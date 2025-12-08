@@ -1,15 +1,28 @@
-# Ignore ALL local environment and secret files
-.env
-.env.local
-config/secrets.*
+# Nuxt dev/build outputs
+.output
+.data
+.nuxt
+.nitro
+.cache
+dist
 
-# Ignore IDE and OS files
-.idea/
-.vscode/
-*.iml
+# Node dependencies
+node_modules
+
+# Logs
+logs
+*.log
+
+# Misc
 .DS_Store
+.fleet
+.idea
 
-# Logifi's specific proprietary files/folders
-# The community should not see any mention of these on the open-source side.
-# Ensure your internal/private code never lives in a folder that is NOT ignored.
-/proprietary_config/
+# Local env files
+.env
+.env.*
+!.env.example
+
+# FAA aircraft database download temporary files
+ReleasableAircraft.zip
+faa-data/
