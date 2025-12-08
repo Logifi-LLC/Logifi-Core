@@ -1,0 +1,15 @@
+# Ignore ALL local environment and secret files
+.env
+.env.local
+config/secrets.*
+
+# Ignore IDE and OS files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Logifi's specific proprietary files/folders
+# The community should not see any mention of these on the open-source side.
+# Ensure your internal/private code never lives in a folder that is NOT ignored.
+/proprietary_config/
