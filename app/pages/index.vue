@@ -817,11 +817,6 @@
                     • AC&nbsp;120-78B reminders: maintain data integrity, protect revision history, and record signer identity (signatures coming soon).
                   </li>
                 </ul>
-                <h2 :class="['text-lg font-quicksand font-semibold mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
-                  Updates for you!
-                </h2>
-                <ul>
-                </ul>
               </div>
             </div>
           </section>

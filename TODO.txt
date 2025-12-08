@@ -1,1 +1,6 @@
-mobile input fix
+Finish what Gemini said about the CLA
+Finish the rest of what Gemini said to do for the Open Source part
+Push to Logifi-Core 
+Fork to Logifi-main
+Copy the information from Pocketbase
+Push on Vercel or Netlify
