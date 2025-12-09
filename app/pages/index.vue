@@ -233,6 +233,22 @@
                     {{ logEntries.length === 0 ? 'No entries to export' : `${logEntries.length} ${logEntries.length === 1 ? 'entry' : 'entries'} available` }}
                   </p>
                 </div>
+                <!-- Developers Link -->
+                <div class="pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
+                  <NuxtLink
+                    to="/developers"
+                    :class="[
+                      'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
+                      isDarkMode 
+                        ? 'bg-gray-700 hover:bg-gray-600 text-white' 
+                        : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                    ]"
+                    @click="showHeaderSettings = false"
+                  >
+                    <Icon name="ri:code-s-slash-line" size="16" />
+                    Developers
+                  </NuxtLink>
+                </div>
               </div>
             </div>
           </div>
