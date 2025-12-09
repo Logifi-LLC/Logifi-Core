@@ -192,6 +192,32 @@
             </div>
             <Icon name="ri:external-link-line" size="18" :class="['flex-shrink-0 mt-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']" />
           </a>
+
+          <!-- ICLA -->
+          <a
+            href="/images/ICLA.pdf"
+            target="_blank"
+            rel="noopener noreferrer"
+            :class="[
+              'flex items-start gap-4 p-6 rounded-2xl border transition-all duration-200 hover:scale-[1.02] shadow-sm',
+              isDarkMode 
+                ? 'bg-gray-800 border-gray-700 hover:border-gray-600 text-gray-200' 
+                : 'bg-gray-100 border-gray-300 hover:border-gray-400 text-gray-800'
+            ]"
+          >
+            <div :class="['flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center', isDarkMode ? 'bg-blue-900/50' : 'bg-blue-100']">
+              <Icon name="ri:file-pdf-2-line" size="24" :class="isDarkMode ? 'text-blue-400' : 'text-blue-600'" />
+            </div>
+            <div>
+              <h3 :class="['font-semibold font-quicksand mb-1', isDarkMode ? 'text-white' : 'text-gray-900']">
+                Contributor License Agreement
+              </h3>
+              <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                Review and sign the CLA to contribute.
+              </p>
+            </div>
+            <Icon name="ri:external-link-line" size="18" :class="['flex-shrink-0 mt-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']" />
+          </a>
         </div>
 
         <!-- Tech Stack -->
