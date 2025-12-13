@@ -8,7 +8,7 @@
       <header>
       <div
         :class="[
-          'fixed top-0 left-0 right-0 z-10 transition-colors duration-300',
+          'fixed top-0 left-0 right-0 z-30 transition-colors duration-300',
           isDarkMode 
             ? 'border-gray-700/50' 
             : 'border-gray-400/50'
@@ -69,10 +69,10 @@
             <div
               v-if="showHeaderSettings"
               :class="[
-                'absolute right-0 top-full mt-2 w-64 rounded-xl border shadow-xl p-4 z-20',
+                'absolute right-0 top-full mt-2 w-64 rounded-xl border shadow-2xl p-4 z-10',
                 isDarkMode 
                   ? 'bg-gray-800 border-gray-700' 
-                  : 'bg-gray-100 border-gray-300'
+                  : 'bg-white border-gray-300'
               ]"
             >
               <div class="flex items-center justify-between mb-4">
@@ -539,151 +539,6 @@
                   {{ catalogs[section.key].length }}
                 </span>
             </div>
-            </div>
-            <div class="relative settings-container mt-4">
-            <button 
-                @click="showHeaderSettings = !showHeaderSettings"
-                :class="[
-                  'p-2 rounded-lg transition-all duration-200',
-                  isDarkMode 
-                    ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' 
-                    : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                ]"
-                aria-label="Settings"
-              >
-                <Icon name="ri:settings-3-line" size="20" />
-              </button>
-              <div
-                v-if="showHeaderSettings"
-                :class="[
-                  'absolute left-full ml-2 top-0 w-64 rounded-xl border shadow-xl p-4 z-20',
-                  isDarkMode 
-                    ? 'bg-gray-800 border-gray-700' 
-                    : 'bg-gray-100 border-gray-300'
-                ]"
-              >
-                <div class="flex items-center justify-between mb-4">
-                  <h3 :class="['font-semibold font-quicksand text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
-                    Settings
-                  </h3>
-                  <button
-                    @click="showHeaderSettings = false"
-                    :class="['hover:opacity-70 transition-opacity', isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700']"
-                    aria-label="Close settings"
-                  >
-                    <Icon name="ri:close-line" size="20" />
-                  </button>
-              </div>
-                <div class="space-y-4">
-                  <div class="flex items-center justify-between">
-                    <label :class="['font-quicksand text-sm', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
-                      {{ isDarkMode ? 'Dark Mode' : 'Light Mode' }}
-                    </label>
-                    <button
-                      @click="toggleTheme"
-                      :class="[
-                        'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
-                        isDarkMode 
-                          ? 'bg-blue-600 focus:ring-blue-500' 
-                          : 'bg-gray-300 focus:ring-gray-400'
-                      ]"
-                      role="switch"
-                      :aria-checked="isDarkMode"
-                    >
-                      <span
-                        :class="[
-                          'inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm',
-                          isDarkMode ? 'translate-x-6' : 'translate-x-1'
-                        ]"
-                      />
-                    </button>
-              </div>
-                  <div class="space-y-2 pt-2">
-                    <div :class="['font-quicksand text-sm', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Clock Format</div>
-                    <div class="flex gap-2">
-                      <button
-                        type="button"
-                        @click="setClockFormat('24')"
-                        :class="[
-                          'px-3 py-1 rounded-md text-sm font-quicksand',
-                          clockFormat === '24'
-                            ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white')
-                            : (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-800')
-                        ]"
-                      >
-                        24h
-                      </button>
-                      <button
-                        type="button"
-                        @click="setClockFormat('12')"
-                        :class="[
-                          'px-3 py-1 rounded-md text-sm font-quicksand',
-                          clockFormat === '12'
-                            ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white')
-                            : (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-800')
-                        ]"
-                      >
-                        12h
-                      </button>
-                    </div>
-                  </div>
-                  <div class="space-y-2">
-                    <div :class="['font-quicksand text-sm', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Clock Timezone</div>
-                    <div class="flex gap-2">
-                      <button
-                        type="button"
-                        @click="setClockZone('UTC')"
-                        :class="[
-                          'px-3 py-1 rounded-md text-sm font-quicksand',
-                          clockZone === 'UTC'
-                            ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white')
-                            : (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-800')
-                        ]"
-                      >
-                        UTC
-                      </button>
-                      <button
-                        type="button"
-                        @click="setClockZone('Local')"
-                        :class="[
-                          'px-3 py-1 rounded-md text-sm font-quicksand',
-                          clockZone === 'Local'
-                            ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white')
-                            : (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-800')
-                        ]"
-                      >
-                        Local
-                      </button>
-                    </div>
-                  </div>
-                  <div class="space-y-3 pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                    <div :class="['font-quicksand text-sm font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                      Customize Totals Overview
-                    </div>
-                    <div class="space-y-2 max-h-64 overflow-y-auto">
-                      <label
-                        v-for="metric in availableTotalsMetrics"
-                        :key="metric.key"
-                        class="flex items-center gap-2 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          :checked="selectedTotalsMetrics.includes(metric.key)"
-                          @change="toggleTotalsMetric(metric.key)"
-                          :disabled="metric.key === 'totalTime'"
-                          :class="[
-                            'rounded border-gray-300 text-blue-600 focus:ring-blue-500',
-                            isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-white'
-                          ]"
-                        />
-                        <span :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
-                          {{ metric.label }}
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </aside>
@@ -1236,7 +1091,7 @@
                       {{ entry.registration }}
                     </td>
                     <td class="px-4 py-3 align-top">
-                      <div :class="['font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
+                      <div :class="['font-semibold whitespace-nowrap', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
                         {{ entry.departure }} → {{ entry.destination }}
         </div>
                       <div v-if="entry.route" :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
@@ -4107,9 +3962,10 @@ function formatTotalValue(key: TotalsMetricKey): string {
     return (totals.value.time.night ?? 0).toFixed(1)
   }
   if (key === 'instrumentTime') {
-    const simulated = totals.value.time.simulator ?? 0
-    const actual = totals.value.time.instrument ?? 0
-    return (simulated + actual).toFixed(1)
+    const simulated = Number(totals.value.time.simulator ?? 0)
+    const actual = Number(totals.value.time.instrument ?? 0)
+    const sum = simulated + actual
+    return sum.toFixed(1)
   }
   if (key === 'crossCountry') {
     return (totals.value.time.crossCountry ?? 0).toFixed(1)
