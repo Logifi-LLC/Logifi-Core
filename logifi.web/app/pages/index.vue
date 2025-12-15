@@ -1059,7 +1059,7 @@
                                 <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Pilot</label>
                                 <div class="grid gap-4 md:grid-cols-3">
                                   <div>
-                                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Flight Instructor</label>
+                                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Job</label>
                                     <select v-model="newEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']">
                                       <option value="">Select...</option>
                                       <option value="Student">Student</option>
@@ -1483,7 +1483,7 @@
                                 <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Pilot</label>
                                 <div class="grid gap-4 md:grid-cols-3">
                                   <div>
-                                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Flight Instructor</label>
+                                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Job</label>
                                     <select v-model="inlineEditEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']">
                                       <option value="">Select...</option>
                                       <option value="Student">Student</option>
@@ -2206,6 +2206,7 @@ import { useAircraftLookup } from '~/composables/useAircraftLookup'
 import type { AircraftInfo } from '~/composables/useAircraftLookup'
 import { useAirportLookup } from '~/composables/useAirportLookup'
 import type { AirportInfo } from '~/composables/useAirportLookup'
+import { calculateNightTime } from '~/utils/nightTimeCalculator'
 
 const roleOptions = ['PIC', 'SIC', 'Dual Received', 'Solo', 'Safety Pilot'] as const
 const oooiFields: (keyof OOOITimes)[] = ['out', 'off', 'on', 'in']
@@ -3466,6 +3467,151 @@ watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.in, 
   }
 }, { deep: true })
 
+// Helper to get airport coordinates from cache
+const AIRPORT_CACHE_KEY = 'logifi://airport-cache'
+
+function getAirportCoordsFromCache(code: string): { lat: number; lon: number } | null {
+  if (!isBrowser || !code) return null
+  
+  try {
+    const cache = JSON.parse(window.localStorage.getItem(AIRPORT_CACHE_KEY) || '{}')
+    const normalizedCode = code.trim().toUpperCase().replace(/\s+/g, '')
+    const cached = cache[normalizedCode]
+    
+    if (cached && typeof cached.latitude === 'number' && typeof cached.longitude === 'number') {
+      return { lat: cached.latitude, lon: cached.longitude }
+    }
+  } catch {
+    // Ignore cache errors
+  }
+  
+  return null
+}
+
+// Auto-calculate night time based on OOOI and airport location
+async function autoCalculateNightTime(
+  date: string,
+  departure: string,
+  destination: string,
+  outTime: string | null,
+  inTime: string | null,
+  isZulu: boolean = true
+): Promise<number | null> {
+  if (!date || !departure || !outTime || !inTime) return null
+  
+  // Get departure airport coordinates from cache, or try to look them up
+  let depCoords = getAirportCoordsFromCache(departure)
+  
+  if (!depCoords) {
+    // Try to look up the airport
+    const depInfo = await lookupAirport(departure)
+    if (depInfo?.latitude && depInfo?.longitude) {
+      depCoords = { lat: depInfo.latitude, lon: depInfo.longitude }
+    }
+  }
+  
+  if (!depCoords) return null
+  
+  // Get destination coordinates (optional, for more accurate calculation on long flights)
+  let destCoords = getAirportCoordsFromCache(destination)
+  if (!destCoords && destination) {
+    const destInfo = await lookupAirport(destination)
+    if (destInfo?.latitude && destInfo?.longitude) {
+      destCoords = { lat: destInfo.latitude, lon: destInfo.longitude }
+    }
+  }
+  
+  // Normalize date to YYYY-MM-DD format
+  let normalizedDate = date
+  if (date.includes('/')) {
+    const parts = date.split('/')
+    if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+      const mm = parts[0]
+      const dd = parts[1]
+      const yyyy = parts[2]
+      normalizedDate = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`
+    }
+  }
+  
+  const result = calculateNightTime({
+    date: normalizedDate,
+    depLatitude: depCoords.lat,
+    depLongitude: depCoords.lon,
+    destLatitude: destCoords?.lat,
+    destLongitude: destCoords?.lon,
+    outTime,
+    inTime,
+    isZulu
+  })
+  
+  if (result.success && result.nightHours > 0) {
+    return result.nightHours
+  }
+  
+  return null
+}
+
+// Watcher to auto-calculate night time for New Entry form
+watch(
+  () => [
+    newEntry.date,
+    newEntry.departure,
+    newEntry.destination,
+    newEntry.oooi?.out,
+    newEntry.oooi?.in,
+    newEntry.oooi?.isZulu
+  ],
+  async () => {
+    if (!isCommercialMode.value || !newEntry.oooi) return
+    if (!newEntry.date || !newEntry.departure || !newEntry.oooi.out || !newEntry.oooi.in) return
+    
+    const nightTime = await autoCalculateNightTime(
+      newEntry.date,
+      newEntry.departure,
+      newEntry.destination,
+      newEntry.oooi.out,
+      newEntry.oooi.in,
+      newEntry.oooi.isZulu
+    )
+    
+    if (nightTime !== null) {
+      newEntry.flightTime.night = nightTime
+    }
+  },
+  { deep: true }
+)
+
+// Watcher to auto-calculate night time for Inline Edit form
+watch(
+  () => [
+    inlineEditEntry.value?.date,
+    inlineEditEntry.value?.departure,
+    inlineEditEntry.value?.destination,
+    inlineEditEntry.value?.oooi?.out,
+    inlineEditEntry.value?.oooi?.in,
+    inlineEditEntry.value?.oooi?.isZulu
+  ],
+  async () => {
+    if (!isInlineCommercialMode.value || !inlineEditEntry.value?.oooi) return
+    if (!inlineEditEntry.value.date || !inlineEditEntry.value.departure || 
+        !inlineEditEntry.value.oooi.out || !inlineEditEntry.value.oooi.in) return
+    
+    const nightTime = await autoCalculateNightTime(
+      inlineEditEntry.value.date,
+      inlineEditEntry.value.departure,
+      inlineEditEntry.value.destination,
+      inlineEditEntry.value.oooi.out,
+      inlineEditEntry.value.oooi.in,
+      inlineEditEntry.value.oooi.isZulu
+    )
+    
+    if (nightTime !== null && inlineEditEntry.value) {
+      inlineEditEntry.value.flightTime.night = nightTime
+    }
+  },
+  { deep: true }
+)
+
 // Watcher to auto-check flight conditions based on time entries (Add Entry form)
 watch(
   () => [
@@ -4000,28 +4146,45 @@ const filteredPilotsForInline = computed(() => {
   return catalogs.value.pilots.filter(p => p.toLowerCase().includes(search))
 })
 
+// Preemptively fetch and cache airport coordinates for night time calculation
+async function prefetchAirportCoords(airportCode: string): Promise<void> {
+  if (!airportCode) return
+  const coords = getAirportCoordsFromCache(airportCode)
+  if (!coords) {
+    // Fetch and cache in background (don't await)
+    lookupAirport(airportCode).catch(() => {
+      // Silently fail - not critical
+    })
+  }
+}
+
 // Selection handlers for FROM dropdown
 function selectAirportForFrom(airport: string): void {
   newEntry.departure = airport
   showFromDropdown.value = false
+  // Prefetch coordinates for night time calculation
+  prefetchAirportCoords(airport)
 }
 
 function selectAirportForInlineFrom(airport: string): void {
   if (!inlineEditEntry.value) return
   inlineEditEntry.value.departure = airport
   showInlineFromDropdown.value = false
+  prefetchAirportCoords(airport)
 }
 
 // Selection handlers for TO dropdown
 function selectAirportForTo(airport: string): void {
   newEntry.destination = airport
   showToDropdown.value = false
+  prefetchAirportCoords(airport)
 }
 
 function selectAirportForInlineTo(airport: string): void {
   if (!inlineEditEntry.value) return
   inlineEditEntry.value.destination = airport
   showInlineToDropdown.value = false
+  prefetchAirportCoords(airport)
 }
 
 // Selection handlers for Pilot Name dropdown
