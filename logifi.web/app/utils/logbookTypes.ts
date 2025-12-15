@@ -8,7 +8,7 @@ export type FlightTimeKey =
   | 'solo'
   | 'night'
   | 'actualInstrument'
-  | 'instrument'
+  | 'dualGiven'
   | 'crossCountry'
   | 'simulator'
 
@@ -20,7 +20,7 @@ export interface FlightTimeBreakdown {
   solo: number | null
   night: number | null
   actualInstrument: number | null
-  instrument: number | null
+  dualGiven: number | null
   crossCountry: number | null
   simulator: number | null
 }
@@ -85,7 +85,7 @@ export const createEmptyFlightTime = (): FlightTimeBreakdown => ({
   solo: null,
   night: null,
   actualInstrument: null,
-  instrument: null,
+  dualGiven: null,
   crossCountry: null,
   simulator: null
 })

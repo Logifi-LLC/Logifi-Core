@@ -903,7 +903,7 @@
                                 <div class="flex gap-2 w-full">
                                   <div v-for="field in flightTimeFields" :key="field.key" class="flex-1">
                                     <div :class="['text-[9px] uppercase font-bold mb-1 text-center whitespace-nowrap', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
-                                      {{ field.key === 'total' ? 'Total Time' : field.key === 'pic' ? 'PIC' : field.key === 'sic' ? 'SIC' : field.key === 'dual' ? 'Dual R' : field.key === 'solo' ? 'Solo' : field.key === 'night' ? 'Night' : field.key === 'actualInstrument' ? 'Actual' : field.key === 'instrument' ? 'As Instr' : field.key === 'crossCountry' ? 'XC' : field.key === 'simulator' ? 'Hood' : field.label }}
+                                      {{ field.key === 'total' ? 'Total Time' : field.key === 'pic' ? 'PIC' : field.key === 'sic' ? 'SIC' : field.key === 'dual' ? 'Dual R' : field.key === 'solo' ? 'Solo' : field.key === 'night' ? 'Night' : field.key === 'actualInstrument' ? 'Actual' : field.key === 'dualGiven' ? 'Dual G' : field.key === 'crossCountry' ? 'XC' : field.key === 'simulator' ? 'Hood' : field.label }}
                                     </div>
                     <input
                                       v-model.number="newEntry.flightTime[field.key]" 
@@ -1236,7 +1236,7 @@
                                <div>
                                 <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
                                 <div class="flex gap-2 w-full">
-                                  <div v-for="(label, key) in {total: 'Total Time', pic: 'PIC', sic: 'SIC', dual: 'Dual R', solo: 'Solo', night: 'Night', actualInstrument: 'Actual', instrument: 'As Instr', crossCountry: 'XC', simulator: 'Hood'}" :key="key" class="flex-1">
+                                  <div v-for="(label, key) in {total: 'Total Time', pic: 'PIC', sic: 'SIC', dual: 'Dual R', solo: 'Solo', night: 'Night', actualInstrument: 'Actual', dualGiven: 'Dual G', crossCountry: 'XC', simulator: 'Hood'}" :key="key" class="flex-1">
                                     <div :class="['text-[9px] uppercase font-bold mb-1 text-center whitespace-nowrap', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
                                       {{ label }}
                                     </div>
@@ -2045,7 +2045,7 @@ const flightTimeFields: readonly { key: FlightTimeKey; label: string }[] = [
   { key: 'solo', label: 'Solo' },
   { key: 'night', label: 'Night' },
   { key: 'actualInstrument', label: 'Actual Instrument' },
-  { key: 'instrument', label: 'Instrument' },
+  { key: 'dualGiven', label: 'Dual Given' },
   { key: 'crossCountry', label: 'Cross-Country' },
   { key: 'simulator', label: 'Simulator / Training Device' }
 ] as const
@@ -2399,6 +2399,7 @@ function exportToCSV(): void {
     'Simulated Instrument',
     'Cross Country',
     'Ground Simulator',
+    'Dual Given',
     'Day Landings',
     'Night Landings',
     'Instrument Approaches',
@@ -2421,13 +2422,13 @@ function exportToCSV(): void {
   }
 
   const getInstrumentSplit = (entry: LogEntry): [string, string] => {
-    const val = entry.flightTime.instrument
-    if (val === null || val === undefined || val === 0) return ['', '']
-    const conds = (entry.flightConditions || []).map(c => c.toLowerCase())
-    if (conds.some(c => c.includes('actual'))) {
-      return [formatTimeValue(val), '']
-    }
-    return ['', formatTimeValue(val)]
+    // Returns [Actual Instrument, Simulated Instrument] for CSV export
+    // Note: simulator field is exported separately as "Ground Simulator"
+    const actualVal = entry.flightTime.actualInstrument
+    return [
+      actualVal ? formatTimeValue(actualVal) : '',
+      '' // Simulated instrument (hood time) - not tracked separately from Ground Simulator
+    ]
   }
 
   const rows = logEntries.value.map((entry) => {
@@ -2458,6 +2459,7 @@ function exportToCSV(): void {
       ...getInstrumentSplit(entry),
       formatTimeValue(entry.flightTime.crossCountry),
       formatTimeValue(entry.flightTime.simulator),
+      formatTimeValue(entry.flightTime.dualGiven),
       formatCountValue(entry.performance.dayLandings),
       formatCountValue(entry.performance.nightLandings),
       formatCountValue(entry.performance.approachCount),
@@ -3416,18 +3418,27 @@ function loadPersistedEntries(): void {
   try {
     const parsed: LogEntry[] = JSON.parse(stored)
     if (Array.isArray(parsed)) {
-      logEntries.value = parsed.map((entry) => ({
-        ...entry,
-        flightConditions: sanitizeFlightConditions(entry.flightConditions || []),
-        flightTime: {
-          ...createEmptyFlightTime(),
-          ...entry.flightTime
-        },
-        performance: {
-          ...createEmptyPerformance(),
-          ...entry.performance
+      logEntries.value = parsed.map((entry) => {
+        // Migration: rename instrument -> dualGiven
+        const flightTimeRaw = entry.flightTime as unknown as Record<string, unknown>
+        if ('instrument' in flightTimeRaw && !('dualGiven' in flightTimeRaw)) {
+          flightTimeRaw.dualGiven = flightTimeRaw.instrument
+          delete flightTimeRaw.instrument
         }
-      }))
+        
+        return {
+          ...entry,
+          flightConditions: sanitizeFlightConditions(entry.flightConditions || []),
+          flightTime: {
+            ...createEmptyFlightTime(),
+            ...entry.flightTime
+          },
+          performance: {
+            ...createEmptyPerformance(),
+            ...entry.performance
+          }
+        }
+      })
     }
   } catch (err) {
     console.error('Unable to load stored logbook entries', err)
@@ -3751,7 +3762,7 @@ const pilotProfileStats = computed<PilotProfileStats>(() => {
     const total = coerceNumber(entry.flightTime.total)
     const pic = coerceNumber(entry.flightTime.pic)
     const night = coerceNumber(entry.flightTime.night)
-    const instrument = coerceNumber(entry.flightTime.instrument) + coerceNumber(entry.flightTime.simulator)
+    const instrument = coerceNumber(entry.flightTime.actualInstrument) + coerceNumber(entry.flightTime.simulator)
 
     stats.totalHours += total
     stats.picHours += pic
@@ -3963,7 +3974,7 @@ function formatTotalValue(key: TotalsMetricKey): string {
   }
   if (key === 'instrumentTime') {
     const simulated = Number(totals.value.time.simulator ?? 0)
-    const actual = Number(totals.value.time.instrument ?? 0)
+    const actual = Number(totals.value.time.actualInstrument ?? 0)
     const sum = simulated + actual
     return sum.toFixed(1)
   }
@@ -3977,16 +3988,7 @@ function formatTotalValue(key: TotalsMetricKey): string {
     return (totals.value.time.dual ?? 0).toFixed(1)
   }
   if (key === 'dualGiven') {
-    // Dual Given: Calculate from entries where user is PIC and has training instructor/elements
-    // This is an approximation - actual dual given time would ideally be tracked separately
-    let dualGivenTime = 0
-    entriesForTotals.value.forEach((entry) => {
-      const picTime = entry.flightTime.pic ?? 0
-      if (picTime > 0 && (entry.trainingInstructor.trim() || entry.trainingElements.trim())) {
-        dualGivenTime += picTime
-      }
-    })
-    return dualGivenTime.toFixed(1)
+    return (totals.value.time.dualGiven ?? 0).toFixed(1)
   }
   if (key === 'mostUsedAircraft') {
     return mostUsedAircraft.value || '—'
