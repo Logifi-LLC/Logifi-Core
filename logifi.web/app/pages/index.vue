@@ -864,20 +864,89 @@
                                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Aircraft</label>
                                   <input v-model="newEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" required />
       </div>
-                  <div>
+                  <div class="relative">
                                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Ident</label>
-                                  <input v-model="newEntry.registration" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" required />
+                                  <input 
+                                    v-model="newEntry.registration" 
+                                    type="text" 
+                                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" 
+                                    required
+                                    autocomplete="off"
+                                    @focus="showIdentDropdown = true"
+                                    @blur="handleIdentBlur"
+                                  />
+                                  <!-- Aircraft Ident Dropdown -->
+                                  <div 
+                                    v-if="showIdentDropdown && filteredAircraftForNewEntry.length > 0"
+                                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300']"
+                                  >
+                                    <button
+                                      v-for="aircraft in filteredAircraftForNewEntry"
+                                      :key="aircraft.registration"
+                                      type="button"
+                                      :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase hover:bg-opacity-80 transition-colors', isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100']"
+                                      @mousedown.prevent="selectAircraftForNewEntry(aircraft)"
+                                    >
+                                      {{ aircraft.registration }}
+                                    </button>
+                                  </div>
           </div>
             </div>
 
                               <div class="grid gap-4 md:grid-cols-4">
-                  <div>
+                  <div class="relative">
                                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">From</label>
-                                  <input v-model="newEntry.departure" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" required />
+                                  <input 
+                                    v-model="newEntry.departure" 
+                                    type="text" 
+                                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" 
+                                    required
+                                    autocomplete="off"
+                                    @focus="showFromDropdown = true"
+                                    @blur="handleFromBlur"
+                                  />
+                                  <!-- Airport FROM Dropdown -->
+                                  <div 
+                                    v-if="showFromDropdown && filteredAirportsForFrom.length > 0"
+                                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300']"
+                                  >
+                                    <button
+                                      v-for="airport in filteredAirportsForFrom"
+                                      :key="airport"
+                                      type="button"
+                                      :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase hover:bg-opacity-80 transition-colors', isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100']"
+                                      @mousedown.prevent="selectAirportForFrom(airport)"
+                                    >
+                                      {{ airport }}
+                                    </button>
+                                  </div>
             </div>
-                  <div>
+                  <div class="relative">
                                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">To</label>
-                                  <input v-model="newEntry.destination" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" required />
+                                  <input 
+                                    v-model="newEntry.destination" 
+                                    type="text" 
+                                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" 
+                                    required
+                                    autocomplete="off"
+                                    @focus="showToDropdown = true"
+                                    @blur="handleToBlur"
+                                  />
+                                  <!-- Airport TO Dropdown -->
+                                  <div 
+                                    v-if="showToDropdown && filteredAirportsForTo.length > 0"
+                                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300']"
+                                  >
+                                    <button
+                                      v-for="airport in filteredAirportsForTo"
+                                      :key="airport"
+                                      type="button"
+                                      :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase hover:bg-opacity-80 transition-colors', isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100']"
+                                      @mousedown.prevent="selectAirportForTo(airport)"
+                                    >
+                                      {{ airport }}
+                                    </button>
+                                  </div>
             </div>
                   <div>
                                   <div class="flex gap-2">
@@ -1000,9 +1069,32 @@
                                       <option value="First Officer">First Officer</option>
                                     </select>
                                   </div>
-                                  <div>
+                                  <div class="relative">
                                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Name</label>
-                                    <input v-model="newEntry.trainingElements" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" placeholder="Pilot Name" />
+                                    <input 
+                                      v-model="newEntry.trainingElements" 
+                                      type="text" 
+                                      :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" 
+                                      placeholder="Pilot Name"
+                                      autocomplete="off"
+                                      @focus="showPilotNameDropdown = true"
+                                      @blur="handlePilotNameBlur"
+                                    />
+                                    <!-- Pilot Name Dropdown -->
+                                    <div 
+                                      v-if="showPilotNameDropdown && filteredPilots.length > 0"
+                                      :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300']"
+                                    >
+                                      <button
+                                        v-for="pilot in filteredPilots"
+                                        :key="pilot"
+                                        type="button"
+                                        :class="['w-full px-3 py-2 text-left text-sm hover:bg-opacity-80 transition-colors', isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100']"
+                                        @mousedown.prevent="selectPilotName(pilot)"
+                                      >
+                                        {{ pilot }}
+                                      </button>
+                                    </div>
                                   </div>
                                   <div>
                                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
@@ -1199,20 +1291,86 @@
                                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Aircraft</label>
                                   <input v-model="inlineEditEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" />
                                 </div>
-                                <div>
+                                <div class="relative">
                                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Ident</label>
-                                  <input v-model="inlineEditEntry.registration" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" />
+                                  <input 
+                                    v-model="inlineEditEntry.registration" 
+                                    type="text" 
+                                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']"
+                                    autocomplete="off"
+                                    @focus="showInlineIdentDropdown = true"
+                                    @blur="handleInlineIdentBlur"
+                                  />
+                                  <!-- Aircraft Ident Dropdown for Inline Edit -->
+                                  <div 
+                                    v-if="showInlineIdentDropdown && filteredAircraftForInlineEdit.length > 0"
+                                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300']"
+                                  >
+                                    <button
+                                      v-for="aircraft in filteredAircraftForInlineEdit"
+                                      :key="aircraft.registration"
+                                      type="button"
+                                      :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase hover:bg-opacity-80 transition-colors', isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100']"
+                                      @mousedown.prevent="selectAircraftForInlineEdit(aircraft)"
+                                    >
+                                      {{ aircraft.registration }}
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
 
                               <div class="grid gap-4 md:grid-cols-4">
-                                <div>
+                                <div class="relative">
                                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">From</label>
-                                  <input v-model="inlineEditEntry.departure" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" />
+                                  <input 
+                                    v-model="inlineEditEntry.departure" 
+                                    type="text" 
+                                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']"
+                                    autocomplete="off"
+                                    @focus="showInlineFromDropdown = true"
+                                    @blur="handleInlineFromBlur"
+                                  />
+                                  <!-- Airport FROM Dropdown for Inline Edit -->
+                                  <div 
+                                    v-if="showInlineFromDropdown && filteredAirportsForInlineFrom.length > 0"
+                                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300']"
+                                  >
+                                    <button
+                                      v-for="airport in filteredAirportsForInlineFrom"
+                                      :key="airport"
+                                      type="button"
+                                      :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase hover:bg-opacity-80 transition-colors', isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100']"
+                                      @mousedown.prevent="selectAirportForInlineFrom(airport)"
+                                    >
+                                      {{ airport }}
+                                    </button>
+                                  </div>
                                 </div>
-                                <div>
+                                <div class="relative">
                                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">To</label>
-                                  <input v-model="inlineEditEntry.destination" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" />
+                                  <input 
+                                    v-model="inlineEditEntry.destination" 
+                                    type="text" 
+                                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']"
+                                    autocomplete="off"
+                                    @focus="showInlineToDropdown = true"
+                                    @blur="handleInlineToBlur"
+                                  />
+                                  <!-- Airport TO Dropdown for Inline Edit -->
+                                  <div 
+                                    v-if="showInlineToDropdown && filteredAirportsForInlineTo.length > 0"
+                                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300']"
+                                  >
+                                    <button
+                                      v-for="airport in filteredAirportsForInlineTo"
+                                      :key="airport"
+                                      type="button"
+                                      :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase hover:bg-opacity-80 transition-colors', isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100']"
+                                      @mousedown.prevent="selectAirportForInlineTo(airport)"
+                                    >
+                                      {{ airport }}
+                                    </button>
+                                  </div>
                                 </div>
                                 <div>
                                   <div class="flex gap-2">
@@ -1335,9 +1493,32 @@
                                       <option value="First Officer">First Officer</option>
                                     </select>
                                   </div>
-                                  <div>
+                                  <div class="relative">
                                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Name</label>
-                                    <input v-model="inlineEditEntry.trainingElements" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" placeholder="Pilot Name" />
+                                    <input 
+                                      v-model="inlineEditEntry.trainingElements" 
+                                      type="text" 
+                                      :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" 
+                                      placeholder="Pilot Name"
+                                      autocomplete="off"
+                                      @focus="showInlinePilotNameDropdown = true"
+                                      @blur="handleInlinePilotNameBlur"
+                                    />
+                                    <!-- Pilot Name Dropdown for Inline Edit -->
+                                    <div 
+                                      v-if="showInlinePilotNameDropdown && filteredPilotsForInline.length > 0"
+                                      :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300']"
+                                    >
+                                      <button
+                                        v-for="pilot in filteredPilotsForInline"
+                                        :key="pilot"
+                                        type="button"
+                                        :class="['w-full px-3 py-2 text-left text-sm hover:bg-opacity-80 transition-colors', isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100']"
+                                        @mousedown.prevent="selectPilotNameForInline(pilot)"
+                                      >
+                                        {{ pilot }}
+                                      </button>
+                                    </div>
                                   </div>
                                   <div>
                                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
@@ -2281,6 +2462,14 @@ const catalogOpenState = reactive<Record<CatalogKey, boolean>>({
 const isSidebarCollapsed = ref(false)
 const showHeaderSettings = ref(false)
 const showPilotProfile = ref(false)
+const showIdentDropdown = ref(false)
+const showInlineIdentDropdown = ref(false)
+const showFromDropdown = ref(false)
+const showInlineFromDropdown = ref(false)
+const showToDropdown = ref(false)
+const showInlineToDropdown = ref(false)
+const showPilotNameDropdown = ref(false)
+const showInlinePilotNameDropdown = ref(false)
 const isDarkMode = ref(true)
 const pilotProfile = reactive<PilotProfilePrefs>({ ...pilotProfileDefaults })
 const pilotProfileLoaded = ref(false)
@@ -3712,6 +3901,165 @@ const catalogs = computed<Record<CatalogKey, string[]> & { families?: string[], 
     familyToItems
   }
 })
+
+// Aircraft registry for Ident dropdown - unique registrations with their make/model
+const aircraftRegistry = computed(() => {
+  const registry: { registration: string; makeModel: string }[] = []
+  const seen = new Set<string>()
+  logEntries.value.forEach((entry) => {
+    const reg = entry.registration.trim().toUpperCase()
+    if (reg && !seen.has(reg)) {
+      seen.add(reg)
+      registry.push({ registration: reg, makeModel: entry.aircraftMakeModel.trim() })
+    }
+  })
+  return registry.sort((a, b) => a.registration.localeCompare(b.registration))
+})
+
+// Filtered aircraft for New Entry form dropdown
+const filteredAircraftForNewEntry = computed(() => {
+  const search = newEntry.registration.trim().toUpperCase()
+  if (!search) return aircraftRegistry.value
+  return aircraftRegistry.value.filter(a => 
+    a.registration.includes(search) || a.makeModel.toUpperCase().includes(search)
+  )
+})
+
+// Filtered aircraft for Inline Edit form dropdown
+const filteredAircraftForInlineEdit = computed(() => {
+  if (!inlineEditEntry.value) return aircraftRegistry.value
+  const search = inlineEditEntry.value.registration.trim().toUpperCase()
+  if (!search) return aircraftRegistry.value
+  return aircraftRegistry.value.filter(a => 
+    a.registration.includes(search) || a.makeModel.toUpperCase().includes(search)
+  )
+})
+
+// Selection handlers for Ident dropdown
+function selectAircraftForNewEntry(aircraft: { registration: string; makeModel: string }): void {
+  newEntry.registration = aircraft.registration
+  newEntry.aircraftMakeModel = aircraft.makeModel
+  showIdentDropdown.value = false
+}
+
+function selectAircraftForInlineEdit(aircraft: { registration: string; makeModel: string }): void {
+  if (!inlineEditEntry.value) return
+  inlineEditEntry.value.registration = aircraft.registration
+  inlineEditEntry.value.aircraftMakeModel = aircraft.makeModel
+  showInlineIdentDropdown.value = false
+}
+
+// Blur handlers for Ident dropdowns (with delay to allow click to register)
+function handleIdentBlur(): void {
+  window.setTimeout(() => { showIdentDropdown.value = false }, 150)
+}
+
+function handleInlineIdentBlur(): void {
+  window.setTimeout(() => { showInlineIdentDropdown.value = false }, 150)
+}
+
+// Filtered airports for FROM dropdown
+const filteredAirportsForFrom = computed(() => {
+  const search = newEntry.departure.trim().toUpperCase()
+  if (!search) return catalogs.value.airports
+  return catalogs.value.airports.filter(a => a.includes(search))
+})
+
+const filteredAirportsForInlineFrom = computed(() => {
+  if (!inlineEditEntry.value) return catalogs.value.airports
+  const search = inlineEditEntry.value.departure.trim().toUpperCase()
+  if (!search) return catalogs.value.airports
+  return catalogs.value.airports.filter(a => a.includes(search))
+})
+
+// Filtered airports for TO dropdown
+const filteredAirportsForTo = computed(() => {
+  const search = newEntry.destination.trim().toUpperCase()
+  if (!search) return catalogs.value.airports
+  return catalogs.value.airports.filter(a => a.includes(search))
+})
+
+const filteredAirportsForInlineTo = computed(() => {
+  if (!inlineEditEntry.value) return catalogs.value.airports
+  const search = inlineEditEntry.value.destination.trim().toUpperCase()
+  if (!search) return catalogs.value.airports
+  return catalogs.value.airports.filter(a => a.includes(search))
+})
+
+// Filtered pilots for Name dropdown
+const filteredPilots = computed(() => {
+  const search = newEntry.trainingElements.trim().toLowerCase()
+  if (!search) return catalogs.value.pilots
+  return catalogs.value.pilots.filter(p => p.toLowerCase().includes(search))
+})
+
+const filteredPilotsForInline = computed(() => {
+  if (!inlineEditEntry.value) return catalogs.value.pilots
+  const search = inlineEditEntry.value.trainingElements.trim().toLowerCase()
+  if (!search) return catalogs.value.pilots
+  return catalogs.value.pilots.filter(p => p.toLowerCase().includes(search))
+})
+
+// Selection handlers for FROM dropdown
+function selectAirportForFrom(airport: string): void {
+  newEntry.departure = airport
+  showFromDropdown.value = false
+}
+
+function selectAirportForInlineFrom(airport: string): void {
+  if (!inlineEditEntry.value) return
+  inlineEditEntry.value.departure = airport
+  showInlineFromDropdown.value = false
+}
+
+// Selection handlers for TO dropdown
+function selectAirportForTo(airport: string): void {
+  newEntry.destination = airport
+  showToDropdown.value = false
+}
+
+function selectAirportForInlineTo(airport: string): void {
+  if (!inlineEditEntry.value) return
+  inlineEditEntry.value.destination = airport
+  showInlineToDropdown.value = false
+}
+
+// Selection handlers for Pilot Name dropdown
+function selectPilotName(pilot: string): void {
+  newEntry.trainingElements = pilot
+  showPilotNameDropdown.value = false
+}
+
+function selectPilotNameForInline(pilot: string): void {
+  if (!inlineEditEntry.value) return
+  inlineEditEntry.value.trainingElements = pilot
+  showInlinePilotNameDropdown.value = false
+}
+
+// Blur handlers for airport and pilot dropdowns
+function handleFromBlur(): void {
+  window.setTimeout(() => { showFromDropdown.value = false }, 150)
+}
+
+function handleInlineFromBlur(): void {
+  window.setTimeout(() => { showInlineFromDropdown.value = false }, 150)
+}
+
+function handleToBlur(): void {
+  window.setTimeout(() => { showToDropdown.value = false }, 150)
+}
+
+function handleInlineToBlur(): void {
+  window.setTimeout(() => { showInlineToDropdown.value = false }, 150)
+}
+
+function handlePilotNameBlur(): void {
+  window.setTimeout(() => { showPilotNameDropdown.value = false }, 150)
+}
+
+function handleInlinePilotNameBlur(): void {
+  window.setTimeout(() => { showInlinePilotNameDropdown.value = false }, 150)
+}
 
 function coerceNumber(value: number | null | undefined): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
