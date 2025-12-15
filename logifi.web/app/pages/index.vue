@@ -415,9 +415,9 @@
                     :key="`${section.key}-${item}`"
                     :class="[
                       'flex items-center gap-2',
-                          (section.key === 'airports') ? 'cursor-pointer hover:opacity-70 transition-opacity' : ''
+                          (section.key === 'airports' || section.key === 'pilots') ? 'cursor-pointer hover:opacity-70 transition-opacity' : ''
                         ]"
-                        @click="section.key === 'airports' ? showAirportInfo(item) : null"
+                        @click="section.key === 'airports' ? showAirportInfo(item) : section.key === 'pilots' ? showCrewProfile(item) : null"
                       >
                         <input
                           type="checkbox"
@@ -2182,6 +2182,144 @@
         </div>
       </div>
     </div>
+
+    <!-- Crew/Instructor Profile Modal -->
+    <div
+      v-if="showCrewProfileModal && currentCrewName"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      @click.self="closeCrewProfileModal"
+    >
+      <div
+        :class="[
+          'relative w-full max-w-lg rounded-2xl border shadow-2xl transition-colors duration-300',
+          isDarkMode 
+            ? 'bg-gray-800 border-gray-700' 
+            : 'bg-gray-100 border-gray-300'
+        ]"
+        @click.stop
+      >
+        <div class="flex items-center justify-between p-6 border-b" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+          <div class="flex items-center gap-3">
+            <div :class="['w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold', isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white']">
+              {{ currentCrewName.charAt(0).toUpperCase() }}
+            </div>
+            <h3 :class="['text-xl font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+              {{ currentCrewName }}
+            </h3>
+          </div>
+          <button
+            @click="closeCrewProfileModal"
+            :class="[
+              'p-1 rounded-lg transition-colors',
+              isDarkMode 
+                ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+            ]"
+            aria-label="Close"
+          >
+            <Icon name="ri:close-line" size="24" />
+          </button>
+        </div>
+        
+        <div class="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+          <!-- Notes Section -->
+          <div>
+            <div :class="['text-sm font-semibold font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+              Notes
+            </div>
+            <textarea
+              :value="getCrewProfile(currentCrewName).notes"
+              @input="(e) => updateCrewNotes(currentCrewName, (e.target as HTMLTextAreaElement).value)"
+              :class="[
+                'w-full rounded-lg border px-3 py-2 text-sm font-quicksand resize-none h-24',
+                isDarkMode 
+                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500' 
+                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+              ]"
+              placeholder="Add notes about this crew member..."
+            />
+          </div>
+          
+          <!-- Statistics Section -->
+          <div v-if="crewStats">
+            <div :class="['text-sm font-semibold font-quicksand mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+              Flight Statistics
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div :class="['rounded-lg p-3', isDarkMode ? 'bg-gray-700/50' : 'bg-gray-200']">
+                <div :class="['text-2xl font-bold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ crewStats.totalFlights }}
+                </div>
+                <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                  Total Flights
+                </div>
+              </div>
+              <div :class="['rounded-lg p-3', isDarkMode ? 'bg-gray-700/50' : 'bg-gray-200']">
+                <div :class="['text-2xl font-bold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ crewStats.totalHours.toFixed(1) }}
+                </div>
+                <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                  Total Hours
+                </div>
+              </div>
+            </div>
+            <div v-if="crewStats.firstFlight || crewStats.lastFlight" class="mt-3 grid grid-cols-2 gap-4">
+              <div v-if="crewStats.firstFlight">
+                <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
+                  First Flight
+                </div>
+                <div :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+                  {{ formatDisplayDate(crewStats.firstFlight) }}
+                </div>
+              </div>
+              <div v-if="crewStats.lastFlight">
+                <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
+                  Last Flight
+                </div>
+                <div :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+                  {{ formatDisplayDate(crewStats.lastFlight) }}
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Recent Flights Section -->
+          <div v-if="crewRecentFlights.length > 0">
+            <div :class="['text-sm font-semibold font-quicksand mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+              Recent Flights ({{ crewRecentFlights.length }})
+            </div>
+            <div class="space-y-2">
+              <div
+                v-for="flight in crewRecentFlights.slice(0, 5)"
+                :key="flight.id"
+                :class="[
+                  'rounded-lg p-3 flex items-center justify-between',
+                  isDarkMode ? 'bg-gray-700/50' : 'bg-gray-200'
+                ]"
+              >
+                <div>
+                  <div :class="['text-sm font-quicksand font-medium', isDarkMode ? 'text-white' : 'text-gray-900']">
+                    {{ flight.departure }} → {{ flight.destination }}
+                  </div>
+                  <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                    {{ formatDisplayDate(flight.date) }} · {{ flight.aircraftMakeModel || flight.registration }}
+                  </div>
+                </div>
+                <div :class="['text-sm font-mono font-bold', isDarkMode ? 'text-blue-400' : 'text-blue-600']">
+                  {{ (flight.flightTime.total ?? 0).toFixed(1) }}h
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div v-else class="text-center py-4">
+            <div :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
+              No flights recorded with this crew member yet.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -2241,6 +2379,14 @@ const performanceFields: readonly { key: PerformanceKey; label: string }[] = [
 ] as const
 
 const PILOT_PROFILE_STORAGE_KEY = 'logifi://pilot-profile'
+const CREW_PROFILES_STORAGE_KEY = 'logifi://crew-profiles'
+
+// Crew/Instructor profile stored locally
+interface CrewProfile {
+  name: string
+  notes: string
+  lastUpdated: string
+}
 
 interface PilotProfilePrefs {
   name: string
@@ -2754,6 +2900,56 @@ const currentAirportInfo = ref<AirportInfo | null>(null)
 const loadingAirportInfo = ref(false)
 const airportInfoError = ref<string | null>(null)
 
+// Crew/Instructor profile modal
+const showCrewProfileModal = ref(false)
+const currentCrewName = ref<string>('')
+const crewProfiles = ref<Record<string, CrewProfile>>({})
+
+// Load crew profiles from localStorage
+function loadCrewProfiles(): void {
+  if (!isBrowser) return
+  try {
+    const stored = window.localStorage.getItem(CREW_PROFILES_STORAGE_KEY)
+    if (stored) {
+      crewProfiles.value = JSON.parse(stored)
+    }
+  } catch {
+    // Ignore parse errors
+  }
+}
+
+// Save crew profiles to localStorage
+function saveCrewProfiles(): void {
+  if (!isBrowser) return
+  try {
+    window.localStorage.setItem(CREW_PROFILES_STORAGE_KEY, JSON.stringify(crewProfiles.value))
+  } catch {
+    // Ignore save errors
+  }
+}
+
+// Get or create a crew profile
+function getCrewProfile(name: string): CrewProfile {
+  if (!crewProfiles.value[name]) {
+    crewProfiles.value[name] = {
+      name,
+      notes: '',
+      lastUpdated: new Date().toISOString()
+    }
+  }
+  return crewProfiles.value[name]
+}
+
+// Update crew profile notes
+function updateCrewNotes(name: string, notes: string): void {
+  if (!crewProfiles.value[name]) {
+    crewProfiles.value[name] = { name, notes: '', lastUpdated: '' }
+  }
+  crewProfiles.value[name].notes = notes
+  crewProfiles.value[name].lastUpdated = new Date().toISOString()
+  saveCrewProfiles()
+}
+
 // Category/Class normalization and autofill helpers
 function normalizeCategoryClassLabel(value: string): string {
   if (!value) return ''
@@ -3215,6 +3411,51 @@ function closeAirportModal(): void {
   currentAirportInfo.value = null
   airportInfoError.value = null
 }
+
+// Crew/Instructor profile functions
+function showCrewProfile(name: string): void {
+  currentCrewName.value = name
+  showCrewProfileModal.value = true
+}
+
+function closeCrewProfileModal(): void {
+  showCrewProfileModal.value = false
+  currentCrewName.value = ''
+}
+
+// Computed: Flights with the current crew member
+const crewRecentFlights = computed(() => {
+  if (!currentCrewName.value) return []
+  const name = currentCrewName.value.toLowerCase()
+  return logEntries.value
+    .filter(entry => entry.trainingElements.toLowerCase() === name)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+})
+
+// Computed: Statistics for the current crew member
+const crewStats = computed(() => {
+  if (!currentCrewName.value) return null
+  
+  const flights = crewRecentFlights.value
+  if (flights.length === 0) return null
+  
+  const totalFlights = flights.length
+  const totalHours = flights.reduce((sum, f) => sum + (f.flightTime.total ?? 0), 0)
+  
+  // Get first and last flight dates
+  const sortedByDate = [...flights].sort((a, b) => 
+    new Date(a.date).getTime() - new Date(b.date).getTime()
+  )
+  const firstFlight = sortedByDate[0]?.date || null
+  const lastFlight = sortedByDate[sortedByDate.length - 1]?.date || null
+  
+  return {
+    totalFlights,
+    totalHours,
+    firstFlight,
+    lastFlight
+  }
+})
 
 async function beginEditing(entry: LogEntry): Promise<void> {
   editingEntryId.value = entry.id
@@ -3786,6 +4027,7 @@ onMounted(() => {
   loadClockPrefs()
   loadSelectedTotalsMetrics()
   loadPilotProfilePrefs()
+  loadCrewProfiles()
   // Normalize and autofill aircraft category/class labels on load
   normalizeAndAutofillCategories()
   if (logEntries.value.length === 0) {
