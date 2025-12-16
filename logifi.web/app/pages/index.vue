@@ -794,10 +794,10 @@
                     <td :colspan="7" class="px-0 py-0">
                       <div
                       :class="[
-                          'border-b shadow-inner transition-all duration-300',
+                          'border-2 shadow-inner transition-all duration-300',
                       isDarkMode 
-                            ? 'bg-gray-900/80 border-gray-700' 
-                            : 'bg-blue-50/50 border-gray-200'
+                            ? 'bg-gray-900/80 border-blue-500/50' 
+                            : 'bg-blue-50/50 border-blue-400/60'
                         ]"
                       >
                         <div class="p-6">
@@ -1220,10 +1220,10 @@
                       <td :colspan="7" class="px-0 py-0">
                         <div
                         :class="[
-                            'border-b border-t shadow-inner transition-all duration-300',
+                            'border-2 shadow-inner transition-all duration-300',
                           isDarkMode 
-                              ? 'bg-gray-900/50 border-gray-700' 
-                              : 'bg-gray-50 border-gray-200'
+                              ? 'bg-gray-900/50 border-blue-500/50' 
+                              : 'bg-gray-50 border-blue-400/60'
                           ]"
                         >
                           <div class="p-6">
@@ -2555,6 +2555,8 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
     inlineEditEntry.value = null
     isInlineCommercialMode.value = false
   } else {
+    // Close Add Entry form when opening inline edit
+    isEntryFormOpen.value = false
     expandedEntryId.value = entry.id
     // Deep copy for inline editing
     const copy = JSON.parse(JSON.stringify(entry))
@@ -3184,7 +3186,15 @@ function resetForm(): void {
 }
 
 function toggleEntryForm(): void {
-  isEntryFormOpen.value = !isEntryFormOpen.value
+  const willBeOpen = !isEntryFormOpen.value
+  isEntryFormOpen.value = willBeOpen
+  
+  // If opening the Add Entry form, close any open inline edit
+  if (willBeOpen) {
+    expandedEntryId.value = null
+    inlineEditEntry.value = null
+    isInlineCommercialMode.value = false
+  }
 }
 
 function toggleCatalogSection(key: CatalogKey): void {
@@ -4068,6 +4078,10 @@ onMounted(() => {
   // Normalize and autofill aircraft category/class labels on load
   normalizeAndAutofillCategories()
   if (logEntries.value.length === 0) {
+    // Ensure inline edit is closed when auto-opening Add Entry form
+    expandedEntryId.value = null
+    inlineEditEntry.value = null
+    isInlineCommercialMode.value = false
     isEntryFormOpen.value = true
   }
   
