@@ -1013,7 +1013,12 @@
                                       type="number" 
                                       step="0.1"
                                       :placeholder="'0.0'"
-                                      :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" 
+                                      :class="[
+                                        'w-full rounded border px-2 py-1 text-sm text-center font-mono',
+                                        field.key !== 'total' ? 'cursor-pointer' : '',
+                                        isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                                      ]"
+                                      @click="field.key !== 'total' && fillFieldWithTotalTime(field.key, newEntry.flightTime.total, false)"
                     />
           </div>
         </div>
@@ -1479,7 +1484,12 @@
                                         type="number" 
                                         step="0.1"
                                       :placeholder="'0.0'"
-                                      :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" 
+                                      :class="[
+                                        'w-full rounded border px-2 py-1 text-sm text-center font-mono',
+                                        key !== 'total' ? 'cursor-pointer' : '',
+                                        isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900'
+                                      ]"
+                                      @click="key !== 'total' && inlineEditEntry && fillFieldWithTotalTime(key as FlightTimeKey, inlineEditEntry.flightTime.total, true)"
                                       />
                                     </div>
                                   </div>
@@ -3250,6 +3260,19 @@ function sanitizeFlightConditions(conditions: string[]): string[] {
     .filter((condition) => condition !== 'dayVfr')
 }
 
+function fillFieldWithTotalTime(fieldKey: FlightTimeKey, totalTime: number | null, isInline: boolean): void {
+  // Only fill if total time has a value and field is not 'total'
+  if (fieldKey === 'total' || totalTime === null || totalTime === undefined) {
+    return
+  }
+  
+  if (isInline && inlineEditEntry.value) {
+    inlineEditEntry.value.flightTime[fieldKey] = totalTime
+  } else {
+    newEntry.flightTime[fieldKey] = totalTime
+  }
+}
+
 function createBlankEntry(): EditableLogEntry {
   return {
     date: '',
@@ -4038,6 +4061,44 @@ watch(
     )
   },
   { deep: true }
+)
+
+// Watcher to sync Category/Class Time with Total Time (Add Entry form)
+watch(
+  () => newEntry.categoryClassTime,
+  (newVal) => {
+    if (newVal !== null && newVal !== undefined && newVal !== newEntry.flightTime.total) {
+      newEntry.flightTime.total = newVal
+    }
+  }
+)
+
+watch(
+  () => newEntry.flightTime.total,
+  (newVal) => {
+    if (newVal !== null && newVal !== undefined && newVal !== newEntry.categoryClassTime) {
+      newEntry.categoryClassTime = newVal
+    }
+  }
+)
+
+// Watcher to sync Category/Class Time with Total Time (Inline Edit form)
+watch(
+  () => inlineEditEntry.value?.categoryClassTime,
+  (newVal) => {
+    if (inlineEditEntry.value && newVal !== null && newVal !== undefined && newVal !== inlineEditEntry.value.flightTime.total) {
+      inlineEditEntry.value.flightTime.total = newVal
+    }
+  }
+)
+
+watch(
+  () => inlineEditEntry.value?.flightTime.total,
+  (newVal) => {
+    if (inlineEditEntry.value && newVal !== null && newVal !== undefined && newVal !== inlineEditEntry.value.categoryClassTime) {
+      inlineEditEntry.value.categoryClassTime = newVal
+    }
+  }
 )
 
 function submitEntry(): void {
