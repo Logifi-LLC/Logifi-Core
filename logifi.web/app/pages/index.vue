@@ -899,6 +899,16 @@
                                     </button>
                                   </div>
           </div>
+                  <div>
+                                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Flight Number</label>
+                                  <input 
+                                    v-model="newEntry.flightNumber" 
+                                    type="text" 
+                                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" 
+                                    autocomplete="off"
+                                    placeholder="Optional"
+                                  />
+                                </div>
             </div>
 
                               <div class="grid gap-4 md:grid-cols-4">
@@ -1356,6 +1366,16 @@
                                       {{ aircraft.registration }}
                                     </button>
                                   </div>
+                                </div>
+                                <div>
+                                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Flight Number</label>
+                                  <input 
+                                    v-model="inlineEditEntry.flightNumber" 
+                                    type="text" 
+                                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']"
+                                    autocomplete="off"
+                                    placeholder="Optional"
+                                  />
                                 </div>
                               </div>
 
@@ -2791,6 +2811,7 @@ function exportToCSV(): void {
     'Aircraft Category/Class',
     'Aircraft Make/Model',
     'Registration',
+    'Flight Number',
     'Departure',
     'Destination',
     'Route',
@@ -2852,6 +2873,7 @@ function exportToCSV(): void {
       entry.aircraftCategoryClass || '',
       entry.aircraftMakeModel || '',
       entry.registration || '',
+      entry.flightNumber || '',
       entry.departure || '',
       entry.destination || '',
       entry.route || '',
@@ -3236,6 +3258,7 @@ function createBlankEntry(): EditableLogEntry {
     categoryClassTime: null,
     aircraftMakeModel: '',
     registration: '',
+    flightNumber: null,
     departure: '',
     destination: '',
     route: '',
@@ -4034,6 +4057,7 @@ function submitEntry(): void {
     categoryClassTime: normalizeNumber(newEntry.categoryClassTime),
     aircraftMakeModel: newEntry.aircraftMakeModel.trim(),
     registration: newEntry.registration.trim(),
+    flightNumber: newEntry.flightNumber?.trim() || null,
     departure: newEntry.departure.trim(),
     destination: newEntry.destination.trim(),
     route: newEntry.route.trim(),
@@ -4125,6 +4149,7 @@ function loadPersistedEntries(): void {
         
         return {
           ...entry,
+          flightNumber: entry.flightNumber ?? null,
           flightConditions: sanitizeFlightConditions(entry.flightConditions || []),
           flightTime: {
             ...createEmptyFlightTime(),

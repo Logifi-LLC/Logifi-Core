@@ -60,6 +60,7 @@ export interface LogEntry {
   categoryClassTime: number | null
   aircraftMakeModel: string
   registration: string
+  flightNumber: string | null
   departure: string
   destination: string
   route: string
