@@ -695,7 +695,7 @@
             <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div class="max-w-xl text-left">
                 <h2 :class="['text-2xl font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
-                  Stored Entries
+                  Logbook
             </h2>
             <p :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
                   Entries are stored locally in this browser to align with AC&nbsp;120-78B data integrity expectations. Export and secured archival features will follow the signing workflow.
@@ -1193,7 +1193,7 @@
                     <td class="px-4 py-3 align-top hidden xl:table-cell">
                       <div class="flex flex-wrap gap-1">
                         <span
-                          v-for="condition in (entry.flightConditions || []).map(conditionLabel).filter(Boolean)"
+                          v-for="condition in sortConditionsInFixedOrder(entry.flightConditions || [])"
                           :key="`${entry.id}-${condition}`"
                           :class="[
                             'rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold border',
@@ -2585,9 +2585,11 @@ async function saveInlineEdit(): Promise<void> {
   // Update the entry in the list
   const targetId = inlineEditEntry.value.id
   const updatedEntry = { ...inlineEditEntry.value }
-  logEntries.value = logEntries.value.map((e) => 
-    e.id === targetId ? updatedEntry : e
-  ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  logEntries.value = sortEntriesByDateAndOOOI(
+    logEntries.value.map((e) => 
+      e.id === targetId ? updatedEntry : e
+    )
+  )
 
   expandedEntryId.value = null
   inlineEditEntry.value = null
@@ -3194,6 +3196,42 @@ function formatOOOIInput(value: string): string {
   return value.replace(/\D/g, '').slice(0, 4)
 }
 
+function parseOOOITime(time: string | null): number | null {
+  if (!time || time.length === 0) return null
+  // Parse 4-digit time string (HHMM) to minutes since midnight
+  const digits = time.replace(/\D/g, '').padStart(4, '0')
+  if (digits.length !== 4) return null
+  const hours = parseInt(digits.slice(0, 2), 10)
+  const minutes = parseInt(digits.slice(2, 4), 10)
+  if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return null
+  }
+  return hours * 60 + minutes
+}
+
+function sortEntriesByDateAndOOOI(entries: LogEntry[]): LogEntry[] {
+  return [...entries].sort((a, b) => {
+    // Primary sort: date (descending - most recent first)
+    const dateA = new Date(a.date).getTime()
+    const dateB = new Date(b.date).getTime()
+    const dateDiff = dateB - dateA
+    
+    if (dateDiff !== 0) {
+      return dateDiff
+    }
+    
+    // Secondary sort: OOOI "out" time (descending - latest first)
+    // Entries without OOOI "out" time come after entries with OOOI times
+    const timeA = parseOOOITime(a.oooi?.out ?? null)
+    const timeB = parseOOOITime(b.oooi?.out ?? null)
+    
+    if (timeA === null && timeB === null) return 0
+    if (timeA === null) return 1 // a comes after b
+    if (timeB === null) return -1 // a comes before b
+    return timeB - timeA // descending order (latest first)
+  })
+}
+
 function autoCheckFlightConditions(
   conditions: string[], 
   nightTime: number | null, 
@@ -3215,7 +3253,8 @@ function autoCheckFlightConditions(
     conditionSet.add('ifr')
     conditionSet.add('actualInstrument')
   } else {
-    conditionSet.delete('ifr')
+    // Only auto-uncheck Actual Instrument when time is 0
+    // Keep IFR checked (can be flown in VMC without actual instrument time)
     conditionSet.delete('actualInstrument')
   }
   
@@ -3427,9 +3466,9 @@ function closeCrewProfileModal(): void {
 const crewRecentFlights = computed(() => {
   if (!currentCrewName.value) return []
   const name = currentCrewName.value.toLowerCase()
-  return logEntries.value
-    .filter(entry => entry.trainingElements.toLowerCase() === name)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  return sortEntriesByDateAndOOOI(
+    logEntries.value.filter(entry => entry.trainingElements.toLowerCase() === name)
+  )
 })
 
 // Computed: Statistics for the current crew member
@@ -3936,18 +3975,16 @@ function submitEntry(): void {
 
   if (editingEntryId.value) {
     const targetId = editingEntryId.value
-    logEntries.value = logEntries.value
-      .map((entry) => (entry.id === targetId ? { ...baseEntry, id: targetId } : entry))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    logEntries.value = sortEntriesByDateAndOOOI(
+      logEntries.value.map((entry) => (entry.id === targetId ? { ...baseEntry, id: targetId } : entry))
+    )
     successMessage.value = 'Entry updated.'
   } else {
     const entryToStore: LogEntry = {
       ...baseEntry,
       id: generateEntryId()
     }
-    logEntries.value = [...logEntries.value, entryToStore].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-    )
+    logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
     successMessage.value = 'Entry saved locally. Remember to archive signatures once the feature is available.'
   }
 
@@ -4156,12 +4193,8 @@ const filteredEntries = computed(() => {
     return true
   })
 
-  // Sort by date (most recent first)
-  return result.sort((a, b) => {
-      const dateA = new Date(a.date).getTime()
-      const dateB = new Date(b.date).getTime()
-    return dateB - dateA
-  })
+  // Sort by date (most recent first), then by OOOI out time for same-day entries
+  return sortEntriesByDateAndOOOI(result)
 })
 
 const entriesForTotals = computed(() => {
@@ -4538,8 +4571,11 @@ const pilotProfileStats = computed<PilotProfileStats>(() => {
     }
 
     (entry.flightConditions || []).forEach((condition) => {
-      const label = condition?.trim() || 'Other'
-      conditionCounts[label] = (conditionCounts[label] || 0) + 1
+      const rawValue = condition?.trim() || ''
+      const label = conditionOptions.find((opt) => opt.value === rawValue)?.label || rawValue
+      if (label) {
+        conditionCounts[label] = (conditionCounts[label] || 0) + 1
+      }
     })
 
     const timestamp = new Date(entry.date).getTime()
@@ -4561,8 +4597,18 @@ const pilotProfileStats = computed<PilotProfileStats>(() => {
   stats.avgDuration = stats.totalFlights > 0 ? stats.totalHours / stats.totalFlights : 0
   stats.favoriteAircraft = getTopKey(familyCounts)
   stats.favoriteRoute = getTopKey(routeCounts)
+  // Create a map of label to index for fixed ordering
+  const conditionOrderMap = new Map<string, number>(
+    conditionOptions.map((opt, index) => [opt.label, index])
+  )
+  
   stats.conditions = Object.entries(conditionCounts)
-    .sort((a, b) => b[1] - a[1])
+    .filter(([label, count]) => count > 0) // Only include conditions with counts > 0
+    .sort((a, b) => {
+      const orderA = conditionOrderMap.get(a[0]) ?? Infinity
+      const orderB = conditionOrderMap.get(b[0]) ?? Infinity
+      return orderA - orderB // Sort by fixed order from conditionOptions
+    })
     .map(([label, count]) => ({ label, count }))
 
   return stats
@@ -4613,13 +4659,12 @@ const pilotStatCards = computed(() => {
 const pilotConditionChips = computed(() => pilotProfileStats.value.conditions.slice(0, 3))
 
 const pilotRecentFlights = computed(() => {
-  return [...logEntries.value]
-    .filter((entry) => {
+  return sortEntriesByDateAndOOOI(
+    [...logEntries.value].filter((entry) => {
       const timestamp = new Date(entry.date).getTime()
       return !Number.isNaN(timestamp)
     })
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 3)
+  ).slice(0, 3)
 })
 
 function formatNumber(value: number | null): string {
@@ -4755,5 +4800,29 @@ function conditionLabel(value: string): string {
   }
   const option = conditionOptions.find((option) => option.value === value)
   return option ? option.label : value
+}
+
+function sortConditionsInFixedOrder(conditions: string[]): string[] {
+  // Create a map of value to index for fixed ordering
+  const conditionOrderMap = new Map<string, number>(
+    conditionOptions.map((opt, index) => [opt.value, index])
+  )
+  
+  // Sort by the original values first, then map to labels
+  const sorted = [...conditions]
+    .filter((cond): cond is string => typeof cond === 'string' && cond !== '' && cond !== 'dayVfr') // Filter out empty/invalid conditions
+    .sort((a, b) => {
+      const orderA = conditionOrderMap.get(a) ?? Infinity
+      const orderB = conditionOrderMap.get(b) ?? Infinity
+      return orderA - orderB
+    })
+  
+  return sorted
+    .map((cond) => {
+      if (cond === 'dayVfr') return ''
+      const option = conditionOptions.find((opt) => opt.value === cond)
+      return option ? option.label : cond
+    })
+    .filter((label): label is string => Boolean(label))
 }
 </script>
