@@ -872,19 +872,27 @@
                                     :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" 
                                     required
                                     autocomplete="off"
-                                    @focus="showIdentDropdown = true"
+                                    @focus="showIdentDropdown = true; highlightedIdentIndex = filteredAircraftForNewEntry.length > 0 ? 0 : -1"
                                     @blur="handleIdentBlur"
+                                    @keydown="(e) => handleDropdownKeydown(e, 'ident', filteredAircraftForNewEntry, (item) => selectAircraftForNewEntry(item))"
                                   />
                                   <!-- Aircraft Ident Dropdown -->
                                   <div 
                                     v-if="showIdentDropdown && filteredAircraftForNewEntry.length > 0"
+                                    data-dropdown="ident"
                                     :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300']"
                                   >
                                     <button
-                                      v-for="aircraft in filteredAircraftForNewEntry"
+                                      v-for="(aircraft, index) in filteredAircraftForNewEntry"
                                       :key="aircraft.registration"
+                                      :data-index="index"
                                       type="button"
-                                      :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase hover:bg-opacity-80 transition-colors', isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100']"
+                                      :class="[
+                                        'w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors',
+                                        highlightedIdentIndex === index
+                                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                                          : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100')
+                                      ]"
                                       @mousedown.prevent="selectAircraftForNewEntry(aircraft)"
                                     >
                                       {{ aircraft.registration }}
@@ -902,19 +910,27 @@
                                     :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" 
                                     required
                                     autocomplete="off"
-                                    @focus="showFromDropdown = true"
+                                    @focus="showFromDropdown = true; highlightedFromIndex = filteredAirportsForFrom.length > 0 ? 0 : -1"
+                                    @keydown="(e) => handleDropdownKeydown(e, 'from', filteredAirportsForFrom, (item) => selectAirportForFrom(item))"
                                     @blur="handleFromBlur"
                                   />
                                   <!-- Airport FROM Dropdown -->
                                   <div 
                                     v-if="showFromDropdown && filteredAirportsForFrom.length > 0"
+                                    data-dropdown="from"
                                     :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300']"
                                   >
                                     <button
-                                      v-for="airport in filteredAirportsForFrom"
+                                      v-for="(airport, index) in filteredAirportsForFrom"
                                       :key="airport"
+                                      :data-index="index"
                                       type="button"
-                                      :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase hover:bg-opacity-80 transition-colors', isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100']"
+                                      :class="[
+                                        'w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors',
+                                        highlightedFromIndex === index
+                                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                                          : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100')
+                                      ]"
                                       @mousedown.prevent="selectAirportForFrom(airport)"
                                     >
                                       {{ airport }}
@@ -929,19 +945,27 @@
                                     :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" 
                                     required
                                     autocomplete="off"
-                                    @focus="showToDropdown = true"
+                                    @focus="showToDropdown = true; highlightedToIndex = filteredAirportsForTo.length > 0 ? 0 : -1"
+                                    @keydown="(e) => handleDropdownKeydown(e, 'to', filteredAirportsForTo, (item) => selectAirportForTo(item))"
                                     @blur="handleToBlur"
                                   />
                                   <!-- Airport TO Dropdown -->
                                   <div 
                                     v-if="showToDropdown && filteredAirportsForTo.length > 0"
+                                    data-dropdown="to"
                                     :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300']"
                                   >
                                     <button
-                                      v-for="airport in filteredAirportsForTo"
+                                      v-for="(airport, index) in filteredAirportsForTo"
                                       :key="airport"
+                                      :data-index="index"
                                       type="button"
-                                      :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase hover:bg-opacity-80 transition-colors', isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100']"
+                                      :class="[
+                                        'w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors',
+                                        highlightedToIndex === index
+                                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                                          : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100')
+                                      ]"
                                       @mousedown.prevent="selectAirportForTo(airport)"
                                     >
                                       {{ airport }}
@@ -1077,19 +1101,27 @@
                                       :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" 
                                       placeholder="Pilot Name"
                                       autocomplete="off"
-                                      @focus="showPilotNameDropdown = true"
+                                      @focus="showPilotNameDropdown = true; highlightedPilotIndex = filteredPilots.length > 0 ? 0 : -1"
+                                      @keydown="(e) => handleDropdownKeydown(e, 'pilot', filteredPilots, (item) => selectPilotName(item))"
                                       @blur="handlePilotNameBlur"
                                     />
                                     <!-- Pilot Name Dropdown -->
                                     <div 
                                       v-if="showPilotNameDropdown && filteredPilots.length > 0"
+                                      data-dropdown="pilot"
                                       :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300']"
                                     >
                                       <button
-                                        v-for="pilot in filteredPilots"
+                                        v-for="(pilot, index) in filteredPilots"
                                         :key="pilot"
+                                        :data-index="index"
                                         type="button"
-                                        :class="['w-full px-3 py-2 text-left text-sm hover:bg-opacity-80 transition-colors', isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100']"
+                                        :class="[
+                                          'w-full px-3 py-2 text-left text-sm transition-colors',
+                                          highlightedPilotIndex === index
+                                            ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                                            : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100')
+                                        ]"
                                         @mousedown.prevent="selectPilotName(pilot)"
                                       >
                                         {{ pilot }}
@@ -1298,19 +1330,27 @@
                                     type="text" 
                                     :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']"
                                     autocomplete="off"
-                                    @focus="showInlineIdentDropdown = true"
+                                    @focus="showInlineIdentDropdown = true; highlightedInlineIdentIndex = filteredAircraftForInlineEdit.length > 0 ? 0 : -1"
+                                    @keydown="(e) => handleDropdownKeydown(e, 'inlineIdent', filteredAircraftForInlineEdit, (item) => selectAircraftForInlineEdit(item))"
                                     @blur="handleInlineIdentBlur"
                                   />
                                   <!-- Aircraft Ident Dropdown for Inline Edit -->
                                   <div 
                                     v-if="showInlineIdentDropdown && filteredAircraftForInlineEdit.length > 0"
+                                    data-dropdown="inlineIdent"
                                     :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300']"
                                   >
                                     <button
-                                      v-for="aircraft in filteredAircraftForInlineEdit"
+                                      v-for="(aircraft, index) in filteredAircraftForInlineEdit"
                                       :key="aircraft.registration"
+                                      :data-index="index"
                                       type="button"
-                                      :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase hover:bg-opacity-80 transition-colors', isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100']"
+                                      :class="[
+                                        'w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors',
+                                        highlightedInlineIdentIndex === index
+                                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                                          : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100')
+                                      ]"
                                       @mousedown.prevent="selectAircraftForInlineEdit(aircraft)"
                                     >
                                       {{ aircraft.registration }}
@@ -1327,19 +1367,27 @@
                                     type="text" 
                                     :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']"
                                     autocomplete="off"
-                                    @focus="showInlineFromDropdown = true"
+                                    @focus="showInlineFromDropdown = true; highlightedInlineFromIndex = filteredAirportsForInlineFrom.length > 0 ? 0 : -1"
+                                    @keydown="(e) => handleDropdownKeydown(e, 'inlineFrom', filteredAirportsForInlineFrom, (item) => selectAirportForInlineFrom(item))"
                                     @blur="handleInlineFromBlur"
                                   />
                                   <!-- Airport FROM Dropdown for Inline Edit -->
                                   <div 
                                     v-if="showInlineFromDropdown && filteredAirportsForInlineFrom.length > 0"
+                                    data-dropdown="inlineFrom"
                                     :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300']"
                                   >
                                     <button
-                                      v-for="airport in filteredAirportsForInlineFrom"
+                                      v-for="(airport, index) in filteredAirportsForInlineFrom"
                                       :key="airport"
+                                      :data-index="index"
                                       type="button"
-                                      :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase hover:bg-opacity-80 transition-colors', isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100']"
+                                      :class="[
+                                        'w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors',
+                                        highlightedInlineFromIndex === index
+                                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                                          : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100')
+                                      ]"
                                       @mousedown.prevent="selectAirportForInlineFrom(airport)"
                                     >
                                       {{ airport }}
@@ -1353,19 +1401,27 @@
                                     type="text" 
                                     :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']"
                                     autocomplete="off"
-                                    @focus="showInlineToDropdown = true"
+                                    @focus="showInlineToDropdown = true; highlightedInlineToIndex = filteredAirportsForInlineTo.length > 0 ? 0 : -1"
+                                    @keydown="(e) => handleDropdownKeydown(e, 'inlineTo', filteredAirportsForInlineTo, (item) => selectAirportForInlineTo(item))"
                                     @blur="handleInlineToBlur"
                                   />
                                   <!-- Airport TO Dropdown for Inline Edit -->
                                   <div 
                                     v-if="showInlineToDropdown && filteredAirportsForInlineTo.length > 0"
+                                    data-dropdown="inlineTo"
                                     :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300']"
                                   >
                                     <button
-                                      v-for="airport in filteredAirportsForInlineTo"
+                                      v-for="(airport, index) in filteredAirportsForInlineTo"
                                       :key="airport"
+                                      :data-index="index"
                                       type="button"
-                                      :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase hover:bg-opacity-80 transition-colors', isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100']"
+                                      :class="[
+                                        'w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors',
+                                        highlightedInlineToIndex === index
+                                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                                          : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100')
+                                      ]"
                                       @mousedown.prevent="selectAirportForInlineTo(airport)"
                                     >
                                       {{ airport }}
@@ -1501,19 +1557,27 @@
                                       :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" 
                                       placeholder="Pilot Name"
                                       autocomplete="off"
-                                      @focus="showInlinePilotNameDropdown = true"
+                                      @focus="showInlinePilotNameDropdown = true; highlightedInlinePilotIndex = filteredPilotsForInline.length > 0 ? 0 : -1"
+                                      @keydown="(e) => handleDropdownKeydown(e, 'inlinePilot', filteredPilotsForInline, (item) => selectPilotNameForInline(item))"
                                       @blur="handleInlinePilotNameBlur"
                                     />
                                     <!-- Pilot Name Dropdown for Inline Edit -->
                                     <div 
                                       v-if="showInlinePilotNameDropdown && filteredPilotsForInline.length > 0"
+                                      data-dropdown="inlinePilot"
                                       :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300']"
                                     >
                                       <button
-                                        v-for="pilot in filteredPilotsForInline"
+                                        v-for="(pilot, index) in filteredPilotsForInline"
                                         :key="pilot"
+                                        :data-index="index"
                                         type="button"
-                                        :class="['w-full px-3 py-2 text-left text-sm hover:bg-opacity-80 transition-colors', isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100']"
+                                        :class="[
+                                          'w-full px-3 py-2 text-left text-sm transition-colors',
+                                          highlightedInlinePilotIndex === index
+                                            ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                                            : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100')
+                                        ]"
                                         @mousedown.prevent="selectPilotNameForInline(pilot)"
                                       >
                                         {{ pilot }}
@@ -2621,6 +2685,16 @@ const showToDropdown = ref(false)
 const showInlineToDropdown = ref(false)
 const showPilotNameDropdown = ref(false)
 const showInlinePilotNameDropdown = ref(false)
+
+// Highlighted index for keyboard navigation
+const highlightedIdentIndex = ref(-1)
+const highlightedInlineIdentIndex = ref(-1)
+const highlightedFromIndex = ref(-1)
+const highlightedInlineFromIndex = ref(-1)
+const highlightedToIndex = ref(-1)
+const highlightedInlineToIndex = ref(-1)
+const highlightedPilotIndex = ref(-1)
+const highlightedInlinePilotIndex = ref(-1)
 const isDarkMode = ref(true)
 const pilotProfile = reactive<PilotProfilePrefs>({ ...pilotProfileDefaults })
 const pilotProfileLoaded = ref(false)
@@ -4371,10 +4445,84 @@ const filteredAircraftForInlineEdit = computed(() => {
 })
 
 // Selection handlers for Ident dropdown
+function handleDropdownKeydown<T>(
+  event: KeyboardEvent,
+  dropdownType: 'ident' | 'inlineIdent' | 'from' | 'inlineFrom' | 'to' | 'inlineTo' | 'pilot' | 'inlinePilot',
+  items: T[],
+  selectFn: (item: T) => void
+): void {
+  if (items.length === 0) return
+
+  const indexMap = {
+    ident: highlightedIdentIndex,
+    inlineIdent: highlightedInlineIdentIndex,
+    from: highlightedFromIndex,
+    inlineFrom: highlightedInlineFromIndex,
+    to: highlightedToIndex,
+    inlineTo: highlightedInlineToIndex,
+    pilot: highlightedPilotIndex,
+    inlinePilot: highlightedInlinePilotIndex
+  }
+
+  const highlightedIndex = indexMap[dropdownType]
+
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    highlightedIndex.value = highlightedIndex.value < items.length - 1 ? highlightedIndex.value + 1 : 0
+    scrollToHighlighted(dropdownType)
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    highlightedIndex.value = highlightedIndex.value > 0 ? highlightedIndex.value - 1 : items.length - 1
+    scrollToHighlighted(dropdownType)
+  } else if (event.key === 'Enter' && highlightedIndex.value >= 0 && highlightedIndex.value < items.length) {
+    event.preventDefault()
+    const index = highlightedIndex.value
+    const selectedItem = items[index]
+    if (selectedItem !== undefined) {
+      selectFn(selectedItem)
+    }
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    highlightedIndex.value = -1
+    if (dropdownType === 'ident') showIdentDropdown.value = false
+    else if (dropdownType === 'inlineIdent') showInlineIdentDropdown.value = false
+    else if (dropdownType === 'from') showFromDropdown.value = false
+    else if (dropdownType === 'inlineFrom') showInlineFromDropdown.value = false
+    else if (dropdownType === 'to') showToDropdown.value = false
+    else if (dropdownType === 'inlineTo') showInlineToDropdown.value = false
+    else if (dropdownType === 'pilot') showPilotNameDropdown.value = false
+    else if (dropdownType === 'inlinePilot') showInlinePilotNameDropdown.value = false
+  }
+}
+
+function scrollToHighlighted(dropdownType: string): void {
+  // Use nextTick to ensure DOM is updated
+  setTimeout(() => {
+    const selector = `[data-dropdown="${dropdownType}"] [data-index="${getHighlightedIndex(dropdownType)}"]`
+    const element = document.querySelector(selector) as HTMLElement
+    if (element) {
+      element.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, 0)
+}
+
+function getHighlightedIndex(dropdownType: string): number {
+  if (dropdownType === 'ident') return highlightedIdentIndex.value
+  if (dropdownType === 'inlineIdent') return highlightedInlineIdentIndex.value
+  if (dropdownType === 'from') return highlightedFromIndex.value
+  if (dropdownType === 'inlineFrom') return highlightedInlineFromIndex.value
+  if (dropdownType === 'to') return highlightedToIndex.value
+  if (dropdownType === 'inlineTo') return highlightedInlineToIndex.value
+  if (dropdownType === 'pilot') return highlightedPilotIndex.value
+  if (dropdownType === 'inlinePilot') return highlightedInlinePilotIndex.value
+  return -1
+}
+
 function selectAircraftForNewEntry(aircraft: { registration: string; makeModel: string }): void {
   newEntry.registration = aircraft.registration
   newEntry.aircraftMakeModel = aircraft.makeModel
   showIdentDropdown.value = false
+  highlightedIdentIndex.value = -1
 }
 
 function selectAircraftForInlineEdit(aircraft: { registration: string; makeModel: string }): void {
@@ -4382,15 +4530,22 @@ function selectAircraftForInlineEdit(aircraft: { registration: string; makeModel
   inlineEditEntry.value.registration = aircraft.registration
   inlineEditEntry.value.aircraftMakeModel = aircraft.makeModel
   showInlineIdentDropdown.value = false
+  highlightedInlineIdentIndex.value = -1
 }
 
 // Blur handlers for Ident dropdowns (with delay to allow click to register)
 function handleIdentBlur(): void {
-  window.setTimeout(() => { showIdentDropdown.value = false }, 150)
+  window.setTimeout(() => { 
+    showIdentDropdown.value = false
+    highlightedIdentIndex.value = -1
+  }, 150)
 }
 
 function handleInlineIdentBlur(): void {
-  window.setTimeout(() => { showInlineIdentDropdown.value = false }, 150)
+  window.setTimeout(() => { 
+    showInlineIdentDropdown.value = false
+    highlightedInlineIdentIndex.value = -1
+  }, 150)
 }
 
 // Filtered airports for FROM dropdown
@@ -4451,6 +4606,7 @@ async function prefetchAirportCoords(airportCode: string): Promise<void> {
 function selectAirportForFrom(airport: string): void {
   newEntry.departure = airport
   showFromDropdown.value = false
+  highlightedFromIndex.value = -1
   // Prefetch coordinates for night time calculation
   prefetchAirportCoords(airport)
 }
@@ -4459,6 +4615,7 @@ function selectAirportForInlineFrom(airport: string): void {
   if (!inlineEditEntry.value) return
   inlineEditEntry.value.departure = airport
   showInlineFromDropdown.value = false
+  highlightedInlineFromIndex.value = -1
   prefetchAirportCoords(airport)
 }
 
@@ -4466,6 +4623,7 @@ function selectAirportForInlineFrom(airport: string): void {
 function selectAirportForTo(airport: string): void {
   newEntry.destination = airport
   showToDropdown.value = false
+  highlightedToIndex.value = -1
   prefetchAirportCoords(airport)
 }
 
@@ -4473,6 +4631,7 @@ function selectAirportForInlineTo(airport: string): void {
   if (!inlineEditEntry.value) return
   inlineEditEntry.value.destination = airport
   showInlineToDropdown.value = false
+  highlightedInlineToIndex.value = -1
   prefetchAirportCoords(airport)
 }
 
@@ -4480,37 +4639,57 @@ function selectAirportForInlineTo(airport: string): void {
 function selectPilotName(pilot: string): void {
   newEntry.trainingElements = pilot
   showPilotNameDropdown.value = false
+  highlightedPilotIndex.value = -1
 }
 
 function selectPilotNameForInline(pilot: string): void {
   if (!inlineEditEntry.value) return
   inlineEditEntry.value.trainingElements = pilot
   showInlinePilotNameDropdown.value = false
+  highlightedInlinePilotIndex.value = -1
 }
 
 // Blur handlers for airport and pilot dropdowns
 function handleFromBlur(): void {
-  window.setTimeout(() => { showFromDropdown.value = false }, 150)
+  window.setTimeout(() => { 
+    showFromDropdown.value = false
+    highlightedFromIndex.value = -1
+  }, 150)
 }
 
 function handleInlineFromBlur(): void {
-  window.setTimeout(() => { showInlineFromDropdown.value = false }, 150)
+  window.setTimeout(() => { 
+    showInlineFromDropdown.value = false
+    highlightedInlineFromIndex.value = -1
+  }, 150)
 }
 
 function handleToBlur(): void {
-  window.setTimeout(() => { showToDropdown.value = false }, 150)
+  window.setTimeout(() => { 
+    showToDropdown.value = false
+    highlightedToIndex.value = -1
+  }, 150)
 }
 
 function handleInlineToBlur(): void {
-  window.setTimeout(() => { showInlineToDropdown.value = false }, 150)
+  window.setTimeout(() => { 
+    showInlineToDropdown.value = false
+    highlightedInlineToIndex.value = -1
+  }, 150)
 }
 
 function handlePilotNameBlur(): void {
-  window.setTimeout(() => { showPilotNameDropdown.value = false }, 150)
+  window.setTimeout(() => { 
+    showPilotNameDropdown.value = false
+    highlightedPilotIndex.value = -1
+  }, 150)
 }
 
 function handleInlinePilotNameBlur(): void {
-  window.setTimeout(() => { showInlinePilotNameDropdown.value = false }, 150)
+  window.setTimeout(() => { 
+    showInlinePilotNameDropdown.value = false
+    highlightedInlinePilotIndex.value = -1
+  }, 150)
 }
 
 function coerceNumber(value: number | null | undefined): number {
