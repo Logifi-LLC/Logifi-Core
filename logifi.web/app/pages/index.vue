@@ -2247,7 +2247,7 @@
                   Coordinates
                 </div>
                 <div :class="['text-base font-quicksand', isDarkMode ? 'text-gray-200' : 'text-gray-700']">
-                  {{ currentAirportInfo.latitude.toFixed(4) }}, {{ currentAirportInfo.longitude.toFixed(4) }}
+                  {{ Number(currentAirportInfo.latitude).toFixed(4) }}, {{ Number(currentAirportInfo.longitude).toFixed(4) }}
                 </div>
               </div>
             </div>

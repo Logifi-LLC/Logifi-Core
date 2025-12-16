@@ -56,8 +56,8 @@ export default defineEventHandler(async (event): Promise<{ success: boolean; dat
           state: airportData.state || undefined,
           country: airportData.country || undefined,
           elevation: airportData.elevation ? `${airportData.elevation} ft` : undefined,
-          latitude: airportData.latitude || undefined,
-          longitude: airportData.longitude || undefined,
+          latitude: airportData.latitude ? Number(airportData.latitude) : undefined,
+          longitude: airportData.longitude ? Number(airportData.longitude) : undefined,
           timezone: airportData.timezone || undefined,
           source: 'Static Airport Database'
         }
