@@ -78,6 +78,62 @@ export type EditableLogEntry = Omit<LogEntry, 'id'>
 
 export type CatalogKey = 'aircraft' | 'airports' | 'pilots' | 'categoryClass'
 
+export type LogbookColumnKey = 
+  | 'date'
+  | 'aircraft'
+  | 'identification'
+  | 'flightNumber'
+  | 'fromTo'
+  | 'conditions'
+  | 'remarks'
+  | 'pic'
+  | 'sic'
+  | 'dualR'
+  | 'solo'
+  | 'night'
+  | 'actual'
+  | 'hood'
+  | 'dualG'
+  | 'xc'
+  | 'dayLandings'
+  | 'nightLandings'
+  | 'approach'
+  | 'pilots'
+  | 'total'
+
+export interface LogbookColumnConfig {
+  key: LogbookColumnKey
+  label: string
+  visible: boolean
+  order: number
+  required: boolean
+  responsiveClass?: string // e.g., 'hidden xl:table-cell' for conditions
+}
+
+export const DEFAULT_COLUMN_CONFIG: LogbookColumnConfig[] = [
+  { key: 'date', label: 'Date', visible: true, order: 0, required: true },
+  { key: 'aircraft', label: 'Aircraft', visible: true, order: 1, required: false },
+  { key: 'identification', label: 'Identification', visible: true, order: 2, required: false },
+  { key: 'flightNumber', label: 'Flight Number', visible: false, order: 3, required: false },
+  { key: 'fromTo', label: 'From → To', visible: true, order: 4, required: false },
+  { key: 'conditions', label: 'Conditions', visible: true, order: 5, required: false, responsiveClass: 'hidden xl:table-cell' },
+  { key: 'remarks', label: 'Remarks', visible: true, order: 6, required: false, responsiveClass: 'hidden lg:table-cell' },
+  { key: 'pic', label: 'PIC', visible: false, order: 7, required: false },
+  { key: 'sic', label: 'SIC', visible: false, order: 8, required: false },
+  { key: 'dualR', label: 'Dual R', visible: false, order: 9, required: false },
+  { key: 'solo', label: 'Solo', visible: false, order: 10, required: false },
+  { key: 'night', label: 'Night', visible: false, order: 11, required: false },
+  { key: 'actual', label: 'Actual', visible: false, order: 12, required: false },
+  { key: 'hood', label: 'Hood', visible: false, order: 13, required: false },
+  { key: 'dualG', label: 'Dual G', visible: false, order: 14, required: false },
+  { key: 'xc', label: 'XC', visible: false, order: 15, required: false },
+  { key: 'dayLandings', label: 'Day Landings', visible: false, order: 16, required: false },
+  { key: 'nightLandings', label: 'Night Landings', visible: false, order: 17, required: false },
+  { key: 'approach', label: 'Approach', visible: false, order: 18, required: false },
+  { key: 'pilots', label: 'Pilots', visible: false, order: 19, required: false },
+  { key: 'total', label: 'Total', visible: true, order: 20, required: true }
+]
+
 export const createEmptyFlightTime = (): FlightTimeBreakdown => ({
   total: null,
   pic: null,
