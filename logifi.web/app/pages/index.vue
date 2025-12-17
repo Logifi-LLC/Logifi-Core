@@ -857,18 +857,18 @@
             <div
               v-else
                       :class="[
-                'mt-6 overflow-x-auto rounded-2xl border transition-colors duration-300 relative',
+                'mt-6 overflow-hidden rounded-2xl border transition-colors duration-300 relative',
                         isDarkMode 
     ? 'border-gray-700' 
     : 'border-gray-300 shadow-sm'
               ]"
             >
               <table :class="[
-                'w-full divide-y text-left font-quicksand table-fixed',
+                'w-full divide-y text-left font-quicksand',
                 isDarkMode 
                   ? 'divide-gray-700 bg-gray-800' 
                     : 'divide-gray-200 bg-gray-100'
-              ]">
+              ]" style="table-layout: fixed; width: 100%;">
                 <thead :class="[
                   'uppercase text-xs font-semibold tracking-wider font-quicksand sticky top-0 z-20 shadow-sm',
                   isDarkMode 
@@ -883,15 +883,10 @@
                         'py-3 font-medium relative',
                         col.key === 'total' ? 'text-right' : '',
                         col.responsiveClass || '',
-                        col.key === 'date' ? 'px-3 w-24' : '',
-                        col.key === 'aircraft' ? 'px-2 w-32' : '',
-                        col.key === 'identification' ? 'px-2 w-28' : '',
-                        col.key === 'fromTo' ? 'px-2 w-40' : '',
-                        col.key === 'conditions' ? 'px-2 w-36' : '',
-                        col.key === 'remarks' ? 'px-2 w-48' : '',
-                        col.key === 'total' ? 'px-3 w-20' : '',
-                        !['date', 'aircraft', 'identification', 'fromTo', 'conditions', 'remarks', 'total'].includes(col.key) ? 'px-2 w-24' : ''
+                        col.key === 'date' ? 'px-3' : 'px-2',
+                        col.key === 'total' ? 'px-3' : ''
                       ]"
+                      :style="col.key === 'date' ? 'width: 10%;' : col.key === 'aircraft' ? 'width: 13%;' : col.key === 'identification' ? 'width: 12%;' : col.key === 'fromTo' ? 'width: 15%;' : col.key === 'conditions' ? 'width: 12%;' : col.key === 'remarks' ? 'width: 22%;' : col.key === 'total' ? 'width: 8%;' : 'width: 6%;'"
                     >
                       {{ col.label }}
                     </th>
@@ -906,7 +901,7 @@
                   <!-- Add Entry Row (Inline Style) -->
                   <tr v-if="isEntryFormOpen">
 
-                    <td :colspan="visibleColumns.length + 1" class="px-0 py-0">
+                    <td :colspan="visibleColumns.length" class="px-0 py-0">
                       <div
                       :class="[
                           'border-2 shadow-inner transition-all duration-300',
@@ -1331,35 +1326,35 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'date')"
                       :class="[
-                        'px-3 py-3 align-top w-24',
+                        'px-3 py-3 align-top',
                         visibleColumns.find(c => c.key === 'date')?.responsiveClass || ''
                       ]"
                     >
                       <div :class="['font-semibold text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
                         {{ formatDisplayDate(entry.date) }}
-            </div>
+                      </div>
                       <div :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                         {{ entry.role }}
-            </div>
+                      </div>
                     </td>
                     <!-- Aircraft Column -->
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'aircraft')"
                       :class="[
-                        'px-2 py-3 align-top w-32',
+                        'px-2 py-3 align-top',
                         visibleColumns.find(c => c.key === 'aircraft')?.responsiveClass || ''
                       ]"
                     >
                       <div :class="['text-sm truncate', isDarkMode ? 'text-gray-200' : 'text-gray-900']">{{ entry.aircraftMakeModel }}</div>
                       <div :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                         {{ entry.aircraftCategoryClass }}
-          </div>
+                      </div>
                     </td>
                     <!-- Identification Column -->
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'identification')"
                       :class="[
-                        'px-2 py-3 align-top uppercase font-mono text-xs tracking-wide w-28',
+                        'px-2 py-3 align-top uppercase font-mono text-xs tracking-wide',
                         isDarkMode ? 'text-gray-300' : 'text-gray-700',
                         visibleColumns.find(c => c.key === 'identification')?.responsiveClass || ''
                       ]"
@@ -1370,7 +1365,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'flightNumber')"
                       :class="[
-                        'px-2 py-3 align-top uppercase font-mono text-xs w-24',
+                        'px-2 py-3 align-top uppercase font-mono text-xs',
                         isDarkMode ? 'text-gray-300' : 'text-gray-700',
                         visibleColumns.find(c => c.key === 'flightNumber')?.responsiveClass || ''
                       ]"
@@ -1381,13 +1376,13 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'fromTo')"
                       :class="[
-                        'px-2 py-3 align-top w-40',
+                        'px-2 py-3 align-top',
                         visibleColumns.find(c => c.key === 'fromTo')?.responsiveClass || ''
                       ]"
                     >
                       <div :class="['font-semibold text-sm truncate', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
                         {{ entry.departure }} → {{ entry.destination }}
-        </div>
+                      </div>
                       <div v-if="entry.route" :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                         {{ entry.route }}
                       </div>
@@ -1396,7 +1391,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'conditions')"
                       :class="[
-                        'px-2 py-3 align-top w-36',
+                        'px-2 py-3 align-top',
                         visibleColumns.find(c => c.key === 'conditions')?.responsiveClass || ''
                       ]"
                     >
@@ -1422,7 +1417,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'remarks')"
                       :class="[
-                        'px-2 py-3 align-top text-sm italic w-48',
+                        'px-2 py-3 align-top text-sm italic',
                         isDarkMode ? 'text-gray-400' : 'text-gray-500',
                         visibleColumns.find(c => c.key === 'remarks')?.responsiveClass || ''
                       ]"
@@ -1433,7 +1428,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'pic')"
                       :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm w-24',
+                        'px-2 py-3 align-top text-right font-mono text-sm',
                         isDarkMode ? 'text-gray-300' : 'text-gray-700',
                         visibleColumns.find(c => c.key === 'pic')?.responsiveClass || ''
                       ]"
@@ -1444,7 +1439,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'sic')"
                       :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm w-24',
+                        'px-2 py-3 align-top text-right font-mono text-sm',
                         isDarkMode ? 'text-gray-300' : 'text-gray-700',
                         visibleColumns.find(c => c.key === 'sic')?.responsiveClass || ''
                       ]"
@@ -1455,7 +1450,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'dualR')"
                       :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm w-24',
+                        'px-2 py-3 align-top text-right font-mono text-sm',
                         isDarkMode ? 'text-gray-300' : 'text-gray-700',
                         visibleColumns.find(c => c.key === 'dualR')?.responsiveClass || ''
                       ]"
@@ -1466,7 +1461,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'solo')"
                       :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm w-24',
+                        'px-2 py-3 align-top text-right font-mono text-sm',
                         isDarkMode ? 'text-gray-300' : 'text-gray-700',
                         visibleColumns.find(c => c.key === 'solo')?.responsiveClass || ''
                       ]"
@@ -1477,7 +1472,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'night')"
                       :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm w-24',
+                        'px-2 py-3 align-top text-right font-mono text-sm',
                         isDarkMode ? 'text-gray-300' : 'text-gray-700',
                         visibleColumns.find(c => c.key === 'night')?.responsiveClass || ''
                       ]"
@@ -1488,7 +1483,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'actual')"
                       :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm w-24',
+                        'px-2 py-3 align-top text-right font-mono text-sm',
                         isDarkMode ? 'text-gray-300' : 'text-gray-700',
                         visibleColumns.find(c => c.key === 'actual')?.responsiveClass || ''
                       ]"
@@ -1499,7 +1494,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'hood')"
                       :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm w-24',
+                        'px-2 py-3 align-top text-right font-mono text-sm',
                         isDarkMode ? 'text-gray-300' : 'text-gray-700',
                         visibleColumns.find(c => c.key === 'hood')?.responsiveClass || ''
                       ]"
@@ -1510,7 +1505,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'dualG')"
                       :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm w-24',
+                        'px-2 py-3 align-top text-right font-mono text-sm',
                         isDarkMode ? 'text-gray-300' : 'text-gray-700',
                         visibleColumns.find(c => c.key === 'dualG')?.responsiveClass || ''
                       ]"
@@ -1521,7 +1516,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'xc')"
                       :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm w-24',
+                        'px-2 py-3 align-top text-right font-mono text-sm',
                         isDarkMode ? 'text-gray-300' : 'text-gray-700',
                         visibleColumns.find(c => c.key === 'xc')?.responsiveClass || ''
                       ]"
@@ -1532,7 +1527,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'dayLandings')"
                       :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm w-24',
+                        'px-2 py-3 align-top text-right font-mono text-sm',
                         isDarkMode ? 'text-gray-300' : 'text-gray-700',
                         visibleColumns.find(c => c.key === 'dayLandings')?.responsiveClass || ''
                       ]"
@@ -1543,7 +1538,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'nightLandings')"
                       :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm w-24',
+                        'px-2 py-3 align-top text-right font-mono text-sm',
                         isDarkMode ? 'text-gray-300' : 'text-gray-700',
                         visibleColumns.find(c => c.key === 'nightLandings')?.responsiveClass || ''
                       ]"
@@ -1554,7 +1549,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'approach')"
                       :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm w-24',
+                        'px-2 py-3 align-top text-right font-mono text-sm',
                         isDarkMode ? 'text-gray-300' : 'text-gray-700',
                         visibleColumns.find(c => c.key === 'approach')?.responsiveClass || ''
                       ]"
@@ -1565,7 +1560,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'pilots')"
                       :class="[
-                        'px-2 py-3 align-top text-sm w-24',
+                        'px-2 py-3 align-top text-sm',
                         isDarkMode ? 'text-gray-300' : 'text-gray-700',
                         visibleColumns.find(c => c.key === 'pilots')?.responsiveClass || ''
                       ]"
@@ -1576,7 +1571,7 @@
                     <td 
                       v-if="visibleColumns.find(c => c.key === 'total')"
                       :class="[
-                        'px-3 py-3 align-top text-right font-bold font-mono w-20',
+                        'px-3 py-3 align-top text-right font-bold font-mono',
                         isDarkMode ? 'text-blue-400' : 'text-blue-600',
                         visibleColumns.find(c => c.key === 'total')?.responsiveClass || ''
                       ]"
@@ -1585,7 +1580,7 @@
                     </td>
                     </tr>
                     <tr v-if="expandedEntryId === entry.id">
-                      <td :colspan="visibleColumns.length + 1" class="px-0 py-0">
+                      <td :colspan="visibleColumns.length" class="px-0 py-0">
                         <div
                         :class="[
                             'border-2 shadow-inner transition-all duration-300',
