@@ -257,7 +257,7 @@
         </div>
       </header>
 
-    <main :class="['min-h-screen flex flex-col pt-40 pb-20 px-4 sm:px-6 lg:px-8 transition-colors duration-300 overflow-x-hidden', isDarkMode ? '' : '']">
+    <main :class="['min-h-screen flex flex-col pt-40 pb-20 px-4 sm:px-6 lg:px-8 transition-colors duration-300 overflow-x-auto', isDarkMode ? '' : '']">
       <div class="mr-auto w-full max-w-full flex flex-col gap-10 lg:flex-row">
         <aside
           :class="[
@@ -543,7 +543,7 @@
           </div>
         </aside>
 
-        <div class="flex-1 space-y-12 min-w-0 overflow-x-hidden">
+        <div class="flex-1 space-y-12 min-w-0 overflow-x-auto">
           <section class="text-center lg:text-left">
 
             <div class="space-y-6">
@@ -826,17 +826,30 @@
                     </div>
                   </div>
                   <div class="mt-4 pt-4 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
-                    <button
-                      @click="resetColumnConfig()"
-                      :class="[
-                        'w-full px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
-                        isDarkMode 
-                          ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' 
-                          : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                      ]"
-                    >
-                      Reset to Defaults
-                    </button>
+                    <div class="flex flex-col gap-2">
+                      <button
+                        @click="resetColumnWidths()"
+                        :class="[
+                          'w-full px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
+                          isDarkMode 
+                            ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' 
+                            : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                        ]"
+                      >
+                        Reset Column Widths
+                      </button>
+                      <button
+                        @click="resetColumnConfig()"
+                        :class="[
+                          'w-full px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
+                          isDarkMode 
+                            ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' 
+                            : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                        ]"
+                      >
+                        Reset to Defaults
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -857,7 +870,7 @@
             <div
               v-else
                       :class="[
-                'mt-6 overflow-hidden rounded-2xl border transition-colors duration-300 relative',
+                'mt-6 overflow-x-auto rounded-2xl border transition-colors duration-300 relative',
                         isDarkMode 
     ? 'border-gray-700' 
     : 'border-gray-300 shadow-sm'
@@ -880,15 +893,21 @@
                       v-for="col in visibleColumns" 
                       :key="col.key"
                       :class="[
-                        'py-3 font-medium relative',
-                        col.key === 'total' ? 'text-right' : '',
+                        'font-medium relative group',
+                        getHeaderTextAlign(col),
                         col.responsiveClass || '',
-                        col.key === 'date' ? 'px-3' : 'px-2',
-                        col.key === 'total' ? 'px-3' : ''
+                        ...getColumnPadding(col)
                       ]"
-                      :style="col.key === 'date' ? 'width: 10%;' : col.key === 'aircraft' ? 'width: 13%;' : col.key === 'identification' ? 'width: 12%;' : col.key === 'fromTo' ? 'width: 15%;' : col.key === 'conditions' ? 'width: 12%;' : col.key === 'remarks' ? 'width: 22%;' : col.key === 'total' ? 'width: 8%;' : 'width: 6%;'"
+                      :style="col.width ? `width: ${col.width}px;` : ''"
                     >
                       {{ col.label }}
+                      <!-- Resize handle -->
+                      <div
+                        class="absolute top-0 right-0 h-full w-1 cursor-col-resize opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                        :class="isDarkMode ? 'hover:bg-blue-500' : 'hover:bg-blue-600'"
+                        @mousedown.prevent="startResize(col.key, $event)"
+                        style="margin-right: -2px;"
+                      ></div>
                     </th>
                   </tr>
                 </thead>
@@ -982,6 +1001,7 @@
                                     :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
                                     required
                                     autocomplete="off"
+                                    @input="newEntry.registration = ($event.target as HTMLInputElement).value.toUpperCase()"
                                     @focus="showIdentDropdown = true; highlightedIdentIndex = filteredAircraftForNewEntry.length > 0 ? 0 : -1"
                                     @blur="handleIdentBlur"
                                     @keydown="(e) => handleDropdownKeydown(e, 'ident', filteredAircraftForNewEntry, (item) => selectAircraftForNewEntry(item))"
@@ -1030,6 +1050,7 @@
                                     :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
                                     required
                                     autocomplete="off"
+                                    @input="newEntry.departure = ($event.target as HTMLInputElement).value.toUpperCase()"
                                     @focus="showFromDropdown = true; highlightedFromIndex = filteredAirportsForFrom.length > 0 ? 0 : -1"
                                     @keydown="(e) => handleDropdownKeydown(e, 'from', filteredAirportsForFrom, (item) => selectAirportForFrom(item))"
                                     @blur="handleFromBlur"
@@ -1065,6 +1086,7 @@
                                     :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
                                     required
                                     autocomplete="off"
+                                    @input="newEntry.destination = ($event.target as HTMLInputElement).value.toUpperCase()"
                                     @focus="showToDropdown = true; highlightedToIndex = filteredAirportsForTo.length > 0 ? 0 : -1"
                                     @keydown="(e) => handleDropdownKeydown(e, 'to', filteredAirportsForTo, (item) => selectAirportForTo(item))"
                                     @blur="handleToBlur"
@@ -1322,261 +1344,125 @@
                       class="cursor-pointer"
                       @click="beginInlineEditing(entry)"
                   >
-                    <!-- Date Column -->
                     <td 
-                      v-if="visibleColumns.find(c => c.key === 'date')"
-                      :class="[
-                        'px-3 py-3 align-top',
-                        visibleColumns.find(c => c.key === 'date')?.responsiveClass || ''
-                      ]"
+                      v-for="col in visibleColumns"
+                      :key="col.key"
+                      :class="[...getCellClasses(col), getCellTextColor(col)]"
+                      :style="col.width ? `width: ${col.width}px;` : ''"
                     >
-                      <div :class="['font-semibold text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
-                        {{ formatDisplayDate(entry.date) }}
-                      </div>
-                      <div :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                        {{ entry.role }}
-                      </div>
-                    </td>
-                    <!-- Aircraft Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'aircraft')"
-                      :class="[
-                        'px-2 py-3 align-top',
-                        visibleColumns.find(c => c.key === 'aircraft')?.responsiveClass || ''
-                      ]"
-                    >
-                      <div :class="['text-sm truncate', isDarkMode ? 'text-gray-200' : 'text-gray-900']">{{ entry.aircraftMakeModel }}</div>
-                      <div :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                        {{ entry.aircraftCategoryClass }}
-                      </div>
-                    </td>
-                    <!-- Identification Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'identification')"
-                      :class="[
-                        'px-2 py-3 align-top uppercase font-mono text-xs tracking-wide',
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700',
-                        visibleColumns.find(c => c.key === 'identification')?.responsiveClass || ''
-                      ]"
-                    >
-                      {{ entry.registration }}
-                    </td>
-                    <!-- Flight Number Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'flightNumber')"
-                      :class="[
-                        'px-2 py-3 align-top uppercase font-mono text-xs',
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700',
-                        visibleColumns.find(c => c.key === 'flightNumber')?.responsiveClass || ''
-                      ]"
-                    >
-                      {{ entry.flightNumber || '—' }}
-                    </td>
-                    <!-- From → To Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'fromTo')"
-                      :class="[
-                        'px-2 py-3 align-top',
-                        visibleColumns.find(c => c.key === 'fromTo')?.responsiveClass || ''
-                      ]"
-                    >
-                      <div :class="['font-semibold text-sm truncate', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                        {{ entry.departure }} → {{ entry.destination }}
-                      </div>
-                      <div v-if="entry.route" :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                        {{ entry.route }}
-                      </div>
-                    </td>
-                    <!-- Conditions Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'conditions')"
-                      :class="[
-                        'px-2 py-3 align-top',
-                        visibleColumns.find(c => c.key === 'conditions')?.responsiveClass || ''
-                      ]"
-                    >
-                      <div class="flex flex-wrap gap-1">
-                        <span
-                          v-for="condition in sortConditionsInFixedOrder(entry.flightConditions || [])"
-                          :key="`${entry.id}-${condition}`"
-                          :class="[
-                            'rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold border',
-                            isDarkMode 
-                              ? 'bg-gray-800 border-gray-600 text-gray-300' 
-                              : 'bg-gray-100 border-gray-200 text-gray-600'
-                          ]"
-                        >
-                          {{ condition }}
-          </span>
-                        <span :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']" v-if="!entry.flightConditions || entry.flightConditions.length === 0">
-                          —
-          </span>
-                      </div>
-                    </td>
-                    <!-- Remarks Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'remarks')"
-                      :class="[
-                        'px-2 py-3 align-top text-sm italic',
-                        isDarkMode ? 'text-gray-400' : 'text-gray-500',
-                        visibleColumns.find(c => c.key === 'remarks')?.responsiveClass || ''
-                      ]"
-                    >
-                      <div class="truncate">{{ entry.remarks || '—' }}</div>
-                    </td>
-                    <!-- PIC Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'pic')"
-                      :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm',
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700',
-                        visibleColumns.find(c => c.key === 'pic')?.responsiveClass || ''
-                      ]"
-                    >
-                      {{ formatNumber(entry.flightTime.pic) }}
-                    </td>
-                    <!-- SIC Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'sic')"
-                      :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm',
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700',
-                        visibleColumns.find(c => c.key === 'sic')?.responsiveClass || ''
-                      ]"
-                    >
-                      {{ formatNumber(entry.flightTime.sic) }}
-                    </td>
-                    <!-- Dual R Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'dualR')"
-                      :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm',
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700',
-                        visibleColumns.find(c => c.key === 'dualR')?.responsiveClass || ''
-                      ]"
-                    >
-                      {{ formatNumber(entry.flightTime.dual) }}
-                    </td>
-                    <!-- Solo Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'solo')"
-                      :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm',
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700',
-                        visibleColumns.find(c => c.key === 'solo')?.responsiveClass || ''
-                      ]"
-                    >
-                      {{ formatNumber(entry.flightTime.solo) }}
-                    </td>
-                    <!-- Night Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'night')"
-                      :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm',
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700',
-                        visibleColumns.find(c => c.key === 'night')?.responsiveClass || ''
-                      ]"
-                    >
-                      {{ formatNumber(entry.flightTime.night) }}
-                    </td>
-                    <!-- Actual Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'actual')"
-                      :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm',
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700',
-                        visibleColumns.find(c => c.key === 'actual')?.responsiveClass || ''
-                      ]"
-                    >
-                      {{ formatNumber(entry.flightTime.actualInstrument) }}
-                    </td>
-                    <!-- Hood Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'hood')"
-                      :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm',
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700',
-                        visibleColumns.find(c => c.key === 'hood')?.responsiveClass || ''
-                      ]"
-                    >
-                      {{ formatNumber(entry.flightTime.simulator) }}
-                    </td>
-                    <!-- Dual G Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'dualG')"
-                      :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm',
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700',
-                        visibleColumns.find(c => c.key === 'dualG')?.responsiveClass || ''
-                      ]"
-                    >
-                      {{ formatNumber(entry.flightTime.dualGiven) }}
-                    </td>
-                    <!-- XC Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'xc')"
-                      :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm',
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700',
-                        visibleColumns.find(c => c.key === 'xc')?.responsiveClass || ''
-                      ]"
-                    >
-                      {{ formatNumber(entry.flightTime.crossCountry) }}
-                    </td>
-                    <!-- Day Landings Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'dayLandings')"
-                      :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm',
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700',
-                        visibleColumns.find(c => c.key === 'dayLandings')?.responsiveClass || ''
-                      ]"
-                    >
-                      {{ entry.performance.dayLandings ?? '—' }}
-                    </td>
-                    <!-- Night Landings Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'nightLandings')"
-                      :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm',
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700',
-                        visibleColumns.find(c => c.key === 'nightLandings')?.responsiveClass || ''
-                      ]"
-                    >
-                      {{ entry.performance.nightLandings ?? '—' }}
-                    </td>
-                    <!-- Approach Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'approach')"
-                      :class="[
-                        'px-2 py-3 align-top text-right font-mono text-sm',
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700',
-                        visibleColumns.find(c => c.key === 'approach')?.responsiveClass || ''
-                      ]"
-                    >
-                      {{ entry.performance.approachCount ?? '—' }}
-                    </td>
-                    <!-- Pilots Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'pilots')"
-                      :class="[
-                        'px-2 py-3 align-top text-sm',
-                        isDarkMode ? 'text-gray-300' : 'text-gray-700',
-                        visibleColumns.find(c => c.key === 'pilots')?.responsiveClass || ''
-                      ]"
-                    >
-                      <div class="truncate">{{ entry.trainingElements || '—' }}</div>
-                    </td>
-                    <!-- Total Column -->
-                    <td 
-                      v-if="visibleColumns.find(c => c.key === 'total')"
-                      :class="[
-                        'px-3 py-3 align-top text-right font-bold font-mono',
-                        isDarkMode ? 'text-blue-400' : 'text-blue-600',
-                        visibleColumns.find(c => c.key === 'total')?.responsiveClass || ''
-                      ]"
-                    >
-                      {{ formatNumber(entry.flightTime.total) }}
+                      <!-- Date Column -->
+                      <template v-if="col.key === 'date'">
+                        <div :class="['font-semibold text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
+                          {{ formatDisplayDate(entry.date) }}
+                        </div>
+                        <div :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                          {{ entry.role }}
+                        </div>
+                      </template>
+                      <!-- Aircraft Column -->
+                      <template v-else-if="col.key === 'aircraft'">
+                        <div :class="['text-sm truncate', isDarkMode ? 'text-gray-200' : 'text-gray-900']">{{ entry.aircraftMakeModel }}</div>
+                        <div :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                          {{ entry.aircraftCategoryClass }}
+                        </div>
+                      </template>
+                      <!-- Identification Column -->
+                      <template v-else-if="col.key === 'identification'">
+                        {{ entry.registration }}
+                      </template>
+                      <!-- Flight Number Column -->
+                      <template v-else-if="col.key === 'flightNumber'">
+                        {{ entry.flightNumber || '—' }}
+                      </template>
+                      <!-- From → To Column -->
+                      <template v-else-if="col.key === 'fromTo'">
+                        <div :class="['font-semibold text-sm truncate', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
+                          {{ entry.departure }} → {{ entry.destination }}
+                        </div>
+                        <div v-if="entry.route" :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                          {{ entry.route }}
+                        </div>
+                      </template>
+                      <!-- Conditions Column -->
+                      <template v-else-if="col.key === 'conditions'">
+                        <div class="flex flex-wrap gap-1">
+                          <span
+                            v-for="condition in sortConditionsInFixedOrder(entry.flightConditions || [])"
+                            :key="`${entry.id}-${condition}`"
+                            :class="[
+                              'rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold border',
+                              isDarkMode 
+                                ? 'bg-gray-800 border-gray-600 text-gray-300' 
+                                : 'bg-gray-100 border-gray-200 text-gray-600'
+                            ]"
+                          >
+                            {{ condition }}
+                          </span>
+                          <span :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']" v-if="!entry.flightConditions || entry.flightConditions.length === 0">
+                            —
+                          </span>
+                        </div>
+                      </template>
+                      <!-- Remarks Column -->
+                      <template v-else-if="col.key === 'remarks'">
+                        <div class="whitespace-normal break-words">{{ entry.remarks || '—' }}</div>
+                      </template>
+                      <!-- PIC Column -->
+                      <template v-else-if="col.key === 'pic'">
+                        {{ formatNumber(entry.flightTime.pic) }}
+                      </template>
+                      <!-- SIC Column -->
+                      <template v-else-if="col.key === 'sic'">
+                        {{ formatNumber(entry.flightTime.sic) }}
+                      </template>
+                      <!-- Dual R Column -->
+                      <template v-else-if="col.key === 'dualR'">
+                        {{ formatNumber(entry.flightTime.dual) }}
+                      </template>
+                      <!-- Solo Column -->
+                      <template v-else-if="col.key === 'solo'">
+                        {{ formatNumber(entry.flightTime.solo) }}
+                      </template>
+                      <!-- Night Column -->
+                      <template v-else-if="col.key === 'night'">
+                        {{ formatNumber(entry.flightTime.night) }}
+                      </template>
+                      <!-- Actual Column -->
+                      <template v-else-if="col.key === 'actual'">
+                        {{ formatNumber(entry.flightTime.actualInstrument) }}
+                      </template>
+                      <!-- Hood Column -->
+                      <template v-else-if="col.key === 'hood'">
+                        {{ formatNumber(entry.flightTime.simulator) }}
+                      </template>
+                      <!-- Dual G Column -->
+                      <template v-else-if="col.key === 'dualG'">
+                        {{ formatNumber(entry.flightTime.dualGiven) }}
+                      </template>
+                      <!-- XC Column -->
+                      <template v-else-if="col.key === 'xc'">
+                        {{ formatNumber(entry.flightTime.crossCountry) }}
+                      </template>
+                      <!-- Day Landings Column -->
+                      <template v-else-if="col.key === 'dayLandings'">
+                        {{ entry.performance.dayLandings ?? '—' }}
+                      </template>
+                      <!-- Night Landings Column -->
+                      <template v-else-if="col.key === 'nightLandings'">
+                        {{ entry.performance.nightLandings ?? '—' }}
+                      </template>
+                      <!-- Approach Column -->
+                      <template v-else-if="col.key === 'approach'">
+                        {{ entry.performance.approachCount ?? '—' }}
+                      </template>
+                      <!-- Pilots Column -->
+                      <template v-else-if="col.key === 'pilots'">
+                        <div class="truncate">{{ entry.trainingElements || '—' }}</div>
+                      </template>
+                      <!-- Total Column -->
+                      <template v-else-if="col.key === 'total'">
+                        {{ formatNumber(entry.flightTime.total) }}
+                      </template>
                     </td>
                     </tr>
                     <tr v-if="expandedEntryId === entry.id">
@@ -1661,6 +1547,7 @@
                                     type="text" 
                                     :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
                                     autocomplete="off"
+                                    @input="inlineEditEntry.registration = ($event.target as HTMLInputElement).value.toUpperCase()"
                                     @focus="showInlineIdentDropdown = true; highlightedInlineIdentIndex = filteredAircraftForInlineEdit.length > 0 ? 0 : -1"
                                     @keydown="(e) => handleDropdownKeydown(e, 'inlineIdent', filteredAircraftForInlineEdit, (item) => selectAircraftForInlineEdit(item))"
                                     @blur="handleInlineIdentBlur"
@@ -1708,6 +1595,7 @@
                                     type="text" 
                                     :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
                                     autocomplete="off"
+                                    @input="inlineEditEntry.departure = ($event.target as HTMLInputElement).value.toUpperCase()"
                                     @focus="showInlineFromDropdown = true; highlightedInlineFromIndex = filteredAirportsForInlineFrom.length > 0 ? 0 : -1"
                                     @keydown="(e) => handleDropdownKeydown(e, 'inlineFrom', filteredAirportsForInlineFrom, (item) => selectAirportForInlineFrom(item))"
                                     @blur="handleInlineFromBlur"
@@ -1742,6 +1630,7 @@
                                     type="text" 
                                     :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
                                     autocomplete="off"
+                                    @input="inlineEditEntry.destination = ($event.target as HTMLInputElement).value.toUpperCase()"
                                     @focus="showInlineToDropdown = true; highlightedInlineToIndex = filteredAirportsForInlineTo.length > 0 ? 0 : -1"
                                     @keydown="(e) => handleDropdownKeydown(e, 'inlineTo', filteredAirportsForInlineTo, (item) => selectAirportForInlineTo(item))"
                                     @blur="handleInlineToBlur"
@@ -2948,6 +2837,7 @@ function loadColumnConfig(): void {
               required: defaultCol.required,
               label: defaultCol.label,
               responsiveClass: defaultCol.responsiveClass,
+              width: savedCol.width ?? defaultCol.width, // Preserve saved width or use default
               visible: defaultCol.required ? true : savedCol.visible // Force required columns to be visible
             }
           }
@@ -3049,6 +2939,161 @@ function handleColumnDrop(targetKey: LogbookColumnKey): void {
   
   reorderColumns(draggedColumnKey.value, targetCol.order)
   draggedColumnKey.value = null
+}
+
+// Column resize state
+const resizingColumn = ref<LogbookColumnKey | null>(null)
+const resizeStartX = ref(0)
+const resizeStartWidth = ref(0)
+
+// Start column resize
+function startResize(columnKey: LogbookColumnKey, event: MouseEvent): void {
+  const col = columnConfig.value.find(c => c.key === columnKey)
+  if (!col) return
+  
+  resizingColumn.value = columnKey
+  resizeStartX.value = event.clientX
+  resizeStartWidth.value = col.width ?? 100
+  
+  document.addEventListener('mousemove', handleResize)
+  document.addEventListener('mouseup', stopResize)
+  event.preventDefault()
+}
+
+// Handle resize during drag
+function handleResize(event: MouseEvent): void {
+  if (!resizingColumn.value) return
+  
+  const col = columnConfig.value.find(c => c.key === resizingColumn.value)
+  if (!col) return
+  
+  const deltaX = event.clientX - resizeStartX.value
+  const newWidth = Math.max(50, resizeStartWidth.value + deltaX) // Minimum width of 50px
+  
+  col.width = newWidth
+}
+
+// Stop resize
+function stopResize(): void {
+  if (resizingColumn.value) {
+    saveColumnConfig()
+  }
+  resizingColumn.value = null
+  document.removeEventListener('mousemove', handleResize)
+  document.removeEventListener('mouseup', stopResize)
+}
+
+// Reset column widths to defaults
+function resetColumnWidths(): void {
+  columnConfig.value.forEach(col => {
+    const defaultCol = DEFAULT_COLUMN_CONFIG.find(d => d.key === col.key)
+    if (defaultCol && defaultCol.width) {
+      col.width = defaultCol.width
+    }
+  })
+  saveColumnConfig()
+}
+
+// Helper function to get padding classes for headers and cells (must match)
+function getColumnPadding(col: LogbookColumnConfig): string[] {
+  switch (col.key) {
+    case 'date':
+    case 'total':
+      return ['px-3', 'py-3']
+    default:
+      return ['px-2', 'py-3']
+  }
+}
+
+// Helper function to get text alignment for headers (must match cells)
+function getHeaderTextAlign(col: LogbookColumnConfig): string {
+  // Right-align numeric columns to match cell alignment
+  switch (col.key) {
+    case 'total':
+    case 'pic':
+    case 'sic':
+    case 'dualR':
+    case 'solo':
+    case 'night':
+    case 'actual':
+    case 'hood':
+    case 'dualG':
+    case 'xc':
+    case 'dayLandings':
+    case 'nightLandings':
+    case 'approach':
+      return 'text-right'
+    default:
+      return ''
+  }
+}
+
+// Helper function to get cell classes for a column
+function getCellClasses(col: LogbookColumnConfig): string[] {
+  const baseClasses = ['align-top']
+  const padding = getColumnPadding(col)
+  if (col.responsiveClass) {
+    baseClasses.push(col.responsiveClass)
+  }
+  
+  switch (col.key) {
+    case 'date':
+      return [...padding, ...baseClasses]
+    case 'total':
+      return [...padding, 'text-right', 'font-bold', 'font-mono', ...baseClasses]
+    case 'identification':
+      return [...padding, 'uppercase', 'font-mono', 'text-xs', 'tracking-wide', ...baseClasses]
+    case 'flightNumber':
+      return [...padding, 'uppercase', 'font-mono', 'text-xs', ...baseClasses]
+    case 'remarks':
+      return [...padding, 'text-sm', 'italic', ...baseClasses]
+    case 'pic':
+    case 'sic':
+    case 'dualR':
+    case 'solo':
+    case 'night':
+    case 'actual':
+    case 'hood':
+    case 'dualG':
+    case 'xc':
+    case 'dayLandings':
+    case 'nightLandings':
+    case 'approach':
+      return [...padding, 'text-right', 'font-mono', 'text-sm', ...baseClasses]
+    case 'pilots':
+      return [...padding, 'text-sm', ...baseClasses]
+    default:
+      return [...padding, ...baseClasses]
+  }
+}
+
+// Helper function to get cell text color classes
+function getCellTextColor(col: LogbookColumnConfig): string {
+  switch (col.key) {
+    case 'total':
+      return isDarkMode.value ? 'text-blue-400' : 'text-blue-600'
+    case 'identification':
+    case 'flightNumber':
+      return isDarkMode.value ? 'text-gray-300' : 'text-gray-700'
+    case 'remarks':
+      return isDarkMode.value ? 'text-gray-400' : 'text-gray-500'
+    case 'pic':
+    case 'sic':
+    case 'dualR':
+    case 'solo':
+    case 'night':
+    case 'actual':
+    case 'hood':
+    case 'dualG':
+    case 'xc':
+    case 'dayLandings':
+    case 'nightLandings':
+    case 'approach':
+    case 'pilots':
+      return isDarkMode.value ? 'text-gray-300' : 'text-gray-700'
+    default:
+      return ''
+  }
 }
 
 const catalogSections = [
@@ -4713,6 +4758,12 @@ onMounted(() => {
       clearInterval(clockTimer)
       clockTimer = null
     }
+    // Clean up resize listeners if still active
+    if (resizingColumn.value) {
+      document.removeEventListener('mousemove', handleResize)
+      document.removeEventListener('mouseup', stopResize)
+      resizingColumn.value = null
+    }
   }
 })
 
@@ -5055,7 +5106,7 @@ function getHighlightedIndex(dropdownType: string): number {
 }
 
 function selectAircraftForNewEntry(aircraft: { registration: string; makeModel: string }): void {
-  newEntry.registration = aircraft.registration
+  newEntry.registration = aircraft.registration.toUpperCase()
   newEntry.aircraftMakeModel = aircraft.makeModel
   showIdentDropdown.value = false
   highlightedIdentIndex.value = -1
@@ -5063,7 +5114,7 @@ function selectAircraftForNewEntry(aircraft: { registration: string; makeModel: 
 
 function selectAircraftForInlineEdit(aircraft: { registration: string; makeModel: string }): void {
   if (!inlineEditEntry.value) return
-  inlineEditEntry.value.registration = aircraft.registration
+  inlineEditEntry.value.registration = aircraft.registration.toUpperCase()
   inlineEditEntry.value.aircraftMakeModel = aircraft.makeModel
   showInlineIdentDropdown.value = false
   highlightedInlineIdentIndex.value = -1
@@ -5140,7 +5191,7 @@ async function prefetchAirportCoords(airportCode: string): Promise<void> {
 
 // Selection handlers for FROM dropdown
 function selectAirportForFrom(airport: string): void {
-  newEntry.departure = airport
+  newEntry.departure = airport.toUpperCase()
   showFromDropdown.value = false
   highlightedFromIndex.value = -1
   // Prefetch coordinates for night time calculation
@@ -5149,7 +5200,7 @@ function selectAirportForFrom(airport: string): void {
 
 function selectAirportForInlineFrom(airport: string): void {
   if (!inlineEditEntry.value) return
-  inlineEditEntry.value.departure = airport
+  inlineEditEntry.value.departure = airport.toUpperCase()
   showInlineFromDropdown.value = false
   highlightedInlineFromIndex.value = -1
   prefetchAirportCoords(airport)
@@ -5157,7 +5208,7 @@ function selectAirportForInlineFrom(airport: string): void {
 
 // Selection handlers for TO dropdown
 function selectAirportForTo(airport: string): void {
-  newEntry.destination = airport
+  newEntry.destination = airport.toUpperCase()
   showToDropdown.value = false
   highlightedToIndex.value = -1
   prefetchAirportCoords(airport)
@@ -5165,7 +5216,7 @@ function selectAirportForTo(airport: string): void {
 
 function selectAirportForInlineTo(airport: string): void {
   if (!inlineEditEntry.value) return
-  inlineEditEntry.value.destination = airport
+  inlineEditEntry.value.destination = airport.toUpperCase()
   showInlineToDropdown.value = false
   highlightedInlineToIndex.value = -1
   prefetchAirportCoords(airport)
@@ -5402,6 +5453,9 @@ function formatNumber(value: number | null | undefined): string {
   }
   const num = typeof value === 'number' ? value : Number(value)
   if (Number.isNaN(num) || !Number.isFinite(num)) {
+    return '—'
+  }
+  if (num === 0 || Math.abs(num) < 0.05) {
     return '—'
   }
   return num.toFixed(1)
