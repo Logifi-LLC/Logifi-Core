@@ -9,6 +9,9 @@ export default defineNuxtConfig({
     plugins: [
       tailwindcss(),
     ],
+    optimizeDeps: {
+      include: ['suncalc'],
+    },
   },
   css: ['~/assets/css/main.css'],
   runtimeConfig: {

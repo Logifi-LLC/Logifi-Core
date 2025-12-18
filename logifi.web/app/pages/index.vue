@@ -4476,7 +4476,13 @@ watch(
     )
     
     if (nightTime !== null) {
+      // Always update night time, even if 0 (to clear incorrect values)
       newEntry.flightTime.night = nightTime
+      if (nightTime > 0) {
+        console.log(`Auto-calculated night time: ${nightTime} hours`)
+      } else {
+        console.log('Auto-calculated night time: 0 hours (cleared)')
+      }
     }
   },
   { deep: true }
@@ -5545,35 +5551,40 @@ const mostUsedAircraft = computed(() => {
 })
 
 function formatTotalValue(key: TotalsMetricKey): string {
+  // Helper to safely convert to number
+  const safeNumber = (val: any): number => {
+    const num = typeof val === 'number' ? val : Number(val) ?? 0
+    return isNaN(num) || !isFinite(num) ? 0 : num
+  }
+  
   if (key === 'totalTime') {
-    return totals.value.time.total.toFixed(1)
+    return safeNumber(totals.value.time.total).toFixed(1)
   }
   if (key === 'soloTime') {
-    return (totals.value.time.solo ?? 0).toFixed(1)
+    return safeNumber(totals.value.time.solo).toFixed(1)
   }
   if (key === 'picTime') {
-    return (totals.value.time.pic ?? 0).toFixed(1)
+    return safeNumber(totals.value.time.pic).toFixed(1)
   }
   if (key === 'nightTime') {
-    return (totals.value.time.night ?? 0).toFixed(1)
+    return safeNumber(totals.value.time.night).toFixed(1)
   }
   if (key === 'instrumentTime') {
-    const simulated = Number(totals.value.time.simulator ?? 0)
-    const actual = Number(totals.value.time.actualInstrument ?? 0)
-    const sum = simulated + actual
-    return sum.toFixed(1)
+    const simulated = safeNumber(totals.value.time.simulator)
+    const actual = safeNumber(totals.value.time.actualInstrument)
+    return (simulated + actual).toFixed(1)
   }
   if (key === 'crossCountry') {
-    return (totals.value.time.crossCountry ?? 0).toFixed(1)
+    return safeNumber(totals.value.time.crossCountry).toFixed(1)
   }
   if (key === 'sic') {
-    return (totals.value.time.sic ?? 0).toFixed(1)
+    return safeNumber(totals.value.time.sic).toFixed(1)
   }
   if (key === 'dualReceived') {
-    return (totals.value.time.dual ?? 0).toFixed(1)
+    return safeNumber(totals.value.time.dual).toFixed(1)
   }
   if (key === 'dualGiven') {
-    return (totals.value.time.dualGiven ?? 0).toFixed(1)
+    return safeNumber(totals.value.time.dualGiven).toFixed(1)
   }
   if (key === 'mostUsedAircraft') {
     return mostUsedAircraft.value || '—'

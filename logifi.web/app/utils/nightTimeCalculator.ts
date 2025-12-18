@@ -269,4 +269,3 @@ export function mightHaveNightTime(outTime: string, inTime: string): boolean {
   // Check if flight spans evening or early morning hours
   return outHour >= eveningStart || inHour <= morningEnd || outHour <= morningEnd
 }
-
