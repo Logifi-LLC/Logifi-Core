@@ -1138,7 +1138,7 @@
                                 <div class="flex gap-2 w-full">
                                   <div v-for="field in flightTimeFields" :key="field.key" class="flex-1">
                                     <div :class="['text-[9px] uppercase font-bold mb-1 text-center whitespace-nowrap', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
-                                      {{ field.key === 'total' ? 'Total Time' : field.key === 'pic' ? 'PIC' : field.key === 'sic' ? 'SIC' : field.key === 'dual' ? 'Dual R' : field.key === 'solo' ? 'Solo' : field.key === 'night' ? 'Night' : field.key === 'actualInstrument' ? 'Actual' : field.key === 'dualGiven' ? 'Dual G' : field.key === 'crossCountry' ? 'XC' : field.key === 'simulator' ? 'Hood' : field.label }}
+                                      {{ field.key === 'total' ? 'Total Time' : field.key === 'pic' ? 'PIC' : field.key === 'sic' ? 'SIC' : field.key === 'dual' ? 'Dual R' : field.key === 'solo' ? 'Solo' : field.key === 'night' ? 'Night' : field.key === 'actualInstrument' ? 'Actual' : field.key === 'dualGiven' ? 'Dual G' : field.key === 'crossCountry' ? 'XC' : field.key === 'simulatedInstrument' ? 'Hood' : field.label }}
                                     </div>
                     <input
                                       :value="newEntry.flightTime[field.key] === null || newEntry.flightTime[field.key] === undefined ? '' : newEntry.flightTime[field.key] === 0 ? '0.0' : String(newEntry.flightTime[field.key])"
@@ -1474,7 +1474,7 @@
                       </template>
                       <!-- Hood Column -->
                       <template v-else-if="col.key === 'hood'">
-                        {{ formatNumber(entry.flightTime.simulator) }}
+                        {{ formatNumber(entry.flightTime.simulatedInstrument) }}
                       </template>
                       <!-- Dual G Column -->
                       <template v-else-if="col.key === 'dualG'">
@@ -1721,7 +1721,7 @@
                                <div>
                                 <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
                                 <div class="flex gap-2 w-full">
-                                  <div v-for="(label, key) in {total: 'Total Time', pic: 'PIC', sic: 'SIC', dual: 'Dual R', solo: 'Solo', night: 'Night', actualInstrument: 'Actual', dualGiven: 'Dual G', crossCountry: 'XC', simulator: 'Hood'}" :key="key" class="flex-1">
+                                  <div v-for="(label, key) in {total: 'Total Time', pic: 'PIC', sic: 'SIC', dual: 'Dual R', solo: 'Solo', night: 'Night', actualInstrument: 'Actual', dualGiven: 'Dual G', crossCountry: 'XC', simulatedInstrument: 'Hood'}" :key="key" class="flex-1">
                                     <div :class="['text-[9px] uppercase font-bold mb-1 text-center whitespace-nowrap', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
                                       {{ label }}
                                     </div>
@@ -2753,7 +2753,7 @@ const flightTimeFields: readonly { key: FlightTimeKey; label: string }[] = [
   { key: 'actualInstrument', label: 'Actual Instrument' },
   { key: 'dualGiven', label: 'Dual Given' },
   { key: 'crossCountry', label: 'Cross-Country' },
-  { key: 'simulator', label: 'Simulator / Training Device' }
+  { key: 'simulatedInstrument', label: 'Simulator / Training Device' }
 ] as const
 
 const performanceFields: readonly { key: PerformanceKey; label: string }[] = [
@@ -3487,7 +3487,7 @@ function exportToCSV(): void {
 
   const getInstrumentSplit = (entry: LogEntry): [string, string] => {
     // Returns [Actual Instrument, Simulated Instrument] for CSV export
-    // Note: simulator field is exported separately as "Ground Simulator"
+    // Note: simulatedInstrument field is exported separately as "Ground Simulator"
     const actualVal = entry.flightTime.actualInstrument
     return [
       actualVal ? formatTimeValue(actualVal) : '',
@@ -3523,7 +3523,7 @@ function exportToCSV(): void {
       formatTimeValue(entry.flightTime.night),
       ...getInstrumentSplit(entry),
       formatTimeValue(entry.flightTime.crossCountry),
-      formatTimeValue(entry.flightTime.simulator),
+      formatTimeValue(entry.flightTime.simulatedInstrument),
       formatTimeValue(entry.flightTime.dualGiven),
       formatCountValue(entry.performance.dayLandings),
       formatCountValue(entry.performance.nightLandings),
@@ -4018,7 +4018,7 @@ function autoCheckFlightConditions(
   conditions: string[], 
   nightTime: number | null, 
   actualInstrumentTime: number | null, 
-  simulatorTime: number | null, 
+  simulatedInstrumentTime: number | null, 
   xcTime: number | null
 ): string[] {
   const conditionSet = new Set(conditions)
@@ -4041,7 +4041,7 @@ function autoCheckFlightConditions(
   }
   
   // Auto-check Simulated Instrument if hood/simulator time > 0
-  if (simulatorTime && simulatorTime > 0) {
+  if (simulatedInstrumentTime && simulatedInstrumentTime > 0) {
     conditionSet.add('simInstrument')
   } else {
     conditionSet.delete('simInstrument')
@@ -4808,7 +4808,7 @@ watch(
   () => [
     newEntry.flightTime.night,
     newEntry.flightTime.actualInstrument,
-    newEntry.flightTime.simulator,
+    newEntry.flightTime.simulatedInstrument,
     newEntry.flightTime.crossCountry
   ],
   () => {
@@ -4816,7 +4816,7 @@ watch(
       newEntry.flightConditions,
       newEntry.flightTime.night,
       newEntry.flightTime.actualInstrument,
-      newEntry.flightTime.simulator,
+      newEntry.flightTime.simulatedInstrument,
       newEntry.flightTime.crossCountry
     )
   },
@@ -4828,7 +4828,7 @@ watch(
   () => [
     inlineEditEntry.value?.flightTime.night,
     inlineEditEntry.value?.flightTime.actualInstrument,
-    inlineEditEntry.value?.flightTime.simulator,
+    inlineEditEntry.value?.flightTime.simulatedInstrument,
     inlineEditEntry.value?.flightTime.crossCountry
   ],
   () => {
@@ -4837,7 +4837,7 @@ watch(
       inlineEditEntry.value.flightConditions,
       inlineEditEntry.value.flightTime.night,
       inlineEditEntry.value.flightTime.actualInstrument,
-      inlineEditEntry.value.flightTime.simulator,
+      inlineEditEntry.value.flightTime.simulatedInstrument,
       inlineEditEntry.value.flightTime.crossCountry
     )
   },
@@ -5679,7 +5679,7 @@ const pilotProfileStats = computed<PilotProfileStats>(() => {
     const total = coerceNumber(entry.flightTime.total)
     const pic = coerceNumber(entry.flightTime.pic)
     const night = coerceNumber(entry.flightTime.night)
-    const instrument = coerceNumber(entry.flightTime.actualInstrument) + coerceNumber(entry.flightTime.simulator)
+    const instrument = coerceNumber(entry.flightTime.actualInstrument) + coerceNumber(entry.flightTime.simulatedInstrument)
 
     stats.totalHours += total
     stats.picHours += pic
@@ -5915,7 +5915,7 @@ function formatTotalValue(key: TotalsMetricKey): string {
     return safeNumber(totals.value.time.night).toFixed(1)
   }
   if (key === 'instrumentTime') {
-    const simulated = safeNumber(totals.value.time.simulator)
+    const simulated = safeNumber(totals.value.time.simulatedInstrument)
     const actual = safeNumber(totals.value.time.actualInstrument)
     return (simulated + actual).toFixed(1)
   }

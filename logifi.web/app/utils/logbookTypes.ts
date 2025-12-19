@@ -10,7 +10,7 @@ export type FlightTimeKey =
   | 'actualInstrument'
   | 'dualGiven'
   | 'crossCountry'
-  | 'simulator'
+  | 'simulatedInstrument'
 
 export interface FlightTimeBreakdown {
   total: number | null
@@ -22,7 +22,7 @@ export interface FlightTimeBreakdown {
   actualInstrument: number | null
   dualGiven: number | null
   crossCountry: number | null
-  simulator: number | null
+  simulatedInstrument: number | null
 }
 
 export type PerformanceKey =
@@ -145,7 +145,7 @@ export const createEmptyFlightTime = (): FlightTimeBreakdown => ({
   actualInstrument: null,
   dualGiven: null,
   crossCountry: null,
-  simulator: null
+  simulatedInstrument: null
 })
 
 export const createEmptyPerformance = (): PerformanceMetrics => ({
