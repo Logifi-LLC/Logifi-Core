@@ -12,9 +12,10 @@
 // Import SunCalc - use default import for CommonJS compatibility
 import SunCalc from 'suncalc'
 
-// Add custom civil twilight times (sun 6° below horizon = 96° zenith angle)
+// Add custom civil twilight times (sun 6° below horizon)
+// SunCalc uses altitude angle: positive = above horizon, negative = below horizon
 // This must be done once when the module loads
-SunCalc.addTime(96, 'civilDawn', 'civilDusk')
+SunCalc.addTime(-6, 'civilDawn', 'civilDusk')
 
 export interface CivilTwilightTimes {
   /** Evening civil twilight end (sun goes 6° below horizon) - UTC Date */
@@ -76,6 +77,20 @@ function checkPolarCase(date: Date, latitude: number, longitude: number): { isPo
  * @returns Civil twilight times in UTC
  */
 export function getCivilTwilight(date: Date, latitude: number, longitude: number): CivilTwilightTimes {
+  // Ensure latitude and longitude are numbers
+  const lat = typeof latitude === 'number' ? latitude : parseFloat(String(latitude))
+  const lon = typeof longitude === 'number' ? longitude : parseFloat(String(longitude))
+  
+  if (isNaN(lat) || isNaN(lon)) {
+    console.error('[SolarCalc] Invalid coordinates:', { latitude, longitude, lat, lon })
+    return {
+      eveningEnd: null,
+      morningStart: null,
+      isPolarDay: false,
+      isPolarNight: false
+    }
+  }
+  
   // SunCalc uses the Date's local timezone to determine the day, but returns absolute times
   // Create a local date from the UTC date components for SunCalc
   // This ensures SunCalc calculates for the correct calendar day
@@ -84,8 +99,23 @@ export function getCivilTwilight(date: Date, latitude: number, longitude: number
   const day = date.getUTCDate()
   const localDate = new Date(year, month, day, 12, 0, 0) // Noon local time for the date
   
+  console.log('[SolarCalc] Calculating twilight for:', {
+    date: date.toISOString(),
+    localDate: localDate.toISOString(),
+    lat,
+    lon
+  })
+  
   // Get all solar times including our custom civil twilight times
-  const times = SunCalc.getTimes(localDate, latitude, longitude) as any
+  const times = SunCalc.getTimes(localDate, lat, lon) as any
+  
+  console.log('[SolarCalc] SunCalc returned times:', {
+    hasCivilDusk: !!times.civilDusk,
+    hasCivilDawn: !!times.civilDawn,
+    civilDusk: times.civilDusk?.toISOString(),
+    civilDawn: times.civilDawn?.toISOString(),
+    allKeys: Object.keys(times)
+  })
   
   // Extract civil twilight times (these are the custom times we added via addTime)
   // TypeScript types don't include custom times, so we use type assertion
@@ -94,7 +124,9 @@ export function getCivilTwilight(date: Date, latitude: number, longitude: number
   
   // If times are null/undefined or invalid, check for polar cases
   if (!civilDusk || !civilDawn || isNaN(civilDusk.getTime()) || isNaN(civilDawn.getTime())) {
-    const polarCase = checkPolarCase(localDate, latitude, longitude)
+    console.warn('[SolarCalc] Civil twilight times are invalid, checking polar cases')
+    const polarCase = checkPolarCase(localDate, lat, lon)
+    console.log('[SolarCalc] Polar case result:', polarCase)
     
     return {
       eveningEnd: null,
@@ -107,12 +139,19 @@ export function getCivilTwilight(date: Date, latitude: number, longitude: number
   // SunCalc returns Date objects with absolute times (milliseconds since epoch)
   // These are correct regardless of timezone - we can use them directly
   // The Date objects represent the correct moment in time
-  return {
+  const result = {
     eveningEnd: new Date(civilDusk.getTime()),
     morningStart: new Date(civilDawn.getTime()),
     isPolarDay: false,
     isPolarNight: false
   }
+  
+  console.log('[SolarCalc] Returning twilight times:', {
+    eveningEnd: result.eveningEnd.toISOString(),
+    morningStart: result.morningStart.toISOString()
+  })
+  
+  return result
 }
 
 /**

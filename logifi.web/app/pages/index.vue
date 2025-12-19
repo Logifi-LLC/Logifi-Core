@@ -1141,16 +1141,57 @@
                                       {{ field.key === 'total' ? 'Total Time' : field.key === 'pic' ? 'PIC' : field.key === 'sic' ? 'SIC' : field.key === 'dual' ? 'Dual R' : field.key === 'solo' ? 'Solo' : field.key === 'night' ? 'Night' : field.key === 'actualInstrument' ? 'Actual' : field.key === 'dualGiven' ? 'Dual G' : field.key === 'crossCountry' ? 'XC' : field.key === 'simulator' ? 'Hood' : field.label }}
                                     </div>
                     <input
-                                      v-model.number="newEntry.flightTime[field.key]" 
-                                      type="number" 
-                                      step="0.1"
+                                      :value="newEntry.flightTime[field.key] === null || newEntry.flightTime[field.key] === undefined ? '' : newEntry.flightTime[field.key] === 0 ? '0.0' : String(newEntry.flightTime[field.key])"
+                                      type="text"
+                                      inputmode="decimal"
                                       :placeholder="'0.0'"
                                       :class="[
                                         'w-full rounded border px-2 py-1 text-sm text-center font-mono',
                                         field.key !== 'total' ? 'cursor-pointer' : '',
-                                        isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'
+                                        isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300',
+                                        (newEntry.flightTime[field.key] === null || newEntry.flightTime[field.key] === 0 || newEntry.flightTime[field.key] === undefined)
+                                          ? (isDarkMode ? 'text-gray-500' : 'text-gray-400')
+                                          : (isDarkMode ? 'text-white' : 'text-gray-900')
                                       ]"
+                                      @input="(e) => {
+                                        const input = e.target as HTMLInputElement;
+                                        const val = input.value.trim();
+                                        
+                                        // Handle empty input
+                                        if (val === '' || val === '-') {
+                                          newEntry.flightTime[field.key] = null;
+                                          return;
+                                        }
+                                        
+                                        // Remove any non-numeric characters except decimal point and minus
+                                        const cleaned = val.replace(/[^\d.-]/g, '');
+                                        
+                                        // Parse as float
+                                        const num = parseFloat(cleaned);
+                                        
+                                        if (isNaN(num)) {
+                                          // Invalid input - revert to previous value or null
+                                          newEntry.flightTime[field.key] = null;
+                                        } else {
+                                          // Ensure it's a valid number (not Infinity, etc.)
+                                          newEntry.flightTime[field.key] = isFinite(num) ? num : null;
+                                        }
+                                      }"
                                       @click="field.key !== 'total' && fillFieldWithTotalTime(field.key, newEntry.flightTime.total, false)"
+                                      @blur="(e) => {
+                                        const input = e.target as HTMLInputElement;
+                                        const val = newEntry.flightTime[field.key];
+                                        
+                                        // Format display on blur
+                                        if (val === null || val === undefined) {
+                                          input.value = '';
+                                        } else if (val === 0) {
+                                          input.value = '0.0';
+                                        } else {
+                                          // Format to 1 decimal place
+                                          input.value = Number(val).toFixed(1);
+                                        }
+                                      }"
                     />
           </div>
         </div>
@@ -1685,16 +1726,59 @@
                                       {{ label }}
                                     </div>
                                       <input 
-                                        v-model.number="inlineEditEntry.flightTime[key]" 
-                                        type="number" 
-                                        step="0.1"
+                                        :value="inlineEditEntry.flightTime[key] === null || inlineEditEntry.flightTime[key] === undefined ? '' : inlineEditEntry.flightTime[key] === 0 ? '0.0' : String(inlineEditEntry.flightTime[key])"
+                                        type="text"
+                                        inputmode="decimal"
                                       :placeholder="'0.0'"
                                       :class="[
                                         'w-full rounded border px-2 py-1 text-sm text-center font-mono',
                                         key !== 'total' ? 'cursor-pointer' : '',
-                                        isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'
+                                        isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300',
+                                        (inlineEditEntry.flightTime[key] === null || inlineEditEntry.flightTime[key] === 0 || inlineEditEntry.flightTime[key] === undefined)
+                                          ? (isDarkMode ? 'text-gray-500' : 'text-gray-400')
+                                          : (isDarkMode ? 'text-white' : 'text-gray-900')
                                       ]"
+                                      @input="(e) => {
+                                        if (!inlineEditEntry) return;
+                                        const input = e.target as HTMLInputElement;
+                                        const val = input.value.trim();
+                                        
+                                        // Handle empty input
+                                        if (val === '' || val === '-') {
+                                          inlineEditEntry.flightTime[key as FlightTimeKey] = null;
+                                          return;
+                                        }
+                                        
+                                        // Remove any non-numeric characters except decimal point and minus
+                                        const cleaned = val.replace(/[^\d.-]/g, '');
+                                        
+                                        // Parse as float
+                                        const num = parseFloat(cleaned);
+                                        
+                                        if (isNaN(num)) {
+                                          // Invalid input - revert to previous value or null
+                                          inlineEditEntry.flightTime[key as FlightTimeKey] = null;
+                                        } else {
+                                          // Ensure it's a valid number (not Infinity, etc.)
+                                          inlineEditEntry.flightTime[key as FlightTimeKey] = isFinite(num) ? num : null;
+                                        }
+                                      }"
                                       @click="key !== 'total' && inlineEditEntry && fillFieldWithTotalTime(key as FlightTimeKey, inlineEditEntry.flightTime.total, true)"
+                                      @blur="(e) => {
+                                        if (!inlineEditEntry) return;
+                                        const input = e.target as HTMLInputElement;
+                                        const val = inlineEditEntry.flightTime[key];
+                                        
+                                        // Format display on blur
+                                        if (val === null || val === undefined) {
+                                          input.value = '';
+                                        } else if (val === 0) {
+                                          input.value = '0.0';
+                                        } else {
+                                          // Format to 1 decimal place
+                                          input.value = Number(val).toFixed(1);
+                                        }
+                                      }"
                                       />
                                     </div>
                                   </div>
@@ -3168,13 +3252,57 @@ async function saveInlineEdit(): Promise<void> {
     return
   }
 
+  // Debug logging for night time
+  console.log('[SaveInlineEdit] Saving entry with night time:', {
+    entryId: inlineEditEntry.value.id,
+    nightTime: inlineEditEntry.value.flightTime.night,
+    date: inlineEditEntry.value.date,
+    departure: inlineEditEntry.value.departure,
+    flightTime: inlineEditEntry.value.flightTime
+  })
+
+  // Normalize the entry like submitEntry does to ensure consistent data
+  const updatedEntry: LogEntry = {
+    ...inlineEditEntry.value,
+    aircraftCategoryClass: normalizeCategoryClassLabel(inlineEditEntry.value.aircraftCategoryClass.trim()),
+    categoryClassTime: normalizeNumber(inlineEditEntry.value.categoryClassTime),
+    flightTime: flightTimeFields.reduce<FlightTimeBreakdown>((acc, field) => {
+      const normalized = normalizeNumber(inlineEditEntry.value!.flightTime[field.key])
+      acc[field.key] = normalized
+      // Debug logging for night time
+      if (field.key === 'night') {
+        console.log('[SaveInlineEdit] Normalizing night time:', {
+          rawValue: inlineEditEntry.value!.flightTime[field.key],
+          normalizedValue: normalized
+        })
+      }
+      return acc
+    }, {} as FlightTimeBreakdown),
+    performance: performanceFields.reduce<PerformanceMetrics>((acc, field) => {
+      if (field.key === 'approachType') {
+        acc[field.key] = (inlineEditEntry.value!.performance[field.key] as string | null) ?? null
+      } else {
+        acc[field.key] = inlineEditEntry.value!.performance[field.key] ?? null
+      }
+      return acc
+    }, {} as PerformanceMetrics),
+    flightConditions: sanitizeFlightConditions([...inlineEditEntry.value.flightConditions]),
+    oooi: inlineEditEntry.value.oooi && Object.values(inlineEditEntry.value.oooi).some(v => v) ? { ...inlineEditEntry.value.oooi } : undefined
+  }
+
   // Update the entry in the list
   const targetId = inlineEditEntry.value.id
-  const updatedEntry = { ...inlineEditEntry.value }
   logEntries.value = sortEntriesByDateAndOOOI(
     logEntries.value.map((e) => 
       e.id === targetId ? updatedEntry : e
     )
+  )
+
+  console.log('[SaveInlineEdit] Entry saved. Updated night time in logEntries:', 
+    logEntries.value.find(e => e.id === targetId)?.flightTime.night
+  )
+  console.log('[SaveInlineEdit] Full flightTime object:', 
+    logEntries.value.find(e => e.id === targetId)?.flightTime
   )
 
   expandedEntryId.value = null
@@ -3830,6 +3958,39 @@ function parseOOOITime(time: string | null): number | null {
   return hours * 60 + minutes
 }
 
+/**
+ * Convert OOOI time format from "HHMM" to "HH:MM"
+ * @param time Time string in HHMM format (e.g., "1430") or null
+ * @returns Time string in HH:MM format (e.g., "14:30") or null if invalid
+ */
+function convertOOOITimeToHHMM(time: string | null): string | null {
+  if (!time || time.length === 0) return null
+  
+  // Remove non-digits
+  let digits = time.replace(/\D/g, '')
+  
+  // Handle 3-digit times (e.g., "083" -> "0803" for 8:03 AM)
+  if (digits.length === 3) {
+    digits = '0' + digits // Prepend 0 to make it 4 digits
+  }
+  
+  // Pad to 4 characters if less than 4 (handles 1-2 digit times)
+  digits = digits.padStart(4, '0')
+  
+  if (digits.length !== 4) return null
+  
+  const hours = parseInt(digits.slice(0, 2), 10)
+  const minutes = parseInt(digits.slice(2, 4), 10)
+  
+  // Validate hours and minutes
+  if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return null
+  }
+  
+  // Format as HH:MM
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
+}
+
 function sortEntriesByDateAndOOOI(entries: LogEntry[]): LogEntry[] {
   return [...entries].sort((a, b) => {
     // Primary sort: date (descending - most recent first)
@@ -4279,11 +4440,27 @@ function validateEntry(entry: EditableLogEntry): string | null {
   return null
 }
 
-function normalizeNumber(value: number | null): number | null {
-  if (value === null || Number.isNaN(value)) {
+function normalizeNumber(value: number | null | string | undefined): number | null {
+  // Handle string values (convert to number)
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value)
+    if (isNaN(parsed) || !isFinite(parsed)) {
+      return null
+    }
+    value = parsed
+  }
+  
+  if (value === null || value === undefined || Number.isNaN(value)) {
     return null
   }
-  const rounded = Math.round(value * 10) / 10
+  
+  // Ensure it's a number
+  const num = typeof value === 'number' ? value : Number(value)
+  if (isNaN(num) || !isFinite(num)) {
+    return null
+  }
+  
+  const rounded = Math.round(num * 10) / 10
   return rounded >= 0 ? rounded : null
 }
 
@@ -4398,57 +4575,124 @@ async function autoCalculateNightTime(
   inTime: string | null,
   isZulu: boolean = true
 ): Promise<number | null> {
-  if (!date || !departure || !outTime || !inTime) return null
+  console.log('[NightTime] Starting calculation:', { date, departure, destination, outTime, inTime, isZulu })
+  
+  if (!date || !departure || !outTime || !inTime) {
+    console.warn('[NightTime] Missing required parameters:', { date, departure, outTime, inTime })
+    return null
+  }
   
   // Get departure airport coordinates from cache, or try to look them up
   let depCoords = getAirportCoordsFromCache(departure)
+  console.log('[NightTime] Departure coords from cache:', depCoords)
   
   if (!depCoords) {
+    console.log('[NightTime] Looking up departure airport:', departure)
     // Try to look up the airport
     const depInfo = await lookupAirport(departure)
+    console.log('[NightTime] Departure airport lookup result:', depInfo)
     if (depInfo?.latitude && depInfo?.longitude) {
       depCoords = { lat: depInfo.latitude, lon: depInfo.longitude }
+      console.log('[NightTime] Using departure coords from lookup:', depCoords)
     }
   }
   
-  if (!depCoords) return null
+  if (!depCoords) {
+    console.error('[NightTime] Failed to get departure airport coordinates for:', departure)
+    return null
+  }
   
   // Get destination coordinates (optional, for more accurate calculation on long flights)
   let destCoords = getAirportCoordsFromCache(destination)
+  console.log('[NightTime] Destination coords from cache:', destCoords)
+  
   if (!destCoords && destination) {
+    console.log('[NightTime] Looking up destination airport:', destination)
     const destInfo = await lookupAirport(destination)
+    console.log('[NightTime] Destination airport lookup result:', destInfo)
     if (destInfo?.latitude && destInfo?.longitude) {
-      destCoords = { lat: destInfo.latitude, lon: destInfo.longitude }
+      // Ensure coordinates are numbers, not strings
+      destCoords = { 
+        lat: typeof destInfo.latitude === 'string' ? parseFloat(destInfo.latitude) : destInfo.latitude, 
+        lon: typeof destInfo.longitude === 'string' ? parseFloat(destInfo.longitude) : destInfo.longitude 
+      }
+      console.log('[NightTime] Using destination coords from lookup:', destCoords)
     }
   }
   
   // Normalize date to YYYY-MM-DD format
+  // Date inputs use YYYY-MM-DD, but we might also receive MM/DD/YYYY
   let normalizedDate = date
   if (date.includes('/')) {
+    // Handle MM/DD/YYYY format
     const parts = date.split('/')
     if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
       const mm = parts[0]
       const dd = parts[1]
       const yyyy = parts[2]
       normalizedDate = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`
+      console.log('[NightTime] Converted date from MM/DD/YYYY:', date, 'to:', normalizedDate)
     }
+  } else if (date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    // Already in YYYY-MM-DD format (from date input)
+    normalizedDate = date
+    console.log('[NightTime] Date already in YYYY-MM-DD format:', normalizedDate)
+  } else {
+    console.warn('[NightTime] Unexpected date format:', date)
   }
   
-  const result = calculateNightTime({
+  // Convert OOOI times from "HHMM" to "HH:MM" format
+  const outTimeFormatted = convertOOOITimeToHHMM(outTime)
+  const inTimeFormatted = convertOOOITimeToHHMM(inTime)
+  console.log('[NightTime] Time conversion:', { 
+    outTime, 
+    outTimeFormatted, 
+    inTime, 
+    inTimeFormatted 
+  })
+  
+  if (!outTimeFormatted || !inTimeFormatted) {
+    console.error('[NightTime] Failed to convert time formats:', { outTime, inTime })
+    return null
+  }
+  
+  // Ensure all coordinates are numbers
+  const depLat = typeof depCoords.lat === 'number' ? depCoords.lat : parseFloat(String(depCoords.lat))
+  const depLon = typeof depCoords.lon === 'number' ? depCoords.lon : parseFloat(String(depCoords.lon))
+  const destLat = destCoords ? (typeof destCoords.lat === 'number' ? destCoords.lat : parseFloat(String(destCoords.lat))) : undefined
+  const destLon = destCoords ? (typeof destCoords.lon === 'number' ? destCoords.lon : parseFloat(String(destCoords.lon))) : undefined
+  
+  console.log('[NightTime] Calling calculateNightTime with:', {
     date: normalizedDate,
-    depLatitude: depCoords.lat,
-    depLongitude: depCoords.lon,
-    destLatitude: destCoords?.lat,
-    destLongitude: destCoords?.lon,
-    outTime,
-    inTime,
+    depLatitude: depLat,
+    depLongitude: depLon,
+    destLatitude: destLat,
+    destLongitude: destLon,
+    outTime: outTimeFormatted,
+    inTime: inTimeFormatted,
     isZulu
   })
   
-  if (result.success && result.nightHours > 0) {
+  const result = calculateNightTime({
+    date: normalizedDate,
+    depLatitude: depLat,
+    depLongitude: depLon,
+    destLatitude: destLat,
+    destLongitude: destLon,
+    outTime: outTimeFormatted,
+    inTime: inTimeFormatted,
+    isZulu
+  })
+  
+  console.log('[NightTime] Calculation result:', result)
+  
+  // Return night time if calculation succeeded (including 0 to clear incorrect values)
+  if (result.success) {
+    console.log('[NightTime] Success! Night time:', result.nightHours, 'hours')
     return result.nightHours
   }
   
+  console.error('[NightTime] Calculation failed:', result.error)
   return null
 }
 
@@ -4463,9 +4707,28 @@ watch(
     newEntry.oooi?.isZulu
   ],
   async () => {
-    if (!isCommercialMode.value || !newEntry.oooi) return
-    if (!newEntry.date || !newEntry.departure || !newEntry.oooi.out || !newEntry.oooi.in) return
+    console.log('[NightTime Watcher] Triggered with:', {
+      isCommercialMode: isCommercialMode.value,
+      hasOOOI: !!newEntry.oooi,
+      date: newEntry.date,
+      departure: newEntry.departure,
+      destination: newEntry.destination,
+      out: newEntry.oooi?.out,
+      in: newEntry.oooi?.in,
+      isZulu: newEntry.oooi?.isZulu
+    })
     
+    if (!isCommercialMode.value || !newEntry.oooi) {
+      console.log('[NightTime Watcher] Skipping - OOOI mode not active or no OOOI data')
+      return
+    }
+    
+    if (!newEntry.date || !newEntry.departure || !newEntry.oooi.out || !newEntry.oooi.in) {
+      console.log('[NightTime Watcher] Skipping - missing required fields')
+      return
+    }
+    
+    console.log('[NightTime Watcher] Calling autoCalculateNightTime...')
     const nightTime = await autoCalculateNightTime(
       newEntry.date,
       newEntry.departure,
@@ -4478,11 +4741,9 @@ watch(
     if (nightTime !== null) {
       // Always update night time, even if 0 (to clear incorrect values)
       newEntry.flightTime.night = nightTime
-      if (nightTime > 0) {
-        console.log(`Auto-calculated night time: ${nightTime} hours`)
-      } else {
-        console.log('Auto-calculated night time: 0 hours (cleared)')
-      }
+      console.log(`[NightTime Watcher] Updated night time to: ${nightTime} hours`)
+    } else {
+      console.warn('[NightTime Watcher] Calculation returned null - night time not updated')
     }
   },
   { deep: true }
@@ -4499,10 +4760,29 @@ watch(
     inlineEditEntry.value?.oooi?.isZulu
   ],
   async () => {
-    if (!isInlineCommercialMode.value || !inlineEditEntry.value?.oooi) return
-    if (!inlineEditEntry.value.date || !inlineEditEntry.value.departure || 
-        !inlineEditEntry.value.oooi.out || !inlineEditEntry.value.oooi.in) return
+    console.log('[NightTime Inline Watcher] Triggered with:', {
+      isInlineCommercialMode: isInlineCommercialMode.value,
+      hasOOOI: !!inlineEditEntry.value?.oooi,
+      date: inlineEditEntry.value?.date,
+      departure: inlineEditEntry.value?.departure,
+      destination: inlineEditEntry.value?.destination,
+      out: inlineEditEntry.value?.oooi?.out,
+      in: inlineEditEntry.value?.oooi?.in,
+      isZulu: inlineEditEntry.value?.oooi?.isZulu
+    })
     
+    if (!isInlineCommercialMode.value || !inlineEditEntry.value?.oooi) {
+      console.log('[NightTime Inline Watcher] Skipping - OOOI mode not active or no OOOI data')
+      return
+    }
+    
+    if (!inlineEditEntry.value.date || !inlineEditEntry.value.departure || 
+        !inlineEditEntry.value.oooi.out || !inlineEditEntry.value.oooi.in) {
+      console.log('[NightTime Inline Watcher] Skipping - missing required fields')
+      return
+    }
+    
+    console.log('[NightTime Inline Watcher] Calling autoCalculateNightTime...')
     const nightTime = await autoCalculateNightTime(
       inlineEditEntry.value.date,
       inlineEditEntry.value.departure,
@@ -4513,7 +4793,11 @@ watch(
     )
     
     if (nightTime !== null && inlineEditEntry.value) {
-      inlineEditEntry.value.flightTime.night = nightTime
+      // Ensure it's a number, not a string
+      inlineEditEntry.value.flightTime.night = typeof nightTime === 'number' ? nightTime : parseFloat(String(nightTime))
+      console.log(`[NightTime Inline Watcher] Updated night time to: ${inlineEditEntry.value.flightTime.night} hours (type: ${typeof inlineEditEntry.value.flightTime.night})`)
+    } else {
+      console.warn('[NightTime Inline Watcher] Calculation returned null - night time not updated')
     }
   },
   { deep: true }
@@ -4625,7 +4909,17 @@ function submitEntry(): void {
     flightConditions: sanitizeFlightConditions([...newEntry.flightConditions]),
     remarks: newEntry.remarks.trim(),
     flightTime: flightTimeFields.reduce<FlightTimeBreakdown>((acc, field) => {
-      acc[field.key] = normalizeNumber(newEntry.flightTime[field.key])
+      const normalized = normalizeNumber(newEntry.flightTime[field.key])
+      acc[field.key] = normalized
+      // Debug logging for night time
+      if (field.key === 'night') {
+        console.log('[SaveEntry] Saving night time:', {
+          rawValue: newEntry.flightTime[field.key],
+          normalizedValue: normalized,
+          entryDate: newEntry.date,
+          departure: newEntry.departure
+        })
+      }
       return acc
     }, {} as FlightTimeBreakdown),
     performance: performanceFields.reduce<PerformanceMetrics>((acc, field) => {
@@ -4639,10 +4933,17 @@ function submitEntry(): void {
     oooi: newEntry.oooi && Object.values(newEntry.oooi).some(v => v) ? { ...newEntry.oooi } : undefined
   }
 
+  // Debug: Log the flightTime object being saved
+  console.log('[SaveEntry] FlightTime being saved:', baseEntry.flightTime)
+  console.log('[SaveEntry] Night time value:', baseEntry.flightTime.night)
+
   if (editingEntryId.value) {
     const targetId = editingEntryId.value
     logEntries.value = sortEntriesByDateAndOOOI(
       logEntries.value.map((entry) => (entry.id === targetId ? { ...baseEntry, id: targetId } : entry))
+    )
+    console.log('[SaveEntry] Entry updated. Night time in saved entry:', 
+      logEntries.value.find(e => e.id === targetId)?.flightTime.night
     )
     successMessage.value = 'Entry updated.'
   } else {
@@ -4651,6 +4952,9 @@ function submitEntry(): void {
       id: generateEntryId()
     }
     logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
+    console.log('[SaveEntry] Entry saved. Night time in saved entry:', 
+      logEntries.value.find(e => e.id === entryToStore.id)?.flightTime.night
+    )
     successMessage.value = 'Entry saved locally. Remember to archive signatures once the feature is available.'
   }
 
@@ -4705,20 +5009,44 @@ function loadPersistedEntries(): void {
           delete flightTimeRaw.instrument
         }
         
+        // Normalize all flightTime values to ensure they're numbers, not strings
+        const normalizedFlightTime: FlightTimeBreakdown = {
+          ...createEmptyFlightTime()
+        }
+        flightTimeFields.forEach((field) => {
+          const rawValue = entry.flightTime?.[field.key]
+          normalizedFlightTime[field.key] = normalizeNumber(rawValue)
+        })
+        
+        // Normalize performance values too
+        const normalizedPerformance: PerformanceMetrics = {
+          ...createEmptyPerformance()
+        }
+        performanceFields.forEach((field) => {
+          if (field.key === 'approachType') {
+            normalizedPerformance[field.key] = (entry.performance?.[field.key] as string | null) ?? null
+          } else {
+            const rawValue = entry.performance?.[field.key]
+            // For performance fields, convert strings to numbers
+            if (typeof rawValue === 'string') {
+              const parsed = parseFloat(rawValue)
+              normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
+            } else {
+              normalizedPerformance[field.key] = rawValue ?? null
+            }
+          }
+        })
+        
         return {
           ...entry,
           flightNumber: entry.flightNumber ?? null,
           flightConditions: sanitizeFlightConditions(entry.flightConditions || []),
-          flightTime: {
-            ...createEmptyFlightTime(),
-            ...entry.flightTime
-          },
-          performance: {
-            ...createEmptyPerformance(),
-            ...entry.performance
-          }
+          flightTime: normalizedFlightTime,
+          performance: normalizedPerformance
         }
       })
+      
+      console.log('[LoadEntries] Loaded', logEntries.value.length, 'entries. Normalized flightTime values.')
     }
   } catch (err) {
     console.error('Unable to load stored logbook entries', err)
@@ -4928,7 +5256,20 @@ const totals = computed(() => {
 
   entriesForTotals.value.forEach((entry) => {
     flightTimeFields.forEach((field) => {
-      timeAccumulator[field.key] += entry.flightTime[field.key] ?? 0
+      const rawValue = entry.flightTime[field.key]
+      const value = rawValue ?? 0
+      timeAccumulator[field.key] += value
+      // Debug logging for night time (log all entries, not just > 0)
+      if (field.key === 'night') {
+        console.log('[Totals] Processing entry night time:', {
+          entryId: entry.id,
+          date: entry.date,
+          departure: entry.departure,
+          rawNightValue: rawValue,
+          nightTime: value,
+          totalSoFar: timeAccumulator[field.key]
+        })
+      }
     })
     performanceFields.forEach((field) => {
       // Skip approachType since it's a string, not a number
@@ -4937,6 +5278,10 @@ const totals = computed(() => {
       }
     })
   })
+  
+  // Debug logging for final totals
+  console.log('[Totals] Final night time total:', timeAccumulator.night, 'from', entriesForTotals.value.length, 'entries')
+  console.log('[Totals] All time totals:', timeAccumulator)
 
   return {
     time: timeAccumulator,
