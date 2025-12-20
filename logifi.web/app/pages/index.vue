@@ -1506,441 +1506,6 @@
                       </template>
                     </td>
                     </tr>
-                    <tr v-if="expandedEntryId === entry.id">
-                      <td :colspan="visibleColumns.length" class="px-0 py-0">
-                        <div
-                        :class="[
-                            'border-2 shadow-inner transition-all duration-300',
-                          isDarkMode 
-                              ? 'bg-gray-900/50 border-blue-500/50' 
-                              : 'bg-gray-100 border-blue-400/60'
-                          ]"
-                        >
-                          <div class="p-6">
-                            <div v-if="inlineEditEntry" class="grid gap-6">
-                              
-                              <!-- Inline Edit Form (Simplified Version) -->
-                              <div class="flex justify-end mb-2">
-                      <button
-                        type="button"
-                                  @click="isInlineCommercialMode = !isInlineCommercialMode"
-                                  :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors', 
-                                    isInlineCommercialMode 
-                                      ? (isDarkMode ? 'bg-blue-900/30 text-blue-300 border-blue-700' : 'bg-blue-100 text-blue-700 border-blue-200')
-                                      : (isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200')
-                                  ]"
-                                >
-                                  {{ isInlineCommercialMode ? 'OOOI Active' : '+ OOOI' }}
-                      </button>
-                              </div>
-
-                              <div v-if="isInlineCommercialMode && inlineEditEntry?.oooi" class="mb-4">
-                                <div class="flex justify-between items-center mb-2 px-2">
-                                  <span :class="['text-xs font-medium', isDarkMode ? 'text-gray-400' : 'text-gray-600']">Time Format:</span>
-                                  <button 
-                                    type="button"
-                                    @click="inlineEditEntry.oooi.isZulu = !inlineEditEntry.oooi.isZulu"
-                                    :class="[
-                                      'px-3 py-1 text-xs font-medium rounded transition-colors',
-                                      inlineEditEntry.oooi.isZulu
-                                        ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
-                                        : (isDarkMode ? 'bg-gray-700 text-gray-300 border border-gray-600' : 'bg-gray-200 text-gray-700 border border-gray-300')
-                                    ]"
-                                  >
-                                    {{ inlineEditEntry.oooi.isZulu ? 'Zulu (UTC)' : 'Local' }}
-                                  </button>
-                                </div>
-                                <div class="grid grid-cols-4 gap-2 p-2 rounded border border-dashed border-gray-600/50">
-                                 <div v-for="field in oooiFields" :key="field">
-                                    <label :class="['block text-[10px] uppercase font-bold mb-1 text-center', isDarkMode ? 'text-blue-400' : 'text-blue-600']">{{ field }}</label>
-                                    <input 
-                                      v-if="inlineEditEntry?.oooi" 
-                                      v-model="inlineEditEntry.oooi[field]" 
-                                      type="text" 
-                                      maxlength="4" 
-                                      placeholder="1430"
-                                      @input="(e) => { if (inlineEditEntry?.oooi && field !== 'isZulu') (inlineEditEntry.oooi as unknown as Record<string, string | null>)[field] = formatOOOIInput((e.target as HTMLInputElement).value) }"
-                                      :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
-                                    />
-                                  </div>
-                                 </div>
-                              </div>
-
-                              <div class="grid gap-4 md:grid-cols-4">
-                                <div>
-                                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Date</label>
-                                  <input v-model="inlineEditEntry.date" type="date" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
-                                </div>
-                                <div>
-                                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Role</label>
-                                  <select v-model="inlineEditEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
-                                    <option v-for="role in roleOptions" :key="role" :value="role">{{ role }}</option>
-                                  </select>
-                                </div>
-                                <div>
-                                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Aircraft</label>
-                                  <input v-model="inlineEditEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
-                                </div>
-                                <div class="relative">
-                                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Ident</label>
-                                  <input 
-                                    v-model="inlineEditEntry.registration" 
-                                    type="text" 
-                                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
-                                    autocomplete="off"
-                                    @input="inlineEditEntry.registration = ($event.target as HTMLInputElement).value.toUpperCase()"
-                                    @focus="showInlineIdentDropdown = true; highlightedInlineIdentIndex = filteredAircraftForInlineEdit.length > 0 ? 0 : -1"
-                                    @keydown="(e) => handleDropdownKeydown(e, 'inlineIdent', filteredAircraftForInlineEdit, (item) => selectAircraftForInlineEdit(item))"
-                                    @blur="handleInlineIdentBlur"
-                                  />
-                                  <!-- Aircraft Ident Dropdown for Inline Edit -->
-                                  <div 
-                                    v-if="showInlineIdentDropdown && filteredAircraftForInlineEdit.length > 0"
-                                    data-dropdown="inlineIdent"
-                                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
-                                  >
-                                    <button
-                                      v-for="(aircraft, index) in filteredAircraftForInlineEdit"
-                                      :key="aircraft.registration"
-                                      :data-index="index"
-                                      type="button"
-                                      :class="[
-                                        'w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors',
-                                        highlightedInlineIdentIndex === index
-                                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
-                                          : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')
-                                      ]"
-                                      @mousedown.prevent="selectAircraftForInlineEdit(aircraft)"
-                                    >
-                                      {{ aircraft.registration }}
-                                    </button>
-                                  </div>
-                                </div>
-                                <div>
-                                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Flight Number</label>
-                                  <input 
-                                    v-model="inlineEditEntry.flightNumber" 
-                                    type="text" 
-                                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
-                                    autocomplete="off"
-                                    placeholder="Optional"
-                                  />
-                                </div>
-                              </div>
-
-                              <div class="grid gap-4 md:grid-cols-4">
-                                <div class="relative">
-                                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">From</label>
-                                  <input 
-                                    v-model="inlineEditEntry.departure" 
-                                    type="text" 
-                                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
-                                    autocomplete="off"
-                                    @input="inlineEditEntry.departure = ($event.target as HTMLInputElement).value.toUpperCase()"
-                                    @focus="showInlineFromDropdown = true; highlightedInlineFromIndex = filteredAirportsForInlineFrom.length > 0 ? 0 : -1"
-                                    @keydown="(e) => handleDropdownKeydown(e, 'inlineFrom', filteredAirportsForInlineFrom, (item) => selectAirportForInlineFrom(item))"
-                                    @blur="handleInlineFromBlur"
-                                  />
-                                  <!-- Airport FROM Dropdown for Inline Edit -->
-                                  <div 
-                                    v-if="showInlineFromDropdown && filteredAirportsForInlineFrom.length > 0"
-                                    data-dropdown="inlineFrom"
-                                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
-                                  >
-                                    <button
-                                      v-for="(airport, index) in filteredAirportsForInlineFrom"
-                                      :key="airport"
-                                      :data-index="index"
-                                      type="button"
-                                      :class="[
-                                        'w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors',
-                                        highlightedInlineFromIndex === index
-                                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
-                                          : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')
-                                      ]"
-                                      @mousedown.prevent="selectAirportForInlineFrom(airport)"
-                                    >
-                                      {{ airport }}
-                                    </button>
-                                  </div>
-                                </div>
-                                <div class="relative">
-                                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">To</label>
-                                  <input 
-                                    v-model="inlineEditEntry.destination" 
-                                    type="text" 
-                                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
-                                    autocomplete="off"
-                                    @input="inlineEditEntry.destination = ($event.target as HTMLInputElement).value.toUpperCase()"
-                                    @focus="showInlineToDropdown = true; highlightedInlineToIndex = filteredAirportsForInlineTo.length > 0 ? 0 : -1"
-                                    @keydown="(e) => handleDropdownKeydown(e, 'inlineTo', filteredAirportsForInlineTo, (item) => selectAirportForInlineTo(item))"
-                                    @blur="handleInlineToBlur"
-                                  />
-                                  <!-- Airport TO Dropdown for Inline Edit -->
-                                  <div 
-                                    v-if="showInlineToDropdown && filteredAirportsForInlineTo.length > 0"
-                                    data-dropdown="inlineTo"
-                                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
-                                  >
-                                    <button
-                                      v-for="(airport, index) in filteredAirportsForInlineTo"
-                                      :key="airport"
-                                      :data-index="index"
-                                      type="button"
-                                      :class="[
-                                        'w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors',
-                                        highlightedInlineToIndex === index
-                                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
-                                          : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')
-                                      ]"
-                                      @mousedown.prevent="selectAirportForInlineTo(airport)"
-                                    >
-                                      {{ airport }}
-                                    </button>
-                                  </div>
-                                </div>
-                                <div>
-                                  <div class="flex gap-2">
-                                    <div class="flex-1">
-                                      <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class</label>
-                                      <input v-model="inlineEditEntry.aircraftCategoryClass" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="e.g. ASEL" />
-                                    </div>
-                                    <div class="flex-1">
-                                      <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
-                                      <input v-model.number="inlineEditEntry.categoryClassTime" type="number" step="0.1" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="0.0" />
-                                    </div>
-                                  </div>
-                                </div>
-                                <div>
-                                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
-                                  <input v-model="inlineEditEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
-                                </div>
-                              </div>
-                              
-                              <!-- Flight Times Inline -->
-                               <div>
-                                <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
-                                <div class="flex gap-2 w-full">
-                                  <div v-for="(label, key) in {total: 'Total Time', pic: 'PIC', sic: 'SIC', dual: 'Dual R', solo: 'Solo', night: 'Night', actualInstrument: 'Actual', dualGiven: 'Dual G', crossCountry: 'XC', simulatedInstrument: 'Hood'}" :key="key" class="flex-1">
-                                    <div :class="['text-[9px] uppercase font-bold mb-1 text-center whitespace-nowrap', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
-                                      {{ label }}
-                                    </div>
-                                      <input 
-                                        :value="inlineEditEntry.flightTime[key] === null || inlineEditEntry.flightTime[key] === undefined ? '' : inlineEditEntry.flightTime[key] === 0 ? '0.0' : String(inlineEditEntry.flightTime[key])"
-                                        type="text"
-                                        inputmode="decimal"
-                                      :placeholder="'0.0'"
-                                      :class="[
-                                        'w-full rounded border px-2 py-1 text-sm text-center font-mono',
-                                        key !== 'total' ? 'cursor-pointer' : '',
-                                        isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300',
-                                        (inlineEditEntry.flightTime[key] === null || inlineEditEntry.flightTime[key] === 0 || inlineEditEntry.flightTime[key] === undefined)
-                                          ? (isDarkMode ? 'text-gray-500' : 'text-gray-400')
-                                          : (isDarkMode ? 'text-white' : 'text-gray-900')
-                                      ]"
-                                      @input="(e) => {
-                                        if (!inlineEditEntry) return;
-                                        const input = e.target as HTMLInputElement;
-                                        const val = input.value.trim();
-                                        
-                                        // Handle empty input
-                                        if (val === '' || val === '-') {
-                                          inlineEditEntry.flightTime[key as FlightTimeKey] = null;
-                                          return;
-                                        }
-                                        
-                                        // Remove any non-numeric characters except decimal point and minus
-                                        const cleaned = val.replace(/[^\d.-]/g, '');
-                                        
-                                        // Parse as float
-                                        const num = parseFloat(cleaned);
-                                        
-                                        if (isNaN(num)) {
-                                          // Invalid input - revert to previous value or null
-                                          inlineEditEntry.flightTime[key as FlightTimeKey] = null;
-                                        } else {
-                                          // Ensure it's a valid number (not Infinity, etc.)
-                                          inlineEditEntry.flightTime[key as FlightTimeKey] = isFinite(num) ? num : null;
-                                        }
-                                      }"
-                                      @click="key !== 'total' && inlineEditEntry && fillFieldWithTotalTime(key as FlightTimeKey, inlineEditEntry.flightTime.total, true)"
-                                      @blur="(e) => {
-                                        if (!inlineEditEntry) return;
-                                        const input = e.target as HTMLInputElement;
-                                        const val = inlineEditEntry.flightTime[key];
-                                        
-                                        // Format display on blur
-                                        if (val === null || val === undefined) {
-                                          input.value = '';
-                                        } else if (val === 0) {
-                                          input.value = '0.0';
-                                        } else {
-                                          // Format to 1 decimal place
-                                          input.value = Number(val).toFixed(1);
-                                        }
-                                      }"
-                                      />
-                                    </div>
-                                  </div>
-                               </div>
-
-                               <!-- Performance Inline -->
-                               <div class="grid gap-4 grid-cols-4">
-                                 <div>
-                                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day Ldg</label>
-                                    <input v-model.number="inlineEditEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
-                                 </div>
-                                 <div>
-                                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night Ldg</label>
-                                    <input v-model.number="inlineEditEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
-                                 </div>
-                                 <div>
-                                    <div class="flex gap-2">
-                                      <div class="flex-1">
-                                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">App #</label>
-                                        <input v-model.number="inlineEditEntry.performance.approachCount" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="0" />
-                                      </div>
-                                      <div class="flex-1">
-                                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">App Type</label>
-                                        <input v-model="inlineEditEntry.performance.approachType" type="text" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="ILS" />
-                                      </div>
-                                    </div>
-                                 </div>
-                                 <div>
-                                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Holds</label>
-                                    <input v-model.number="inlineEditEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
-                                 </div>
-                               </div>
-
-                              <div class="flex flex-wrap gap-3">
-                                <label
-                                  v-for="condition in conditionOptions"
-                                  :key="condition.value"
-                                  :class="[
-                                    'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all',
-                                    isDarkMode 
-                                      ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' 
-                                      : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200'
-                                  ]"
-                                >
-                                  <input
-                                    v-model="inlineEditEntry.flightConditions"
-                                    :value="condition.value"
-                                    type="checkbox"
-                                    :class="[
-                                      'h-4 w-4 rounded border transition-colors',
-                                      isDarkMode 
-                                        ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' 
-                                        : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500'
-                                    ]"
-                                  />
-                                  <span>{{ condition.label }}</span>
-                                </label>
-                              </div>
-
-                              <div>
-                                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Remarks / Applicable 61.51 Notes</label>
-                                <textarea
-                                  v-model="inlineEditEntry.remarks"
-                                  rows="3"
-                                  placeholder="Document training received, endorsements pending, or other relevant notes."
-                                  :class="[
-                                    'w-full rounded border px-2 py-2 text-sm font-quicksand transition-colors duration-300',
-                                    isDarkMode 
-                                      ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-400' 
-                                      : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400'
-                                  ]"
-                                ></textarea>
-                              </div>
-
-                              <!-- Pilot Section -->
-                              <div>
-                                <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Pilot</label>
-                                <div class="grid gap-4 md:grid-cols-3">
-                                  <div>
-                                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Job</label>
-                                    <select v-model="inlineEditEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
-                                      <option value="">Select...</option>
-                                      <option value="Student">Student</option>
-                                      <option value="Instructor">Instructor</option>
-                                      <option value="Safety Pilot">Safety Pilot</option>
-                                      <option value="Captain">Captain</option>
-                                      <option value="First Officer">First Officer</option>
-                                    </select>
-                                  </div>
-                                  <div class="relative">
-                                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Name</label>
-                                    <input 
-                                      v-model="inlineEditEntry.trainingElements" 
-                                      type="text" 
-                                      :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
-                                      placeholder="Pilot Name"
-                                      autocomplete="off"
-                                      @focus="showInlinePilotNameDropdown = true; highlightedInlinePilotIndex = filteredPilotsForInline.length > 0 ? 0 : -1"
-                                      @keydown="(e) => handleDropdownKeydown(e, 'inlinePilot', filteredPilotsForInline, (item) => selectPilotNameForInline(item))"
-                                      @blur="handleInlinePilotNameBlur"
-                                    />
-                                    <!-- Pilot Name Dropdown for Inline Edit -->
-                                    <div 
-                                      v-if="showInlinePilotNameDropdown && filteredPilotsForInline.length > 0"
-                                      data-dropdown="inlinePilot"
-                                      :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
-                                    >
-                                      <button
-                                        v-for="(pilot, index) in filteredPilotsForInline"
-                                        :key="pilot"
-                                        :data-index="index"
-                                        type="button"
-                                        :class="[
-                                          'w-full px-3 py-2 text-left text-sm transition-colors',
-                                          highlightedInlinePilotIndex === index
-                                            ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
-                                            : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')
-                                        ]"
-                                        @mousedown.prevent="selectPilotNameForInline(pilot)"
-                                      >
-                                        {{ pilot }}
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
-                                    <input v-model="inlineEditEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Certificate #" />
-                                  </div>
-                                 </div>
-                               </div>
-
-                              <div class="flex items-center justify-between mt-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <button
-            type="button"
-                                  @click.stop="confirmAndDeleteEntry(entry.id)"
-                                  :class="['text-xs text-red-500 hover:text-red-600 font-medium px-2 py-1']"
-                                >
-                                  Delete Entry
-                                </button>
-                                <div class="flex items-center gap-3">
-                                  <button
-                                    type="button"
-                                    @click.stop="cancelInlineEdit"
-                                    :class="['px-4 py-2 rounded-lg text-sm font-medium', isDarkMode ? 'text-gray-400 hover:bg-gray-800' : 'text-gray-600 hover:bg-gray-200']"
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    type="button"
-                                    @click.stop="saveInlineEdit"
-                                    :class="['px-4 py-2 rounded-lg text-sm font-bold shadow-lg', isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white']"
-                                  >
-                                    Confirm Changes
-                                  </button>
-                                </div>
-                              </div>
-
-                            </div>
-                          </div>
-                        </div>
-                    </td>
-                  </tr>
                   </template>
                 </tbody>
               </table>
@@ -1948,6 +1513,480 @@
       </div>
     </div>
     </main>
+
+    <!-- Backdrop Overlay for Edit Panel -->
+    <Transition name="fade">
+      <div
+        v-if="expandedEntryId !== null"
+        class="fixed inset-0 z-40 bg-black/50 pointer-events-none"
+      ></div>
+    </Transition>
+
+    <!-- Right-Side Edit Panel -->
+    <Transition name="slide-right">
+      <div v-if="expandedEntryId !== null && inlineEditEntry" class="fixed right-0 top-0 h-full w-full md:w-[500px] lg:w-[600px] z-50" @keydown.escape="cancelInlineEdit" tabindex="-1">
+        <div class="h-full flex flex-col shadow-2xl" :class="isDarkMode ? 'bg-gray-900 border-l border-gray-700' : 'bg-gray-50 border-l border-gray-200'">
+          <!-- Panel Header -->
+        <div 
+          class="flex items-center justify-between p-4 border-b"
+          :class="[
+            isDarkMode ? 'border-gray-700' : 'border-gray-200'
+          ]"
+        >
+          <h2 
+            class="text-lg font-semibold font-quicksand"
+            :class="[
+              isDarkMode ? 'text-gray-100' : 'text-gray-900'
+            ]"
+          >
+            Edit Flight Entry
+          </h2>
+          <button
+            type="button"
+            @click="cancelInlineEdit"
+            :class="[
+              'p-2 rounded-lg transition-colors text-xl leading-none',
+              isDarkMode 
+                ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-800' 
+                : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'
+            ]"
+            aria-label="Close panel"
+          >
+            ×
+          </button>
+          </div>
+          
+          <!-- Scrollable Form Content -->
+          <div class="flex-1 overflow-y-auto p-6" data-edit-panel>
+          <div v-if="inlineEditEntry" class="grid gap-6">
+            
+            <!-- Inline Edit Form (Simplified Version) -->
+            <div class="flex justify-end mb-2">
+              <button
+                type="button"
+                @click="isInlineCommercialMode = !isInlineCommercialMode"
+                :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors', 
+                  isInlineCommercialMode 
+                    ? (isDarkMode ? 'bg-blue-900/30 text-blue-300 border-blue-700' : 'bg-blue-100 text-blue-700 border-blue-200')
+                    : (isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200')
+                ]"
+              >
+                {{ isInlineCommercialMode ? 'OOOI Active' : '+ OOOI' }}
+              </button>
+            </div>
+
+            <div v-if="isInlineCommercialMode && inlineEditEntry?.oooi" class="mb-4">
+              <div class="flex justify-between items-center mb-2 px-2">
+                <span :class="['text-xs font-medium', isDarkMode ? 'text-gray-400' : 'text-gray-600']">Time Format:</span>
+                <button 
+                  type="button"
+                  @click="inlineEditEntry.oooi.isZulu = !inlineEditEntry.oooi.isZulu"
+                  :class="[
+                    'px-3 py-1 text-xs font-medium rounded transition-colors',
+                    inlineEditEntry.oooi.isZulu
+                      ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                      : (isDarkMode ? 'bg-gray-700 text-gray-300 border border-gray-600' : 'bg-gray-200 text-gray-700 border border-gray-300')
+                  ]"
+                >
+                  {{ inlineEditEntry.oooi.isZulu ? 'Zulu (UTC)' : 'Local' }}
+                </button>
+              </div>
+              <div class="grid grid-cols-4 gap-2 p-2 rounded border border-dashed border-gray-600/50">
+               <div v-for="field in oooiFields" :key="field">
+                  <label :class="['block text-[10px] uppercase font-bold mb-1 text-center', isDarkMode ? 'text-blue-400' : 'text-blue-600']">{{ field }}</label>
+                  <input 
+                    v-if="inlineEditEntry?.oooi" 
+                    v-model="inlineEditEntry.oooi[field]" 
+                    type="text" 
+                    maxlength="4" 
+                    placeholder="1430"
+                    @input="(e) => { if (inlineEditEntry?.oooi && field !== 'isZulu') (inlineEditEntry.oooi as unknown as Record<string, string | null>)[field] = formatOOOIInput((e.target as HTMLInputElement).value) }"
+                    :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
+                  />
+                </div>
+               </div>
+            </div>
+
+            <div class="grid gap-4 md:grid-cols-4">
+              <div>
+                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Date</label>
+                <input v-model="inlineEditEntry.date" type="date" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+              </div>
+              <div>
+                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Role</label>
+                <select v-model="inlineEditEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                  <option v-for="role in roleOptions" :key="role" :value="role">{{ role }}</option>
+                </select>
+              </div>
+              <div>
+                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Aircraft</label>
+                <input v-model="inlineEditEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+              </div>
+              <div class="relative">
+                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Ident</label>
+                <input 
+                  v-model="inlineEditEntry.registration" 
+                  type="text" 
+                  :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                  autocomplete="off"
+                  @input="inlineEditEntry.registration = ($event.target as HTMLInputElement).value.toUpperCase()"
+                  @focus="showInlineIdentDropdown = true; highlightedInlineIdentIndex = filteredAircraftForInlineEdit.length > 0 ? 0 : -1"
+                  @keydown="(e) => handleDropdownKeydown(e, 'inlineIdent', filteredAircraftForInlineEdit, (item) => selectAircraftForInlineEdit(item))"
+                  @blur="handleInlineIdentBlur"
+                />
+                <!-- Aircraft Ident Dropdown for Inline Edit -->
+                <div 
+                  v-if="showInlineIdentDropdown && filteredAircraftForInlineEdit.length > 0"
+                  data-dropdown="inlineIdent"
+                  :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
+                >
+                  <button
+                    v-for="(aircraft, index) in filteredAircraftForInlineEdit"
+                    :key="aircraft.registration"
+                    :data-index="index"
+                    type="button"
+                    :class="[
+                      'w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors',
+                      highlightedInlineIdentIndex === index
+                        ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                        : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')
+                    ]"
+                    @mousedown.prevent="selectAircraftForInlineEdit(aircraft)"
+                  >
+                    {{ aircraft.registration }}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Flight Number</label>
+                <input 
+                  v-model="inlineEditEntry.flightNumber" 
+                  type="text" 
+                  :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                  autocomplete="off"
+                  placeholder="Optional"
+                />
+              </div>
+            </div>
+
+            <div class="grid gap-4" style="grid-template-columns: 1fr 1fr 2fr 1.5fr;">
+              <div class="relative">
+                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">From</label>
+                <input 
+                  v-model="inlineEditEntry.departure" 
+                  type="text" 
+                  :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                  autocomplete="off"
+                  @input="inlineEditEntry.departure = ($event.target as HTMLInputElement).value.toUpperCase()"
+                  @focus="showInlineFromDropdown = true; highlightedInlineFromIndex = filteredAirportsForInlineFrom.length > 0 ? 0 : -1"
+                  @keydown="(e) => handleDropdownKeydown(e, 'inlineFrom', filteredAirportsForInlineFrom, (item) => selectAirportForInlineFrom(item))"
+                  @blur="handleInlineFromBlur"
+                />
+                <!-- Airport FROM Dropdown for Inline Edit -->
+                <div 
+                  v-if="showInlineFromDropdown && filteredAirportsForInlineFrom.length > 0"
+                  data-dropdown="inlineFrom"
+                  :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
+                >
+                  <button
+                    v-for="(airport, index) in filteredAirportsForInlineFrom"
+                    :key="airport"
+                    :data-index="index"
+                    type="button"
+                    :class="[
+                      'w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors',
+                      highlightedInlineFromIndex === index
+                        ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                        : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')
+                    ]"
+                    @mousedown.prevent="selectAirportForInlineFrom(airport)"
+                  >
+                    {{ airport }}
+                  </button>
+                </div>
+              </div>
+              <div class="relative">
+                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">To</label>
+                <input 
+                  v-model="inlineEditEntry.destination" 
+                  type="text" 
+                  :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                  autocomplete="off"
+                  @input="inlineEditEntry.destination = ($event.target as HTMLInputElement).value.toUpperCase()"
+                  @focus="showInlineToDropdown = true; highlightedInlineToIndex = filteredAirportsForInlineTo.length > 0 ? 0 : -1"
+                  @keydown="(e) => handleDropdownKeydown(e, 'inlineTo', filteredAirportsForInlineTo, (item) => selectAirportForInlineTo(item))"
+                  @blur="handleInlineToBlur"
+                />
+                <!-- Airport TO Dropdown for Inline Edit -->
+                <div 
+                  v-if="showInlineToDropdown && filteredAirportsForInlineTo.length > 0"
+                  data-dropdown="inlineTo"
+                  :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
+                >
+                  <button
+                    v-for="(airport, index) in filteredAirportsForInlineTo"
+                    :key="airport"
+                    :data-index="index"
+                    type="button"
+                    :class="[
+                      'w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors',
+                      highlightedInlineToIndex === index
+                        ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                        : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')
+                    ]"
+                    @mousedown.prevent="selectAirportForInlineTo(airport)"
+                  >
+                    {{ airport }}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <div class="flex gap-2">
+                  <div class="flex-[0.6]">
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class</label>
+                    <input v-model="inlineEditEntry.aircraftCategoryClass" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="e.g. ASEL" />
+                  </div>
+                  <div class="flex-[1.4]">
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
+                    <input v-model.number="inlineEditEntry.categoryClassTime" type="number" step="0.1" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="0.0" />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
+                <input v-model="inlineEditEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+              </div>
+            </div>
+            
+            <!-- Flight Times Inline -->
+             <div>
+              <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
+              <div class="flex gap-2 w-full">
+                <div v-for="(label, key) in {total: 'Total Time', pic: 'PIC', sic: 'SIC', dual: 'Dual R', solo: 'Solo', night: 'Night', actualInstrument: 'Actual', dualGiven: 'Dual G', crossCountry: 'XC', simulatedInstrument: 'Hood'}" :key="key" class="flex-1">
+                  <div :class="['text-[9px] uppercase font-bold mb-1 text-center whitespace-nowrap', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
+                    {{ label }}
+                  </div>
+                    <input 
+                      :value="inlineEditEntry.flightTime[key] === null || inlineEditEntry.flightTime[key] === undefined ? '' : inlineEditEntry.flightTime[key] === 0 ? '0.0' : String(inlineEditEntry.flightTime[key])"
+                      type="text"
+                      inputmode="decimal"
+                    :placeholder="'0.0'"
+                    :class="[
+                      'w-full rounded border px-2 py-1 text-sm text-center font-mono',
+                      key !== 'total' ? 'cursor-pointer' : '',
+                      isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300',
+                      (inlineEditEntry.flightTime[key] === null || inlineEditEntry.flightTime[key] === 0 || inlineEditEntry.flightTime[key] === undefined)
+                        ? (isDarkMode ? 'text-gray-500' : 'text-gray-400')
+                        : (isDarkMode ? 'text-white' : 'text-gray-900')
+                    ]"
+                    @input="(e) => {
+                      if (!inlineEditEntry) return;
+                      const input = e.target as HTMLInputElement;
+                      const val = input.value.trim();
+                      
+                      // Handle empty input
+                      if (val === '' || val === '-') {
+                        inlineEditEntry.flightTime[key as FlightTimeKey] = null;
+                        return;
+                      }
+                      
+                      // Remove any non-numeric characters except decimal point and minus
+                      const cleaned = val.replace(/[^\d.-]/g, '');
+                      
+                      // Parse as float
+                      const num = parseFloat(cleaned);
+                      
+                      if (isNaN(num)) {
+                        // Invalid input - revert to previous value or null
+                        inlineEditEntry.flightTime[key as FlightTimeKey] = null;
+                      } else {
+                        // Ensure it's a valid number (not Infinity, etc.)
+                        inlineEditEntry.flightTime[key as FlightTimeKey] = isFinite(num) ? num : null;
+                      }
+                    }"
+                    @click="key !== 'total' && inlineEditEntry && fillFieldWithTotalTime(key as FlightTimeKey, inlineEditEntry.flightTime.total, true)"
+                    @blur="(e) => {
+                      if (!inlineEditEntry) return;
+                      const input = e.target as HTMLInputElement;
+                      const val = inlineEditEntry.flightTime[key];
+                      
+                      // Format display on blur
+                      if (val === null || val === undefined) {
+                        input.value = '';
+                      } else if (val === 0) {
+                        input.value = '0.0';
+                      } else {
+                        // Format to 1 decimal place
+                        input.value = Number(val).toFixed(1);
+                      }
+                    }"
+                    />
+                  </div>
+                </div>
+             </div>
+
+             <!-- Performance Inline -->
+             <div class="grid gap-4 grid-cols-4">
+               <div>
+                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day Ldg</label>
+                  <input v-model.number="inlineEditEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+               </div>
+               <div>
+                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night Ldg</label>
+                  <input v-model.number="inlineEditEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+               </div>
+               <div>
+                  <div class="flex gap-2">
+                    <div class="flex-1">
+                      <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">App #</label>
+                      <input v-model.number="inlineEditEntry.performance.approachCount" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="0" />
+                    </div>
+                    <div class="flex-1">
+                      <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">App Type</label>
+                      <input v-model="inlineEditEntry.performance.approachType" type="text" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="ILS" />
+                    </div>
+                  </div>
+               </div>
+               <div>
+                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Holds</label>
+                  <input v-model.number="inlineEditEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+               </div>
+             </div>
+
+            <div class="flex flex-wrap gap-3">
+              <label
+                v-for="condition in conditionOptions"
+                :key="condition.value"
+                :class="[
+                  'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all',
+                  isDarkMode 
+                    ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' 
+                    : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200'
+                ]"
+              >
+                <input
+                  v-model="inlineEditEntry.flightConditions"
+                  :value="condition.value"
+                  type="checkbox"
+                  :class="[
+                    'h-4 w-4 rounded border transition-colors',
+                    isDarkMode 
+                      ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' 
+                      : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500'
+                  ]"
+                />
+                <span>{{ condition.label }}</span>
+              </label>
+            </div>
+
+            <div>
+              <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Remarks / Applicable 61.51 Notes</label>
+              <textarea
+                v-model="inlineEditEntry.remarks"
+                rows="3"
+                placeholder="Document training received, endorsements pending, or other relevant notes."
+                :class="[
+                  'w-full rounded border px-2 py-2 text-sm font-quicksand transition-colors duration-300',
+                  isDarkMode 
+                    ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-400' 
+                    : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400'
+                ]"
+              ></textarea>
+            </div>
+
+            <!-- Pilot Section -->
+            <div>
+              <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Pilot</label>
+              <div class="grid gap-4 md:grid-cols-3">
+                <div>
+                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Job</label>
+                  <select v-model="inlineEditEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                    <option value="">Select...</option>
+                    <option value="Student">Student</option>
+                    <option value="Instructor">Instructor</option>
+                    <option value="Safety Pilot">Safety Pilot</option>
+                    <option value="Captain">Captain</option>
+                    <option value="First Officer">First Officer</option>
+                  </select>
+                </div>
+                <div class="relative">
+                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Name</label>
+                  <input 
+                    v-model="inlineEditEntry.trainingElements" 
+                    type="text" 
+                    :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
+                    placeholder="Pilot Name"
+                    autocomplete="off"
+                    @focus="showInlinePilotNameDropdown = true; highlightedInlinePilotIndex = filteredPilotsForInline.length > 0 ? 0 : -1"
+                    @keydown="(e) => handleDropdownKeydown(e, 'inlinePilot', filteredPilotsForInline, (item) => selectPilotNameForInline(item))"
+                    @blur="handleInlinePilotNameBlur"
+                  />
+                  <!-- Pilot Name Dropdown for Inline Edit -->
+                  <div 
+                    v-if="showInlinePilotNameDropdown && filteredPilotsForInline.length > 0"
+                    data-dropdown="inlinePilot"
+                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
+                  >
+                    <button
+                      v-for="(pilot, index) in filteredPilotsForInline"
+                      :key="pilot"
+                      :data-index="index"
+                      type="button"
+                      :class="[
+                        'w-full px-3 py-2 text-left text-sm transition-colors',
+                        highlightedInlinePilotIndex === index
+                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                          : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')
+                      ]"
+                      @mousedown.prevent="selectPilotNameForInline(pilot)"
+                    >
+                      {{ pilot }}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
+                  <input v-model="inlineEditEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Certificate #" />
+                </div>
+               </div>
+             </div>
+
+            <div 
+              class="flex items-center justify-between mt-2 pt-4 border-t"
+              :class="[
+                isDarkMode ? 'border-gray-700' : 'border-gray-200'
+              ]"
+            >
+              <button
+                type="button"
+                @click.stop="expandedEntryId && confirmAndDeleteEntry(expandedEntryId)"
+                :class="['text-xs text-red-500 hover:text-red-600 font-medium px-2 py-1']"
+              >
+                Delete Entry
+              </button>
+              <div class="flex items-center gap-3">
+                <button
+                  type="button"
+                  @click.stop="cancelInlineEdit"
+                  :class="['px-4 py-2 rounded-lg text-sm font-medium', isDarkMode ? 'text-gray-400 hover:bg-gray-800' : 'text-gray-600 hover:bg-gray-200']"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  @click.stop="saveInlineEdit"
+                  :class="['px-4 py-2 rounded-lg text-sm font-bold shadow-lg', isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white']"
+                >
+                  Confirm Changes
+                </button>
+              </div>
+            </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
 
     <!-- Pilot Profile Overlay -->
     <div
@@ -5082,12 +5121,21 @@ onMounted(() => {
     }
   }
   document.addEventListener('click', handleClickOutside)
+  
+  // Handle Escape key to close edit panel
+  const handleEscapeKey = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && expandedEntryId.value !== null) {
+      cancelInlineEdit()
+    }
+  }
+  document.addEventListener('keydown', handleEscapeKey)
   clockTimer = window.setInterval(() => {
     now.value = new Date()
   }, 1000)
   
   return () => {
     document.removeEventListener('click', handleClickOutside)
+    document.removeEventListener('keydown', handleEscapeKey)
     if (clockTimer !== null) {
       clearInterval(clockTimer)
       clockTimer = null
@@ -5118,6 +5166,22 @@ watch(
     savePilotProfilePrefs()
   },
   { deep: true }
+)
+
+// Auto-focus first input when edit panel opens
+watch(
+  expandedEntryId,
+  (newId) => {
+    if (newId !== null && inlineEditEntry.value) {
+      // Use nextTick to ensure DOM is updated
+      setTimeout(() => {
+        const firstInput = document.querySelector('[data-edit-panel] input[type="date"], [data-edit-panel] input[type="text"]') as HTMLInputElement
+        if (firstInput) {
+          firstInput.focus()
+        }
+      }, 100)
+    }
+  }
 )
 
 const filteredEntries = computed(() => {
@@ -5969,3 +6033,30 @@ function sortConditionsInFixedOrder(conditions: string[]): string[] {
     .filter((label): label is string => Boolean(label))
 }
 </script>
+
+<style scoped>
+/* Fade transition for backdrop */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* Slide right transition for panel */
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: transform 0.3s ease-in-out;
+}
+
+.slide-right-enter-from {
+  transform: translateX(100%);
+}
+
+.slide-right-leave-to {
+  transform: translateX(100%);
+}
+</style>
