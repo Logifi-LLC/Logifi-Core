@@ -69,13 +69,14 @@
             <div
               v-if="showHeaderSettings"
               :class="[
-                'absolute right-0 top-full mt-2 w-64 rounded-xl border shadow-2xl p-4 z-10',
+                'absolute right-0 top-full mt-2 w-64 rounded-xl border shadow-2xl z-10 flex flex-col',
                 isDarkMode 
                   ? 'bg-gray-800 border-gray-700' 
                   : 'bg-gray-100 border-gray-300'
               ]"
+              style="max-height: calc(100vh - 120px);"
             >
-              <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center justify-between p-4 border-b" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
                 <h3 :class="['font-semibold font-quicksand text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
                   Settings
                 </h3>
@@ -87,7 +88,7 @@
                   <Icon name="ri:close-line" size="20" />
                 </button>
               </div>
-              <div class="space-y-4">
+              <div class="overflow-y-auto p-4 space-y-4">
                 <div class="flex items-center justify-between">
                   <label :class="['font-quicksand text-sm', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
                     {{ isDarkMode ? 'Dark Mode' : 'Light Mode' }}
@@ -233,6 +234,63 @@
                     {{ logEntries.length === 0 ? 'No entries to export' : `${logEntries.length} ${logEntries.length === 1 ? 'entry' : 'entries'} available` }}
                   </p>
                 </div>
+                <div 
+                  class="space-y-3 pt-2 border-t transition-colors" 
+                  :class="[
+                    isDarkMode ? 'border-gray-700' : 'border-gray-300',
+                    isDragOverImport ? (isDarkMode ? 'border-green-500 bg-green-900/20' : 'border-green-500 bg-green-50') : ''
+                  ]"
+                  @dragover.prevent="handleImportDragOver"
+                  @dragenter.prevent="handleImportDragEnter"
+                  @dragleave="handleImportDragLeave"
+                  @drop.prevent="handleImportDrop"
+                >
+                  <div :class="['font-quicksand text-sm font-semibold mb-2', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
+                    Import Logbook
+                  </div>
+                  <div class="space-y-2">
+                    <button
+                      type="button"
+                      @click="() => csvFileInput?.click()"
+                      :class="[
+                        'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
+                        isDarkMode ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
+                      ]"
+                    >
+                      <Icon name="ri:file-excel-2-line" size="16" />
+                      Import from CSV
+                    </button>
+                    <button
+                      type="button"
+                      @click="() => jsonFileInput?.click()"
+                      :class="[
+                        'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
+                        isDarkMode ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
+                      ]"
+                    >
+                      <Icon name="ri:file-code-line" size="16" />
+                      Import from JSON
+                    </button>
+                  </div>
+                  <p :class="['text-xs mt-2', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
+                    {{ isDragOverImport ? 'Drop file here to import' : 'Drag & drop or click to import. Duplicates (same date + registration) will be skipped.' }}
+                  </p>
+                </div>
+                <!-- Hidden file inputs -->
+                <input
+                  ref="csvFileInput"
+                  type="file"
+                  accept=".csv,text/csv"
+                  style="display: none;"
+                  @change="handleCSVImport"
+                />
+                <input
+                  ref="jsonFileInput"
+                  type="file"
+                  accept=".json,application/json"
+                  style="display: none;"
+                  @change="handleJSONImport"
+                />
                 <!-- Developers Link -->
                 <div class="pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
                   <NuxtLink
@@ -2764,6 +2822,285 @@
         </div>
       </div>
     </div>
+
+    <!-- Import Preview Modal -->
+    <div
+      v-if="showImportPreview && importPreviewStatistics && importPreviewMetadata"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      @click.self="cancelImport"
+    >
+      <div
+        :class="[
+          'relative w-full max-w-4xl max-h-[90vh] rounded-2xl border shadow-2xl transition-colors duration-300 flex flex-col',
+          isDarkMode 
+            ? 'bg-gray-800 border-gray-700' 
+            : 'bg-gray-200 border-gray-300'
+        ]"
+        @click.stop
+      >
+        <!-- Header -->
+        <div class="flex items-center justify-between p-6 border-b flex-shrink-0" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+          <div>
+            <h3 :class="['text-xl font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+              Import Preview
+            </h3>
+            <p :class="['text-sm font-quicksand mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+              {{ importPreviewMetadata.fileName }} ({{ importPreviewMetadata.fileType }})
+            </p>
+          </div>
+          <button
+            @click="cancelImport"
+            :class="[
+              'p-1 rounded-lg transition-colors',
+              isDarkMode 
+                ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-300'
+            ]"
+            aria-label="Close"
+          >
+            <Icon name="ri:close-line" size="24" />
+          </button>
+        </div>
+
+        <!-- Content - Scrollable -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-6">
+          <!-- Summary Statistics -->
+          <div>
+            <h4 :class="['text-lg font-semibold font-quicksand mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
+              Summary
+            </h4>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Total Entries</div>
+                <div :class="['text-2xl font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ importPreviewStatistics.totalEntries }}
+                </div>
+              </div>
+              <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">To Import</div>
+                <div :class="['text-2xl font-bold font-mono text-green-500']">
+                  {{ importPreviewStatistics.totalEntries - importPreviewStatistics.duplicates - importPreviewStatistics.errors }}
+                </div>
+              </div>
+              <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Duplicates</div>
+                <div :class="['text-2xl font-bold font-mono', importPreviewStatistics.duplicates > 0 ? 'text-yellow-500' : 'text-gray-400']">
+                  {{ importPreviewStatistics.duplicates }}
+                </div>
+              </div>
+              <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Errors</div>
+                <div :class="['text-2xl font-bold font-mono', importPreviewStatistics.errors > 0 ? 'text-red-500' : 'text-gray-400']">
+                  {{ importPreviewStatistics.errors }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Flight Time Statistics -->
+          <div>
+            <h4 :class="['text-lg font-semibold font-quicksand mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
+              Flight Time
+            </h4>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Total</div>
+                <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ importPreviewStatistics.totalFlightTime.toFixed(1) }}h
+                </div>
+              </div>
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">PIC</div>
+                <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ importPreviewStatistics.picTime.toFixed(1) }}h
+                </div>
+              </div>
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Night</div>
+                <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ importPreviewStatistics.nightTime.toFixed(1) }}h
+                </div>
+              </div>
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">XC</div>
+                <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ importPreviewStatistics.crossCountryTime.toFixed(1) }}h
+                </div>
+              </div>
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Instrument</div>
+                <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ (importPreviewStatistics.actualInstrumentTime + importPreviewStatistics.simulatedInstrumentTime).toFixed(1) }}h
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Performance Statistics -->
+          <div>
+            <h4 :class="['text-lg font-semibold font-quicksand mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
+              Performance
+            </h4>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Total Landings</div>
+                <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ importPreviewStatistics.totalLandings }}
+                </div>
+              </div>
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Day Landings</div>
+                <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ importPreviewStatistics.dayLandings }}
+                </div>
+              </div>
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Night Landings</div>
+                <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ importPreviewStatistics.nightLandings }}
+                </div>
+              </div>
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Approaches</div>
+                <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ importPreviewStatistics.totalApproaches }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Date Range & Aircraft Breakdown -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h4 :class="['text-sm font-semibold font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                Date Range
+              </h4>
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div :class="['text-sm font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ importPreviewStatistics.dateRange.earliest ? formatDisplayDate(importPreviewStatistics.dateRange.earliest) : 'N/A' }}
+                  <span :class="[isDarkMode ? 'text-gray-500' : 'text-gray-400']"> → </span>
+                  {{ importPreviewStatistics.dateRange.latest ? formatDisplayDate(importPreviewStatistics.dateRange.latest) : 'N/A' }}
+                </div>
+              </div>
+            </div>
+            <div>
+              <h4 :class="['text-sm font-semibold font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                Aircraft ({{ Object.keys(importPreviewStatistics.aircraftBreakdown).length }})
+              </h4>
+              <div :class="['rounded-lg border p-3 max-h-32 overflow-y-auto', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div v-for="(count, aircraft) in importPreviewStatistics.aircraftBreakdown" :key="aircraft" 
+                     :class="['text-xs font-quicksand py-1', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+                  {{ aircraft }}: {{ count }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Errors (if any) -->
+          <div v-if="importPreviewStatistics.errors > 0">
+            <h4 :class="['text-lg font-semibold font-quicksand mb-4 text-red-500']">
+              Errors ({{ importPreviewStatistics.errors }})
+            </h4>
+            <div :class="['rounded-lg border p-4 max-h-40 overflow-y-auto', isDarkMode ? 'border-red-700 bg-red-900/20' : 'border-red-300 bg-red-50']">
+              <div v-for="(error, index) in importPreviewStatistics.errorMessages.slice(0, 10)" :key="index"
+                   :class="['text-sm font-quicksand text-red-600 py-1']">
+                {{ error }}
+              </div>
+              <div v-if="importPreviewStatistics.errorMessages.length > 10" 
+                   :class="['text-sm font-quicksand text-red-500 py-1']">
+                ... and {{ importPreviewStatistics.errorMessages.length - 10 }} more errors
+              </div>
+            </div>
+          </div>
+
+          <!-- Entry List -->
+          <div>
+            <h4 :class="['text-lg font-semibold font-quicksand mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
+              Entries to Import ({{ importPreviewEntries.length }})
+            </h4>
+            <div class="space-y-2 max-h-96 overflow-y-auto">
+              <div
+                v-for="entry in importPreviewEntries"
+                :key="entry.id"
+                :class="[
+                  'rounded-lg border p-3 cursor-pointer transition-colors',
+                  isDarkMode 
+                    ? 'border-gray-700 bg-gray-900/30 hover:bg-gray-900/50' 
+                    : 'border-gray-300 bg-white hover:bg-gray-50'
+                ]"
+                @click="togglePreviewEntry(entry.id)"
+              >
+                <div class="flex items-center justify-between">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-3">
+                      <div :class="['text-sm font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
+                        {{ formatDisplayDate(entry.date) }}
+                      </div>
+                      <div :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+                        {{ entry.registration }}
+                      </div>
+                      <div :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                        {{ entry.aircraftMakeModel }}
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2 mt-1">
+                      <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                        {{ entry.departure }} → {{ entry.destination }}
+                      </div>
+                      <div :class="['text-xs font-mono', isDarkMode ? 'text-blue-400' : 'text-blue-600']">
+                        {{ (entry.flightTime.total ?? 0).toFixed(1) }}h
+                      </div>
+                    </div>
+                  </div>
+                  <Icon 
+                    :name="expandedPreviewEntries.has(entry.id) ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'" 
+                    size="20" 
+                    :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+                  />
+                </div>
+                <div v-if="expandedPreviewEntries.has(entry.id)" class="mt-3 pt-3 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+                  <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Role:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ entry.role }}</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">PIC:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.flightTime.pic ?? 0).toFixed(1) }}h</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Night:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.flightTime.night ?? 0).toFixed(1) }}h</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">XC:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.flightTime.crossCountry ?? 0).toFixed(1) }}h</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Landings:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.performance.dayLandings ?? 0) + (entry.performance.nightLandings ?? 0) }}</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Approaches:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ entry.performance.approachCount ?? 0 }}</span></div>
+                  </div>
+                  <div v-if="entry.remarks" class="mt-2 text-xs" :class="[isDarkMode ? 'text-gray-300' : 'text-gray-600']">
+                    {{ entry.remarks }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer with Buttons -->
+        <div class="flex items-center justify-end gap-3 p-6 border-t flex-shrink-0" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+          <button
+            @click="cancelImport"
+            :class="[
+              'px-4 py-2 rounded-lg font-quicksand transition-colors',
+              isDarkMode 
+                ? 'bg-gray-700 hover:bg-gray-600 text-white' 
+                : 'bg-gray-300 hover:bg-gray-400 text-gray-900'
+            ]"
+          >
+            Cancel
+          </button>
+          <button
+            @click="confirmImport"
+            :class="[
+              'px-4 py-2 rounded-lg font-quicksand transition-colors',
+              'bg-green-600 hover:bg-green-700 text-white'
+            ]"
+          >
+            Confirm Import
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -3408,6 +3745,45 @@ const highlightedInlinePilotIndex = ref(-1)
 const isDarkMode = ref(true)
 const pilotProfile = reactive<PilotProfilePrefs>({ ...pilotProfileDefaults })
 const pilotProfileLoaded = ref(false)
+const csvFileInput = ref<HTMLInputElement | null>(null)
+const jsonFileInput = ref<HTMLInputElement | null>(null)
+const isDragOverImport = ref(false)
+
+// Import preview state
+interface ImportStatistics {
+  totalEntries: number
+  duplicates: number
+  errors: number
+  totalFlightTime: number
+  picTime: number
+  sicTime: number
+  nightTime: number
+  crossCountryTime: number
+  actualInstrumentTime: number
+  simulatedInstrumentTime: number
+  dualReceivedTime: number
+  dualGivenTime: number
+  soloTime: number
+  totalLandings: number
+  dayLandings: number
+  nightLandings: number
+  totalApproaches: number
+  aircraftBreakdown: Record<string, number>
+  dateRange: { earliest: string | null; latest: string | null }
+  errorMessages: string[]
+}
+
+interface ImportMetadata {
+  fileName: string
+  fileType: 'CSV' | 'JSON'
+  importedAt: string
+}
+
+const showImportPreview = ref(false)
+const importPreviewEntries = ref<LogEntry[]>([])
+const importPreviewStatistics = ref<ImportStatistics | null>(null)
+const importPreviewMetadata = ref<ImportMetadata | null>(null)
+const expandedPreviewEntries = ref<Set<string>>(new Set())
 const pilotInitials = computed(() => {
   const name = pilotProfile.name.trim()
   if (!name) return 'PP'
@@ -3548,11 +3924,12 @@ function exportToCSV(): void {
 
   const getInstrumentSplit = (entry: LogEntry): [string, string] => {
     // Returns [Actual Instrument, Simulated Instrument] for CSV export
-    // Note: simulatedInstrument field is exported separately as "Ground Simulator"
+    // simulatedInstrument represents hood time (simulated instrument time in actual flight)
     const actualVal = entry.flightTime.actualInstrument
+    const simulatedVal = entry.flightTime.simulatedInstrument
     return [
       actualVal ? formatTimeValue(actualVal) : '',
-      '' // Simulated instrument (hood time) - not tracked separately from Ground Simulator
+      simulatedVal ? formatTimeValue(simulatedVal) : ''
     ]
   }
 
@@ -3584,7 +3961,7 @@ function exportToCSV(): void {
       formatTimeValue(entry.flightTime.night),
       ...getInstrumentSplit(entry),
       formatTimeValue(entry.flightTime.crossCountry),
-      formatTimeValue(entry.flightTime.simulatedInstrument),
+      '0.0', // Ground Simulator - Logifi doesn't track ground simulator time separately
       formatTimeValue(entry.flightTime.dualGiven),
       formatCountValue(entry.performance.dayLandings),
       formatCountValue(entry.performance.nightLandings),
@@ -3650,6 +4027,781 @@ function exportToJSON(): void {
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
+}
+
+// Import functions
+function parseCSVLine(line: string): string[] {
+  const result: string[] = []
+  let current = ''
+  let inQuotes = false
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    const nextChar = line[i + 1]
+    
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        current += '"'
+        i++ // Skip next quote
+      } else {
+        inQuotes = !inQuotes
+      }
+    } else if (char === ',' && !inQuotes) {
+      result.push(current)
+      current = ''
+    } else {
+      current += char
+    }
+  }
+  result.push(current)
+  return result
+}
+
+function parseCSVContent(content: string): Record<string, string>[] {
+  const lines = content.split('\n').filter(line => line.trim())
+  if (lines.length === 0) return []
+  
+  const firstLine = lines[0]
+  if (!firstLine) return []
+  
+  const headers = parseCSVLine(firstLine).map((h: string) => h.trim().replace(/^"|"$/g, ''))
+  const rows: Record<string, string>[] = []
+  
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i]
+    if (!line) continue
+    const values = parseCSVLine(line).map((v: string) => v.trim().replace(/^"|"$/g, '').replace(/""/g, '"'))
+    if (values.length === 0 || values.every(v => !v)) continue // Skip empty rows
+    
+    const row: Record<string, string> = {}
+    headers.forEach((header, index) => {
+      row[header] = values[index] || ''
+    })
+    rows.push(row)
+  }
+  
+  return rows
+}
+
+// Helper function to find a field value by trying multiple possible column names
+function findFieldValue(rawEntry: Record<string, any>, possibleNames: string[]): string {
+  for (const name of possibleNames) {
+    // Try exact match first
+    if (rawEntry[name] !== undefined && rawEntry[name] !== null && rawEntry[name] !== '') {
+      return String(rawEntry[name]).trim()
+    }
+    // Try case-insensitive match
+    const lowerName = name.toLowerCase()
+    for (const key in rawEntry) {
+      if (key.toLowerCase() === lowerName && rawEntry[key] !== undefined && rawEntry[key] !== null && rawEntry[key] !== '') {
+        return String(rawEntry[key]).trim()
+      }
+    }
+  }
+  return ''
+}
+
+// Extract base aircraft model name from full model string
+// Examples: "C-172 S G-1000, Cessna Skyhawk SP" -> "C-172"
+//           "PA-28-181 Archer II" -> "PA-28"
+//           "SR-22T G6" -> "SR-22"
+function extractBaseModelName(model: string): string {
+  if (!model || !model.trim()) return ''
+  
+  const trimmed = model.trim()
+  
+  // Common aircraft model patterns: [Letter(s)]-[Number(s)]
+  // Match patterns like: C-172, PA-28, SR-22, BE-58, DA-42, etc.
+  const modelPattern = /^([A-Z]{1,3})-(\d{2,4})/i
+  
+  const match = trimmed.match(modelPattern)
+  if (match && match[1] && match[2]) {
+    // Found pattern like C-172, PA-28, etc.
+    return `${match[1].toUpperCase()}-${match[2]}`
+  }
+  
+  // Fallback: take everything before the first comma
+  const commaIndex = trimmed.indexOf(',')
+  if (commaIndex > 0) {
+    const beforeComma = trimmed.substring(0, commaIndex).trim()
+    // Try to extract base model from this part
+    const fallbackMatch = beforeComma.match(modelPattern)
+    if (fallbackMatch && fallbackMatch[1] && fallbackMatch[2]) {
+      return `${fallbackMatch[1].toUpperCase()}-${fallbackMatch[2]}`
+    }
+    // If no pattern found, return first part before comma (but limit length)
+    const parts = beforeComma.split(/\s+/)
+    if (parts.length > 0 && parts[0] && parts[0].length <= 20) {
+      return parts[0]
+    }
+  }
+  
+  // Last resort: return first word if it looks like a model (has dash or is short)
+  const words = trimmed.split(/\s+/)
+  const firstWord = words[0]
+  if (firstWord && (firstWord.includes('-') || firstWord.length <= 10)) {
+    return firstWord
+  }
+  
+  return trimmed
+}
+
+function normalizeImportedEntry(rawEntry: Record<string, any>): LogEntry | null {
+  try {
+    // Parse date - handle various formats
+    const dateValue = findFieldValue(rawEntry, ['Date', 'date', 'DATE', 'Flight Date', 'flight date'])
+    let dateStr = dateValue
+    if (!dateStr) return null
+    
+    // Normalize to YYYY-MM-DD format
+    // Try ISO format first (YYYY-MM-DD)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      // Already in correct format
+    } else {
+      // Try MM/DD/YYYY format (from Logifi export)
+      const parts = dateStr.split('/')
+      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+        dateStr = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`
+      } else {
+        // Try parsing with Date object as fallback
+        const date = new Date(dateStr)
+        if (isNaN(date.getTime())) {
+          return null // Invalid date
+        }
+        const isoString = date.toISOString().split('T')[0]
+        if (isoString) {
+          dateStr = isoString
+        } else {
+          return null
+        }
+      }
+    }
+    
+    // Validate the final date string
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return null // Invalid date format
+    }
+    
+    // Required fields - try multiple common column names for registration
+    // Put "Tail Number" first for MyFlightBook compatibility
+    const registration = findFieldValue(rawEntry, [
+      'Tail Number', 'tail number', 'TailNumber', 'tailNumber',  // MyFlightBook uses this - put first!
+      'Display Tail', 'display tail',  // MyFlightBook also has this
+      'Registration', 'registration', 'REGISTRATION',
+      'N-Number', 'n-number', 'NNumber', 'nNumber',
+      'Aircraft Registration', 'aircraft registration',
+      'Ident', 'ident', 'IDENT',
+      'Aircraft', 'aircraft', 'AIRCRAFT',
+      'Aircraft ID', 'aircraft id', 'AircraftID', 'aircraftID'  // Put this last as fallback
+    ])
+    
+    if (!registration) return null
+    
+    // Map CSV/JSON fields to LogEntry format
+    const entry: LogEntry = {
+      id: generateEntryId(),
+      date: dateStr,
+      role: findFieldValue(rawEntry, ['Role', 'role', 'ROLE']) || '',
+      aircraftCategoryClass: normalizeCategoryClassLabel(
+        findFieldValue(rawEntry, [
+          'Aircraft Category/Class', 'aircraft category/class',
+          'Category/Class', 'category/class', 'Category Class', 'category class',
+          'aircraftCategoryClass'
+        ]) || ''
+      ),
+      categoryClassTime: normalizeNumber(rawEntry['Total Flight Time'] || rawEntry.total || rawEntry.flightTime?.total),
+      aircraftMakeModel: extractBaseModelName(
+        findFieldValue(rawEntry, [
+          'Aircraft Make/Model', 'aircraft make/model',
+          'Model', 'model', 'MODEL',
+          'aircraftMakeModel'
+        ])
+      ),
+      registration: registration.toUpperCase(),
+      flightNumber: findFieldValue(rawEntry, ['Flight Number', 'flight number', 'FlightNumber', 'flightNumber']) || null,
+      departure: '', // Will be set below after route parsing
+      destination: '', // Will be set below after route parsing
+      route: '', // Will be set below
+      trainingElements: (() => {
+        // Try "First Officer Name" column first (MyFlightBook)
+        let pilot = findFieldValue(rawEntry, ['First Officer Name', 'first officer name', 'FirstOfficerName', 'firstOfficerName'])
+        
+        // Fallback: Extract from "Flight Properties" field
+        if (!pilot) {
+          const flightProperties = findFieldValue(rawEntry, ['Flight Properties', 'flight properties', 'FlightProperties', 'flightProperties'])
+          if (flightProperties) {
+            // Look for patterns like "First Officer: Name" or "First Officer:Name"
+            const firstOfficerMatch = flightProperties.match(/First\s+Officer\s*:\s*([^;]+)/i)
+            if (firstOfficerMatch && firstOfficerMatch[1]) {
+              pilot = firstOfficerMatch[1].trim()
+            }
+          }
+        }
+        
+        // If still no pilot found, use Training Elements as fallback
+        if (!pilot) {
+          pilot = findFieldValue(rawEntry, ['Training Elements', 'training elements', 'TrainingElements', 'trainingElements'])
+        }
+        
+        return pilot || ''
+      })(),
+      trainingInstructor: (rawEntry['Training Instructor'] || rawEntry.trainingInstructor || '').trim(),
+      instructorCertificate: (rawEntry['Instructor Certificate'] || rawEntry.instructorCertificate || '').trim(),
+      flightConditions: [],
+      remarks: findFieldValue(rawEntry, ['Remarks', 'remarks', 'Comments', 'comments', 'COMMENTS']) || '',
+      flightTime: {
+        total: normalizeNumber(rawEntry['Total Flight Time'] || rawEntry.total || rawEntry.flightTime?.total),
+        pic: normalizeNumber(rawEntry.PIC || rawEntry.pic || rawEntry.flightTime?.pic),
+        sic: normalizeNumber(rawEntry.SIC || rawEntry.sic || rawEntry.flightTime?.sic),
+        dual: normalizeNumber(rawEntry['Dual Received'] || rawEntry.dual || rawEntry.flightTime?.dual),
+        solo: normalizeNumber(rawEntry.Solo || rawEntry['Solo Time'] || rawEntry.solo || rawEntry.flightTime?.solo),
+        night: normalizeNumber(rawEntry.Night || rawEntry.night || rawEntry.flightTime?.night),
+        actualInstrument: normalizeNumber(rawEntry['Actual Instrument'] || rawEntry.IMC || rawEntry.imc || rawEntry.actualInstrument || rawEntry.flightTime?.actualInstrument),
+        dualGiven: normalizeNumber(rawEntry['Dual Given'] || rawEntry.CFI || rawEntry.cfi || rawEntry.dualGiven || rawEntry.flightTime?.dualGiven),
+        crossCountry: normalizeNumber(rawEntry['Cross Country'] || rawEntry['X-Country'] || rawEntry['X-C'] || rawEntry.crossCountry || rawEntry.flightTime?.crossCountry),
+        // IMPORTANT: Map "Simulated Instrument" to simulatedInstrument (hood time)
+        // NOT "Ground Simulator" - that's a different field
+        simulatedInstrument: normalizeNumber(rawEntry['Simulated Instrument'] || rawEntry.simulatedInstrument || rawEntry.hood || rawEntry.flightTime?.simulatedInstrument)
+      },
+      performance: {
+        dayTakeoffs: normalizeNumber(rawEntry['Day Takeoffs'] || rawEntry['FS Day Landings'] || rawEntry.dayTakeoffs || rawEntry.performance?.dayTakeoffs),
+        nightTakeoffs: normalizeNumber(rawEntry['Night Takeoffs'] || rawEntry['FS Night Landings'] || rawEntry.nightTakeoffs || rawEntry.performance?.nightTakeoffs),
+        dayLandings: normalizeNumber(
+          findFieldValue(rawEntry, [
+            'Landings', 'landings', 'LANDINGS',  // MyFlightBook uses this for total landings
+            'Day Landings', 'day landings', 'DayLandings',
+            'FS Day Landings', 'fs day landings',
+            'dayLandings'
+          ]) || rawEntry.performance?.dayLandings
+        ),
+        nightLandings: normalizeNumber(
+          findFieldValue(rawEntry, [
+            'Night Landings', 'night landings', 'NightLandings',
+            'FS Night Landings', 'fs night landings',
+            'nightLandings'
+          ]) || rawEntry.performance?.nightLandings
+        ),
+        approachCount: normalizeNumber(rawEntry['Instrument Approaches'] || rawEntry.Approaches || rawEntry.approachCount || rawEntry.performance?.approachCount),
+        approachType: findFieldValue(rawEntry, ['Approach Type', 'approach type', 'ApproachType', 'approachType']) || null,
+        holdingProcedures: normalizeNumber(rawEntry['Holding Procedures'] || rawEntry.Hold || rawEntry.holdingProcedures || rawEntry.performance?.holdingProcedures)
+      },
+      oooi: undefined
+    }
+    
+    // Parse route and extract departure/destination if missing
+    let departure = findFieldValue(rawEntry, ['Departure', 'departure', 'From', 'from', 'FROM']) || ''
+    let destination = findFieldValue(rawEntry, ['Destination', 'destination', 'To', 'to', 'TO']) || ''
+    let route = findFieldValue(rawEntry, ['Route', 'route', 'ROUTE']) || ''
+    
+    // Parse route to extract departure/destination if they're missing
+    // Route format is typically space-separated airport codes like "KIND KLAF" or "KIND KMCX KLGA"
+    if ((!departure || departure === 'UNKNOWN') && route) {
+      const routeParts = route.trim().split(/\s+/).filter(part => part.length >= 3)
+      const firstAirport = routeParts[0]
+      const lastAirport = routeParts.length > 1 ? routeParts[routeParts.length - 1] : null
+      
+      if (firstAirport) {
+        departure = firstAirport.toUpperCase()
+      }
+      if (lastAirport) {
+        destination = lastAirport.toUpperCase()  // Last airport is destination
+        
+        // Keep only intermediate airports in route field
+        if (routeParts.length > 2) {
+          // Multiple airports: keep middle ones
+          route = routeParts.slice(1, -1).join(' ')
+        } else {
+          // Only 2 airports: route should be empty
+          route = ''
+        }
+      }
+    }
+    
+    // Only use UNKNOWN as last resort
+    if (!departure.trim()) {
+      departure = 'UNKNOWN'
+    }
+    if (!destination.trim()) {
+      destination = 'UNKNOWN'
+    }
+    
+    // Update entry with parsed values
+    entry.departure = departure
+    entry.destination = destination
+    entry.route = route
+    
+    // Parse flight conditions
+    const conditionsStr = rawEntry['Flight Conditions'] || rawEntry.flightConditions || ''
+    if (conditionsStr) {
+      entry.flightConditions = sanitizeFlightConditions(
+        conditionsStr.split(';').map((c: string) => c.trim()).filter((c: string) => c)
+      )
+    }
+    
+    // Parse OOOI times if present
+    const out = rawEntry.Out || rawEntry.oooi?.out
+    const off = rawEntry.Off || rawEntry.oooi?.off
+    const on = rawEntry.On || rawEntry.oooi?.on
+    const inTime = rawEntry.In || rawEntry.oooi?.in
+    const isZulu = rawEntry['Is Zulu'] !== undefined ? rawEntry['Is Zulu'] : (rawEntry.oooi?.isZulu !== undefined ? rawEntry.oooi.isZulu : true)
+    
+    if (out || off || on || inTime) {
+      entry.oooi = {
+        out: out || null,
+        off: off || null,
+        on: on || null,
+        in: inTime || null,
+        isZulu: Boolean(isZulu)
+      }
+    }
+    
+    // Auto-check flight conditions based on time entries
+    entry.flightConditions = autoCheckFlightConditions(
+      entry.flightConditions,
+      entry.flightTime.night,
+      entry.flightTime.actualInstrument,
+      entry.flightTime.simulatedInstrument,
+      entry.flightTime.crossCountry
+    )
+    
+    return entry
+  } catch (error) {
+    console.error('Error normalizing imported entry:', error, rawEntry)
+    return null
+  }
+}
+
+function isDuplicateEntry(entry: LogEntry, existingEntries: LogEntry[]): boolean {
+  return existingEntries.some(existing => 
+    existing.date === entry.date && 
+    existing.registration.toUpperCase() === entry.registration.toUpperCase()
+  )
+}
+
+function calculateImportStatistics(entries: LogEntry[]): { statistics: ImportStatistics; validEntries: LogEntry[]; duplicates: LogEntry[]; errors: { entry: LogEntry; message: string }[] } {
+  const validEntries: LogEntry[] = []
+  const duplicates: LogEntry[] = []
+  const errors: { entry: LogEntry; message: string }[] = []
+  const aircraftBreakdown: Record<string, number> = {}
+  
+  let totalFlightTime = 0
+  let picTime = 0
+  let sicTime = 0
+  let nightTime = 0
+  let crossCountryTime = 0
+  let actualInstrumentTime = 0
+  let simulatedInstrumentTime = 0
+  let dualReceivedTime = 0
+  let dualGivenTime = 0
+  let soloTime = 0
+  let totalLandings = 0
+  let dayLandings = 0
+  let nightLandings = 0
+  let totalApproaches = 0
+  
+  const dates: string[] = []
+  const errorMessages: string[] = []
+  
+  for (const entry of entries) {
+    // Provide defaults for missing required fields
+    if (!entry.departure.trim()) {
+      entry.departure = 'UNKNOWN'
+    }
+    if (!entry.destination.trim()) {
+      entry.destination = 'UNKNOWN'
+    }
+    if (!entry.aircraftMakeModel.trim()) {
+      entry.aircraftMakeModel = 'Unknown'
+    }
+    
+    // Validate entry
+    const validationError = validateEntry(entry)
+    if (validationError) {
+      errors.push({ entry, message: validationError })
+      errorMessages.push(`Entry ${entry.date} ${entry.registration}: ${validationError}`)
+      continue
+    }
+    
+    // Check for duplicates
+    if (isDuplicateEntry(entry, logEntries.value)) {
+      duplicates.push(entry)
+      continue
+    }
+    
+    // Entry is valid and not a duplicate
+    validEntries.push(entry)
+    dates.push(entry.date)
+    
+    // Accumulate statistics
+    totalFlightTime += entry.flightTime.total ?? 0
+    picTime += entry.flightTime.pic ?? 0
+    sicTime += entry.flightTime.sic ?? 0
+    nightTime += entry.flightTime.night ?? 0
+    crossCountryTime += entry.flightTime.crossCountry ?? 0
+    actualInstrumentTime += entry.flightTime.actualInstrument ?? 0
+    simulatedInstrumentTime += entry.flightTime.simulatedInstrument ?? 0
+    dualReceivedTime += entry.flightTime.dual ?? 0
+    dualGivenTime += entry.flightTime.dualGiven ?? 0
+    soloTime += entry.flightTime.solo ?? 0
+    
+    dayLandings += entry.performance.dayLandings ?? 0
+    nightLandings += entry.performance.nightLandings ?? 0
+    totalLandings += (entry.performance.dayLandings ?? 0) + (entry.performance.nightLandings ?? 0)
+    totalApproaches += entry.performance.approachCount ?? 0
+    
+    // Aircraft breakdown
+    const aircraftKey = `${entry.aircraftMakeModel} (${entry.registration})`
+    aircraftBreakdown[aircraftKey] = (aircraftBreakdown[aircraftKey] || 0) + 1
+  }
+  
+  // Calculate date range
+  dates.sort()
+  const earliestDate: string | null = dates.length > 0 ? (dates[0] ?? null) : null
+  const latestDate: string | null = dates.length > 0 ? (dates[dates.length - 1] ?? null) : null
+  const dateRange: { earliest: string | null; latest: string | null } = {
+    earliest: earliestDate,
+    latest: latestDate
+  }
+  
+  const statistics: ImportStatistics = {
+    totalEntries: entries.length,
+    duplicates: duplicates.length,
+    errors: errors.length,
+    totalFlightTime,
+    picTime,
+    sicTime,
+    nightTime,
+    crossCountryTime,
+    actualInstrumentTime,
+    simulatedInstrumentTime,
+    dualReceivedTime,
+    dualGivenTime,
+    soloTime,
+    totalLandings,
+    dayLandings,
+    nightLandings,
+    totalApproaches,
+    aircraftBreakdown,
+    dateRange,
+    errorMessages
+  }
+  
+  return { statistics, validEntries, duplicates, errors }
+}
+
+async function importEntries(entries: LogEntry[]): Promise<{ imported: number; skipped: number; errors: string[] }> {
+  const result = { imported: 0, skipped: 0, errors: [] as string[] }
+  
+  for (const entry of entries) {
+    // Provide defaults for missing required fields (for imports from other systems)
+    if (!entry.departure.trim()) {
+      entry.departure = 'UNKNOWN'
+    }
+    if (!entry.destination.trim()) {
+      entry.destination = 'UNKNOWN'
+    }
+    if (!entry.aircraftMakeModel.trim()) {
+      entry.aircraftMakeModel = 'Unknown'
+    }
+    
+    // Validate entry (with lenient defaults applied)
+    const validationError = validateEntry(entry)
+    if (validationError) {
+      result.errors.push(`Entry ${entry.date} ${entry.registration}: ${validationError}`)
+      continue
+    }
+    
+    // Check for duplicates
+    if (isDuplicateEntry(entry, logEntries.value)) {
+      result.skipped++
+      continue
+    }
+    
+    // Add entry
+    logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entry])
+    result.imported++
+  }
+  
+  return result
+}
+
+async function confirmImport(): Promise<void> {
+  if (!importPreviewEntries.value.length || !importPreviewStatistics.value) {
+    return
+  }
+  
+  // Import the entries
+  const result = await importEntries(importPreviewEntries.value)
+  
+  // Show result
+  let message = `Import complete!\n\nImported: ${result.imported} ${result.imported === 1 ? 'entry' : 'entries'}`
+  if (result.skipped > 0) {
+    message += `\nSkipped (duplicates): ${result.skipped} ${result.skipped === 1 ? 'entry' : 'entries'}`
+  }
+  if (result.errors.length > 0) {
+    message += `\n\nErrors (${result.errors.length}):\n${result.errors.slice(0, 5).join('\n')}`
+    if (result.errors.length > 5) {
+      message += `\n... and ${result.errors.length - 5} more`
+    }
+  }
+  alert(message)
+  
+  // Close preview and reset
+  cancelImport()
+}
+
+function cancelImport(): void {
+  showImportPreview.value = false
+  importPreviewEntries.value = []
+  importPreviewStatistics.value = null
+  importPreviewMetadata.value = null
+  expandedPreviewEntries.value = new Set()
+}
+
+function togglePreviewEntry(entryId: string): void {
+  if (expandedPreviewEntries.value.has(entryId)) {
+    expandedPreviewEntries.value.delete(entryId)
+  } else {
+    expandedPreviewEntries.value.add(entryId)
+  }
+}
+
+async function handleCSVImport(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  
+  await processCSVFile(file)
+  
+  // Reset file input
+  if (input && input.value) {
+    input.value = ''
+  }
+}
+
+async function processCSVFile(file: File): Promise<void> {
+  try {
+    const text = await file.text()
+    const rows = parseCSVContent(text)
+    
+    console.log('Parsed CSV rows:', rows.length)
+    if (rows.length > 0 && rows[0]) {
+      console.log('First row headers:', Object.keys(rows[0]))
+      console.log('First row sample:', rows[0])
+    }
+    
+    if (rows.length === 0) {
+      alert('CSV file is empty or could not be parsed.')
+      return
+    }
+    
+    // Normalize entries
+    const entries: LogEntry[] = []
+    const rejectedRows: { row: any; reason: string }[] = []
+    
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]
+      if (!row) continue
+      
+      const entry = normalizeImportedEntry(row)
+      if (entry) {
+        entries.push(entry)
+      } else {
+        // Determine why it was rejected
+        let reason = 'Unknown reason'
+        const dateValue = findFieldValue(row, ['Date', 'date', 'DATE', 'Flight Date', 'flight date'])
+        const regValue = findFieldValue(row, [
+          'Registration', 'registration', 'REGISTRATION',
+          'Aircraft ID', 'aircraft id', 'AircraftID', 'aircraftID',
+          'Tail Number', 'tail number', 'TailNumber', 'tailNumber',
+          'N-Number', 'n-number', 'NNumber', 'nNumber',
+          'Aircraft Registration', 'aircraft registration',
+          'Ident', 'ident', 'IDENT',
+          'Aircraft', 'aircraft', 'AIRCRAFT'
+        ])
+        
+        if (!dateValue) {
+          reason = 'Missing date field'
+        } else if (!regValue) {
+          reason = 'Missing registration field (tried: Registration, Aircraft ID, Tail Number, N-Number, Ident, etc.)'
+        } else {
+          reason = 'Invalid date format or other validation error'
+        }
+        rejectedRows.push({ row, reason })
+        if (i === 0 && row) {
+          console.log('First row rejected:', reason, row)
+          console.log('Available columns:', Object.keys(row))
+        }
+      }
+    }
+    
+    console.log(`Processed ${rows.length} rows: ${entries.length} valid, ${rejectedRows.length} rejected`)
+    
+    if (entries.length === 0) {
+      let errorMsg = 'No valid entries found in CSV file.\n\n'
+      if (rejectedRows.length > 0) {
+        errorMsg += `Reasons:\n${rejectedRows.slice(0, 3).map(r => `- ${r.reason}`).join('\n')}`
+        if (rejectedRows.length > 3) {
+          errorMsg += `\n... and ${rejectedRows.length - 3} more`
+        }
+        errorMsg += '\n\nCheck console for details.'
+      }
+      alert(errorMsg)
+      return
+    }
+    
+    // Calculate statistics and show preview
+    const { statistics, validEntries } = calculateImportStatistics(entries)
+    importPreviewEntries.value = validEntries
+    importPreviewStatistics.value = statistics
+    importPreviewMetadata.value = {
+      fileName: file.name,
+      fileType: 'CSV',
+      importedAt: new Date().toISOString()
+    }
+    showImportPreview.value = true
+  } catch (error) {
+    console.error('Error importing CSV:', error)
+    alert(`Error importing CSV file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
+}
+
+async function handleJSONImport(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  
+  await processJSONFile(file)
+  
+  // Reset file input
+  if (input && input.value) {
+    input.value = ''
+  }
+}
+
+async function processJSONFile(file: File): Promise<void> {
+  try {
+    const text = await file.text()
+    const data = JSON.parse(text)
+    
+    // Handle both direct array and wrapped format
+    let entries: any[] = []
+    if (Array.isArray(data)) {
+      entries = data
+    } else if (data.entries && Array.isArray(data.entries)) {
+      entries = data.entries
+    } else {
+      alert('JSON file format not recognized. Expected an array of entries or an object with an "entries" property.')
+      return
+    }
+    
+    if (entries.length === 0) {
+      alert('No entries found in JSON file.')
+      return
+    }
+    
+    // Normalize entries
+    const normalizedEntries: LogEntry[] = []
+    for (const entry of entries) {
+      const normalized = normalizeImportedEntry(entry)
+      if (normalized) {
+        normalizedEntries.push(normalized)
+      }
+    }
+    
+    if (normalizedEntries.length === 0) {
+      alert('No valid entries found in JSON file.')
+      return
+    }
+    
+    // Calculate statistics and show preview
+    const { statistics, validEntries } = calculateImportStatistics(normalizedEntries)
+    importPreviewEntries.value = validEntries
+    importPreviewStatistics.value = statistics
+    importPreviewMetadata.value = {
+      fileName: file.name,
+      fileType: 'JSON',
+      importedAt: new Date().toISOString()
+    }
+    showImportPreview.value = true
+  } catch (error) {
+    console.error('Error importing JSON:', error)
+    alert(`Error importing JSON file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
+}
+
+// Drag and drop handlers for import
+let dragEnterCount = 0
+
+function handleImportDragEnter(event: DragEvent): void {
+  // Only handle file drags
+  if (event.dataTransfer?.types.includes('Files')) {
+    event.preventDefault()
+    // Don't stop propagation - we need to count all dragenter events from child elements
+    dragEnterCount++
+    console.log('Drag enter (file), count:', dragEnterCount)
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy'
+    }
+    isDragOverImport.value = true
+  }
+}
+
+function handleImportDragOver(event: DragEvent): void {
+  // Only handle file drags
+  if (event.dataTransfer?.types.includes('Files')) {
+    event.preventDefault()
+    // Don't stop propagation - let it bubble
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy'
+    }
+  }
+}
+
+function handleImportDragLeave(event: DragEvent): void {
+  event.preventDefault()
+  // Don't stop propagation - we need to count all dragleave events
+  dragEnterCount--
+  console.log('Drag leave, count:', dragEnterCount)
+  // Only clear the drag state when we've actually left the drop zone
+  if (dragEnterCount <= 0) {
+    dragEnterCount = 0
+    isDragOverImport.value = false
+  }
+}
+
+async function handleImportDrop(event: DragEvent): Promise<void> {
+  event.preventDefault()
+  event.stopPropagation() // Stop propagation on drop to prevent other handlers
+  dragEnterCount = 0
+  isDragOverImport.value = false
+  
+  const files = event.dataTransfer?.files
+  if (!files || files.length === 0) {
+    console.log('No files in drop event')
+    return
+  }
+  
+  const file = files[0]
+  if (!file) {
+    console.log('File is undefined')
+    return
+  }
+  
+  const fileName = file.name.toLowerCase()
+  
+  console.log('File dropped:', fileName, 'Type:', file.type)
+  
+  // Determine file type and route to appropriate handler
+  if (fileName.endsWith('.csv') || file.type === 'text/csv') {
+    console.log('Processing as CSV')
+    await processCSVFile(file)
+  } else if (fileName.endsWith('.json') || file.type === 'application/json') {
+    console.log('Processing as JSON')
+    await processJSONFile(file)
+  } else {
+    alert(`Please drop a CSV or JSON file. Received: ${file.type || 'unknown type'}`)
+  }
 }
 
 function loadPilotProfilePrefs(): void {
