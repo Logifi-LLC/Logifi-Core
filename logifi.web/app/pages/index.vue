@@ -280,7 +280,7 @@
                 <input
                   ref="csvFileInput"
                   type="file"
-                  accept=".csv,text/csv"
+                  accept=".csv,.txt,text/csv,text/plain"
                   style="display: none;"
                   @change="handleCSVImport"
                 />
@@ -3129,6 +3129,7 @@ import type { AircraftInfo } from '~/composables/useAircraftLookup'
 import { useAirportLookup } from '~/composables/useAirportLookup'
 import type { AirportInfo } from '~/composables/useAirportLookup'
 import { calculateNightTime } from '~/utils/nightTimeCalculator'
+import { DateTime } from 'luxon'
 
 const roleOptions = ['PIC', 'SIC', 'Dual Received', 'Solo', 'Safety Pilot'] as const
 const oooiFields: (keyof OOOITimes)[] = ['out', 'off', 'on', 'in']
@@ -4030,7 +4031,7 @@ function exportToJSON(): void {
 }
 
 // Import functions
-function parseCSVLine(line: string): string[] {
+function parseCSVLine(line: string, delimiter: string = ','): string[] {
   const result: string[] = []
   let current = ''
   let inQuotes = false
@@ -4046,7 +4047,7 @@ function parseCSVLine(line: string): string[] {
       } else {
         inQuotes = !inQuotes
       }
-    } else if (char === ',' && !inQuotes) {
+    } else if (char === delimiter && !inQuotes) {
       result.push(current)
       current = ''
     } else {
@@ -4064,13 +4065,20 @@ function parseCSVContent(content: string): Record<string, string>[] {
   const firstLine = lines[0]
   if (!firstLine) return []
   
-  const headers = parseCSVLine(firstLine).map((h: string) => h.trim().replace(/^"|"$/g, ''))
+  // Detect delimiter: count tabs vs commas in first line
+  const tabCount = (firstLine.match(/\t/g) || []).length
+  const commaCount = (firstLine.match(/,/g) || []).length
+  const delimiter = tabCount > commaCount ? '\t' : ','
+  
+  console.log(`Detected delimiter: ${delimiter === '\t' ? 'TAB' : 'COMMA'} (tabs: ${tabCount}, commas: ${commaCount})`)
+  
+  const headers = parseCSVLine(firstLine, delimiter).map((h: string) => h.trim().replace(/^"|"$/g, ''))
   const rows: Record<string, string>[] = []
   
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i]
     if (!line) continue
-    const values = parseCSVLine(line).map((v: string) => v.trim().replace(/^"|"$/g, '').replace(/""/g, '"'))
+    const values = parseCSVLine(line, delimiter).map((v: string) => v.trim().replace(/^"|"$/g, '').replace(/""/g, '"'))
     if (values.length === 0 || values.every(v => !v)) continue // Skip empty rows
     
     const row: Record<string, string> = {}
@@ -4146,10 +4154,13 @@ function extractBaseModelName(model: string): string {
   return trimmed
 }
 
-function normalizeImportedEntry(rawEntry: Record<string, any>): LogEntry | null {
+async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<LogEntry | null> {
   try {
     // Parse date - handle various formats
-    const dateValue = findFieldValue(rawEntry, ['Date', 'date', 'DATE', 'Flight Date', 'flight date'])
+    const dateValue = findFieldValue(rawEntry, [
+      'flight_flightDate',  // Logten
+      'Date', 'date', 'DATE', 'Flight Date', 'flight date'
+    ])
     let dateStr = dateValue
     if (!dateStr) return null
     
@@ -4183,9 +4194,12 @@ function normalizeImportedEntry(rawEntry: Record<string, any>): LogEntry | null 
     }
     
     // Required fields - try multiple common column names for registration
-    // Put "Tail Number" first for MyFlightBook compatibility
-    const registration = findFieldValue(rawEntry, [
-      'Tail Number', 'tail number', 'TailNumber', 'tailNumber',  // MyFlightBook uses this - put first!
+    // Try Logten field names first (they use aircraft_ prefix for registration!)
+    let registration = findFieldValue(rawEntry, [
+      'aircraft_aircraftID',  // Logten uses this for registration!
+      'flight_aircraft', 'flight_aircraftID', 'flight_aircraftRegistration', 'flight_tailNumber', 
+      'flight_aircraftIdentifier', 'flight_aircraftIdentifierID',  // Logten variations
+      'Tail Number', 'tail number', 'TailNumber', 'tailNumber',  // MyFlightBook uses this
       'Display Tail', 'display tail',  // MyFlightBook also has this
       'Registration', 'registration', 'REGISTRATION',
       'N-Number', 'n-number', 'NNumber', 'nNumber',
@@ -4195,36 +4209,121 @@ function normalizeImportedEntry(rawEntry: Record<string, any>): LogEntry | null 
       'Aircraft ID', 'aircraft id', 'AircraftID', 'aircraftID'  // Put this last as fallback
     ])
     
+    // Fallback: Search all columns for anything that looks like an aircraft registration
+    // This helps with exports where the column name might be unexpected
+    if (!registration) {
+      for (const key in rawEntry) {
+        const value = String(rawEntry[key] || '').trim().toUpperCase()
+        // Check if value looks like an aircraft registration (N-number pattern)
+        // US registrations: N followed by 1-5 digits, optionally followed by letters
+        if (value && /^N\d{1,5}[A-Z]*$/.test(value)) {
+          registration = value
+          console.log(`Found aircraft registration in column "${key}": ${registration}`)
+          break
+        }
+      }
+    }
+    
     if (!registration) return null
     
     // Map CSV/JSON fields to LogEntry format
     const entry: LogEntry = {
       id: generateEntryId(),
       date: dateStr,
-      role: findFieldValue(rawEntry, ['Role', 'role', 'ROLE']) || '',
+      role: (() => {
+        // Determine role from PIC/SIC time values
+        const picTime = normalizeNumber(rawEntry.flight_pic || rawEntry.PIC || rawEntry.pic || 0) || 0
+        const sicTime = normalizeNumber(rawEntry.flight_sic || rawEntry.SIC || rawEntry.sic || 0) || 0
+        
+        if (picTime > 0) {
+          return 'PIC'
+        } else if (sicTime > 0) {
+          return 'SIC'
+        }
+        
+        // Fallback to existing role field
+        return findFieldValue(rawEntry, ['Role', 'role', 'ROLE']) || ''
+      })(),
       aircraftCategoryClass: normalizeCategoryClassLabel(
         findFieldValue(rawEntry, [
+          'aircraftType_selectedAircraftClass',  // Logten (e.g., "Multi-Engine Land")
+          'aircraftType_selectedCategory',  // Logten (e.g., "Airplane")
           'Aircraft Category/Class', 'aircraft category/class',
           'Category/Class', 'category/class', 'Category Class', 'category class',
           'aircraftCategoryClass'
         ]) || ''
       ),
-      categoryClassTime: normalizeNumber(rawEntry['Total Flight Time'] || rawEntry.total || rawEntry.flightTime?.total),
+      categoryClassTime: normalizeNumber(rawEntry.flight_totalTime || rawEntry['Total Flight Time'] || rawEntry.total || rawEntry.flightTime?.total),
       aircraftMakeModel: extractBaseModelName(
         findFieldValue(rawEntry, [
+          'aircraftType_model',  // Logten
           'Aircraft Make/Model', 'aircraft make/model',
           'Model', 'model', 'MODEL',
           'aircraftMakeModel'
-        ])
+        ]) || (() => {
+          // Try combining make and model from Logten
+          const make = findFieldValue(rawEntry, ['aircraftType_make'])
+          const model = findFieldValue(rawEntry, ['aircraftType_model'])
+          if (make && model) {
+            return `${make} ${model}`.trim()
+          }
+          return ''
+        })()
       ),
       registration: registration.toUpperCase(),
-      flightNumber: findFieldValue(rawEntry, ['Flight Number', 'flight number', 'FlightNumber', 'flightNumber']) || null,
+      flightNumber: findFieldValue(rawEntry, [
+        'flight_flightNumber',  // Logten
+        'Flight Number', 'flight number', 'FlightNumber', 'flightNumber'
+      ]) || null,
       departure: '', // Will be set below after route parsing
       destination: '', // Will be set below after route parsing
       route: '', // Will be set below
       trainingElements: (() => {
-        // Try "First Officer Name" column first (MyFlightBook)
-        let pilot = findFieldValue(rawEntry, ['First Officer Name', 'first officer name', 'FirstOfficerName', 'firstOfficerName'])
+        // Try Logten crew fields first - show the OTHER pilot (not the logged-in user)
+        const picCrew = findFieldValue(rawEntry, ['flight_selectedCrewPIC'])
+        const sicCrew = findFieldValue(rawEntry, ['flight_selectedCrewSIC'])
+        const picTime = normalizeNumber(rawEntry.flight_pic || rawEntry.PIC || rawEntry.pic || 0) || 0
+        const sicTime = normalizeNumber(rawEntry.flight_sic || rawEntry.SIC || rawEntry.sic || 0) || 0
+        
+        // Get the logged-in user's name from pilot profile
+        const userName = (pilotProfile.name || '').trim()
+        
+        // Determine which pilot to show (the OTHER one, not the user)
+        let pilot = ''
+        
+        if (userName) {
+          // Check if user matches PIC crew
+          const userIsPIC = picCrew && picCrew.trim().toLowerCase() === userName.toLowerCase()
+          // Check if user matches SIC crew
+          const userIsSIC = sicCrew && sicCrew.trim().toLowerCase() === userName.toLowerCase()
+          
+          if (userIsPIC && sicCrew) {
+            // User is PIC, show SIC
+            pilot = sicCrew
+          } else if (userIsSIC && picCrew) {
+            // User is SIC, show PIC
+            pilot = picCrew
+          } else if (!userIsPIC && !userIsSIC) {
+            // User doesn't match either, use PIC if available, otherwise SIC
+            if (picTime > 0 && picCrew) {
+              pilot = picCrew
+            } else if (sicTime > 0 && sicCrew) {
+              pilot = sicCrew
+            }
+          }
+        } else {
+          // No user name available, use PIC if available, otherwise SIC
+          if (picTime > 0 && picCrew) {
+            pilot = picCrew
+          } else if (sicTime > 0 && sicCrew) {
+            pilot = sicCrew
+          }
+        }
+        
+        // Fallback: Try "First Officer Name" column (MyFlightBook)
+        if (!pilot) {
+          pilot = findFieldValue(rawEntry, ['First Officer Name', 'first officer name', 'FirstOfficerName', 'firstOfficerName'])
+        }
         
         // Fallback: Extract from "Flight Properties" field
         if (!pilot) {
@@ -4250,36 +4349,46 @@ function normalizeImportedEntry(rawEntry: Record<string, any>): LogEntry | null 
       flightConditions: [],
       remarks: findFieldValue(rawEntry, ['Remarks', 'remarks', 'Comments', 'comments', 'COMMENTS']) || '',
       flightTime: {
-        total: normalizeNumber(rawEntry['Total Flight Time'] || rawEntry.total || rawEntry.flightTime?.total),
-        pic: normalizeNumber(rawEntry.PIC || rawEntry.pic || rawEntry.flightTime?.pic),
-        sic: normalizeNumber(rawEntry.SIC || rawEntry.sic || rawEntry.flightTime?.sic),
-        dual: normalizeNumber(rawEntry['Dual Received'] || rawEntry.dual || rawEntry.flightTime?.dual),
-        solo: normalizeNumber(rawEntry.Solo || rawEntry['Solo Time'] || rawEntry.solo || rawEntry.flightTime?.solo),
-        night: normalizeNumber(rawEntry.Night || rawEntry.night || rawEntry.flightTime?.night),
-        actualInstrument: normalizeNumber(rawEntry['Actual Instrument'] || rawEntry.IMC || rawEntry.imc || rawEntry.actualInstrument || rawEntry.flightTime?.actualInstrument),
-        dualGiven: normalizeNumber(rawEntry['Dual Given'] || rawEntry.CFI || rawEntry.cfi || rawEntry.dualGiven || rawEntry.flightTime?.dualGiven),
-        crossCountry: normalizeNumber(rawEntry['Cross Country'] || rawEntry['X-Country'] || rawEntry['X-C'] || rawEntry.crossCountry || rawEntry.flightTime?.crossCountry),
+        // For Logten imports, we'll calculate total from OOOI times later, so start with null
+        // For other imports, use the provided total time
+        total: (() => {
+          const hasLogtenOOOI = !!(findFieldValue(rawEntry, ['flight_actualDepartureTime']) || findFieldValue(rawEntry, ['flight_actualArrivalTime']))
+          if (hasLogtenOOOI) {
+            return null // Will be calculated from OOOI times
+          }
+          return normalizeNumber(rawEntry.flight_totalTime || rawEntry['Total Flight Time'] || rawEntry.total || rawEntry.flightTime?.total)
+        })(),
+        pic: normalizeNumber(rawEntry.flight_pic || rawEntry.PIC || rawEntry.pic || rawEntry.flightTime?.pic),
+        sic: normalizeNumber(rawEntry.flight_sic || rawEntry.SIC || rawEntry.sic || rawEntry.flightTime?.sic),
+        dual: normalizeNumber(rawEntry.flight_dualReceived || rawEntry['Dual Received'] || rawEntry.dual || rawEntry.flightTime?.dual),
+        solo: normalizeNumber(rawEntry.flight_solo || rawEntry.Solo || rawEntry['Solo Time'] || rawEntry.solo || rawEntry.flightTime?.solo),
+        night: normalizeNumber(rawEntry.flight_night || rawEntry.Night || rawEntry.night || rawEntry.flightTime?.night),
+        actualInstrument: normalizeNumber(rawEntry.flight_actualInstrument || rawEntry['Actual Instrument'] || rawEntry.IMC || rawEntry.imc || rawEntry.actualInstrument || rawEntry.flightTime?.actualInstrument),
+        dualGiven: normalizeNumber(rawEntry.flight_dualGiven || rawEntry['Dual Given'] || rawEntry.CFI || rawEntry.cfi || rawEntry.dualGiven || rawEntry.flightTime?.dualGiven),
+        crossCountry: normalizeNumber(rawEntry.flight_crossCountry || rawEntry['Cross Country'] || rawEntry['X-Country'] || rawEntry['X-C'] || rawEntry.crossCountry || rawEntry.flightTime?.crossCountry),
         // IMPORTANT: Map "Simulated Instrument" to simulatedInstrument (hood time)
         // NOT "Ground Simulator" - that's a different field
-        simulatedInstrument: normalizeNumber(rawEntry['Simulated Instrument'] || rawEntry.simulatedInstrument || rawEntry.hood || rawEntry.flightTime?.simulatedInstrument)
+        simulatedInstrument: normalizeNumber(rawEntry.flight_simulatedInstrument || rawEntry['Simulated Instrument'] || rawEntry.simulatedInstrument || rawEntry.hood || rawEntry.flightTime?.simulatedInstrument)
       },
       performance: {
         dayTakeoffs: normalizeNumber(rawEntry['Day Takeoffs'] || rawEntry['FS Day Landings'] || rawEntry.dayTakeoffs || rawEntry.performance?.dayTakeoffs),
         nightTakeoffs: normalizeNumber(rawEntry['Night Takeoffs'] || rawEntry['FS Night Landings'] || rawEntry.nightTakeoffs || rawEntry.performance?.nightTakeoffs),
         dayLandings: normalizeNumber(
           findFieldValue(rawEntry, [
+            'flight_dayLandings',  // Logten
             'Landings', 'landings', 'LANDINGS',  // MyFlightBook uses this for total landings
             'Day Landings', 'day landings', 'DayLandings',
             'FS Day Landings', 'fs day landings',
             'dayLandings'
-          ]) || rawEntry.performance?.dayLandings
+          ]) || rawEntry.flight_dayLandings || rawEntry.performance?.dayLandings
         ),
         nightLandings: normalizeNumber(
           findFieldValue(rawEntry, [
+            'flight_nightLandings',  // Logten
             'Night Landings', 'night landings', 'NightLandings',
             'FS Night Landings', 'fs night landings',
             'nightLandings'
-          ]) || rawEntry.performance?.nightLandings
+          ]) || rawEntry.flight_nightLandings || rawEntry.performance?.nightLandings
         ),
         approachCount: normalizeNumber(rawEntry['Instrument Approaches'] || rawEntry.Approaches || rawEntry.approachCount || rawEntry.performance?.approachCount),
         approachType: findFieldValue(rawEntry, ['Approach Type', 'approach type', 'ApproachType', 'approachType']) || null,
@@ -4289,9 +4398,18 @@ function normalizeImportedEntry(rawEntry: Record<string, any>): LogEntry | null 
     }
     
     // Parse route and extract departure/destination if missing
-    let departure = findFieldValue(rawEntry, ['Departure', 'departure', 'From', 'from', 'FROM']) || ''
-    let destination = findFieldValue(rawEntry, ['Destination', 'destination', 'To', 'to', 'TO']) || ''
-    let route = findFieldValue(rawEntry, ['Route', 'route', 'ROUTE']) || ''
+    let departure = findFieldValue(rawEntry, [
+      'flight_from',  // Logten
+      'Departure', 'departure', 'From', 'from', 'FROM'
+    ]) || ''
+    let destination = findFieldValue(rawEntry, [
+      'flight_to',  // Logten
+      'Destination', 'destination', 'To', 'to', 'TO'
+    ]) || ''
+    let route = findFieldValue(rawEntry, [
+      'flight_route',  // Logten
+      'Route', 'route', 'ROUTE'
+    ]) || ''
     
     // Parse route to extract departure/destination if they're missing
     // Route format is typically space-separated airport codes like "KIND KLAF" or "KIND KMCX KLGA"
@@ -4338,20 +4456,76 @@ function normalizeImportedEntry(rawEntry: Record<string, any>): LogEntry | null 
       )
     }
     
-    // Parse OOOI times if present
-    const out = rawEntry.Out || rawEntry.oooi?.out
-    const off = rawEntry.Off || rawEntry.oooi?.off
-    const on = rawEntry.On || rawEntry.oooi?.on
-    const inTime = rawEntry.In || rawEntry.oooi?.in
-    const isZulu = rawEntry['Is Zulu'] !== undefined ? rawEntry['Is Zulu'] : (rawEntry.oooi?.isZulu !== undefined ? rawEntry.oooi.isZulu : true)
+    // Parse OOOI times if present - check Logten fields first
+    // Logten exports: Scheduled Departure, Actual Departure (OUT), Scheduled Arrival, Actual Arrival (IN)
+    // Map Actual Departure → OUT and Actual Arrival → IN, leave OFF and ON blank
+    const logtenOut = findFieldValue(rawEntry, ['flight_actualDepartureTime'])
+    const logtenIn = findFieldValue(rawEntry, ['flight_actualArrivalTime'])
+    const isLogtenImport = !!(logtenOut || logtenIn)
+    
+    const out = logtenOut || rawEntry.Out || rawEntry.oooi?.out || null
+    const off = null // Always blank for Logten imports
+    const on = null // Always blank for Logten imports
+    const inTime = logtenIn || rawEntry.In || rawEntry.oooi?.in || null
+    // Logten times are in local time, not Zulu
+    const isZulu = isLogtenImport ? false : (rawEntry['Is Zulu'] !== undefined ? rawEntry['Is Zulu'] : (rawEntry.oooi?.isZulu !== undefined ? rawEntry.oooi.isZulu : true))
+    
+    // If we have OOOI times, calculate block time from out to in (gate out to gate in)
+    // For Logten imports, this will override the null initial value
+    // Fall back to off/on if out/in don't exist
+    if (out && inTime) {
+      // Get timezones for departure and destination airports
+      const startTimezone = entry.departure ? await getAirportTimezone(entry.departure) : null
+      const endTimezone = entry.destination ? await getAirportTimezone(entry.destination) : null
+      
+      const calculatedTime = await calculateDuration(out, inTime, entry.date, startTimezone, endTimezone, isZulu)
+      if (calculatedTime !== null && calculatedTime > 0) {
+        entry.flightTime.total = calculatedTime
+      }
+    } else if (off && on) {
+      // Fallback: calculate from off to on if out/in not available
+      const startTimezone = entry.departure ? await getAirportTimezone(entry.departure) : null
+      const endTimezone = entry.destination ? await getAirportTimezone(entry.destination) : null
+      
+      const calculatedTime = await calculateDuration(off, on, entry.date, startTimezone, endTimezone, isZulu)
+      if (calculatedTime !== null && calculatedTime > 0) {
+        entry.flightTime.total = calculatedTime
+      }
+    }
+    
+    // For Logten imports without OOOI times, fall back to flight_totalTime
+    if (isLogtenImport && !entry.flightTime.total) {
+      const fallbackTotal = normalizeNumber(rawEntry.flight_totalTime)
+      if (fallbackTotal !== null && fallbackTotal > 0) {
+        entry.flightTime.total = fallbackTotal
+      }
+    }
     
     if (out || off || on || inTime) {
       entry.oooi = {
-        out: out || null,
-        off: off || null,
-        on: on || null,
-        in: inTime || null,
+        out: out,
+        off: off,
+        on: on,
+        in: inTime,
         isZulu: Boolean(isZulu)
+      }
+    }
+    
+    // Auto-detect IFR if flight number exists (only add condition, don't auto-set actualInstrument)
+    if (entry.flightNumber && entry.flightNumber.trim() !== '') {
+      const conditionSet = new Set(entry.flightConditions)
+      conditionSet.add('ifr')
+      entry.flightConditions = Array.from(conditionSet)
+    }
+    
+    // Set PIC time = total time if user is PIC
+    const userName = (pilotProfile.name || '').trim()
+    if (userName) {
+      const picCrew = findFieldValue(rawEntry, ['flight_selectedCrewPIC'])
+      const userIsPIC = picCrew && picCrew.trim().toLowerCase() === userName.toLowerCase()
+      
+      if (userIsPIC && entry.flightTime.total) {
+        entry.flightTime.pic = entry.flightTime.total
       }
     }
     
@@ -4603,21 +4777,28 @@ async function processCSVFile(file: File): Promise<void> {
       const row = rows[i]
       if (!row) continue
       
-      const entry = normalizeImportedEntry(row)
+      const entry = await normalizeImportedEntry(row)
       if (entry) {
         entries.push(entry)
       } else {
         // Determine why it was rejected
         let reason = 'Unknown reason'
-        const dateValue = findFieldValue(row, ['Date', 'date', 'DATE', 'Flight Date', 'flight date'])
+        const dateValue = findFieldValue(row, [
+          'flight_flightDate',  // Logten
+          'Date', 'date', 'DATE', 'Flight Date', 'flight date'
+        ])
         const regValue = findFieldValue(row, [
+          'aircraft_aircraftID',  // Logten uses this for registration!
+          'flight_aircraft', 'flight_aircraftID', 'flight_aircraftRegistration', 'flight_tailNumber',
+          'flight_aircraftIdentifier', 'flight_aircraftIdentifierID',  // Logten variations
+          'Tail Number', 'tail number', 'TailNumber', 'tailNumber',  // MyFlightBook uses this
+          'Display Tail', 'display tail',  // MyFlightBook also has this
           'Registration', 'registration', 'REGISTRATION',
-          'Aircraft ID', 'aircraft id', 'AircraftID', 'aircraftID',
-          'Tail Number', 'tail number', 'TailNumber', 'tailNumber',
           'N-Number', 'n-number', 'NNumber', 'nNumber',
           'Aircraft Registration', 'aircraft registration',
           'Ident', 'ident', 'IDENT',
-          'Aircraft', 'aircraft', 'AIRCRAFT'
+          'Aircraft', 'aircraft', 'AIRCRAFT',
+          'Aircraft ID', 'aircraft id', 'AircraftID', 'aircraftID'  // Put this last as fallback
         ])
         
         if (!dateValue) {
@@ -4703,7 +4884,7 @@ async function processJSONFile(file: File): Promise<void> {
     // Normalize entries
     const normalizedEntries: LogEntry[] = []
     for (const entry of entries) {
-      const normalized = normalizeImportedEntry(entry)
+      const normalized = await normalizeImportedEntry(entry)
       if (normalized) {
         normalizedEntries.push(normalized)
       }
@@ -4793,14 +4974,14 @@ async function handleImportDrop(event: DragEvent): Promise<void> {
   console.log('File dropped:', fileName, 'Type:', file.type)
   
   // Determine file type and route to appropriate handler
-  if (fileName.endsWith('.csv') || file.type === 'text/csv') {
-    console.log('Processing as CSV')
+  if (fileName.endsWith('.csv') || fileName.endsWith('.txt') || file.type === 'text/csv' || file.type === 'text/plain') {
+    console.log('Processing as CSV/Tab-delimited')
     await processCSVFile(file)
   } else if (fileName.endsWith('.json') || file.type === 'application/json') {
     console.log('Processing as JSON')
     await processJSONFile(file)
   } else {
-    alert(`Please drop a CSV or JSON file. Received: ${file.type || 'unknown type'}`)
+    alert(`Please drop a CSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`)
   }
 }
 
@@ -5682,38 +5863,455 @@ function normalizeNumber(value: number | null | string | undefined): number | nu
   return rounded >= 0 ? rounded : null
 }
 
-function calculateDuration(start: string | null, end: string | null): number | null {
+/**
+ * Helper to parse time string (HH:mm or HHmm) to minutes since midnight
+ */
+function parseTimeToMinutes(time: string | null): number | null {
+  if (!time) return null
+  
+  const t = time.replace(':', '').trim()
+  if (t.length < 3) return null
+  const normalized = t.length === 3 ? '0' + t : t
+  if (normalized.length !== 4) return null
+  
+  const h = parseInt(normalized.substring(0, 2))
+  const m = parseInt(normalized.substring(2, 4))
+  if (isNaN(h) || isNaN(m)) return null
+  
+  return h * 60 + m
+}
+
+// Cache for airport timezone lookups
+const airportTimezoneCache = new Map<string, string | null>()
+
+/**
+ * Convert airport timezone string to IANA timezone format
+ * Airport timezones are often in formats like "America/Chicago" or "UTC-6" or just "-6"
+ * This function normalizes them to IANA format
+ */
+function normalizeTimezoneToIANA(timezone: string | undefined | null): string | null {
+  if (!timezone) return null
+  
+  // If already in IANA format (contains '/'), return as-is
+  if (timezone.includes('/')) {
+    return timezone
+  }
+  
+  // Handle UTC offset strings like "-6", "-5", "UTC-6", "+5", etc.
+  // Try patterns: "-6", "+5", "UTC-6", "UTC+5", "-06:00", etc.
+  const offsetMatch1 = timezone.match(/^([+-]?)(\d{1,2})(?::\d{2})?$/)
+  const offsetMatch2 = timezone.match(/^UTC([+-])(\d{1,2})$/i)
+  
+  let offset: number | null = null
+  
+  if (offsetMatch1 && offsetMatch1[2]) {
+    const sign = offsetMatch1[1] || '-'
+    const hours = offsetMatch1[2]
+    offset = parseInt(sign + hours)
+  } else if (offsetMatch2) {
+    const sign = offsetMatch2[1]
+    const hours = offsetMatch2[2]
+    if (sign && hours) {
+      offset = parseInt(sign + hours)
+    }
+  }
+  
+  if (offset !== null) {
+    // Map common US UTC offsets to IANA timezones
+    // Note: These are approximations - actual timezones depend on DST
+    // For US airports, we map to the most common timezone for that offset
+    const offsetToTimezone: Record<string, string> = {
+      '-10': 'Pacific/Honolulu',  // HST
+      '-9': 'America/Anchorage',  // AKST/AKDT
+      '-8': 'America/Los_Angeles', // PST/PDT
+      '-7': 'America/Denver',     // MST/MDT (or PDT during DST)
+      '-6': 'America/Chicago',     // CST/CDT
+      '-5': 'America/New_York',   // EST/EDT (or CDT during DST)
+      '-4': 'America/New_York',   // EDT (during DST)
+    }
+    
+    const offsetStr = offset.toString()
+    const timezone = offsetToTimezone[offsetStr]
+    if (timezone) {
+      return timezone
+    }
+  }
+  
+  // Common timezone mappings for US airports
+  const timezoneMap: Record<string, string> = {
+    'America/New_York': 'America/New_York',
+    'America/Chicago': 'America/Chicago',
+    'America/Denver': 'America/Denver',
+    'America/Los_Angeles': 'America/Los_Angeles',
+    'America/Phoenix': 'America/Phoenix',
+    'America/Anchorage': 'America/Anchorage',
+    'Pacific/Honolulu': 'Pacific/Honolulu',
+    'EST': 'America/New_York',
+    'EDT': 'America/New_York',
+    'CST': 'America/Chicago',
+    'CDT': 'America/Chicago',
+    'MST': 'America/Denver',
+    'MDT': 'America/Denver',
+    'PST': 'America/Los_Angeles',
+    'PDT': 'America/Los_Angeles',
+    'AKST': 'America/Anchorage',
+    'AKDT': 'America/Anchorage',
+    'HST': 'Pacific/Honolulu'
+  }
+  
+  // Check if it's a known abbreviation
+  if (timezoneMap[timezone]) {
+    return timezoneMap[timezone]
+  }
+  
+  // Try to use as-is (might already be valid IANA)
+  try {
+    // Validate by trying to create a DateTime with this timezone
+    DateTime.now().setZone(timezone)
+    return timezone
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Get IANA timezone for an airport code
+ * Uses cached airport lookup data and converts to IANA format
+ */
+async function getAirportTimezone(airportCode: string | null | undefined): Promise<string | null> {
+  if (!airportCode) return null
+  
+  const normalizedCode = airportCode.trim().toUpperCase()
+  
+  // Check cache first
+  if (airportTimezoneCache.has(normalizedCode)) {
+    const cached = airportTimezoneCache.get(normalizedCode)
+    console.log(`[Timezone] Cache hit for ${normalizedCode}:`, cached)
+    return cached || null
+  }
+  
+  try {
+    console.log(`[Timezone] Looking up timezone for ${normalizedCode}...`)
+    const airportInfo = await lookupAirport(normalizedCode)
+    console.log(`[Timezone] Airport info for ${normalizedCode}:`, airportInfo)
+    if (airportInfo?.timezone) {
+      const ianaTimezone = normalizeTimezoneToIANA(airportInfo.timezone)
+      console.log(`[Timezone] Normalized timezone for ${normalizedCode}: ${airportInfo.timezone} -> ${ianaTimezone}`)
+      airportTimezoneCache.set(normalizedCode, ianaTimezone)
+      return ianaTimezone
+    } else {
+      console.warn(`[Timezone] No timezone found for airport ${normalizedCode}`)
+    }
+  } catch (error) {
+    console.warn(`[Timezone] Failed to lookup timezone for airport ${normalizedCode}:`, error)
+  }
+  
+  airportTimezoneCache.set(normalizedCode, null)
+  return null
+}
+
+/**
+ * Calculate duration between two times, accounting for timezone differences
+ * @param start - Start time string (HH:mm or HHmm format)
+ * @param end - End time string (HH:mm or HHmm format)
+ * @param date - Date string (YYYY-MM-DD format) for DST calculations
+ * @param startTimezone - IANA timezone for start time (e.g., "America/Chicago")
+ * @param endTimezone - IANA timezone for end time (e.g., "America/New_York")
+ * @param isZulu - Whether times are already in UTC
+ */
+async function calculateDuration(
+  start: string | null,
+  end: string | null,
+  date?: string | null,
+  startTimezone?: string | null,
+  endTimezone?: string | null,
+  isZulu?: boolean
+): Promise<number | null> {
   if (!start || !end) return null
   
-  // helper to parse HH:mm or HHmm
-  const parse = (t: string) => {
-     t = t.replace(':', '').trim()
-     if (t.length < 3) return null // Allow 3 digits like 130 -> 0130? No, let's expect 4 or assume leading zero
-     if (t.length === 3) t = '0' + t
-     if (t.length !== 4) return null
-     const h = parseInt(t.substring(0, 2))
-     const m = parseInt(t.substring(2, 4))
-     if (isNaN(h) || isNaN(m)) return null
-     return h * 60 + m
+  // If times are in UTC or no timezone info, use simple calculation
+  if (isZulu || (!startTimezone && !endTimezone)) {
+    console.log('[CalculateDuration] Using simple calculation:', { isZulu, startTimezone, endTimezone })
+    const s = parseTimeToMinutes(start)
+    const e = parseTimeToMinutes(end)
+    
+    if (s === null || e === null) return null
+    
+    let diff = e - s
+    if (diff < 0) diff += 24 * 60 // wrap around midnight
+    
+    const result = Math.round((diff / 60) * 10) / 10
+    console.log('[CalculateDuration] Simple calculation result:', result)
+    return result
   }
-
-  const s = parse(start)
-  const e = parse(end)
   
-  if (s === null || e === null) return null
+  // If both timezones are the same, use simple calculation
+  if (startTimezone && endTimezone && startTimezone === endTimezone) {
+    console.log('[CalculateDuration] Same timezone, using simple calculation:', startTimezone)
+    const s = parseTimeToMinutes(start)
+    const e = parseTimeToMinutes(end)
+    
+    if (s === null || e === null) return null
+    
+    let diff = e - s
+    if (diff < 0) diff += 24 * 60 // wrap around midnight
+    
+    const result = Math.round((diff / 60) * 10) / 10
+    console.log('[CalculateDuration] Same timezone calculation result:', result)
+    return result
+  }
   
-  let diff = e - s
-  if (diff < 0) diff += 24 * 60 // wrap around midnight
+  // Need date for timezone conversion (for DST handling)
+  const flightDate = date || new Date().toISOString().split('T')[0]
   
-  return Math.round((diff / 60) * 10) / 10
+  console.log('[CalculateDuration] Using timezone-aware calculation:', {
+    start,
+    end,
+    date: flightDate,
+    startTimezone,
+    endTimezone
+  })
+  
+  // Validate flightDate format
+  if (!flightDate || !/^\d{4}-\d{2}-\d{2}$/.test(flightDate)) {
+    // Fallback to simple calculation if date is invalid
+    const s = parseTimeToMinutes(start)
+    const e = parseTimeToMinutes(end)
+    if (s === null || e === null) return null
+    let diff = e - s
+    if (diff < 0) diff += 24 * 60
+    return Math.round((diff / 60) * 10) / 10
+  }
+  
+  try {
+    // Parse time strings
+    const startTimeStr = start.replace(':', '').trim()
+    const endTimeStr = end.replace(':', '').trim()
+    
+    const startNormalized = startTimeStr.length === 3 ? '0' + startTimeStr : startTimeStr
+    const endNormalized = endTimeStr.length === 3 ? '0' + endTimeStr : endTimeStr
+    
+    if (startNormalized.length !== 4 || endNormalized.length !== 4) {
+      // Fallback to simple calculation
+      const s = parseTimeToMinutes(start)
+      const e = parseTimeToMinutes(end)
+      if (s === null || e === null) return null
+      let diff = e - s
+      if (diff < 0) diff += 24 * 60
+      return Math.round((diff / 60) * 10) / 10
+    }
+    
+    // Parse date components
+    const dateParts = flightDate.split('-')
+    if (dateParts.length !== 3) {
+      // Fallback to simple calculation
+      const s = parseTimeToMinutes(start)
+      const e = parseTimeToMinutes(end)
+      if (s === null || e === null) return null
+      let diff = e - s
+      if (diff < 0) diff += 24 * 60
+      return Math.round((diff / 60) * 10) / 10
+    }
+    
+    const yearStr = dateParts[0]
+    const monthStr = dateParts[1]
+    const dayStr = dateParts[2]
+    
+    if (!yearStr || !monthStr || !dayStr) {
+      // Fallback to simple calculation
+      const s = parseTimeToMinutes(start)
+      const e = parseTimeToMinutes(end)
+      if (s === null || e === null) return null
+      let diff = e - s
+      if (diff < 0) diff += 24 * 60
+      return Math.round((diff / 60) * 10) / 10
+    }
+    
+    const year = parseInt(yearStr)
+    const month = parseInt(monthStr)
+    const day = parseInt(dayStr)
+    
+    if (isNaN(year) || isNaN(month) || isNaN(day)) {
+      // Fallback to simple calculation
+      const s = parseTimeToMinutes(start)
+      const e = parseTimeToMinutes(end)
+      if (s === null || e === null) return null
+      let diff = e - s
+      if (diff < 0) diff += 24 * 60
+      return Math.round((diff / 60) * 10) / 10
+    }
+    
+    // Create DateTime objects with timezone context
+    const startHour = parseInt(startNormalized.substring(0, 2))
+    const startMin = parseInt(startNormalized.substring(2, 4))
+    const endHour = parseInt(endNormalized.substring(0, 2))
+    const endMin = parseInt(endNormalized.substring(2, 4))
+    
+    // Create DateTime in respective timezones
+    const startDT = startTimezone
+      ? DateTime.fromObject(
+          {
+            year,
+            month,
+            day,
+            hour: startHour,
+            minute: startMin
+          },
+          { zone: startTimezone }
+        )
+      : DateTime.fromObject(
+          {
+            year,
+            month,
+            day,
+            hour: startHour,
+            minute: startMin
+          }
+        )
+    
+    const endDT = endTimezone
+      ? DateTime.fromObject(
+          {
+            year,
+            month,
+            day,
+            hour: endHour,
+            minute: endMin
+          },
+          { zone: endTimezone }
+        )
+      : DateTime.fromObject(
+          {
+            year,
+            month,
+            day,
+            hour: endHour,
+            minute: endMin
+          }
+        )
+    
+    if (!startDT.isValid || !endDT.isValid) {
+      // Fallback to simple calculation
+      const s = parseTimeToMinutes(start)
+      const e = parseTimeToMinutes(end)
+      if (s === null || e === null) return null
+      let diff = e - s
+      if (diff < 0) diff += 24 * 60
+      return Math.round((diff / 60) * 10) / 10
+    }
+    
+    // Convert both to UTC for accurate comparison
+    const startUTC = startDT.toUTC()
+    const endUTC = endDT.toUTC()
+    
+    // Calculate difference in minutes
+    const diffMs = endUTC.toMillis() - startUTC.toMillis()
+    const diffMinutes = diffMs / (1000 * 60)
+    
+    // Handle negative differences (crossing midnight)
+    let finalDiff = diffMinutes
+    if (finalDiff < 0) {
+      // If negative and less than -12 hours, assume next day
+      if (finalDiff < -12 * 60) {
+        finalDiff += 24 * 60
+      } else {
+        // Otherwise, might be same day but timezone difference makes it appear negative
+        // Try adding 24 hours
+        finalDiff += 24 * 60
+      }
+    }
+    
+    // Convert to hours and round to 1 decimal
+    const result = Math.round((finalDiff / 60) * 10) / 10
+    console.log('[CalculateDuration] Timezone-aware calculation result:', result, {
+      startUTC: startUTC.toISO(),
+      endUTC: endUTC.toISO(),
+      diffMinutes: finalDiff
+    })
+    return result
+  } catch (error) {
+    console.warn('[CalculateDuration] Error calculating timezone-aware duration, falling back to simple calculation:', error)
+    // Fallback to simple calculation
+    const s = parseTimeToMinutes(start)
+    const e = parseTimeToMinutes(end)
+    if (s === null || e === null) return null
+    let diff = e - s
+    if (diff < 0) diff += 24 * 60
+    return Math.round((diff / 60) * 10) / 10
+  }
 }
 
 // Watcher to auto-calculate total time and flight time
-watch(() => [newEntry.oooi?.out, newEntry.oooi?.in, newEntry.oooi?.off, newEntry.oooi?.on, newEntry.role], () => {
+watch(() => [newEntry.oooi?.out, newEntry.oooi?.in, newEntry.oooi?.off, newEntry.oooi?.on, newEntry.role, newEntry.departure, newEntry.destination, newEntry.date], async () => {
   if (!isCommercialMode.value || !newEntry.oooi) return
   
   if (newEntry.oooi.out && newEntry.oooi.in) {
-     const block = calculateDuration(newEntry.oooi.out, newEntry.oooi.in)
+     // Get timezones for departure and destination airports
+     const startTimezone = newEntry.oooi.off && newEntry.departure
+       ? await getAirportTimezone(newEntry.departure)
+       : newEntry.departure
+         ? await getAirportTimezone(newEntry.departure)
+         : null
+     const endTimezone = newEntry.destination
+       ? await getAirportTimezone(newEntry.destination)
+       : null
+     
+     // Debug logging
+     console.log('[FlightTime] Calculating duration:', {
+       out: newEntry.oooi.out,
+       in: newEntry.oooi.in,
+       date: newEntry.date,
+       departure: newEntry.departure,
+       destination: newEntry.destination,
+       startTimezone,
+       endTimezone,
+       isZulu: newEntry.oooi.isZulu
+     })
+     
+     const block = await calculateDuration(
+       newEntry.oooi.out,
+       newEntry.oooi.in,
+       newEntry.date,
+       startTimezone,
+       endTimezone,
+       newEntry.oooi.isZulu
+     )
+     
+     console.log('[FlightTime] Calculated block time:', block)
+     if (block !== null) {
+       newEntry.flightTime.total = block
+       
+       // Auto-distribute based on Role
+       if (newEntry.role === 'PIC') {
+         newEntry.flightTime.pic = block
+         newEntry.flightTime.sic = null
+       } else if (newEntry.role === 'SIC') {
+         newEntry.flightTime.sic = block
+         newEntry.flightTime.pic = null
+       } else if (newEntry.role === 'Dual Received') {
+          newEntry.flightTime.dual = block
+       } else if (newEntry.role === 'Solo') {
+          newEntry.flightTime.solo = block
+          newEntry.flightTime.pic = block // Solo is also PIC usually
+       }
+     }
+  } else if (newEntry.oooi.off && newEntry.oooi.on) {
+     // Calculate from OFF to ON (air time)
+     const startTimezone = newEntry.departure
+       ? await getAirportTimezone(newEntry.departure)
+       : null
+     const endTimezone = newEntry.destination
+       ? await getAirportTimezone(newEntry.destination)
+       : null
+     
+     const block = await calculateDuration(
+       newEntry.oooi.off,
+       newEntry.oooi.on,
+       newEntry.date,
+       startTimezone,
+       endTimezone,
+       newEntry.oooi.isZulu
+     )
      if (block !== null) {
        newEntry.flightTime.total = block
        
@@ -5737,11 +6335,77 @@ watch(() => [newEntry.oooi?.out, newEntry.oooi?.in, newEntry.oooi?.off, newEntry
   // For now, let's just map Out-In to Total Time.
 }, { deep: true })
 
-watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.in, inlineEditEntry.value?.role], () => {
+watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.in, inlineEditEntry.value?.oooi?.off, inlineEditEntry.value?.oooi?.on, inlineEditEntry.value?.role, inlineEditEntry.value?.departure, inlineEditEntry.value?.destination, inlineEditEntry.value?.date], async () => {
   if (!isInlineCommercialMode.value || !inlineEditEntry.value?.oooi) return
   
   if (inlineEditEntry.value.oooi.out && inlineEditEntry.value.oooi.in) {
-     const block = calculateDuration(inlineEditEntry.value.oooi.out, inlineEditEntry.value.oooi.in)
+     // Get timezones for departure and destination airports
+     const startTimezone = inlineEditEntry.value.oooi.off && inlineEditEntry.value.departure
+       ? await getAirportTimezone(inlineEditEntry.value.departure)
+       : inlineEditEntry.value.departure
+         ? await getAirportTimezone(inlineEditEntry.value.departure)
+         : null
+     const endTimezone = inlineEditEntry.value.destination
+       ? await getAirportTimezone(inlineEditEntry.value.destination)
+       : null
+     
+     // Debug logging
+     console.log('[FlightTime Inline] Calculating duration:', {
+       out: inlineEditEntry.value.oooi.out,
+       in: inlineEditEntry.value.oooi.in,
+       date: inlineEditEntry.value.date,
+       departure: inlineEditEntry.value.departure,
+       destination: inlineEditEntry.value.destination,
+       startTimezone,
+       endTimezone,
+       isZulu: inlineEditEntry.value.oooi.isZulu
+     })
+     
+     const block = await calculateDuration(
+       inlineEditEntry.value.oooi.out,
+       inlineEditEntry.value.oooi.in,
+       inlineEditEntry.value.date,
+       startTimezone,
+       endTimezone,
+       inlineEditEntry.value.oooi.isZulu
+     )
+     
+     console.log('[FlightTime Inline] Calculated block time:', block)
+     if (block !== null) {
+       inlineEditEntry.value.flightTime.total = block
+       
+       // Auto-distribute based on Role
+       const role = inlineEditEntry.value.role
+       if (role === 'PIC') {
+         inlineEditEntry.value.flightTime.pic = block
+         inlineEditEntry.value.flightTime.sic = null
+       } else if (role === 'SIC') {
+         inlineEditEntry.value.flightTime.sic = block
+         inlineEditEntry.value.flightTime.pic = null
+       } else if (role === 'Dual Received') {
+          inlineEditEntry.value.flightTime.dual = block
+       } else if (role === 'Solo') {
+          inlineEditEntry.value.flightTime.solo = block
+          inlineEditEntry.value.flightTime.pic = block
+       }
+     }
+  } else if (inlineEditEntry.value.oooi.off && inlineEditEntry.value.oooi.on) {
+     // Calculate from OFF to ON (air time)
+     const startTimezone = inlineEditEntry.value.departure
+       ? await getAirportTimezone(inlineEditEntry.value.departure)
+       : null
+     const endTimezone = inlineEditEntry.value.destination
+       ? await getAirportTimezone(inlineEditEntry.value.destination)
+       : null
+     
+     const block = await calculateDuration(
+       inlineEditEntry.value.oooi.off,
+       inlineEditEntry.value.oooi.on,
+       inlineEditEntry.value.date,
+       startTimezone,
+       endTimezone,
+       inlineEditEntry.value.oooi.isZulu
+     )
      if (block !== null) {
        inlineEditEntry.value.flightTime.total = block
        
