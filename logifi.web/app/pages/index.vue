@@ -553,6 +553,43 @@
                 </div>
           <!-- Aircraft families filter section removed per request -->
 
+          <!-- Flagged Entries filter section -->
+          <div v-show="!isSidebarCollapsed" class="mt-4">
+            <div
+              :class="[
+                'rounded-xl border px-4 py-4 transition-colors duration-300',
+                isDarkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-300 border-gray-300'
+              ]"
+            >
+              <div class="flex items-center justify-between mb-2">
+                <h3 :class="['text-sm font-semibold font-quicksand', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
+                  Flagged Entries
+                </h3>
+                <span :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                  Optional filter
+                </span>
+              </div>
+              <label
+                :class="[
+                  'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-quicksand cursor-pointer transition-all',
+                  isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200'
+                ]"
+              >
+                <input
+                  type="checkbox"
+                  :checked="selectedFilters.flagged"
+                  @change="(e) => { selectedFilters.flagged = (e.target as HTMLInputElement).checked }"
+                  :class="[
+                    'h-4 w-4 rounded border transition-colors',
+                    isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500'
+                  ]"
+                />
+                <Icon name="ri:flag-fill" :size="14" :class="[isDarkMode ? 'text-amber-400' : 'text-amber-600']" />
+                <span>Show flagged entries only</span>
+              </label>
+            </div>
+          </div>
+
           <div v-show="!isSidebarCollapsed" class="relative settings-container mt-auto pt-6">
             <div class="mb-3 flex items-center justify-between">
               <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
@@ -562,7 +599,10 @@
                     Object.values(selectedFilters.aircraft).filter(Boolean).length +
                     Object.values(selectedFilters.airports).filter(Boolean).length +
                     Object.values(selectedFilters.pilots).filter(Boolean).length +
-                    Object.values(selectedFilters.conditions).filter(Boolean).length
+                    Object.values(selectedFilters.conditions).filter(Boolean).length +
+                    Object.values(selectedFilters.families).filter(Boolean).length +
+                    Object.values(selectedFilters.categoryClass).filter(Boolean).length +
+                    (selectedFilters.flagged ? 1 : 0)
                   }}
                 </span>
               </div>
@@ -982,9 +1022,13 @@
                   <tr
                     :class="[
                       'transition-all duration-200 border-l-4',
-                      isDarkMode 
-                        ? 'hover:bg-gray-800 border-transparent hover:border-blue-500' 
-                        : 'hover:bg-gray-200 border-transparent hover:border-blue-500'
+                      entry.flagged
+                        ? (isDarkMode 
+                          ? 'bg-amber-900/20 border-l-amber-500 hover:bg-amber-900/30' 
+                          : 'bg-amber-50 border-l-amber-500 hover:bg-amber-100')
+                        : (isDarkMode 
+                          ? 'hover:bg-gray-800 border-transparent hover:border-blue-500' 
+                          : 'hover:bg-gray-200 border-transparent hover:border-blue-500')
                     ]"
                       class="cursor-pointer"
                       @click="beginInlineEditing(entry)"
@@ -1165,7 +1209,19 @@
           <div v-if="inlineEditEntry" class="grid gap-6">
             
             <!-- Inline Edit Form (Simplified Version) -->
-            <div class="flex justify-end mb-2">
+            <div class="flex justify-between mb-2">
+              <button
+                type="button"
+                @click="toggleEntryFlag(inlineEditEntry)"
+                :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors', 
+                  inlineEditEntry.flagged
+                    ? (isDarkMode ? 'bg-amber-900/30 text-amber-300 border-amber-700' : 'bg-amber-100 text-amber-700 border-amber-200')
+                    : (isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200')
+                ]"
+                :aria-label="inlineEditEntry.flagged ? 'Unflag entry' : 'Flag entry'"
+              >
+                {{ inlineEditEntry.flagged ? 'Flagged' : '+ Flag' }}
+              </button>
               <button
                 type="button"
                 @click="isInlineCommercialMode = !isInlineCommercialMode"
@@ -3961,7 +4017,8 @@ const selectedFilters = reactive({
   pilots: {} as Record<string, boolean>,   // key: name string
   conditions: {} as Record<string, boolean>, // key: condition value (e.g., 'ifr', 'nightVfr')
   families: {} as Record<string, boolean>, // key: normalized aircraft family (e.g., 'C172', 'PA-28')
-  categoryClass: {} as Record<string, boolean> // key: category/class (e.g., 'ASEL', 'AMEL')
+  categoryClass: {} as Record<string, boolean>, // key: category/class (e.g., 'ASEL', 'AMEL')
+  flagged: false // filter for flagged entries
 })
 // Aircraft family section open/closed state
 const familyOpenState = reactive<Record<string, boolean>>({})
@@ -5677,7 +5734,8 @@ function createBlankEntry(): EditableLogEntry {
     remarks: '',
     flightTime: createEmptyFlightTime(),
     performance: createEmptyPerformance(),
-    oooi: createEmptyOOOI()
+    oooi: createEmptyOOOI(),
+    flagged: false
   }
 }
 
@@ -5861,6 +5919,7 @@ function clearAllFilters(): void {
   selectedFilters.conditions = {}
   selectedFilters.families = {}
   selectedFilters.categoryClass = {}
+  selectedFilters.flagged = false
 }
 
 // Aircraft family normalization (maps model variants to a base family)
@@ -6302,6 +6361,11 @@ function cancelEditing(): void {
   resetForm()
   validationError.value = null
   successMessage.value = null
+}
+
+function toggleEntryFlag(entry: LogEntry): void {
+  entry.flagged = !entry.flagged
+  // The watch on logEntries will automatically save to localStorage
 }
 
 function validateEntry(entry: EditableLogEntry): string | null {
@@ -7420,7 +7484,8 @@ function loadPersistedEntries(): void {
           flightNumber: entry.flightNumber ?? null,
           flightConditions: sanitizeFlightConditions(entry.flightConditions || []),
           flightTime: normalizedFlightTime,
-          performance: normalizedPerformance
+          performance: normalizedPerformance,
+          flagged: entry.flagged ?? false
         }
       })
       
@@ -7622,6 +7687,13 @@ const filteredEntries = computed(() => {
     if (activeCategoryClass.size > 0) {
       const catClass = (entry.aircraftCategoryClass || '').trim().toUpperCase()
       if (!activeCategoryClass.has(catClass)) {
+        return false
+      }
+    }
+
+    // flagged filter
+    if (selectedFilters.flagged) {
+      if (!entry.flagged) {
         return false
       }
     }

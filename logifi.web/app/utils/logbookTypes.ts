@@ -72,6 +72,7 @@ export interface LogEntry {
   flightTime: FlightTimeBreakdown
   performance: PerformanceMetrics
   oooi?: OOOITimes
+  flagged?: boolean
 }
 
 export type EditableLogEntry = Omit<LogEntry, 'id'>
