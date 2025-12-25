@@ -502,7 +502,9 @@
                           "
                         />
                     <span :class="['inline-flex h-2 w-2 rounded-full', isDarkMode ? 'bg-gray-500' : 'bg-gray-400']"></span>
-                    <span class="truncate" :title="item">{{ item }}</span>
+                    <span class="truncate" :title="section.key === 'airports' ? getAirportDisplayText(item) : item">
+                      {{ section.key === 'airports' ? getAirportDisplayText(item) : item }}
+                    </span>
                   </li>
                 </ul>
                   </template>
@@ -3265,7 +3267,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch, watchEffect } from 'vue'
 import {
   LOGBOOK_STORAGE_KEY,
   createEmptyFlightTime,
@@ -5315,6 +5317,18 @@ const showAirportModal = ref(false)
 const currentAirportInfo = ref<AirportInfo | null>(null)
 const loadingAirportInfo = ref(false)
 const airportInfoError = ref<string | null>(null)
+
+// Airport names cache for display in catalog
+const airportNames = ref<Record<string, string>>({})
+
+// Format airport display text: "CODE - Name" or just "CODE" if name not loaded
+function getAirportDisplayText(code: string): string {
+  const name = airportNames.value[code]
+  if (name) {
+    return `${code} - ${name}`
+  }
+  return code
+}
 
 // Crew/Instructor profile modal
 const showCrewProfileModal = ref(false)
@@ -7760,6 +7774,27 @@ const catalogs = computed<Record<CatalogKey, string[]> & { families?: string[], 
     families: Array.from(familiesSet).sort((a, b) => a.localeCompare(b)),
     familyToItems
   }
+})
+
+// Lazy load airport names for display in catalog
+watchEffect(() => {
+  const airportCodes = catalogs.value.airports
+  airportCodes.forEach(async (code) => {
+    // Skip if already cached or currently loading
+    if (airportNames.value[code]) {
+      return
+    }
+    
+    try {
+      const info = await lookupAirport(code)
+      if (info && info.name) {
+        airportNames.value[code] = info.name
+      }
+    } catch (error) {
+      // Silently fail - will just show code without name
+      console.warn(`Failed to load airport name for ${code}:`, error)
+    }
+  })
 })
 
 // Aircraft registry for Ident dropdown - unique registrations with their make/model
