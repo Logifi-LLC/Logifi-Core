@@ -423,6 +423,7 @@
                               type="button"
                               :aria-expanded="familyOpenState[fam]"
                               @click="familyOpenState[fam] = !familyOpenState[fam]"
+                              @contextmenu.prevent="showRenameFamilyContextMenu($event, fam)"
                               :class="[
                                 'px-1 py-0.5 rounded',
                                 isDarkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-300'
@@ -2823,6 +2824,143 @@
       </div>
     </div>
 
+    <!-- Context Menu for Aircraft Family Rename -->
+    <div
+      v-if="contextMenuVisible"
+      class="context-menu-container fixed z-50"
+      :style="{ left: contextMenuX + 'px', top: contextMenuY + 'px' }"
+      @click.stop
+    >
+      <div
+        :class="[
+          'rounded-lg border shadow-lg py-1 min-w-[160px]',
+          isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'
+        ]"
+      >
+        <button
+          @click="openRenameFamilyModal"
+          :class="[
+            'w-full px-4 py-2 text-left text-sm transition-colors',
+            isDarkMode 
+              ? 'text-gray-200 hover:bg-gray-700' 
+              : 'text-gray-700 hover:bg-gray-100'
+          ]"
+        >
+          <div class="flex items-center gap-2">
+            <Icon name="ri:edit-line" :size="16" />
+            <span>Rename Family...</span>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Rename Aircraft Family Modal -->
+    <div
+      v-if="showRenameFamilyModal"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      @click.self="closeRenameFamilyModal"
+    >
+      <div
+        :class="[
+          'relative w-full max-w-md rounded-2xl border shadow-2xl transition-colors duration-300',
+          isDarkMode 
+            ? 'bg-gray-800 border-gray-700' 
+            : 'bg-gray-200 border-gray-300'
+        ]"
+        @click.stop
+      >
+        <div class="flex items-center justify-between p-6 border-b" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+          <h3 :class="['text-xl font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+            Rename Aircraft Family
+          </h3>
+          <button
+            @click="closeRenameFamilyModal"
+            :class="[
+              'p-1 rounded-lg transition-colors',
+              isDarkMode 
+                ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-300'
+            ]"
+            aria-label="Close"
+          >
+            <Icon name="ri:close-line" size="24" />
+          </button>
+        </div>
+        
+        <div class="p-6 space-y-4">
+          <div>
+            <div :class="['text-sm font-semibold font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+              Current Name
+            </div>
+            <div :class="['text-base font-quicksand', isDarkMode ? 'text-gray-200' : 'text-gray-700']">
+              {{ renameFamilyOldName }}
+            </div>
+            <div :class="['text-xs mt-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
+              {{ entriesToRenameCount }} entries will be updated
+            </div>
+          </div>
+
+          <div>
+            <label :class="['block text-sm font-semibold font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+              New Name
+            </label>
+            <input
+              v-model="renameFamilyNewName"
+              type="text"
+              :class="[
+                'w-full rounded-lg border px-3 py-2 text-base font-quicksand',
+                isDarkMode 
+                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500' 
+                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+              ]"
+              placeholder="Enter new family name"
+              @keyup.enter="confirmRenameFamily"
+              @keyup.escape="closeRenameFamilyModal"
+              autofocus
+            />
+          </div>
+
+          <div v-if="renameFamilyNewName.trim() && normalizeAircraftFamily(renameFamilyNewName.trim()) !== renameFamilyOldName" class="rounded-lg p-3" :class="[isDarkMode ? 'bg-gray-700/50' : 'bg-gray-100']">
+            <div :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              <span class="font-semibold">Note:</span> 
+              <span v-if="catalogs.families?.includes(normalizeAircraftFamily(renameFamilyNewName.trim()))">
+                This will merge with the existing "{{ normalizeAircraftFamily(renameFamilyNewName.trim()) }}" family.
+              </span>
+              <span v-else>
+                This will create a new family group.
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 p-6 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+          <button
+            @click="closeRenameFamilyModal"
+            :class="[
+              'px-4 py-2 rounded-lg font-semibold font-quicksand transition-colors',
+              isDarkMode 
+                ? 'text-gray-300 hover:bg-gray-700' 
+                : 'text-gray-700 hover:bg-gray-300'
+            ]"
+          >
+            Cancel
+          </button>
+          <button
+            @click="confirmRenameFamily"
+            :disabled="!renameFamilyNewName.trim() || renameFamilyNewName.trim() === renameFamilyOldName"
+            :class="[
+              'px-4 py-2 rounded-lg font-semibold font-quicksand transition-colors',
+              (!renameFamilyNewName.trim() || renameFamilyNewName.trim() === renameFamilyOldName)
+                ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-500 cursor-not-allowed')
+                : (isDarkMode ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-blue-600 text-white hover:bg-blue-700')
+            ]"
+          >
+            Rename
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Import Preview Modal -->
     <div
       v-if="showImportPreview && importPreviewStatistics && importPreviewMetadata"
@@ -5161,6 +5299,15 @@ const showCrewProfileModal = ref(false)
 const currentCrewName = ref<string>('')
 const crewProfiles = ref<Record<string, CrewProfile>>({})
 
+// Aircraft family rename modal
+const showRenameFamilyModal = ref(false)
+const renameFamilyOldName = ref<string>('')
+const renameFamilyNewName = ref<string>('')
+const contextMenuVisible = ref(false)
+const contextMenuX = ref(0)
+const contextMenuY = ref(0)
+const contextMenuFamilyName = ref<string>('')
+
 // Load crew profiles from localStorage
 function loadCrewProfiles(): void {
   if (!isBrowser) return
@@ -5724,6 +5871,94 @@ function closeAircraftModal(): void {
   currentAircraftInfo.value = null
   aircraftInfoError.value = null
 }
+
+// Aircraft family rename functions
+function showRenameFamilyContextMenu(event: MouseEvent, familyName: string): void {
+  event.preventDefault()
+  event.stopPropagation()
+  contextMenuX.value = event.clientX
+  contextMenuY.value = event.clientY
+  contextMenuFamilyName.value = familyName
+  contextMenuVisible.value = true
+}
+
+function closeContextMenu(): void {
+  contextMenuVisible.value = false
+  contextMenuFamilyName.value = ''
+}
+
+function openRenameFamilyModal(): void {
+  renameFamilyOldName.value = contextMenuFamilyName.value
+  renameFamilyNewName.value = contextMenuFamilyName.value
+  closeContextMenu()
+  showRenameFamilyModal.value = true
+}
+
+function closeRenameFamilyModal(): void {
+  showRenameFamilyModal.value = false
+  renameFamilyOldName.value = ''
+  renameFamilyNewName.value = ''
+}
+
+function renameAircraftFamily(oldFamilyName: string, newFamilyName: string): void {
+  if (!oldFamilyName || !newFamilyName || oldFamilyName.trim() === newFamilyName.trim()) {
+    return
+  }
+  
+  const trimmedNewName = newFamilyName.trim()
+  if (!trimmedNewName) {
+    return
+  }
+  
+  // Find all entries where normalizeAircraftFamily(entry.aircraftMakeModel) === oldFamilyName
+  const entriesToUpdate = logEntries.value.filter(entry => {
+    const normalized = normalizeAircraftFamily(entry.aircraftMakeModel)
+    return normalized === oldFamilyName
+  })
+  
+  if (entriesToUpdate.length === 0) {
+    return
+  }
+  
+  // Update all matching entries
+  logEntries.value = logEntries.value.map(entry => {
+    const normalized = normalizeAircraftFamily(entry.aircraftMakeModel)
+    if (normalized === oldFamilyName) {
+      return {
+        ...entry,
+        aircraftMakeModel: trimmedNewName
+      }
+    }
+    return entry
+  })
+  
+  // Note: logEntries is watched and auto-saves to localStorage
+  closeRenameFamilyModal()
+}
+
+function confirmRenameFamily(): void {
+  if (!renameFamilyOldName.value || !renameFamilyNewName.value) {
+    return
+  }
+  
+  const trimmedNewName = renameFamilyNewName.value.trim()
+  if (!trimmedNewName) {
+    return
+  }
+  
+  if (trimmedNewName === renameFamilyOldName.value) {
+    closeRenameFamilyModal()
+    return
+  }
+  
+  renameAircraftFamily(renameFamilyOldName.value, trimmedNewName)
+}
+
+// Computed: count of entries that will be renamed
+const entriesToRenameCount = computed(() => {
+  if (!renameFamilyOldName.value) return 0
+  return logEntries.value.filter(e => normalizeAircraftFamily(e.aircraftMakeModel) === renameFamilyOldName.value).length
+})
 
 async function showAirportInfo(airportCode: string): Promise<void> {
   showAirportModal.value = true
@@ -7099,6 +7334,10 @@ onMounted(() => {
     }
     if (showColumnSettings.value && !target.closest('.column-settings-container')) {
       showColumnSettings.value = false
+    }
+    // Close context menu when clicking outside
+    if (contextMenuVisible.value && !target.closest('.context-menu-container')) {
+      closeContextMenu()
     }
   }
   document.addEventListener('click', handleClickOutside)
