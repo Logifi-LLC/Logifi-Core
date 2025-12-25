@@ -2702,13 +2702,35 @@
         @click.stop
       >
         <div class="flex items-center justify-between p-6 border-b" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
-          <div class="flex items-center gap-3">
-            <div :class="['w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold', isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white']">
-              {{ currentCrewName.charAt(0).toUpperCase() }}
+          <div class="flex items-center gap-3 flex-1">
+            <div :class="['w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold flex-shrink-0', isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white']">
+              {{ (isEditingCrewName ? editingCrewName : currentCrewName).charAt(0).toUpperCase() }}
             </div>
-            <h3 :class="['text-xl font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
-              {{ currentCrewName }}
-            </h3>
+            <div class="flex-1 min-w-0">
+              <input
+                v-if="isEditingCrewName"
+                v-model="editingCrewName"
+                type="text"
+                :class="[
+                  'text-xl font-semibold font-quicksand w-full bg-transparent border-b-2 pb-1 focus:outline-none',
+                  isDarkMode 
+                    ? 'text-white border-blue-500 focus:border-blue-400' 
+                    : 'text-gray-900 border-blue-600 focus:border-blue-700'
+                ]"
+                @blur="saveCrewNameEdit"
+                @keyup.enter="saveCrewNameEdit"
+                @keyup.escape="cancelCrewNameEdit"
+                @click.stop
+                autofocus
+              />
+              <h3 
+                v-else
+                :class="['text-xl font-semibold font-quicksand cursor-pointer hover:opacity-80 transition-opacity', isDarkMode ? 'text-white' : 'text-gray-900']"
+                @click.stop="startEditingCrewName"
+              >
+                {{ currentCrewName }}
+              </h3>
+            </div>
           </div>
           <button
             @click="closeCrewProfileModal"
@@ -5298,6 +5320,8 @@ const airportInfoError = ref<string | null>(null)
 const showCrewProfileModal = ref(false)
 const currentCrewName = ref<string>('')
 const crewProfiles = ref<Record<string, CrewProfile>>({})
+const isEditingCrewName = ref(false)
+const editingCrewName = ref<string>('')
 
 // Aircraft family rename modal
 const showRenameFamilyModal = ref(false)
@@ -5351,6 +5375,60 @@ function updateCrewNotes(name: string, notes: string): void {
   crewProfiles.value[name].notes = notes
   crewProfiles.value[name].lastUpdated = new Date().toISOString()
   saveCrewProfiles()
+}
+
+// Rename crew member
+function renameCrewMember(oldName: string, newName: string): void {
+  if (!oldName || !newName || oldName.trim() === newName.trim()) {
+    return
+  }
+  
+  const trimmedNewName = newName.trim()
+  if (!trimmedNewName) {
+    return
+  }
+  
+  const oldNameLower = oldName.toLowerCase()
+  
+  // Find all entries where trainingElements (case-insensitive) matches the old name
+  const entriesToUpdate = logEntries.value.filter(entry => 
+    entry.trainingElements && entry.trainingElements.toLowerCase() === oldNameLower
+  )
+  
+  // Update all matching entries
+  logEntries.value = logEntries.value.map(entry => {
+    if (entry.trainingElements && entry.trainingElements.toLowerCase() === oldNameLower) {
+      return {
+        ...entry,
+        trainingElements: trimmedNewName
+      }
+    }
+    return entry
+  })
+  
+  // Update the crew profile key (move profile from old name to new name)
+  // Find profile by case-insensitive key match
+  const profileKey = Object.keys(crewProfiles.value).find(
+    key => key.toLowerCase() === oldNameLower
+  )
+  
+  if (profileKey && crewProfiles.value[profileKey]) {
+    const profile = crewProfiles.value[profileKey]
+    crewProfiles.value[trimmedNewName] = {
+      ...profile,
+      name: trimmedNewName,
+      lastUpdated: new Date().toISOString()
+    }
+    delete crewProfiles.value[profileKey]
+    saveCrewProfiles()
+  }
+  
+  // Update currentCrewName if it matches the old name
+  if (currentCrewName.value.toLowerCase() === oldNameLower) {
+    currentCrewName.value = trimmedNewName
+  }
+  
+  // Note: logEntries is watched and auto-saves to localStorage
 }
 
 // Category/Class normalization and autofill helpers
@@ -6009,6 +6087,37 @@ function showCrewProfile(name: string): void {
 function closeCrewProfileModal(): void {
   showCrewProfileModal.value = false
   currentCrewName.value = ''
+  isEditingCrewName.value = false
+  editingCrewName.value = ''
+}
+
+// Start editing crew name
+function startEditingCrewName(): void {
+  isEditingCrewName.value = true
+  editingCrewName.value = currentCrewName.value
+}
+
+// Save crew name changes
+function saveCrewNameEdit(): void {
+  if (!editingCrewName.value.trim()) {
+    // Prevent empty names, cancel edit instead
+    cancelCrewNameEdit()
+    return
+  }
+  
+  const trimmedNewName = editingCrewName.value.trim()
+  if (trimmedNewName !== currentCrewName.value) {
+    renameCrewMember(currentCrewName.value, trimmedNewName)
+  }
+  
+  isEditingCrewName.value = false
+  editingCrewName.value = ''
+}
+
+// Cancel crew name editing
+function cancelCrewNameEdit(): void {
+  isEditingCrewName.value = false
+  editingCrewName.value = ''
 }
 
 // Computed: Flights with the current crew member
