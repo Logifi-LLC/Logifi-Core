@@ -4109,6 +4109,16 @@ function findFieldValue(rawEntry: Record<string, any>, possibleNames: string[]):
   return ''
 }
 
+// Convert a name string to proper title case (e.g., "CHASE ALBRIGHT" -> "Chase Albright")
+function toTitleCase(str: string): string {
+  if (!str || !str.trim()) return str
+  return str
+    .toLowerCase()
+    .split(/\s+/)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
 // Extract base aircraft model name from full model string
 // Examples: "C-172 S G-1000, Cessna Skyhawk SP" -> "C-172"
 //           "PA-28-181 Archer II" -> "PA-28"
@@ -4342,9 +4352,83 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
           pilot = findFieldValue(rawEntry, ['Training Elements', 'training elements', 'TrainingElements', 'trainingElements'])
         }
         
-        return pilot || ''
+        return toTitleCase(pilot || '')
       })(),
-      trainingInstructor: (rawEntry['Training Instructor'] || rawEntry.trainingInstructor || '').trim(),
+      trainingInstructor: (() => {
+        // First check if there's an explicit Training Instructor field
+        const explicitInstructor = (rawEntry['Training Instructor'] || rawEntry.trainingInstructor || '').trim()
+        if (explicitInstructor) {
+          return toTitleCase(explicitInstructor)
+        }
+        
+        // For Logten imports, determine job based on which crew field the pilot name appears in
+        // We need to determine the pilot name again (same logic as trainingElements)
+        const picCrew = findFieldValue(rawEntry, ['flight_selectedCrewPIC'])
+        const sicCrew = findFieldValue(rawEntry, ['flight_selectedCrewSIC'])
+        const instructorCrew = findFieldValue(rawEntry, ['flight_selectedCrewInstructor'])
+        const studentCrew = findFieldValue(rawEntry, ['flight_selectedCrewStudent'])
+        const picTime = normalizeNumber(rawEntry.flight_pic || rawEntry.PIC || rawEntry.pic || 0) || 0
+        const sicTime = normalizeNumber(rawEntry.flight_sic || rawEntry.SIC || rawEntry.sic || 0) || 0
+        
+        // Get the logged-in user's name from pilot profile
+        const userName = (pilotProfile.name || '').trim()
+        
+        // Determine which pilot name we're showing (same logic as trainingElements)
+        let pilotName = ''
+        
+        if (userName) {
+          const userIsPIC = picCrew && picCrew.trim().toLowerCase() === userName.toLowerCase()
+          const userIsSIC = sicCrew && sicCrew.trim().toLowerCase() === userName.toLowerCase()
+          
+          if (userIsPIC && sicCrew) {
+            pilotName = sicCrew
+          } else if (userIsSIC && picCrew) {
+            pilotName = picCrew
+          } else if (!userIsPIC && !userIsSIC) {
+            if (picTime > 0 && picCrew) {
+              pilotName = picCrew
+            } else if (sicTime > 0 && sicCrew) {
+              pilotName = sicCrew
+            }
+          }
+        } else {
+          if (picTime > 0 && picCrew) {
+            pilotName = picCrew
+          } else if (sicTime > 0 && sicCrew) {
+            pilotName = sicCrew
+          }
+        }
+        
+        // Fallbacks (simplified - just check for name, not all the complex logic)
+        if (!pilotName) {
+          pilotName = findFieldValue(rawEntry, ['First Officer Name', 'first officer name', 'FirstOfficerName', 'firstOfficerName'])
+        }
+        if (!pilotName) {
+          pilotName = findFieldValue(rawEntry, ['Training Elements', 'training elements', 'TrainingElements', 'trainingElements'])
+        }
+        
+        if (!pilotName) return ''
+        
+        // Normalize names for comparison (case-insensitive)
+        const normalizedPilotName = pilotName.trim().toLowerCase()
+        
+        // Check in priority order: Instructor, Student, PIC (Captain), SIC (First Officer)
+        if (instructorCrew && instructorCrew.trim().toLowerCase() === normalizedPilotName) {
+          return 'Instructor'
+        }
+        if (studentCrew && studentCrew.trim().toLowerCase() === normalizedPilotName) {
+          return 'Student'
+        }
+        if (picCrew && picCrew.trim().toLowerCase() === normalizedPilotName) {
+          return 'Captain'
+        }
+        if (sicCrew && sicCrew.trim().toLowerCase() === normalizedPilotName) {
+          return 'First Officer'
+        }
+        
+        // No match found, return empty
+        return ''
+      })(),
       instructorCertificate: (rawEntry['Instructor Certificate'] || rawEntry.instructorCertificate || '').trim(),
       flightConditions: [],
       remarks: findFieldValue(rawEntry, ['Remarks', 'remarks', 'Comments', 'comments', 'COMMENTS']) || '',
@@ -4501,6 +4585,16 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
       }
     }
     
+    // For Logten imports, if flight is marked as cross-country (flight_crossCountry > 0),
+    // set cross-country time to match total time
+    if (isLogtenImport && entry.flightTime.total) {
+      const logtenXCTime = normalizeNumber(rawEntry.flight_crossCountry)
+      if (logtenXCTime !== null && logtenXCTime > 0) {
+        // Logten marked it as cross-country, so XC time should equal total time
+        entry.flightTime.crossCountry = entry.flightTime.total
+      }
+    }
+    
     if (out || off || on || inTime) {
       entry.oooi = {
         out: out,
@@ -4546,10 +4640,49 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
 }
 
 function isDuplicateEntry(entry: LogEntry, existingEntries: LogEntry[]): boolean {
-  return existingEntries.some(existing => 
-    existing.date === entry.date && 
-    existing.registration.toUpperCase() === entry.registration.toUpperCase()
-  )
+  return existingEntries.some(existing => {
+    // Must match date and registration
+    if (existing.date !== entry.date || 
+        existing.registration.toUpperCase() !== entry.registration.toUpperCase()) {
+      return false
+    }
+    
+    // Check departure and destination airports (normalize UNKNOWN and empty strings)
+    const existingDep = (existing.departure || 'UNKNOWN').trim().toUpperCase()
+    const entryDep = (entry.departure || 'UNKNOWN').trim().toUpperCase()
+    const existingDest = (existing.destination || 'UNKNOWN').trim().toUpperCase()
+    const entryDest = (entry.destination || 'UNKNOWN').trim().toUpperCase()
+    
+    // If departure or destination differs (and not both UNKNOWN), they're different flights
+    if (existingDep !== entryDep || existingDest !== entryDest) {
+      // Exception: if both are UNKNOWN, we'll fall through to check times
+      if (!(existingDep === 'UNKNOWN' && entryDep === 'UNKNOWN' && 
+            existingDest === 'UNKNOWN' && entryDest === 'UNKNOWN')) {
+        return false
+      }
+    }
+    
+    // If we have OOOI times for both, compare OUT time as tiebreaker
+    const existingOut = existing.oooi?.out
+    const entryOut = entry.oooi?.out
+    if (existingOut && entryOut) {
+      // If OUT times differ, they're different flights (e.g., morning vs afternoon)
+      return existingOut === entryOut
+    }
+    
+    // If OOOI not available, compare total flight time as tiebreaker
+    const existingTotal = existing.flightTime.total
+    const entryTotal = entry.flightTime.total
+    if (existingTotal !== null && existingTotal !== undefined &&
+        entryTotal !== null && entryTotal !== undefined) {
+      // Only consider duplicates if total times match exactly (conservative approach)
+      return existingTotal === entryTotal
+    }
+    
+    // If we don't have OOOI or total times, and airports matched (or both UNKNOWN),
+    // consider them duplicates (conservative approach - matches original behavior for edge cases)
+    return true
+  })
 }
 
 function calculateImportStatistics(entries: LogEntry[]): { statistics: ImportStatistics; validEntries: LogEntry[]; duplicates: LogEntry[]; errors: { entry: LogEntry; message: string }[] } {
