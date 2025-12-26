@@ -229,6 +229,20 @@
                       <Icon name="ri:file-code-line" size="16" />
                       Export as JSON
                     </button>
+                    <button
+                      type="button"
+                      @click="showForm8710Modal = true"
+                      :disabled="logEntries.length === 0"
+                      :class="[
+                        'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
+                        logEntries.length === 0
+                          ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
+                          : (isDarkMode ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-purple-600 hover:bg-purple-700 text-white')
+                      ]"
+                    >
+                      <Icon name="ri:file-pdf-line" size="16" />
+                      Generate 8710 Form
+                    </button>
                   </div>
                   <p :class="['text-xs mt-2', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
                     {{ logEntries.length === 0 ? 'No entries to export' : `${logEntries.length} ${logEntries.length === 1 ? 'entry' : 'entries'} available` }}
@@ -2271,6 +2285,154 @@
                 ]"
               ></textarea>
             </div>
+
+            <!-- 8710 Form Fields -->
+            <div class="pt-4 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
+              <h3 :class="['text-sm font-semibold uppercase tracking-wide mb-4', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+                FAA Form 8710 Information
+              </h3>
+              
+              <div class="space-y-4">
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <div class="space-y-2">
+                    <label :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                      Date of Birth (MM/DD/YYYY)
+                    </label>
+                    <input
+                      v-model="pilotProfile.dateOfBirth"
+                      type="text"
+                      placeholder="MM/DD/YYYY"
+                      maxlength="10"
+                      :class="[
+                        'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
+                        isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                      ]"
+                    />
+                  </div>
+                  <div class="space-y-2">
+                    <label :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                      Place of Birth
+                    </label>
+                    <input
+                      v-model="pilotProfile.placeOfBirth"
+                      type="text"
+                      placeholder="City, State or City, Country"
+                      :class="[
+                        'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
+                        isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                      ]"
+                    />
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <label :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                    Residential Address
+                  </label>
+                  <input
+                    v-model="pilotProfile.residentialAddress"
+                    type="text"
+                    placeholder="Street Address"
+                    :class="[
+                      'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200 mb-2',
+                      isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                    ]"
+                  />
+                  <div class="grid gap-2 sm:grid-cols-3">
+                    <input
+                      v-model="pilotProfile.residentialCity"
+                      type="text"
+                      placeholder="City"
+                      :class="[
+                        'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
+                        isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                      ]"
+                    />
+                    <input
+                      v-model="pilotProfile.residentialState"
+                      type="text"
+                      placeholder="State"
+                      maxlength="2"
+                      :class="[
+                        'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200 uppercase',
+                        isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                      ]"
+                    />
+                    <input
+                      v-model="pilotProfile.residentialZip"
+                      type="text"
+                      placeholder="ZIP"
+                      maxlength="10"
+                      :class="[
+                        'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
+                        isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                      ]"
+                    />
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <label :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                    Mailing Address <span class="text-xs normal-case font-normal">(if different from residential)</span>
+                  </label>
+                  <input
+                    v-model="pilotProfile.mailingAddress"
+                    type="text"
+                    placeholder="Street Address (optional)"
+                    :class="[
+                      'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200 mb-2',
+                      isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                    ]"
+                  />
+                  <div class="grid gap-2 sm:grid-cols-3">
+                    <input
+                      v-model="pilotProfile.mailingCity"
+                      type="text"
+                      placeholder="City"
+                      :class="[
+                        'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
+                        isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                      ]"
+                    />
+                    <input
+                      v-model="pilotProfile.mailingState"
+                      type="text"
+                      placeholder="State"
+                      maxlength="2"
+                      :class="[
+                        'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200 uppercase',
+                        isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                      ]"
+                    />
+                    <input
+                      v-model="pilotProfile.mailingZip"
+                      type="text"
+                      placeholder="ZIP"
+                      maxlength="10"
+                      :class="[
+                        'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
+                        isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                      ]"
+                    />
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <label :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                    Certificate Number <span class="text-xs normal-case font-normal">(if applicable)</span>
+                  </label>
+                  <input
+                    v-model="pilotProfile.certificateNumber"
+                    type="text"
+                    placeholder="e.g. 12345678"
+                    :class="[
+                      'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
+                      isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                    ]"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
           <div class="lg:col-span-2 space-y-6">
@@ -2469,6 +2631,413 @@
                   </p>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Form 8710 Generator Modal -->
+    <div
+      v-if="showForm8710Modal"
+      class="fixed inset-0 z-40 flex items-start justify-center px-4 py-8"
+    >
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showForm8710Modal = false"></div>
+      <div
+        :class="[
+          'relative w-full max-w-4xl overflow-y-auto rounded-3xl border shadow-2xl transition-colors duration-300 max-h-[90vh] p-6 sm:p-8 space-y-6',
+          isDarkMode 
+            ? 'bg-gray-900 border-gray-700 text-gray-100' 
+            : 'bg-gray-100 border-gray-200 text-gray-900'
+        ]"
+      >
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-2xl font-semibold font-quicksand">
+              Generate FAA Form 8710-1
+            </h2>
+            <p :class="['text-sm mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+              Pre-fill form with your logbook data
+            </p>
+          </div>
+          <button
+            @click="showForm8710Modal = false"
+            :class="[
+              'rounded-full p-2 transition-colors',
+              isDarkMode ? 'text-gray-400 hover:text-white hover:bg-gray-800' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+            ]"
+            aria-label="Close"
+          >
+            <Icon name="ri:close-line" size="22" />
+          </button>
+        </div>
+
+        <!-- Warnings -->
+        <div
+          v-if="form8710Warnings.length > 0"
+          :class="[
+            'rounded-xl border p-4 space-y-2',
+            isDarkMode ? 'bg-yellow-900/20 border-yellow-700' : 'bg-yellow-50 border-yellow-200'
+          ]"
+        >
+          <div class="flex items-start gap-2">
+            <Icon name="ri:alert-line" size="20" :class="isDarkMode ? 'text-yellow-400' : 'text-yellow-600'" />
+            <div class="flex-1">
+              <p :class="['text-sm font-semibold mb-1', isDarkMode ? 'text-yellow-300' : 'text-yellow-800']">
+                Please review before generating:
+              </p>
+              <ul class="list-disc list-inside space-y-1">
+                <li
+                  v-for="(warning, idx) in form8710Warnings"
+                  :key="idx"
+                  :class="['text-sm', isDarkMode ? 'text-yellow-200' : 'text-yellow-700']"
+                >
+                  {{ warning }}
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preview Section -->
+        <div
+          :class="[
+            'rounded-2xl border p-6 space-y-4',
+            isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-100 border-gray-200'
+          ]"
+        >
+          <h3 :class="['text-lg font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
+            Preview Totals
+          </h3>
+          
+          <!-- All-Time Totals -->
+          <div>
+            <h4 :class="['text-sm font-semibold mb-2', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              All-Time Totals
+            </h4>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Total Time</p>
+                <p class="text-lg font-semibold">{{ formatNumber(form8710PreviewData?.sectionII?.allTime?.totalTime || 0) }}</p>
+              </div>
+              <div>
+                <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">PIC Time</p>
+                <p class="text-lg font-semibold">{{ formatNumber(form8710PreviewData?.sectionII?.allTime?.picTime || 0) }}</p>
+              </div>
+              <div>
+                <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">SIC Time</p>
+                <p class="text-lg font-semibold">{{ formatNumber(form8710PreviewData?.sectionII?.allTime?.sicTime || 0) }}</p>
+              </div>
+              <div>
+                <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Cross Country</p>
+                <p class="text-lg font-semibold">{{ formatNumber(form8710PreviewData?.sectionII?.allTime?.crossCountryTime || 0) }}</p>
+              </div>
+              <div>
+                <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Instrument</p>
+                <p class="text-lg font-semibold">{{ formatNumber(form8710PreviewData?.sectionII?.allTime?.instrumentTime || 0) }}</p>
+              </div>
+              <div>
+                <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Night</p>
+                <p class="text-lg font-semibold">{{ formatNumber(form8710PreviewData?.sectionII?.allTime?.nightTime || 0) }}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Categories Summary -->
+          <div v-if="form8710PreviewData?.sectionIII?.categories && form8710PreviewData.sectionIII.categories.length > 0">
+            <h4 :class="['text-sm font-semibold mb-2', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              Categories ({{ form8710PreviewData?.sectionIII?.categories?.length || 0 }})
+            </h4>
+            <div class="space-y-2 max-h-48 overflow-y-auto">
+              <div
+                v-for="category in (form8710PreviewData?.sectionIII?.categories || [])"
+                :key="category.category"
+                :class="[
+                  'rounded-lg border p-3',
+                  isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                ]"
+              >
+                <div class="flex items-center justify-between">
+                  <span :class="['text-sm font-medium', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
+                    {{ getCategoryDisplayName(category.category) }}
+                  </span>
+                  <span :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                    {{ category.totalFlights }} flight{{ category.totalFlights !== 1 ? 's' : '' }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex gap-3 justify-end">
+          <button
+            @click="showForm8710Modal = false"
+            :class="[
+              'px-4 py-2 rounded-lg font-quicksand transition-colors',
+              isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+            ]"
+          >
+            Cancel
+          </button>
+          <button
+            @click="showForm8710View = true; showForm8710Modal = false"
+            :class="[
+              'px-4 py-2 rounded-lg font-quicksand transition-colors flex items-center gap-2',
+              isDarkMode ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-purple-600 hover:bg-purple-700 text-white'
+            ]"
+          >
+            <Icon name="ri:file-list-3-line" size="18" />
+            View Form
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Form 8710 Full View -->
+    <div
+      v-if="showForm8710View"
+      class="fixed inset-0 z-50 overflow-y-auto"
+      :class="isDarkMode ? 'bg-gray-900' : 'bg-gray-100'"
+    >
+      <div class="min-h-screen p-4 sm:p-6 lg:p-8">
+        <div class="max-w-6xl mx-auto">
+          <!-- Header -->
+          <div class="flex items-center justify-between mb-6 print:hidden">
+            <div>
+              <h1 :class="['text-3xl font-bold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+                FAA Form 8710-1
+              </h1>
+              <p :class="['text-sm mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                Airman Certificate and/or Rating Application
+              </p>
+            </div>
+            <div class="flex gap-3">
+              <button
+                @click="printForm8710"
+                :class="[
+                  'px-4 py-2 rounded-lg font-quicksand transition-colors flex items-center gap-2',
+                  isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
+                ]"
+              >
+                <Icon name="ri:printer-line" size="18" />
+                Print
+              </button>
+              <button
+                @click="showForm8710View = false"
+                :class="[
+                  'px-4 py-2 rounded-lg font-quicksand transition-colors',
+                  isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                ]"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+
+          <!-- Form Content -->
+          <div
+            :class="[
+              'rounded-2xl border p-6 sm:p-8 space-y-8 print:p-0 print:border-0 print:rounded-none print:shadow-none',
+              isDarkMode ? 'bg-gray-800 border-gray-700 print:bg-white print:text-black' : 'bg-white border-gray-300'
+            ]"
+            id="form8710-content"
+          >
+            <!-- Section I: Application Information -->
+            <div class="space-y-4">
+              <h2 :class="['text-xl font-bold border-b pb-2', isDarkMode ? 'text-white border-gray-600 print:text-black print:border-gray-400' : 'text-gray-900 border-gray-300']">
+                I. APPLICATION INFORMATION
+              </h2>
+              
+              <div class="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
+                    Name
+                  </label>
+                  <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-900 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-gray-50 border-gray-300 text-gray-900']">
+                    {{ form8710PreviewData?.sectionI?.name || '_________________' }}
+                  </div>
+                </div>
+                
+                <div>
+                  <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
+                    Date of Birth (MM/DD/YYYY)
+                  </label>
+                  <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-900 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-gray-50 border-gray-300 text-gray-900']">
+                    {{ form8710PreviewData?.sectionI?.dateOfBirth || '_________________' }}
+                  </div>
+                </div>
+                
+                <div>
+                  <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
+                    Place of Birth
+                  </label>
+                  <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-900 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-gray-50 border-gray-300 text-gray-900']">
+                    {{ form8710PreviewData?.sectionI?.placeOfBirth || '_________________' }}
+                  </div>
+                </div>
+                
+                <div v-if="form8710PreviewData?.sectionI?.certificateNumber">
+                  <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
+                    Certificate Number
+                  </label>
+                  <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-900 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-gray-50 border-gray-300 text-gray-900']">
+                    {{ form8710PreviewData.sectionI.certificateNumber }}
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
+                  Residential Address
+                </label>
+                <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-900 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-gray-50 border-gray-300 text-gray-900']">
+                  {{ buildAddress(form8710PreviewData?.sectionI, 'residential') || '_________________' }}
+                </div>
+              </div>
+              
+              <div v-if="hasMailingAddress(form8710PreviewData?.sectionI)">
+                <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
+                  Mailing Address (if different)
+                </label>
+                <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-900 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-gray-50 border-gray-300 text-gray-900']">
+                  {{ buildAddress(form8710PreviewData?.sectionI, 'mailing') }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Section II: Recent Experience -->
+            <div class="space-y-4">
+              <h2 :class="['text-xl font-bold border-b pb-2', isDarkMode ? 'text-white border-gray-600 print:text-black print:border-gray-400' : 'text-gray-900 border-gray-300']">
+                II. RECENT EXPERIENCE
+              </h2>
+              
+              <div class="overflow-x-auto">
+                <table class="w-full border-collapse">
+                  <thead>
+                    <tr :class="isDarkMode ? 'bg-gray-700 print:bg-gray-200' : 'bg-gray-100'">
+                      <th :class="['px-3 py-2 text-left text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">Period</th>
+                      <th :class="['px-3 py-2 text-right text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">Total Time</th>
+                      <th :class="['px-3 py-2 text-right text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">PIC</th>
+                      <th :class="['px-3 py-2 text-right text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">SIC</th>
+                      <th :class="['px-3 py-2 text-right text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">Cross Country</th>
+                      <th :class="['px-3 py-2 text-right text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">Instrument</th>
+                      <th :class="['px-3 py-2 text-right text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">Night</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="period in recentExperiencePeriods" :key="period.key">
+                      <td :class="['px-3 py-2 border font-medium', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ period.label }}
+                      </td>
+                      <td :class="['px-3 py-2 border text-right font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(form8710PreviewData?.sectionII?.[period.key]?.totalTime || 0) }}
+                      </td>
+                      <td :class="['px-3 py-2 border text-right font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(form8710PreviewData?.sectionII?.[period.key]?.picTime || 0) }}
+                      </td>
+                      <td :class="['px-3 py-2 border text-right font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(form8710PreviewData?.sectionII?.[period.key]?.sicTime || 0) }}
+                      </td>
+                      <td :class="['px-3 py-2 border text-right font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(form8710PreviewData?.sectionII?.[period.key]?.crossCountryTime || 0) }}
+                      </td>
+                      <td :class="['px-3 py-2 border text-right font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(form8710PreviewData?.sectionII?.[period.key]?.instrumentTime || 0) }}
+                      </td>
+                      <td :class="['px-3 py-2 border text-right font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(form8710PreviewData?.sectionII?.[period.key]?.nightTime || 0) }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Section III: Record of Pilot Time -->
+            <div class="space-y-4">
+              <h2 :class="['text-xl font-bold border-b pb-2', isDarkMode ? 'text-white border-gray-600 print:text-black print:border-gray-400' : 'text-gray-900 border-gray-300']">
+                III. RECORD OF PILOT TIME
+              </h2>
+              
+              <div class="overflow-x-auto">
+                <table class="w-full border-collapse text-xs">
+                  <thead>
+                    <tr :class="isDarkMode ? 'bg-gray-700 print:bg-gray-200' : 'bg-gray-100'">
+                      <th :class="['px-2 py-2 text-left text-xs font-semibold uppercase border sticky left-0 z-10', isDarkMode ? 'border-gray-600 text-gray-300 bg-gray-700 print:text-black print:bg-gray-200 print:border-gray-400' : 'border-gray-300 text-gray-700 bg-gray-100']">Category</th>
+                      <th :class="['px-2 py-2 text-center text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">Flights</th>
+                      <th :class="['px-2 py-2 text-center text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">Instr Rcv</th>
+                      <th :class="['px-2 py-2 text-center text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">Solo</th>
+                      <th :class="['px-2 py-2 text-center text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">PIC</th>
+                      <th :class="['px-2 py-2 text-center text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">SIC</th>
+                      <th :class="['px-2 py-2 text-center text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">XC Instr</th>
+                      <th :class="['px-2 py-2 text-center text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">XC Solo</th>
+                      <th :class="['px-2 py-2 text-center text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">XC PIC</th>
+                      <th :class="['px-2 py-2 text-center text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">XC SIC</th>
+                      <th :class="['px-2 py-2 text-center text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">Inst</th>
+                      <th :class="['px-2 py-2 text-center text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">Night</th>
+                      <th :class="['px-2 py-2 text-center text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">Night PIC</th>
+                      <th :class="['px-2 py-2 text-center text-xs font-semibold uppercase border', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">Night SIC</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="category in (form8710PreviewData?.sectionIII?.categories || [])"
+                      :key="category.category"
+                      :class="isDarkMode ? 'hover:bg-gray-700/50 print:hover:bg-transparent' : 'hover:bg-gray-50'"
+                    >
+                      <td :class="['px-2 py-2 border font-medium sticky left-0 z-10', isDarkMode ? 'border-gray-600 text-gray-300 bg-gray-800 print:text-black print:bg-white print:border-gray-400' : 'border-gray-300 text-gray-700 bg-white']">
+                        {{ getCategoryDisplayName(category.category) }}
+                      </td>
+                      <td :class="['px-2 py-2 border text-center font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ category.totalFlights }}
+                      </td>
+                      <td :class="['px-2 py-2 border text-center font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(category.instructionReceived) }}
+                      </td>
+                      <td :class="['px-2 py-2 border text-center font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(category.solo) }}
+                      </td>
+                      <td :class="['px-2 py-2 border text-center font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(category.pic) }}
+                      </td>
+                      <td :class="['px-2 py-2 border text-center font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(category.sic) }}
+                      </td>
+                      <td :class="['px-2 py-2 border text-center font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(category.crossCountryInstructionReceived) }}
+                      </td>
+                      <td :class="['px-2 py-2 border text-center font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(category.crossCountrySolo) }}
+                      </td>
+                      <td :class="['px-2 py-2 border text-center font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(category.crossCountryPic) }}
+                      </td>
+                      <td :class="['px-2 py-2 border text-center font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(category.crossCountrySic) }}
+                      </td>
+                      <td :class="['px-2 py-2 border text-center font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(category.instrument) }}
+                      </td>
+                      <td :class="['px-2 py-2 border text-center font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(category.nightPic + category.nightSic + category.nightInstructionReceived) }}
+                      </td>
+                      <td :class="['px-2 py-2 border text-center font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(category.nightPic) }}
+                      </td>
+                      <td :class="['px-2 py-2 border text-center font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
+                        {{ formatTime(category.nightSic) }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Footer Note -->
+            <div :class="['text-xs mt-8 pt-4 border-t print:hidden', isDarkMode ? 'text-gray-400 border-gray-600' : 'text-gray-500 border-gray-300']">
+              <p>This form is generated by Logifi. Review all fields before submitting to FAA.</p>
             </div>
           </div>
         </div>
@@ -3348,6 +3917,8 @@ import { useAirportLookup } from '~/composables/useAirportLookup'
 import type { AirportInfo } from '~/composables/useAirportLookup'
 import { calculateNightTime } from '~/utils/nightTimeCalculator'
 import { DateTime } from 'luxon'
+import { calculateSectionII, calculateSectionIII } from '~/utils/form8710Calculator'
+import type { Form8710Data, AircraftCategory8710 } from '~/utils/form8710Types'
 
 const roleOptions = ['PIC', 'SIC', 'Dual Received', 'Solo', 'Safety Pilot'] as const
 const oooiFields: (keyof OOOITimes)[] = ['out', 'off', 'on', 'in']
@@ -3398,6 +3969,18 @@ interface PilotProfilePrefs {
   certificates: string
   flightGoals: string
   notes: string
+  // 8710 Form fields
+  dateOfBirth: string
+  placeOfBirth: string
+  residentialAddress: string
+  residentialCity: string
+  residentialState: string
+  residentialZip: string
+  mailingAddress: string
+  mailingCity: string
+  mailingState: string
+  mailingZip: string
+  certificateNumber: string
 }
 
 interface PilotProfileStats {
@@ -3423,7 +4006,19 @@ const pilotProfileDefaults: PilotProfilePrefs = {
   homeBase: '',
   certificates: '',
   flightGoals: '',
-  notes: ''
+  notes: '',
+  // 8710 Form fields
+  dateOfBirth: '',
+  placeOfBirth: '',
+  residentialAddress: '',
+  residentialCity: '',
+  residentialState: '',
+  residentialZip: '',
+  mailingAddress: '',
+  mailingCity: '',
+  mailingState: '',
+  mailingZip: '',
+  certificateNumber: ''
 }
 
 // Available metrics for Totals Overview customization
@@ -3965,6 +4560,21 @@ const isDarkMode = ref(true)
 const pilotProfile = reactive<PilotProfilePrefs>({ ...pilotProfileDefaults })
 const pilotProfileLoaded = ref(false)
 const csvFileInput = ref<HTMLInputElement | null>(null)
+
+// Form 8710 state
+const showForm8710Modal = ref(false)
+const showForm8710View = ref(false)
+const form8710PreviewData = ref<Form8710Data | null>(null)
+const form8710Warnings = computed<string[]>(() => {
+  const warnings: string[] = []
+  
+  if (!pilotProfile.name) warnings.push('Name is missing in Pilot Profile')
+  if (!pilotProfile.dateOfBirth) warnings.push('Date of Birth is missing in Pilot Profile')
+  if (!pilotProfile.placeOfBirth) warnings.push('Place of Birth is missing in Pilot Profile')
+  if (!pilotProfile.residentialAddress) warnings.push('Residential Address is missing in Pilot Profile')
+  
+  return warnings
+})
 const jsonFileInput = ref<HTMLInputElement | null>(null)
 const isDragOverImport = ref(false)
 
@@ -4248,6 +4858,111 @@ function exportToJSON(): void {
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
 }
+
+// Form 8710 generation functions
+function prepareForm8710Data(): Form8710Data | null {
+  try {
+    // Calculate sections
+    const sectionII = calculateSectionII(logEntries.value)
+    const sectionIII = calculateSectionIII(logEntries.value)
+
+    // Build Section I from pilot profile
+    const sectionI = {
+      name: pilotProfile.name || '',
+      dateOfBirth: pilotProfile.dateOfBirth || '',
+      placeOfBirth: pilotProfile.placeOfBirth || '',
+      residentialAddress: pilotProfile.residentialAddress || '',
+      residentialCity: pilotProfile.residentialCity || '',
+      residentialState: pilotProfile.residentialState || '',
+      residentialZip: pilotProfile.residentialZip || '',
+      mailingAddress: pilotProfile.mailingAddress || undefined,
+      mailingCity: pilotProfile.mailingCity || undefined,
+      mailingState: pilotProfile.mailingState || undefined,
+      mailingZip: pilotProfile.mailingZip || undefined,
+      certificateNumber: pilotProfile.certificateNumber || undefined
+    }
+
+    return {
+      sectionI,
+      sectionII,
+      sectionIII
+    }
+  } catch (error) {
+    console.error('Error preparing 8710 form data:', error)
+    return null
+  }
+}
+
+// Helper functions for form display
+const recentExperiencePeriods = computed<Array<{ key: 'last6Months' | 'last12Months' | 'last24Months' | 'allTime'; label: string }>>(() => [
+  { key: 'last6Months', label: 'Last 6 Months' },
+  { key: 'last12Months', label: 'Last 12 Months' },
+  { key: 'last24Months', label: 'Last 24 Months' },
+  { key: 'allTime', label: 'All Time' }
+])
+
+function formatTime(hours: number): string {
+  if (hours === 0) return '—'
+  return hours.toFixed(1)
+}
+
+function buildAddress(sectionI: Form8710Data['sectionI'] | undefined, type: 'residential' | 'mailing'): string {
+  if (!sectionI) return ''
+  
+  if (type === 'residential') {
+    const parts = [
+      sectionI.residentialAddress,
+      sectionI.residentialCity,
+      sectionI.residentialState,
+      sectionI.residentialZip
+    ].filter(Boolean)
+    return parts.join(', ')
+  } else {
+    const parts = [
+      sectionI.mailingAddress,
+      sectionI.mailingCity,
+      sectionI.mailingState,
+      sectionI.mailingZip
+    ].filter(Boolean)
+    return parts.join(', ')
+  }
+}
+
+function hasMailingAddress(sectionI: Form8710Data['sectionI'] | undefined): boolean {
+  if (!sectionI) return false
+  return !!(sectionI.mailingAddress || sectionI.mailingCity || sectionI.mailingState || sectionI.mailingZip)
+}
+
+function printForm8710(): void {
+  window.print()
+}
+
+function getCategoryDisplayName(category: AircraftCategory8710): string {
+  const labels: Record<AircraftCategory8710, string> = {
+    'airplane-sel': 'Airplane SEL',
+    'airplane-mel': 'Airplane MEL',
+    'airplane-ses': 'Airplane SES',
+    'airplane-mes': 'Airplane MES',
+    'rotorcraft-heli': 'Rotorcraft Helicopter',
+    'rotorcraft-gyro': 'Rotorcraft Gyroplane',
+    'glider': 'Glider',
+    'lta-balloon': 'LTA Balloon',
+    'lta-airship': 'LTA Airship',
+    'powered-lift': 'Powered Lift',
+    'ffs': 'Full Flight Simulator',
+    'ftd': 'Flight Training Device',
+    'atd': 'Aviation Training Device'
+  }
+  return labels[category] || category
+}
+
+// Watch for modal open to calculate preview data
+watch(showForm8710Modal, (isOpen) => {
+  if (isOpen) {
+    const formData = prepareForm8710Data()
+    form8710PreviewData.value = formData
+  }
+})
 
 // Import functions
 function parseCSVLine(line: string, delimiter: string = ','): string[] {
