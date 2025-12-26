@@ -1427,7 +1427,7 @@
                     {{ label }}
                   </div>
                     <input 
-                      :value="inlineEditEntry.flightTime[key] === null || inlineEditEntry.flightTime[key] === undefined ? '' : inlineEditEntry.flightTime[key] === 0 ? '0.0' : String(inlineEditEntry.flightTime[key])"
+                      :value="inlineEditEntry.flightTime[key] === null || inlineEditEntry.flightTime[key] === undefined || inlineEditEntry.flightTime[key] === 0 ? '' : String(inlineEditEntry.flightTime[key])"
                       type="text"
                       inputmode="decimal"
                     :placeholder="'0.0'"
@@ -1892,7 +1892,7 @@
                       {{ field.key === 'total' ? 'Total Time' : field.key === 'pic' ? 'PIC' : field.key === 'sic' ? 'SIC' : field.key === 'dual' ? 'Dual R' : field.key === 'solo' ? 'Solo' : field.key === 'night' ? 'Night' : field.key === 'actualInstrument' ? 'Actual' : field.key === 'dualGiven' ? 'Dual G' : field.key === 'crossCountry' ? 'XC' : field.key === 'simulatedInstrument' ? 'Hood' : field.label }}
                     </div>
                     <input
-                      :value="newEntry.flightTime[field.key] === null || newEntry.flightTime[field.key] === undefined ? '' : newEntry.flightTime[field.key] === 0 ? '0.0' : String(newEntry.flightTime[field.key])"
+                      :value="newEntry.flightTime[field.key] === null || newEntry.flightTime[field.key] === undefined || newEntry.flightTime[field.key] === 0 ? '' : String(newEntry.flightTime[field.key])"
                       type="text"
                       inputmode="decimal"
                       :placeholder="'0.0'"
