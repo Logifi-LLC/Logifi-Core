@@ -2149,7 +2149,7 @@
       <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showPilotProfile = false"></div>
       <div
         :class="[
-          'relative w-full max-w-5xl overflow-y-auto rounded-3xl border shadow-2xl transition-colors duration-300 max-h-[90vh] p-6 sm:p-8 space-y-6',
+          'relative w-full max-w-7xl overflow-y-auto rounded-3xl border shadow-2xl transition-colors duration-300 max-h-[90vh] p-6 sm:p-8 space-y-6',
           isDarkMode 
             ? 'bg-gray-900 border-gray-700 text-gray-100' 
             : 'bg-gray-100 border-gray-200 text-gray-900'
@@ -2296,7 +2296,7 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-2">
                     <label :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                      Date of Birth (MM/DD/YYYY)
+                      Date of Birth
                     </label>
                     <input
                       v-model="pilotProfile.dateOfBirth"
@@ -3919,6 +3919,7 @@ import { calculateNightTime } from '~/utils/nightTimeCalculator'
 import { DateTime } from 'luxon'
 import { calculateSectionII, calculateSectionIII } from '~/utils/form8710Calculator'
 import type { Form8710Data, AircraftCategory8710 } from '~/utils/form8710Types'
+import { supabase } from '~/lib/supabase'
 
 const roleOptions = ['PIC', 'SIC', 'Dual Received', 'Solo', 'Safety Pilot'] as const
 const oooiFields: (keyof OOOITimes)[] = ['out', 'off', 'on', 'in']
@@ -8211,6 +8212,46 @@ function loadPersistedEntries(): void {
   }
 }
 
+// Test Supabase connection (can be called from browser console: window.testSupabase())
+async function testSupabaseConnection() {
+  try {
+    console.log('🔍 Testing Supabase connection...')
+    console.log('Supabase client:', supabase)
+    
+    // Test connection by querying log_entries table
+    const { data, error, count } = await supabase
+      .from('log_entries')
+      .select('*', { count: 'exact', head: true })
+    
+    if (error) {
+      console.error('❌ Supabase connection failed:', error)
+      console.error('Error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      })
+      alert(`Connection failed: ${error.message}\n\nCheck console for details.`)
+      return { success: false, error }
+    }
+    
+    console.log('✅ Supabase connection successful!')
+    console.log('Table exists, row count:', count)
+    alert(`✅ Supabase connection successful!\n\nTable accessible. Row count: ${count ?? 0}`)
+    return { success: true, data, count }
+  } catch (err) {
+    console.error('❌ Supabase test error:', err)
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+    alert(`Test error: ${errorMessage}\n\nCheck console for details.`)
+    return { success: false, error: err }
+  }
+}
+
+// Expose test function to window for easy console access
+if (typeof window !== 'undefined') {
+  (window as any).testSupabase = testSupabaseConnection
+}
+
 onMounted(() => {
   loadPersistedEntries()
   loadThemePreference()
@@ -9231,3 +9272,53 @@ function sortConditionsInFixedOrder(conditions: string[]): string[] {
   transform: translateX(100%);
 }
 </style>
+
+<style>
+/* Override browser autofill styles to maintain consistent appearance */
+/* Using box-shadow trick to override autofill background color */
+/* Light mode - default */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+textarea:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px rgb(243 244 246) inset !important;
+  -webkit-text-fill-color: rgb(17 24 39) !important;
+  transition: background-color 5000s ease-in-out 0s, color 5000s ease-in-out 0s;
+  box-shadow: 0 0 0 1000px rgb(243 244 246) inset !important;
+}
+
+/* Dark mode autofill override - target inputs inside dark mode containers */
+.bg-gray-900 input:-webkit-autofill,
+.bg-gray-900 input:-webkit-autofill:hover,
+.bg-gray-900 input:-webkit-autofill:focus,
+.bg-gray-900 input:-webkit-autofill:active,
+.bg-gray-900 textarea:-webkit-autofill,
+.bg-gray-900 textarea:-webkit-autofill:hover,
+.bg-gray-900 textarea:-webkit-autofill:focus,
+.bg-gray-900 textarea:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px rgb(31 41 55) inset !important;
+  -webkit-text-fill-color: rgb(255 255 255) !important;
+  box-shadow: 0 0 0 1000px rgb(31 41 55) inset !important;
+}
+
+/* Also handle inputs with dark mode background classes directly */
+input.bg-gray-800:-webkit-autofill,
+input.bg-gray-800:-webkit-autofill:hover,
+input.bg-gray-800:-webkit-autofill:focus,
+input.bg-gray-800:-webkit-autofill:active,
+textarea.bg-gray-800:-webkit-autofill,
+textarea.bg-gray-800:-webkit-autofill:hover,
+textarea.bg-gray-800:-webkit-autofill:focus,
+textarea.bg-gray-800:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px rgb(31 41 55) inset !important;
+  -webkit-text-fill-color: rgb(255 255 255) !important;
+  box-shadow: 0 0 0 1000px rgb(31 41 55) inset !important;
+}
+</style>
+
+
+
