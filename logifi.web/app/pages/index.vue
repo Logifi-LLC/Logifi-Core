@@ -5,6 +5,41 @@
     isDarkMode ? 'bg-gray-900' : 'bg-gray-300'
   ]"
 >
+  <!-- Auth Modal -->
+  <AuthModal
+    v-if="showAuthModal"
+    :is-dark-mode="isDarkMode"
+    @close="showAuthModal = false"
+    @success="showAuthModal = false"
+  />
+
+  <!-- Migration Progress (if migrating) -->
+  <div
+    v-if="isMigrating"
+    :class="[
+      'fixed top-20 left-1/2 transform -translate-x-1/2 z-50 rounded-lg border p-4 shadow-2xl max-w-md',
+      isDarkMode 
+        ? 'bg-gray-800 border-gray-700' 
+        : 'bg-gray-100 border-gray-300'
+    ]"
+  >
+    <div class="flex items-center gap-3">
+      <Icon name="ri:loader-4-line" size="24" class="animate-spin" :class="isDarkMode ? 'text-blue-400' : 'text-blue-600'" />
+      <div class="flex-1">
+        <div :class="['text-sm font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+          Migrating your data...
+        </div>
+        <div :class="['text-xs mt-1 font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+          {{ migrationProgress.step === 'entries' ? `Entries: ${migrationProgress.current}/${migrationProgress.total}` : '' }}
+          {{ migrationProgress.step === 'profile' ? 'Migrating profile...' : '' }}
+          {{ migrationProgress.step === 'crew' ? `Crew profiles: ${migrationProgress.current}` : '' }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content (only show when authenticated) -->
+  <div v-if="isAuthenticated && !authLoading">
       <header>
       <div
         :class="[
@@ -50,6 +85,20 @@
           >
             <Icon name="ri:user-star-line" size="18" class="mr-2" />
             Pilot Profile
+          </button>
+          <button
+            type="button"
+            @click="handleLogout"
+            :class="[
+              'inline-flex items-center px-5 py-2 rounded-lg text-sm sm:text-base font-quicksand font-medium transition-all duration-200',
+              isDarkMode 
+                ? 'bg-red-700 hover:bg-red-600 text-white' 
+                : 'bg-red-200 hover:bg-red-300 text-red-900'
+            ]"
+            aria-label="Sign out"
+          >
+            <Icon name="ri:logout-box-line" size="18" class="mr-2" />
+            Sign Out
           </button>
           <div class="relative settings-container">
             <button
@@ -3889,6 +3938,21 @@
       </div>
     </div>
   </div>
+  <!-- End Main Content -->
+  
+  <!-- Loading State -->
+  <div
+    v-else-if="authLoading"
+    class="flex items-center justify-center min-h-screen"
+    :class="isDarkMode ? 'bg-gray-900' : 'bg-gray-300'"
+  >
+    <div class="text-center">
+      <Icon name="ri:loader-4-line" size="48" class="animate-spin mx-auto mb-4" :class="isDarkMode ? 'text-gray-400' : 'text-gray-600'" />
+      <p :class="['text-lg font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Loading...</p>
+    </div>
+  </div>
+  <!-- End root div -->
+</div>
 </template>
 
 <script setup lang="ts">
@@ -3920,6 +3984,62 @@ import { DateTime } from 'luxon'
 import { calculateSectionII, calculateSectionIII } from '~/utils/form8710Calculator'
 import type { Form8710Data, AircraftCategory8710 } from '~/utils/form8710Types'
 import { supabase } from '~/lib/supabase'
+import { useAuth } from '~/composables/useAuth'
+import AuthModal from '~/components/AuthModal.vue'
+import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '~/utils/migrateLocalStorage'
+
+// Authentication setup
+const { user, isAuthenticated, isLoading: authLoading, signOut: authSignOut } = useAuth()
+const showAuthModal = ref(false)
+const isMigrating = ref(false)
+const migrationProgress = ref({ step: '', current: 0, total: 0 })
+
+// Logout function
+const handleLogout = async () => {
+  await authSignOut()
+  showAuthModal.value = true
+  logEntries.value = []
+}
+
+// Watch for authentication changes and trigger migration on first login
+watch(isAuthenticated, async (authenticated) => {
+  if (authenticated && user.value) {
+    // Check if migration is needed
+    if (!hasMigrationCompleted()) {
+      isMigrating.value = true
+      try {
+        const result = await migrateLocalStorageToSupabase(
+          user.value.id,
+          (step, current, total) => {
+            migrationProgress.value = { step, current, total }
+          }
+        )
+        
+        if (result.success) {
+          console.log('Migration completed:', result)
+          // Reload entries from Supabase after migration
+          await loadEntries()
+        } else {
+          console.error('Migration failed:', result.error)
+        }
+      } catch (error) {
+        console.error('Migration error:', error)
+      } finally {
+        isMigrating.value = false
+      }
+    }
+  } else if (!authenticated) {
+    // Show auth modal when not authenticated
+    showAuthModal.value = true
+  }
+}, { immediate: true })
+
+// Show auth modal if not authenticated after loading
+watch(authLoading, (loading) => {
+  if (!loading && !isAuthenticated.value) {
+    showAuthModal.value = true
+  }
+})
 
 const roleOptions = ['PIC', 'SIC', 'Dual Received', 'Solo', 'Safety Pilot'] as const
 const oooiFields: (keyof OOOITimes)[] = ['out', 'off', 'on', 'in']
@@ -7079,9 +7199,46 @@ function cancelEditing(): void {
   successMessage.value = null
 }
 
-function toggleEntryFlag(entry: LogEntry): void {
-  entry.flagged = !entry.flagged
-  // The watch on logEntries will automatically save to localStorage
+async function toggleEntryFlag(entry: LogEntry): Promise<void> {
+  const newFlaggedValue = !entry.flagged
+  entry.flagged = newFlaggedValue
+  
+  // Save to Supabase if authenticated
+  if (isAuthenticated.value && user.value) {
+    try {
+      const { data, error } = await (supabase
+        .from('log_entries') as any)
+        .update({ flagged: newFlaggedValue })
+        .eq('id', entry.id)
+        .select()
+      
+      if (error) {
+        console.error('Error updating flagged status:', error)
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        // Revert the change if save failed
+        entry.flagged = !newFlaggedValue
+        alert(`Failed to save flagged status: ${error.message}\n\nCheck console for details.`)
+        return
+      }
+      
+      // Success - the update worked
+      console.log('Flagged status updated successfully:', newFlaggedValue)
+    } catch (error) {
+      console.error('Error updating flagged status:', error)
+      // Revert the change if save failed
+      entry.flagged = !newFlaggedValue
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      alert(`Failed to save flagged status: ${errorMessage}\n\nCheck console for details.`)
+      return
+    }
+  }
+  
+  // If not authenticated, the watch on logEntries will save to localStorage
 }
 
 function validateEntry(entry: EditableLogEntry): string | null {
@@ -8035,7 +8192,7 @@ watch(
   }
 )
 
-function submitEntry(): void {
+async function submitEntry(): Promise<void> {
   validationError.value = null
   successMessage.value = null
 
@@ -8090,25 +8247,94 @@ function submitEntry(): void {
   console.log('[SaveEntry] FlightTime being saved:', baseEntry.flightTime)
   console.log('[SaveEntry] Night time value:', baseEntry.flightTime.night)
 
-  if (editingEntryId.value) {
-    const targetId = editingEntryId.value
-    logEntries.value = sortEntriesByDateAndOOOI(
-      logEntries.value.map((entry) => (entry.id === targetId ? { ...baseEntry, id: targetId } : entry))
-    )
-    console.log('[SaveEntry] Entry updated. Night time in saved entry:', 
-      logEntries.value.find(e => e.id === targetId)?.flightTime.night
-    )
-    successMessage.value = 'Entry updated.'
-  } else {
-    const entryToStore: LogEntry = {
-      ...baseEntry,
-      id: generateEntryId()
+  // Save to Supabase if authenticated, otherwise save to localStorage
+  if (isAuthenticated.value && user.value) {
+    try {
+      const dbEntry: any = {
+        user_id: user.value.id,
+        date: baseEntry.date,
+        role: baseEntry.role,
+        aircraft_category_class: baseEntry.aircraftCategoryClass,
+        category_class_time: baseEntry.categoryClassTime,
+        aircraft_make_model: baseEntry.aircraftMakeModel,
+        registration: baseEntry.registration,
+        flight_number: baseEntry.flightNumber,
+        departure: baseEntry.departure,
+        destination: baseEntry.destination,
+        route: baseEntry.route,
+        training_elements: baseEntry.trainingElements || null,
+        training_instructor: baseEntry.trainingInstructor || null,
+        instructor_certificate: baseEntry.instructorCertificate || null,
+        flight_conditions: baseEntry.flightConditions,
+        remarks: baseEntry.remarks || null,
+        flight_time: baseEntry.flightTime,
+        performance: baseEntry.performance,
+        oooi: baseEntry.oooi || null,
+        flagged: false,
+        is_imported: false
+      }
+
+      if (editingEntryId.value) {
+        // Update existing entry
+        const { error } = await (supabase
+          .from('log_entries') as any)
+          .update(dbEntry)
+          .eq('id', editingEntryId.value)
+        
+        if (error) throw error
+        
+        // Update local state
+        const targetId = editingEntryId.value
+        logEntries.value = sortEntriesByDateAndOOOI(
+          logEntries.value.map((entry) => (entry.id === targetId ? { ...baseEntry, id: targetId } : entry))
+        )
+        successMessage.value = 'Entry updated.'
+      } else {
+        // Insert new entry
+        const { data, error } = await (supabase
+          .from('log_entries') as any)
+          .insert(dbEntry)
+          .select()
+          .single()
+        
+        if (error) throw error
+        
+        // Add to local state
+        const entryToStore: LogEntry = {
+          ...baseEntry,
+          id: (data as any).id
+        }
+        logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
+        successMessage.value = 'Entry saved.'
+      }
+    } catch (error) {
+      console.error('Error saving entry to Supabase:', error)
+      successMessage.value = 'Error saving entry. Please try again.'
+      validationError.value = error instanceof Error ? error.message : 'Failed to save entry'
+      return
     }
-    logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
-    console.log('[SaveEntry] Entry saved. Night time in saved entry:', 
-      logEntries.value.find(e => e.id === entryToStore.id)?.flightTime.night
-    )
-    successMessage.value = 'Entry saved locally. Remember to archive signatures once the feature is available.'
+  } else {
+    // Fallback to localStorage
+    if (editingEntryId.value) {
+      const targetId = editingEntryId.value
+      logEntries.value = sortEntriesByDateAndOOOI(
+        logEntries.value.map((entry) => (entry.id === targetId ? { ...baseEntry, id: targetId } : entry))
+      )
+      console.log('[SaveEntry] Entry updated. Night time in saved entry:', 
+        logEntries.value.find(e => e.id === targetId)?.flightTime.night
+      )
+      successMessage.value = 'Entry updated.'
+    } else {
+      const entryToStore: LogEntry = {
+        ...baseEntry,
+        id: generateEntryId()
+      }
+      logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
+      console.log('[SaveEntry] Entry saved. Night time in saved entry:', 
+        logEntries.value.find(e => e.id === entryToStore.id)?.flightTime.night
+      )
+      successMessage.value = 'Entry saved locally. Remember to archive signatures once the feature is available.'
+    }
   }
 
   resetForm()
@@ -8119,24 +8345,45 @@ function submitEntry(): void {
   }
 }
 
-function removeEntry(id: string): void {
+async function removeEntry(id: string): Promise<void> {
+  // Delete from Supabase if authenticated
+  if (isAuthenticated.value && user.value) {
+    try {
+      const { error } = await (supabase
+        .from('log_entries') as any)
+        .delete()
+        .eq('id', id)
+      
+      if (error) {
+        console.error('Error deleting entry from Supabase:', error)
+        alert(`Failed to delete entry: ${error.message}`)
+        return
+      }
+    } catch (error) {
+      console.error('Error deleting entry:', error)
+      alert(`Failed to delete entry: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      return
+    }
+  }
+  
+  // Update local state (remove from UI)
   logEntries.value = logEntries.value.filter((entry) => entry.id !== id)
 }
 
-function confirmAndDeleteEditing(): void {
+async function confirmAndDeleteEditing(): Promise<void> {
   if (!editingEntryId.value) return
   const proceed = window.confirm('Delete this entry? This action cannot be undone.')
   if (!proceed) return
-  removeEntry(editingEntryId.value)
+  await removeEntry(editingEntryId.value)
   resetForm()
   successMessage.value = null
   validationError.value = null
 }
 
-function confirmAndDeleteEntry(id: string): void {
+async function confirmAndDeleteEntry(id: string): Promise<void> {
   const proceed = window.confirm('Delete this entry? This action cannot be undone.')
   if (!proceed) return
-  removeEntry(id)
+  await removeEntry(id)
   // If we're editing this entry, cancel editing
   if (editingEntryId.value === id) {
     resetForm()
@@ -8148,6 +8395,108 @@ function confirmAndDeleteEntry(id: string): void {
     inlineEditEntry.value = null
   }
 }
+// Load entries from Supabase (when authenticated) or localStorage (fallback)
+async function loadEntries(): Promise<void> {
+  if (!isBrowser) return
+  
+  // If authenticated, load from Supabase
+  if (isAuthenticated.value && user.value) {
+    try {
+      // Clear existing entries before loading from Supabase to prevent duplicates
+      logEntries.value = []
+      
+      const { data, error } = await (supabase
+        .from('log_entries') as any)
+        .select('*')
+        .order('date', { ascending: false })
+      
+      if (error) {
+        console.error('Error loading entries from Supabase:', error)
+        // Fallback to localStorage only if we have no Supabase entries
+        loadPersistedEntries()
+        return
+      }
+      
+      if (data && data.length > 0) {
+        // Convert database format to LogEntry format
+        logEntries.value = data.map((dbEntry: any) => {
+          const entry: LogEntry = {
+            id: dbEntry.id,
+            date: dbEntry.date,
+            role: dbEntry.role,
+            aircraftCategoryClass: dbEntry.aircraft_category_class,
+            categoryClassTime: dbEntry.category_class_time,
+            aircraftMakeModel: dbEntry.aircraft_make_model,
+            registration: dbEntry.registration,
+            flightNumber: dbEntry.flight_number,
+            departure: dbEntry.departure,
+            destination: dbEntry.destination,
+            route: dbEntry.route || '',
+            trainingElements: dbEntry.training_elements || '',
+            trainingInstructor: dbEntry.training_instructor || '',
+            instructorCertificate: dbEntry.instructor_certificate || '',
+            flightConditions: dbEntry.flight_conditions || [],
+            remarks: dbEntry.remarks || '',
+            flightTime: dbEntry.flight_time as FlightTimeBreakdown,
+            performance: dbEntry.performance as PerformanceMetrics,
+            oooi: dbEntry.oooi as OOOITimes | undefined,
+            flagged: dbEntry.flagged || false
+          }
+          
+          // Normalize flight time values
+          const normalizedFlightTime: FlightTimeBreakdown = {
+            ...createEmptyFlightTime()
+          }
+          flightTimeFields.forEach((field) => {
+            const rawValue = entry.flightTime?.[field.key]
+            normalizedFlightTime[field.key] = normalizeNumber(rawValue)
+          })
+          entry.flightTime = normalizedFlightTime
+          
+          // Normalize performance values
+          const normalizedPerformance: PerformanceMetrics = {
+            ...createEmptyPerformance()
+          }
+          performanceFields.forEach((field) => {
+            if (field.key === 'approachType') {
+              normalizedPerformance[field.key] = (entry.performance?.[field.key] as string | null) ?? null
+            } else {
+              const rawValue = entry.performance?.[field.key]
+              if (typeof rawValue === 'string') {
+                const parsed = parseFloat(rawValue)
+                normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
+              } else {
+                normalizedPerformance[field.key] = rawValue ?? null
+              }
+            }
+          })
+          entry.performance = normalizedPerformance
+          
+          return entry
+        })
+        
+        console.log('[LoadEntries] Loaded', logEntries.value.length, 'entries from Supabase.')
+        return
+      } else {
+        // No entries in Supabase, but we're authenticated - check if migration is needed
+        // Don't load from localStorage if we're authenticated (migration will handle it)
+        console.log('[LoadEntries] No entries in Supabase yet.')
+        return
+      }
+    } catch (err) {
+      console.error('Error loading entries from Supabase:', err)
+      // Only fallback to localStorage if we're not authenticated
+      if (!isAuthenticated.value) {
+        loadPersistedEntries()
+      }
+      return
+    }
+  }
+  
+  // Not authenticated - load from localStorage
+  loadPersistedEntries()
+}
+
 function loadPersistedEntries(): void {
   if (!isBrowser) {
     return
@@ -8250,10 +8599,27 @@ async function testSupabaseConnection() {
 // Expose test function to window for easy console access
 if (typeof window !== 'undefined') {
   (window as any).testSupabase = testSupabaseConnection
+  
+  // Expose migration reset function for cleanup
+  ;(window as any).resetMigration = async () => {
+    if (!isAuthenticated.value || !user.value) {
+      console.error('You must be logged in to reset migration')
+      return
+    }
+    const { resetMigration } = await import('~/utils/migrateLocalStorage')
+    const result = await resetMigration(user.value.id)
+    if (result.success) {
+      alert('Migration reset complete! Refreshing page...')
+      window.location.reload()
+    } else {
+      alert(`Error: ${result.error}`)
+    }
+  }
 }
 
-onMounted(() => {
-  loadPersistedEntries()
+onMounted(async () => {
+  // Wait for auth to initialize, then load entries
+  await loadEntries()
   loadThemePreference()
   loadClockPrefs()
   loadSelectedTotalsMetrics()
@@ -8262,7 +8628,7 @@ onMounted(() => {
   loadCrewProfiles()
   // Normalize and autofill aircraft category/class labels on load
   normalizeAndAutofillCategories()
-  if (logEntries.value.length === 0) {
+  if (logEntries.value.length === 0 && isAuthenticated.value) {
     // Ensure inline edit is closed when auto-opening Add Entry form
     expandedEntryId.value = null
     inlineEditEntry.value = null

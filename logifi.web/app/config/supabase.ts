@@ -3,7 +3,8 @@
 // With ssr: false, runtimeConfig is the proper way to access env vars
 
 // Get config from runtimeConfig (Nuxt's way - reads from .env automatically)
-function getSupabaseConfig() {
+// This must be called lazily (not at module load time) to work with Nuxt's context
+export function getSupabaseConfig() {
   const config = useRuntimeConfig()
   const url = config.public?.supabaseUrl
   const anonKey = config.public?.supabaseAnonKey
@@ -30,13 +31,5 @@ After updating .env, restart your dev server!`)
   }
   
   return { url, anonKey }
-}
-
-// Get config - runtimeConfig is the source of truth for Nuxt 3
-export const supabaseConfig = getSupabaseConfig()
-
-// Debug in dev (minimal logging now that it's working)
-if (process.dev) {
-  console.log('✅ Supabase Config loaded from .env via runtimeConfig')
 }
 
