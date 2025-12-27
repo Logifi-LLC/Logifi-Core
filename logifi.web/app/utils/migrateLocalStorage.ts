@@ -150,6 +150,334 @@ export const resetMigration = async (userId: string): Promise<{ success: boolean
 }
 
 /**
+ * Merge duplicate crew profiles (case-insensitive)
+ * Updates all log entries to use the canonical name and deletes duplicates
+ */
+export const mergeDuplicateCrewProfiles = async (
+  userId: string,
+  canonicalName: string,
+  duplicateName: string,
+  updateLogEntries: (oldName: string, newName: string) => Promise<void>
+): Promise<{ success: boolean; entriesUpdated: number; error?: string }> => {
+  if (typeof window === 'undefined') {
+    return { success: false, entriesUpdated: 0, error: 'Not in browser environment' }
+  }
+  
+  try {
+    // Get both profiles
+    const { data: profiles, error: fetchError } = await supabase
+      .from('crew_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .in('name', [canonicalName, duplicateName])
+    
+    if (fetchError) {
+      return { success: false, entriesUpdated: 0, error: fetchError.message }
+    }
+    
+    if (!profiles || profiles.length === 0) {
+      return { success: false, entriesUpdated: 0, error: 'Profiles not found' }
+    }
+    
+    // Find the canonical and duplicate profiles
+    const canonicalProfile = profiles.find(p => p.name === canonicalName)
+    const duplicateProfile = profiles.find(p => p.name === duplicateName)
+    
+    if (!canonicalProfile || !duplicateProfile) {
+      return { success: false, entriesUpdated: 0, error: 'One or both profiles not found' }
+    }
+    
+    // Merge notes (combine non-empty notes)
+    const mergedNotes = [
+      canonicalProfile.notes,
+      duplicateProfile.notes
+    ].filter(n => n && n.trim()).join('\n\n')
+    
+    // Update canonical profile with merged data
+    const { error: updateError } = await supabase
+      .from('crew_profiles')
+      .update({
+        notes: mergedNotes || null,
+        certificate_number: canonicalProfile.certificate_number || duplicateProfile.certificate_number || null,
+        certificate_type: canonicalProfile.certificate_type || duplicateProfile.certificate_type || null
+      })
+      .eq('id', canonicalProfile.id)
+    
+    if (updateError) {
+      return { success: false, entriesUpdated: 0, error: updateError.message }
+    }
+    
+    // Update all log entries that reference the duplicate name
+    await updateLogEntries(duplicateName, canonicalName)
+    
+    // Delete the duplicate profile
+    const { error: deleteError } = await supabase
+      .from('crew_profiles')
+      .delete()
+      .eq('id', duplicateProfile.id)
+    
+    if (deleteError) {
+      console.warn('Failed to delete duplicate profile:', deleteError)
+      // Don't fail the whole operation if delete fails
+    }
+    
+    console.log(`[MergeDuplicateCrewProfiles] Merged "${duplicateName}" into "${canonicalName}"`)
+    
+    return { success: true, entriesUpdated: 0 } // entriesUpdated would need to be tracked by updateLogEntries
+  } catch (error) {
+    console.error('Error merging duplicate crew profiles:', error)
+    return { success: false, entriesUpdated: 0, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}
+
+/**
+ * Find and list all duplicate crew profiles (case-insensitive)
+ */
+export const findDuplicateCrewProfiles = async (userId: string): Promise<{ duplicates: Array<{ names: string[] }>, error?: string }> => {
+  if (typeof window === 'undefined') {
+    return { duplicates: [], error: 'Not in browser environment' }
+  }
+  
+  try {
+    const { data: profiles, error } = await supabase
+      .from('crew_profiles')
+      .select('name')
+      .eq('user_id', userId)
+    
+    if (error) {
+      return { duplicates: [], error: error.message }
+    }
+    
+    if (!profiles || profiles.length === 0) {
+      return { duplicates: [] }
+    }
+    
+    // Group by case-insensitive name
+    const nameGroups = new Map<string, string[]>()
+    profiles.forEach((p: any) => {
+      const lowerName = p.name.toLowerCase()
+      if (!nameGroups.has(lowerName)) {
+        nameGroups.set(lowerName, [])
+      }
+      nameGroups.get(lowerName)!.push(p.name)
+    })
+    
+    // Find groups with multiple entries (duplicates)
+    const duplicates = Array.from(nameGroups.values())
+      .filter(names => names.length > 1)
+      .map(names => ({ names }))
+    
+    return { duplicates }
+  } catch (error) {
+    console.error('Error finding duplicate crew profiles:', error)
+    return { duplicates: [], error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}
+
+/**
+ * Extract unique crew names from log entries and migrate them to crew_profiles
+ * This ensures all crew members mentioned in log entries have profiles
+ */
+export const migrateCrewFromLogEntries = async (userId: string, logEntries: any[]): Promise<{ success: boolean; migrated: number; error?: string }> => {
+  if (typeof window === 'undefined') {
+    return { success: false, migrated: 0, error: 'Not in browser environment' }
+  }
+  
+  try {
+    // Extract unique crew names from log entries
+    const crewNames = new Set<string>()
+    logEntries.forEach(entry => {
+      if (entry.trainingElements && entry.trainingElements.trim()) {
+        crewNames.add(entry.trainingElements.trim())
+      }
+    })
+    
+    console.log(`[MigrateCrewFromLogEntries] Found ${crewNames.size} unique crew names in log entries`)
+    
+    if (crewNames.size === 0) {
+      return { success: true, migrated: 0 }
+    }
+    
+    // Get existing crew profiles from Supabase
+    const { data: existing } = await supabase
+      .from('crew_profiles')
+      .select('name')
+      .eq('user_id', userId)
+    
+    const existingNames = new Set(existing?.map((p: any) => p.name) || [])
+    console.log(`[MigrateCrewFromLogEntries] Found ${existingNames.size} existing crew profiles in Supabase`)
+    
+    // Filter out names that already exist
+    const namesToMigrate = Array.from(crewNames).filter(name => !existingNames.has(name))
+    console.log(`[MigrateCrewFromLogEntries] Need to migrate ${namesToMigrate.length} new crew profiles`)
+    
+    if (namesToMigrate.length === 0) {
+      return { success: true, migrated: 0 }
+    }
+    
+    // Create profiles for each crew name
+    const profiles = namesToMigrate.map(name => ({
+      user_id: userId,
+      name: name,
+      certificate_number: null,
+      certificate_type: null,
+      notes: null
+    }))
+    
+    // Insert profiles one by one to see which ones fail
+    let successCount = 0
+    let failCount = 0
+    const errors: string[] = []
+    
+    for (const profile of profiles) {
+      const { error } = await supabase
+        .from('crew_profiles')
+        .upsert(profile, { onConflict: 'user_id,name' })
+      
+      if (error) {
+        console.error(`[MigrateCrewFromLogEntries] Failed to migrate "${profile.name}":`, error)
+        errors.push(`${profile.name}: ${error.message}`)
+        failCount++
+      } else {
+        successCount++
+      }
+    }
+    
+    console.log(`[MigrateCrewFromLogEntries] Migration complete: ${successCount} succeeded, ${failCount} failed`)
+    if (errors.length > 0) {
+      console.error('[MigrateCrewFromLogEntries] Errors:', errors)
+    }
+    
+    if (failCount > 0) {
+      return { success: false, migrated: successCount, error: `${failCount} profiles failed to migrate. Check console for details.` }
+    }
+    
+    return { success: true, migrated: successCount }
+  } catch (error) {
+    console.error('Error migrating crew from log entries:', error)
+    return { success: false, migrated: 0, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}
+
+/**
+ * Re-migrate crew profiles - useful if some were missed
+ * This will upsert all crew profiles from localStorage to Supabase
+ */
+export const remigrateCrewProfiles = async (userId: string): Promise<{ success: boolean; migrated: number; error?: string }> => {
+  if (typeof window === 'undefined') {
+    return { success: false, migrated: 0, error: 'Not in browser environment' }
+  }
+  
+  try {
+    const stored = window.localStorage.getItem(CREW_PROFILES_STORAGE_KEY)
+    if (!stored) {
+      return { success: false, migrated: 0, error: 'No crew profiles in localStorage' }
+    }
+    
+    const crewProfiles: Record<string, CrewProfile> = JSON.parse(stored)
+    if (!crewProfiles || typeof crewProfiles !== 'object') {
+      return { success: false, migrated: 0, error: 'Invalid crew profiles data' }
+    }
+    
+    const profileEntries = Object.entries(crewProfiles)
+    console.log(`[ReMigrateCrewProfiles] Found ${profileEntries.length} crew profiles in localStorage`)
+    
+    // Get existing crew profiles from Supabase to see what's already there
+    const { data: existing } = await supabase
+      .from('crew_profiles')
+      .select('name')
+      .eq('user_id', userId)
+    
+    const existingNames = new Set(existing?.map((p: any) => p.name) || [])
+    console.log(`[ReMigrateCrewProfiles] Found ${existingNames.size} existing crew profiles in Supabase`)
+    
+    // Convert to Supabase format - preserve the key as a unique identifier
+    // Use the key (which is unique) combined with name to ensure we don't lose entries
+    const profiles = profileEntries.map(([key, profile]) => {
+      // Use the profile.name if it exists and is different from key, otherwise use key
+      // This ensures we preserve all entries even if names are similar
+      const profileName = profile.name || key
+      return {
+        user_id: userId,
+        name: profileName.trim(), // Trim whitespace
+        certificate_number: profile.certificateNumber || null,
+        certificate_type: profile.certificateType || null,
+        notes: profile.notes || null,
+        // Store the original key in notes if name differs, for debugging
+        _originalKey: key !== profileName ? key : undefined
+      }
+    }).filter(p => p.name && p.name.length > 0) // Filter out empty names
+    
+    console.log(`[ReMigrateCrewProfiles] Prepared ${profiles.length} profiles to migrate`)
+    console.log(`[ReMigrateCrewProfiles] Profile names:`, profiles.map(p => p.name))
+    
+    // Check for duplicates
+    const nameCounts = new Map<string, number>()
+    profiles.forEach(p => {
+      const normalizedName = p.name.toLowerCase().trim()
+      nameCounts.set(normalizedName, (nameCounts.get(normalizedName) || 0) + 1)
+    })
+    const duplicates = Array.from(nameCounts.entries()).filter(([_, count]) => count > 1)
+    if (duplicates.length > 0) {
+      console.warn(`[ReMigrateCrewProfiles] Warning: Found ${duplicates.length} duplicate names (case-insensitive):`, duplicates.map(([name]) => name))
+      // Show which profiles have duplicate names
+      duplicates.forEach(([normalizedName]) => {
+        const matching = profiles.filter(p => p.name.toLowerCase().trim() === normalizedName)
+        console.warn(`  - "${normalizedName}": ${matching.length} entries`, matching.map(p => ({ name: p.name, key: p._originalKey })))
+      })
+    }
+    
+    // Remove the debug field before inserting
+    const profilesToInsert = profiles.map(({ _originalKey, ...rest }) => rest)
+    
+    // Insert profiles one by one to see which ones fail
+    let successCount = 0
+    let failCount = 0
+    const errors: string[] = []
+    
+    for (const profile of profilesToInsert) {
+      const { error } = await supabase
+        .from('crew_profiles')
+        .upsert(profile, { onConflict: 'user_id,name' })
+      
+      if (error) {
+        console.error(`[ReMigrateCrewProfiles] Failed to migrate "${profile.name}":`, error)
+        errors.push(`${profile.name}: ${error.message}`)
+        failCount++
+      } else {
+        successCount++
+      }
+    }
+    
+    console.log(`[ReMigrateCrewProfiles] Migration complete: ${successCount} succeeded, ${failCount} failed`)
+    if (errors.length > 0) {
+      console.error('[ReMigrateCrewProfiles] Errors:', errors)
+    }
+    
+    // Get final count
+    const { data: final, error: countError } = await supabase
+      .from('crew_profiles')
+      .select('name', { count: 'exact' })
+      .eq('user_id', userId)
+    
+    if (countError) {
+      console.error('Error counting crew profiles:', countError)
+    } else {
+      console.log(`[ReMigrateCrewProfiles] Final count in Supabase: ${final?.length || 0}`)
+    }
+    
+    if (failCount > 0) {
+      return { success: false, migrated: successCount, error: `${failCount} profiles failed to migrate. Check console for details.` }
+    }
+    
+    return { success: true, migrated: successCount }
+  } catch (error) {
+    console.error('Error re-migrating crew profiles:', error)
+    return { success: false, migrated: 0, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}
+
+/**
  * Convert LogEntry to database format
  */
 const convertLogEntryToDb = (entry: LogEntry, userId: string) => {
@@ -332,15 +660,28 @@ const migrateCrewProfiles = async (userId: string): Promise<number> => {
     const crewProfiles: Record<string, CrewProfile> = JSON.parse(stored)
     if (!crewProfiles || typeof crewProfiles !== 'object') return 0
     
-    const profiles = Object.entries(crewProfiles).map(([name, profile]) => ({
+    const profiles = Object.entries(crewProfiles).map(([key, profile]) => ({
       user_id: userId,
-      name: profile.name || name,
+      name: profile.name || key, // Use profile.name if available, otherwise use the key
       certificate_number: profile.certificateNumber || null,
       certificate_type: profile.certificateType || null,
       notes: profile.notes || null
     }))
     
     if (profiles.length === 0) return 0
+    
+    console.log(`[MigrateCrewProfiles] Found ${Object.keys(crewProfiles).length} crew profiles in localStorage`)
+    console.log(`[MigrateCrewProfiles] Preparing to migrate ${profiles.length} profiles`)
+    
+    // Check for duplicate names (which would cause upsert to only keep one)
+    const nameCounts = new Map<string, number>()
+    profiles.forEach(p => {
+      nameCounts.set(p.name, (nameCounts.get(p.name) || 0) + 1)
+    })
+    const duplicates = Array.from(nameCounts.entries()).filter(([_, count]) => count > 1)
+    if (duplicates.length > 0) {
+      console.warn(`[MigrateCrewProfiles] Warning: Found ${duplicates.length} duplicate names that will be merged:`, duplicates.map(([name]) => name))
+    }
     
     // Insert crew profiles (handle duplicates gracefully)
     const { error } = await supabase
@@ -352,6 +693,7 @@ const migrateCrewProfiles = async (userId: string): Promise<number> => {
       return 0
     }
     
+    console.log(`[MigrateCrewProfiles] Successfully migrated ${profiles.length} crew profiles`)
     return profiles.length
   } catch (error) {
     console.error('Error migrating crew profiles:', error)

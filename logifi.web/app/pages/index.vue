@@ -6239,8 +6239,58 @@ const contextMenuX = ref(0)
 const contextMenuY = ref(0)
 const contextMenuFamilyName = ref<string>('')
 
-// Load crew profiles from localStorage
-function loadCrewProfiles(): void {
+// Load crew profiles from Supabase (when authenticated) or localStorage (fallback)
+async function loadCrewProfiles(): Promise<void> {
+  if (!isBrowser) return
+  
+  // If authenticated, load from Supabase
+  if (isAuthenticated.value && user.value) {
+    try {
+      const { data, error } = await (supabase
+        .from('crew_profiles') as any)
+        .select('*')
+        .eq('user_id', user.value.id)
+        .order('name')
+      
+      if (error) {
+        console.error('Error loading crew profiles from Supabase:', error)
+        // Fallback to localStorage
+        loadCrewProfilesFromLocalStorage()
+        return
+      }
+      
+      if (data && data.length > 0) {
+        // Convert Supabase format to localStorage format
+        const profiles: Record<string, CrewProfile> = {}
+        data.forEach((dbProfile: any) => {
+          profiles[dbProfile.name] = {
+            name: dbProfile.name,
+            notes: dbProfile.notes || '',
+            lastUpdated: dbProfile.updated_at || dbProfile.created_at || new Date().toISOString()
+          }
+        })
+        crewProfiles.value = profiles
+        console.log('[LoadCrewProfiles] Loaded', Object.keys(profiles).length, 'crew profiles from Supabase.')
+        return
+      } else {
+        // No crew profiles in Supabase yet
+        console.log('[LoadCrewProfiles] No crew profiles in Supabase yet.')
+        return
+      }
+    } catch (err) {
+      console.error('Error loading crew profiles from Supabase:', err)
+      // Fallback to localStorage
+      loadCrewProfilesFromLocalStorage()
+      return
+    }
+  }
+  
+  // Not authenticated - load from localStorage
+  loadCrewProfilesFromLocalStorage()
+}
+
+// Helper function to load from localStorage
+function loadCrewProfilesFromLocalStorage(): void {
   if (!isBrowser) return
   try {
     const stored = window.localStorage.getItem(CREW_PROFILES_STORAGE_KEY)
@@ -6252,8 +6302,50 @@ function loadCrewProfiles(): void {
   }
 }
 
-// Save crew profiles to localStorage
-function saveCrewProfiles(): void {
+// Save crew profiles to Supabase (when authenticated) or localStorage (fallback)
+async function saveCrewProfiles(): Promise<void> {
+  if (!isBrowser) return
+  
+  // If authenticated, save to Supabase
+  if (isAuthenticated.value && user.value) {
+    try {
+      // Convert localStorage format to Supabase format
+      const profilesToSave = Object.entries(crewProfiles.value).map(([name, profile]) => ({
+        user_id: user.value!.id,
+        name: profile.name || name,
+        certificate_number: null, // Not stored in localStorage format
+        certificate_type: null, // Not stored in localStorage format
+        notes: profile.notes || null
+      }))
+      
+      // Upsert all crew profiles
+      const { error } = await (supabase
+        .from('crew_profiles') as any)
+        .upsert(profilesToSave, { onConflict: 'user_id,name' })
+      
+      if (error) {
+        console.error('Error saving crew profiles to Supabase:', error)
+        // Fallback to localStorage
+        saveCrewProfilesToLocalStorage()
+        return
+      }
+      
+      console.log('[SaveCrewProfiles] Saved', profilesToSave.length, 'crew profiles to Supabase.')
+      return
+    } catch (error) {
+      console.error('Error saving crew profiles to Supabase:', error)
+      // Fallback to localStorage
+      saveCrewProfilesToLocalStorage()
+      return
+    }
+  }
+  
+  // Not authenticated - save to localStorage
+  saveCrewProfilesToLocalStorage()
+}
+
+// Helper function to save to localStorage
+function saveCrewProfilesToLocalStorage(): void {
   if (!isBrowser) return
   try {
     window.localStorage.setItem(CREW_PROFILES_STORAGE_KEY, JSON.stringify(crewProfiles.value))
@@ -8615,6 +8707,124 @@ if (typeof window !== 'undefined') {
       alert(`Error: ${result.error}`)
     }
   }
+  
+  // Expose crew profile re-migration function
+  ;(window as any).remigrateCrewProfiles = async () => {
+    if (!isAuthenticated.value || !user.value) {
+      console.error('You must be logged in to re-migrate crew profiles')
+      return
+    }
+    const { remigrateCrewProfiles } = await import('~/utils/migrateLocalStorage')
+    const result = await remigrateCrewProfiles(user.value.id)
+    if (result.success) {
+      alert(`Re-migrated ${result.migrated} crew profiles! Refreshing page...`)
+      await loadCrewProfiles() // Reload from Supabase
+      window.location.reload()
+    } else {
+      alert(`Error: ${result.error}`)
+    }
+  }
+  
+  // Expose function to migrate crew names from log entries
+  ;(window as any).migrateCrewFromEntries = async () => {
+    if (!isAuthenticated.value || !user.value) {
+      console.error('You must be logged in to migrate crew from entries')
+      return
+    }
+    const { migrateCrewFromLogEntries } = await import('~/utils/migrateLocalStorage')
+    const result = await migrateCrewFromLogEntries(user.value.id, logEntries.value)
+    if (result.success) {
+      alert(`Migrated ${result.migrated} crew profiles from log entries! Refreshing page...`)
+      await loadCrewProfiles() // Reload from Supabase
+      window.location.reload()
+    } else {
+      alert(`Error: ${result.error}`)
+    }
+  }
+  
+  // Expose function to find duplicate crew profiles
+  ;(window as any).findDuplicateCrew = async () => {
+    if (!isAuthenticated.value || !user.value) {
+      console.error('You must be logged in to find duplicates')
+      return
+    }
+    const { findDuplicateCrewProfiles } = await import('~/utils/migrateLocalStorage')
+    const result = await findDuplicateCrewProfiles(user.value.id)
+    if (result.duplicates.length > 0) {
+      console.log('Duplicate crew profiles found:', result.duplicates)
+      alert(`Found ${result.duplicates.length} duplicate(s):\n${result.duplicates.map(d => d.names.join(' / ')).join('\n')}`)
+    } else {
+      alert('No duplicate crew profiles found!')
+    }
+    return result
+  }
+  
+  // Expose function to merge duplicate crew profiles
+  ;(window as any).mergeCrewProfiles = async (canonicalName: string, duplicateName: string) => {
+    if (!isAuthenticated.value || !user.value) {
+      console.error('You must be logged in to merge crew profiles')
+      return
+    }
+    if (!canonicalName || !duplicateName) {
+      alert('Usage: mergeCrewProfiles("Canonical Name", "Duplicate Name")')
+      return
+    }
+    
+    const { mergeDuplicateCrewProfiles } = await import('~/utils/migrateLocalStorage')
+    
+    // Create update function that updates log entries in Supabase
+    const updateLogEntries = async (oldName: string, newName: string) => {
+      // Update log entries in Supabase
+      const { data: entriesToUpdate, error: fetchError } = await (supabase
+        .from('log_entries') as any)
+        .select('id, training_elements')
+        .eq('user_id', user.value!.id)
+        .ilike('training_elements', oldName)
+      
+      if (fetchError) {
+        console.error('Error fetching entries to update:', fetchError)
+        return
+      }
+      
+      if (!entriesToUpdate || entriesToUpdate.length === 0) {
+        console.log('No entries found to update')
+        return
+      }
+      
+      // Update each entry
+      for (const entry of entriesToUpdate) {
+        const { error: updateError } = await (supabase
+          .from('log_entries') as any)
+          .update({ training_elements: newName })
+          .eq('id', entry.id)
+        
+        if (updateError) {
+          console.error(`Error updating entry ${entry.id}:`, updateError)
+        }
+      }
+      
+      // Also update local state
+      logEntries.value = logEntries.value.map(entry => {
+        if (entry.trainingElements && entry.trainingElements.toLowerCase() === oldName.toLowerCase()) {
+          return { ...entry, trainingElements: newName }
+        }
+        return entry
+      })
+      
+      console.log(`Updated ${entriesToUpdate.length} log entries`)
+    }
+    
+    const result = await mergeDuplicateCrewProfiles(user.value.id, canonicalName, duplicateName, updateLogEntries)
+    if (result.success) {
+      alert(`Merged "${duplicateName}" into "${canonicalName}"! Refreshing page...`)
+      await loadCrewProfiles() // Reload from Supabase
+      await loadEntries() // Reload entries
+      window.location.reload()
+    } else {
+      alert(`Error: ${result.error}`)
+    }
+    return result
+  }
 }
 
 onMounted(async () => {
@@ -8625,7 +8835,7 @@ onMounted(async () => {
   loadSelectedTotalsMetrics()
   loadColumnConfig()
   loadPilotProfilePrefs()
-  loadCrewProfiles()
+  await loadCrewProfiles()
   // Normalize and autofill aircraft category/class labels on load
   normalizeAndAutofillCategories()
   if (logEntries.value.length === 0 && isAuthenticated.value) {
