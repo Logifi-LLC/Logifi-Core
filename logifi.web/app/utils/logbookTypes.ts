@@ -73,6 +73,12 @@ export interface LogEntry {
   performance: PerformanceMetrics
   oooi?: OOOITimes
   flagged?: boolean
+  // Import tracking fields
+  isImported?: boolean
+  importSource?: string // 'csv', 'json', 'paper', etc.
+  importBatchId?: string
+  originalEntryDate?: string // Original creation date from source
+  importMetadata?: Record<string, any> // Additional import info
 }
 
 export type EditableLogEntry = Omit<LogEntry, 'id'>

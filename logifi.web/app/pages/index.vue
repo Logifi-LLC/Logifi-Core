@@ -1216,7 +1216,13 @@
                       </template>
                       <!-- Total Column -->
                       <template v-else-if="col.key === 'total'">
-                        {{ formatNumber(entry.flightTime.total) }}
+                        <span :class="[
+                          entry.isImported && entry.importSource !== 'localStorage'
+                            ? (isDarkMode ? 'text-red-400' : 'text-red-600')
+                            : (isDarkMode ? 'text-blue-400' : 'text-blue-600')
+                        ]">
+                          {{ formatNumber(entry.flightTime.total) }}
+                        </span>
                       </template>
                     </td>
                     </tr>
@@ -1299,6 +1305,25 @@
               >
                 {{ isInlineCommercialMode ? 'OOOI Active' : '+ OOOI' }}
               </button>
+            </div>
+
+            <!-- Import Source Info -->
+            <div v-if="inlineEditEntry.isImported" class="mb-4 p-3 rounded border" :class="[isDarkMode ? 'bg-blue-900/20 border-blue-700/50' : 'bg-blue-50 border-blue-200']">
+              <div class="flex items-center gap-2 mb-1">
+                <Icon name="ri:download-line" size="16" :class="[isDarkMode ? 'text-blue-400' : 'text-blue-600']" />
+                <span :class="['text-xs font-semibold', isDarkMode ? 'text-blue-300' : 'text-blue-700']">Imported Entry</span>
+              </div>
+              <div class="text-xs space-y-1" :class="[isDarkMode ? 'text-blue-200' : 'text-blue-600']">
+                <div v-if="inlineEditEntry.importSource">
+                  <span class="font-medium">Source:</span> {{ inlineEditEntry.importSource.toUpperCase() }}
+                </div>
+                <div v-if="inlineEditEntry.importMetadata?.fileName">
+                  <span class="font-medium">File:</span> {{ inlineEditEntry.importMetadata.fileName }}
+                </div>
+                <div v-if="inlineEditEntry.originalEntryDate">
+                  <span class="font-medium">Original Date:</span> {{ formatDisplayDate(inlineEditEntry.originalEntryDate) }}
+                </div>
+              </div>
             </div>
 
             <div v-if="isInlineCommercialMode && inlineEditEntry?.oooi" class="mb-4">
@@ -5862,6 +5887,62 @@ function calculateImportStatistics(entries: LogEntry[]): { statistics: ImportSta
 async function importEntries(entries: LogEntry[]): Promise<{ imported: number; skipped: number; errors: string[] }> {
   const result = { imported: 0, skipped: 0, errors: [] as string[] }
   
+  // Determine import source from metadata
+  const importSource = importPreviewMetadata.value?.fileType?.toLowerCase() || 'unknown'
+  const fileName = importPreviewMetadata.value?.fileName || 'unknown'
+  
+  // Create import batch if authenticated
+  let importBatchId: string | null = null
+  if (isAuthenticated.value && user.value) {
+    try {
+      // Calculate statistics for the batch
+      const totalEntries = entries.length
+      const dateRange = entries.length > 0 
+        ? {
+            earliest: entries.reduce((earliest, e) => !earliest || e.date < earliest ? e.date : earliest, entries[0].date),
+            latest: entries.reduce((latest, e) => !latest || e.date > latest ? e.date : latest, entries[0].date)
+          }
+        : { earliest: null, latest: null }
+      
+      const aircraftList = [...new Set(entries.map(e => e.registration))].sort()
+      
+      const batchMetadata = {
+        fileName,
+        fileType: importPreviewMetadata.value?.fileType,
+        dateRange,
+        aircraftList,
+        importedAt: new Date().toISOString()
+      }
+      
+      const { data: batch, error: batchError } = await (supabase
+        .from('import_batches') as any)
+        .insert({
+          user_id: user.value.id,
+          source_type: importSource,
+          file_name: fileName,
+          file_size: null, // Could calculate if needed
+          total_entries: totalEntries,
+          successful_imports: 0, // Will update after import
+          duplicates_skipped: 0, // Will update after import
+          errors: 0, // Will update after import
+          import_metadata: batchMetadata
+        })
+        .select()
+        .single()
+      
+      if (batchError) {
+        console.error('Error creating import batch:', batchError)
+        result.errors.push(`Failed to create import batch: ${batchError.message}`)
+      } else {
+        importBatchId = (batch as any).id
+      }
+    } catch (error) {
+      console.error('Error creating import batch:', error)
+      result.errors.push(`Failed to create import batch: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+  
+  // Process each entry
   for (const entry of entries) {
     // Provide defaults for missing required fields (for imports from other systems)
     if (!entry.departure.trim()) {
@@ -5887,9 +5968,106 @@ async function importEntries(entries: LogEntry[]): Promise<{ imported: number; s
       continue
     }
     
-    // Add entry
-    logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entry])
-    result.imported++
+    // Save to Supabase if authenticated
+    if (isAuthenticated.value && user.value) {
+      try {
+        const dbEntry: any = {
+          user_id: user.value.id,
+          date: entry.date,
+          role: entry.role,
+          aircraft_category_class: entry.aircraftCategoryClass,
+          category_class_time: entry.categoryClassTime,
+          aircraft_make_model: entry.aircraftMakeModel,
+          registration: entry.registration,
+          flight_number: entry.flightNumber || null,
+          departure: entry.departure,
+          destination: entry.destination,
+          route: entry.route || null,
+          training_elements: entry.trainingElements || null,
+          training_instructor: entry.trainingInstructor || null,
+          instructor_certificate: entry.instructorCertificate || null,
+          flight_conditions: entry.flightConditions || [],
+          remarks: entry.remarks || null,
+          flight_time: entry.flightTime,
+          performance: entry.performance,
+          oooi: entry.oooi || null,
+          flagged: entry.flagged || false,
+          // Import tracking fields
+          is_imported: true,
+          import_source: importSource,
+          import_batch_id: importBatchId,
+          original_entry_date: entry.date ? new Date(entry.date).toISOString() : null,
+          import_metadata: {
+            fileName,
+            fileType: importPreviewMetadata.value?.fileType,
+            importedAt: new Date().toISOString()
+          }
+        }
+        
+        const { data, error } = await (supabase
+          .from('log_entries') as any)
+          .insert(dbEntry)
+          .select()
+          .single()
+        
+        if (error) {
+          throw error
+        }
+        
+        // Add to local state with import tracking
+        const entryToStore: LogEntry = {
+          ...entry,
+          id: (data as any).id,
+          isImported: true,
+          importSource,
+          importBatchId: importBatchId || undefined,
+          originalEntryDate: entry.date,
+          importMetadata: {
+            fileName,
+            fileType: importPreviewMetadata.value?.fileType,
+            importedAt: new Date().toISOString()
+          }
+        }
+        logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
+        result.imported++
+      } catch (error) {
+        console.error('Error saving imported entry:', error)
+        result.errors.push(`Entry ${entry.date} ${entry.registration}: ${error instanceof Error ? error.message : 'Failed to save'}`)
+      }
+    } else {
+      // Fallback to localStorage (not authenticated)
+      const entryToStore: LogEntry = {
+        ...entry,
+        id: entry.id || generateEntryId(),
+        isImported: true,
+        importSource,
+        importBatchId: importBatchId || undefined,
+        originalEntryDate: entry.date,
+        importMetadata: {
+          fileName,
+          fileType: importPreviewMetadata.value?.fileType,
+          importedAt: new Date().toISOString()
+        }
+      }
+      logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
+      result.imported++
+    }
+  }
+  
+  // Update import batch statistics if batch was created
+  if (importBatchId && isAuthenticated.value && user.value) {
+    try {
+      await (supabase
+        .from('import_batches') as any)
+        .update({
+          successful_imports: result.imported,
+          duplicates_skipped: result.skipped,
+          errors: result.errors.length
+        })
+        .eq('id', importBatchId)
+    } catch (error) {
+      console.error('Error updating import batch statistics:', error)
+    }
   }
   
   return result
@@ -8540,7 +8718,13 @@ async function loadEntries(): Promise<void> {
             flightTime: dbEntry.flight_time as FlightTimeBreakdown,
             performance: dbEntry.performance as PerformanceMetrics,
             oooi: dbEntry.oooi as OOOITimes | undefined,
-            flagged: dbEntry.flagged || false
+            flagged: dbEntry.flagged || false,
+            // Import tracking fields
+            isImported: dbEntry.is_imported || false,
+            importSource: dbEntry.import_source || undefined,
+            importBatchId: dbEntry.import_batch_id || undefined,
+            originalEntryDate: dbEntry.original_entry_date || undefined,
+            importMetadata: dbEntry.import_metadata || undefined
           }
           
           // Normalize flight time values
