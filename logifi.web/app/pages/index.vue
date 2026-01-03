@@ -86,20 +86,6 @@
             <Icon name="ri:user-star-line" size="18" class="mr-2" />
             Pilot Profile
           </button>
-          <button
-            type="button"
-            @click="handleLogout"
-            :class="[
-              'inline-flex items-center px-5 py-2 rounded-lg text-sm sm:text-base font-quicksand font-medium transition-all duration-200',
-              isDarkMode 
-                ? 'bg-red-700 hover:bg-red-600 text-white' 
-                : 'bg-red-200 hover:bg-red-300 text-red-900'
-            ]"
-            aria-label="Sign out"
-          >
-            <Icon name="ri:logout-box-line" size="18" class="mr-2" />
-            Sign Out
-          </button>
           <div class="relative settings-container">
             <button
               type="button"
@@ -369,6 +355,23 @@
                     <Icon name="ri:code-s-slash-line" size="16" />
                     Developers
                   </NuxtLink>
+                </div>
+                <!-- Sign Out Button -->
+                <div class="pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
+                  <button
+                    type="button"
+                    @click="handleLogout"
+                    :class="[
+                      'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
+                      isDarkMode 
+                        ? 'bg-red-700 hover:bg-red-600 text-white' 
+                        : 'bg-red-200 hover:bg-red-300 text-red-900'
+                    ]"
+                    aria-label="Sign out"
+                  >
+                    <Icon name="ri:logout-box-line" size="16" />
+                    Sign Out
+                  </button>
                 </div>
               </div>
             </div>
@@ -3988,6 +3991,9 @@ import { useAuth } from '~/composables/useAuth'
 import AuthModal from '~/components/AuthModal.vue'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '~/utils/migrateLocalStorage'
 
+// Browser check (must be defined early for watchers with immediate: true)
+const isBrowser = typeof window !== 'undefined'
+
 // Authentication setup
 const { user, isAuthenticated, isLoading: authLoading, signOut: authSignOut } = useAuth()
 const showAuthModal = ref(false)
@@ -4027,6 +4033,9 @@ watch(isAuthenticated, async (authenticated) => {
       } finally {
         isMigrating.value = false
       }
+    } else {
+      // Migration already completed - load entries directly
+      await loadEntries()
     }
   } else if (!authenticated) {
     // Show auth modal when not authenticated
@@ -4542,7 +4551,6 @@ const newEntry = reactive<EditableLogEntry>(createBlankEntry())
 const searchTerm = ref('')
 const validationError = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
-const isBrowser = typeof window !== 'undefined'
 const isEntryFormOpen = ref(false)
 const isCommercialMode = ref(false)
 const isInlineCommercialMode = ref(false)
