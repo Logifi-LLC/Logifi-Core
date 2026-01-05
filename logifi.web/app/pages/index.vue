@@ -2247,11 +2247,37 @@
               </div>
 
               <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div v-if="validationError" :class="['font-quicksand text-sm', isDarkMode ? 'text-red-400' : 'text-red-600']">
-                  {{ validationError }}
-                </div>
-                <div v-if="successMessage" :class="['font-quicksand text-sm', isDarkMode ? 'text-emerald-400' : 'text-emerald-600']">
-                  {{ successMessage }}
+                <div class="flex flex-col gap-2">
+                  <div v-if="validationError" :class="['font-quicksand text-sm', isDarkMode ? 'text-red-400' : 'text-red-600']">
+                    {{ validationError }}
+                  </div>
+                  <div v-if="duplicateWarning" 
+                       :class="['rounded-lg border p-3', isDarkMode ? 'border-yellow-700 bg-yellow-900/20' : 'border-yellow-300 bg-yellow-50']">
+                    <div class="flex items-start gap-2">
+                      <Icon name="ri:alert-line" size="20" :class="[isDarkMode ? 'text-yellow-400' : 'text-yellow-600', 'flex-shrink-0 mt-0.5']" />
+                      <div class="flex-1">
+                        <div :class="['font-quicksand text-sm font-semibold mb-1', isDarkMode ? 'text-yellow-300' : 'text-yellow-800']">
+                          Duplicate Entry Detected
+                        </div>
+                        <div :class="['font-quicksand text-xs mb-2', isDarkMode ? 'text-yellow-200' : 'text-yellow-700']">
+                          This entry matches {{ duplicateWarning.matches.length }} existing {{ duplicateWarning.matches.length === 1 ? 'entry' : 'entries' }}:
+                        </div>
+                        <div class="space-y-1">
+                          <div v-for="match in duplicateWarning.matches.slice(0, 3)" :key="match.id"
+                               :class="['font-quicksand text-xs', isDarkMode ? 'text-yellow-200' : 'text-yellow-800']">
+                            • {{ formatDisplayDate(match.date) }} · {{ match.registration }} · {{ match.departure }} → {{ match.destination }}
+                          </div>
+                          <div v-if="duplicateWarning.matches.length > 3"
+                               :class="['font-quicksand text-xs', isDarkMode ? 'text-yellow-300' : 'text-yellow-700']">
+                            ... and {{ duplicateWarning.matches.length - 3 }} more
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-if="successMessage" :class="['font-quicksand text-sm', isDarkMode ? 'text-emerald-400' : 'text-emerald-600']">
+                    {{ successMessage }}
+                  </div>
                 </div>
                 <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end">
                   <button
@@ -2296,7 +2322,21 @@
                   >
                     Cancel
                   </button>
+                  <button
+                    v-if="duplicateWarning"
+                    type="button"
+                    :class="[
+                      'inline-flex items-center justify-center rounded-lg px-6 py-2 font-semibold font-quicksand transition-all',
+                      isDarkMode 
+                        ? 'bg-yellow-600 text-white hover:bg-yellow-700' 
+                        : 'bg-yellow-600 text-white hover:bg-yellow-700'
+                    ]"
+                    @click="saveAnyway = true; submitEntry()"
+                  >
+                    Save Anyway
+                  </button>
                   <button 
+                    v-if="!duplicateWarning"
                     type="submit"
                     :class="[
                       'inline-flex items-center justify-center rounded-lg px-6 py-2 font-semibold font-quicksand transition-all',
@@ -3974,6 +4014,31 @@
             </div>
           </div>
 
+          <!-- Duplicates (if any) -->
+          <div v-if="importPreviewStatistics.duplicates > 0">
+            <h4 :class="['text-lg font-semibold font-quicksand mb-4 text-yellow-500']">
+              Duplicates ({{ importPreviewStatistics.duplicates }})
+            </h4>
+            <div :class="['rounded-lg border p-4 max-h-60 overflow-y-auto', isDarkMode ? 'border-yellow-700 bg-yellow-900/20' : 'border-yellow-300 bg-yellow-50']">
+              <div v-for="(dup, index) in importPreviewStatistics.duplicateEntries.slice(0, 10)" :key="index"
+                   :class="['text-sm font-quicksand py-2 border-b last:border-b-0', isDarkMode ? 'border-yellow-700/30 text-yellow-200' : 'border-yellow-300/50 text-yellow-800']">
+                <div class="font-semibold mb-1">
+                  {{ formatDisplayDate(dup.entry.date) }} · {{ dup.entry.registration }} · {{ dup.entry.departure }} → {{ dup.entry.destination }}
+                </div>
+                <div :class="['text-xs mt-1', isDarkMode ? 'text-yellow-300' : 'text-yellow-700']">
+                  Matches {{ dup.matches.length }} existing {{ dup.matches.length === 1 ? 'entry' : 'entries' }}:
+                  <span v-for="(match, matchIndex) in dup.matches" :key="match.id" class="ml-1">
+                    {{ formatDisplayDate(match.date) }} {{ match.registration }}{{ matchIndex < dup.matches.length - 1 ? ',' : '' }}
+                  </span>
+                </div>
+              </div>
+              <div v-if="importPreviewStatistics.duplicateEntries.length > 10" 
+                   :class="['text-sm font-quicksand py-2', isDarkMode ? 'text-yellow-300' : 'text-yellow-700']">
+                ... and {{ importPreviewStatistics.duplicateEntries.length - 10 }} more duplicate {{ importPreviewStatistics.duplicateEntries.length - 10 === 1 ? 'entry' : 'entries' }}
+              </div>
+            </div>
+          </div>
+
           <!-- Entry List -->
           <div>
             <h4 :class="['text-lg font-semibold font-quicksand mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
@@ -4063,6 +4128,93 @@
       </div>
     </div>
   </div>
+
+  <!-- Duplicate Confirmation Dialog -->
+  <div
+    v-if="showDuplicateConfirmDialog && importPreviewStatistics"
+    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    @click.self="handleDuplicateConfirm(false)"
+  >
+    <div
+      :class="[
+        'relative w-full max-w-md rounded-2xl border shadow-2xl transition-colors duration-300',
+        isDarkMode 
+          ? 'bg-gray-800 border-gray-700' 
+          : 'bg-gray-200 border-gray-300'
+      ]"
+      @click.stop
+    >
+      <div class="flex items-center justify-between p-6 border-b" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+        <h3 :class="['text-xl font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+          Duplicate Entries Detected
+        </h3>
+        <button
+          @click="handleDuplicateConfirm(false)"
+          :class="[
+            'p-1 rounded-lg transition-colors',
+            isDarkMode 
+              ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-300'
+          ]"
+          aria-label="Close"
+        >
+          <Icon name="ri:close-line" size="24" />
+        </button>
+      </div>
+      
+      <div class="p-6 space-y-4">
+        <div :class="['flex items-start gap-3', isDarkMode ? 'text-yellow-200' : 'text-yellow-700']">
+          <Icon name="ri:alert-line" size="24" class="flex-shrink-0 mt-0.5" />
+          <div class="flex-1">
+            <p :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              Found {{ importPreviewStatistics.duplicates }} duplicate {{ importPreviewStatistics.duplicates === 1 ? 'entry' : 'entries' }} that match existing entries in your logbook.
+            </p>
+            <p :class="['text-sm font-quicksand mt-2', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+              Duplicates are detected based on date and registration. Importing duplicates may create duplicate entries in your logbook.
+            </p>
+          </div>
+        </div>
+        
+        <div v-if="importPreviewStatistics.duplicateEntries.length > 0" 
+             :class="['rounded-lg border p-3 max-h-40 overflow-y-auto', isDarkMode ? 'border-yellow-700/50 bg-yellow-900/10' : 'border-yellow-300 bg-yellow-50']">
+          <div :class="['text-xs font-semibold font-quicksand mb-2', isDarkMode ? 'text-yellow-300' : 'text-yellow-700']">
+            Sample duplicates:
+          </div>
+          <div v-for="(dup, index) in importPreviewStatistics.duplicateEntries.slice(0, 3)" :key="index"
+               :class="['text-xs font-quicksand py-1', isDarkMode ? 'text-yellow-200' : 'text-yellow-800']">
+            {{ formatDisplayDate(dup.entry.date) }} · {{ dup.entry.registration }} · {{ dup.entry.departure }} → {{ dup.entry.destination }}
+          </div>
+          <div v-if="importPreviewStatistics.duplicateEntries.length > 3"
+               :class="['text-xs font-quicksand py-1', isDarkMode ? 'text-yellow-300' : 'text-yellow-700']">
+            ... and {{ importPreviewStatistics.duplicateEntries.length - 3 }} more
+          </div>
+        </div>
+      </div>
+      
+      <div class="flex items-center justify-end gap-3 p-6 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+        <button
+          @click="handleDuplicateConfirm(false)"
+          :class="[
+            'px-4 py-2 rounded-lg font-quicksand transition-colors',
+            isDarkMode 
+              ? 'bg-gray-700 hover:bg-gray-600 text-white' 
+              : 'bg-gray-300 hover:bg-gray-400 text-gray-900'
+          ]"
+        >
+          Cancel
+        </button>
+        <button
+          @click="handleDuplicateConfirm(true)"
+          :class="[
+            'px-4 py-2 rounded-lg font-quicksand transition-colors',
+            'bg-yellow-600 hover:bg-yellow-700 text-white'
+          ]"
+        >
+          Import Anyway
+        </button>
+      </div>
+    </div>
+  </div>
   <!-- End Main Content -->
   
   <!-- Loading State -->
@@ -4115,6 +4267,7 @@ import AuthModal from '~/components/AuthModal.vue'
 import AuditTrail from '~/components/AuditTrail.vue'
 import IntegrityStatus from '~/components/IntegrityStatus.vue'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '~/utils/migrateLocalStorage'
+import { findDuplicateEntries, checkDuplicatesInDatabase } from '~/utils/duplicateDetection'
 
 // Browser check (must be defined early for watchers with immediate: true)
 const isBrowser = typeof window !== 'undefined'
@@ -4678,6 +4831,8 @@ const newEntry = reactive<EditableLogEntry>(createBlankEntry())
 const searchTerm = ref('')
 const validationError = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
+const duplicateWarning = ref<{ matches: LogEntry[] } | null>(null)
+const saveAnyway = ref(false)
 const isEntryFormOpen = ref(false)
 const isCommercialMode = ref(false)
 const isInlineCommercialMode = ref(false)
@@ -5109,6 +5264,7 @@ interface ImportStatistics {
   aircraftBreakdown: Record<string, number>
   dateRange: { earliest: string | null; latest: string | null }
   errorMessages: string[]
+  duplicateEntries: Array<{ entry: LogEntry; matches: LogEntry[] }>
 }
 
 interface ImportMetadata {
@@ -5122,6 +5278,8 @@ const importPreviewEntries = ref<LogEntry[]>([])
 const importPreviewStatistics = ref<ImportStatistics | null>(null)
 const importPreviewMetadata = ref<ImportMetadata | null>(null)
 const expandedPreviewEntries = ref<Set<string>>(new Set())
+const showDuplicateConfirmDialog = ref(false)
+const importWithDuplicates = ref(false)
 const pilotInitials = computed(() => {
   const name = pilotProfile.name.trim()
   if (!name) return 'PP'
@@ -6082,55 +6240,10 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
   }
 }
 
-function isDuplicateEntry(entry: LogEntry, existingEntries: LogEntry[]): boolean {
-  return existingEntries.some(existing => {
-    // Must match date and registration
-    if (existing.date !== entry.date || 
-        existing.registration.toUpperCase() !== entry.registration.toUpperCase()) {
-      return false
-    }
-    
-    // Check departure and destination airports (normalize UNKNOWN and empty strings)
-    const existingDep = (existing.departure || 'UNKNOWN').trim().toUpperCase()
-    const entryDep = (entry.departure || 'UNKNOWN').trim().toUpperCase()
-    const existingDest = (existing.destination || 'UNKNOWN').trim().toUpperCase()
-    const entryDest = (entry.destination || 'UNKNOWN').trim().toUpperCase()
-    
-    // If departure or destination differs (and not both UNKNOWN), they're different flights
-    if (existingDep !== entryDep || existingDest !== entryDest) {
-      // Exception: if both are UNKNOWN, we'll fall through to check times
-      if (!(existingDep === 'UNKNOWN' && entryDep === 'UNKNOWN' && 
-            existingDest === 'UNKNOWN' && entryDest === 'UNKNOWN')) {
-        return false
-      }
-    }
-    
-    // If we have OOOI times for both, compare OUT time as tiebreaker
-    const existingOut = existing.oooi?.out
-    const entryOut = entry.oooi?.out
-    if (existingOut && entryOut) {
-      // If OUT times differ, they're different flights (e.g., morning vs afternoon)
-      return existingOut === entryOut
-    }
-    
-    // If OOOI not available, compare total flight time as tiebreaker
-    const existingTotal = existing.flightTime.total
-    const entryTotal = entry.flightTime.total
-    if (existingTotal !== null && existingTotal !== undefined &&
-        entryTotal !== null && entryTotal !== undefined) {
-      // Only consider duplicates if total times match exactly (conservative approach)
-      return existingTotal === entryTotal
-    }
-    
-    // If we don't have OOOI or total times, and airports matched (or both UNKNOWN),
-    // consider them duplicates (conservative approach - matches original behavior for edge cases)
-    return true
-  })
-}
-
 function calculateImportStatistics(entries: LogEntry[]): { statistics: ImportStatistics; validEntries: LogEntry[]; duplicates: LogEntry[]; errors: { entry: LogEntry; message: string }[] } {
   const validEntries: LogEntry[] = []
   const duplicates: LogEntry[] = []
+  const duplicateEntries: Array<{ entry: LogEntry; matches: LogEntry[] }> = []
   const errors: { entry: LogEntry; message: string }[] = []
   const aircraftBreakdown: Record<string, number> = {}
   
@@ -6172,9 +6285,11 @@ function calculateImportStatistics(entries: LogEntry[]): { statistics: ImportSta
       continue
     }
     
-    // Check for duplicates
-    if (isDuplicateEntry(entry, logEntries.value)) {
+    // Check for duplicates and find matching entries
+    const matches = findDuplicateEntries(entry, logEntries.value)
+    if (matches.length > 0) {
       duplicates.push(entry)
+      duplicateEntries.push({ entry, matches })
       continue
     }
     
@@ -6233,13 +6348,14 @@ function calculateImportStatistics(entries: LogEntry[]): { statistics: ImportSta
     totalApproaches,
     aircraftBreakdown,
     dateRange,
-    errorMessages
+    errorMessages,
+    duplicateEntries
   }
   
   return { statistics, validEntries, duplicates, errors }
 }
 
-async function importEntries(entries: LogEntry[]): Promise<{ imported: number; skipped: number; errors: string[] }> {
+async function importEntries(entries: LogEntry[], importDuplicates: boolean = false): Promise<{ imported: number; skipped: number; errors: string[] }> {
   const result = { imported: 0, skipped: 0, errors: [] as string[] }
   
   // Determine import source from metadata
@@ -6322,7 +6438,8 @@ async function importEntries(entries: LogEntry[]): Promise<{ imported: number; s
     }
     
     // Check for duplicates
-    if (isDuplicateEntry(entry, logEntries.value)) {
+    const matches = findDuplicateEntries(entry, logEntries.value)
+    if (matches.length > 0 && !importDuplicates) {
       result.skipped++
       continue
     }
@@ -6437,8 +6554,23 @@ async function confirmImport(): Promise<void> {
     return
   }
   
-  // Import the entries
-  const result = await importEntries(importPreviewEntries.value)
+  // Check if there are duplicates and show confirmation dialog
+  if (importPreviewStatistics.value.duplicates > 0 && !importWithDuplicates.value) {
+    showDuplicateConfirmDialog.value = true
+    return
+  }
+  
+  // Proceed with import
+  await proceedWithImport()
+}
+
+async function proceedWithImport(): Promise<void> {
+  if (!importPreviewEntries.value.length || !importPreviewStatistics.value) {
+    return
+  }
+  
+  // Import the entries (with duplicates if user confirmed)
+  const result = await importEntries(importPreviewEntries.value, importWithDuplicates.value)
   
   // Show result
   let message = `Import complete!\n\nImported: ${result.imported} ${result.imported === 1 ? 'entry' : 'entries'}`
@@ -6457,12 +6589,22 @@ async function confirmImport(): Promise<void> {
   cancelImport()
 }
 
+function handleDuplicateConfirm(importAnyway: boolean): void {
+  importWithDuplicates.value = importAnyway
+  showDuplicateConfirmDialog.value = false
+  if (importAnyway) {
+    proceedWithImport()
+  }
+}
+
 function cancelImport(): void {
   showImportPreview.value = false
   importPreviewEntries.value = []
   importPreviewStatistics.value = null
   importPreviewMetadata.value = null
   expandedPreviewEntries.value = new Set()
+  showDuplicateConfirmDialog.value = false
+  importWithDuplicates.value = false
 }
 
 function togglePreviewEntry(entryId: string): void {
@@ -7217,6 +7359,8 @@ function generateEntryId(): string {
 }
 
 function resetForm(): void {
+  duplicateWarning.value = null
+  saveAnyway.value = false
   Object.assign(newEntry, createBlankEntry())
   editingEntryId.value = null
 }
@@ -8832,6 +8976,7 @@ watch(
 async function submitEntry(): Promise<void> {
   validationError.value = null
   successMessage.value = null
+  duplicateWarning.value = null
 
   const error = validateEntry(newEntry)
   if (error) {
@@ -8883,6 +9028,34 @@ async function submitEntry(): Promise<void> {
   // Debug: Log the flightTime object being saved
   console.log('[SaveEntry] FlightTime being saved:', baseEntry.flightTime)
   console.log('[SaveEntry] Night time value:', baseEntry.flightTime.night)
+
+  // Check for duplicates before saving (always check, but exclude current entry if editing)
+  if (isAuthenticated.value && user.value) {
+    const entryToCheck: LogEntry = {
+      ...baseEntry,
+      id: editingEntryId.value || 'temp'
+    }
+    
+    // Always check for duplicates, but exclude the current entry if editing
+    const duplicates = await checkDuplicatesInDatabase(entryToCheck, user.value.id, editingEntryId.value || undefined)
+    if (duplicates.length > 0 && !saveAnyway.value) {
+      duplicateWarning.value = { matches: duplicates }
+      return
+    }
+  } else {
+    // For localStorage, check against local entries (excluding current entry if editing)
+    const entryToCheck: LogEntry = {
+      ...baseEntry,
+      id: editingEntryId.value || 'temp'
+    }
+    
+    // Always check for duplicates, but exclude the current entry if editing
+    const matches = findDuplicateEntries(entryToCheck, logEntries.value.filter(e => e.id !== editingEntryId.value))
+    if (matches.length > 0 && !saveAnyway.value) {
+      duplicateWarning.value = { matches }
+      return
+    }
+  }
 
   // Save to Supabase if authenticated, otherwise save to localStorage
   if (isAuthenticated.value && user.value) {
@@ -9272,6 +9445,8 @@ async function submitEntry(): Promise<void> {
         // by closing and reopening the sidebar if needed.
         
         successMessage.value = 'Entry updated.'
+        duplicateWarning.value = null
+        saveAnyway.value = false
       } else {
         // Insert new entry
         const { data, error } = await (supabase
@@ -9377,6 +9552,8 @@ async function submitEntry(): Promise<void> {
         }
         logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
         successMessage.value = 'Entry saved.'
+        duplicateWarning.value = null
+        saveAnyway.value = false
       }
     } catch (error) {
       console.error('Error saving entry to Supabase:', error)
@@ -9405,6 +9582,8 @@ async function submitEntry(): Promise<void> {
         logEntries.value.find(e => e.id === entryToStore.id)?.flightTime.night
       )
       successMessage.value = 'Entry saved locally. Remember to archive signatures once the feature is available.'
+      duplicateWarning.value = null
+      saveAnyway.value = false
     }
   }
 
