@@ -13,6 +13,15 @@
     @success="showAuthModal = false"
   />
 
+  <!-- Audit Trail Modal -->
+  <AuditTrail
+    :is-open="showAuditTrail"
+    :entry-id="auditTrailEntryId"
+    :is-dark-mode="isDarkMode"
+    @close="showAuditTrail = false"
+    @restored="handleEntryRestored"
+  />
+
   <!-- Migration Progress (if migrating) -->
   <div
     v-if="isMigrating"
@@ -1107,11 +1116,13 @@
                     >
                       <!-- Date Column -->
                       <template v-if="col.key === 'date'">
+                        <div>
                         <div :class="['font-semibold text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
                           {{ formatDisplayDate(entry.date) }}
                         </div>
                         <div :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                           {{ entry.role }}
+                          </div>
                         </div>
                       </template>
                       <!-- Aircraft Column -->
@@ -1245,7 +1256,59 @@
     <!-- Right-Side Edit Panel -->
     <Transition name="slide-right">
       <div v-if="expandedEntryId !== null && inlineEditEntry" class="fixed right-0 top-0 h-full w-full md:w-[500px] lg:w-[600px] z-50" @keydown.escape="cancelInlineEdit" tabindex="-1">
-        <div class="h-full flex flex-col shadow-2xl" :class="isDarkMode ? 'bg-gray-900 border-l border-gray-700' : 'bg-gray-50 border-l border-gray-200'">
+        <div class="h-full flex flex-col shadow-2xl relative" :class="isDarkMode ? 'bg-gray-900 border-l border-gray-700' : 'bg-gray-50 border-l border-gray-200'">
+          <!-- Audit Trail Sidebar -->
+          <Transition name="slide-left">
+            <div
+              v-if="showAuditTrailSidebar && expandedEntryId"
+              class="fixed left-0 top-0 h-full w-[400px] z-[60] shadow-2xl"
+              :class="isDarkMode ? 'bg-gray-800 border-r border-gray-700' : 'bg-white border-r border-gray-300'"
+            >
+              <div class="h-full flex flex-col">
+                <!-- Sidebar Header -->
+                <div
+                  :class="[
+                    'flex items-center justify-between p-4 border-b',
+                    isDarkMode ? 'border-gray-700' : 'border-gray-300'
+                  ]"
+                >
+                  <div>
+                    <h2 :class="['text-lg font-bold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+                      Audit Trail
+                    </h2>
+                    <p :class="['text-xs mt-1 font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                      History of changes
+                    </p>
+                  </div>
+                  <button
+                    @click="showAuditTrailSidebar = false"
+                    :class="[
+                      'p-2 rounded-lg transition-colors',
+                      isDarkMode 
+                        ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                    ]"
+                    aria-label="Close sidebar"
+                  >
+                    <Icon name="ri:close-line" size="20" />
+                  </button>
+                </div>
+
+                <!-- Sidebar Content -->
+                <div class="flex-1 overflow-y-auto p-4">
+                  <AuditTrail
+                    :is-open="true"
+                    :entry-id="expandedEntryId"
+                    :is-dark-mode="isDarkMode"
+                    :is-sidebar="true"
+                    @close="showAuditTrailSidebar = false"
+                    @restored="handleEntryRestored"
+                  />
+                </div>
+              </div>
+            </div>
+          </Transition>
+
           <!-- Panel Header -->
         <div 
           class="flex items-center justify-between p-4 border-b"
@@ -1253,6 +1316,22 @@
             isDarkMode ? 'border-gray-700' : 'border-gray-200'
           ]"
         >
+          <div class="flex items-center gap-2">
+            <button
+              v-if="expandedEntryId"
+              type="button"
+              @click="showAuditTrailSidebar = !showAuditTrailSidebar"
+              :class="[
+                'p-2 rounded-lg transition-colors',
+                showAuditTrailSidebar
+                  ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                  : (isDarkMode ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200')
+              ]"
+              :title="showAuditTrailSidebar ? 'Hide Audit Trail' : 'Show Audit Trail'"
+              aria-label="Toggle audit trail"
+            >
+              <Icon name="ri:history-line" size="20" />
+            </button>
           <h2 
             class="text-lg font-semibold font-quicksand"
             :class="[
@@ -1261,6 +1340,7 @@
           >
             Edit Flight Entry
           </h2>
+          </div>
           <button
             type="button"
             @click="cancelInlineEdit"
@@ -1307,24 +1387,6 @@
               </button>
             </div>
 
-            <!-- Import Source Info -->
-            <div v-if="inlineEditEntry.isImported" class="mb-4 p-3 rounded border" :class="[isDarkMode ? 'bg-blue-900/20 border-blue-700/50' : 'bg-blue-50 border-blue-200']">
-              <div class="flex items-center gap-2 mb-1">
-                <Icon name="ri:download-line" size="16" :class="[isDarkMode ? 'text-blue-400' : 'text-blue-600']" />
-                <span :class="['text-xs font-semibold', isDarkMode ? 'text-blue-300' : 'text-blue-700']">Imported Entry</span>
-              </div>
-              <div class="text-xs space-y-1" :class="[isDarkMode ? 'text-blue-200' : 'text-blue-600']">
-                <div v-if="inlineEditEntry.importSource">
-                  <span class="font-medium">Source:</span> {{ inlineEditEntry.importSource.toUpperCase() }}
-                </div>
-                <div v-if="inlineEditEntry.importMetadata?.fileName">
-                  <span class="font-medium">File:</span> {{ inlineEditEntry.importMetadata.fileName }}
-                </div>
-                <div v-if="inlineEditEntry.originalEntryDate">
-                  <span class="font-medium">Original Date:</span> {{ formatDisplayDate(inlineEditEntry.originalEntryDate) }}
-                </div>
-              </div>
-            </div>
 
             <div v-if="isInlineCommercialMode && inlineEditEntry?.oooi" class="mb-4">
               <div class="flex justify-between items-center mb-2 px-2">
@@ -1708,6 +1770,23 @@
                 isDarkMode ? 'border-gray-700' : 'border-gray-200'
               ]"
             >
+              <div class="flex items-center gap-2">
+                <button
+                  v-if="expandedEntryId"
+                  type="button"
+                  @click.stop="showAuditTrailSidebar = !showAuditTrailSidebar"
+                  :class="[
+                    'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold font-quicksand transition-colors',
+                    showAuditTrailSidebar
+                      ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                      : (isDarkMode
+                        ? 'border border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600'
+                        : 'border border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')
+                  ]"
+                >
+                  <Icon name="ri:history-line" size="14" />
+                  {{ showAuditTrailSidebar ? 'Hide History' : 'View History' }}
+                </button>
               <button
                 type="button"
                 @click.stop="expandedEntryId && confirmAndDeleteEntry(expandedEntryId)"
@@ -1715,6 +1794,7 @@
               >
                 Delete Entry
               </button>
+              </div>
               <div class="flex items-center gap-3">
                 <button
                   type="button"
@@ -1754,7 +1834,7 @@
           <!-- Panel Header -->
           <div class="flex items-center justify-between p-4 border-b" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-200']">
             <h2 class="text-lg font-semibold font-quicksand" :class="[isDarkMode ? 'text-gray-100' : 'text-gray-900']">
-              New Log Entry
+              {{ editingEntryId ? 'Edit Log Entry' : 'New Log Entry' }}
             </h2>
             <button
               type="button"
@@ -1774,6 +1854,7 @@
           <!-- Scrollable Form Content -->
           <div class="flex-1 overflow-y-auto p-6" data-add-entry-panel>
             <form class="grid gap-6" @submit.prevent="submitEntry">
+
               <div class="flex items-center justify-between mb-2">
                 <button
                   type="button"
@@ -2173,6 +2254,22 @@
                   {{ successMessage }}
                 </div>
                 <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end">
+                  <button
+                    v-if="editingEntryId"
+                    type="button"
+                    :class="[
+                      'inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold font-quicksand transition-all',
+                      showAuditTrailSidebar
+                        ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+                        : (isDarkMode 
+                          ? 'border border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' 
+                          : 'border border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')
+                    ]"
+                    @click="showAuditTrailSidebar = !showAuditTrailSidebar"
+                  >
+                    <Icon name="ri:history-line" size="16" />
+                    {{ showAuditTrailSidebar ? 'Hide History' : 'View History' }}
+                  </button>
                   <button
                     v-if="editingEntryId"
                     type="button"
@@ -3984,7 +4081,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, watch, watchEffect } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch, watchEffect } from 'vue'
 import {
   LOGBOOK_STORAGE_KEY,
   createEmptyFlightTime,
@@ -4013,7 +4110,10 @@ import { calculateSectionII, calculateSectionIII } from '~/utils/form8710Calcula
 import type { Form8710Data, AircraftCategory8710 } from '~/utils/form8710Types'
 import { supabase } from '~/lib/supabase'
 import { useAuth } from '~/composables/useAuth'
+import { useDataIntegrity } from '~/composables/useDataIntegrity'
 import AuthModal from '~/components/AuthModal.vue'
+import AuditTrail from '~/components/AuditTrail.vue'
+import IntegrityStatus from '~/components/IntegrityStatus.vue'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '~/utils/migrateLocalStorage'
 
 // Browser check (must be defined early for watchers with immediate: true)
@@ -4021,9 +4121,13 @@ const isBrowser = typeof window !== 'undefined'
 
 // Authentication setup
 const { user, isAuthenticated, isLoading: authLoading, signOut: authSignOut } = useAuth()
+const { validateEntry: validateEntryIntegrity } = useDataIntegrity()
 const showAuthModal = ref(false)
 const isMigrating = ref(false)
 const migrationProgress = ref({ step: '', current: 0, total: 0 })
+
+// Log entries - must be declared before any functions that use it
+const logEntries = ref<LogEntry[]>([])
 
 // Logout function
 const handleLogout = async () => {
@@ -4570,8 +4674,6 @@ const catalogSections = [
   }
 ] as const satisfies readonly { key: CatalogKey; label: string; icon: string }[]
 
-const logEntries = ref<LogEntry[]>([])
-
 const newEntry = reactive<EditableLogEntry>(createBlankEntry())
 const searchTerm = ref('')
 const validationError = ref<string | null>(null)
@@ -4656,27 +4758,277 @@ async function saveInlineEdit(): Promise<void> {
     oooi: inlineEditEntry.value.oooi && Object.values(inlineEditEntry.value.oooi).some(v => v) ? { ...inlineEditEntry.value.oooi } : undefined
   }
 
-  // Update the entry in the list
   const targetId = inlineEditEntry.value.id
+
+  // Save to Supabase if authenticated, otherwise save to localStorage
+  if (isAuthenticated.value && user.value) {
+    try {
+      // Get old entry data before updating
+      const { data: oldEntryData, error: fetchError } = await (supabase
+        .from('log_entries') as any)
+        .select('*')
+        .eq('id', targetId)
+        .single()
+      
+      if (fetchError) {
+        console.error('[SaveInlineEdit] Failed to fetch old entry data:', fetchError)
+        throw fetchError
+      }
+
+      // Convert to database format
+      const dbEntry: any = {
+        date: updatedEntry.date,
+        role: updatedEntry.role,
+        aircraft_category_class: updatedEntry.aircraftCategoryClass,
+        category_class_time: updatedEntry.categoryClassTime,
+        aircraft_make_model: updatedEntry.aircraftMakeModel,
+        registration: updatedEntry.registration,
+        flight_number: updatedEntry.flightNumber,
+        departure: updatedEntry.departure,
+        destination: updatedEntry.destination,
+        route: updatedEntry.route,
+        training_elements: updatedEntry.trainingElements || null,
+        training_instructor: updatedEntry.trainingInstructor || null,
+        instructor_certificate: updatedEntry.instructorCertificate || null,
+        flight_conditions: updatedEntry.flightConditions,
+        remarks: updatedEntry.remarks || null,
+        flight_time: updatedEntry.flightTime,
+        performance: updatedEntry.performance,
+        oooi: updatedEntry.oooi || null,
+        flagged: oldEntryData?.flagged ?? false,
+        is_imported: oldEntryData?.is_imported ?? false,
+        import_source: oldEntryData?.import_source ?? null,
+        import_batch_id: oldEntryData?.import_batch_id ?? null,
+        original_entry_date: oldEntryData?.original_entry_date ?? null,
+        import_metadata: oldEntryData?.import_metadata ?? null
+      }
+
+      console.log('[SaveInlineEdit] Updating entry in database:', targetId)
+      
+      // Update existing entry and verify it succeeded
+      const { data: updateResult, error } = await (supabase
+        .from('log_entries') as any)
+        .update(dbEntry)
+        .eq('id', targetId)
+        .select()
+        .single()
+      
+      if (error) {
+        console.error('[SaveInlineEdit] Update error:', error)
+        throw error
+      }
+      
+      if (!updateResult) {
+        console.error('[SaveInlineEdit] Update succeeded but no data returned')
+        throw new Error('Update succeeded but no data returned')
+      }
+      
+      console.log('[SaveInlineEdit] Entry updated successfully in database:', updateResult)
+      console.log('[SaveInlineEdit] Hash from updateResult:', updateResult.data_hash)
+      console.log('[SaveInlineEdit] Version from updateResult:', updateResult.version)
+      
+      // Store updateResult in a const for the closure
+      const savedUpdateResult = updateResult
+      
+      // Validate entry integrity after update commits
+      // The trigger (compute_entry_hash_trigger) fires BEFORE UPDATE and computes the hash
+      // The returned updateResult.data_hash contains the hash computed by the trigger
+      // Validation should match this hash exactly since it uses the same build_entry_hash_text function
+      // Small delay to ensure transaction is fully committed and any replication lag is accounted for
+      setTimeout(async () => {
+        try {
+          console.log('[SaveInlineEdit] Validating entry integrity after update commit...')
+          const validationResult = await validateEntryIntegrity(targetId, true).catch((err: any) => {
+            console.warn(`[SaveInlineEdit] Failed to validate entry ${targetId}:`, err)
+            return null
+          })
+          
+          if (validationResult) {
+            if (validationResult.isValid) {
+              console.log('[SaveInlineEdit] Entry validated successfully')
+            } else {
+              console.error('[SaveInlineEdit] Hash mismatch detected!', {
+                entryId: targetId,
+                storedHash: validationResult.currentHash?.substring(0, 16) + '...',
+                computedHash: validationResult.computedHash?.substring(0, 16) + '...'
+              })
+            }
+          }
+          
+          // Refresh audit trail if it's open for this entry
+          if (showAuditTrailSidebar.value && expandedEntryId.value === targetId) {
+            // Trigger a refresh by slightly modifying and restoring the entryId
+            const currentId = expandedEntryId.value
+            expandedEntryId.value = null
+            await nextTick()
+            expandedEntryId.value = currentId
+          }
+        } catch (validationErr) {
+          // Ignore validation errors - don't fail the save
+          console.warn('[SaveInlineEdit] Validation error:', validationErr)
+        }
+      }, 200) // Small delay to ensure transaction is committed
+      
+      // Update local state IMMEDIATELY with the data returned from database
+      const dbEntryResult = updateResult
+      const entry: LogEntry = {
+        id: dbEntryResult.id,
+        date: dbEntryResult.date,
+        role: dbEntryResult.role,
+        aircraftCategoryClass: dbEntryResult.aircraft_category_class,
+        categoryClassTime: dbEntryResult.category_class_time,
+        aircraftMakeModel: dbEntryResult.aircraft_make_model,
+        registration: dbEntryResult.registration,
+        flightNumber: dbEntryResult.flight_number,
+        departure: dbEntryResult.departure,
+        destination: dbEntryResult.destination,
+        route: dbEntryResult.route || '',
+        trainingElements: dbEntryResult.training_elements || '',
+        trainingInstructor: dbEntryResult.training_instructor || '',
+        instructorCertificate: dbEntryResult.instructor_certificate || '',
+        flightConditions: dbEntryResult.flight_conditions || [],
+        remarks: dbEntryResult.remarks || '',
+        flightTime: dbEntryResult.flight_time as FlightTimeBreakdown,
+        performance: dbEntryResult.performance as PerformanceMetrics,
+        oooi: dbEntryResult.oooi as OOOITimes | undefined,
+        flagged: dbEntryResult.flagged || false,
+        version: dbEntryResult.version, // Include version to keep frontend in sync with database
+        isImported: dbEntryResult.is_imported || false,
+        importSource: dbEntryResult.import_source || undefined,
+        importBatchId: dbEntryResult.import_batch_id || undefined,
+        originalEntryDate: dbEntryResult.original_entry_date || undefined,
+        importMetadata: dbEntryResult.import_metadata || undefined
+      }
+      
+      // Normalize values
+      const normalizedFlightTime: FlightTimeBreakdown = { ...createEmptyFlightTime() }
+      flightTimeFields.forEach((field) => {
+        normalizedFlightTime[field.key] = normalizeNumber(entry.flightTime?.[field.key])
+      })
+      entry.flightTime = normalizedFlightTime
+      
+      const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
+      performanceFields.forEach((field) => {
+        if (field.key === 'approachType') {
+          normalizedPerformance[field.key] = (entry.performance?.[field.key] as string | null) ?? null
+        } else {
+          const rawValue = entry.performance?.[field.key]
+          if (typeof rawValue === 'string') {
+            const parsed = parseFloat(rawValue)
+            normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
+          } else {
+            normalizedPerformance[field.key] = normalizeNumber(rawValue)
+          }
+        }
+      })
+      entry.performance = normalizedPerformance
+      
+      // Update local state immediately
+      logEntries.value = sortEntriesByDateAndOOOI(
+        logEntries.value.map((e) => (e.id === targetId ? entry : e))
+      )
+      console.log('[SaveInlineEdit] Local state updated immediately with database result')
+
+      // Create audit log entry
+      try {
+        const changedFields: string[] = []
+        const oldData: any = {}
+        const newData: any = {}
+        
+        // Compare all fields
+        const fieldsToCompare = [
+          'date', 'role', 'aircraft_category_class', 'category_class_time',
+          'aircraft_make_model', 'registration', 'flight_number', 'departure',
+          'destination', 'route', 'training_elements', 'training_instructor',
+          'instructor_certificate', 'flight_conditions', 'remarks',
+          'flight_time', 'performance', 'oooi', 'flagged'
+        ]
+        
+        fieldsToCompare.forEach(field => {
+          const oldVal = oldEntryData[field]
+          const newVal = dbEntry[field]
+          
+          // Deep comparison for objects/arrays
+          if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+            changedFields.push(field)
+            oldData[field] = oldVal
+            newData[field] = newVal
+          }
+        })
+        
+        if (changedFields.length > 0) {
+          // Create change summary
+          const summaryParts = changedFields.slice(0, 3).map(field => {
+            const fieldName = field.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+            return fieldName
+          })
+          const changeSummary = changedFields.length > 3
+            ? `Updated ${summaryParts.join(', ')} and ${changedFields.length - 3} more field${changedFields.length - 3 > 1 ? 's' : ''}`
+            : `Updated ${summaryParts.join(', ')}`
+          
+          console.log('[SaveInlineEdit] Creating audit log:', {
+            entry_id: targetId,
+            user_id: user.value.id,
+            changed_fields_count: changedFields.length
+          })
+          
+          const { data: auditData, error: auditError } = await (supabase
+            .from('audit_logs') as any)
+            .insert({
+              entry_id: targetId,
+              user_id: user.value.id,
+              action: 'update',
+              old_data: oldData,
+              new_data: newData,
+              changed_fields: changedFields,
+              change_summary: changeSummary,
+              is_compliance_event: false
+            })
+            .select()
+            .single()
+          
+          if (auditError) {
+            console.error('[SaveInlineEdit] Failed to create audit log:', auditError)
+            console.error('[SaveInlineEdit] Audit error details:', JSON.stringify(auditError, null, 2))
+          } else {
+            console.log('[SaveInlineEdit] Audit log created successfully:', auditData)
+          }
+        } else {
+          console.log('[SaveInlineEdit] No fields changed, skipping audit log')
+        }
+      } catch (auditError) {
+        console.error('[SaveInlineEdit] Exception creating audit log:', auditError)
+      }
+
+      // Verification is already done - we have the data from updateResult
+      // No need to reload, we already updated local state with the returned data
+      console.log('[SaveInlineEdit] Save complete - entry persisted and local state updated')
+    } catch (error) {
+      console.error('[SaveInlineEdit] Error saving entry to Supabase:', error)
+      alert('Error saving entry. Please try again.')
+      return
+    }
+  } else {
+    // Fallback to localStorage - just update local state
   logEntries.value = sortEntriesByDateAndOOOI(
     logEntries.value.map((e) => 
       e.id === targetId ? updatedEntry : e
     )
   )
+  }
 
   console.log('[SaveInlineEdit] Entry saved. Updated night time in logEntries:', 
     logEntries.value.find(e => e.id === targetId)?.flightTime.night
-  )
-  console.log('[SaveInlineEdit] Full flightTime object:', 
-    logEntries.value.find(e => e.id === targetId)?.flightTime
   )
 
   expandedEntryId.value = null
   inlineEditEntry.value = null
   isInlineCommercialMode.value = false
+  showAuditTrailSidebar.value = false
 }
 
 function cancelInlineEdit(): void {
+  showAuditTrailSidebar.value = false
   expandedEntryId.value = null
   inlineEditEntry.value = null
   isInlineCommercialMode.value = false
@@ -4694,6 +5046,9 @@ const showPilotProfile = ref(false)
 const showIdentDropdown = ref(false)
 const showColumnSettings = ref(false)
 const showInlineIdentDropdown = ref(false)
+const showAuditTrail = ref(false)
+const auditTrailEntryId = ref<string | null>(null)
+const showAuditTrailSidebar = ref(false)
 const showFromDropdown = ref(false)
 const showInlineFromDropdown = ref(false)
 const showToDropdown = ref(false)
@@ -5897,12 +6252,16 @@ async function importEntries(entries: LogEntry[]): Promise<{ imported: number; s
     try {
       // Calculate statistics for the batch
       const totalEntries = entries.length
-      const dateRange = entries.length > 0 
-        ? {
-            earliest: entries.reduce((earliest, e) => !earliest || e.date < earliest ? e.date : earliest, entries[0].date),
-            latest: entries.reduce((latest, e) => !latest || e.date > latest ? e.date : latest, entries[0].date)
+      let dateRange = { earliest: null as string | null, latest: null as string | null }
+      if (entries.length > 0) {
+        const firstEntry = entries[0]
+        if (firstEntry) {
+          dateRange = {
+            earliest: entries.reduce((earliest, e) => !earliest || e.date < earliest ? e.date : earliest, firstEntry.date),
+            latest: entries.reduce((latest, e) => !latest || e.date > latest ? e.date : latest, firstEntry.date)
           }
-        : { earliest: null, latest: null }
+        }
+      }
       
       const aircraftList = [...new Set(entries.map(e => e.registration))].sort()
       
@@ -8553,19 +8912,365 @@ async function submitEntry(): Promise<void> {
       }
 
       if (editingEntryId.value) {
-        // Update existing entry
-        const { error } = await (supabase
+        // Get old entry data before updating
+        const { data: oldEntryData, error: fetchError } = await (supabase
           .from('log_entries') as any)
-          .update(dbEntry)
+          .select('*')
           .eq('id', editingEntryId.value)
+          .single()
         
-        if (error) throw error
+        if (fetchError) {
+          console.error('[SaveEntry] Failed to fetch old entry data:', fetchError)
+          throw fetchError
+        }
         
-        // Update local state
+        // Only include fields that should be updated (exclude read-only/computed fields)
+        // Read-only: id, user_id, created_at, updated_at, data_hash, version
+        const updateData: any = {
+          // Basic flight information
+          date: dbEntry.date,
+          role: dbEntry.role,
+          aircraft_category_class: dbEntry.aircraft_category_class,
+          category_class_time: dbEntry.category_class_time,
+          aircraft_make_model: dbEntry.aircraft_make_model,
+          registration: dbEntry.registration,
+          flight_number: dbEntry.flight_number,
+          departure: dbEntry.departure,
+          destination: dbEntry.destination,
+          route: dbEntry.route,
+          
+          // Training information
+          training_elements: dbEntry.training_elements,
+          training_instructor: dbEntry.training_instructor,
+          instructor_certificate: dbEntry.instructor_certificate,
+          
+          // Flight conditions
+          flight_conditions: dbEntry.flight_conditions,
+          remarks: dbEntry.remarks,
+          
+          // Flight data (JSONB)
+          flight_time: dbEntry.flight_time,
+          performance: dbEntry.performance,
+          oooi: dbEntry.oooi,
+          
+          // Metadata fields (preserve existing values)
+          flagged: oldEntryData?.flagged ?? false,
+          is_imported: oldEntryData?.is_imported ?? false,
+          import_source: oldEntryData?.import_source ?? null,
+          import_batch_id: oldEntryData?.import_batch_id ?? null,
+          original_entry_date: oldEntryData?.original_entry_date ?? null,
+          import_metadata: oldEntryData?.import_metadata ?? null
+          
+          // Excluded: id, user_id, created_at, updated_at (auto), data_hash (computed), version (computed)
+        }
+        
+        console.log('[SaveEntry] Updating entry:', editingEntryId.value)
+        console.log('[SaveEntry] Update data:', JSON.stringify(updateData, null, 2))
+        
+        // Update existing entry and verify it succeeded
+        const { data: updateResult, error } = await (supabase
+          .from('log_entries') as any)
+          .update(updateData)
+          .eq('id', editingEntryId.value)
+          .select()
+          .single()
+        
+        if (error) {
+          console.error('[SaveEntry] Update error:', error)
+          console.error('[SaveEntry] Error details:', JSON.stringify(error, null, 2))
+          throw error
+        }
+        
+        if (!updateResult) {
+          console.error('[SaveEntry] Update succeeded but no data returned')
+          throw new Error('Update succeeded but no data returned')
+        }
+        
+        console.log('[SaveEntry] Entry updated successfully:', updateResult)
+        
+        // Validate entry integrity after update commits
+        // The trigger computes the hash BEFORE UPDATE, so after UPDATE completes the hash should be stored
+        // Small delay to ensure transaction is fully committed before validating
+        setTimeout(async () => {
+          try {
+            console.log('[SaveEntry] Validating entry integrity after update commit...')
+            const validationResult = await validateEntryIntegrity(editingEntryId.value, true).catch((err: any) => {
+              console.warn(`[SaveEntry] Failed to validate entry ${editingEntryId.value}:`, err)
+              return null
+            })
+            
+            if (validationResult) {
+              if (validationResult.isValid) {
+                console.log('[SaveEntry] Entry validated successfully')
+              } else {
+                console.error('[SaveEntry] Hash mismatch detected!', {
+                  entryId: editingEntryId.value,
+                  storedHash: validationResult.currentHash?.substring(0, 16) + '...',
+                  computedHash: validationResult.computedHash?.substring(0, 16) + '...'
+                })
+              }
+            }
+            
+            // Refresh audit trail if it's open for this entry
+            if (showAuditTrailSidebar.value && expandedEntryId.value === editingEntryId.value) {
+              // Trigger a refresh by slightly modifying and restoring the entryId
+              const currentId = expandedEntryId.value
+              expandedEntryId.value = null
+              await nextTick()
+              expandedEntryId.value = currentId
+            }
+          } catch (validationErr) {
+            // Ignore validation errors - don't fail the save
+            console.warn('[SaveEntry] Validation error:', validationErr)
+          }
+        }, 200) // Small delay to ensure transaction is committed
+        
+        // Use the updateResult data directly (already fetched with .select().single())
+        const updatedEntryData = updateResult
+        
+        // Create audit log entry
+        try {
+          const changedFields: string[] = []
+          const oldData: any = {}
+          const newData: any = {}
+          
+          // Compare all fields
+          const fieldsToCompare = [
+            'date', 'role', 'aircraft_category_class', 'category_class_time',
+            'aircraft_make_model', 'registration', 'flight_number', 'departure',
+            'destination', 'route', 'training_elements', 'training_instructor',
+            'instructor_certificate', 'flight_conditions', 'remarks',
+            'flight_time', 'performance', 'oooi', 'flagged'
+          ]
+          
+          fieldsToCompare.forEach(field => {
+            const oldVal = oldEntryData[field]
+            const newVal = updateData[field]
+            
+            // Deep comparison for objects/arrays
+            if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
+              changedFields.push(field)
+              oldData[field] = oldVal
+              newData[field] = newVal
+            }
+          })
+          
+          if (changedFields.length > 0) {
+            // Create change summary
+            const summaryParts = changedFields.slice(0, 3).map(field => {
+              const fieldName = field.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+              return fieldName
+            })
+            const changeSummary = changedFields.length > 3
+              ? `Updated ${summaryParts.join(', ')} and ${changedFields.length - 3} more field${changedFields.length - 3 > 1 ? 's' : ''}`
+              : `Updated ${summaryParts.join(', ')}`
+            
+            console.log('[SaveEntry] Creating audit log:', {
+              entry_id: editingEntryId.value,
+              user_id: user.value.id,
+              changed_fields_count: changedFields.length
+            })
+            
+            const { data: auditData, error: auditError } = await (supabase
+              .from('audit_logs') as any)
+              .insert({
+                entry_id: editingEntryId.value,
+                user_id: user.value.id,
+                action: 'update',
+                old_data: oldData,
+                new_data: newData,
+                changed_fields: changedFields,
+                change_summary: changeSummary,
+                is_compliance_event: false
+              })
+              .select()
+              .single()
+            
+            if (auditError) {
+              console.error('[SaveEntry] Failed to create audit log:', auditError)
+              console.error('[SaveEntry] Audit error details:', JSON.stringify(auditError, null, 2))
+            } else {
+              console.log('[SaveEntry] Audit log created successfully:', auditData)
+              console.log('[SaveEntry] Audit log ID:', auditData?.id)
+            }
+          } else {
+            console.log('[SaveEntry] No fields changed, skipping audit log')
+          }
+        } catch (auditError) {
+          // Don't fail the update if audit log creation fails
+          console.error('[SaveEntry] Exception creating audit log:', auditError)
+          console.error('[SaveEntry] Audit error stack:', auditError instanceof Error ? auditError.stack : 'No stack')
+        }
+        
+        // Validation will be done after verification query completes
+        
+        // Update local state with data from database
         const targetId = editingEntryId.value
+        if (updatedEntryData) {
+          // Convert database format to LogEntry format
+          const dbEntry = updatedEntryData
+          const entry: LogEntry = {
+            id: dbEntry.id,
+            date: dbEntry.date,
+            role: dbEntry.role,
+            aircraftCategoryClass: dbEntry.aircraft_category_class,
+            categoryClassTime: dbEntry.category_class_time,
+            aircraftMakeModel: dbEntry.aircraft_make_model,
+            registration: dbEntry.registration,
+            flightNumber: dbEntry.flight_number,
+            departure: dbEntry.departure,
+            destination: dbEntry.destination,
+            route: dbEntry.route || '',
+            trainingElements: dbEntry.training_elements || '',
+            trainingInstructor: dbEntry.training_instructor || '',
+            instructorCertificate: dbEntry.instructor_certificate || '',
+            flightConditions: dbEntry.flight_conditions || [],
+            remarks: dbEntry.remarks || '',
+            flightTime: dbEntry.flight_time as FlightTimeBreakdown,
+            performance: dbEntry.performance as PerformanceMetrics,
+            oooi: dbEntry.oooi as OOOITimes | undefined,
+            flagged: dbEntry.flagged || false,
+            version: dbEntry.version, // Include version to keep frontend in sync with database
+            // Import tracking fields
+            isImported: dbEntry.is_imported || false,
+            importSource: dbEntry.import_source || undefined,
+            importBatchId: dbEntry.import_batch_id || undefined,
+            originalEntryDate: dbEntry.original_entry_date || undefined,
+            importMetadata: dbEntry.import_metadata || undefined
+          }
+          
+          // Normalize flight time values
+          const normalizedFlightTime: FlightTimeBreakdown = {
+            ...createEmptyFlightTime()
+          }
+          flightTimeFields.forEach((field) => {
+            const rawValue = entry.flightTime?.[field.key]
+            normalizedFlightTime[field.key] = normalizeNumber(rawValue)
+          })
+          entry.flightTime = normalizedFlightTime
+          
+          // Normalize performance values
+          const normalizedPerformance: PerformanceMetrics = {
+            ...createEmptyPerformance()
+          }
+          performanceFields.forEach((field) => {
+            if (field.key === 'approachType') {
+              normalizedPerformance[field.key] = (entry.performance?.[field.key] as string | null) ?? null
+            } else {
+              const rawValue = entry.performance?.[field.key]
+              if (typeof rawValue === 'string') {
+                const parsed = parseFloat(rawValue)
+                normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
+              } else {
+                normalizedPerformance[field.key] = normalizeNumber(rawValue)
+              }
+            }
+          })
+          entry.performance = normalizedPerformance
+          
+          logEntries.value = sortEntriesByDateAndOOOI(
+            logEntries.value.map((e) => (e.id === targetId ? entry : e))
+          )
+        } else {
+          // Fallback to form data if reload failed
         logEntries.value = sortEntriesByDateAndOOOI(
           logEntries.value.map((entry) => (entry.id === targetId ? { ...baseEntry, id: targetId } : entry))
         )
+        }
+        
+        // Verify the update persisted by checking the database
+        const { data: verifyData, error: verifyError } = await (supabase
+          .from('log_entries') as any)
+          .select('*')
+          .eq('id', editingEntryId.value)
+          .single()
+        
+        if (verifyError) {
+          console.error('[SaveEntry] Failed to verify update:', verifyError)
+        } else {
+          console.log('[SaveEntry] Verified update in database - data matches:', 
+            JSON.stringify(verifyData, null, 2))
+        }
+        
+        // Don't reload all entries immediately - wait a moment for database to commit
+        // Then reload just this entry to verify it persisted, and validate integrity
+        setTimeout(async () => {
+          console.log('[SaveEntry] Reloading entry to verify persistence...')
+          const { data: verifyEntry, error: verifyErr } = await (supabase
+            .from('log_entries') as any)
+            .select('*')
+            .eq('id', editingEntryId.value)
+            .single()
+          
+          if (!verifyErr && verifyEntry) {
+            // Update just this entry in the local state
+            const dbEntry = verifyEntry
+            const entry: LogEntry = {
+              id: dbEntry.id,
+              date: dbEntry.date,
+              role: dbEntry.role,
+              aircraftCategoryClass: dbEntry.aircraft_category_class,
+              categoryClassTime: dbEntry.category_class_time,
+              aircraftMakeModel: dbEntry.aircraft_make_model,
+              registration: dbEntry.registration,
+              flightNumber: dbEntry.flight_number,
+              departure: dbEntry.departure,
+              destination: dbEntry.destination,
+              route: dbEntry.route || '',
+              trainingElements: dbEntry.training_elements || '',
+              trainingInstructor: dbEntry.training_instructor || '',
+              instructorCertificate: dbEntry.instructor_certificate || '',
+              flightConditions: dbEntry.flight_conditions || [],
+              remarks: dbEntry.remarks || '',
+              flightTime: dbEntry.flight_time as FlightTimeBreakdown,
+              performance: dbEntry.performance as PerformanceMetrics,
+              oooi: dbEntry.oooi as OOOITimes | undefined,
+              flagged: dbEntry.flagged || false,
+              version: dbEntry.version, // Include version to keep frontend in sync with database
+              isImported: dbEntry.is_imported || false,
+              importSource: dbEntry.import_source || undefined,
+              importBatchId: dbEntry.import_batch_id || undefined,
+              originalEntryDate: dbEntry.original_entry_date || undefined,
+              importMetadata: dbEntry.import_metadata || undefined
+            }
+            
+            // Normalize flight time and performance
+            const normalizedFlightTime: FlightTimeBreakdown = { ...createEmptyFlightTime() }
+            flightTimeFields.forEach((field) => {
+              normalizedFlightTime[field.key] = normalizeNumber(entry.flightTime?.[field.key])
+            })
+            entry.flightTime = normalizedFlightTime
+            
+            const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
+            performanceFields.forEach((field) => {
+              if (field.key === 'approachType') {
+                normalizedPerformance[field.key] = (entry.performance?.[field.key] as string | null) ?? null
+              } else {
+                const rawValue = entry.performance?.[field.key]
+                if (typeof rawValue === 'string') {
+                  const parsed = parseFloat(rawValue)
+                  normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
+                } else {
+                  normalizedPerformance[field.key] = normalizeNumber(rawValue)
+                }
+              }
+            })
+            entry.performance = normalizedPerformance
+            
+            logEntries.value = sortEntriesByDateAndOOOI(
+              logEntries.value.map((e) => (e.id === targetId ? entry : e))
+            )
+            console.log('[SaveEntry] Entry verified and updated in local state')
+          }
+        }, 500)
+        
+        // Refresh audit logs in the sidebar if open (by toggling to force re-fetch)
+        // The AuditTrail component watches props.entryId and props.isOpen, so it will auto-reload
+        // when the sidebar opens, but if it's already open, we need to trigger a refresh
+        // Since editingEntryId hasn't changed, we can't rely on that. Instead, the component
+        // should watch for changes. But for now, we'll just let the user manually refresh
+        // by closing and reopening the sidebar if needed.
+        
         successMessage.value = 'Entry updated.'
       } else {
         // Insert new entry
@@ -8577,10 +9282,98 @@ async function submitEntry(): Promise<void> {
         
         if (error) throw error
         
-        // Add to local state
+        // Create audit log entry for new entry
+        try {
+          const { error: auditError } = await (supabase
+            .from('audit_logs') as any)
+            .insert({
+              entry_id: (data as any).id,
+              user_id: user.value.id,
+              action: 'create',
+              old_data: null,
+              new_data: dbEntry,
+              changed_fields: [],
+              change_summary: `Created new log entry for ${dbEntry.date}`,
+              is_compliance_event: false
+            })
+          
+          if (auditError) {
+            console.error('[SaveEntry] Failed to create audit log for new entry:', auditError)
+          } else {
+            console.log('[SaveEntry] Audit log created successfully for new entry')
+          }
+        } catch (auditError) {
+          // Don't fail the insert if audit log creation fails
+          console.warn('[SaveEntry] Failed to create audit log:', auditError)
+        }
+        
+        // Validate entry integrity after create commits
+        // The trigger computes the hash BEFORE INSERT, so after INSERT completes the hash should be stored
+        // Small delay to ensure transaction is fully committed before validating
+        const newEntryId = (data as any).id
+        setTimeout(async () => {
+          try {
+            console.log('[SaveEntry] Validating entry integrity after create commit...')
+            const validationResult = await validateEntryIntegrity(newEntryId, true).catch((err: any) => {
+              console.warn(`[SaveEntry] Failed to validate new entry ${newEntryId}:`, err)
+              return null
+            })
+            
+            if (validationResult) {
+              if (validationResult.isValid) {
+                console.log('[SaveEntry] New entry validated successfully')
+              } else {
+                console.error('[SaveEntry] Hash mismatch detected for new entry!', {
+                  entryId: newEntryId,
+                  storedHash: validationResult.currentHash?.substring(0, 16) + '...',
+                  computedHash: validationResult.computedHash?.substring(0, 16) + '...'
+                })
+              }
+            }
+            
+            // Refresh audit trail if it's open for this entry
+            if (showAuditTrailSidebar.value && expandedEntryId.value === newEntryId) {
+              // Trigger a refresh by slightly modifying and restoring the entryId
+              const currentId = expandedEntryId.value
+              expandedEntryId.value = null
+              await nextTick()
+              expandedEntryId.value = currentId
+            }
+          } catch (validationErr) {
+            // Ignore validation errors - don't fail the save
+            console.warn('[SaveEntry] Validation error for new entry:', validationErr)
+          }
+        }, 200) // Small delay to ensure transaction is committed
+        
+        // Add to local state using data returned from database (includes version)
+        const dbEntryResult = data as any
         const entryToStore: LogEntry = {
-          ...baseEntry,
-          id: (data as any).id
+          id: dbEntryResult.id,
+          date: dbEntryResult.date,
+          role: dbEntryResult.role,
+          aircraftCategoryClass: dbEntryResult.aircraft_category_class,
+          categoryClassTime: dbEntryResult.category_class_time,
+          aircraftMakeModel: dbEntryResult.aircraft_make_model,
+          registration: dbEntryResult.registration,
+          flightNumber: dbEntryResult.flight_number,
+          departure: dbEntryResult.departure,
+          destination: dbEntryResult.destination,
+          route: dbEntryResult.route || '',
+          trainingElements: dbEntryResult.training_elements || '',
+          trainingInstructor: dbEntryResult.training_instructor || '',
+          instructorCertificate: dbEntryResult.instructor_certificate || '',
+          flightConditions: dbEntryResult.flight_conditions || [],
+          remarks: dbEntryResult.remarks || '',
+          flightTime: dbEntryResult.flight_time as FlightTimeBreakdown,
+          performance: dbEntryResult.performance as PerformanceMetrics,
+          oooi: dbEntryResult.oooi as OOOITimes | undefined,
+          flagged: dbEntryResult.flagged || false,
+          version: dbEntryResult.version, // Include version to keep frontend in sync with database
+          isImported: dbEntryResult.is_imported || false,
+          importSource: dbEntryResult.import_source || undefined,
+          importBatchId: dbEntryResult.import_batch_id || undefined,
+          originalEntryDate: dbEntryResult.original_entry_date || undefined,
+          importMetadata: dbEntryResult.import_metadata || undefined
         }
         logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
         successMessage.value = 'Entry saved.'
@@ -8627,6 +9420,19 @@ async function removeEntry(id: string): Promise<void> {
   // Delete from Supabase if authenticated
   if (isAuthenticated.value && user.value) {
     try {
+      // Get entry data before deleting for audit log
+      let entryData = null
+      try {
+        const { data } = await (supabase
+          .from('log_entries') as any)
+          .select('*')
+          .eq('id', id)
+          .single()
+        entryData = data
+      } catch (err) {
+        console.warn('Could not fetch entry data for audit log:', err)
+      }
+      
       const { error } = await (supabase
         .from('log_entries') as any)
         .delete()
@@ -8636,6 +9442,26 @@ async function removeEntry(id: string): Promise<void> {
         console.error('Error deleting entry from Supabase:', error)
         alert(`Failed to delete entry: ${error.message}`)
         return
+      }
+      
+      // Create audit log entry for deletion
+      if (entryData) {
+        try {
+          await (supabase
+            .from('audit_logs') as any)
+            .insert({
+              entry_id: id,
+              user_id: user.value.id,
+              action: 'delete',
+              old_data: entryData,
+              new_data: null,
+              changed_fields: [],
+              change_summary: `Deleted log entry for ${entryData.date}`,
+              is_compliance_event: false
+            })
+        } catch (auditError) {
+          console.warn('Failed to create audit log for deletion:', auditError)
+        }
       }
     } catch (error) {
       console.error('Error deleting entry:', error)
@@ -8673,6 +9499,32 @@ async function confirmAndDeleteEntry(id: string): Promise<void> {
     inlineEditEntry.value = null
   }
 }
+
+// Audit Trail handlers
+function openAuditTrail(entryId: string) {
+  auditTrailEntryId.value = entryId
+  showAuditTrail.value = true
+}
+
+async function handleEntryRestored(entryId: string) {
+  // Reload the entry from Supabase to get updated data
+  await loadEntries()
+  // If we're currently editing this entry, refresh the form
+  if (editingEntryId.value === entryId) {
+    const updatedEntry = logEntries.value.find(e => e.id === entryId)
+    if (updatedEntry) {
+      // Re-populate form with updated entry - just reload entries, the form should update
+      // The editingEntryId is still set, so the form will show the updated data
+    }
+  }
+  // If this entry is expanded, refresh it
+  if (expandedEntryId.value === entryId) {
+    const updatedEntry = logEntries.value.find(e => e.id === entryId)
+    if (updatedEntry) {
+      inlineEditEntry.value = { ...updatedEntry }
+    }
+  }
+}
 // Load entries from Supabase (when authenticated) or localStorage (fallback)
 async function loadEntries(): Promise<void> {
   if (!isBrowser) return
@@ -8696,6 +9548,10 @@ async function loadEntries(): Promise<void> {
       }
       
       if (data && data.length > 0) {
+        // Removed automatic validation - it will be done on-demand when user opens audit log
+        // This significantly reduces network load (was validating ALL entries on every page load)
+        // Validation now happens only when user opens the audit trail for a specific entry
+        
         // Convert database format to LogEntry format
         logEntries.value = data.map((dbEntry: any) => {
           const entry: LogEntry = {
@@ -8719,6 +9575,7 @@ async function loadEntries(): Promise<void> {
             performance: dbEntry.performance as PerformanceMetrics,
             oooi: dbEntry.oooi as OOOITimes | undefined,
             flagged: dbEntry.flagged || false,
+            version: dbEntry.version, // Include version to keep frontend in sync with database
             // Import tracking fields
             isImported: dbEntry.is_imported || false,
             importSource: dbEntry.import_source || undefined,
@@ -10038,6 +10895,19 @@ function sortConditionsInFixedOrder(conditions: string[]): string[] {
 
 .slide-right-leave-to {
   transform: translateX(100%);
+}
+
+.slide-left-enter-active,
+.slide-left-leave-active {
+  transition: transform 0.3s ease-in-out;
+}
+
+.slide-left-enter-from {
+  transform: translateX(-100%);
+}
+
+.slide-left-leave-to {
+  transform: translateX(-100%);
 }
 </style>
 

@@ -103,13 +103,104 @@ export type Database = {
           import_metadata?: Record<string, any> | null
         }
       }
+      audit_logs: {
+        Row: {
+          id: string
+          entry_id: string
+          user_id: string | null
+          action: 'create' | 'update' | 'delete' | 'sign' | 'export' | 'restore'
+          old_data: Record<string, any> | null
+          new_data: Record<string, any> | null
+          changed_fields: string[] | null
+          change_summary: string | null
+          timestamp: string
+          ip_address: string | null
+          user_agent: string | null
+          session_id: string | null
+          is_compliance_event: boolean
+          compliance_reason: string | null
+        }
+        Insert: {
+          id?: string
+          entry_id: string
+          user_id?: string | null
+          action: 'create' | 'update' | 'delete' | 'sign' | 'export' | 'restore'
+          old_data?: Record<string, any> | null
+          new_data?: Record<string, any> | null
+          changed_fields?: string[] | null
+          change_summary?: string | null
+          timestamp?: string
+          ip_address?: string | null
+          user_agent?: string | null
+          session_id?: string | null
+          is_compliance_event?: boolean
+          compliance_reason?: string | null
+        }
+        Update: {
+          id?: string
+          entry_id?: string
+          user_id?: string | null
+          action?: 'create' | 'update' | 'delete' | 'sign' | 'export' | 'restore'
+          old_data?: Record<string, any> | null
+          new_data?: Record<string, any> | null
+          changed_fields?: string[] | null
+          change_summary?: string | null
+          timestamp?: string
+          ip_address?: string | null
+          user_agent?: string | null
+          session_id?: string | null
+          is_compliance_event?: boolean
+          compliance_reason?: string | null
+        }
+      }
+      entry_revisions: {
+        Row: {
+          id: string
+          entry_id: string
+          version: number
+          entry_data: Record<string, any>
+          data_hash: string
+          created_at: string
+          created_by: string | null
+          reason: string | null
+        }
+        Insert: {
+          id?: string
+          entry_id: string
+          version: number
+          entry_data: Record<string, any>
+          data_hash: string
+          created_at?: string
+          created_by?: string | null
+          reason?: string | null
+        }
+        Update: {
+          id?: string
+          entry_id?: string
+          version?: number
+          entry_data?: Record<string, any>
+          data_hash?: string
+          created_at?: string
+          created_by?: string | null
+          reason?: string | null
+        }
+      }
       // Add other tables as needed
     }
     Views: {
       // Views will be added here
     }
     Functions: {
-      // Functions will be added here
+      validate_entry_integrity: {
+        Args: {
+          entry_uuid: string
+        }
+        Returns: {
+          is_valid: boolean
+          current_hash: string
+          computed_hash: string
+        }[]
+      }
     }
   }
 }

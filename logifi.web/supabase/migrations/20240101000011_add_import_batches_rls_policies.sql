@@ -14,3 +14,5 @@ CREATE POLICY "Users can delete own import batches"
   ON import_batches FOR DELETE
   USING (auth.uid() = user_id);
 
+
+

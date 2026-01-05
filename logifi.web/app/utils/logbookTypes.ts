@@ -73,6 +73,7 @@ export interface LogEntry {
   performance: PerformanceMetrics
   oooi?: OOOITimes
   flagged?: boolean
+  version?: number // Entry version for data integrity tracking
   // Import tracking fields
   isImported?: boolean
   importSource?: string // 'csv', 'json', 'paper', etc.
