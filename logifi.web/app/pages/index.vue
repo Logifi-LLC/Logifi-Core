@@ -2275,6 +2275,33 @@
                       </div>
                     </div>
                   </div>
+                  <div v-if="validationWarning && (hasErrors || hasWarnings)" 
+                       :class="['rounded-lg border p-3', hasErrors ? (isDarkMode ? 'border-red-700 bg-red-900/20' : 'border-red-300 bg-red-50') : (isDarkMode ? 'border-yellow-700 bg-yellow-900/20' : 'border-yellow-300 bg-yellow-50')]">
+                    <div class="flex items-start gap-2">
+                      <Icon 
+                        :name="hasErrors ? 'ri:error-warning-line' : 'ri:alert-line'" 
+                        size="20" 
+                        :class="[hasErrors ? (isDarkMode ? 'text-red-400' : 'text-red-600') : (isDarkMode ? 'text-yellow-400' : 'text-yellow-600'), 'flex-shrink-0 mt-0.5']" 
+                      />
+                      <div class="flex-1">
+                        <div :class="['font-quicksand text-sm font-semibold mb-2', hasErrors ? (isDarkMode ? 'text-red-300' : 'text-red-800') : (isDarkMode ? 'text-yellow-300' : 'text-yellow-800')]">
+                          {{ hasErrors ? 'Flight Time Validation Errors' : 'Flight Time Validation Warnings' }}
+                        </div>
+                        <div class="space-y-2">
+                          <div v-for="(result, index) in [...validationErrors, ...validationWarnings]" :key="index"
+                               :class="['font-quicksand text-xs', hasErrors && result.type === 'error' ? (isDarkMode ? 'text-red-200' : 'text-red-800') : (isDarkMode ? 'text-yellow-200' : 'text-yellow-800')]">
+                            <div class="font-semibold mb-0.5">
+                              {{ result.field === 'date' ? 'Date' : result.field === 'total' ? 'Total Time' : result.field === 'pic' ? 'PIC' : result.field === 'sic' ? 'SIC' : result.field === 'dual' ? 'Dual Received' : result.field === 'solo' ? 'Solo' : result.field === 'night' ? 'Night' : result.field === 'actualInstrument' ? 'Actual Instrument' : result.field === 'simulatedInstrument' ? 'Simulated Instrument' : result.field === 'crossCountry' ? 'Cross-Country' : result.field === 'dualGiven' ? 'Dual Given' : result.field }}:
+                            </div>
+                            <div class="mb-1">{{ result.message }}</div>
+                            <div v-if="result.suggestion" :class="['text-xs italic', hasErrors && result.type === 'error' ? (isDarkMode ? 'text-red-300/80' : 'text-red-700') : (isDarkMode ? 'text-yellow-300/80' : 'text-yellow-700')]">
+                              💡 {{ result.suggestion }}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                   <div v-if="successMessage" :class="['font-quicksand text-sm', isDarkMode ? 'text-emerald-400' : 'text-emerald-600']">
                     {{ successMessage }}
                   </div>
@@ -2335,8 +2362,21 @@
                   >
                     Save Anyway
                   </button>
+                  <button
+                    v-if="validationWarning && !duplicateWarning && (hasWarnings || hasErrors)"
+                    type="button"
+                    :class="[
+                      'inline-flex items-center justify-center rounded-lg px-6 py-2 font-semibold font-quicksand transition-all',
+                      hasErrors
+                        ? (isDarkMode ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-red-600 text-white hover:bg-red-700')
+                        : (isDarkMode ? 'bg-yellow-600 text-white hover:bg-yellow-700' : 'bg-yellow-600 text-white hover:bg-yellow-700')
+                    ]"
+                    @click.prevent="() => { console.log('[SaveAnyway] Setting saveAnywayValidation to true'); saveAnywayValidation = true; submitEntry(); }"
+                  >
+                    {{ hasErrors ? 'Save Despite Errors' : 'Save Anyway' }}
+                  </button>
                   <button 
-                    v-if="!duplicateWarning"
+                    v-if="!duplicateWarning && !validationWarning"
                     type="submit"
                     :class="[
                       'inline-flex items-center justify-center rounded-lg px-6 py-2 font-semibold font-quicksand transition-all',
@@ -4263,6 +4303,7 @@ import type { Form8710Data, AircraftCategory8710 } from '~/utils/form8710Types'
 import { supabase } from '~/lib/supabase'
 import { useAuth } from '~/composables/useAuth'
 import { useDataIntegrity } from '~/composables/useDataIntegrity'
+import { useValidation } from '~/composables/useValidation'
 import AuthModal from '~/components/AuthModal.vue'
 import AuditTrail from '~/components/AuditTrail.vue'
 import IntegrityStatus from '~/components/IntegrityStatus.vue'
@@ -4275,6 +4316,7 @@ const isBrowser = typeof window !== 'undefined'
 // Authentication setup
 const { user, isAuthenticated, isLoading: authLoading, signOut: authSignOut } = useAuth()
 const { validateEntry: validateEntryIntegrity } = useDataIntegrity()
+const { validateEntry: validateFlightTimeEntry, validationErrors, validationWarnings, hasErrors, hasWarnings, clearValidation } = useValidation()
 const showAuthModal = ref(false)
 const isMigrating = ref(false)
 const migrationProgress = ref({ step: '', current: 0, total: 0 })
@@ -4833,6 +4875,8 @@ const validationError = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 const duplicateWarning = ref<{ matches: LogEntry[] } | null>(null)
 const saveAnyway = ref(false)
+const validationWarning = ref<boolean>(false)
+const saveAnywayValidation = ref(false)
 const isEntryFormOpen = ref(false)
 const isCommercialMode = ref(false)
 const isInlineCommercialMode = ref(false)
@@ -7361,6 +7405,9 @@ function generateEntryId(): string {
 function resetForm(): void {
   duplicateWarning.value = null
   saveAnyway.value = false
+  validationWarning.value = false
+  saveAnywayValidation.value = false
+  clearValidation()
   Object.assign(newEntry, createBlankEntry())
   editingEntryId.value = null
 }
@@ -8977,6 +9024,8 @@ async function submitEntry(): Promise<void> {
   validationError.value = null
   successMessage.value = null
   duplicateWarning.value = null
+  // Don't reset validationWarning or saveAnywayValidation here - they need to persist
+  // so that "Save Anyway" can work. They'll be cleared after successful save.
 
   const error = validateEntry(newEntry)
   if (error) {
@@ -9057,6 +9106,41 @@ async function submitEntry(): Promise<void> {
     }
   }
 
+  // Validate flight time before saving
+  const entryToValidate: LogEntry = {
+    ...baseEntry,
+    id: editingEntryId.value || 'temp'
+  }
+  const validationResults = validateFlightTimeEntry(entryToValidate)
+  
+  // Always show validation warnings if there are issues (for display purposes)
+  if (hasErrors.value || hasWarnings.value) {
+    validationWarning.value = true
+  }
+  
+  // If user has explicitly chosen to save anyway, proceed (but keep validation visible)
+  if (saveAnywayValidation.value) {
+    // User has chosen to proceed, so we'll save despite validation issues
+    // Validation results will be cleared after successful save
+    console.log('[SaveEntry] Proceeding with save despite validation issues (saveAnywayValidation = true)')
+  } else {
+    // Block save if there are errors (unless user explicitly overrides)
+    if (hasErrors.value) {
+      console.log('[SaveEntry] Blocking save due to validation errors')
+      return
+    }
+    
+    // Show warning if there are warnings (but allow save)
+    if (hasWarnings.value) {
+      console.log('[SaveEntry] Blocking save due to validation warnings')
+      return
+    }
+
+    // Clear validation warnings if no issues
+    validationWarning.value = false
+    clearValidation()
+  }
+
   // Save to Supabase if authenticated, otherwise save to localStorage
   if (isAuthenticated.value && user.value) {
     try {
@@ -9080,7 +9164,7 @@ async function submitEntry(): Promise<void> {
         flight_time: baseEntry.flightTime,
         performance: baseEntry.performance,
         oooi: baseEntry.oooi || null,
-        flagged: false,
+        flagged: saveAnywayValidation.value, // Flag entry if saved despite validation issues
         is_imported: false
       }
 
@@ -9126,8 +9210,8 @@ async function submitEntry(): Promise<void> {
           performance: dbEntry.performance,
           oooi: dbEntry.oooi,
           
-          // Metadata fields (preserve existing values)
-          flagged: oldEntryData?.flagged ?? false,
+          // Metadata fields (preserve existing values or flag if saving despite validation)
+          flagged: saveAnywayValidation.value ? true : (oldEntryData?.flagged ?? false),
           is_imported: oldEntryData?.is_imported ?? false,
           import_source: oldEntryData?.import_source ?? null,
           import_batch_id: oldEntryData?.import_batch_id ?? null,
@@ -9447,6 +9531,9 @@ async function submitEntry(): Promise<void> {
         successMessage.value = 'Entry updated.'
         duplicateWarning.value = null
         saveAnyway.value = false
+        validationWarning.value = false
+        saveAnywayValidation.value = false
+        clearValidation()
       } else {
         // Insert new entry
         const { data, error } = await (supabase
@@ -9554,6 +9641,9 @@ async function submitEntry(): Promise<void> {
         successMessage.value = 'Entry saved.'
         duplicateWarning.value = null
         saveAnyway.value = false
+        validationWarning.value = false
+        saveAnywayValidation.value = false
+        clearValidation()
       }
     } catch (error) {
       console.error('Error saving entry to Supabase:', error)
@@ -9566,7 +9656,16 @@ async function submitEntry(): Promise<void> {
     if (editingEntryId.value) {
       const targetId = editingEntryId.value
       logEntries.value = sortEntriesByDateAndOOOI(
-        logEntries.value.map((entry) => (entry.id === targetId ? { ...baseEntry, id: targetId } : entry))
+        logEntries.value.map((entry) => {
+          if (entry.id === targetId) {
+            return { 
+              ...baseEntry, 
+              id: targetId,
+              flagged: saveAnywayValidation.value ? true : (entry.flagged ?? false)
+            }
+          }
+          return entry
+        })
       )
       console.log('[SaveEntry] Entry updated. Night time in saved entry:', 
         logEntries.value.find(e => e.id === targetId)?.flightTime.night
@@ -9575,7 +9674,8 @@ async function submitEntry(): Promise<void> {
     } else {
       const entryToStore: LogEntry = {
         ...baseEntry,
-        id: generateEntryId()
+        id: generateEntryId(),
+        flagged: saveAnywayValidation.value // Flag entry if saved despite validation issues
       }
       logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
       console.log('[SaveEntry] Entry saved. Night time in saved entry:', 
@@ -9584,6 +9684,9 @@ async function submitEntry(): Promise<void> {
       successMessage.value = 'Entry saved locally. Remember to archive signatures once the feature is available.'
       duplicateWarning.value = null
       saveAnyway.value = false
+      validationWarning.value = false
+      saveAnywayValidation.value = false
+      clearValidation()
     }
   }
 
