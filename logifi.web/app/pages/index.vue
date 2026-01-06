@@ -1973,7 +1973,11 @@
                     :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
                     required
                     autocomplete="off"
-                    @input="newEntry.departure = ($event.target as HTMLInputElement).value.toUpperCase()"
+                    @input="(e) => { 
+                      newEntry.departure = (e.target as HTMLInputElement).value.toUpperCase()
+                      // Trigger cross-country check after a brief delay to allow value to update
+                      nextTick(() => checkAndAutoLogCrossCountry())
+                    }"
                     @focus="showFromDropdown = true; highlightedFromIndex = filteredAirportsForFrom.length > 0 ? 0 : -1"
                     @keydown="(e) => handleDropdownKeydown(e, 'from', filteredAirportsForFrom, (item) => selectAirportForFrom(item))"
                     @blur="handleFromBlur"
@@ -2009,7 +2013,11 @@
                     :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
                     required
                     autocomplete="off"
-                    @input="newEntry.destination = ($event.target as HTMLInputElement).value.toUpperCase()"
+                    @input="(e) => { 
+                      newEntry.destination = (e.target as HTMLInputElement).value.toUpperCase()
+                      // Trigger cross-country check after a brief delay to allow value to update
+                      nextTick(() => checkAndAutoLogCrossCountry())
+                    }"
                     @focus="showToDropdown = true; highlightedToIndex = filteredAirportsForTo.length > 0 ? 0 : -1"
                     @keydown="(e) => handleDropdownKeydown(e, 'to', filteredAirportsForTo, (item) => selectAirportForTo(item))"
                     @blur="handleToBlur"
@@ -2358,7 +2366,7 @@
                         ? 'bg-yellow-600 text-white hover:bg-yellow-700' 
                         : 'bg-yellow-600 text-white hover:bg-yellow-700'
                     ]"
-                    @click="saveAnyway = true; submitEntry()"
+                    @click="showDuplicateOverrideDialog = true"
                   >
                     Save Anyway
                   </button>
@@ -4255,6 +4263,93 @@
       </div>
     </div>
   </div>
+
+  <!-- Duplicate Override Confirmation Dialog (for individual entry saves) -->
+  <div
+    v-if="showDuplicateOverrideDialog && duplicateWarning"
+    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    @click.self="showDuplicateOverrideDialog = false"
+  >
+    <div
+      :class="[
+        'relative w-full max-w-md rounded-2xl border shadow-2xl transition-colors duration-300',
+        isDarkMode 
+          ? 'bg-gray-800 border-gray-700' 
+          : 'bg-gray-200 border-gray-300'
+      ]"
+      @click.stop
+    >
+      <div class="flex items-center justify-between p-6 border-b" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+        <h3 :class="['text-xl font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+          Confirm Save Duplicate Entry
+        </h3>
+        <button
+          @click="showDuplicateOverrideDialog = false"
+          :class="[
+            'p-1 rounded-lg transition-colors',
+            isDarkMode 
+              ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-300'
+          ]"
+          aria-label="Close"
+        >
+          <Icon name="ri:close-line" size="24" />
+        </button>
+      </div>
+      
+      <div class="p-6 space-y-4">
+        <div :class="['flex items-start gap-3', isDarkMode ? 'text-yellow-200' : 'text-yellow-700']">
+          <Icon name="ri:alert-line" size="24" class="flex-shrink-0 mt-0.5" />
+          <div class="flex-1">
+            <p :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              This entry matches {{ duplicateWarning.matches.length }} existing {{ duplicateWarning.matches.length === 1 ? 'entry' : 'entries' }} in your logbook.
+            </p>
+            <p :class="['text-sm font-quicksand mt-2', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+              Are you sure you want to save this duplicate entry? This may create duplicate records in your logbook.
+            </p>
+          </div>
+        </div>
+        
+        <div v-if="duplicateWarning.matches.length > 0" 
+             :class="['rounded-lg border p-3 max-h-40 overflow-y-auto', isDarkMode ? 'border-yellow-700/50 bg-yellow-900/10' : 'border-yellow-300 bg-yellow-50']">
+          <div :class="['text-xs font-semibold font-quicksand mb-2', isDarkMode ? 'text-yellow-300' : 'text-yellow-700']">
+            Matching {{ duplicateWarning.matches.length === 1 ? 'entry' : 'entries' }}:
+          </div>
+          <div v-for="match in duplicateWarning.matches.slice(0, 5)" :key="match.id"
+               :class="['text-xs font-quicksand py-1', isDarkMode ? 'text-yellow-200' : 'text-yellow-800']">
+            • {{ formatDisplayDate(match.date) }} · {{ match.registration }} · {{ match.departure }} → {{ match.destination }}
+          </div>
+          <div v-if="duplicateWarning.matches.length > 5"
+               :class="['text-xs font-quicksand py-1', isDarkMode ? 'text-yellow-300' : 'text-yellow-700']">
+            ... and {{ duplicateWarning.matches.length - 5 }} more
+          </div>
+        </div>
+      </div>
+      
+      <div class="flex items-center justify-end gap-3 p-6 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+        <button
+          @click="showDuplicateOverrideDialog = false"
+          :class="[
+            'px-4 py-2 rounded-lg font-quicksand transition-colors',
+            isDarkMode 
+              ? 'bg-gray-700 hover:bg-gray-600 text-white' 
+              : 'bg-gray-300 hover:bg-gray-400 text-gray-900'
+          ]"
+        >
+          Cancel
+        </button>
+        <button
+          @click="showDuplicateOverrideDialog = false; saveAnyway = true; submitEntry()"
+          :class="[
+            'px-4 py-2 rounded-lg font-quicksand transition-colors',
+            'bg-yellow-600 hover:bg-yellow-700 text-white'
+          ]"
+        >
+          Yes, Save Anyway
+        </button>
+      </div>
+    </div>
+  </div>
   <!-- End Main Content -->
   
   <!-- Loading State -->
@@ -5324,6 +5419,7 @@ const importPreviewMetadata = ref<ImportMetadata | null>(null)
 const expandedPreviewEntries = ref<Set<string>>(new Set())
 const showDuplicateConfirmDialog = ref(false)
 const importWithDuplicates = ref(false)
+const showDuplicateOverrideDialog = ref(false)
 const pilotInitials = computed(() => {
   const name = pilotProfile.name.trim()
   if (!name) return 'PP'
@@ -8022,6 +8118,7 @@ async function tryPopulateAircraftCategory(registration: string): Promise<void> 
 }
 
 function cancelEditing(): void {
+  showDuplicateOverrideDialog.value = false
   resetForm()
   validationError.value = null
   successMessage.value = null
@@ -8591,6 +8688,24 @@ watch(() => [newEntry.oooi?.out, newEntry.oooi?.in, newEntry.oooi?.off, newEntry
   // For now, let's just map Out-In to Total Time.
 }, { deep: true })
 
+// Watch for airport changes to trigger cross-country validation and auto-logging
+const validationTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
+watch(() => [newEntry.departure, newEntry.destination, newEntry.flightTime.crossCountry, newEntry.date, newEntry.flightTime.total], async () => {
+  if (!newEntry.departure || !newEntry.destination || newEntry.departure === 'UNKNOWN' || newEntry.destination === 'UNKNOWN') {
+    return
+  }
+  
+  // Clear existing timeout
+  if (validationTimeout.value) {
+    clearTimeout(validationTimeout.value)
+  }
+  
+  // Debounce validation to avoid too many API calls (reduced to 200ms for faster response)
+  validationTimeout.value = setTimeout(async () => {
+    await checkAndAutoLogCrossCountry()
+  }, 200)
+})
+
 watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.in, inlineEditEntry.value?.oooi?.off, inlineEditEntry.value?.oooi?.on, inlineEditEntry.value?.role, inlineEditEntry.value?.departure, inlineEditEntry.value?.destination, inlineEditEntry.value?.date], async () => {
   if (!isInlineCommercialMode.value || !inlineEditEntry.value?.oooi) return
   
@@ -9111,7 +9226,7 @@ async function submitEntry(): Promise<void> {
     ...baseEntry,
     id: editingEntryId.value || 'temp'
   }
-  const validationResults = validateFlightTimeEntry(entryToValidate, logEntries.value)
+  const validationResults = await validateFlightTimeEntry(entryToValidate, logEntries.value)
   
   // Always show validation warnings if there are issues (for display purposes)
   if (hasErrors.value || hasWarnings.value) {
@@ -9250,9 +9365,11 @@ async function submitEntry(): Promise<void> {
         // Small delay to ensure transaction is fully committed before validating
         setTimeout(async () => {
           try {
+            const entryId = editingEntryId.value
+            if (!entryId) return
             console.log('[SaveEntry] Validating entry integrity after update commit...')
-            const validationResult = await validateEntryIntegrity(editingEntryId.value, true).catch((err: any) => {
-              console.warn(`[SaveEntry] Failed to validate entry ${editingEntryId.value}:`, err)
+            const validationResult = await validateEntryIntegrity(entryId, true).catch((err: any) => {
+              console.warn(`[SaveEntry] Failed to validate entry ${entryId}:`, err)
               return null
             })
             
@@ -10723,6 +10840,69 @@ async function prefetchAirportCoords(airportCode: string): Promise<void> {
   }
 }
 
+// Helper function to check and auto-log cross-country time
+async function checkAndAutoLogCrossCountry(): Promise<void> {
+  // Only require airports - date is not needed for cross-country distance calculation
+  if (!newEntry.departure || !newEntry.destination || 
+      newEntry.departure === 'UNKNOWN' || newEntry.destination === 'UNKNOWN') {
+    return
+  }
+  
+  const entryToValidate: LogEntry = {
+    ...newEntry,
+    id: 'temp'
+  }
+  
+  try {
+    const results = await validateFlightTimeEntry(entryToValidate, logEntries.value)
+    
+    // Show validation warnings if there are any
+    if (hasErrors.value || hasWarnings.value) {
+      validationWarning.value = true
+    }
+    
+    // Auto-apply cross-country time if suggested (only if distance >= 50nm)
+    const crossCountryResult = results.find(r => r.field === 'crossCountry' && r.autoFix)
+    const crossCountryWarning = results.find(r => r.field === 'crossCountry' && r.type === 'warning' && r.message?.includes('distance is only'))
+    
+    // Helper to safely get numeric value
+    const getNumValue = (val: number | null | undefined): number => {
+      return val === null || val === undefined || isNaN(val) ? 0 : val
+    }
+    
+    // If there's a warning about distance being too short, remove auto-filled cross-country time
+    if (crossCountryWarning) {
+      // Distance is too short - clear cross-country time if it was auto-filled
+      // Only clear if it matches the total time (likely auto-filled)
+      const totalTime = getNumValue(newEntry.flightTime.total)
+      const xcTime = getNumValue(newEntry.flightTime.crossCountry)
+      if (xcTime > 0 && Math.abs(xcTime - totalTime) < 0.01) {
+        newEntry.flightTime.crossCountry = 0
+        // Remove cross-country checkbox
+        const index = newEntry.flightConditions.indexOf('Cross-Country')
+        if (index > -1) {
+          newEntry.flightConditions.splice(index, 1)
+        }
+      }
+    } else if (crossCountryResult?.autoFix && crossCountryResult.autoFix.field === 'crossCountry') {
+      // Only auto-fill if distance >= 50nm (indicated by presence of autoFix)
+      // The autoFix is only provided when coordinates are available and distance >= 50nm
+      const autoFixValue = crossCountryResult.autoFix.value as number
+      // Only auto-fill if cross-country time is currently 0 or null
+      // AND only if we have a valid auto-fix value (which means distance was validated as >= 50nm)
+      if (autoFixValue > 0 && (!newEntry.flightTime.crossCountry || newEntry.flightTime.crossCountry === 0)) {
+        newEntry.flightTime.crossCountry = autoFixValue
+        // Also check the cross-country checkbox
+        if (!newEntry.flightConditions.includes('Cross-Country')) {
+          newEntry.flightConditions.push('Cross-Country')
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to check and auto-log cross-country:', error)
+  }
+}
+
 // Selection handlers for FROM dropdown
 function selectAirportForFrom(airport: string): void {
   newEntry.departure = airport.toUpperCase()
@@ -10730,6 +10910,8 @@ function selectAirportForFrom(airport: string): void {
   highlightedFromIndex.value = -1
   // Prefetch coordinates for night time calculation
   prefetchAirportCoords(airport)
+  // Immediately check and auto-log cross-country if both airports are set
+  checkAndAutoLogCrossCountry()
 }
 
 function selectAirportForInlineFrom(airport: string): void {
@@ -10746,6 +10928,8 @@ function selectAirportForTo(airport: string): void {
   showToDropdown.value = false
   highlightedToIndex.value = -1
   prefetchAirportCoords(airport)
+  // Immediately check and auto-log cross-country if both airports are set
+  checkAndAutoLogCrossCountry()
 }
 
 function selectAirportForInlineTo(airport: string): void {
@@ -10776,6 +10960,8 @@ function handleFromBlur(): void {
     showFromDropdown.value = false
     highlightedFromIndex.value = -1
   }, 150)
+  // Trigger cross-country validation when user tabs out
+  checkAndAutoLogCrossCountry()
 }
 
 function handleInlineFromBlur(): void {
@@ -10790,6 +10976,8 @@ function handleToBlur(): void {
     showToDropdown.value = false
     highlightedToIndex.value = -1
   }, 150)
+  // Trigger cross-country validation when user tabs out
+  checkAndAutoLogCrossCountry()
 }
 
 function handleInlineToBlur(): void {

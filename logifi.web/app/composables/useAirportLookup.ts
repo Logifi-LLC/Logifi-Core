@@ -66,6 +66,12 @@ export const useAirportLookup = () => {
     // Normalize code (remove spaces, ensure uppercase)
     const normalizedCode = code.trim().toUpperCase().replace(/\s+/g, '')
 
+    // Validate airport code format (3-4 characters) before making API call
+    if (normalizedCode.length < 3 || normalizedCode.length > 4) {
+      // Silently return null for invalid codes - don't log as error since this might be expected
+      return null
+    }
+
     // Check cache first
     const cached = getCachedAirport(normalizedCode)
     if (cached) {
@@ -85,7 +91,10 @@ export const useAirportLookup = () => {
         setCachedAirport(normalizedCode, response.data)
         return response.data
       } else if (response.error) {
-        console.error('Airport API error:', response.error)
+        // Only log as error if it's not a format validation error (which we already handled)
+        if (!response.error.includes('Invalid airport code format')) {
+          console.error('Airport API error:', response.error)
+        }
       }
     } catch (error) {
       console.error('Airport lookup API call failed:', error)
