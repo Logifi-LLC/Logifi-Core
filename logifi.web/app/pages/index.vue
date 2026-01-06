@@ -9111,7 +9111,7 @@ async function submitEntry(): Promise<void> {
     ...baseEntry,
     id: editingEntryId.value || 'temp'
   }
-  const validationResults = validateFlightTimeEntry(entryToValidate)
+  const validationResults = validateFlightTimeEntry(entryToValidate, logEntries.value)
   
   // Always show validation warnings if there are issues (for display purposes)
   if (hasErrors.value || hasWarnings.value) {

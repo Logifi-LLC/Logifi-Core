@@ -22,14 +22,16 @@ export const useValidation = () => {
 
   /**
    * Validate a log entry and update validation state
+   * @param entry - The log entry to validate
+   * @param allEntries - Optional array of all entries for chronological order validation
    */
-  const validateEntry = (entry: LogEntry): ValidationResult[] => {
+  const validateEntry = (entry: LogEntry, allEntries?: LogEntry[]): ValidationResult[] => {
     try {
       isLoading.value = true
       error.value = null
 
-      // Run date validation
-      const dateResults = validateDate(entry)
+      // Run date validation (with allEntries for chronological checks)
+      const dateResults = validateDate(entry, allEntries)
       
       // Run flight time validation
       const flightTimeResults = validateFlightTime(entry)

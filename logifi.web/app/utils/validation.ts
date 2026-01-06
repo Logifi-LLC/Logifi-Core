@@ -34,9 +34,27 @@ function approximatelyEqual(a: number, b: number, tolerance: number = FLOATING_P
 }
 
 /**
- * Validate date for a log entry
+ * Parse OOOI time string (HHMM format) to minutes since midnight for comparison
  */
-export function validateDate(entry: LogEntry): ValidationResult[] {
+function parseOOOITimeForValidation(time: string | null | undefined): number | null {
+  if (!time || time.length === 0) return null
+  // Parse 4-digit time string (HHMM) to minutes since midnight
+  const digits = time.replace(/\D/g, '').padStart(4, '0')
+  if (digits.length !== 4) return null
+  const hours = parseInt(digits.slice(0, 2), 10)
+  const minutes = parseInt(digits.slice(2, 4), 10)
+  if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return null
+  }
+  return hours * 60 + minutes
+}
+
+/**
+ * Validate date for a log entry
+ * @param entry - The log entry to validate
+ * @param allEntries - Optional array of all entries for chronological order validation
+ */
+export function validateDate(entry: LogEntry, allEntries?: LogEntry[]): ValidationResult[] {
   const results: ValidationResult[] = []
   
   if (!entry.date) {
@@ -58,6 +76,78 @@ export function validateDate(entry: LogEntry): ValidationResult[] {
         message: `Flight date (${entry.date}) cannot be in the future`,
         suggestion: 'Please enter a date that is today or in the past'
       })
+    }
+
+    // Reasonable date range checks
+    const minDate = new Date('1900-01-01')
+    minDate.setHours(0, 0, 0, 0)
+    
+    if (entryDate < minDate) {
+      results.push({
+        type: 'warning',
+        field: 'date',
+        message: `Flight date (${entry.date}) is before 1900, which seems unusually early`,
+        suggestion: 'Please verify this date is correct. Historical logbook entries may be valid.'
+      })
+    }
+
+    // Check if date is more than 100 years in the past
+    const hundredYearsAgo = new Date()
+    hundredYearsAgo.setFullYear(today.getFullYear() - 100)
+    hundredYearsAgo.setHours(0, 0, 0, 0)
+    
+    if (entryDate < hundredYearsAgo) {
+      results.push({
+        type: 'warning',
+        field: 'date',
+        message: `Flight date (${entry.date}) is more than 100 years ago`,
+        suggestion: 'Please verify this date is correct. Historical logbook entries may be valid.'
+      })
+    }
+
+    // Chronological order checks (only if allEntries is provided)
+    if (allEntries && allEntries.length > 0) {
+      // Filter out the current entry being validated
+      const otherEntries = allEntries.filter(e => e.id !== entry.id)
+      
+      if (otherEntries.length > 0) {
+        // Sort entries by date and OOOI times (same logic as sortEntriesByDateAndOOOI)
+        const sortedEntries = [...otherEntries].sort((a, b) => {
+          // Primary sort: date (descending - most recent first)
+          const dateA = new Date(a.date).getTime()
+          const dateB = new Date(b.date).getTime()
+          const dateDiff = dateB - dateA
+          
+          if (dateDiff !== 0) {
+            return dateDiff
+          }
+          
+          // Secondary sort: OOOI "out" time (descending - latest first)
+          const timeA = parseOOOITimeForValidation(a.oooi?.out ?? null)
+          const timeB = parseOOOITimeForValidation(b.oooi?.out ?? null)
+          
+          if (timeA === null && timeB === null) return 0
+          if (timeA === null) return 1 // a comes after b
+          if (timeB === null) return -1 // a comes before b
+          return timeB - timeA // descending order (latest first)
+        })
+
+        // Check if current entry date is before the most recent entry
+        const mostRecentEntry = sortedEntries[0]
+        if (mostRecentEntry && mostRecentEntry.date) {
+          const mostRecentDate = new Date(mostRecentEntry.date)
+          mostRecentDate.setHours(0, 0, 0, 0)
+          
+          if (entryDate < mostRecentDate) {
+            results.push({
+              type: 'warning',
+              field: 'date',
+              message: `Flight date (${entry.date}) is before your most recent entry (${mostRecentEntry.date})`,
+              suggestion: 'Entries are typically added in chronological order. Verify this date is correct.'
+            })
+          }
+        }
+      }
     }
   } catch (err) {
     // Invalid date format
