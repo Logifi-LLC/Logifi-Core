@@ -3030,6 +3030,51 @@
               </div>
             </div>
           </div>
+
+          <!-- Entry Statistics -->
+          <div v-if="form8710PreviewData?.complianceMetadata">
+            <h4 :class="['text-sm font-semibold mb-2', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              Entry Statistics
+            </h4>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200']">
+                <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Total Entries</p>
+                <p :class="['text-lg font-semibold', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ form8710PreviewData.complianceMetadata.totalEntries }}
+                </p>
+              </div>
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200']">
+                <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Imported</p>
+                <p :class="['text-lg font-semibold', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ form8710PreviewData.complianceMetadata.importedEntries }}
+                </p>
+              </div>
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200']">
+                <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Manual</p>
+                <p :class="['text-lg font-semibold', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ form8710PreviewData.complianceMetadata.manualEntries }}
+                </p>
+              </div>
+            </div>
+            <!-- Import Sources Breakdown -->
+            <div v-if="form8710PreviewData.complianceMetadata.importBatches.length > 0" class="mt-3">
+              <p :class="['text-xs font-semibold mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                Import Sources:
+              </p>
+              <div class="flex flex-wrap gap-2">
+                <span
+                  v-for="batch in form8710PreviewData.complianceMetadata.importBatches"
+                  :key="batch.batchId || batch.sourceType"
+                  :class="[
+                    'px-2 py-1 rounded text-xs font-medium',
+                    isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-200 text-gray-700'
+                  ]"
+                >
+                  {{ batch.sourceType.toUpperCase() }} ({{ batch.entryCount }})
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Action Buttons -->
@@ -3294,6 +3339,113 @@
                     </tr>
                   </tbody>
                 </table>
+              </div>
+            </div>
+
+            <!-- Compliance Metadata Section -->
+            <div v-if="form8710PreviewData?.complianceMetadata" class="mt-8 pt-6 border-t print:border-gray-400" :class="isDarkMode ? 'border-gray-600 print:border-gray-400' : 'border-gray-300'">
+              <h2 :class="['text-lg font-bold border-b pb-2 mb-4', isDarkMode ? 'text-white border-gray-600 print:text-black print:border-gray-400' : 'text-gray-900 border-gray-300']">
+                COMPLIANCE METADATA
+              </h2>
+              
+              <div class="grid gap-4 sm:grid-cols-2 print:grid-cols-2">
+                <div>
+                  <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
+                    Total Entries
+                  </label>
+                  <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-900 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-gray-50 border-gray-300 text-gray-900']">
+                    {{ form8710PreviewData.complianceMetadata.totalEntries }}
+                  </div>
+                </div>
+                
+                <div>
+                  <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
+                    Imported Entries
+                  </label>
+                  <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-900 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-gray-50 border-gray-300 text-gray-900']">
+                    {{ form8710PreviewData.complianceMetadata.importedEntries }}
+                  </div>
+                </div>
+                
+                <div>
+                  <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
+                    Manual Entries
+                  </label>
+                  <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-900 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-gray-50 border-gray-300 text-gray-900']">
+                    {{ form8710PreviewData.complianceMetadata.manualEntries }}
+                  </div>
+                </div>
+                
+                <div>
+                  <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
+                    Import Batches
+                  </label>
+                  <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-900 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-gray-50 border-gray-300 text-gray-900']">
+                    {{ form8710PreviewData.complianceMetadata.importBatches.length }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Import Metadata Section -->
+            <div v-if="form8710PreviewData?.complianceMetadata?.importBatches && form8710PreviewData.complianceMetadata.importBatches.length > 0" class="mt-8 pt-6 border-t print:border-gray-400" :class="isDarkMode ? 'border-gray-600 print:border-gray-400' : 'border-gray-300'">
+              <h2 :class="['text-lg font-bold border-b pb-2 mb-4', isDarkMode ? 'text-white border-gray-600 print:text-black print:border-gray-400' : 'text-gray-900 border-gray-300']">
+                IMPORT METADATA
+              </h2>
+              
+              <div class="space-y-4">
+                <div
+                  v-for="batch in form8710PreviewData.complianceMetadata.importBatches"
+                  :key="batch.batchId || batch.sourceType"
+                  :class="['rounded-lg border p-4', isDarkMode ? 'bg-gray-900 border-gray-600 print:bg-white print:border-gray-400' : 'bg-gray-50 border-gray-300']"
+                >
+                  <div class="grid gap-3 sm:grid-cols-2 print:grid-cols-2">
+                    <div>
+                      <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
+                        Source Type
+                      </label>
+                      <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-800 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-white border-gray-300 text-gray-900']">
+                        {{ batch.sourceType.toUpperCase() }}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
+                        Entry Count
+                      </label>
+                      <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-800 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-white border-gray-300 text-gray-900']">
+                        {{ batch.entryCount }}
+                      </div>
+                    </div>
+                    
+                    <div v-if="batch.batchId">
+                      <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
+                        Batch ID
+                      </label>
+                      <div :class="['px-3 py-2 rounded border font-mono text-xs', isDarkMode ? 'bg-gray-800 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-white border-gray-300 text-gray-900']">
+                        {{ batch.batchId }}
+                      </div>
+                    </div>
+                    
+                    <div v-if="batch.importedAt">
+                      <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
+                        Import Date
+                      </label>
+                      <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-800 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-white border-gray-300 text-gray-900']">
+                        {{ formatDisplayDate(batch.importedAt) }}
+                      </div>
+                    </div>
+                    
+                    <div v-if="batch.dateRange" class="sm:col-span-2">
+                      <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
+                        Entry Date Range
+                      </label>
+                      <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-800 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-white border-gray-300 text-gray-900']">
+                        {{ formatDisplayDate(batch.dateRange.start) }} - {{ formatDisplayDate(batch.dateRange.end) }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -4394,7 +4546,8 @@ import type { AirportInfo } from '~/composables/useAirportLookup'
 import { calculateNightTime } from '~/utils/nightTimeCalculator'
 import { DateTime } from 'luxon'
 import { calculateSectionII, calculateSectionIII } from '~/utils/form8710Calculator'
-import type { Form8710Data, AircraftCategory8710 } from '~/utils/form8710Types'
+import type { Form8710Data, AircraftCategory8710, ComplianceMetadata } from '~/utils/form8710Types'
+import { mapCategoryTo8710, isTrainingDevice } from '~/utils/form8710Types'
 import { supabase } from '~/lib/supabase'
 import { useAuth } from '~/composables/useAuth'
 import { useDataIntegrity } from '~/composables/useDataIntegrity'
@@ -5371,10 +5524,70 @@ const form8710PreviewData = ref<Form8710Data | null>(null)
 const form8710Warnings = computed<string[]>(() => {
   const warnings: string[] = []
   
+  // Section I validation (pilot profile)
   if (!pilotProfile.name) warnings.push('Name is missing in Pilot Profile')
   if (!pilotProfile.dateOfBirth) warnings.push('Date of Birth is missing in Pilot Profile')
   if (!pilotProfile.placeOfBirth) warnings.push('Place of Birth is missing in Pilot Profile')
   if (!pilotProfile.residentialAddress) warnings.push('Residential Address is missing in Pilot Profile')
+  
+  // Data completeness validation
+  if (logEntries.value.length === 0) {
+    warnings.push('No logbook entries found. Form 8710 requires at least one entry.')
+    return warnings
+  }
+  
+  // Check for entries with valid flight time
+  const entriesWithTime = logEntries.value.filter(e => 
+    e.flightTime?.total && e.flightTime.total > 0
+  )
+  
+  if (entriesWithTime.length === 0) {
+    warnings.push('No entries with valid flight time found. All entries have zero total time.')
+  }
+  
+  // Check for entries with missing critical fields
+  const entriesWithMissingFields = logEntries.value.filter(e => 
+    !e.date || !e.aircraftCategoryClass || !e.registration
+  )
+  
+  if (entriesWithMissingFields.length > 0) {
+    warnings.push(`${entriesWithMissingFields.length} entr${entriesWithMissingFields.length === 1 ? 'y' : 'ies'} missing critical fields (date, category/class, or registration)`)
+  }
+  
+  // Check for entries that couldn't be mapped to 8710 categories
+  const unmappedEntries = logEntries.value.filter(e => {
+    if (isTrainingDevice(e)) return false // Training devices are handled separately
+    const category = mapCategoryTo8710(e.aircraftCategoryClass)
+    return !category
+  })
+  
+  if (unmappedEntries.length > 0) {
+    warnings.push(`${unmappedEntries.length} entr${unmappedEntries.length === 1 ? 'y' : 'ies'} could not be mapped to Form 8710 categories`)
+  }
+  
+  // Check date range issues
+  const dates = logEntries.value
+    .map(e => e.date)
+    .filter(d => d)
+    .map(d => new Date(d))
+    .filter(d => !isNaN(d.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime())
+  
+  if (dates.length > 0) {
+    const now = new Date()
+    const futureDates = dates.filter(d => d > now)
+    if (futureDates.length > 0) {
+      warnings.push(`${futureDates.length} entr${futureDates.length === 1 ? 'y has' : 'ies have'} future dates`)
+    }
+    
+    // Check for unreasonable date ranges (more than 100 years)
+    const oldestDate = dates[0]
+    const newestDate = dates[dates.length - 1]
+    const yearsDiff = (newestDate.getTime() - oldestDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25)
+    if (yearsDiff > 100) {
+      warnings.push(`Date range spans ${yearsDiff.toFixed(1)} years, which may indicate data quality issues`)
+    }
+  }
   
   return warnings
 })
@@ -5689,10 +5902,97 @@ function prepareForm8710Data(): Form8710Data | null {
       certificateNumber: pilotProfile.certificateNumber || undefined
     }
 
+    // Collect compliance metadata: verify imported entries and gather import batch info
+    const totalEntries = logEntries.value.length
+    const importedEntries = logEntries.value.filter(e => e.isImported).length
+    const manualEntries = totalEntries - importedEntries
+
+    // Group entries by import batch
+    const batchMap = new Map<string, {
+      batchId?: string
+      sourceType: string
+      entries: typeof logEntries.value
+    }>()
+
+    // Group imported entries by batch
+    logEntries.value.forEach(entry => {
+      if (entry.isImported && entry.importSource) {
+        const batchKey = entry.importBatchId || `manual-${entry.importSource}`
+        if (!batchMap.has(batchKey)) {
+          batchMap.set(batchKey, {
+            batchId: entry.importBatchId,
+            sourceType: entry.importSource,
+            entries: []
+          })
+        }
+        batchMap.get(batchKey)!.entries.push(entry)
+      }
+    })
+
+    // Build import batches array with date ranges
+    const importBatches: ComplianceMetadata['importBatches'] = Array.from(batchMap.values()).map(batch => {
+      const dates = batch.entries
+        .map(e => e.date)
+        .filter(d => d)
+        .sort()
+      
+      const dateRange = dates.length > 0 ? {
+        start: dates[0],
+        end: dates[dates.length - 1]
+      } : undefined
+
+      // Try to get import date from metadata
+      const firstEntry = batch.entries[0]
+      const importedAt = firstEntry?.importMetadata?.importedAt || 
+                        firstEntry?.importMetadata?.importDate ||
+                        undefined
+
+      return {
+        batchId: batch.batchId,
+        sourceType: batch.sourceType,
+        entryCount: batch.entries.length,
+        dateRange,
+        importedAt
+      }
+    })
+
+    // If there are manual entries, add them as a separate "batch"
+    if (manualEntries > 0) {
+      const manualDates = logEntries.value
+        .filter(e => !e.isImported)
+        .map(e => e.date)
+        .filter(d => d)
+        .sort()
+      
+      if (manualDates.length > 0) {
+        importBatches.push({
+          sourceType: 'manual',
+          entryCount: manualEntries,
+          dateRange: {
+            start: manualDates[0],
+            end: manualDates[manualDates.length - 1]
+          }
+        })
+      } else {
+        importBatches.push({
+          sourceType: 'manual',
+          entryCount: manualEntries
+        })
+      }
+    }
+
+    const complianceMetadata: ComplianceMetadata = {
+      totalEntries,
+      importedEntries,
+      manualEntries,
+      importBatches
+    }
+
     return {
       sectionI,
       sectionII,
-      sectionIII
+      sectionIII,
+      complianceMetadata
     }
   } catch (error) {
     console.error('Error preparing 8710 form data:', error)
@@ -11427,6 +11727,152 @@ textarea.bg-gray-800:-webkit-autofill:active {
   -webkit-box-shadow: 0 0 0 1000px rgb(31 41 55) inset !important;
   -webkit-text-fill-color: rgb(255 255 255) !important;
   box-shadow: 0 0 0 1000px rgb(31 41 55) inset !important;
+}
+
+/* Print styles for Form 8710 */
+@media print {
+  /* Hide non-essential UI elements */
+  .print\\:hidden {
+    display: none !important;
+  }
+  
+  /* Page setup */
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+  
+  /* Ensure form content is visible and properly formatted */
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  
+  /* Form 8710 specific styling */
+  #form8710-content {
+    background: white !important;
+    color: black !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  
+  /* Section headers */
+  h1, h2, h3 {
+    color: black !important;
+    page-break-after: avoid;
+  }
+  
+  /* Prevent page breaks inside sections */
+  .space-y-4 > *,
+  .space-y-6 > *,
+  .space-y-8 > * {
+    page-break-inside: avoid;
+  }
+  
+  /* Tables */
+  table {
+    page-break-inside: avoid;
+    border-collapse: collapse;
+  }
+  
+  tr {
+    page-break-inside: avoid;
+  }
+  
+  /* Ensure borders are visible in print */
+  .border,
+  td.border,
+  th.border {
+    border-color: #000 !important;
+    border-width: 1px !important;
+  }
+  
+  /* Text colors for print */
+  .print\\:text-black {
+    color: black !important;
+  }
+  
+  .print\\:bg-white {
+    background: white !important;
+  }
+  
+  .print\\:border-gray-400 {
+    border-color: #9ca3af !important;
+  }
+  
+  /* Ensure proper spacing */
+  .print\\:p-0 {
+    padding: 0 !important;
+  }
+  
+  .print\\:border-0 {
+    border: 0 !important;
+  }
+  
+  .print\\:rounded-none {
+    border-radius: 0 !important;
+  }
+  
+  .print\\:shadow-none {
+    box-shadow: none !important;
+  }
+  
+  /* Grid columns for print */
+  .print\\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  
+  /* Font sizes optimized for print */
+  .text-xs {
+    font-size: 10pt !important;
+  }
+  
+  .text-sm {
+    font-size: 11pt !important;
+  }
+  
+  .text-base {
+    font-size: 12pt !important;
+  }
+  
+  .text-lg {
+    font-size: 14pt !important;
+  }
+  
+  .text-xl {
+    font-size: 16pt !important;
+  }
+  
+  .text-2xl {
+    font-size: 18pt !important;
+  }
+  
+  .text-3xl {
+    font-size: 24pt !important;
+  }
+  
+  /* Ensure proper margins */
+  .mt-8 {
+    margin-top: 1.5rem !important;
+  }
+  
+  .pt-6 {
+    padding-top: 1.5rem !important;
+  }
+  
+  /* Page breaks */
+  .page-break-before {
+    page-break-before: always;
+  }
+  
+  .page-break-after {
+    page-break-after: always;
+  }
+  
+  .page-break-inside-avoid {
+    page-break-inside: avoid;
+  }
 }
 </style>
 

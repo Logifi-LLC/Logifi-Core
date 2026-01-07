@@ -93,10 +93,24 @@ export interface Form8710SectionIII {
   categories: CategoryFlightTimes[]
 }
 
+export interface ComplianceMetadata {
+  totalEntries: number
+  importedEntries: number
+  manualEntries: number
+  importBatches: Array<{
+    batchId?: string
+    sourceType: string
+    entryCount: number
+    dateRange?: { start: string; end: string }
+    importedAt?: string
+  }>
+}
+
 export interface Form8710Data {
   sectionI: Form8710SectionI
   sectionII: Form8710SectionII
   sectionIII: Form8710SectionIII
+  complianceMetadata?: ComplianceMetadata
 }
 
 // Mapping from logbook category/class to 8710 categories
