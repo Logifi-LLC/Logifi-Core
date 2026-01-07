@@ -171,11 +171,13 @@ interface Props {
   entryId: string
   isDarkMode?: boolean
   autoValidate?: boolean
+  localEntry?: any // Optional local entry data to help find UUID
 }
 
 const props = withDefaults(defineProps<Props>(), {
   isDarkMode: false,
-  autoValidate: false
+  autoValidate: false,
+  localEntry: undefined
 })
 
 const emit = defineEmits<{
@@ -224,7 +226,7 @@ watch(() => props.entryId, (entryId) => {
 const handleValidate = async () => {
   isValidating.value = true
   try {
-    const result = await validateEntry(props.entryId)
+    const result = await validateEntry(props.entryId, false, props.localEntry)
     integrityStatus.value = result
     emit('validated', result)
   } catch (error) {

@@ -55,9 +55,18 @@
         </div>
 
         <div v-else-if="auditLogs.length === 0" class="text-center py-12">
-          <Icon name="ri:history-line" size="48" :class="['mx-auto mb-4', isDarkMode ? 'text-gray-600' : 'text-gray-400']" />
+          <Icon 
+            :name="isEntrySynced === false ? 'ri:cloud-off-line' : 'ri:history-line'" 
+            size="48" 
+            :class="['mx-auto mb-4', isDarkMode ? 'text-gray-600' : 'text-gray-400']" 
+          />
           <p :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-            No audit history found for this entry
+            <span v-if="isEntrySynced === false">
+              This entry hasn't synced to the server yet. Audit history will appear after synchronization.
+            </span>
+            <span v-else>
+              No audit history found for this entry
+            </span>
           </p>
         </div>
 
@@ -270,6 +279,7 @@
               :entry-id="entryId"
               :is-dark-mode="isDarkMode"
               :auto-validate="false"
+              :local-entry="localEntry"
             />
           </div>
         </div>
@@ -286,9 +296,18 @@
       </div>
 
       <div v-else-if="auditLogs.length === 0" class="text-center py-12">
-        <Icon name="ri:history-line" size="48" :class="['mx-auto mb-4', isDarkMode ? 'text-gray-600' : 'text-gray-400']" />
+        <Icon 
+          :name="isEntrySynced === false ? 'ri:cloud-off-line' : 'ri:history-line'" 
+          size="48" 
+          :class="['mx-auto mb-4', isDarkMode ? 'text-gray-600' : 'text-gray-400']" 
+        />
         <p :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-          No audit history found for this entry
+          <span v-if="isEntrySynced === false">
+            This entry hasn't synced to the server yet. Audit history will appear after synchronization.
+          </span>
+          <span v-else>
+            No audit history found for this entry
+          </span>
         </p>
       </div>
 
@@ -559,11 +578,13 @@ interface Props {
   entryId: string | null
   isDarkMode?: boolean
   isSidebar?: boolean
+  localEntry?: any // Optional local entry data to help find UUID
 }
 
 const props = withDefaults(defineProps<Props>(), {
   isDarkMode: false,
-  isSidebar: false
+  isSidebar: false,
+  localEntry: undefined
 })
 
 const emit = defineEmits<{
@@ -576,6 +597,7 @@ const {
   entryRevisions,
   isLoading,
   error,
+  isEntrySynced,
   getAuditLogs,
   getEntryRevisions,
   restoreRevision,
@@ -596,24 +618,60 @@ const showRestoreConfirm = ref(false)
 const pendingRestore = ref<{ entryId: string; version: number; log: AuditLogWithDisplay } | null>(null)
 
 // Load audit logs, revisions, and entry metadata when modal opens or entryId changes
-watch(() => [props.isOpen, props.entryId], async ([isOpen, entryId]) => {
+watch(() => [props.isOpen, props.entryId, props.localEntry], async ([isOpen, entryId, localEntry]) => {
   if (isOpen && entryId && typeof entryId === 'string') {
     console.log('[AuditTrail] Loading audit logs for entry:', entryId)
-    await getAuditLogs(entryId)
-    await getEntryRevisions(entryId)
+    await getAuditLogs(entryId, localEntry)
+    await getEntryRevisions(entryId, localEntry)
     
     // Validate entry integrity when audit log is opened (silently, no audit log)
-    validateEntryIntegrity(entryId, false).catch((err: any) => {
+    validateEntryIntegrity(entryId, false, localEntry).catch((err: any) => {
       console.warn(`[AuditTrail] Failed to validate entry ${entryId}:`, err)
     })
     
     // Load entry metadata for import info
+    // Try to find UUID if entryId is not a UUID
     try {
-      const { data } = await (supabase
+      let supabaseId = entryId
+      
+      // If entryId is not a UUID, try to find it
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(entryId) && localEntry) {
+        const { data: matchingEntries } = await (supabase
+          .from('log_entries') as any)
+          .select('id')
+          .eq('date', localEntry.date)
+          .eq('registration', localEntry.registration)
+          .eq('departure', localEntry.departure)
+          .eq('destination', localEntry.destination)
+          .limit(1)
+        
+        if (matchingEntries && matchingEntries.length > 0) {
+          supabaseId = matchingEntries[0].id
+        } else {
+          // Entry doesn't exist in Supabase yet, skip metadata loading
+          return
+        }
+      }
+      
+      // Use .maybeSingle() instead of .single() to avoid errors when entry doesn't exist
+      const { data, error: metadataError } = await (supabase
         .from('log_entries') as any)
         .select('is_imported, import_source, import_metadata, original_entry_date')
-        .eq('id', entryId)
-        .single()
+        .eq('id', supabaseId)
+        .maybeSingle()
+      
+      // Handle case where entry doesn't exist in Supabase yet
+      if (metadataError) {
+        // 406 (Not Acceptable) or 404 (Not Found) means entry doesn't exist in Supabase yet
+        // This is expected for entries that haven't synced yet
+        if (metadataError.code === 'PGRST116' || metadataError.code === '22P02' || metadataError.status === 406 || metadataError.status === 404) {
+          // Entry not synced yet - this is normal, don't log as error
+          return
+        }
+        // Other errors should be logged
+        console.warn('[AuditTrail] Failed to load entry metadata:', metadataError)
+        return
+      }
       
       if (data) {
         entryMetadata.value = {
@@ -622,9 +680,16 @@ watch(() => [props.isOpen, props.entryId], async ([isOpen, entryId]) => {
           importMetadata: data.import_metadata,
           originalEntryDate: data.original_entry_date
         }
+      } else {
+        // Entry doesn't exist in Supabase yet (not synced) - this is normal
+        // Don't log as error since this is expected for new entries
       }
     } catch (err) {
-      console.warn('[AuditTrail] Failed to load entry metadata:', err)
+      // Only log unexpected errors (entry not found is expected for unsynced entries)
+      const error = err as any
+      if (error?.code !== 'PGRST116' && error?.code !== '22P02' && error?.status !== 406 && error?.status !== 404) {
+        console.warn('[AuditTrail] Failed to load entry metadata:', err)
+      }
     }
   }
 }, { immediate: true })
@@ -689,7 +754,7 @@ const confirmRestore = async () => {
   if (!pendingRestore.value) return
 
   const { entryId, version } = pendingRestore.value
-  const result = await restoreRevision(entryId, version)
+  const result = await restoreRevision(entryId, version, props.localEntry)
 
   showRestoreConfirm.value = false
   pendingRestore.value = null
@@ -698,8 +763,8 @@ const confirmRestore = async () => {
     emit('restored', entryId)
     // Reload audit logs and revisions
     await Promise.all([
-      getAuditLogs(entryId),
-      getEntryRevisions(entryId)
+      getAuditLogs(entryId, props.localEntry),
+      getEntryRevisions(entryId, props.localEntry)
     ])
   } else {
     alert(`Failed to restore: ${result.error}`)

@@ -17,14 +17,65 @@ export const useDataIntegrity = () => {
   const isValidationInProgress = ref(false)
   const error = ref<string | null>(null)
 
+  // Helper function to check if a string is a valid UUID
+  const isValidUUID = (id: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    return uuidRegex.test(id)
+  }
+
+  // Helper function to find entry UUID in Supabase by matching fields
+  const findEntryUUID = async (entryId: string, localEntry?: any): Promise<string | null> => {
+    // If it's already a UUID, return it
+    if (isValidUUID(entryId)) {
+      return entryId
+    }
+
+    // If we have local entry data, try to find it in Supabase
+    if (localEntry) {
+      try {
+        const { data: matchingEntries, error: findError } = await supabase
+          .from('log_entries')
+          .select('id, date, registration, departure, destination')
+          .eq('date', localEntry.date)
+          .eq('registration', localEntry.registration)
+          .eq('departure', localEntry.departure)
+          .eq('destination', localEntry.destination)
+          .limit(1)
+
+        if (!findError && matchingEntries && matchingEntries.length > 0) {
+          return matchingEntries[0].id
+        }
+      } catch (err) {
+        console.warn('[DataIntegrity] Failed to find entry UUID:', err)
+      }
+    }
+
+    return null
+  }
+
   // Validate a single entry
-  const validateEntry = async (entryId: string, createAuditLog: boolean = false): Promise<IntegrityStatus> => {
+  const validateEntry = async (entryId: string, createAuditLog: boolean = false, localEntry?: any): Promise<IntegrityStatus> => {
     try {
       error.value = null
 
-      // Call the database function
+      // Try to find the UUID if entryId is not a UUID
+      const supabaseId = await findEntryUUID(entryId, localEntry)
+      
+      if (!supabaseId) {
+        // Entry doesn't exist in Supabase yet (hasn't synced)
+        console.log('[DataIntegrity] Entry not in Supabase (invalid UUID), cannot validate')
+        return {
+          entryId,
+          isValid: false,
+          currentHash: null,
+          computedHash: null,
+          lastValidated: null
+        }
+      }
+
+      // Call the database function with the UUID
       const { data, error: validateError } = await supabase
-        .rpc('validate_entry_integrity', { entry_uuid: entryId })
+        .rpc('validate_entry_integrity', { entry_uuid: supabaseId })
 
       if (validateError) {
         throw validateError
@@ -53,14 +104,14 @@ export const useDataIntegrity = () => {
           const { data: entryData } = await supabase
             .from('log_entries')
             .select('user_id')
-            .eq('id', entryId)
+            .eq('id', supabaseId)
             .single()
 
           if (entryData) {
             await supabase
               .from('audit_logs')
               .insert({
-                entry_id: entryId,
+                entry_id: supabaseId,
                 user_id: entryData.user_id,
                 action: 'export', // Using 'export' for compliance-related validation events
                 new_data: {

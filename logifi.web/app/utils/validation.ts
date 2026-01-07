@@ -529,3 +529,367 @@ export function validateCrossCountry(
   return results
 }
 
+/**
+ * Validate Part 61.51(b) required fields for a log entry
+ * Per 14 CFR Part 61.51(b), each logbook entry must include:
+ * - Date
+ * - Total flight time or lesson time
+ * - Location (departure and destination)
+ * - Type and identification of aircraft
+ * - PIC time or Solo time (when applicable)
+ * - Type of pilot experience or training
+ * - Conditions of flight
+ */
+export function validatePart61RequiredFields(entry: LogEntry): ValidationResult[] {
+  const results: ValidationResult[] = []
+  const flightTime = entry.flightTime || { total: null, pic: null, sic: null, dual: null, solo: null, night: null, actualInstrument: null, simulatedInstrument: null, crossCountry: null, dualGiven: null }
+
+  // 1. Date (required per Part 61.51(b))
+  if (!entry.date || entry.date.trim() === '') {
+    results.push({
+      type: 'error',
+      field: 'date',
+      message: 'Date is required per 14 CFR Part 61.51(b)',
+      suggestion: 'Please enter the date of the flight'
+    })
+  }
+
+  // 2. Total flight time OR lesson time (at least one must be > 0)
+  const totalTime = getNumericValue(flightTime.total)
+  const dualTime = getNumericValue(flightTime.dual) // Lesson time
+  const hasTotalTime = isProvided(flightTime.total) && totalTime > 0
+  const hasLessonTime = isProvided(flightTime.dual) && dualTime > 0
+
+  if (!hasTotalTime && !hasLessonTime) {
+    results.push({
+      type: 'error',
+      field: 'total',
+      message: 'Total flight time or lesson time is required per 14 CFR Part 61.51(b)',
+      suggestion: 'Please enter either total flight time or dual received (lesson) time'
+    })
+  }
+
+  // 3. Location: departure AND destination airports (both required)
+  const departure = (entry.departure || '').trim()
+  const destination = (entry.destination || '').trim()
+
+  if (!departure || departure === '') {
+    results.push({
+      type: 'error',
+      field: 'departure',
+      message: 'Departure airport is required per 14 CFR Part 61.51(b)',
+      suggestion: 'Please enter the departure airport code or location'
+    })
+  }
+
+  if (!destination || destination === '') {
+    results.push({
+      type: 'error',
+      field: 'destination',
+      message: 'Destination airport is required per 14 CFR Part 61.51(b)',
+      suggestion: 'Please enter the destination airport code or location'
+    })
+  }
+
+  // 4. Aircraft type and identification
+  const categoryClass = (entry.aircraftCategoryClass || '').trim()
+  const makeModel = (entry.aircraftMakeModel || '').trim()
+  const registration = (entry.registration || '').trim()
+
+  if (!categoryClass || categoryClass === '') {
+    results.push({
+      type: 'error',
+      field: 'aircraftCategoryClass',
+      message: 'Aircraft category and class is required per 14 CFR Part 61.51(b)',
+      suggestion: 'Please enter the aircraft category and class (e.g., "ASEL", "AMEL")'
+    })
+  }
+
+  if (!makeModel || makeModel === '') {
+    results.push({
+      type: 'error',
+      field: 'aircraftMakeModel',
+      message: 'Aircraft make and model is required per 14 CFR Part 61.51(b)',
+      suggestion: 'Please enter the aircraft make and model'
+    })
+  }
+
+  if (!registration || registration === '') {
+    results.push({
+      type: 'error',
+      field: 'registration',
+      message: 'Aircraft identification (registration) is required per 14 CFR Part 61.51(b)',
+      suggestion: 'Please enter the aircraft registration number (N-number)'
+    })
+  }
+
+  // 5. PIC, Solo, SIC, or Dual Received time (at least one must be logged when applicable)
+  // This is required when logging flight time, but not necessarily for all entries
+  // If total time is logged, we should have at least one of: PIC, Solo, SIC, or Dual Received
+  // Note: dualTime is already declared above (line 559) for lesson time check
+  if (hasTotalTime) {
+    // Check if we have at least one of the required time types
+    const picTime = getNumericValue(flightTime.pic)
+    const soloTime = getNumericValue(flightTime.solo)
+    const sicTime = getNumericValue(flightTime.sic)
+    // Use dualTime that was already calculated above (line 559)
+    
+    const hasPicTime = picTime > 0
+    const hasSoloTime = soloTime > 0
+    const hasSicTime = sicTime > 0
+    const hasDualTime = dualTime > 0
+    
+    // If we don't have any of these time types, show error
+    if (!hasPicTime && !hasSoloTime && !hasSicTime && !hasDualTime) {
+      results.push({
+        type: 'error',
+        field: 'pic',
+        message: 'PIC, Solo, SIC, or Dual Received time is required per 14 CFR Part 61.51(b) when logging flight time',
+        suggestion: 'Please enter at least one of: PIC time, Solo time, SIC time, or Dual Received time for this flight'
+      })
+    }
+  }
+
+  // 6. Type of pilot experience (role field must be valid)
+  const validRoles = ['PIC', 'SIC', 'Student', 'Instructor', 'CFI', 'CFII', 'MEI', 'ATP', 'Commercial', 'Private']
+  const role = (entry.role || '').trim()
+  
+  if (!role || role === '') {
+    results.push({
+      type: 'error',
+      field: 'role',
+      message: 'Type of pilot experience or training is required per 14 CFR Part 61.51(b)',
+      suggestion: 'Please select your role for this flight (PIC, SIC, Student, Instructor, etc.)'
+    })
+  } else if (!validRoles.some(r => role.toUpperCase().includes(r.toUpperCase()))) {
+    // Warn if role doesn't match common values, but don't block
+    results.push({
+      type: 'warning',
+      field: 'role',
+      message: `Role "${role}" may not be a standard pilot experience type`,
+      suggestion: 'Common roles include: PIC, SIC, Student, Instructor, CFI, CFII, MEI, ATP, Commercial, Private'
+    })
+  }
+
+  // 7. Conditions of flight (day/night indicator - must be present if night time logged)
+  const nightTime = getNumericValue(flightTime.night)
+  const hasNightTime = isProvided(flightTime.night) && nightTime > 0
+  const flightConditions = entry.flightConditions || []
+  const hasDayCondition = flightConditions.some(c => c.toLowerCase().includes('day'))
+  const hasNightCondition = flightConditions.some(c => c.toLowerCase().includes('night'))
+
+  if (hasNightTime && !hasNightCondition) {
+    results.push({
+      type: 'warning',
+      field: 'flightConditions',
+      message: 'Night time is logged but flight conditions do not indicate night flight',
+      suggestion: 'Please add "Night" to flight conditions if this flight included night time'
+    })
+  }
+
+  // Also check if day/night conditions are present when they should be
+  if (hasTotalTime && !hasDayCondition && !hasNightCondition && flightConditions.length === 0) {
+    results.push({
+      type: 'warning',
+      field: 'flightConditions',
+      message: 'Flight conditions (day/night) should be recorded per 14 CFR Part 61.51(b)',
+      suggestion: 'Please indicate whether this flight was conducted during day or night conditions'
+    })
+  }
+
+  return results
+}
+
+/**
+ * Validate date format
+ * Accepts any valid date format (MM/DD/YYYY, YYYY-MM-DD, etc.) and validates that it can be parsed
+ */
+export function validateDateFormat(date: string | null | undefined): ValidationResult[] {
+  const results: ValidationResult[] = []
+
+  if (!date || date.trim() === '') {
+    return results // Empty dates are handled by required field validation
+  }
+
+  const trimmedDate = date.trim()
+
+  // Try to parse the date - JavaScript Date constructor is flexible with formats
+  // It handles: YYYY-MM-DD, MM/DD/YYYY, and other common formats
+  const parsedDate = new Date(trimmedDate)
+  
+  // Check if the date is invalid
+  if (isNaN(parsedDate.getTime())) {
+    results.push({
+      type: 'error',
+      field: 'date',
+      message: `Date "${trimmedDate}" is not a valid date`,
+      suggestion: 'Please enter a valid date in any recognized format (e.g., MM/DD/YYYY, YYYY-MM-DD)'
+    })
+    return results
+  }
+
+  // Additional check: ensure the date is reasonable (not too far in the past or future)
+  // This is a warning/error check, not a format check
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const minDate = new Date('1900-01-01')
+  minDate.setHours(0, 0, 0, 0)
+  
+  parsedDate.setHours(0, 0, 0, 0)
+  
+  if (parsedDate < minDate) {
+    results.push({
+      type: 'warning',
+      field: 'date',
+      message: `Date "${trimmedDate}" is before 1900, which seems unusually early`,
+      suggestion: 'Please verify this date is correct. Historical logbook entries may be valid.'
+    })
+  }
+  
+  if (parsedDate > today) {
+    results.push({
+      type: 'error',
+      field: 'date',
+      message: `Date "${trimmedDate}" is in the future`,
+      suggestion: 'Please enter a date that is today or in the past'
+    })
+  }
+
+  return results
+}
+
+/**
+ * Validate airport code format
+ * Accepts ICAO (4 letters) or IATA (3 letters) format
+ * Allows "UNKNOWN" with a warning
+ */
+export function validateAirportCode(
+  code: string | null | undefined, 
+  field: 'departure' | 'destination'
+): ValidationResult[] {
+  const results: ValidationResult[] = []
+
+  if (!code || code.trim() === '') {
+    return results // Empty codes are handled by required field validation
+  }
+
+  const trimmedCode = code.trim().toUpperCase()
+  const fieldName = field === 'departure' ? 'Departure' : 'Destination'
+
+  // Allow UNKNOWN with warning
+  if (trimmedCode === 'UNKNOWN') {
+    results.push({
+      type: 'warning',
+      field: field,
+      message: `${fieldName} airport is marked as UNKNOWN`,
+      suggestion: 'Consider updating with the actual airport code if known'
+    })
+    return results
+  }
+
+  // ICAO format: exactly 4 uppercase letters
+  const icaoPattern = /^[A-Z]{4}$/
+  // IATA format: exactly 3 uppercase letters
+  const iataPattern = /^[A-Z]{3}$/
+
+  if (icaoPattern.test(trimmedCode)) {
+    // Valid ICAO code
+    return results
+  } else if (iataPattern.test(trimmedCode)) {
+    // Valid IATA code
+    return results
+  } else {
+    // Invalid format
+    results.push({
+      type: 'error',
+      field: field,
+      message: `${fieldName} airport code "${code}" is not in a valid format`,
+      suggestion: 'Airport codes should be 3 letters (IATA, e.g., ORD) or 4 letters (ICAO, e.g., KORD)'
+    })
+  }
+
+  return results
+}
+
+/**
+ * Validate aircraft registration format
+ * US N-number format: N followed by 1-5 digits, optionally followed by 1-2 letters
+ * Pattern: /^N\d{1,5}[A-Z]{0,2}$/i
+ */
+export function validateAircraftRegistration(registration: string | null | undefined): ValidationResult[] {
+  const results: ValidationResult[] = []
+
+  if (!registration || registration.trim() === '') {
+    return results // Empty registration is handled by required field validation
+  }
+
+  const trimmedReg = registration.trim().toUpperCase()
+
+  // US N-number pattern: N followed by 1-5 digits, optionally followed by 0-2 letters
+  const nNumberPattern = /^N\d{1,5}[A-Z]{0,2}$/
+
+  if (nNumberPattern.test(trimmedReg)) {
+    // Valid N-number format
+    return results
+  } else {
+    // Check if it starts with N (might be close)
+    if (trimmedReg.startsWith('N')) {
+      results.push({
+        type: 'warning',
+        field: 'registration',
+        message: `Aircraft registration "${registration}" does not match standard N-number format`,
+        suggestion: 'US N-numbers should be in format: N followed by 1-5 digits and optionally 1-2 letters (e.g., N123AB, N12345, N1A)'
+      })
+    } else {
+      // Doesn't start with N - might be foreign registration
+      results.push({
+        type: 'warning',
+        field: 'registration',
+        message: `Aircraft registration "${registration}" does not appear to be a US N-number`,
+        suggestion: 'If this is a US-registered aircraft, N-numbers should start with "N" followed by digits and optional letters'
+      })
+    }
+  }
+
+  return results
+}
+
+/**
+ * Validate numeric precision for flight times
+ * Flight times should be to 0.1 hour precision (warn if more decimal places)
+ */
+export function validateNumericPrecision(
+  value: number | null | undefined, 
+  field: string
+): ValidationResult[] {
+  const results: ValidationResult[] = []
+
+  if (value === null || value === undefined || isNaN(value)) {
+    return results // Empty values are handled elsewhere
+  }
+
+  // Check decimal places
+  const decimalPlaces = (value.toString().split('.')[1] || '').length
+
+  if (decimalPlaces > 1) {
+    results.push({
+      type: 'warning',
+      field: field,
+      message: `${field} has ${decimalPlaces} decimal places. Flight times are typically recorded to 0.1 hour precision`,
+      suggestion: `Consider rounding to 0.1 hour precision (e.g., ${value.toFixed(1)})`
+    })
+  }
+
+  // Negative values are already checked in validateFlightTime, but double-check here
+  if (value < 0) {
+    results.push({
+      type: 'error',
+      field: field,
+      message: `${field} cannot be negative`,
+      suggestion: 'Please enter a positive value or leave blank'
+    })
+  }
+
+  return results
+}
+

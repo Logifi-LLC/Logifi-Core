@@ -69,9 +69,12 @@ export const useSyncQueue = () => {
     try {
       let success = false
 
+      let insertedData = null
+      
       switch (item.operation) {
         case 'insert':
-          success = await syncInsert(item)
+          insertedData = await syncInsert(item)
+          success = !!insertedData
           break
         case 'update':
           success = await syncUpdate(item)
@@ -82,6 +85,48 @@ export const useSyncQueue = () => {
       }
 
       if (success) {
+        // For inserts, update IndexedDB with the hash and version returned from Supabase
+        // Since all new entries now have UUIDs, the ID should already match
+        if (item.operation === 'insert' && insertedData && insertedData.id) {
+          try {
+            // Verify ID matches (should always be true for new UUID entries)
+            if (insertedData.id !== item.entryId) {
+              // This should only happen for old entries with non-UUID IDs
+              console.log('[SyncQueue] ID mismatch - updating IndexedDB entry from', item.entryId, 'to', insertedData.id)
+              const { getAllEntriesFromIndexedDB, updateEntryInIndexedDB } = await import('~/utils/indexedDB')
+              const localEntries = await getAllEntriesFromIndexedDB()
+              const localEntry = localEntries.find(e => e.id === item.entryId)
+              
+              if (localEntry) {
+                // Update the entry with the UUID and hash from Supabase
+                await updateEntryInIndexedDB({
+                  ...localEntry,
+                  id: insertedData.id,
+                  dataHash: insertedData.data_hash || undefined,
+                  version: insertedData.version || undefined
+                })
+                console.log('[SyncQueue] Updated IndexedDB entry with UUID:', insertedData.id, 'Hash:', insertedData.data_hash)
+              }
+            } else {
+              // IDs match - just update hash and version
+              const { getAllEntriesFromIndexedDB, updateEntryInIndexedDB } = await import('~/utils/indexedDB')
+              const localEntries = await getAllEntriesFromIndexedDB()
+              const localEntry = localEntries.find(e => e.id === item.entryId)
+              
+              if (localEntry) {
+                await updateEntryInIndexedDB({
+                  ...localEntry,
+                  dataHash: insertedData.data_hash || undefined,
+                  version: insertedData.version || undefined
+                })
+                console.log('[SyncQueue] Updated IndexedDB entry hash and version for UUID:', insertedData.id)
+              }
+            }
+          } catch (err) {
+            console.warn('[SyncQueue] Failed to update IndexedDB:', err)
+          }
+        }
+        
         // Mark entry as synced if it exists
         try {
           await markEntryAsSynced(item.entryId)
@@ -126,14 +171,26 @@ export const useSyncQueue = () => {
   /**
    * Sync insert operation
    */
-  const syncInsert = async (item: SyncQueueEntry): Promise<boolean> => {
+  const syncInsert = async (item: SyncQueueEntry): Promise<any> => {
     if (!item.entryData) {
       throw new Error('Entry data missing for insert operation')
     }
 
-    const { error } = await supabase
+    // All new entries now have UUIDs, so we can always include the ID
+    // The trigger will automatically compute the hash
+    const insertData = { ...item.entryData }
+    
+    // Safety check: verify ID is a UUID (should always be true for new entries)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (insertData.id && !uuidRegex.test(insertData.id)) {
+      console.warn('[SyncQueue] Warning: Entry ID is not a UUID:', insertData.id, '- This should not happen for new entries')
+      // For backward compatibility with old entries, remove non-UUID ID and let Supabase generate one
+      delete insertData.id
+    }
+
+    const { data, error } = await supabase
       .from('log_entries')
-      .insert(item.entryData)
+      .insert(insertData)
       .select()
       .single()
 
@@ -141,7 +198,14 @@ export const useSyncQueue = () => {
       throw error
     }
 
-    return true
+    // Verify that hash was computed by the trigger
+    if (data && !data.data_hash) {
+      console.warn('[SyncQueue] Hash was not computed by trigger for entry:', data.id)
+    } else if (data && data.data_hash) {
+      console.log('[SyncQueue] Hash computed successfully for entry:', data.id, 'Hash:', data.data_hash)
+    }
+
+    return data
   }
 
   /**
@@ -152,18 +216,46 @@ export const useSyncQueue = () => {
       throw new Error('Entry data missing for update operation')
     }
 
-    // Remove read-only fields
+    // Remove read-only fields (data_hash will be recomputed by trigger)
     const { id, user_id, created_at, updated_at, data_hash, version, ...updateData } = item.entryData
 
-    const { error } = await supabase
+    // Find the UUID if entryId is not a UUID
+    let supabaseId = item.entryId
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(item.entryId) && item.entryData) {
+      // Try to find the entry by matching fields
+      try {
+        const { data: matchingEntries } = await supabase
+          .from('log_entries')
+          .select('id')
+          .eq('date', item.entryData.date)
+          .eq('registration', item.entryData.registration)
+          .eq('departure', item.entryData.departure)
+          .eq('destination', item.entryData.destination)
+          .limit(1)
+        
+        if (matchingEntries && matchingEntries.length > 0) {
+          supabaseId = matchingEntries[0].id
+        }
+      } catch (err) {
+        console.warn('[SyncQueue] Failed to find UUID for update:', err)
+      }
+    }
+
+    const { data, error } = await supabase
       .from('log_entries')
       .update(updateData)
-      .eq('id', item.entryId)
+      .eq('id', supabaseId)
       .select()
       .single()
 
     if (error) {
       throw error
+    }
+
+    // Verify that hash was recomputed by the trigger
+    if (data && !data.data_hash) {
+      console.warn('[SyncQueue] Hash was not recomputed by trigger for entry:', data.id)
     }
 
     return true

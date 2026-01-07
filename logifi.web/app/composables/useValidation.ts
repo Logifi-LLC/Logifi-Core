@@ -1,6 +1,17 @@
 import { ref, computed, type Ref } from 'vue'
 import type { LogEntry } from '~/utils/logbookTypes'
-import { validateFlightTime, validateDate, validateCrossCountry, type ValidationResult, type AirportCoordinates } from '~/utils/validation'
+import { 
+  validateFlightTime, 
+  validateDate, 
+  validateCrossCountry, 
+  validatePart61RequiredFields,
+  validateDateFormat,
+  validateAirportCode,
+  validateAircraftRegistration,
+  validateNumericPrecision,
+  type ValidationResult, 
+  type AirportCoordinates 
+} from '~/utils/validation'
 import { useAirportLookup } from '~/composables/useAirportLookup'
 
 export const useValidation = () => {
@@ -84,8 +95,50 @@ export const useValidation = () => {
         crossCountryResults = validateCrossCountry(entry)
       }
       
+      // Run Part 61 required field validation
+      const part61RequiredResults = validatePart61RequiredFields(entry)
+      
+      // Run format validation
+      const formatResults: ValidationResult[] = []
+      
+      // Date format validation
+      if (entry.date) {
+        formatResults.push(...validateDateFormat(entry.date))
+      }
+      
+      // Airport code format validation
+      if (entry.departure) {
+        formatResults.push(...validateAirportCode(entry.departure, 'departure'))
+      }
+      if (entry.destination) {
+        formatResults.push(...validateAirportCode(entry.destination, 'destination'))
+      }
+      
+      // Aircraft registration format validation
+      if (entry.registration) {
+        formatResults.push(...validateAircraftRegistration(entry.registration))
+      }
+      
+      // Numeric precision validation for flight times
+      if (entry.flightTime) {
+        const timeFields = ['total', 'pic', 'sic', 'dual', 'solo', 'night', 'actualInstrument', 'simulatedInstrument', 'crossCountry', 'dualGiven'] as const
+        timeFields.forEach(field => {
+          const value = entry.flightTime[field]
+          if (value !== null && value !== undefined) {
+            formatResults.push(...validateNumericPrecision(value, field))
+          }
+        })
+      }
+      
       // Combine all validation results
-      const results = [...dateResults, ...flightTimeResults, ...crossCountryResults]
+      // Part 61 required fields come first (most critical), then format validation, then logical consistency checks
+      const results = [
+        ...part61RequiredResults,
+        ...formatResults,
+        ...dateResults, 
+        ...flightTimeResults, 
+        ...crossCountryResults
+      ]
       
       validationResults.value = results
 

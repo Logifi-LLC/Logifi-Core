@@ -18,6 +18,7 @@
     :is-open="showAuditTrail"
     :entry-id="auditTrailEntryId"
     :is-dark-mode="isDarkMode"
+    :local-entry="logEntries.find(e => e.id === auditTrailEntryId)"
     @close="showAuditTrail = false"
     @restored="handleEntryRestored"
   />
@@ -337,9 +338,9 @@
                     {{ logEntries.length === 0 ? 'No entries to export' : `${logEntries.length} ${logEntries.length === 1 ? 'entry' : 'entries'} available` }}
                   </p>
                 </div>
-                <!-- AC 120-78B Compliance Checklist -->
+                <!-- Compliance Checklist (AC 120-78B & 14 CFR Part 61) -->
                 <div class="space-y-3 pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <AC120Checklist :is-dark-mode="isDarkMode" />
+                  <ComplianceChecklist :is-dark-mode="isDarkMode" />
                 </div>
                 <div 
                   class="space-y-3 pt-2 border-t transition-colors" 
@@ -1349,6 +1350,7 @@
                     :is-open="true"
                     :entry-id="expandedEntryId"
                     :is-dark-mode="isDarkMode"
+                    :local-entry="inlineEditEntry"
                     :is-sidebar="true"
                     @close="showAuditTrailSidebar = false"
                     @restored="handleEntryRestored"
@@ -2341,14 +2343,38 @@
                         :class="[hasErrors ? (isDarkMode ? 'text-red-400' : 'text-red-600') : (isDarkMode ? 'text-yellow-400' : 'text-yellow-600'), 'flex-shrink-0 mt-0.5']" 
                       />
                       <div class="flex-1">
-                        <div :class="['font-quicksand text-sm font-semibold mb-2', hasErrors ? (isDarkMode ? 'text-red-300' : 'text-red-800') : (isDarkMode ? 'text-yellow-300' : 'text-yellow-800')]">
-                          {{ hasErrors ? 'Flight Time Validation Errors' : 'Flight Time Validation Warnings' }}
+                        <div class="flex items-center gap-2 mb-2">
+                          <div :class="['font-quicksand text-sm font-semibold', hasErrors ? (isDarkMode ? 'text-red-300' : 'text-red-800') : (isDarkMode ? 'text-yellow-300' : 'text-yellow-800')]">
+                            {{ hasErrors ? 'Validation Errors' : 'Validation Warnings' }}
+                          </div>
+                          <span v-if="validationErrors.some(r => r.message.includes('Part 61') || r.message.includes('14 CFR'))" 
+                                :class="['text-xs px-2 py-0.5 rounded font-semibold', isDarkMode ? 'bg-red-800/30 text-red-300' : 'bg-red-100 text-red-700']">
+                            Part 61
+                          </span>
                         </div>
                         <div class="space-y-2">
                           <div v-for="(result, index) in [...validationErrors, ...validationWarnings]" :key="index"
                                :class="['font-quicksand text-xs', hasErrors && result.type === 'error' ? (isDarkMode ? 'text-red-200' : 'text-red-800') : (isDarkMode ? 'text-yellow-200' : 'text-yellow-800')]">
                             <div class="font-semibold mb-0.5">
-                              {{ result.field === 'date' ? 'Date' : result.field === 'total' ? 'Total Time' : result.field === 'pic' ? 'PIC' : result.field === 'sic' ? 'SIC' : result.field === 'dual' ? 'Dual Received' : result.field === 'solo' ? 'Solo' : result.field === 'night' ? 'Night' : result.field === 'actualInstrument' ? 'Actual Instrument' : result.field === 'simulatedInstrument' ? 'Simulated Instrument' : result.field === 'crossCountry' ? 'Cross-Country' : result.field === 'dualGiven' ? 'Dual Given' : result.field }}:
+                              {{ result.field === 'date' ? 'Date' : 
+                                 result.field === 'total' ? 'Total Time' : 
+                                 result.field === 'pic' ? 'PIC' : 
+                                 result.field === 'sic' ? 'SIC' : 
+                                 result.field === 'dual' ? 'Dual Received' : 
+                                 result.field === 'solo' ? 'Solo' : 
+                                 result.field === 'night' ? 'Night' : 
+                                 result.field === 'actualInstrument' ? 'Actual Instrument' : 
+                                 result.field === 'simulatedInstrument' ? 'Simulated Instrument' : 
+                                 result.field === 'crossCountry' ? 'Cross-Country' : 
+                                 result.field === 'dualGiven' ? 'Dual Given' : 
+                                 result.field === 'departure' ? 'Departure Airport' :
+                                 result.field === 'destination' ? 'Destination Airport' :
+                                 result.field === 'registration' ? 'Aircraft Registration' :
+                                 result.field === 'aircraftCategoryClass' ? 'Aircraft Category/Class' :
+                                 result.field === 'aircraftMakeModel' ? 'Aircraft Make/Model' :
+                                 result.field === 'role' ? 'Pilot Role' :
+                                 result.field === 'flightConditions' ? 'Flight Conditions' :
+                                 result.field }}:
                             </div>
                             <div class="mb-1">{{ result.message }}</div>
                             <div v-if="result.suggestion" :class="['text-xs italic', hasErrors && result.type === 'error' ? (isDarkMode ? 'text-red-300/80' : 'text-red-700') : (isDarkMode ? 'text-yellow-300/80' : 'text-yellow-700')]">
@@ -4592,6 +4618,7 @@ import { useAircraftLookup } from '~/composables/useAircraftLookup'
 import type { AircraftInfo } from '~/composables/useAircraftLookup'
 import { useAirportLookup } from '~/composables/useAirportLookup'
 import type { AirportInfo } from '~/composables/useAirportLookup'
+import { validateCrossCountry } from '~/utils/validation'
 import { calculateNightTime } from '~/utils/nightTimeCalculator'
 import { DateTime } from 'luxon'
 import { calculateSectionII, calculateSectionIII } from '~/utils/form8710Calculator'
@@ -4607,7 +4634,7 @@ import { useExport } from '~/composables/useExport'
 import AuthModal from '~/components/AuthModal.vue'
 import AuditTrail from '~/components/AuditTrail.vue'
 import IntegrityStatus from '~/components/IntegrityStatus.vue'
-import AC120Checklist from '~/components/AC120Checklist.vue'
+import ComplianceChecklist from '~/components/ComplianceChecklist.vue'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '~/utils/migrateLocalStorage'
 import { findDuplicateEntries, checkDuplicatesInDatabase } from '~/utils/duplicateDetection'
 import {
@@ -5396,7 +5423,7 @@ async function saveInlineEdit(): Promise<void> {
       setTimeout(async () => {
         try {
           console.log('[SaveInlineEdit] Validating entry integrity after update commit...')
-          const validationResult = await validateEntryIntegrity(targetId, true).catch((err: any) => {
+          const validationResult = await validateEntryIntegrity(targetId, true, inlineEditEntry.value).catch((err: any) => {
             console.warn(`[SaveInlineEdit] Failed to validate entry ${targetId}:`, err)
             return null
           })
@@ -6899,7 +6926,7 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
   }
 }
 
-function calculateImportStatistics(entries: LogEntry[]): { statistics: ImportStatistics; validEntries: LogEntry[]; duplicates: LogEntry[]; errors: { entry: LogEntry; message: string }[] } {
+async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statistics: ImportStatistics; validEntries: LogEntry[]; duplicates: LogEntry[]; errors: { entry: LogEntry; message: string }[] }> {
   const validEntries: LogEntry[] = []
   const duplicates: LogEntry[] = []
   const duplicateEntries: Array<{ entry: LogEntry; matches: LogEntry[] }> = []
@@ -6936,8 +6963,8 @@ function calculateImportStatistics(entries: LogEntry[]): { statistics: ImportSta
       entry.aircraftMakeModel = 'Unknown'
     }
     
-    // Validate entry
-    const validationError = validateEntry(entry)
+    // Validate entry using composable validation
+    const validationError = await validateEntryForImport(entry)
     if (validationError) {
       errors.push({ entry, message: validationError })
       errorMessages.push(`Entry ${entry.date} ${entry.registration}: ${validationError}`)
@@ -7089,8 +7116,8 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
       entry.aircraftMakeModel = 'Unknown'
     }
     
-    // Validate entry (with lenient defaults applied)
-    const validationError = validateEntry(entry)
+    // Validate entry using composable validation (with lenient defaults applied)
+    const validationError = await validateEntryForImport(entry)
     if (validationError) {
       result.errors.push(`Entry ${entry.date} ${entry.registration}: ${validationError}`)
       continue
@@ -7366,7 +7393,7 @@ async function processCSVFile(file: File): Promise<void> {
     }
     
     // Calculate statistics and show preview
-    const { statistics, validEntries } = calculateImportStatistics(entries)
+    const { statistics, validEntries } = await calculateImportStatistics(entries)
     importPreviewEntries.value = validEntries
     importPreviewStatistics.value = statistics
     importPreviewMetadata.value = {
@@ -7430,7 +7457,7 @@ async function processJSONFile(file: File): Promise<void> {
     }
     
     // Calculate statistics and show preview
-    const { statistics, validEntries } = calculateImportStatistics(normalizedEntries)
+    const { statistics, validEntries } = await calculateImportStatistics(normalizedEntries)
     importPreviewEntries.value = validEntries
     importPreviewStatistics.value = statistics
     importPreviewMetadata.value = {
@@ -8014,7 +8041,16 @@ function createBlankEntry(): EditableLogEntry {
 }
 
 function generateEntryId(): string {
-  return `entry-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  // Use crypto.randomUUID() for proper UUID v4 generation
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID()
+  }
+  // Fallback for older browsers (shouldn't be needed in modern browsers)
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0
+    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+    return v.toString(16)
+  })
 }
 
 function resetForm(): void {
@@ -8685,30 +8721,12 @@ async function toggleEntryFlag(entry: LogEntry): Promise<void> {
   // If not authenticated, the watch on logEntries will save to localStorage
 }
 
-function validateEntry(entry: EditableLogEntry): string | null {
-  if (!entry.date) {
-    return 'Date of flight is required.'
-  }
-  if (!entry.aircraftCategoryClass.trim()) {
-    return 'Aircraft category and class is required.'
-  }
-  if (!entry.aircraftMakeModel.trim()) {
-    return 'Aircraft make and model is required.'
-  }
-  if (!entry.registration.trim()) {
-    return 'Aircraft identification (N-number) is required.'
-  }
-  if (!entry.departure.trim() || !entry.destination.trim()) {
-    return 'Departure and destination aerodromes are required.'
-  }
-  if (
-    entry.flightTime.total === null ||
-    Number.isNaN(entry.flightTime.total) ||
-    entry.flightTime.total < 0
-  ) {
-    return 'Total flight time must be provided.'
-  }
-  return null
+// Helper function for import validation - returns first error message if any
+// Uses the composable validation but returns a simple string for import compatibility
+async function validateEntryForImport(entry: LogEntry): Promise<string | null> {
+  const results = await validateFlightTimeEntry(entry)
+  const firstError = results.find(r => r.type === 'error')
+  return firstError ? firstError.message : null
 }
 
 function normalizeNumber(value: number | null | string | undefined): number | null {
@@ -9207,7 +9225,8 @@ watch(() => [newEntry.oooi?.out, newEntry.oooi?.in, newEntry.oooi?.off, newEntry
   // For now, let's just map Out-In to Total Time.
 }, { deep: true })
 
-// Watch for airport changes to trigger cross-country validation and auto-logging
+// Watch for airport changes to trigger cross-country auto-logging (without validation)
+// Validation will only run when Save Entry button is pressed
 const validationTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 watch(() => [newEntry.departure, newEntry.destination, newEntry.flightTime.crossCountry, newEntry.date, newEntry.flightTime.total], async () => {
   if (!newEntry.departure || !newEntry.destination || newEntry.departure === 'UNKNOWN' || newEntry.destination === 'UNKNOWN') {
@@ -9219,7 +9238,8 @@ watch(() => [newEntry.departure, newEntry.destination, newEntry.flightTime.cross
     clearTimeout(validationTimeout.value)
   }
   
-  // Debounce validation to avoid too many API calls (reduced to 200ms for faster response)
+  // Debounce cross-country check to avoid too many API calls (reduced to 200ms for faster response)
+  // Note: This only checks cross-country distance, not full validation
   validationTimeout.value = setTimeout(async () => {
     await checkAndAutoLogCrossCountry()
   }, 200)
@@ -9660,12 +9680,6 @@ async function submitEntry(): Promise<void> {
   duplicateWarning.value = null
   // Don't reset validationWarning or saveAnywayValidation here - they need to persist
   // so that "Save Anyway" can work. They'll be cleared after successful save.
-
-  const error = validateEntry(newEntry)
-  if (error) {
-    validationError.value = error
-    return
-  }
   
   const baseEntry: Omit<LogEntry, 'id'> = {
     date: newEntry.date,
@@ -9747,32 +9761,36 @@ async function submitEntry(): Promise<void> {
   }
   const validationResults = await validateFlightTimeEntry(entryToValidate, logEntries.value)
   
-  // Always show validation warnings if there are issues (for display purposes)
-  if (hasErrors.value || hasWarnings.value) {
-    validationWarning.value = true
-  }
+  // Check if validation now passes (user may have fixed errors)
+  const validationNowPasses = !hasErrors.value && !hasWarnings.value
   
-  // If user has explicitly chosen to save anyway, proceed (but keep validation visible)
-  if (saveAnywayValidation.value) {
-    // User has chosen to proceed, so we'll save despite validation issues
-    // Validation results will be cleared after successful save
-    console.log('[SaveEntry] Proceeding with save despite validation issues (saveAnywayValidation = true)')
-  } else {
-    // Block save if there are errors (unless user explicitly overrides)
-    if (hasErrors.value) {
-      console.log('[SaveEntry] Blocking save due to validation errors')
-      return
-    }
-    
-    // Show warning if there are warnings (but allow save)
-    if (hasWarnings.value) {
-      console.log('[SaveEntry] Blocking save due to validation warnings')
-      return
-    }
-
-    // Clear validation warnings if no issues
+  // If validation now passes, reset the "save anyway" flag and clear validation state
+  if (validationNowPasses) {
+    saveAnywayValidation.value = false
     validationWarning.value = false
     clearValidation()
+  } else {
+    // Show validation warnings if there are issues
+    validationWarning.value = true
+    
+    // If user has explicitly chosen to save anyway, proceed (but keep validation visible)
+    if (saveAnywayValidation.value) {
+      // User has chosen to proceed, so we'll save despite validation issues
+      // Validation results will be cleared after successful save
+      console.log('[SaveEntry] Proceeding with save despite validation issues (saveAnywayValidation = true)')
+    } else {
+      // Block save if there are errors (unless user explicitly overrides)
+      if (hasErrors.value) {
+        console.log('[SaveEntry] Blocking save due to validation errors')
+        return
+      }
+      
+      // Show warning if there are warnings (but allow save)
+      if (hasWarnings.value) {
+        console.log('[SaveEntry] Blocking save due to validation warnings')
+        return
+      }
+    }
   }
 
   // LOCAL-FIRST: Always save to IndexedDB first, then queue for sync
@@ -9806,6 +9824,7 @@ async function submitEntry(): Promise<void> {
 
     // Prepare database entry format for sync queue
     const dbEntry: any = {
+      id: entryId, // Include UUID for both new entries and updates
       user_id: user.value?.id,
       date: baseEntry.date,
       role: baseEntry.role,
@@ -9832,10 +9851,10 @@ async function submitEntry(): Promise<void> {
     // Add to sync queue (will sync to Supabase when online)
     if (isAuthenticated.value && user.value) {
       if (editingEntryId.value) {
-        // For updates, include the entry ID in the data
-        dbEntry.id = entryId
+        // For updates, the ID is already included above
         await addToQueue('update', entryId, dbEntry)
       } else {
+        // For inserts, include the UUID so Supabase uses it
         await addToQueue('insert', entryId, dbEntry)
       }
 
@@ -9871,29 +9890,90 @@ async function submitEntry(): Promise<void> {
   }
 }
 
+// Helper function to check if a string is a valid UUID
+function isValidUUID(id: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  return uuidRegex.test(id)
+}
+
 async function removeEntry(id: string): Promise<void> {
   // Delete from Supabase if authenticated
   if (isAuthenticated.value && user.value) {
     try {
-      // Get entry data before deleting for audit log
+      let supabaseId = id
       let entryData = null
-      try {
-        const { data } = await (supabase
-          .from('log_entries') as any)
-          .select('*')
-          .eq('id', id)
-          .single()
-        entryData = data
-      } catch (err) {
-        console.warn('Could not fetch entry data for audit log:', err)
+      
+      // If ID is not a UUID, try to find the entry in Supabase by matching other fields
+      if (!isValidUUID(id)) {
+        // Get the entry from local state to use for matching
+        const localEntry = logEntries.value.find(e => e.id === id)
+        
+        if (localEntry) {
+          // Try to find the entry in Supabase by matching date, registration, departure, destination
+          const { data: matchingEntries, error: findError } = await (supabase
+            .from('log_entries') as any)
+            .select('id, date, registration, departure, destination')
+            .eq('date', localEntry.date)
+            .eq('registration', localEntry.registration)
+            .eq('departure', localEntry.departure)
+            .eq('destination', localEntry.destination)
+            .limit(1)
+          
+          if (!findError && matchingEntries && matchingEntries.length > 0) {
+            // Found matching entry in Supabase, use its UUID
+            supabaseId = matchingEntries[0].id
+            // Fetch full entry data for audit log
+            try {
+              const { data } = await (supabase
+                .from('log_entries') as any)
+                .select('*')
+                .eq('id', supabaseId)
+                .single()
+              entryData = data
+            } catch (err) {
+              console.warn('Could not fetch entry data for audit log:', err)
+            }
+          } else {
+            // Entry doesn't exist in Supabase (hasn't synced yet), just delete from IndexedDB
+            console.log('[RemoveEntry] Entry not found in Supabase, deleting from IndexedDB only')
+            await deleteEntryFromIndexedDB(id)
+            logEntries.value = logEntries.value.filter((entry) => entry.id !== id)
+            return
+          }
+        } else {
+          // Entry not found locally either, just try to delete from Supabase with the ID
+          // (will fail if not UUID, but that's okay - we'll handle the error)
+        }
+      } else {
+        // ID is a valid UUID, fetch entry data for audit log
+        try {
+          const { data } = await (supabase
+            .from('log_entries') as any)
+            .select('*')
+            .eq('id', supabaseId)
+            .single()
+          entryData = data
+        } catch (err) {
+          console.warn('Could not fetch entry data for audit log:', err)
+        }
       }
       
+      // Delete from Supabase using the UUID
       const { error } = await (supabase
         .from('log_entries') as any)
         .delete()
-        .eq('id', id)
+        .eq('id', supabaseId)
       
       if (error) {
+        // If error is about invalid UUID and we have a non-UUID ID, 
+        // the entry probably doesn't exist in Supabase yet
+        if (error.message?.includes('invalid input syntax for type uuid') && !isValidUUID(id)) {
+          console.log('[RemoveEntry] Entry not in Supabase (invalid UUID), deleting from IndexedDB only')
+          await deleteEntryFromIndexedDB(id)
+          logEntries.value = logEntries.value.filter((entry) => entry.id !== id)
+          return
+        }
+        
         console.error('Error deleting entry from Supabase:', error)
         alert(`Failed to delete entry: ${error.message}`)
         return
@@ -9905,7 +9985,7 @@ async function removeEntry(id: string): Promise<void> {
           await (supabase
             .from('audit_logs') as any)
             .insert({
-              entry_id: id,
+              entry_id: supabaseId,
               user_id: user.value.id,
               action: 'delete',
               old_data: entryData,
@@ -9918,11 +9998,17 @@ async function removeEntry(id: string): Promise<void> {
           console.warn('Failed to create audit log for deletion:', auditError)
         }
       }
+      
+      // Also delete from IndexedDB
+      await deleteEntryFromIndexedDB(id)
     } catch (error) {
       console.error('Error deleting entry:', error)
       alert(`Failed to delete entry: ${error instanceof Error ? error.message : 'Unknown error'}`)
       return
     }
+  } else {
+    // Not authenticated, just delete from IndexedDB
+    await deleteEntryFromIndexedDB(id)
   }
   
   // Update local state (remove from UI)
@@ -10975,6 +11061,8 @@ async function prefetchAirportCoords(airportCode: string): Promise<void> {
 }
 
 // Helper function to check and auto-log cross-country time
+// This function only handles cross-country auto-logging, NOT validation
+// Validation will only run when Save Entry button is pressed
 async function checkAndAutoLogCrossCountry(): Promise<void> {
   // Only require airports - date is not needed for cross-country distance calculation
   if (!newEntry.departure || !newEntry.destination || 
@@ -10988,50 +11076,81 @@ async function checkAndAutoLogCrossCountry(): Promise<void> {
   }
   
   try {
-    const results = await validateFlightTimeEntry(entryToValidate, logEntries.value)
+    // Only run cross-country validation, not full Part 61 validation
+    // We'll use validateCrossCountry directly to avoid triggering full validation
+    // Note: lookupAirport is already defined in the component scope (line 7579)
     
-    // Update validation warning state based on current validation results
-    if (hasErrors.value || hasWarnings.value) {
-      validationWarning.value = true
-    } else {
-      validationWarning.value = false
-    }
+    // Lookup airport coordinates for distance calculation
+    const departure = (newEntry.departure || '').trim()
+    const destination = (newEntry.destination || '').trim()
     
-    // Auto-apply cross-country time if suggested (only if distance >= 50nm)
-    const crossCountryResult = results.find(r => r.field === 'crossCountry' && r.autoFix)
-    const crossCountryWarning = results.find(r => r.field === 'crossCountry' && r.type === 'warning' && r.message?.includes('distance is only'))
-    
-    // Helper to safely get numeric value
-    const getNumValue = (val: number | null | undefined): number => {
-      return val === null || val === undefined || isNaN(val) ? 0 : val
-    }
-    
-    // If there's a warning about distance being too short, remove auto-filled cross-country time
-    if (crossCountryWarning) {
-      // Distance is too short - clear cross-country time if it was auto-filled
-      // Only clear if it matches the total time (likely auto-filled)
-      const totalTime = getNumValue(newEntry.flightTime.total)
-      const xcTime = getNumValue(newEntry.flightTime.crossCountry)
-      if (xcTime > 0 && Math.abs(xcTime - totalTime) < 0.01) {
-        newEntry.flightTime.crossCountry = 0
-        // Remove cross-country checkbox
-        const index = newEntry.flightConditions.indexOf('Cross-Country')
-        if (index > -1) {
-          newEntry.flightConditions.splice(index, 1)
+    if (departure && destination && departure !== 'UNKNOWN' && destination !== 'UNKNOWN') {
+      try {
+        const [depInfo, destInfo] = await Promise.all([
+          lookupAirport(departure),
+          lookupAirport(destination)
+        ])
+        
+        const airportCoords: { departure?: { latitude: number; longitude: number }; destination?: { latitude: number; longitude: number } } = {}
+        
+        if (depInfo?.latitude !== undefined && depInfo?.longitude !== undefined) {
+          airportCoords.departure = {
+            latitude: depInfo.latitude,
+            longitude: depInfo.longitude
+          }
         }
-      }
-    } else if (crossCountryResult?.autoFix && crossCountryResult.autoFix.field === 'crossCountry') {
-      // Only auto-fill if distance >= 50nm (indicated by presence of autoFix)
-      // The autoFix is only provided when coordinates are available and distance >= 50nm
-      const autoFixValue = crossCountryResult.autoFix.value as number
-      // Only auto-fill if cross-country time is currently 0 or null
-      // AND only if we have a valid auto-fix value (which means distance was validated as >= 50nm)
-      if (autoFixValue > 0 && (!newEntry.flightTime.crossCountry || newEntry.flightTime.crossCountry === 0)) {
-        newEntry.flightTime.crossCountry = autoFixValue
-        // Also check the cross-country checkbox
-        if (!newEntry.flightConditions.includes('Cross-Country')) {
-          newEntry.flightConditions.push('Cross-Country')
+        
+        if (destInfo?.latitude !== undefined && destInfo?.longitude !== undefined) {
+          airportCoords.destination = {
+            latitude: destInfo.latitude,
+            longitude: destInfo.longitude
+          }
         }
+        
+        // Only pass coordinates if we have both
+        if (airportCoords.departure && airportCoords.destination) {
+          const results = validateCrossCountry(entryToValidate, airportCoords)
+          
+          // Auto-apply cross-country time if suggested (only if distance >= 50nm)
+          const crossCountryResult = results.find(r => r.field === 'crossCountry' && r.autoFix)
+          const crossCountryWarning = results.find(r => r.field === 'crossCountry' && r.type === 'warning' && r.message?.includes('distance is only'))
+          
+          // Helper to safely get numeric value
+          const getNumValue = (val: number | null | undefined): number => {
+            return val === null || val === undefined || isNaN(val) ? 0 : val
+          }
+          
+          // If there's a warning about distance being too short, remove auto-filled cross-country time
+          if (crossCountryWarning) {
+            // Distance is too short - clear cross-country time if it was auto-filled
+            // Only clear if it matches the total time (likely auto-filled)
+            const totalTime = getNumValue(newEntry.flightTime.total)
+            const xcTime = getNumValue(newEntry.flightTime.crossCountry)
+            if (xcTime > 0 && Math.abs(xcTime - totalTime) < 0.01) {
+              newEntry.flightTime.crossCountry = 0
+              // Remove cross-country checkbox
+              const index = newEntry.flightConditions.indexOf('Cross-Country')
+              if (index > -1) {
+                newEntry.flightConditions.splice(index, 1)
+              }
+            }
+          } else if (crossCountryResult?.autoFix && crossCountryResult.autoFix.field === 'crossCountry') {
+            // Only auto-fill if distance >= 50nm (indicated by presence of autoFix)
+            // The autoFix is only provided when coordinates are available and distance >= 50nm
+            const autoFixValue = crossCountryResult.autoFix.value as number
+            // Only auto-fill if cross-country time is currently 0 or null
+            // AND only if we have a valid auto-fix value (which means distance was validated as >= 50nm)
+            if (autoFixValue > 0 && (!newEntry.flightTime.crossCountry || newEntry.flightTime.crossCountry === 0)) {
+              newEntry.flightTime.crossCountry = autoFixValue
+              // Also check the cross-country checkbox
+              if (!newEntry.flightConditions.includes('Cross-Country')) {
+                newEntry.flightConditions.push('Cross-Country')
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to lookup airport coordinates for cross-country check:', err)
       }
     }
   } catch (error) {

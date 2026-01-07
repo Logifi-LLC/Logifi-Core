@@ -20,6 +20,7 @@ export const useAuditTrail = () => {
   const entryRevisions = ref<EntryRevisionWithDisplay[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+  const isEntrySynced = ref<boolean | null>(null) // null = unknown, true = synced, false = not synced
 
   // Format timestamp for display
   const formatTimestamp = (timestamp: string) => {
@@ -55,19 +56,87 @@ export const useAuditTrail = () => {
     return { displayTime, relativeTime }
   }
 
+  // Helper function to check if a string is a valid UUID
+  const isValidUUID = (id: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    return uuidRegex.test(id)
+  }
+
+  // Helper function to find entry UUID in Supabase by matching fields
+  const findEntryUUID = async (entryId: string, localEntry?: any): Promise<string | null> => {
+    // If it's already a UUID, return it
+    if (isValidUUID(entryId)) {
+      return entryId
+    }
+
+    // If we have local entry data, try to find it in Supabase
+    if (localEntry) {
+      try {
+        const { data: matchingEntries, error: findError } = await supabase
+          .from('log_entries')
+          .select('id, date, registration, departure, destination')
+          .eq('date', localEntry.date)
+          .eq('registration', localEntry.registration)
+          .eq('departure', localEntry.departure)
+          .eq('destination', localEntry.destination)
+          .limit(1)
+
+        if (!findError && matchingEntries && matchingEntries.length > 0) {
+          return matchingEntries[0].id
+        }
+      } catch (err) {
+        console.warn('[AuditTrail] Failed to find entry UUID:', err)
+      }
+    }
+
+    return null
+  }
+
   // Fetch audit logs for a specific entry
-  const getAuditLogs = async (entryId: string) => {
+  const getAuditLogs = async (entryId: string, localEntry?: any) => {
     try {
       isLoading.value = true
       error.value = null
+      isEntrySynced.value = null // Reset sync status
+
+      // Try to find the UUID if entryId is not a UUID
+      const supabaseId = await findEntryUUID(entryId, localEntry) || entryId
+
+      // First, check if the entry exists in Supabase
+      if (isValidUUID(supabaseId)) {
+        const { data: entryExists, error: checkError } = await supabase
+          .from('log_entries')
+          .select('id')
+          .eq('id', supabaseId)
+          .maybeSingle()
+
+        if (checkError && checkError.code !== 'PGRST116') {
+          // Error other than "not found" - log it but continue
+          console.warn('[AuditTrail] Error checking if entry exists:', checkError)
+        }
+
+        // Set sync status based on whether entry exists
+        isEntrySynced.value = !!entryExists
+      } else {
+        // Non-UUID ID means entry likely hasn't synced
+        isEntrySynced.value = false
+      }
 
       const { data, error: fetchError } = await supabase
         .from('audit_logs')
         .select('*')
-        .eq('entry_id', entryId)
+        .eq('entry_id', supabaseId)
         .order('timestamp', { ascending: false })
 
       if (fetchError) {
+        // If error is about invalid UUID and we have a non-UUID ID, 
+        // the entry probably doesn't exist in Supabase yet
+        if (fetchError.message?.includes('invalid input syntax for type uuid') && !isValidUUID(entryId)) {
+          console.log('[AuditTrail] Entry not in Supabase (invalid UUID), no audit logs available')
+          auditLogs.value = []
+          isEntrySynced.value = false
+          return { success: true, data: [] }
+        }
         throw fetchError
       }
 
@@ -114,18 +183,28 @@ export const useAuditTrail = () => {
   }
 
   // Fetch entry revisions for a specific entry
-  const getEntryRevisions = async (entryId: string) => {
+  const getEntryRevisions = async (entryId: string, localEntry?: any) => {
     try {
       isLoading.value = true
       error.value = null
 
+      // Try to find the UUID if entryId is not a UUID
+      const supabaseId = await findEntryUUID(entryId, localEntry) || entryId
+
       const { data, error: fetchError } = await supabase
         .from('entry_revisions')
         .select('*')
-        .eq('entry_id', entryId)
+        .eq('entry_id', supabaseId)
         .order('version', { ascending: false })
 
       if (fetchError) {
+        // If error is about invalid UUID and we have a non-UUID ID, 
+        // the entry probably doesn't exist in Supabase yet
+        if (fetchError.message?.includes('invalid input syntax for type uuid') && !isValidUUID(entryId)) {
+          console.log('[AuditTrail] Entry not in Supabase (invalid UUID), no revisions available')
+          entryRevisions.value = []
+          return { success: true, data: [] }
+        }
         throw fetchError
       }
 
@@ -146,16 +225,19 @@ export const useAuditTrail = () => {
   }
 
   // Restore an entry to a specific revision version
-  const restoreRevision = async (entryId: string, version: number) => {
+  const restoreRevision = async (entryId: string, version: number, localEntry?: any) => {
     try {
       isLoading.value = true
       error.value = null
+
+      // Try to find the UUID if entryId is not a UUID
+      const supabaseId = await findEntryUUID(entryId, localEntry) || entryId
 
       // First, get the revision data
       const { data: revision, error: revisionError } = await supabase
         .from('entry_revisions')
         .select('*')
-        .eq('entry_id', entryId)
+        .eq('entry_id', supabaseId)
         .eq('version', version)
         .single()
 
@@ -197,7 +279,7 @@ export const useAuditTrail = () => {
           original_entry_date: entryData.original_entry_date,
           import_metadata: entryData.import_metadata
         })
-        .eq('id', entryId)
+        .eq('id', supabaseId)
 
       if (updateError) {
         throw updateError
@@ -250,6 +332,7 @@ export const useAuditTrail = () => {
     entryRevisions,
     isLoading,
     error,
+    isEntrySynced,
     getAuditLogs,
     getEntryRevisions,
     restoreRevision,
