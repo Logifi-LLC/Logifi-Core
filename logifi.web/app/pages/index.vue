@@ -81,6 +81,51 @@
           </span>
         </div>
         <nav class="flex items-center gap-3">
+          <!-- Offline/Sync Status Indicator -->
+          <div class="flex items-center gap-2">
+            <div
+              :class="[
+                'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-quicksand font-medium transition-all',
+                isOnline
+                  ? (isSyncing
+                      ? (isDarkMode ? 'bg-yellow-600/20 text-yellow-400 border border-yellow-600/50' : 'bg-yellow-100 text-yellow-700 border border-yellow-300')
+                      : (isDarkMode ? 'bg-green-600/20 text-green-400 border border-green-600/50' : 'bg-green-100 text-green-700 border border-green-300'))
+                  : (isDarkMode ? 'bg-red-600/20 text-red-400 border border-red-600/50' : 'bg-red-100 text-red-700 border border-red-300')
+              ]"
+              :title="syncStatusTitle"
+            >
+              <Icon
+                :name="syncStatusIcon"
+                :class="[isSyncing ? 'animate-spin' : '', 'text-xs']"
+                size="14"
+              />
+              <span class="hidden sm:inline">
+                {{ syncStatusText }}
+              </span>
+            </div>
+            <div
+              v-if="queueLength > 0"
+              :class="[
+                'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-quicksand font-semibold',
+                isDarkMode ? 'bg-orange-600/20 text-orange-400 border border-orange-600/50' : 'bg-orange-100 text-orange-700 border border-orange-300'
+              ]"
+              :title="`${queueLength} pending sync ${queueLength === 1 ? 'operation' : 'operations'}`"
+            >
+              <Icon name="ri:time-line" size="12" />
+              <span>{{ queueLength }}</span>
+            </div>
+            <div
+              v-if="syncError"
+              :class="[
+                'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-quicksand',
+                isDarkMode ? 'bg-red-600/20 text-red-400 border border-red-600/50' : 'bg-red-100 text-red-700 border border-red-300'
+              ]"
+              :title="syncError"
+            >
+              <Icon name="ri:error-warning-line" size="12" />
+              <span class="hidden sm:inline">Sync Error</span>
+            </div>
+          </div>
           <button
             type="button"
             @click="showPilotProfile = true"
@@ -4552,11 +4597,21 @@ import { supabase } from '~/lib/supabase'
 import { useAuth } from '~/composables/useAuth'
 import { useDataIntegrity } from '~/composables/useDataIntegrity'
 import { useValidation } from '~/composables/useValidation'
+import { useOffline } from '~/composables/useOffline'
+import { useSyncQueue } from '~/composables/useSyncQueue'
 import AuthModal from '~/components/AuthModal.vue'
 import AuditTrail from '~/components/AuditTrail.vue'
 import IntegrityStatus from '~/components/IntegrityStatus.vue'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '~/utils/migrateLocalStorage'
 import { findDuplicateEntries, checkDuplicatesInDatabase } from '~/utils/duplicateDetection'
+import {
+  initIndexedDB,
+  saveEntryToIndexedDB,
+  updateEntryInIndexedDB,
+  deleteEntryFromIndexedDB,
+  getAllEntriesFromIndexedDB,
+  type IDBLogEntry
+} from '~/utils/indexedDB'
 
 // Browser check (must be defined early for watchers with immediate: true)
 const isBrowser = typeof window !== 'undefined'
@@ -4565,6 +4620,30 @@ const isBrowser = typeof window !== 'undefined'
 const { user, isAuthenticated, isLoading: authLoading, signOut: authSignOut } = useAuth()
 const { validateEntry: validateEntryIntegrity } = useDataIntegrity()
 const { validateEntry: validateFlightTimeEntry, validationErrors, validationWarnings, hasErrors, hasWarnings, clearValidation } = useValidation()
+
+// Offline support
+const { isOnline, isSyncing, syncProgress, updateSyncProgress } = useOffline()
+const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync } = useSyncQueue()
+
+// Computed properties for offline UI
+const syncStatusIcon = computed(() => {
+  if (!isOnline.value) return 'ri:wifi-off-line'
+  if (isSyncing.value) return 'ri:loader-4-line'
+  return 'ri:wifi-line'
+})
+
+const syncStatusText = computed(() => {
+  if (!isOnline.value) return 'Offline'
+  if (isSyncing.value) return 'Syncing'
+  return 'Online'
+})
+
+const syncStatusTitle = computed(() => {
+  if (!isOnline.value) return 'Offline'
+  if (isSyncing.value) return 'Syncing...'
+  return 'Online'
+})
+
 const showAuthModal = ref(false)
 const isMigrating = ref(false)
 const migrationProgress = ref({ step: '', current: 0, total: 0 })
@@ -4619,6 +4698,32 @@ watch(isAuthenticated, async (authenticated) => {
 watch(authLoading, (loading) => {
   if (!loading && !isAuthenticated.value) {
     showAuthModal.value = true
+  }
+})
+
+// Initialize IndexedDB and start background sync on mount
+onMounted(async () => {
+  if (!isBrowser) return
+  
+  try {
+    // Initialize IndexedDB
+    await initIndexedDB()
+    console.log('[App] IndexedDB initialized')
+    
+    // Start background sync if authenticated
+    if (isAuthenticated.value && user.value) {
+      startBackgroundSync()
+    }
+  } catch (error) {
+    console.error('[App] Failed to initialize IndexedDB:', error)
+  }
+})
+
+// Watch for online status changes to trigger sync
+watch(isOnline, (online) => {
+  if (online && isAuthenticated.value && user.value) {
+    // When coming back online, process sync queue
+    processQueue()
   }
 })
 
@@ -9556,555 +9661,92 @@ async function submitEntry(): Promise<void> {
     clearValidation()
   }
 
-  // Save to Supabase if authenticated, otherwise save to localStorage
-  if (isAuthenticated.value && user.value) {
-    try {
-      const dbEntry: any = {
-        user_id: user.value.id,
-        date: baseEntry.date,
-        role: baseEntry.role,
-        aircraft_category_class: baseEntry.aircraftCategoryClass,
-        category_class_time: baseEntry.categoryClassTime,
-        aircraft_make_model: baseEntry.aircraftMakeModel,
-        registration: baseEntry.registration,
-        flight_number: baseEntry.flightNumber,
-        departure: baseEntry.departure,
-        destination: baseEntry.destination,
-        route: baseEntry.route,
-        training_elements: baseEntry.trainingElements || null,
-        training_instructor: baseEntry.trainingInstructor || null,
-        instructor_certificate: baseEntry.instructorCertificate || null,
-        flight_conditions: baseEntry.flightConditions,
-        remarks: baseEntry.remarks || null,
-        flight_time: baseEntry.flightTime,
-        performance: baseEntry.performance,
-        oooi: baseEntry.oooi || null,
-        flagged: saveAnywayValidation.value, // Flag entry if saved despite validation issues
-        is_imported: false
+  // LOCAL-FIRST: Always save to IndexedDB first, then queue for sync
+  try {
+    // Generate entry ID if new entry
+    const entryId = editingEntryId.value || generateEntryId()
+    
+    // Create LogEntry for IndexedDB
+    const entryToSave: LogEntry = {
+      ...baseEntry,
+      id: entryId,
+      flagged: saveAnywayValidation.value,
+      isImported: false
+    }
+
+    // Save to IndexedDB first (immediate, works offline)
+    if (editingEntryId.value) {
+      await updateEntryInIndexedDB(entryToSave)
+    } else {
+      await saveEntryToIndexedDB(entryToSave)
+    }
+
+    // Update local state immediately from IndexedDB
+    if (editingEntryId.value) {
+      logEntries.value = sortEntriesByDateAndOOOI(
+        logEntries.value.map((e) => (e.id === entryId ? entryToSave : e))
+      )
+    } else {
+      logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToSave])
+    }
+
+    // Prepare database entry format for sync queue
+    const dbEntry: any = {
+      user_id: user.value?.id,
+      date: baseEntry.date,
+      role: baseEntry.role,
+      aircraft_category_class: baseEntry.aircraftCategoryClass,
+      category_class_time: baseEntry.categoryClassTime,
+      aircraft_make_model: baseEntry.aircraftMakeModel,
+      registration: baseEntry.registration,
+      flight_number: baseEntry.flightNumber,
+      departure: baseEntry.departure,
+      destination: baseEntry.destination,
+      route: baseEntry.route,
+      training_elements: baseEntry.trainingElements || null,
+      training_instructor: baseEntry.trainingInstructor || null,
+      instructor_certificate: baseEntry.instructorCertificate || null,
+      flight_conditions: baseEntry.flightConditions,
+      remarks: baseEntry.remarks || null,
+      flight_time: baseEntry.flightTime,
+      performance: baseEntry.performance,
+      oooi: baseEntry.oooi || null,
+      flagged: saveAnywayValidation.value,
+      is_imported: false
+    }
+
+    // Add to sync queue (will sync to Supabase when online)
+    if (isAuthenticated.value && user.value) {
+      if (editingEntryId.value) {
+        // For updates, include the entry ID in the data
+        dbEntry.id = entryId
+        await addToQueue('update', entryId, dbEntry)
+      } else {
+        await addToQueue('insert', entryId, dbEntry)
       }
 
-      if (editingEntryId.value) {
-        // Get old entry data before updating
-        const { data: oldEntryData, error: fetchError } = await (supabase
-          .from('log_entries') as any)
-          .select('*')
-          .eq('id', editingEntryId.value)
-          .single()
-        
-        if (fetchError) {
-          console.error('[SaveEntry] Failed to fetch old entry data:', fetchError)
-          throw fetchError
-        }
-        
-        // Only include fields that should be updated (exclude read-only/computed fields)
-        // Read-only: id, user_id, created_at, updated_at, data_hash, version
-        const updateData: any = {
-          // Basic flight information
-          date: dbEntry.date,
-          role: dbEntry.role,
-          aircraft_category_class: dbEntry.aircraft_category_class,
-          category_class_time: dbEntry.category_class_time,
-          aircraft_make_model: dbEntry.aircraft_make_model,
-          registration: dbEntry.registration,
-          flight_number: dbEntry.flight_number,
-          departure: dbEntry.departure,
-          destination: dbEntry.destination,
-          route: dbEntry.route,
-          
-          // Training information
-          training_elements: dbEntry.training_elements,
-          training_instructor: dbEntry.training_instructor,
-          instructor_certificate: dbEntry.instructor_certificate,
-          
-          // Flight conditions
-          flight_conditions: dbEntry.flight_conditions,
-          remarks: dbEntry.remarks,
-          
-          // Flight data (JSONB)
-          flight_time: dbEntry.flight_time,
-          performance: dbEntry.performance,
-          oooi: dbEntry.oooi,
-          
-          // Metadata fields (preserve existing values or flag if saving despite validation)
-          flagged: saveAnywayValidation.value ? true : (oldEntryData?.flagged ?? false),
-          is_imported: oldEntryData?.is_imported ?? false,
-          import_source: oldEntryData?.import_source ?? null,
-          import_batch_id: oldEntryData?.import_batch_id ?? null,
-          original_entry_date: oldEntryData?.original_entry_date ?? null,
-          import_metadata: oldEntryData?.import_metadata ?? null
-          
-          // Excluded: id, user_id, created_at, updated_at (auto), data_hash (computed), version (computed)
-        }
-        
-        console.log('[SaveEntry] Updating entry:', editingEntryId.value)
-        console.log('[SaveEntry] Update data:', JSON.stringify(updateData, null, 2))
-        
-        // Update existing entry and verify it succeeded
-        const { data: updateResult, error } = await (supabase
-          .from('log_entries') as any)
-          .update(updateData)
-          .eq('id', editingEntryId.value)
-          .select()
-          .single()
-        
-        if (error) {
-          console.error('[SaveEntry] Update error:', error)
-          console.error('[SaveEntry] Error details:', JSON.stringify(error, null, 2))
-          throw error
-        }
-        
-        if (!updateResult) {
-          console.error('[SaveEntry] Update succeeded but no data returned')
-          throw new Error('Update succeeded but no data returned')
-        }
-        
-        console.log('[SaveEntry] Entry updated successfully:', updateResult)
-        
-        // Validate entry integrity after update commits
-        // The trigger computes the hash BEFORE UPDATE, so after UPDATE completes the hash should be stored
-        // Small delay to ensure transaction is fully committed before validating
-        setTimeout(async () => {
-          try {
-            const entryId = editingEntryId.value
-            if (!entryId) return
-            console.log('[SaveEntry] Validating entry integrity after update commit...')
-            const validationResult = await validateEntryIntegrity(entryId, true).catch((err: any) => {
-              console.warn(`[SaveEntry] Failed to validate entry ${entryId}:`, err)
-              return null
-            })
-            
-            if (validationResult) {
-              if (validationResult.isValid) {
-                console.log('[SaveEntry] Entry validated successfully')
-              } else {
-                console.error('[SaveEntry] Hash mismatch detected!', {
-                  entryId: editingEntryId.value,
-                  storedHash: validationResult.currentHash?.substring(0, 16) + '...',
-                  computedHash: validationResult.computedHash?.substring(0, 16) + '...'
-                })
-              }
-            }
-            
-            // Refresh audit trail if it's open for this entry
-            if (showAuditTrailSidebar.value && expandedEntryId.value === editingEntryId.value) {
-              // Trigger a refresh by slightly modifying and restoring the entryId
-              const currentId = expandedEntryId.value
-              expandedEntryId.value = null
-              await nextTick()
-              expandedEntryId.value = currentId
-            }
-          } catch (validationErr) {
-            // Ignore validation errors - don't fail the save
-            console.warn('[SaveEntry] Validation error:', validationErr)
-          }
-        }, 200) // Small delay to ensure transaction is committed
-        
-        // Use the updateResult data directly (already fetched with .select().single())
-        const updatedEntryData = updateResult
-        
-        // Create audit log entry
-        try {
-          const changedFields: string[] = []
-          const oldData: any = {}
-          const newData: any = {}
-          
-          // Compare all fields
-          const fieldsToCompare = [
-            'date', 'role', 'aircraft_category_class', 'category_class_time',
-            'aircraft_make_model', 'registration', 'flight_number', 'departure',
-            'destination', 'route', 'training_elements', 'training_instructor',
-            'instructor_certificate', 'flight_conditions', 'remarks',
-            'flight_time', 'performance', 'oooi', 'flagged'
-          ]
-          
-          fieldsToCompare.forEach(field => {
-            const oldVal = oldEntryData[field]
-            const newVal = updateData[field]
-            
-            // Deep comparison for objects/arrays
-            if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
-              changedFields.push(field)
-              oldData[field] = oldVal
-              newData[field] = newVal
-            }
-          })
-          
-          if (changedFields.length > 0) {
-            // Create change summary
-            const summaryParts = changedFields.slice(0, 3).map(field => {
-              const fieldName = field.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
-              return fieldName
-            })
-            const changeSummary = changedFields.length > 3
-              ? `Updated ${summaryParts.join(', ')} and ${changedFields.length - 3} more field${changedFields.length - 3 > 1 ? 's' : ''}`
-              : `Updated ${summaryParts.join(', ')}`
-            
-            console.log('[SaveEntry] Creating audit log:', {
-              entry_id: editingEntryId.value,
-              user_id: user.value.id,
-              changed_fields_count: changedFields.length
-            })
-            
-            const { data: auditData, error: auditError } = await (supabase
-              .from('audit_logs') as any)
-              .insert({
-                entry_id: editingEntryId.value,
-                user_id: user.value.id,
-                action: 'update',
-                old_data: oldData,
-                new_data: newData,
-                changed_fields: changedFields,
-                change_summary: changeSummary,
-                is_compliance_event: false
-              })
-              .select()
-              .single()
-            
-            if (auditError) {
-              console.error('[SaveEntry] Failed to create audit log:', auditError)
-              console.error('[SaveEntry] Audit error details:', JSON.stringify(auditError, null, 2))
-            } else {
-              console.log('[SaveEntry] Audit log created successfully:', auditData)
-              console.log('[SaveEntry] Audit log ID:', auditData?.id)
-            }
-          } else {
-            console.log('[SaveEntry] No fields changed, skipping audit log')
-          }
-        } catch (auditError) {
-          // Don't fail the update if audit log creation fails
-          console.error('[SaveEntry] Exception creating audit log:', auditError)
-          console.error('[SaveEntry] Audit error stack:', auditError instanceof Error ? auditError.stack : 'No stack')
-        }
-        
-        // Validation will be done after verification query completes
-        
-        // Update local state with data from database
-        const targetId = editingEntryId.value
-        if (updatedEntryData) {
-          // Convert database format to LogEntry format
-          const dbEntry = updatedEntryData
-          const entry: LogEntry = {
-            id: dbEntry.id,
-            date: dbEntry.date,
-            role: dbEntry.role,
-            aircraftCategoryClass: dbEntry.aircraft_category_class,
-            categoryClassTime: dbEntry.category_class_time,
-            aircraftMakeModel: dbEntry.aircraft_make_model,
-            registration: dbEntry.registration,
-            flightNumber: dbEntry.flight_number,
-            departure: dbEntry.departure,
-            destination: dbEntry.destination,
-            route: dbEntry.route || '',
-            trainingElements: dbEntry.training_elements || '',
-            trainingInstructor: dbEntry.training_instructor || '',
-            instructorCertificate: dbEntry.instructor_certificate || '',
-            flightConditions: dbEntry.flight_conditions || [],
-            remarks: dbEntry.remarks || '',
-            flightTime: dbEntry.flight_time as FlightTimeBreakdown,
-            performance: dbEntry.performance as PerformanceMetrics,
-            oooi: dbEntry.oooi as OOOITimes | undefined,
-            flagged: dbEntry.flagged || false,
-            version: dbEntry.version, // Include version to keep frontend in sync with database
-            // Import tracking fields
-            isImported: dbEntry.is_imported || false,
-            importSource: dbEntry.import_source || undefined,
-            importBatchId: dbEntry.import_batch_id || undefined,
-            originalEntryDate: dbEntry.original_entry_date || undefined,
-            importMetadata: dbEntry.import_metadata || undefined
-          }
-          
-          // Normalize flight time values
-          const normalizedFlightTime: FlightTimeBreakdown = {
-            ...createEmptyFlightTime()
-          }
-          flightTimeFields.forEach((field) => {
-            const rawValue = entry.flightTime?.[field.key]
-            normalizedFlightTime[field.key] = normalizeNumber(rawValue)
-          })
-          entry.flightTime = normalizedFlightTime
-          
-          // Normalize performance values
-          const normalizedPerformance: PerformanceMetrics = {
-            ...createEmptyPerformance()
-          }
-          performanceFields.forEach((field) => {
-            if (field.key === 'approachType') {
-              normalizedPerformance[field.key] = (entry.performance?.[field.key] as string | null) ?? null
-            } else {
-              const rawValue = entry.performance?.[field.key]
-              if (typeof rawValue === 'string') {
-                const parsed = parseFloat(rawValue)
-                normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
-              } else {
-                normalizedPerformance[field.key] = normalizeNumber(rawValue)
-              }
-            }
-          })
-          entry.performance = normalizedPerformance
-          
-          logEntries.value = sortEntriesByDateAndOOOI(
-            logEntries.value.map((e) => (e.id === targetId ? entry : e))
-          )
-        } else {
-          // Fallback to form data if reload failed
-        logEntries.value = sortEntriesByDateAndOOOI(
-          logEntries.value.map((entry) => (entry.id === targetId ? { ...baseEntry, id: targetId } : entry))
-        )
-        }
-        
-        // Verify the update persisted by checking the database
-        const { data: verifyData, error: verifyError } = await (supabase
-          .from('log_entries') as any)
-          .select('*')
-          .eq('id', editingEntryId.value)
-          .single()
-        
-        if (verifyError) {
-          console.error('[SaveEntry] Failed to verify update:', verifyError)
-        } else {
-          console.log('[SaveEntry] Verified update in database - data matches:', 
-            JSON.stringify(verifyData, null, 2))
-        }
-        
-        // Don't reload all entries immediately - wait a moment for database to commit
-        // Then reload just this entry to verify it persisted, and validate integrity
-        setTimeout(async () => {
-          console.log('[SaveEntry] Reloading entry to verify persistence...')
-          const { data: verifyEntry, error: verifyErr } = await (supabase
-            .from('log_entries') as any)
-            .select('*')
-            .eq('id', editingEntryId.value)
-            .single()
-          
-          if (!verifyErr && verifyEntry) {
-            // Update just this entry in the local state
-            const dbEntry = verifyEntry
-            const entry: LogEntry = {
-              id: dbEntry.id,
-              date: dbEntry.date,
-              role: dbEntry.role,
-              aircraftCategoryClass: dbEntry.aircraft_category_class,
-              categoryClassTime: dbEntry.category_class_time,
-              aircraftMakeModel: dbEntry.aircraft_make_model,
-              registration: dbEntry.registration,
-              flightNumber: dbEntry.flight_number,
-              departure: dbEntry.departure,
-              destination: dbEntry.destination,
-              route: dbEntry.route || '',
-              trainingElements: dbEntry.training_elements || '',
-              trainingInstructor: dbEntry.training_instructor || '',
-              instructorCertificate: dbEntry.instructor_certificate || '',
-              flightConditions: dbEntry.flight_conditions || [],
-              remarks: dbEntry.remarks || '',
-              flightTime: dbEntry.flight_time as FlightTimeBreakdown,
-              performance: dbEntry.performance as PerformanceMetrics,
-              oooi: dbEntry.oooi as OOOITimes | undefined,
-              flagged: dbEntry.flagged || false,
-              version: dbEntry.version, // Include version to keep frontend in sync with database
-              isImported: dbEntry.is_imported || false,
-              importSource: dbEntry.import_source || undefined,
-              importBatchId: dbEntry.import_batch_id || undefined,
-              originalEntryDate: dbEntry.original_entry_date || undefined,
-              importMetadata: dbEntry.import_metadata || undefined
-            }
-            
-            // Normalize flight time and performance
-            const normalizedFlightTime: FlightTimeBreakdown = { ...createEmptyFlightTime() }
-            flightTimeFields.forEach((field) => {
-              normalizedFlightTime[field.key] = normalizeNumber(entry.flightTime?.[field.key])
-            })
-            entry.flightTime = normalizedFlightTime
-            
-            const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
-            performanceFields.forEach((field) => {
-              if (field.key === 'approachType') {
-                normalizedPerformance[field.key] = (entry.performance?.[field.key] as string | null) ?? null
-              } else {
-                const rawValue = entry.performance?.[field.key]
-                if (typeof rawValue === 'string') {
-                  const parsed = parseFloat(rawValue)
-                  normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
-                } else {
-                  normalizedPerformance[field.key] = normalizeNumber(rawValue)
-                }
-              }
-            })
-            entry.performance = normalizedPerformance
-            
-            logEntries.value = sortEntriesByDateAndOOOI(
-              logEntries.value.map((e) => (e.id === targetId ? entry : e))
-            )
-            console.log('[SaveEntry] Entry verified and updated in local state')
-          }
-        }, 500)
-        
-        // Refresh audit logs in the sidebar if open (by toggling to force re-fetch)
-        // The AuditTrail component watches props.entryId and props.isOpen, so it will auto-reload
-        // when the sidebar opens, but if it's already open, we need to trigger a refresh
-        // Since editingEntryId hasn't changed, we can't rely on that. Instead, the component
-        // should watch for changes. But for now, we'll just let the user manually refresh
-        // by closing and reopening the sidebar if needed.
-        
-        successMessage.value = 'Entry updated.'
-        duplicateWarning.value = null
-        saveAnyway.value = false
-        validationWarning.value = false
-        saveAnywayValidation.value = false
-        clearValidation()
-      } else {
-        // Insert new entry
-        const { data, error } = await (supabase
-          .from('log_entries') as any)
-          .insert(dbEntry)
-          .select()
-          .single()
-        
-        if (error) throw error
-        
-        // Create audit log entry for new entry
-        try {
-          const { error: auditError } = await (supabase
-            .from('audit_logs') as any)
-            .insert({
-              entry_id: (data as any).id,
-              user_id: user.value.id,
-              action: 'create',
-              old_data: null,
-              new_data: dbEntry,
-              changed_fields: [],
-              change_summary: `Created new log entry for ${dbEntry.date}`,
-              is_compliance_event: false
-            })
-          
-          if (auditError) {
-            console.error('[SaveEntry] Failed to create audit log for new entry:', auditError)
-          } else {
-            console.log('[SaveEntry] Audit log created successfully for new entry')
-          }
-        } catch (auditError) {
-          // Don't fail the insert if audit log creation fails
-          console.warn('[SaveEntry] Failed to create audit log:', auditError)
-        }
-        
-        // Validate entry integrity after create commits
-        // The trigger computes the hash BEFORE INSERT, so after INSERT completes the hash should be stored
-        // Small delay to ensure transaction is fully committed before validating
-        const newEntryId = (data as any).id
-        setTimeout(async () => {
-          try {
-            console.log('[SaveEntry] Validating entry integrity after create commit...')
-            const validationResult = await validateEntryIntegrity(newEntryId, true).catch((err: any) => {
-              console.warn(`[SaveEntry] Failed to validate new entry ${newEntryId}:`, err)
-              return null
-            })
-            
-            if (validationResult) {
-              if (validationResult.isValid) {
-                console.log('[SaveEntry] New entry validated successfully')
-              } else {
-                console.error('[SaveEntry] Hash mismatch detected for new entry!', {
-                  entryId: newEntryId,
-                  storedHash: validationResult.currentHash?.substring(0, 16) + '...',
-                  computedHash: validationResult.computedHash?.substring(0, 16) + '...'
-                })
-              }
-            }
-            
-            // Refresh audit trail if it's open for this entry
-            if (showAuditTrailSidebar.value && expandedEntryId.value === newEntryId) {
-              // Trigger a refresh by slightly modifying and restoring the entryId
-              const currentId = expandedEntryId.value
-              expandedEntryId.value = null
-              await nextTick()
-              expandedEntryId.value = currentId
-            }
-          } catch (validationErr) {
-            // Ignore validation errors - don't fail the save
-            console.warn('[SaveEntry] Validation error for new entry:', validationErr)
-          }
-        }, 200) // Small delay to ensure transaction is committed
-        
-        // Add to local state using data returned from database (includes version)
-        const dbEntryResult = data as any
-        const entryToStore: LogEntry = {
-          id: dbEntryResult.id,
-          date: dbEntryResult.date,
-          role: dbEntryResult.role,
-          aircraftCategoryClass: dbEntryResult.aircraft_category_class,
-          categoryClassTime: dbEntryResult.category_class_time,
-          aircraftMakeModel: dbEntryResult.aircraft_make_model,
-          registration: dbEntryResult.registration,
-          flightNumber: dbEntryResult.flight_number,
-          departure: dbEntryResult.departure,
-          destination: dbEntryResult.destination,
-          route: dbEntryResult.route || '',
-          trainingElements: dbEntryResult.training_elements || '',
-          trainingInstructor: dbEntryResult.training_instructor || '',
-          instructorCertificate: dbEntryResult.instructor_certificate || '',
-          flightConditions: dbEntryResult.flight_conditions || [],
-          remarks: dbEntryResult.remarks || '',
-          flightTime: dbEntryResult.flight_time as FlightTimeBreakdown,
-          performance: dbEntryResult.performance as PerformanceMetrics,
-          oooi: dbEntryResult.oooi as OOOITimes | undefined,
-          flagged: dbEntryResult.flagged || false,
-          version: dbEntryResult.version, // Include version to keep frontend in sync with database
-          isImported: dbEntryResult.is_imported || false,
-          importSource: dbEntryResult.import_source || undefined,
-          importBatchId: dbEntryResult.import_batch_id || undefined,
-          originalEntryDate: dbEntryResult.original_entry_date || undefined,
-          importMetadata: dbEntryResult.import_metadata || undefined
-        }
-        logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
-        successMessage.value = 'Entry saved.'
-        duplicateWarning.value = null
-        saveAnyway.value = false
-        validationWarning.value = false
-        saveAnywayValidation.value = false
-        clearValidation()
+      // If online, try immediate sync
+      if (isOnline.value) {
+        processQueue()
       }
-    } catch (error) {
-      console.error('Error saving entry to Supabase:', error)
-      successMessage.value = 'Error saving entry. Please try again.'
-      validationError.value = error instanceof Error ? error.message : 'Failed to save entry'
-      return
     }
-  } else {
-    // Fallback to localStorage
-    if (editingEntryId.value) {
-      const targetId = editingEntryId.value
-      logEntries.value = sortEntriesByDateAndOOOI(
-        logEntries.value.map((entry) => {
-          if (entry.id === targetId) {
-            return { 
-              ...baseEntry, 
-              id: targetId,
-              flagged: saveAnywayValidation.value ? true : (entry.flagged ?? false)
-            }
-          }
-          return entry
-        })
-      )
-      console.log('[SaveEntry] Entry updated. Night time in saved entry:', 
-        logEntries.value.find(e => e.id === targetId)?.flightTime.night
-      )
-      successMessage.value = 'Entry updated.'
-    } else {
-      const entryToStore: LogEntry = {
-        ...baseEntry,
-        id: generateEntryId(),
-        flagged: saveAnywayValidation.value // Flag entry if saved despite validation issues
-      }
-      logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
-      console.log('[SaveEntry] Entry saved. Night time in saved entry:', 
-        logEntries.value.find(e => e.id === entryToStore.id)?.flightTime.night
-      )
-      successMessage.value = 'Entry saved locally. Remember to archive signatures once the feature is available.'
-      duplicateWarning.value = null
-      saveAnyway.value = false
-      validationWarning.value = false
-      saveAnywayValidation.value = false
-      clearValidation()
-    }
+
+    // Show success message
+    successMessage.value = editingEntryId.value ? 'Entry updated.' : 'Entry saved.'
+    duplicateWarning.value = null
+    saveAnyway.value = false
+    validationWarning.value = false
+    saveAnywayValidation.value = false
+    clearValidation()
+
+    // Sync queue will handle Supabase sync in the background
+    // No need to wait for it here - IndexedDB is the source of truth
+
+  } catch (error) {
+    console.error('Error saving entry to IndexedDB:', error)
+    successMessage.value = 'Error saving entry. Please try again.'
+    validationError.value = error instanceof Error ? error.message : 'Failed to save entry'
+    return
   }
 
   resetForm()
@@ -10228,31 +9870,77 @@ async function handleEntryRestored(entryId: string) {
 async function loadEntries(): Promise<void> {
   if (!isBrowser) return
   
-  // If authenticated, load from Supabase
-  if (isAuthenticated.value && user.value) {
-    try {
-      // Clear existing entries before loading from Supabase to prevent duplicates
-      logEntries.value = []
+  try {
+    // Initialize IndexedDB
+    await initIndexedDB()
+    console.log('[LoadEntries] IndexedDB initialized')
+  } catch (error) {
+    console.error('[LoadEntries] Failed to initialize IndexedDB:', error)
+    // Continue with fallback loading
+  }
+  
+  // LOCAL-FIRST: Load from IndexedDB first (fast, always available)
+  try {
+    const indexedDBEntries = await getAllEntriesFromIndexedDB()
+    
+    if (indexedDBEntries && indexedDBEntries.length > 0) {
+      // Normalize entries from IndexedDB
+      logEntries.value = indexedDBEntries.map((entry) => {
+        // Normalize flight time values
+        const normalizedFlightTime: FlightTimeBreakdown = {
+          ...createEmptyFlightTime()
+        }
+        flightTimeFields.forEach((field) => {
+          const rawValue = entry.flightTime?.[field.key]
+          normalizedFlightTime[field.key] = normalizeNumber(rawValue)
+        })
+        entry.flightTime = normalizedFlightTime
+        
+        // Normalize performance values
+        const normalizedPerformance: PerformanceMetrics = {
+          ...createEmptyPerformance()
+        }
+        performanceFields.forEach((field) => {
+          if (field.key === 'approachType') {
+            normalizedPerformance[field.key] = (entry.performance?.[field.key] as string | null) ?? null
+          } else {
+            const rawValue = entry.performance?.[field.key]
+            if (typeof rawValue === 'string') {
+              const parsed = parseFloat(rawValue)
+              normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
+            } else {
+              normalizedPerformance[field.key] = normalizeNumber(rawValue)
+            }
+          }
+        })
+        entry.performance = normalizedPerformance
+        
+        return entry
+      })
       
+      console.log('[LoadEntries] Loaded', logEntries.value.length, 'entries from IndexedDB')
+    }
+  } catch (error) {
+    console.error('[LoadEntries] Error loading from IndexedDB:', error)
+  }
+  
+  // If authenticated and online, sync with Supabase (merge using last-write-wins)
+  if (isAuthenticated.value && user.value && isOnline.value) {
+    try {
       const { data, error } = await (supabase
         .from('log_entries') as any)
         .select('*')
         .order('date', { ascending: false })
       
       if (error) {
-        console.error('Error loading entries from Supabase:', error)
-        // Fallback to localStorage only if we have no Supabase entries
-        loadPersistedEntries()
+        console.error('[LoadEntries] Error loading entries from Supabase:', error)
+        // Continue with IndexedDB entries
         return
       }
       
       if (data && data.length > 0) {
-        // Removed automatic validation - it will be done on-demand when user opens audit log
-        // This significantly reduces network load (was validating ALL entries on every page load)
-        // Validation now happens only when user opens the audit trail for a specific entry
-        
         // Convert database format to LogEntry format
-        logEntries.value = data.map((dbEntry: any) => {
+        const supabaseEntries: LogEntry[] = data.map((dbEntry: any) => {
           const entry: LogEntry = {
             id: dbEntry.id,
             date: dbEntry.date,
@@ -10274,8 +9962,7 @@ async function loadEntries(): Promise<void> {
             performance: dbEntry.performance as PerformanceMetrics,
             oooi: dbEntry.oooi as OOOITimes | undefined,
             flagged: dbEntry.flagged || false,
-            version: dbEntry.version, // Include version to keep frontend in sync with database
-            // Import tracking fields
+            version: dbEntry.version,
             isImported: dbEntry.is_imported || false,
             importSource: dbEntry.import_source || undefined,
             importBatchId: dbEntry.import_batch_id || undefined,
@@ -10283,20 +9970,14 @@ async function loadEntries(): Promise<void> {
             importMetadata: dbEntry.import_metadata || undefined
           }
           
-          // Normalize flight time values
-          const normalizedFlightTime: FlightTimeBreakdown = {
-            ...createEmptyFlightTime()
-          }
+          // Normalize flight time and performance
+          const normalizedFlightTime: FlightTimeBreakdown = { ...createEmptyFlightTime() }
           flightTimeFields.forEach((field) => {
-            const rawValue = entry.flightTime?.[field.key]
-            normalizedFlightTime[field.key] = normalizeNumber(rawValue)
+            normalizedFlightTime[field.key] = normalizeNumber(entry.flightTime?.[field.key])
           })
           entry.flightTime = normalizedFlightTime
           
-          // Normalize performance values
-          const normalizedPerformance: PerformanceMetrics = {
-            ...createEmptyPerformance()
-          }
+          const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
           performanceFields.forEach((field) => {
             if (field.key === 'approachType') {
               normalizedPerformance[field.key] = (entry.performance?.[field.key] as string | null) ?? null
@@ -10306,7 +9987,7 @@ async function loadEntries(): Promise<void> {
                 const parsed = parseFloat(rawValue)
                 normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
               } else {
-                normalizedPerformance[field.key] = rawValue ?? null
+                normalizedPerformance[field.key] = normalizeNumber(rawValue)
               }
             }
           })
@@ -10315,26 +9996,49 @@ async function loadEntries(): Promise<void> {
           return entry
         })
         
-        console.log('[LoadEntries] Loaded', logEntries.value.length, 'entries from Supabase.')
-        return
-      } else {
-        // No entries in Supabase, but we're authenticated - check if migration is needed
-        // Don't load from localStorage if we're authenticated (migration will handle it)
-        console.log('[LoadEntries] No entries in Supabase yet.')
-        return
+        // Merge with IndexedDB entries using last-write-wins (compare updated_at or version)
+        const entryMap = new Map<string, LogEntry>()
+        
+        // First, add all IndexedDB entries
+        logEntries.value.forEach(entry => {
+          entryMap.set(entry.id, entry)
+        })
+        
+        // Then merge Supabase entries (last-write-wins based on version or updated_at)
+        supabaseEntries.forEach(supabaseEntry => {
+          const existing = entryMap.get(supabaseEntry.id)
+          if (!existing || !existing.version || (supabaseEntry.version && supabaseEntry.version > existing.version)) {
+            // Supabase entry is newer or doesn't exist locally
+            entryMap.set(supabaseEntry.id, supabaseEntry)
+            // Update IndexedDB with synced entry
+            updateEntryInIndexedDB(supabaseEntry).catch(err => {
+              console.warn('[LoadEntries] Failed to update IndexedDB with synced entry:', err)
+            })
+          } else {
+            // Local entry is newer, keep it and queue for sync
+            // (sync queue will handle this)
+          }
+        })
+        
+        // Update logEntries with merged results
+        logEntries.value = Array.from(entryMap.values())
+        logEntries.value = sortEntriesByDateAndOOOI(logEntries.value)
+        
+        console.log('[LoadEntries] Merged entries: IndexedDB + Supabase =', logEntries.value.length, 'entries')
       }
     } catch (err) {
-      console.error('Error loading entries from Supabase:', err)
-      // Only fallback to localStorage if we're not authenticated
-      if (!isAuthenticated.value) {
-        loadPersistedEntries()
-      }
-      return
+      console.error('[LoadEntries] Error syncing with Supabase:', err)
+      // Continue with IndexedDB entries
     }
+  } else if (!isAuthenticated.value) {
+    // Not authenticated - fallback to localStorage
+    loadPersistedEntries()
   }
   
-  // Not authenticated - load from localStorage
-  loadPersistedEntries()
+  // Start background sync if authenticated
+  if (isAuthenticated.value && user.value) {
+    startBackgroundSync()
+  }
 }
 
 function loadPersistedEntries(): void {
@@ -10576,7 +10280,15 @@ if (typeof window !== 'undefined') {
 }
 
 onMounted(async () => {
-  // Wait for auth to initialize, then load entries
+  // Initialize IndexedDB first
+  try {
+    await initIndexedDB()
+    console.log('[App] IndexedDB initialized')
+  } catch (error) {
+    console.error('[App] Failed to initialize IndexedDB:', error)
+  }
+  
+  // Wait for auth to initialize, then load entries (loadEntries will use IndexedDB)
   await loadEntries()
   loadThemePreference()
   loadClockPrefs()
@@ -10586,6 +10298,11 @@ onMounted(async () => {
   await loadCrewProfiles()
   // Normalize and autofill aircraft category/class labels on load
   normalizeAndAutofillCategories()
+  
+  // Start background sync if authenticated
+  if (isAuthenticated.value && user.value) {
+    startBackgroundSync()
+  }
   if (logEntries.value.length === 0 && isAuthenticated.value) {
     // Ensure inline edit is closed when auto-opening Add Entry form
     expandedEntryId.value = null
