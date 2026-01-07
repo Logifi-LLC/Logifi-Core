@@ -337,6 +337,10 @@
                     {{ logEntries.length === 0 ? 'No entries to export' : `${logEntries.length} ${logEntries.length === 1 ? 'entry' : 'entries'} available` }}
                   </p>
                 </div>
+                <!-- AC 120-78B Compliance Checklist -->
+                <div class="space-y-3 pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
+                  <AC120Checklist :is-dark-mode="isDarkMode" />
+                </div>
                 <div 
                   class="space-y-3 pt-2 border-t transition-colors" 
                   :class="[
@@ -4603,6 +4607,7 @@ import { useExport } from '~/composables/useExport'
 import AuthModal from '~/components/AuthModal.vue'
 import AuditTrail from '~/components/AuditTrail.vue'
 import IntegrityStatus from '~/components/IntegrityStatus.vue'
+import AC120Checklist from '~/components/AC120Checklist.vue'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '~/utils/migrateLocalStorage'
 import { findDuplicateEntries, checkDuplicatesInDatabase } from '~/utils/duplicateDetection'
 import {
