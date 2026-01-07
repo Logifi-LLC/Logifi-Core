@@ -4599,6 +4599,7 @@ import { useDataIntegrity } from '~/composables/useDataIntegrity'
 import { useValidation } from '~/composables/useValidation'
 import { useOffline } from '~/composables/useOffline'
 import { useSyncQueue } from '~/composables/useSyncQueue'
+import { useExport } from '~/composables/useExport'
 import AuthModal from '~/components/AuthModal.vue'
 import AuditTrail from '~/components/AuditTrail.vue'
 import IntegrityStatus from '~/components/IntegrityStatus.vue'
@@ -5860,7 +5861,18 @@ function exportToCSV(): void {
     'Night Landings',
     'Instrument Approaches',
     'Approach Type',
-    'Holding Procedures'
+    'Holding Procedures',
+    // Import metadata columns
+    'Is Imported',
+    'Import Source',
+    'Import Batch ID',
+    'Original Entry Date',
+    'Import Metadata',
+    // Compliance columns
+    'Version',
+    'Data Hash',
+    'Created At',
+    'Updated At'
   ]
   
   const formatTimeValue = (value: number | null | undefined): string => {
@@ -5886,6 +5898,29 @@ function exportToCSV(): void {
       actualVal ? formatTimeValue(actualVal) : '',
       simulatedVal ? formatTimeValue(simulatedVal) : ''
     ]
+  }
+
+  const formatBoolean = (value: boolean | null | undefined): string => {
+    if (value === null || value === undefined) return ''
+    return value ? 'Yes' : 'No'
+  }
+
+  const formatTimestamp = (value: string | null | undefined): string => {
+    if (!value) return ''
+    try {
+      return new Date(value).toISOString()
+    } catch {
+      return value
+    }
+  }
+
+  const formatJSONMetadata = (value: Record<string, any> | null | undefined): string => {
+    if (!value) return ''
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return ''
+    }
   }
 
   const rows = logEntries.value.map((entry) => {
@@ -5922,7 +5957,18 @@ function exportToCSV(): void {
       formatCountValue(entry.performance.nightLandings),
       formatCountValue(entry.performance.approachCount),
       entry.performance.approachType || '',
-      formatCountValue(entry.performance.holdingProcedures)
+      formatCountValue(entry.performance.holdingProcedures),
+      // Import metadata
+      formatBoolean(entry.isImported),
+      entry.importSource || '',
+      entry.importBatchId || '',
+      formatTimestamp(entry.originalEntryDate),
+      formatJSONMetadata(entry.importMetadata),
+      // Compliance fields
+      entry.version?.toString() || '',
+      entry.dataHash || '',
+      formatTimestamp(entry.createdAt),
+      formatTimestamp(entry.updatedAt)
     ].map(val => escapeCSVValue(String(val)))
   })
   
@@ -5943,45 +5989,108 @@ function exportToCSV(): void {
   URL.revokeObjectURL(url)
 }
 
-function exportToJSON(): void {
+async function exportToJSON(): Promise<void> {
   if (logEntries.value.length === 0) return
   
-  const exportData = {
-    exportedAt: new Date().toISOString(),
-    version: '1.0',
-    pilotProfile: pilotProfileLoaded.value ? { ...pilotProfile } : null,
-    entries: logEntries.value.map((entry) => ({
-      id: entry.id,
-      date: entry.date,
-      role: entry.role,
-      aircraftCategoryClass: entry.aircraftCategoryClass,
-      aircraftMakeModel: entry.aircraftMakeModel,
-      registration: entry.registration,
-      departure: entry.departure,
-      destination: entry.destination,
-      route: entry.route,
-      trainingElements: entry.trainingElements,
-      trainingInstructor: entry.trainingInstructor,
-      instructorCertificate: entry.instructorCertificate,
-      flightConditions: entry.flightConditions,
-      remarks: entry.remarks,
-      flightTime: entry.flightTime,
-      performance: entry.performance,
-      oooi: entry.oooi
-    }))
-  }
+  // Use the export composable to prepare entries with audit trail
+  const { prepareEntriesForExport } = useExport()
   
-  const jsonContent = JSON.stringify(exportData, null, 2)
-  const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' })
-  const link = document.createElement('a')
-  const url = URL.createObjectURL(blob)
-  link.setAttribute('href', url)
-  link.setAttribute('download', `logifi-logbook-${new Date().toISOString().split('T')[0]}.json`)
-  link.style.visibility = 'hidden'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
+  // Show a brief loading indicator if we have many entries (audit trail fetching may take time)
+  const isFetchingAuditTrail = logEntries.value.length > 10
+  
+  try {
+    // Prepare entries with audit trail
+    const preparedEntries = await prepareEntriesForExport(
+      logEntries.value,
+      true // include audit trail
+    )
+    
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      version: '1.1',
+      pilotProfile: pilotProfileLoaded.value ? { ...pilotProfile } : null,
+      entries: preparedEntries
+    }
+    
+    const jsonContent = JSON.stringify(exportData, null, 2)
+    const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `logifi-logbook-${new Date().toISOString().split('T')[0]}.json`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('Error exporting JSON:', error)
+    // Fallback: export without audit trail if there's an error
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      version: '1.1',
+      pilotProfile: pilotProfileLoaded.value ? { ...pilotProfile } : null,
+      entries: logEntries.value.map((entry) => {
+        const baseEntry: any = {
+          id: entry.id,
+          date: entry.date,
+          role: entry.role,
+          aircraftCategoryClass: entry.aircraftCategoryClass,
+          aircraftMakeModel: entry.aircraftMakeModel,
+          registration: entry.registration,
+          departure: entry.departure,
+          destination: entry.destination,
+          route: entry.route,
+          trainingElements: entry.trainingElements,
+          trainingInstructor: entry.trainingInstructor,
+          instructorCertificate: entry.instructorCertificate,
+          flightConditions: entry.flightConditions,
+          remarks: entry.remarks,
+          flightTime: entry.flightTime,
+          performance: entry.performance,
+          oooi: entry.oooi,
+          flagged: entry.flagged
+        }
+        
+        // Add metadata if available
+        if (entry.isImported !== undefined || entry.importSource || entry.importBatchId || entry.originalEntryDate || entry.importMetadata) {
+          baseEntry.metadata = {
+            isImported: entry.isImported || false,
+            importSource: entry.importSource || null,
+            importBatchId: entry.importBatchId || null,
+            originalEntryDate: entry.originalEntryDate || null,
+            importMetadata: entry.importMetadata || null
+          }
+        }
+        
+        // Add integrity fields if available
+        if (entry.version !== undefined || entry.dataHash || entry.createdAt || entry.updatedAt) {
+          baseEntry.integrity = {
+            version: entry.version || null,
+            dataHash: entry.dataHash || null,
+            createdAt: entry.createdAt || null,
+            updatedAt: entry.updatedAt || null
+          }
+        }
+        
+        baseEntry.auditTrail = []
+        
+        return baseEntry
+      })
+    }
+    
+    const jsonContent = JSON.stringify(exportData, null, 2)
+    const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `logifi-logbook-${new Date().toISOString().split('T')[0]}.json`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
 }
 
 // Form 8710 generation functions
@@ -9963,6 +10072,9 @@ async function loadEntries(): Promise<void> {
             oooi: dbEntry.oooi as OOOITimes | undefined,
             flagged: dbEntry.flagged || false,
             version: dbEntry.version,
+            dataHash: dbEntry.data_hash || undefined,
+            createdAt: dbEntry.created_at || undefined,
+            updatedAt: dbEntry.updated_at || undefined,
             isImported: dbEntry.is_imported || false,
             importSource: dbEntry.import_source || undefined,
             importBatchId: dbEntry.import_batch_id || undefined,

@@ -74,6 +74,10 @@ export interface LogEntry {
   oooi?: OOOITimes
   flagged?: boolean
   version?: number // Entry version for data integrity tracking
+  // Integrity fields
+  dataHash?: string // SHA-256 hash of entry data for integrity verification
+  createdAt?: string // ISO timestamp when entry was created
+  updatedAt?: string // ISO timestamp when entry was last updated
   // Import tracking fields
   isImported?: boolean
   importSource?: string // 'csv', 'json', 'paper', etc.
