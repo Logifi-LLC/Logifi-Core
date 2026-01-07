@@ -10856,9 +10856,11 @@ async function checkAndAutoLogCrossCountry(): Promise<void> {
   try {
     const results = await validateFlightTimeEntry(entryToValidate, logEntries.value)
     
-    // Show validation warnings if there are any
+    // Update validation warning state based on current validation results
     if (hasErrors.value || hasWarnings.value) {
       validationWarning.value = true
+    } else {
+      validationWarning.value = false
     }
     
     // Auto-apply cross-country time if suggested (only if distance >= 50nm)
