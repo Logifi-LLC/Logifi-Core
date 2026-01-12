@@ -626,7 +626,6 @@
                             }
                           "
                         />
-                    <span :class="['inline-flex h-2 w-2 rounded-full', isDarkMode ? 'bg-gray-500' : 'bg-gray-400']"></span>
                     <span class="truncate" :title="section.key === 'airports' ? getAirportDisplayText(item) : item">
                       {{ section.key === 'airports' ? getAirportDisplayText(item) : item }}
                     </span>
@@ -635,14 +634,13 @@
                   </template>
         </div>
             </div>
-          </div>
-          
+
           <!-- Conditions filter section -->
-          <div v-show="!isSidebarCollapsed" class="mt-6">
+          <div v-show="!isSidebarCollapsed">
             <div
               :class="[
                 'rounded-xl border px-4 py-4 transition-colors duration-300',
-                isDarkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-300 border-gray-300'
+                isDarkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-200 border-gray-300'
               ]"
             >
               <div class="flex items-center justify-between mb-2">
@@ -679,11 +677,11 @@
                 </div>
 
           <!-- Flagged Entries filter section -->
-          <div v-show="!isSidebarCollapsed" class="mt-6">
+          <div v-show="!isSidebarCollapsed">
             <div
               :class="[
                 'rounded-xl border px-4 py-4 transition-colors duration-300',
-                isDarkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-300 border-gray-300'
+                isDarkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-200 border-gray-300'
               ]"
             >
               <div class="flex items-center justify-between mb-2">
@@ -715,7 +713,8 @@
             </div>
           </div>
 
-          <div v-show="!isSidebarCollapsed" class="relative settings-container mt-auto pt-6">
+          <!-- Filters active section -->
+          <div v-show="!isSidebarCollapsed" class="relative settings-container pt-6">
             <div class="mb-3 flex items-center justify-between">
               <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                 Filters active:
@@ -742,6 +741,7 @@
                 Clear Filters
                     </button>
             </div>
+          </div>
           </div>
           <div v-show="isSidebarCollapsed" class="flex flex-col items-center gap-4">
             <Icon 
