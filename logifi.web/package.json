@@ -28,5 +28,11 @@
     "@types/luxon": "^3.3.7",
     "@types/suncalc": "^1.9.2",
     "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "lodash": "^4.17.21",
+    "csv": {
+      "csv-parse": "^5.5.0"
+    }
   }
 }

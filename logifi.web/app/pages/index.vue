@@ -636,8 +636,9 @@
         </div>
             </div>
           </div>
+          
           <!-- Conditions filter section -->
-          <div v-show="!isSidebarCollapsed" class="mt-4">
+          <div v-show="!isSidebarCollapsed" class="mt-6">
             <div
               :class="[
                 'rounded-xl border px-4 py-4 transition-colors duration-300',
@@ -676,10 +677,9 @@
             </div>
                   </div>
                 </div>
-          <!-- Aircraft families filter section removed per request -->
 
           <!-- Flagged Entries filter section -->
-          <div v-show="!isSidebarCollapsed" class="mt-4">
+          <div v-show="!isSidebarCollapsed" class="mt-6">
             <div
               :class="[
                 'rounded-xl border px-4 py-4 transition-colors duration-300',
@@ -2139,9 +2139,17 @@
                         const input = e.target as HTMLInputElement;
                         const val = input.value.trim();
                         
+                        // Track manual XC time entry
+                        if (field.key === 'crossCountry') {
+                          xcTimeManuallySet.value = true;
+                        }
+                        
                         // Handle empty input
                         if (val === '' || val === '-') {
                           newEntry.flightTime[field.key] = null;
+                          if (field.key === 'crossCountry') {
+                            xcTimeManuallySet.value = false;
+                          }
                           return;
                         }
                         
@@ -2154,6 +2162,9 @@
                         if (isNaN(num)) {
                           // Invalid input - revert to previous value or null
                           newEntry.flightTime[field.key] = null;
+                          if (field.key === 'crossCountry') {
+                            xcTimeManuallySet.value = false;
+                          }
                         } else {
                           // Ensure it's a valid number (not Infinity, etc.)
                           newEntry.flightTime[field.key] = isFinite(num) ? num : null;
@@ -5256,6 +5267,8 @@ const catalogSections = [
 ] as const satisfies readonly { key: CatalogKey; label: string; icon: string }[]
 
 const newEntry = reactive<EditableLogEntry>(createBlankEntry())
+// Track if XC time was manually set by user (to prevent auto-overwrite)
+const xcTimeManuallySet = ref(false)
 const searchTerm = ref('')
 const validationError = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
@@ -5471,7 +5484,7 @@ async function saveInlineEdit(): Promise<void> {
         trainingElements: dbEntryResult.training_elements || '',
         trainingInstructor: dbEntryResult.training_instructor || '',
         instructorCertificate: dbEntryResult.instructor_certificate || '',
-        flightConditions: dbEntryResult.flight_conditions || [],
+        flightConditions: sanitizeFlightConditions(dbEntryResult.flight_conditions || []),
         remarks: dbEntryResult.remarks || '',
         flightTime: dbEntryResult.flight_time as FlightTimeBreakdown,
         performance: dbEntryResult.performance as PerformanceMetrics,
@@ -8001,6 +8014,17 @@ function sanitizeFlightConditions(conditions: string[]): string[] {
   return (conditions || [])
     .filter(Boolean)
     .filter((condition) => condition !== 'dayVfr')
+    .map((condition) => {
+      // Normalize 'Cross-Country' label to 'crossCountry' value
+      if (condition === 'Cross-Country') {
+        return 'crossCountry'
+      }
+      return condition
+    })
+    .filter((condition, index, array) => {
+      // Remove duplicates (in case both 'Cross-Country' and 'crossCountry' existed)
+      return array.indexOf(condition) === index
+    })
 }
 
 function fillFieldWithTotalTime(fieldKey: FlightTimeKey, totalTime: number | null, isInline: boolean): void {
@@ -8061,6 +8085,9 @@ function resetForm(): void {
   clearValidation()
   Object.assign(newEntry, createBlankEntry())
   editingEntryId.value = null
+  // Reset manual XC time tracking when form is reset
+  xcTimeManuallySet.value = false
+  lastKnownXcTime.value = null
 }
 
 function toggleEntryForm(): void {
@@ -8560,6 +8587,9 @@ async function beginEditing(entry: LogEntry): Promise<void> {
   newEntry.remarks = entry.remarks
   Object.assign(newEntry.flightTime, entry.flightTime)
   Object.assign(newEntry.performance, entry.performance)
+  // Reset manual XC time tracking when editing (assume existing values are intentional)
+  xcTimeManuallySet.value = entry.flightTime.crossCountry ? true : false
+  lastKnownXcTime.value = entry.flightTime.crossCountry ?? null
   if (entry.oooi) {
     newEntry.oooi = { ...entry.oooi }
     if (Object.values(entry.oooi).some(v => v)) {
@@ -9228,21 +9258,43 @@ watch(() => [newEntry.oooi?.out, newEntry.oooi?.in, newEntry.oooi?.off, newEntry
 // Watch for airport changes to trigger cross-country auto-logging (without validation)
 // Validation will only run when Save Entry button is pressed
 const validationTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
-watch(() => [newEntry.departure, newEntry.destination, newEntry.flightTime.crossCountry, newEntry.date, newEntry.flightTime.total], async () => {
+// Track last known XC time to detect manual changes
+const lastKnownXcTime = ref<number | null>(null)
+watch(() => [newEntry.departure, newEntry.destination, newEntry.flightTime.crossCountry, newEntry.date, newEntry.flightTime.total, newEntry.oooi?.out, newEntry.oooi?.in], async () => {
   if (!newEntry.departure || !newEntry.destination || newEntry.departure === 'UNKNOWN' || newEntry.destination === 'UNKNOWN') {
     return
   }
+  
+  // All time calculations use OUT and IN (block time) if available, as that's the most accurate
+  // For cross-country calculation, wait for IN time when OUT is present
+  // This ensures we use block time (OUT→IN) rather than air time (OFF→ON)
+  if (newEntry.oooi && newEntry.oooi.out && !newEntry.oooi.in) {
+    // If OUT is present, wait for IN to get accurate block time
+    // This prevents calculating XC from air time (OFF→ON) when block time (OUT→IN) will be available
+    return
+  }
+  
+  // Detect if XC time was manually changed (not by auto-fill)
+  const currentXcTime = newEntry.flightTime.crossCountry ?? 0
+  if (lastKnownXcTime.value !== null && currentXcTime !== lastKnownXcTime.value) {
+    // Check if this looks like a manual change (not matching total time exactly)
+    const totalTime = newEntry.flightTime.total ?? 0
+    if (Math.abs(currentXcTime - totalTime) > 0.01) {
+      xcTimeManuallySet.value = true
+    }
+  }
+  lastKnownXcTime.value = currentXcTime
   
   // Clear existing timeout
   if (validationTimeout.value) {
     clearTimeout(validationTimeout.value)
   }
   
-  // Debounce cross-country check to avoid too many API calls (reduced to 200ms for faster response)
+  // Debounce cross-country check to avoid too many API calls (increased to 500ms for better stability)
   // Note: This only checks cross-country distance, not full validation
   validationTimeout.value = setTimeout(async () => {
     await checkAndAutoLogCrossCountry()
-  }, 200)
+  }, 500)
 })
 
 watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.in, inlineEditEntry.value?.oooi?.off, inlineEditEntry.value?.oooi?.on, inlineEditEntry.value?.role, inlineEditEntry.value?.departure, inlineEditEntry.value?.destination, inlineEditEntry.value?.date], async () => {
@@ -10156,7 +10208,7 @@ async function loadEntries(): Promise<void> {
             trainingElements: dbEntry.training_elements || '',
             trainingInstructor: dbEntry.training_instructor || '',
             instructorCertificate: dbEntry.instructor_certificate || '',
-            flightConditions: dbEntry.flight_conditions || [],
+            flightConditions: sanitizeFlightConditions(dbEntry.flight_conditions || []),
             remarks: dbEntry.remarks || '',
             flightTime: dbEntry.flight_time as FlightTimeBreakdown,
             performance: dbEntry.performance as PerformanceMetrics,
@@ -11128,23 +11180,47 @@ async function checkAndAutoLogCrossCountry(): Promise<void> {
             const xcTime = getNumValue(newEntry.flightTime.crossCountry)
             if (xcTime > 0 && Math.abs(xcTime - totalTime) < 0.01) {
               newEntry.flightTime.crossCountry = 0
-              // Remove cross-country checkbox
-              const index = newEntry.flightConditions.indexOf('Cross-Country')
-              if (index > -1) {
-                newEntry.flightConditions.splice(index, 1)
+              // Remove cross-country checkbox (normalize both possible values)
+              const indexCrossCountry = newEntry.flightConditions.indexOf('crossCountry')
+              const indexCrossCountryLabel = newEntry.flightConditions.indexOf('Cross-Country')
+              if (indexCrossCountry > -1) {
+                newEntry.flightConditions.splice(indexCrossCountry, 1)
+              }
+              if (indexCrossCountryLabel > -1) {
+                newEntry.flightConditions.splice(indexCrossCountryLabel, 1)
               }
             }
           } else if (crossCountryResult?.autoFix && crossCountryResult.autoFix.field === 'crossCountry') {
             // Only auto-fill if distance >= 50nm (indicated by presence of autoFix)
             // The autoFix is only provided when coordinates are available and distance >= 50nm
             const autoFixValue = crossCountryResult.autoFix.value as number
-            // Only auto-fill if cross-country time is currently 0 or null
-            // AND only if we have a valid auto-fix value (which means distance was validated as >= 50nm)
-            if (autoFixValue > 0 && (!newEntry.flightTime.crossCountry || newEntry.flightTime.crossCountry === 0)) {
+            const currentXcTime = getNumValue(newEntry.flightTime.crossCountry)
+            const currentTotalTime = getNumValue(newEntry.flightTime.total)
+            
+            // Check if XC time was previously auto-filled from air time (OFF→ON) and needs updating to block time (OUT→IN)
+            // This happens when IN is entered after ON, updating total time from air time to block time
+            const wasAutoFilledFromAirTime = currentXcTime > 0 && 
+                                             lastKnownXcTime.value !== null &&
+                                             Math.abs(currentXcTime - lastKnownXcTime.value) < 0.01 &&
+                                             Math.abs(currentXcTime - currentTotalTime) > 0.1 // XC doesn't match new total
+            
+            // Only auto-fill/update if:
+            // 1. We have a valid auto-fix value (which means distance was validated as >= 50nm)
+            // 2. Cross-country time is currently 0 or null, OR it was auto-filled from air time and needs updating
+            // 3. XC time was NOT manually set by the user
+            if (autoFixValue > 0 && 
+                ((!newEntry.flightTime.crossCountry || newEntry.flightTime.crossCountry === 0) || wasAutoFilledFromAirTime) &&
+                !xcTimeManuallySet.value) {
               newEntry.flightTime.crossCountry = autoFixValue
-              // Also check the cross-country checkbox
-              if (!newEntry.flightConditions.includes('Cross-Country')) {
-                newEntry.flightConditions.push('Cross-Country')
+              lastKnownXcTime.value = autoFixValue
+              // Also check the cross-country checkbox (use correct value, not label)
+              // Normalize any existing 'Cross-Country' label to 'crossCountry' value
+              const indexCrossCountryLabel = newEntry.flightConditions.indexOf('Cross-Country')
+              if (indexCrossCountryLabel > -1) {
+                newEntry.flightConditions.splice(indexCrossCountryLabel, 1)
+              }
+              if (!newEntry.flightConditions.includes('crossCountry')) {
+                newEntry.flightConditions.push('crossCountry')
               }
             }
           }
