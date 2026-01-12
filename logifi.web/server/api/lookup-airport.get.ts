@@ -5,7 +5,20 @@
  * Uses static airport database for instant, offline lookups
  */
 
-import AirportCodes from 'airport-codes'
+import { airports } from '@nwpr/airport-codes'
+
+interface Airport {
+  icao?: string
+  iata?: string
+  name?: string
+  city?: string
+  state?: string
+  country?: string
+  elevation?: number
+  latitude?: number
+  longitude?: number
+  timezone?: string
+}
 
 export default defineEventHandler(async (event): Promise<{ success: boolean; data?: any; error?: string }> => {
   const query = getQuery(event)
@@ -24,41 +37,39 @@ export default defineEventHandler(async (event): Promise<{ success: boolean; dat
 
   try {
     // Try ICAO lookup first (4 characters)
-    let airport = null
+    let airport: Airport | undefined = undefined
     
     if (normalizedCode.length === 4) {
-      airport = AirportCodes.findWhere({ icao: normalizedCode })
+      airport = airports.find(a => a.icao === normalizedCode)
     }
     
     // Try IATA lookup (3 characters) if ICAO failed
     if (!airport && normalizedCode.length === 3) {
-      airport = AirportCodes.findWhere({ iata: normalizedCode })
+      airport = airports.find(a => a.iata === normalizedCode)
     }
     
     // If still not found and it's 4 chars, try as FAA code by searching IATA
     if (!airport && normalizedCode.length === 4) {
       // Some US airports use FAA codes that match their IATA
       const iataCode = normalizedCode.substring(1) // Try last 3 chars
-      airport = AirportCodes.findWhere({ iata: iataCode })
+      airport = airports.find(a => a.iata === iataCode)
     }
 
     if (airport) {
-      const airportData = airport.toJSON()
-      
       return {
         success: true,
         data: {
           code: normalizedCode,
-          icao: airportData.icao || undefined,
-          iata: airportData.iata || undefined,
-          name: airportData.name || `${normalizedCode} Airport`,
-          city: airportData.city || undefined,
-          state: airportData.state || undefined,
-          country: airportData.country || undefined,
-          elevation: airportData.elevation ? `${airportData.elevation} ft` : undefined,
-          latitude: airportData.latitude ? Number(airportData.latitude) : undefined,
-          longitude: airportData.longitude ? Number(airportData.longitude) : undefined,
-          timezone: airportData.timezone || undefined,
+          icao: airport.icao || undefined,
+          iata: airport.iata || undefined,
+          name: airport.name || `${normalizedCode} Airport`,
+          city: airport.city || undefined,
+          state: airport.state || undefined,
+          country: airport.country || undefined,
+          elevation: airport.elevation ? `${airport.elevation} ft` : undefined,
+          latitude: airport.latitude ? Number(airport.latitude) : undefined,
+          longitude: airport.longitude ? Number(airport.longitude) : undefined,
+          timezone: airport.timezone || undefined,
           source: 'Static Airport Database'
         }
       }

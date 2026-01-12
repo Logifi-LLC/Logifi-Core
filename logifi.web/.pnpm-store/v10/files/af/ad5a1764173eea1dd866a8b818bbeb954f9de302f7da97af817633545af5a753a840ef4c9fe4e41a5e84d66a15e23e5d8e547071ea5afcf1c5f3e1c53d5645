@@ -1,0 +1,3 @@
+const airports = require("./airports.json");
+
+export { airports, airports as default };
