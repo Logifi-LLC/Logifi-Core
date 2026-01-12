@@ -95,51 +95,6 @@
           </span>
         </div>
         <nav class="flex items-center gap-3">
-          <!-- Offline/Sync Status Indicator -->
-          <div class="flex items-center gap-2">
-            <div
-              :class="[
-                'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-quicksand font-medium transition-all',
-                isOnline
-                  ? (isSyncing
-                      ? (isDarkMode ? 'bg-yellow-600/20 text-yellow-400 border border-yellow-600/50' : 'bg-yellow-100 text-yellow-700 border border-yellow-300')
-                      : (isDarkMode ? 'bg-green-600/20 text-green-400 border border-green-600/50' : 'bg-green-100 text-green-700 border border-green-300'))
-                  : (isDarkMode ? 'bg-red-600/20 text-red-400 border border-red-600/50' : 'bg-red-100 text-red-700 border border-red-300')
-              ]"
-              :title="syncStatusTitle"
-            >
-              <Icon
-                :name="syncStatusIcon"
-                :class="[isSyncing ? 'animate-spin' : '', 'text-xs']"
-                size="14"
-              />
-              <span class="hidden sm:inline">
-                {{ syncStatusText }}
-              </span>
-            </div>
-            <div
-              v-if="queueLength > 0"
-              :class="[
-                'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-quicksand font-semibold',
-                isDarkMode ? 'bg-orange-600/20 text-orange-400 border border-orange-600/50' : 'bg-orange-100 text-orange-700 border border-orange-300'
-              ]"
-              :title="`${queueLength} pending sync ${queueLength === 1 ? 'operation' : 'operations'}`"
-            >
-              <Icon name="ri:time-line" size="12" />
-              <span>{{ queueLength }}</span>
-            </div>
-            <div
-              v-if="syncError"
-              :class="[
-                'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-quicksand',
-                isDarkMode ? 'bg-red-600/20 text-red-400 border border-red-600/50' : 'bg-red-100 text-red-700 border border-red-300'
-              ]"
-              :title="syncError"
-            >
-              <Icon name="ri:error-warning-line" size="12" />
-              <span class="hidden sm:inline">Sync Error</span>
-            </div>
-          </div>
           <button
             type="button"
             @click="showPilotProfile = true"
@@ -214,6 +169,56 @@
                       ]"
                     />
                   </button>
+                </div>
+                <!-- Online/Sync Status Indicator -->
+                <div class="space-y-2 pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
+                  <div :class="['font-quicksand text-sm font-semibold mb-2', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
+                    Sync Status
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <div
+                      :class="[
+                        'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-quicksand font-medium transition-all',
+                        isOnline
+                          ? (isSyncing
+                              ? (isDarkMode ? 'bg-yellow-600/20 text-yellow-400 border border-yellow-600/50' : 'bg-yellow-100 text-yellow-700 border border-yellow-300')
+                              : (isDarkMode ? 'bg-green-600/20 text-green-400 border border-green-600/50' : 'bg-green-100 text-green-700 border border-green-300'))
+                          : (isDarkMode ? 'bg-red-600/20 text-red-400 border border-red-600/50' : 'bg-red-100 text-red-700 border border-red-300')
+                      ]"
+                      :title="syncStatusTitle"
+                    >
+                      <Icon
+                        :name="syncStatusIcon"
+                        :class="[isSyncing ? 'animate-spin' : '', 'text-xs']"
+                        size="14"
+                      />
+                      <span>
+                        {{ syncStatusText }}
+                      </span>
+                    </div>
+                    <div
+                      v-if="queueLength > 0"
+                      :class="[
+                        'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-quicksand font-semibold',
+                        isDarkMode ? 'bg-orange-600/20 text-orange-400 border border-orange-600/50' : 'bg-orange-100 text-orange-700 border border-orange-300'
+                      ]"
+                      :title="`${queueLength} pending sync ${queueLength === 1 ? 'operation' : 'operations'}`"
+                    >
+                      <Icon name="ri:time-line" size="12" />
+                      <span>{{ queueLength }}</span>
+                    </div>
+                    <div
+                      v-if="syncError"
+                      :class="[
+                        'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-quicksand',
+                        isDarkMode ? 'bg-red-600/20 text-red-400 border border-red-600/50' : 'bg-red-100 text-red-700 border border-red-300'
+                      ]"
+                      :title="syncError"
+                    >
+                      <Icon name="ri:error-warning-line" size="12" />
+                      <span>Sync Error</span>
+                    </div>
+                  </div>
                 </div>
                 <div class="space-y-2 pt-2">
                   <div :class="['font-quicksand text-sm', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Clock Format</div>
@@ -299,103 +304,71 @@
                     </label>
                   </div>
                 </div>
-                <div class="space-y-3 pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <div :class="['font-quicksand text-sm font-semibold mb-2', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                    Export Logbook
-                  </div>
-                  <div class="space-y-2">
+                <div class="pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
+                  <div class="flex items-center justify-between mb-2">
+                    <div :class="['font-quicksand text-sm font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
+                      Import Logbook
+                    </div>
                     <button
                       type="button"
-                      @click="exportToCSV"
-                      :disabled="logEntries.length === 0"
+                      @click="showImportSection = !showImportSection"
                       :class="[
-                        'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                        logEntries.length === 0
-                          ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
-                          : (isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white')
+                        'p-1 rounded transition-colors',
+                        isDarkMode 
+                          ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-300' 
+                          : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
                       ]"
+                      :aria-expanded="showImportSection"
                     >
-                      <Icon name="ri:file-excel-2-line" size="16" />
-                      Export as CSV
-                    </button>
-                    <button
-                      type="button"
-                      @click="exportToJSON"
-                      :disabled="logEntries.length === 0"
-                      :class="[
-                        'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                        logEntries.length === 0
-                          ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
-                          : (isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-300 hover:bg-gray-400 text-gray-900')
-                      ]"
-                    >
-                      <Icon name="ri:file-code-line" size="16" />
-                      Export as JSON
-                    </button>
-                    <button
-                      type="button"
-                      @click="showForm8710Modal = true"
-                      :disabled="logEntries.length === 0"
-                      :class="[
-                        'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                        logEntries.length === 0
-                          ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
-                          : (isDarkMode ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-purple-600 hover:bg-purple-700 text-white')
-                      ]"
-                    >
-                      <Icon name="ri:file-pdf-line" size="16" />
-                      Generate 8710 Form
+                      <Icon
+                        name="ri:arrow-down-s-line"
+                        :size="16"
+                        :class="[
+                          'transition-transform',
+                          showImportSection ? 'rotate-180' : ''
+                        ]"
+                      />
                     </button>
                   </div>
-                  <p :class="['text-xs mt-2', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
-                    {{ logEntries.length === 0 ? 'No entries to export' : `${logEntries.length} ${logEntries.length === 1 ? 'entry' : 'entries'} available` }}
-                  </p>
-                </div>
-                <!-- Compliance Checklist (AC 120-78B & 14 CFR Part 61) -->
-                <div class="space-y-3 pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <ComplianceChecklist :is-dark-mode="isDarkMode" />
-                </div>
-                <div 
-                  class="space-y-3 pt-2 border-t transition-colors" 
-                  :class="[
-                    isDarkMode ? 'border-gray-700' : 'border-gray-300',
-                    isDragOverImport ? (isDarkMode ? 'border-green-500 bg-green-900/20' : 'border-green-500 bg-green-50') : ''
-                  ]"
-                  @dragover.prevent="handleImportDragOver"
-                  @dragenter.prevent="handleImportDragEnter"
-                  @dragleave="handleImportDragLeave"
-                  @drop.prevent="handleImportDrop"
-                >
-                  <div :class="['font-quicksand text-sm font-semibold mb-2', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                    Import Logbook
+                  <div 
+                    v-show="showImportSection"
+                    class="space-y-3 transition-colors" 
+                    :class="[
+                      isDragOverImport ? (isDarkMode ? 'border-green-500 bg-green-900/20' : 'border-green-500 bg-green-50') : ''
+                    ]"
+                    @dragover.prevent="handleImportDragOver"
+                    @dragenter.prevent="handleImportDragEnter"
+                    @dragleave="handleImportDragLeave"
+                    @drop.prevent="handleImportDrop"
+                  >
+                    <div class="space-y-2">
+                      <button
+                        type="button"
+                        @click="() => csvFileInput?.click()"
+                        :class="[
+                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
+                          isDarkMode ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
+                        ]"
+                      >
+                        <Icon name="ri:file-excel-2-line" size="16" />
+                        Import from CSV
+                      </button>
+                      <button
+                        type="button"
+                        @click="() => jsonFileInput?.click()"
+                        :class="[
+                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
+                          isDarkMode ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
+                        ]"
+                      >
+                        <Icon name="ri:file-code-line" size="16" />
+                        Import from JSON
+                      </button>
+                    </div>
+                    <p :class="['text-xs mt-2', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
+                      {{ isDragOverImport ? 'Drop file here to import' : 'Drag & drop or click to import. Duplicates (same date + registration) will be skipped.' }}
+                    </p>
                   </div>
-                  <div class="space-y-2">
-                    <button
-                      type="button"
-                      @click="() => csvFileInput?.click()"
-                      :class="[
-                        'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                        isDarkMode ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
-                      ]"
-                    >
-                      <Icon name="ri:file-excel-2-line" size="16" />
-                      Import from CSV
-                    </button>
-                    <button
-                      type="button"
-                      @click="() => jsonFileInput?.click()"
-                      :class="[
-                        'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                        isDarkMode ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
-                      ]"
-                    >
-                      <Icon name="ri:file-code-line" size="16" />
-                      Import from JSON
-                    </button>
-                  </div>
-                  <p :class="['text-xs mt-2', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
-                    {{ isDragOverImport ? 'Drop file here to import' : 'Drag & drop or click to import. Duplicates (same date + registration) will be skipped.' }}
-                  </p>
                 </div>
                 <!-- Hidden file inputs -->
                 <input
@@ -412,6 +385,86 @@
                   style="display: none;"
                   @change="handleJSONImport"
                 />
+                <div class="pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
+                  <div class="flex items-center justify-between mb-2">
+                    <div :class="['font-quicksand text-sm font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
+                      Export Logbook
+                    </div>
+                    <button
+                      type="button"
+                      @click="showExportSection = !showExportSection"
+                      :class="[
+                        'p-1 rounded transition-colors',
+                        isDarkMode 
+                          ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-300' 
+                          : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
+                      ]"
+                      :aria-expanded="showExportSection"
+                    >
+                      <Icon
+                        name="ri:arrow-down-s-line"
+                        :size="16"
+                        :class="[
+                          'transition-transform',
+                          showExportSection ? 'rotate-180' : ''
+                        ]"
+                      />
+                    </button>
+                  </div>
+                  <div v-show="showExportSection" class="space-y-3">
+                    <div class="space-y-2">
+                      <button
+                        type="button"
+                        @click="exportToCSV"
+                        :disabled="logEntries.length === 0"
+                        :class="[
+                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
+                          logEntries.length === 0
+                            ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
+                            : (isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white')
+                        ]"
+                      >
+                        <Icon name="ri:file-excel-2-line" size="16" />
+                        Export as CSV
+                      </button>
+                      <button
+                        type="button"
+                        @click="exportToJSON"
+                        :disabled="logEntries.length === 0"
+                        :class="[
+                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
+                          logEntries.length === 0
+                            ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
+                            : (isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white')
+                        ]"
+                      >
+                        <Icon name="ri:file-code-line" size="16" />
+                        Export as JSON
+                      </button>
+                      <button
+                        type="button"
+                        @click="showForm8710Modal = true"
+                        :disabled="logEntries.length === 0"
+                        :class="[
+                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
+                          logEntries.length === 0
+                            ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
+                            : (isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white')
+                        ]"
+                      >
+                        <Icon name="ri:file-pdf-line" size="16" />
+                        Generate 8710 Form
+                      </button>
+                    </div>
+                    <p :class="['text-xs mt-2', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
+                      {{ logEntries.length === 0 ? 'No entries to export' : `${logEntries.length} ${logEntries.length === 1 ? 'entry' : 'entries'} available` }}
+                    </p>
+                  </div>
+                </div>
+                <!-- Compliance Checklist (AC 120-78B & 14 CFR Part 61) -->
+                <div class="space-y-3 pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
+                  <ComplianceChecklist :is-dark-mode="isDarkMode" />
+                </div>
                 <!-- Developers Link -->
                 <div class="pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
                   <NuxtLink
@@ -5752,6 +5805,8 @@ const catalogOpenState = reactive<Record<CatalogKey, boolean>>({
 const isSidebarCollapsed = ref(false)
 const showHeaderSettings = ref(false)
 const showPilotProfile = ref(false)
+const showImportSection = ref(true)
+const showExportSection = ref(true)
 const showIdentDropdown = ref(false)
 const showColumnSettings = ref(false)
 const showInlineIdentDropdown = ref(false)

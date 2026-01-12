@@ -129,7 +129,7 @@ export const DEFAULT_COLUMN_CONFIG: LogbookColumnConfig[] = [
   { key: 'identification', label: 'Identification', visible: true, order: 2, required: false, width: 100 },
   { key: 'flightNumber', label: 'Flight Number', visible: false, order: 3, required: false, width: 100 },
   { key: 'fromTo', label: 'From → To', visible: true, order: 4, required: false, width: 150 },
-  { key: 'conditions', label: 'Conditions', visible: true, order: 5, required: false, responsiveClass: 'hidden xl:table-cell', width: 120 },
+  { key: 'conditions', label: 'Conditions', visible: true, order: 5, required: false, width: 120 },
   { key: 'remarks', label: 'Remarks', visible: true, order: 6, required: false, responsiveClass: 'hidden lg:table-cell', width: 200 },
   { key: 'pic', label: 'PIC', visible: false, order: 7, required: false, width: 70 },
   { key: 'sic', label: 'SIC', visible: false, order: 8, required: false, width: 70 },
