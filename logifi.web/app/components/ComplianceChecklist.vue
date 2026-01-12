@@ -273,8 +273,8 @@ const part61Requirements: Requirement[] = [
   {
     id: 'currency-tracking',
     name: 'Currency Tracking',
-    status: 'partial',
-    statusText: 'If applicable - partial (Days 24-25 features)'
+    status: 'complete',
+    statusText: 'Complete - Available in Pilot Profile'
   }
 ]
 

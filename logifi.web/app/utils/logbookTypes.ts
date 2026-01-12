@@ -178,3 +178,27 @@ export const createEmptyOOOI = (): OOOITimes => ({
   isZulu: true
 })
 
+// Currency tracking types
+export type CurrencyStatusType = 'current' | 'expired' | 'expiring_soon'
+
+export interface CurrencyStatus {
+  isCurrent: boolean
+  daysRemaining?: number
+  monthsRemaining?: number
+  expirationDate: Date
+  status: CurrencyStatusType
+  qualifyingEntries: LogEntry[]
+  // Type-specific counts
+  takeoffs?: number
+  landings?: number
+  approaches?: number
+  holdingProcedures?: number
+}
+
+export interface AnnualCurrencyStatus {
+  isCurrent: boolean
+  status: CurrencyStatusType
+  requirements: string[]
+  qualifyingEntries: LogEntry[]
+}
+

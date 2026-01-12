@@ -23,6 +23,19 @@
     @restored="handleEntryRestored"
   />
 
+  <!-- Currency Dashboard Modal -->
+  <CurrencyDashboard
+    :is-open="showCurrencyDashboard"
+    :is-dark-mode="isDarkMode"
+    :passenger-currency="passengerCurrency"
+    :night-currency="nightCurrency"
+    :instrument-currency="instrumentCurrency"
+    :annual-requirements="annualRequirements"
+    :is-loading="isLoadingCurrency"
+    :error="currencyError"
+    @close="showCurrencyDashboard = false"
+  />
+
   <!-- Migration Progress (if migrating) -->
   <div
     v-if="isMigrating"
@@ -2916,6 +2929,91 @@
 
             <div
               :class="[
+                'rounded-2xl border p-4',
+                isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-100 border-gray-200'
+              ]"
+            >
+              <div class="flex items-center justify-between mb-4">
+                <div>
+                  <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
+                    Currency Status
+                  </p>
+                  <p :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
+                    Part 61.57 Recent Flight Experience Requirements
+                  </p>
+                </div>
+                <button
+                  @click="showCurrencyDashboard = true"
+                  :class="[
+                    'px-4 py-2 rounded-lg text-sm font-semibold font-quicksand transition-colors',
+                    isDarkMode
+                      ? 'bg-blue-600 hover:bg-blue-500 text-white'
+                      : 'bg-blue-500 hover:bg-blue-600 text-white'
+                  ]"
+                >
+                  View Details
+                </button>
+              </div>
+              <div class="grid gap-3 sm:grid-cols-3">
+                <div
+                  :class="[
+                    'rounded-xl border p-3',
+                    passengerCurrency?.isCurrent
+                      ? (isDarkMode ? 'bg-green-900/20 border-green-700' : 'bg-green-50 border-green-200')
+                      : (isDarkMode ? 'bg-gray-800/50 border-gray-600' : 'bg-gray-100 border-gray-300')
+                  ]"
+                >
+                  <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                    90-Day Passenger
+                  </p>
+                  <p :class="['text-lg font-semibold mt-1', passengerCurrency?.isCurrent ? (isDarkMode ? 'text-green-400' : 'text-green-700') : (isDarkMode ? 'text-gray-300' : 'text-gray-700')]">
+                    {{ passengerCurrency?.isCurrent ? 'Current' : 'Expired' }}
+                  </p>
+                  <p :class="['text-xs mt-1', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
+                    {{ passengerCurrency?.takeoffs || 0 }}/3 takeoffs
+                  </p>
+                </div>
+                <div
+                  :class="[
+                    'rounded-xl border p-3',
+                    nightCurrency?.isCurrent
+                      ? (isDarkMode ? 'bg-green-900/20 border-green-700' : 'bg-green-50 border-green-200')
+                      : (isDarkMode ? 'bg-gray-800/50 border-gray-600' : 'bg-gray-100 border-gray-300')
+                  ]"
+                >
+                  <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                    90-Day Night
+                  </p>
+                  <p :class="['text-lg font-semibold mt-1', nightCurrency?.isCurrent ? (isDarkMode ? 'text-green-400' : 'text-green-700') : (isDarkMode ? 'text-gray-300' : 'text-gray-700')]">
+                    {{ nightCurrency?.isCurrent ? 'Current' : 'Expired' }}
+                  </p>
+                  <p :class="['text-xs mt-1', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
+                    {{ nightCurrency?.landings || 0 }}/3 landings
+                  </p>
+                </div>
+                <div
+                  :class="[
+                    'rounded-xl border p-3',
+                    instrumentCurrency?.isCurrent
+                      ? (isDarkMode ? 'bg-green-900/20 border-green-700' : 'bg-green-50 border-green-200')
+                      : (isDarkMode ? 'bg-gray-800/50 border-gray-600' : 'bg-gray-100 border-gray-300')
+                  ]"
+                >
+                  <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                    6-Month Instrument
+                  </p>
+                  <p :class="['text-lg font-semibold mt-1', instrumentCurrency?.isCurrent ? (isDarkMode ? 'text-green-400' : 'text-green-700') : (isDarkMode ? 'text-gray-300' : 'text-gray-700')]">
+                    {{ instrumentCurrency?.isCurrent ? 'Current' : 'Expired' }}
+                  </p>
+                  <p :class="['text-xs mt-1', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
+                    {{ instrumentCurrency?.approaches || 0 }}/6 approaches
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div
+              :class="[
                 'rounded-2xl border p-4 space-y-4',
                 isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-100 border-gray-200'
               ]"
@@ -4642,10 +4740,12 @@ import { useValidation } from '~/composables/useValidation'
 import { useOffline } from '~/composables/useOffline'
 import { useSyncQueue } from '~/composables/useSyncQueue'
 import { useExport } from '~/composables/useExport'
+import { useCurrency } from '~/composables/useCurrency'
 import AuthModal from '~/components/AuthModal.vue'
 import AuditTrail from '~/components/AuditTrail.vue'
 import IntegrityStatus from '~/components/IntegrityStatus.vue'
 import ComplianceChecklist from '~/components/ComplianceChecklist.vue'
+import CurrencyDashboard from '~/components/CurrencyDashboard.vue'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '~/utils/migrateLocalStorage'
 import { findDuplicateEntries, checkDuplicatesInDatabase } from '~/utils/duplicateDetection'
 import {
@@ -4668,6 +4768,17 @@ const { validateEntry: validateFlightTimeEntry, validationErrors, validationWarn
 // Offline support
 const { isOnline, isSyncing, syncProgress, updateSyncProgress } = useOffline()
 const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync } = useSyncQueue()
+
+// Currency tracking
+const {
+  passengerCurrency,
+  nightCurrency,
+  instrumentCurrency,
+  annualRequirements,
+  isLoading: isLoadingCurrency,
+  error: currencyError,
+  calculateAllCurrency
+} = useCurrency()
 
 // Computed properties for offline UI
 const syncStatusIcon = computed(() => {
@@ -5670,6 +5781,7 @@ const csvFileInput = ref<HTMLInputElement | null>(null)
 
 // Form 8710 state
 const showForm8710Modal = ref(false)
+const showCurrencyDashboard = ref(false)
 const showForm8710View = ref(false)
 const form8710PreviewData = ref<Form8710Data | null>(null)
 const form8710Warnings = computed<string[]>(() => {
@@ -10620,6 +10732,10 @@ watch(
       return
     }
     window.localStorage.setItem(LOGBOOK_STORAGE_KEY, JSON.stringify(entries))
+    // Calculate currency when entries change
+    if (entries.length > 0) {
+      calculateAllCurrency(entries)
+    }
   },
   { deep: true }
 )
