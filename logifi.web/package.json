@@ -1,5 +1,6 @@
 {
   "name": "nuxt-app",
+  "version": "1.0.0",
   "type": "module",
   "private": true,
   "scripts": {
@@ -8,13 +9,20 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "update-aircraft-db": "node scripts/download-faa-aircraft.js"
+    "update-aircraft-db": "node scripts/download-faa-aircraft.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
     "@nuxt/icon": "2.2.0",
+    "@nwpr/airport-codes": "^3.0.3",
     "@supabase/supabase-js": "^2.90.1",
     "@tailwindcss/vite": "^4.1.18",
-    "@nwpr/airport-codes": "^3.0.3",
     "csv-parse": "^6.1.0",
     "luxon": "^3.7.2",
     "nuxt": "^4.2.2",
@@ -25,10 +33,16 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
+    "@testing-library/vue": "^8.1.0",
     "@types/luxon": "^3.7.1",
     "@types/suncalc": "^1.9.2",
+    "@vitest/ui": "^4.0.17",
+    "@vue/test-utils": "^2.4.6",
+    "happy-dom": "^20.1.0",
     "pnpm": "^10.28.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
   },
   "overrides": {
     "lodash@*": "4.17.21",
