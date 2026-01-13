@@ -6586,6 +6586,14 @@ function toTitleCase(str: string): string {
     .join(' ')
 }
 
+// Helper function to check if a name matches the logged-in user
+function isUserName(name: string): boolean {
+  if (!name || !name.trim()) return false
+  const userName = (pilotProfile.name || '').trim()
+  if (!userName) return false
+  return name.trim().toLowerCase() === userName.toLowerCase()
+}
+
 // Extract base aircraft model name from full model string
 // Examples: "C-172 S G-1000, Cessna Skyhawk SP" -> "C-172"
 //           "PA-28-181 Archer II" -> "PA-28"
@@ -6756,80 +6764,7 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
       destination: '', // Will be set below after route parsing
       route: '', // Will be set below
       trainingElements: (() => {
-        // Try Logten crew fields first - show the OTHER pilot (not the logged-in user)
-        const picCrew = findFieldValue(rawEntry, ['flight_selectedCrewPIC'])
-        const sicCrew = findFieldValue(rawEntry, ['flight_selectedCrewSIC'])
-        const picTime = normalizeNumber(rawEntry.flight_pic || rawEntry.PIC || rawEntry.pic || 0) || 0
-        const sicTime = normalizeNumber(rawEntry.flight_sic || rawEntry.SIC || rawEntry.sic || 0) || 0
-        
-        // Get the logged-in user's name from pilot profile
-        const userName = (pilotProfile.name || '').trim()
-        
-        // Determine which pilot to show (the OTHER one, not the user)
-        let pilot = ''
-        
-        if (userName) {
-          // Check if user matches PIC crew
-          const userIsPIC = picCrew && picCrew.trim().toLowerCase() === userName.toLowerCase()
-          // Check if user matches SIC crew
-          const userIsSIC = sicCrew && sicCrew.trim().toLowerCase() === userName.toLowerCase()
-          
-          if (userIsPIC && sicCrew) {
-            // User is PIC, show SIC
-            pilot = sicCrew
-          } else if (userIsSIC && picCrew) {
-            // User is SIC, show PIC
-            pilot = picCrew
-          } else if (!userIsPIC && !userIsSIC) {
-            // User doesn't match either, use PIC if available, otherwise SIC
-            if (picTime > 0 && picCrew) {
-              pilot = picCrew
-            } else if (sicTime > 0 && sicCrew) {
-              pilot = sicCrew
-            }
-          }
-        } else {
-          // No user name available, use PIC if available, otherwise SIC
-          if (picTime > 0 && picCrew) {
-            pilot = picCrew
-          } else if (sicTime > 0 && sicCrew) {
-            pilot = sicCrew
-          }
-        }
-        
-        // Fallback: Try "First Officer Name" column (MyFlightBook)
-        if (!pilot) {
-          pilot = findFieldValue(rawEntry, ['First Officer Name', 'first officer name', 'FirstOfficerName', 'firstOfficerName'])
-        }
-        
-        // Fallback: Extract from "Flight Properties" field
-        if (!pilot) {
-          const flightProperties = findFieldValue(rawEntry, ['Flight Properties', 'flight properties', 'FlightProperties', 'flightProperties'])
-          if (flightProperties) {
-            // Look for patterns like "First Officer: Name" or "First Officer:Name"
-            const firstOfficerMatch = flightProperties.match(/First\s+Officer\s*:\s*([^;]+)/i)
-            if (firstOfficerMatch && firstOfficerMatch[1]) {
-              pilot = firstOfficerMatch[1].trim()
-            }
-          }
-        }
-        
-        // If still no pilot found, use Training Elements as fallback
-        if (!pilot) {
-          pilot = findFieldValue(rawEntry, ['Training Elements', 'training elements', 'TrainingElements', 'trainingElements'])
-        }
-        
-        return toTitleCase(pilot || '')
-      })(),
-      trainingInstructor: (() => {
-        // First check if there's an explicit Training Instructor field
-        const explicitInstructor = (rawEntry['Training Instructor'] || rawEntry.trainingInstructor || '').trim()
-        if (explicitInstructor) {
-          return toTitleCase(explicitInstructor)
-        }
-        
-        // For Logten imports, determine job based on which crew field the pilot name appears in
-        // We need to determine the pilot name again (same logic as trainingElements)
+        // Collect all possible pilot names from all sources
         const picCrew = findFieldValue(rawEntry, ['flight_selectedCrewPIC'])
         const sicCrew = findFieldValue(rawEntry, ['flight_selectedCrewSIC'])
         const instructorCrew = findFieldValue(rawEntry, ['flight_selectedCrewInstructor'])
@@ -6837,49 +6772,227 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
         const picTime = normalizeNumber(rawEntry.flight_pic || rawEntry.PIC || rawEntry.pic || 0) || 0
         const sicTime = normalizeNumber(rawEntry.flight_sic || rawEntry.SIC || rawEntry.sic || 0) || 0
         
+        // Get fallback fields
+        const firstOfficerName = findFieldValue(rawEntry, ['First Officer Name', 'first officer name', 'FirstOfficerName', 'firstOfficerName'])
+        const trainingElementsField = findFieldValue(rawEntry, ['Training Elements', 'training elements', 'TrainingElements', 'trainingElements'])
+        const trainingInstructorField = findFieldValue(rawEntry, ['Training Instructor', 'training instructor', 'TrainingInstructor', 'trainingInstructor'])
+        
+        // Extract from Flight Properties field
+        let flightPropertiesPilot = ''
+        const flightProperties = findFieldValue(rawEntry, ['Flight Properties', 'flight properties', 'FlightProperties', 'flightProperties'])
+        if (flightProperties) {
+          // Look for patterns like "First Officer: Name" or "First Officer:Name"
+          const firstOfficerMatch = flightProperties.match(/First\s+Officer\s*:\s*([^;]+)/i)
+          if (firstOfficerMatch && firstOfficerMatch[1]) {
+            flightPropertiesPilot = firstOfficerMatch[1].trim()
+          }
+        }
+        
         // Get the logged-in user's name from pilot profile
         const userName = (pilotProfile.name || '').trim()
         
-        // Determine which pilot name we're showing (same logic as trainingElements)
-        let pilotName = ''
+        // Determine user's role
+        const userIsPIC = userName && picCrew && isUserName(picCrew)
+        const userIsSIC = userName && sicCrew && isUserName(sicCrew)
+        const userIsInstructor = userName && instructorCrew && isUserName(instructorCrew)
+        const userIsStudent = userName && studentCrew && isUserName(studentCrew)
         
-        if (userName) {
-          const userIsPIC = picCrew && picCrew.trim().toLowerCase() === userName.toLowerCase()
-          const userIsSIC = sicCrew && sicCrew.trim().toLowerCase() === userName.toLowerCase()
-          
-          if (userIsPIC && sicCrew) {
-            pilotName = sicCrew
-          } else if (userIsSIC && picCrew) {
-            pilotName = picCrew
-          } else if (!userIsPIC && !userIsSIC) {
-            if (picTime > 0 && picCrew) {
-              pilotName = picCrew
-            } else if (sicTime > 0 && sicCrew) {
-              pilotName = sicCrew
-            }
-          }
+        // Collect all non-user pilot names with their roles
+        const candidates: Array<{ name: string; role: 'instructor' | 'student' | 'pic' | 'sic' | 'other'; priority: number }> = []
+        
+        // Add candidates, filtering out user's name
+        if (instructorCrew && !isUserName(instructorCrew)) {
+          candidates.push({ name: instructorCrew, role: 'instructor', priority: 1 })
+        }
+        if (studentCrew && !isUserName(studentCrew)) {
+          candidates.push({ name: studentCrew, role: 'student', priority: 2 })
+        }
+        if (picCrew && !isUserName(picCrew)) {
+          candidates.push({ name: picCrew, role: 'pic', priority: 3 })
+        }
+        if (sicCrew && !isUserName(sicCrew)) {
+          candidates.push({ name: sicCrew, role: 'sic', priority: 4 })
+        }
+        if (firstOfficerName && !isUserName(firstOfficerName)) {
+          candidates.push({ name: firstOfficerName, role: 'other', priority: 5 })
+        }
+        if (flightPropertiesPilot && !isUserName(flightPropertiesPilot)) {
+          candidates.push({ name: flightPropertiesPilot, role: 'other', priority: 6 })
+        }
+        if (trainingElementsField && !isUserName(trainingElementsField)) {
+          candidates.push({ name: trainingElementsField, role: 'other', priority: 7 })
+        }
+        if (trainingInstructorField && !isUserName(trainingInstructorField)) {
+          candidates.push({ name: trainingInstructorField, role: 'other', priority: 8 })
+        }
+        
+        // If no user name available, use first available candidate
+        if (!userName) {
+          // Prioritize by role: Instructor > Student > PIC > SIC > Other
+          candidates.sort((a, b) => {
+            const rolePriority: Record<string, number> = { instructor: 1, student: 2, pic: 3, sic: 4, other: 5 }
+            return (rolePriority[a.role] || 99) - (rolePriority[b.role] || 99) || a.priority - b.priority
+          })
+          return toTitleCase(candidates[0]?.name || '')
+        }
+        
+        // Prioritize based on user's role
+        let selectedPilot = ''
+        
+        if (userIsPIC) {
+          // User is PIC → prefer SIC, then Instructor, then Student
+          selectedPilot = candidates.find(c => c.role === 'sic')?.name ||
+                         candidates.find(c => c.role === 'instructor')?.name ||
+                         candidates.find(c => c.role === 'student')?.name ||
+                         candidates[0]?.name || ''
+        } else if (userIsSIC) {
+          // User is SIC → prefer PIC, then Instructor, then Student
+          selectedPilot = candidates.find(c => c.role === 'pic')?.name ||
+                         candidates.find(c => c.role === 'instructor')?.name ||
+                         candidates.find(c => c.role === 'student')?.name ||
+                         candidates[0]?.name || ''
+        } else if (userIsInstructor) {
+          // User is Instructor → prefer Student, then PIC, then SIC
+          selectedPilot = candidates.find(c => c.role === 'student')?.name ||
+                         candidates.find(c => c.role === 'pic')?.name ||
+                         candidates.find(c => c.role === 'sic')?.name ||
+                         candidates[0]?.name || ''
+        } else if (userIsStudent) {
+          // User is Student → prefer Instructor, then PIC, then SIC
+          selectedPilot = candidates.find(c => c.role === 'instructor')?.name ||
+                         candidates.find(c => c.role === 'pic')?.name ||
+                         candidates.find(c => c.role === 'sic')?.name ||
+                         candidates[0]?.name || ''
         } else {
-          if (picTime > 0 && picCrew) {
-            pilotName = picCrew
-          } else if (sicTime > 0 && sicCrew) {
-            pilotName = sicCrew
+          // User doesn't match any role → prefer Instructor, then Student, then PIC, then SIC
+          candidates.sort((a, b) => {
+            const rolePriority: Record<string, number> = { instructor: 1, student: 2, pic: 3, sic: 4, other: 5 }
+            return (rolePriority[a.role] || 99) - (rolePriority[b.role] || 99) || a.priority - b.priority
+          })
+          selectedPilot = candidates[0]?.name || ''
+        }
+        
+        return toTitleCase(selectedPilot)
+      })(),
+      trainingInstructor: (() => {
+        // First check if there's an explicit Training Instructor field
+        const explicitInstructor = findFieldValue(rawEntry, ['Training Instructor', 'training instructor', 'TrainingInstructor', 'trainingInstructor'])
+        if (explicitInstructor && !isUserName(explicitInstructor)) {
+          // If explicit instructor is found and it's not the user, use it
+          // But we still need to determine the job title based on crew fields
+          const instructorCrew = findFieldValue(rawEntry, ['flight_selectedCrewInstructor'])
+          const studentCrew = findFieldValue(rawEntry, ['flight_selectedCrewStudent'])
+          const picCrew = findFieldValue(rawEntry, ['flight_selectedCrewPIC'])
+          const sicCrew = findFieldValue(rawEntry, ['flight_selectedCrewSIC'])
+          
+          const normalizedName = explicitInstructor.trim().toLowerCase()
+          
+          // Check which crew field this instructor appears in
+          if (instructorCrew && instructorCrew.trim().toLowerCase() === normalizedName) {
+            return 'Instructor'
+          }
+          if (studentCrew && studentCrew.trim().toLowerCase() === normalizedName) {
+            return 'Student'
+          }
+          if (picCrew && picCrew.trim().toLowerCase() === normalizedName) {
+            return 'Captain'
+          }
+          if (sicCrew && sicCrew.trim().toLowerCase() === normalizedName) {
+            return 'First Officer'
+          }
+          // Default to Instructor if found in explicit field but not in crew fields
+          return 'Instructor'
+        }
+        
+        // Get all crew fields
+        const picCrew = findFieldValue(rawEntry, ['flight_selectedCrewPIC'])
+        const sicCrew = findFieldValue(rawEntry, ['flight_selectedCrewSIC'])
+        const instructorCrew = findFieldValue(rawEntry, ['flight_selectedCrewInstructor'])
+        const studentCrew = findFieldValue(rawEntry, ['flight_selectedCrewStudent'])
+        
+        // Get the filtered pilot name from trainingElements (reuse the same logic)
+        // We'll determine which pilot was selected by checking all sources
+        const firstOfficerName = findFieldValue(rawEntry, ['First Officer Name', 'first officer name', 'FirstOfficerName', 'firstOfficerName'])
+        const trainingElementsField = findFieldValue(rawEntry, ['Training Elements', 'training elements', 'TrainingElements', 'trainingElements'])
+        
+        // Extract from Flight Properties
+        let flightPropertiesPilot = ''
+        const flightProperties = findFieldValue(rawEntry, ['Flight Properties', 'flight properties', 'FlightProperties', 'flightProperties'])
+        if (flightProperties) {
+          const firstOfficerMatch = flightProperties.match(/First\s+Officer\s*:\s*([^;]+)/i)
+          if (firstOfficerMatch && firstOfficerMatch[1]) {
+            flightPropertiesPilot = firstOfficerMatch[1].trim()
           }
         }
         
-        // Fallbacks (simplified - just check for name, not all the complex logic)
-        if (!pilotName) {
-          pilotName = findFieldValue(rawEntry, ['First Officer Name', 'first officer name', 'FirstOfficerName', 'firstOfficerName'])
+        // Collect all non-user pilot names
+        const candidates: Array<{ name: string; role: 'instructor' | 'student' | 'pic' | 'sic' | 'other' }> = []
+        
+        if (instructorCrew && !isUserName(instructorCrew)) {
+          candidates.push({ name: instructorCrew, role: 'instructor' })
         }
-        if (!pilotName) {
-          pilotName = findFieldValue(rawEntry, ['Training Elements', 'training elements', 'TrainingElements', 'trainingElements'])
+        if (studentCrew && !isUserName(studentCrew)) {
+          candidates.push({ name: studentCrew, role: 'student' })
+        }
+        if (picCrew && !isUserName(picCrew)) {
+          candidates.push({ name: picCrew, role: 'pic' })
+        }
+        if (sicCrew && !isUserName(sicCrew)) {
+          candidates.push({ name: sicCrew, role: 'sic' })
+        }
+        if (firstOfficerName && !isUserName(firstOfficerName)) {
+          candidates.push({ name: firstOfficerName, role: 'other' })
+        }
+        if (flightPropertiesPilot && !isUserName(flightPropertiesPilot)) {
+          candidates.push({ name: flightPropertiesPilot, role: 'other' })
+        }
+        if (trainingElementsField && !isUserName(trainingElementsField)) {
+          candidates.push({ name: trainingElementsField, role: 'other' })
         }
         
-        if (!pilotName) return ''
+        // Get the selected pilot name (same logic as trainingElements)
+        const userName = (pilotProfile.name || '').trim()
+        const userIsPIC = userName && picCrew && isUserName(picCrew)
+        const userIsSIC = userName && sicCrew && isUserName(sicCrew)
+        const userIsInstructor = userName && instructorCrew && isUserName(instructorCrew)
+        const userIsStudent = userName && studentCrew && isUserName(studentCrew)
         
-        // Normalize names for comparison (case-insensitive)
-        const normalizedPilotName = pilotName.trim().toLowerCase()
+        let selectedPilotName = ''
         
-        // Check in priority order: Instructor, Student, PIC (Captain), SIC (First Officer)
+        if (userIsPIC) {
+          selectedPilotName = candidates.find(c => c.role === 'sic')?.name ||
+                            candidates.find(c => c.role === 'instructor')?.name ||
+                            candidates.find(c => c.role === 'student')?.name ||
+                            candidates[0]?.name || ''
+        } else if (userIsSIC) {
+          selectedPilotName = candidates.find(c => c.role === 'pic')?.name ||
+                            candidates.find(c => c.role === 'instructor')?.name ||
+                            candidates.find(c => c.role === 'student')?.name ||
+                            candidates[0]?.name || ''
+        } else if (userIsInstructor) {
+          selectedPilotName = candidates.find(c => c.role === 'student')?.name ||
+                            candidates.find(c => c.role === 'pic')?.name ||
+                            candidates.find(c => c.role === 'sic')?.name ||
+                            candidates[0]?.name || ''
+        } else if (userIsStudent) {
+          selectedPilotName = candidates.find(c => c.role === 'instructor')?.name ||
+                            candidates.find(c => c.role === 'pic')?.name ||
+                            candidates.find(c => c.role === 'sic')?.name ||
+                            candidates[0]?.name || ''
+        } else {
+          // Prioritize: Instructor > Student > PIC > SIC
+          candidates.sort((a, b) => {
+            const rolePriority: Record<string, number> = { instructor: 1, student: 2, pic: 3, sic: 4, other: 5 }
+            return (rolePriority[a.role] || 99) - (rolePriority[b.role] || 99)
+          })
+          selectedPilotName = candidates[0]?.name || ''
+        }
+        
+        if (!selectedPilotName) return ''
+        
+        // Determine job based on which crew field the selected pilot appears in
+        const normalizedPilotName = selectedPilotName.trim().toLowerCase()
+        
         if (instructorCrew && instructorCrew.trim().toLowerCase() === normalizedPilotName) {
           return 'Instructor'
         }
@@ -6890,6 +7003,12 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
           return 'Captain'
         }
         if (sicCrew && sicCrew.trim().toLowerCase() === normalizedPilotName) {
+          return 'First Officer'
+        }
+        
+        // If pilot name found but not in crew fields, check if it's in other fields
+        // Default based on context (e.g., if found in "First Officer Name", return "First Officer")
+        if (firstOfficerName && firstOfficerName.trim().toLowerCase() === normalizedPilotName) {
           return 'First Officer'
         }
         
@@ -6913,7 +7032,15 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
         sic: normalizeNumber(rawEntry.flight_sic || rawEntry.SIC || rawEntry.sic || rawEntry.flightTime?.sic),
         dual: normalizeNumber(rawEntry.flight_dualReceived || rawEntry['Dual Received'] || rawEntry.dual || rawEntry.flightTime?.dual),
         solo: normalizeNumber(rawEntry.flight_solo || rawEntry.Solo || rawEntry['Solo Time'] || rawEntry.solo || rawEntry.flightTime?.solo),
-        night: normalizeNumber(rawEntry.flight_night || rawEntry.Night || rawEntry.night || rawEntry.flightTime?.night),
+        night: normalizeNumber(
+          findFieldValue(rawEntry, [
+            'flight_nightTime',  // Logten (with Time suffix)
+            'flight_night',  // Logten
+            'Night Time', 'night time', 'NightTime', 'nightTime',
+            'Night', 'night', 'NIGHT',
+            'flightTime?.night'
+          ]) || rawEntry.flight_night || rawEntry.Night || rawEntry.night || rawEntry.flightTime?.night
+        ),
         actualInstrument: normalizeNumber(rawEntry.flight_actualInstrument || rawEntry['Actual Instrument'] || rawEntry.IMC || rawEntry.imc || rawEntry.actualInstrument || rawEntry.flightTime?.actualInstrument),
         dualGiven: normalizeNumber(rawEntry.flight_dualGiven || rawEntry['Dual Given'] || rawEntry.CFI || rawEntry.cfi || rawEntry.dualGiven || rawEntry.flightTime?.dualGiven),
         crossCountry: normalizeNumber(rawEntry.flight_crossCountry || rawEntry['Cross Country'] || rawEntry['X-Country'] || rawEntry['X-C'] || rawEntry.crossCountry || rawEntry.flightTime?.crossCountry),
@@ -7010,6 +7137,7 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
     // Parse OOOI times if present - check Logten fields first
     // Logten exports: Scheduled Departure, Actual Departure (OUT), Scheduled Arrival, Actual Arrival (IN)
     // Map Actual Departure → OUT and Actual Arrival → IN, leave OFF and ON blank
+    // Note: LogTen exports times in Zulu/UTC by default (see isZulu handling below)
     const logtenOut = findFieldValue(rawEntry, ['flight_actualDepartureTime'])
     const logtenIn = findFieldValue(rawEntry, ['flight_actualArrivalTime'])
     const isLogtenImport = !!(logtenOut || logtenIn)
@@ -7018,8 +7146,34 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
     const off = null // Always blank for Logten imports
     const on = null // Always blank for Logten imports
     const inTime = logtenIn || rawEntry.In || rawEntry.oooi?.in || null
-    // Logten times are in local time, not Zulu
-    const isZulu = isLogtenImport ? false : (rawEntry['Is Zulu'] !== undefined ? rawEntry['Is Zulu'] : (rawEntry.oooi?.isZulu !== undefined ? rawEntry.oooi.isZulu : true))
+    
+    // Determine if times are in Zulu (UTC)
+    // LogTen exports times in Zulu/UTC by default
+    // Check for explicit timezone indicators in the export
+    let isZulu: boolean
+    if (isLogtenImport) {
+      // Check for timezone indicators in LogTen export
+      const timezoneField = findFieldValue(rawEntry, ['timezone', 'Timezone', 'TIMEZONE', 'isZulu', 'Is Zulu', 'is_zulu'])
+      const timezoneLower = timezoneField.toLowerCase()
+      
+      // Check for Zulu/UTC indicators
+      const hasZuluIndicator = timezoneLower.includes('zulu') || 
+                               timezoneLower.includes('utc') ||
+                               timezoneLower === 'z' ||
+                               rawEntry.isZulu === true ||
+                               rawEntry['Is Zulu'] === true
+      
+      // Check for local time indicator
+      const hasLocalIndicator = timezoneLower.includes('local') ||
+                                rawEntry.isZulu === false ||
+                                rawEntry['Is Zulu'] === false
+      
+      // Default to Zulu (true) for LogTen imports unless explicitly marked as local
+      isZulu = hasLocalIndicator ? false : (hasZuluIndicator ? true : true) // Default to true (Zulu)
+    } else {
+      // For non-LogTen imports, check explicit field or default to Zulu
+      isZulu = rawEntry['Is Zulu'] !== undefined ? rawEntry['Is Zulu'] : (rawEntry.oooi?.isZulu !== undefined ? rawEntry.oooi.isZulu : true)
+    }
     
     // If we have OOOI times, calculate block time from out to in (gate out to gate in)
     // For Logten imports, this will override the null initial value
@@ -7041,6 +7195,26 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
       const calculatedTime = await calculateDuration(off, on, entry.date, startTimezone, endTimezone, isZulu)
       if (calculatedTime !== null && calculatedTime > 0) {
         entry.flightTime.total = calculatedTime
+      }
+    }
+    
+    // For Logten imports with OOOI times, calculate night time from OOOI
+    // This ensures accurate night time even if LogTen's exported night time value is missing
+    if (isLogtenImport && out && inTime && entry.departure && entry.destination) {
+      const calculatedNightTime = await autoCalculateNightTime(
+        entry.date,
+        entry.departure,
+        entry.destination,
+        out,
+        inTime,
+        isZulu
+      )
+      if (calculatedNightTime !== null && calculatedNightTime >= 0) {
+        // Use calculated night time if available, otherwise keep the parsed value
+        // This allows LogTen's exported value to be used if calculation fails
+        if (calculatedNightTime > 0 || !entry.flightTime.night || entry.flightTime.night === 0) {
+          entry.flightTime.night = calculatedNightTime
+        }
       }
     }
     

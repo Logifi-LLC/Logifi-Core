@@ -233,18 +233,18 @@ $$ LANGUAGE plpgsql
 SET search_path = public, pg_catalog, pg_temp;
 
 -- Function to compute data hash for integrity (legacy - kept for compatibility)
--- Note: digest function from pgcrypto extension is in public schema
+-- Note: digest function from pgcrypto extension is in extensions schema
 -- Converted to PL/pgSQL to fix type resolution with restricted search_path
+-- Use extensions.digest to explicitly reference the pgcrypto function
 CREATE OR REPLACE FUNCTION compute_entry_hash(entry_data JSONB)
 RETURNS TEXT AS $$
-DECLARE
-  algorithm CONSTANT TEXT := 'sha256';
 BEGIN
-  RETURN encode(digest(entry_data::text::bytea, algorithm), 'hex');
+  -- Use literal string 'sha256'::text to avoid type resolution issues with variables
+  RETURN encode(extensions.digest(entry_data::text::bytea, 'sha256'::text), 'hex');
 END;
 $$ LANGUAGE plpgsql 
 IMMUTABLE
-SET search_path = public, pg_catalog, pg_temp;
+SET search_path = extensions, public, pg_catalog, pg_temp;
 
 -- Note: If build_entry_hash_object function exists in your database (not in migrations),
 -- it should also have search_path set. This function is not in the codebase, so if
@@ -303,18 +303,18 @@ SET search_path = public, pg_catalog, pg_temp;
 
 -- Compute SHA-256 hash from pre-formatted text string
 -- This is a simple wrapper around the digest function
--- Note: digest function from pgcrypto extension is in public schema
+-- Note: digest function from pgcrypto extension is in extensions schema
 -- Converted to PL/pgSQL to fix type resolution with restricted search_path
+-- Use extensions.digest to explicitly reference the pgcrypto function
 CREATE OR REPLACE FUNCTION compute_entry_hash_from_text(hash_text TEXT)
 RETURNS TEXT AS $$
-DECLARE
-  algorithm CONSTANT TEXT := 'sha256';
 BEGIN
-  RETURN encode(digest(hash_text::bytea, algorithm), 'hex');
+  -- Use literal string 'sha256'::text to avoid type resolution issues with variables
+  RETURN encode(extensions.digest(hash_text::bytea, 'sha256'::text), 'hex');
 END;
 $$ LANGUAGE plpgsql 
 IMMUTABLE
-SET search_path = public, pg_catalog, pg_temp;
+SET search_path = extensions, public, pg_catalog, pg_temp;
 
 -- Trigger function: Updates hash on INSERT or UPDATE
 -- This MUST use the exact same functions as validation
