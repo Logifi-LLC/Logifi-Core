@@ -4449,6 +4449,21 @@
                 ... and {{ importPreviewStatistics.errorMessages.length - 10 }} more errors
               </div>
             </div>
+            <div class="mt-4 p-3 rounded-lg border" :class="[isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-gray-50']">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  v-model="importWithErrors"
+                  class="rounded"
+                />
+                <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">
+                  Import entries with errors and flag them
+                </span>
+              </label>
+              <p :class="['text-xs mt-1 ml-6', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                These entries will be flagged for review. The validation error will be added to the remarks field.
+              </p>
+            </div>
           </div>
 
           <!-- Duplicates (if any) -->
@@ -5950,6 +5965,7 @@ const importPreviewMetadata = ref<ImportMetadata | null>(null)
 const expandedPreviewEntries = ref<Set<string>>(new Set())
 const showDuplicateConfirmDialog = ref(false)
 const importWithDuplicates = ref(false)
+const importWithErrors = ref(false)
 const showDuplicateOverrideDialog = ref(false)
 const pilotInitials = computed(() => {
   const name = pilotProfile.name.trim()
@@ -7198,25 +7214,8 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
       }
     }
     
-    // For Logten imports with OOOI times, calculate night time from OOOI
-    // This ensures accurate night time even if LogTen's exported night time value is missing
-    if (isLogtenImport && out && inTime && entry.departure && entry.destination) {
-      const calculatedNightTime = await autoCalculateNightTime(
-        entry.date,
-        entry.departure,
-        entry.destination,
-        out,
-        inTime,
-        isZulu
-      )
-      if (calculatedNightTime !== null && calculatedNightTime >= 0) {
-        // Use calculated night time if available, otherwise keep the parsed value
-        // This allows LogTen's exported value to be used if calculation fails
-        if (calculatedNightTime > 0 || !entry.flightTime.night || entry.flightTime.night === 0) {
-          entry.flightTime.night = calculatedNightTime
-        }
-      }
-    }
+    // For imports, rely solely on exported night time values
+    // No calculation during import - use what was exported from the source system
     
     // For Logten imports without OOOI times, fall back to flight_totalTime
     if (isLogtenImport && !entry.flightTime.total) {
@@ -7395,7 +7394,7 @@ async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statist
   return { statistics, validEntries, duplicates, errors }
 }
 
-async function importEntries(entries: LogEntry[], importDuplicates: boolean = false): Promise<{ imported: number; skipped: number; errors: string[] }> {
+async function importEntries(entries: LogEntry[], importDuplicates: boolean = false, importWithErrorsFlag: boolean = false): Promise<{ imported: number; skipped: number; errors: string[] }> {
   const result = { imported: 0, skipped: 0, errors: [] as string[] }
   
   // Determine import source from metadata
@@ -7473,8 +7472,16 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
     // Validate entry using composable validation (with lenient defaults applied)
     const validationError = await validateEntryForImport(entry)
     if (validationError) {
-      result.errors.push(`Entry ${entry.date} ${entry.registration}: ${validationError}`)
-      continue
+      if (importWithErrorsFlag) {
+        // Import with flag and error in remarks
+        entry.flagged = true
+        const errorNote = `\n\n[Import Error: ${validationError}]`
+        entry.remarks = (entry.remarks || '') + errorNote
+      } else {
+        // Skip entry (current behavior)
+        result.errors.push(`Entry ${entry.date} ${entry.registration}: ${validationError}`)
+        continue
+      }
     }
     
     // Check for duplicates
@@ -7609,8 +7616,8 @@ async function proceedWithImport(): Promise<void> {
     return
   }
   
-  // Import the entries (with duplicates if user confirmed)
-  const result = await importEntries(importPreviewEntries.value, importWithDuplicates.value)
+  // Import the entries (with duplicates if user confirmed, with errors if checkbox is checked)
+  const result = await importEntries(importPreviewEntries.value, importWithDuplicates.value, importWithErrors.value)
   
   // Show result
   let message = `Import complete!\n\nImported: ${result.imported} ${result.imported === 1 ? 'entry' : 'entries'}`
@@ -7645,6 +7652,7 @@ function cancelImport(): void {
   expandedPreviewEntries.value = new Set()
   showDuplicateConfirmDialog.value = false
   importWithDuplicates.value = false
+  importWithErrors.value = false
 }
 
 function togglePreviewEntry(entryId: string): void {
@@ -7747,8 +7755,9 @@ async function processCSVFile(file: File): Promise<void> {
     }
     
     // Calculate statistics and show preview
-    const { statistics, validEntries } = await calculateImportStatistics(entries)
-    importPreviewEntries.value = validEntries
+    const { statistics, validEntries, errors } = await calculateImportStatistics(entries)
+    // Include all entries (valid + errors) so error entries can be imported if checkbox is checked
+    importPreviewEntries.value = [...validEntries, ...errors.map(e => e.entry)]
     importPreviewStatistics.value = statistics
     importPreviewMetadata.value = {
       fileName: file.name,
@@ -7811,8 +7820,9 @@ async function processJSONFile(file: File): Promise<void> {
     }
     
     // Calculate statistics and show preview
-    const { statistics, validEntries } = await calculateImportStatistics(normalizedEntries)
-    importPreviewEntries.value = validEntries
+    const { statistics, validEntries, errors } = await calculateImportStatistics(normalizedEntries)
+    // Include all entries (valid + errors) so error entries can be imported if checkbox is checked
+    importPreviewEntries.value = [...validEntries, ...errors.map(e => e.entry)]
     importPreviewStatistics.value = statistics
     importPreviewMetadata.value = {
       fileName: file.name,
