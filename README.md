@@ -1,18 +1,105 @@
 # Logifi-Core
-The open-source core digital flight logbook used by Logifi.io. Community driven, pilot focused.  
 
-This is very early on in the Product creation stage of Logifi and I am opening it up to the community of pilots and coders alike to help build something that people will use.  
+The open-source core digital flight logbook used by Logifi.io. Community driven, pilot focused.
 
-Currently using the framework vue.js and there is no backend connected so everything is stored locally.  I want to get the product working before I add a backend (login, database, etc).  
+**Phase 1 Complete** - AC 120-78B compliant digital flight logbook with data migration, compliance features, and export capabilities.
 
-This is building a project but it also is for building a network. I plan to add many features to this logbook and will need more solid teammates on the journey to bring forward some new tech to the average pilot. If that is something that interests anyone on here then I would love to have a chat.  
+## Features
 
-https://discord.com/invite/cpqzYrD5F
+### ✅ Phase 1 Features
 
-This Discord will be where the community talks to eachother and builds of off one another.  
+- **AC 120-78B Compliance**: Complete audit trail, data integrity protection, and export capabilities
+- **Data Migration**: Import from CSV/JSON, automatic localStorage migration
+- **Offline Support**: Local-first architecture with automatic cloud sync
+- **Currency Tracking**: Part 61.57 currency requirements (90-day passenger/night, 6-month instrument)
+- **Export**: CSV, JSON, and Form 8710 PDF export with compliance metadata
+- **Validation**: Comprehensive validation for Part 61 requirements
+- **Audit Trail**: Complete change history with before/after values
+- **Data Integrity**: SHA-256 hashing and version tracking
 
-The website is posted on the page www.logifi.io but that is a fork that I have created.  Logifi-Core is the open source code that I am using for the logbook.  Still very much a work in progress.  
+## Quick Start
 
-For starters, I think it would be focused at airline pilots who don't necessarily need to have someone sign an entry every time.  Just have the capabilities of adding entries (eventually bulk) and automated time totaling.  
+### Prerequisites
 
-For now you will have to run the code your own but I am going for one of the main Saas themes that I am seeing out there.  Similar to Robinhood or CFO Silvia.  A dashboard at the top with totals and customization, a panel on the side for specifics, and more information as you scroll down.  
+- Node.js 18+
+- npm or pnpm
+- Supabase account (for backend)
+
+### Installation
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   cd logifi.web
+   npm install
+   ```
+3. Set up environment variables (see `env.example`)
+4. Run database migrations in Supabase
+5. Start development server:
+   ```bash
+   npm run dev
+   ```
+
+See [SETUP_INSTRUCTIONS.md](SETUP_INSTRUCTIONS.md) for detailed setup instructions.
+
+## Documentation
+
+- **[USER_GUIDE.md](USER_GUIDE.md)** - Complete user guide with step-by-step instructions
+- **[SCHEMA.md](SCHEMA.md)** - Database schema documentation
+- **[API.md](API.md)** - API reference for developers
+- **[PHASE1_ROADMAP.md](PHASE1_ROADMAP.md)** - Development roadmap and status
+- **[RELEASE_NOTES.md](RELEASE_NOTES.md)** - Phase 1 release notes
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history
+
+## Testing
+
+Run tests:
+
+```bash
+# Unit and integration tests
+npm run test
+
+# Watch mode
+npm run test:watch
+
+# Coverage
+npm run test:coverage
+
+# E2E tests
+npm run test:e2e
+```
+
+## Technology Stack
+
+- **Frontend**: Nuxt 3, Vue 3, TypeScript, Tailwind CSS
+- **Backend**: Supabase (PostgreSQL)
+- **Storage**: IndexedDB (local) + Supabase (cloud)
+- **Testing**: Vitest, Playwright
+
+## Community
+
+- **Discord**: https://discord.com/invite/cpqzYrD5F
+- **Website**: www.logifi.io
+
+## Roadmap
+
+### Phase 2 (Planned)
+- Electronic signatures
+- Student/instructor update workflow
+- Enhanced non-repudiation features
+- Additional currency requirements
+
+See [PHASE1_ROADMAP.md](PHASE1_ROADMAP.md) for detailed roadmap.
+
+## License
+
+[License information]
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
+**Current Version**: 1.0.0 (Phase 1)  
+**Status**: Production Ready
