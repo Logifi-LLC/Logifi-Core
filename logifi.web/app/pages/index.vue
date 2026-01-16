@@ -1,5 +1,6 @@
 <template>
 <div
+  ref="rootScrollContainerRef"
   :class="[
     'min-h-screen overflow-y-auto transition-colors duration-300 font-quicksand',
     isDarkMode ? 'bg-gray-900' : 'bg-gray-300'
@@ -127,7 +128,7 @@
             <div
               v-if="showHeaderSettings"
               :class="[
-                'absolute right-0 top-full mt-2 w-64 rounded-xl border shadow-2xl z-10 flex flex-col',
+                'absolute right-0 top-full mt-2 w-64 rounded-xl border shadow-2xl z-40 flex flex-col',
                 isDarkMode 
                   ? 'bg-gray-800 border-gray-700' 
                   : 'bg-gray-100 border-gray-300'
@@ -1161,25 +1162,33 @@
 
             <div
               v-else
+              ref="tableContainerRef"
                       :class="[
-                'mt-6 overflow-x-auto rounded-2xl border transition-colors duration-300 relative',
+                'mt-6 rounded-2xl border transition-colors duration-300 relative overflow-x-auto',
                         isDarkMode 
     ? 'border-gray-700' 
     : 'border-gray-300 shadow-sm'
               ]"
             >
-              <table :class="[
-                'w-full divide-y text-left font-quicksand',
-                isDarkMode 
-                  ? 'divide-gray-700 bg-gray-800' 
-                    : 'divide-gray-200 bg-gray-100'
-              ]" style="table-layout: fixed; width: 100%;">
-                <thead :class="[
-                  'uppercase text-xs font-semibold tracking-wider font-quicksand sticky top-0 z-20 shadow-sm',
+              <table 
+                ref="tableRef"
+                :class="[
+                  'w-full divide-y text-left font-quicksand',
                   isDarkMode 
-                    ? 'bg-gray-800 text-gray-400 border-b border-gray-700' 
-                    : 'bg-gray-100 text-gray-500 border-b border-gray-200'
-                ]">
+                    ? 'divide-gray-700 bg-gray-800' 
+                      : 'divide-gray-200 bg-gray-100'
+                ]" 
+                style="table-layout: fixed; width: 100%;"
+              >
+                <thead 
+                  ref="tableHeaderRef"
+                  :class="[
+                    'uppercase text-xs font-semibold tracking-wider font-quicksand z-20',
+                    isDarkMode 
+                      ? 'bg-gray-800 text-gray-400 border-b border-gray-700' 
+                      : 'bg-gray-100 text-gray-500 border-b border-gray-200'
+                  ]"
+                >
                   <tr>
                     <th 
                       v-for="col in visibleColumns" 
@@ -1356,7 +1365,7 @@
                   </template>
                 </tbody>
               </table>
-        </div>
+            </div>
       </div>
     </div>
     </main>
@@ -4937,6 +4946,8 @@ onMounted(async () => {
     if (isAuthenticated.value && user.value) {
       startBackgroundSync()
     }
+    
+    // Setup sticky header - will be called when table is rendered via watcher
   } catch (error) {
     console.error('[App] Failed to initialize IndexedDB:', error)
   }
@@ -5457,6 +5468,12 @@ const validationWarning = ref<boolean>(false)
 const saveAnywayValidation = ref(false)
 const isEntryFormOpen = ref(false)
 const isCommercialMode = ref(false)
+
+// Sticky header refs
+const rootScrollContainerRef = ref<HTMLElement | null>(null)
+const tableHeaderRef = ref<HTMLElement | null>(null)
+const tableContainerRef = ref<HTMLElement | null>(null)
+const tableRef = ref<HTMLTableElement | null>(null)
 const isInlineCommercialMode = ref(false)
 const editingEntryId = ref<string | null>(null)
 const expandedEntryId = ref<string | null>(null)
@@ -5509,7 +5526,7 @@ async function saveInlineEdit(): Promise<void> {
   // Normalize the entry like submitEntry does to ensure consistent data
   const updatedEntry: LogEntry = {
     ...inlineEditEntry.value,
-    aircraftCategoryClass: normalizeCategoryClassLabel(inlineEditEntry.value.aircraftCategoryClass.trim()),
+    aircraftCategoryClass: normalizeCategoryClassLabel((inlineEditEntry.value.aircraftCategoryClass || '').trim()),
     categoryClassTime: normalizeNumber(inlineEditEntry.value.categoryClassTime),
     flightTime: flightTimeFields.reduce<FlightTimeBreakdown>((acc, field) => {
       const normalized = normalizeNumber(inlineEditEntry.value!.flightTime[field.key])
@@ -8114,7 +8131,7 @@ function updateCrewNotes(name: string, notes: string): void {
 }
 
 // Rename crew member
-function renameCrewMember(oldName: string, newName: string): void {
+async function renameCrewMember(oldName: string, newName: string): Promise<void> {
   if (!oldName || !newName || oldName.trim() === newName.trim()) {
     return
   }
@@ -8126,12 +8143,47 @@ function renameCrewMember(oldName: string, newName: string): void {
   
   const oldNameLower = oldName.toLowerCase()
   
-  // Find all entries where trainingElements (case-insensitive) matches the old name
-  const entriesToUpdate = logEntries.value.filter(entry => 
-    entry.trainingElements && entry.trainingElements.toLowerCase() === oldNameLower
-  )
+  // Update log entries in Supabase if authenticated
+  if (isAuthenticated.value && user.value) {
+    try {
+      // Fetch all entries that need to be updated
+      const { data: entriesToUpdate, error: fetchError } = await (supabase
+        .from('log_entries') as any)
+        .select('id, training_elements')
+        .eq('user_id', user.value.id)
+        .ilike('training_elements', oldName)
+      
+      if (fetchError) {
+        console.error('[RenameCrewMember] Error fetching entries to update:', fetchError)
+        // Continue with local updates even if database fetch fails
+      } else if (entriesToUpdate && entriesToUpdate.length > 0) {
+        // Update each entry in the database
+        let successCount = 0
+        let failCount = 0
+        
+        for (const entry of entriesToUpdate) {
+          const { error: updateError } = await (supabase
+            .from('log_entries') as any)
+            .update({ training_elements: trimmedNewName })
+            .eq('id', entry.id)
+          
+          if (updateError) {
+            console.error(`[RenameCrewMember] Error updating entry ${entry.id}:`, updateError)
+            failCount++
+          } else {
+            successCount++
+          }
+        }
+        
+        console.log(`[RenameCrewMember] Updated ${successCount} log entries in Supabase${failCount > 0 ? ` (${failCount} failed)` : ''}`)
+      }
+    } catch (error) {
+      console.error('[RenameCrewMember] Exception updating entries in Supabase:', error)
+      // Continue with local updates even if database update fails
+    }
+  }
   
-  // Update all matching entries
+  // Update all matching entries in local state
   logEntries.value = logEntries.value.map(entry => {
     if (entry.trainingElements && entry.trainingElements.toLowerCase() === oldNameLower) {
       return {
@@ -8163,8 +8215,6 @@ function renameCrewMember(oldName: string, newName: string): void {
   if (currentCrewName.value.toLowerCase() === oldNameLower) {
     currentCrewName.value = trimmedNewName
   }
-  
-  // Note: logEntries is watched and auto-saves to localStorage
 }
 
 // Category/Class normalization and autofill helpers
@@ -8864,7 +8914,7 @@ function startEditingCrewName(): void {
 }
 
 // Save crew name changes
-function saveCrewNameEdit(): void {
+async function saveCrewNameEdit(): Promise<void> {
   if (!editingCrewName.value.trim()) {
     // Prevent empty names, cancel edit instead
     cancelCrewNameEdit()
@@ -8873,7 +8923,7 @@ function saveCrewNameEdit(): void {
   
   const trimmedNewName = editingCrewName.value.trim()
   if (trimmedNewName !== currentCrewName.value) {
-    renameCrewMember(currentCrewName.value, trimmedNewName)
+    await renameCrewMember(currentCrewName.value, trimmedNewName)
   }
   
   isEditingCrewName.value = false
@@ -10087,7 +10137,7 @@ async function submitEntry(): Promise<void> {
   const baseEntry: Omit<LogEntry, 'id'> = {
     date: newEntry.date,
     role: newEntry.role,
-    aircraftCategoryClass: normalizeCategoryClassLabel(newEntry.aircraftCategoryClass.trim()),
+    aircraftCategoryClass: normalizeCategoryClassLabel((newEntry.aircraftCategoryClass || '').trim()),
     categoryClassTime: normalizeNumber(newEntry.categoryClassTime),
     aircraftMakeModel: newEntry.aircraftMakeModel.trim(),
     registration: newEntry.registration.trim(),
