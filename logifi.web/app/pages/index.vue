@@ -2216,14 +2216,14 @@
                         
                         // Track manual XC time entry
                         if (field.key === 'crossCountry') {
-                          xcTimeManuallySet.value = true;
+                          setXcTimeManuallySet(true);
                         }
                         
                         // Handle empty input
                         if (val === '' || val === '-') {
                           newEntry.flightTime[field.key] = null;
                           if (field.key === 'crossCountry') {
-                            xcTimeManuallySet.value = false;
+                            setXcTimeManuallySet(false);
                           }
                           return;
                         }
@@ -2238,7 +2238,7 @@
                           // Invalid input - revert to previous value or null
                           newEntry.flightTime[field.key] = null;
                           if (field.key === 'crossCountry') {
-                            xcTimeManuallySet.value = false;
+                            setXcTimeManuallySet(false);
                           }
                         } else {
                           // Ensure it's a valid number (not Infinity, etc.)
@@ -5499,7 +5499,10 @@ const catalogSections = [
 
 const newEntry = reactive<EditableLogEntry>(createBlankEntry())
 // Track if XC time was manually set by user (to prevent auto-overwrite)
-const xcTimeManuallySet = ref(false)
+const xcTimeManuallySet = ref<boolean>(false)
+const setXcTimeManuallySet = (value: boolean) => {
+  xcTimeManuallySet.value = value
+}
 const searchTerm = ref('')
 const validationError = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
@@ -5973,8 +5976,8 @@ const form8710Warnings = computed<string[]>(() => {
     }
     
     // Check for unreasonable date ranges (more than 100 years)
-    const oldestDate = dates[0]
-    const newestDate = dates[dates.length - 1]
+    const oldestDate = dates[0]!
+    const newestDate = dates[dates.length - 1]!
     const yearsDiff = (newestDate.getTime() - oldestDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25)
     if (yearsDiff > 100) {
       warnings.push(`Date range spans ${yearsDiff.toFixed(1)} years, which may indicate data quality issues`)
@@ -6438,8 +6441,8 @@ function prepareForm8710Data(): Form8710Data | null {
         .sort()
       
       const dateRange = dates.length > 0 ? {
-        start: dates[0],
-        end: dates[dates.length - 1]
+        start: dates[0]!,
+        end: dates[dates.length - 1]!
       } : undefined
 
       // Try to get import date from metadata
@@ -6470,8 +6473,8 @@ function prepareForm8710Data(): Form8710Data | null {
           sourceType: 'manual',
           entryCount: manualEntries,
           dateRange: {
-            start: manualDates[0],
-            end: manualDates[manualDates.length - 1]
+            start: manualDates[0]!,
+            end: manualDates[manualDates.length - 1]!
           }
         })
       } else {
