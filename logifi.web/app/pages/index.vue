@@ -4776,6 +4776,35 @@
       <p :class="['text-lg font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Loading...</p>
     </div>
   </div>
+  
+  <!-- Scroll to Top Button -->
+  <Transition
+    enter-active-class="transition-opacity duration-300"
+    enter-from-class="opacity-0"
+    enter-to-class="opacity-100"
+    leave-active-class="transition-opacity duration-300"
+    leave-from-class="opacity-100"
+    leave-to-class="opacity-0"
+  >
+    <button
+      v-if="showScrollToTop"
+      @click="scrollToTop"
+      :class="[
+        'fixed bottom-6 z-40 transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 border-none p-0',
+        isSidebarCollapsed 
+          ? 'lg:left-16' 
+          : 'lg:left-44 xl:left-48'
+      ]"
+      style="background: transparent !important; background-color: transparent !important; appearance: none; -webkit-appearance: none; transform: translateX(-50%);"
+      aria-label="Scroll to top"
+    >
+      <img
+        :src="isDarkMode ? '/images/white-arrow.png' : '/images/black-arrow.png'"
+        alt="Scroll to top"
+        class="w-25 h-25"
+      />
+    </button>
+  </Transition>
   <!-- End root div -->
 </div>
 </template>
@@ -4948,8 +4977,20 @@ onMounted(async () => {
     }
     
     // Setup sticky header - will be called when table is rendered via watcher
+    
+    // Setup scroll to top button - listen to window scroll
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    // Check initial scroll position
+    handleScroll()
   } catch (error) {
     console.error('[App] Failed to initialize IndexedDB:', error)
+  }
+})
+
+// Cleanup scroll event listener on unmount
+onUnmounted(() => {
+  if (isBrowser) {
+    window.removeEventListener('scroll', handleScroll)
   }
 })
 
@@ -5474,6 +5515,7 @@ const rootScrollContainerRef = ref<HTMLElement | null>(null)
 const tableHeaderRef = ref<HTMLElement | null>(null)
 const tableContainerRef = ref<HTMLElement | null>(null)
 const tableRef = ref<HTMLTableElement | null>(null)
+const showScrollToTop = ref(false)
 const isInlineCommercialMode = ref(false)
 const editingEntryId = ref<string | null>(null)
 const expandedEntryId = ref<string | null>(null)
@@ -8409,6 +8451,21 @@ const applyTheme = () => {
       root.classList.remove('dark')
     }
   }
+}
+
+// Scroll to top functionality - listen to window scroll
+const handleScroll = () => {
+  if (!isBrowser) return
+  const scrollTop = window.scrollY || document.documentElement.scrollTop
+  showScrollToTop.value = scrollTop > 300
+}
+
+const scrollToTop = () => {
+  if (!isBrowser) return
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  })
 }
 
 function sanitizeFlightConditions(conditions: string[]): string[] {
