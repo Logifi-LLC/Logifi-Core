@@ -39,7 +39,7 @@
           <nav class="flex items-center gap-3 relative z-10">
             <!-- Discord Button -->
             <a
-              href="https://discord.com/invite/cpqzYrD5F"
+              href="https://discord.gg/hBaDkNt2ev"
               target="_blank"
               rel="noopener noreferrer"
               :class="[

@@ -78,7 +78,7 @@ npm run test:e2e
 
 ## Community
 
-- **Discord**: https://discord.com/invite/cpqzYrD5F
+- **Discord**: https://discord.gg/hBaDkNt2ev
 - **Website**: www.logifi.io
 
 ## Roadmap

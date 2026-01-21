@@ -2,7 +2,7 @@
 
 ## Discord Community
 
-https://discord.com/invite/cpqzYrD5F
+https://discord.gg/hBaDkNt2ev
 
 ## Our Pledge
 
