@@ -110,7 +110,7 @@ For new installations, run migrations in order:
 ## Support
 
 - GitHub: [Repository URL]
-- Discord: https://discord.com/invite/cpqzYrD5F
+- Discord: https://discord.gg/hBaDkNt2ev
 - Documentation: See docs in repository
 
 ## Acknowledgments
