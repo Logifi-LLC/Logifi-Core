@@ -47,6 +47,7 @@ See [SETUP_INSTRUCTIONS.md](SETUP_INSTRUCTIONS.md) for detailed setup instructio
 - **[USER_GUIDE.md](USER_GUIDE.md)** - Complete user guide with step-by-step instructions
 - **[SCHEMA.md](SCHEMA.md)** - Database schema documentation
 - **[API.md](API.md)** - API reference for developers
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment and testing guide (Vercel, Netlify, local tunnels)
 - **[PHASE1_ROADMAP.md](PHASE1_ROADMAP.md)** - Development roadmap and status
 - **[RELEASE_NOTES.md](RELEASE_NOTES.md)** - Phase 1 release notes
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history
