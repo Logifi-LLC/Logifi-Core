@@ -4,11 +4,12 @@ This document tracks the security fixes applied to address GitHub dependency vul
 
 ## Vulnerabilities Addressed
 
-1. **h3 v1** - Request Smuggling (High) - Fixed by overriding to `^1.12.0` (patched version)
-2. **node-tar** - Race Condition & Arbitrary File Overwrite (High) - Fixed by overriding to `^7.4.3`
-3. **devalue** - Denial of Service (High) - Fixed by overriding to `^3.0.0`
-4. **lodash** - Prototype Pollution (Moderate) - Already had override to `^4.17.21`, updated to ensure latest patch
-5. **jsdiff/diff** - Denial of Service (Low) - Fixed by overriding to `^7.0.0`
+1. **h3 v1** - Request Smuggling (TE.TE) (High) - Fixed by overriding to `^1.13.0` (patched version)
+2. **node-tar** - Race Condition via Unicode Ligature Collisions (High) - Fixed by overriding to `^7.4.3` (latest secure 7.x version)
+3. **node-tar** - Arbitrary File Overwrite and Symlink Poisoning (High) - Fixed by overriding to `^7.4.3` (latest secure 7.x version)
+4. **devalue** - Denial of Service due to memory/CPU exhaustion (High) - Fixed by overriding to `^5.3.2`
+5. **lodash** - Prototype Pollution in `_.unset` and `_.omit` (Moderate) - Fixed by overriding to `^4.17.22`
+6. **jsdiff/diff** - Denial of Service in parsePatch and applyPatch (Low) - Fixed by overriding to `^8.0.3`
 
 ## Changes Made
 
@@ -18,12 +19,13 @@ Added overrides to force secure versions of vulnerable packages:
 
 ```json
 "overrides": {
-  "h3": "^1.12.0",
+  "h3": "^1.13.0",
   "tar": "^7.4.3",
   "node-tar": "^7.4.3",
-  "devalue": "^3.0.0",
-  "diff": "^7.0.0",
-  "jsdiff": "^7.0.0"
+  "devalue": "^5.3.2",
+  "diff": "^8.0.3",
+  "jsdiff": "^8.0.3",
+  "lodash@*": "^4.17.22"
 }
 ```
 
