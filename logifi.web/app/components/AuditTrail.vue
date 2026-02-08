@@ -140,58 +140,27 @@
                   {{ log.displayTime }}
                 </p>
 
-                <!-- Changed fields -->
-                <div v-if="log.changed_fields && log.changed_fields.length > 0" class="mt-4">
-                  <p :class="['text-xs font-semibold uppercase tracking-wide mb-2 font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                    Changed Fields ({{ log.changed_fields.length }})
-                  </p>
-                  <div class="space-y-2">
-                    <div
-                      v-for="diff in getFieldDiffs(log)"
-                      :key="diff.field"
-                      :class="[
-                        'rounded-lg p-3 text-sm',
-                        isDarkMode ? 'bg-gray-800/50' : 'bg-white'
-                      ]"
-                    >
-                      <div class="font-semibold font-quicksand mb-2" :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">
-                        {{ formatFieldName(diff.field) }}
+                <!-- Changed fields (vertical stack, no horizontal scroll) -->
+                <div v-if="log.changed_fields && log.changed_fields.length > 0" class="mt-4 space-y-3">
+                  <div
+                    v-for="diff in getFieldDiffs(log)"
+                    :key="diff.field"
+                    :class="[
+                      'rounded-lg p-3 border text-sm font-quicksand',
+                      isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50/80'
+                    ]"
+                  >
+                    <div :class="['font-semibold mb-2', isDarkMode ? 'text-gray-300' : 'text-gray-800']">
+                      {{ formatFieldName(diff.field) }}
+                    </div>
+                    <div class="space-y-1 text-sm">
+                      <div :class="[isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                        <span :class="['font-medium', isDarkMode ? 'text-gray-500' : 'text-gray-500']">Before:</span>
+                        <span class="break-words">{{ formatValue(diff.oldValue, diff.field) }}</span>
                       </div>
-                      <div class="grid grid-cols-2 gap-3">
-                        <!-- Old value -->
-                        <div>
-                          <div :class="['text-xs font-semibold mb-1 font-quicksand', isDarkMode ? 'text-red-400' : 'text-red-600']">
-                            Before
-                          </div>
-                          <div
-                            :class="[
-                              'p-2 rounded text-xs font-mono break-words',
-                              isDarkMode ? 'bg-gray-900 text-gray-300' : 'bg-gray-100 text-gray-700'
-                            ]"
-                          >
-                            <span v-if="diff.oldValue === null || diff.oldValue === undefined" :class="isDarkMode ? 'text-gray-500' : 'text-gray-400'">
-                              (empty)
-                            </span>
-                            <span v-else>{{ formatValue(diff.oldValue) }}</span>
-                          </div>
-                        </div>
-                        <!-- New value -->
-                        <div>
-                          <div :class="['text-xs font-semibold mb-1 font-quicksand', isDarkMode ? 'text-green-400' : 'text-green-600']">
-                            After
-                          </div>
-                          <div
-                            :class="[
-                              'p-2 rounded text-xs font-mono break-words',
-                              isDarkMode ? 'bg-gray-900 text-gray-300' : 'bg-gray-100 text-gray-700'
-                            ]"
-                          >
-                            <span v-if="diff.newValue === null || diff.newValue === undefined" :class="isDarkMode ? 'text-gray-500' : 'text-gray-400'">
-                              (empty)
-                            </span>
-                            <span v-else>{{ formatValue(diff.newValue) }}</span>
-                          </div>
-                        </div>
+                      <div :class="[isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                        <span :class="['font-medium', isDarkMode ? 'text-gray-500' : 'text-gray-500']">After:</span>
+                        <span class="break-words">{{ formatValue(diff.newValue, diff.field) }}</span>
                       </div>
                     </div>
                   </div>
@@ -381,58 +350,27 @@
                 {{ log.displayTime }}
               </p>
 
-              <!-- Changed fields (only show for update actions, not create/delete) -->
-              <div v-if="log.action === 'update' && log.changed_fields && log.changed_fields.length > 0" class="mt-4">
-                <p :class="['text-xs font-semibold uppercase tracking-wide mb-2 font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                  Changed Fields ({{ log.changed_fields.length }})
-                </p>
-                <div class="space-y-2">
-                  <div
-                    v-for="diff in getFieldDiffs(log)"
-                    :key="diff.field"
-                    :class="[
-                      'rounded-lg p-3 text-sm',
-                      isDarkMode ? 'bg-gray-800/50' : 'bg-white'
-                    ]"
-                  >
-                    <div class="font-semibold font-quicksand mb-2" :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">
-                      {{ formatFieldName(diff.field) }}
+              <!-- Changed fields (vertical stack, no horizontal scroll) -->
+              <div v-if="log.action === 'update' && log.changed_fields && log.changed_fields.length > 0" class="mt-4 space-y-2">
+                <div
+                  v-for="diff in getFieldDiffs(log)"
+                  :key="diff.field"
+                  :class="[
+                    'rounded-lg p-2.5 border text-xs font-quicksand',
+                    isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-gray-50/80'
+                  ]"
+                >
+                  <div :class="['font-semibold mb-1.5', isDarkMode ? 'text-gray-300' : 'text-gray-800']">
+                    {{ formatFieldName(diff.field) }}
+                  </div>
+                  <div class="space-y-0.5">
+                    <div :class="[isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                      <span :class="['font-medium', isDarkMode ? 'text-gray-500' : 'text-gray-500']">Before:</span>
+                      <span class="break-words">{{ formatValue(diff.oldValue, diff.field) }}</span>
                     </div>
-                    <div class="grid grid-cols-2 gap-3">
-                      <!-- Old value -->
-                      <div>
-                        <div :class="['text-xs font-semibold mb-1 font-quicksand', isDarkMode ? 'text-red-400' : 'text-red-600']">
-                          Before
-                        </div>
-                        <div
-                          :class="[
-                            'p-2 rounded text-xs font-mono break-words',
-                            isDarkMode ? 'bg-gray-900 text-gray-300' : 'bg-gray-100 text-gray-700'
-                          ]"
-                        >
-                          <span v-if="diff.oldValue === null || diff.oldValue === undefined" :class="isDarkMode ? 'text-gray-500' : 'text-gray-400'">
-                            (empty)
-                          </span>
-                          <span v-else>{{ formatValue(diff.oldValue) }}</span>
-                        </div>
-                      </div>
-                      <!-- New value -->
-                      <div>
-                        <div :class="['text-xs font-semibold mb-1 font-quicksand', isDarkMode ? 'text-green-400' : 'text-green-600']">
-                          After
-                        </div>
-                        <div
-                          :class="[
-                            'p-2 rounded text-xs font-mono break-words',
-                            isDarkMode ? 'bg-gray-900 text-gray-300' : 'bg-gray-100 text-gray-700'
-                          ]"
-                        >
-                          <span v-if="diff.newValue === null || diff.newValue === undefined" :class="isDarkMode ? 'text-gray-500' : 'text-gray-400'">
-                            (empty)
-                          </span>
-                          <span v-else>{{ formatValue(diff.newValue) }}</span>
-                        </div>
-                      </div>
+                    <div :class="[isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                      <span :class="['font-medium', isDarkMode ? 'text-gray-500' : 'text-gray-500']">After:</span>
+                      <span class="break-words">{{ formatValue(diff.newValue, diff.field) }}</span>
                     </div>
                   </div>
                 </div>
@@ -694,9 +632,19 @@ watch(() => [props.isOpen, props.entryId, props.localEntry], async ([isOpen, ent
   }
 }, { immediate: true })
 
-// Get field diffs for display
+// Display order: put Data Hash last (least important to user)
+const DATA_HASH_FIELD = 'data hash'
+
+// Get field diffs for display (Data Hash moved to bottom)
 const getFieldDiffs = (log: AuditLogWithDisplay) => {
-  return getFieldDiff(log.old_data, log.new_data, log.changed_fields || [])
+  const diffs = getFieldDiff(log.old_data, log.new_data, log.changed_fields || [])
+  return [...diffs].sort((a, b) => {
+    const aKey = (a.field || '').toLowerCase()
+    const bKey = (b.field || '').toLowerCase()
+    if (aKey === DATA_HASH_FIELD) return 1
+    if (bKey === DATA_HASH_FIELD) return -1
+    return 0
+  })
 }
 
 // Format field name for display
@@ -706,16 +654,80 @@ const formatFieldName = (field: string) => {
     .replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
-// Format value for display
-const formatValue = (value: any) => {
+// CamelCase to normal label (e.g. nightVfr -> Night VFR, crossCountry -> Cross Country)
+const camelToLabel = (s: string): string => {
+  const withSpaces = s.replace(/([A-Z])/g, ' $1').replace(/^\w/, (c) => c.toUpperCase()).trim()
+  return withSpaces.split(/\s+/).map((word) => {
+    const lower = word.toLowerCase()
+    if (lower === 'vfr') return 'VFR'
+    if (lower === 'ifr') return 'IFR'
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  }).join(' ')
+}
+
+// Format value for display (human-readable). Pass field for context (e.g. Version is not "hrs", Updated At is human date).
+const formatValue = (value: any, field?: string) => {
   if (value === null || value === undefined) {
     return '(empty)'
+  }
+  const fieldKey = (field || '').toLowerCase()
+  if (typeof value === 'boolean') {
+    return value ? 'Yes' : 'No'
+  }
+  if (Array.isArray(value)) {
+    const isFlightConditions = fieldKey.includes('flight') && fieldKey.includes('condition')
+    const list = value.map((v: any) =>
+      typeof v === 'string'
+        ? (isFlightConditions ? camelToLabel(v) : v.replace(/([A-Z])/g, ' $1').replace(/^\w/, (s) => s.toUpperCase()).trim())
+        : String(v)
+    )
+    return list.join(', ') || '(empty)'
   }
   if (typeof value === 'object') {
     return JSON.stringify(value, null, 2)
   }
-  if (Array.isArray(value)) {
-    return value.join(', ')
+  if (typeof value === 'number') {
+    const n = value
+    // Version is a revision number, not hours — do not append "hrs"
+    if (fieldKey === 'version') {
+      return Number.isInteger(n) ? String(n) : n.toFixed(2)
+    }
+    if (n > 0 && n <= 24) return Number.isInteger(n) ? `${n} hrs` : `${n.toFixed(2)} hrs`
+    if (Number.isInteger(n)) return String(n)
+    return n.toFixed(2)
+  }
+  if (typeof value === 'string') {
+    const s = value.trim()
+    // Flight conditions: JSON array string -> normal labels (e.g. "nightVfr" -> "Night VFR")
+    if (fieldKey.includes('flight') && fieldKey.includes('condition') && s.startsWith('[')) {
+      try {
+        const arr = JSON.parse(s) as unknown[]
+        const list = arr.map((v) => (typeof v === 'string' ? camelToLabel(v) : String(v)))
+        return list.join(', ') || '(empty)'
+      } catch {
+        return s || '(empty)'
+      }
+    }
+    // Human-readable date for Updated At / Created At (ISO-like timestamps)
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) && (fieldKey.includes('updated') || fieldKey.includes('created'))) {
+      try {
+        return new Date(s).toLocaleString(undefined, {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        })
+      } catch {
+        return s || '(empty)'
+      }
+    }
+    if (/^\d{3,4}$/.test(s)) {
+      const padded = s.padStart(4, '0')
+      return `${padded.slice(0, 2)}:${padded.slice(2)}`
+    }
+    return s || '(empty)'
   }
   return String(value)
 }

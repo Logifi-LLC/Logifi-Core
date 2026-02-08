@@ -299,25 +299,91 @@ export const useAuditTrail = () => {
     }
   }
 
-  // Get changed fields diff for display
+  // Human-readable labels for nested fields (Phase 1: avoid raw JSON in history)
+  const FLIGHT_TIME_LABELS: Record<string, string> = {
+    total: 'Total Time',
+    pic: 'PIC',
+    sic: 'SIC',
+    dual: 'Dual Received',
+    solo: 'Solo',
+    night: 'Night',
+    actualInstrument: 'Actual Instrument',
+    simulatedInstrument: 'Simulated Instrument',
+    crossCountry: 'Cross Country',
+    dualGiven: 'Dual Given'
+  }
+  const PERFORMANCE_LABELS: Record<string, string> = {
+    approachCount: 'Approach Count',
+    approachType: 'Approach Type',
+    dayTakeoffs: 'Day Takeoffs',
+    dayLandings: 'Day Landings',
+    nightTakeoffs: 'Night Takeoffs',
+    nightLandings: 'Night Landings'
+  }
+  const OOOI_LABELS: Record<string, string> = {
+    out: 'Out',
+    off: 'Off',
+    on: 'On',
+    in: 'In',
+    isZulu: 'Zulu (UTC)'
+  }
+
   const getFieldDiff = (oldData: any, newData: any, changedFields: string[]) => {
     const diffs: Array<{ field: string; oldValue: any; newValue: any }> = []
+
+    const isSame = (a: any, b: any): boolean => {
+      if (a === b) return true
+      if (a == null && b == null) return true
+      if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) < 0.01
+      return false
+    }
+
+    const expandNested = (
+      fieldName: string,
+      oldObj: Record<string, any> | null,
+      newObj: Record<string, any> | null,
+      labels: Record<string, string>
+    ) => {
+      const keys = new Set([...(oldObj ? Object.keys(oldObj) : []), ...(newObj ? Object.keys(newObj) : [])])
+      keys.forEach(key => {
+        const oldVal = oldObj?.[key]
+        const newVal = newObj?.[key]
+        if (isSame(oldVal, newVal)) return
+        const label = labels[key] ?? key.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())
+        diffs.push({
+          field: label,
+          oldValue: oldVal ?? null,
+          newValue: newVal ?? null
+        })
+      })
+    }
 
     changedFields.forEach(field => {
       const oldValue = oldData?.[field]
       const newValue = newData?.[field]
 
-      // Handle nested objects (flight_time, performance, oooi)
+      if (field === 'flight_time') {
+        expandNested('flight_time', oldValue && typeof oldValue === 'object' ? oldValue : null, newValue && typeof newValue === 'object' ? newValue : null, FLIGHT_TIME_LABELS)
+        return
+      }
+      if (field === 'performance') {
+        expandNested('performance', oldValue && typeof oldValue === 'object' ? oldValue : null, newValue && typeof newValue === 'object' ? newValue : null, PERFORMANCE_LABELS)
+        return
+      }
+      if (field === 'oooi') {
+        expandNested('oooi', oldValue && typeof oldValue === 'object' ? oldValue : null, newValue && typeof newValue === 'object' ? newValue : null, OOOI_LABELS)
+        return
+      }
+
       if (typeof oldValue === 'object' && oldValue !== null || typeof newValue === 'object' && newValue !== null) {
-        // For nested objects, show JSON diff
         diffs.push({
-          field,
+          field: field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
           oldValue: oldValue ? JSON.stringify(oldValue, null, 2) : null,
           newValue: newValue ? JSON.stringify(newValue, null, 2) : null
         })
       } else {
         diffs.push({
-          field,
+          field: field.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
           oldValue: oldValue ?? null,
           newValue: newValue ?? null
         })

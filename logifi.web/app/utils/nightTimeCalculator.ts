@@ -1,7 +1,18 @@
 /**
  * Night Time Calculator
- * Calculates the amount of flight time that occurs during "night" per FAA definition
- * (between end of evening civil twilight and beginning of morning civil twilight)
+ *
+ * Definition: "Night" per FAA = time between end of evening civil twilight and
+ * beginning of morning civil twilight. Civil twilight = sun 6° below horizon
+ * (see solarCalculator.ts / SunCalc civilDawn and civilDusk).
+ *
+ * Logic (single location by default):
+ * - The app passes only departure coordinates, so night = flight time that
+ *   falls inside "night" at the departure airport (civil twilight there).
+ *   This matches common logbook behavior and typically yields lower or equal
+ *   night time than a two-location union.
+ * - If a caller provided both departure and destination coordinates, the
+ *   calculator would use the union of night at both locations (see
+ *   calculateNightTimeWithTwoLocations); the app does not use that path.
  */
 
 import { getCivilTwilight, type CivilTwilightTimes } from './solarCalculator'

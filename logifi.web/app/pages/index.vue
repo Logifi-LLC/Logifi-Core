@@ -1683,7 +1683,7 @@
                 <div class="flex gap-2">
                   <div class="flex-[0.6]">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class</label>
-                    <input v-model="inlineEditEntry.aircraftCategoryClass" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="e.g. ASEL" />
+                    <input v-model="inlineEditEntry.aircraftCategoryClass" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="e.g. ASEL" @blur="inlineEditEntry.aircraftCategoryClass = (inlineEditEntry.aircraftCategoryClass || '').trim().toUpperCase()" />
                   </div>
                   <div class="flex-[1.4]">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
@@ -1693,7 +1693,7 @@
               </div>
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
-                <input v-model="inlineEditEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                <input v-model="inlineEditEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" @blur="inlineEditEntry.route = (inlineEditEntry.route || '').trim().toUpperCase()" />
               </div>
             </div>
             
@@ -2175,7 +2175,7 @@
                   <div class="flex gap-2">
                     <div class="flex-[0.6]">
                       <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class</label>
-                      <input v-model="newEntry.aircraftCategoryClass" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="e.g. ASEL" />
+                      <input v-model="newEntry.aircraftCategoryClass" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="e.g. ASEL" @blur="newEntry.aircraftCategoryClass = (newEntry.aircraftCategoryClass || '').trim().toUpperCase()" />
                     </div>
                     <div class="flex-[1.4]">
                       <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
@@ -2185,7 +2185,7 @@
                 </div>
                 <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
-                  <input v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                  <input v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" @blur="newEntry.route = (newEntry.route || '').trim().toUpperCase()" />
                 </div>
               </div>
               
@@ -3797,12 +3797,12 @@
                   {{ currentAircraftInfo.engineType }}
                 </div>
               </div>
-              <div v-if="currentAircraftInfo.category">
+              <div v-if="currentAircraftInfo.category || derivedAircraftCategoryDisplay(currentAircraftInfo)">
                 <div :class="['text-sm font-semibold font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                  Category
+                  Category / class
                 </div>
                 <div :class="['text-base font-quicksand', isDarkMode ? 'text-gray-200' : 'text-gray-700']">
-                  {{ currentAircraftInfo.category }}
+                  {{ derivedAircraftCategoryDisplay(currentAircraftInfo) || currentAircraftInfo.category }}
                 </div>
               </div>
             </div>
@@ -4787,7 +4787,7 @@
     leave-to-class="opacity-0"
   >
     <button
-      v-if="showScrollToTop"
+      v-if="showScrollToTop && !isEntryFormOpen"
       @click="scrollToTop"
       :class="[
         'fixed bottom-6 z-40 transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 border-none p-0',
@@ -4803,6 +4803,28 @@
         alt="Scroll to top"
         class="w-25 h-25"
       />
+    </button>
+  </Transition>
+  <!-- Floating Add Entry button (bottom-right) -->
+  <Transition
+    enter-active-class="transition-opacity duration-200"
+    enter-from-class="opacity-0"
+    enter-to-class="opacity-100"
+    leave-active-class="transition-opacity duration-200"
+    leave-from-class="opacity-100"
+    leave-to-class="opacity-0"
+  >
+    <button
+      v-if="!isEntryFormOpen"
+      type="button"
+      @click="toggleEntryForm"
+      :class="[
+        'fixed bottom-6 right-6 z-40 flex items-center justify-center w-12 h-12 rounded-full shadow-lg transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 font-quicksand font-medium',
+        isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white focus:ring-blue-400' : 'bg-blue-500 hover:bg-blue-600 text-white focus:ring-blue-300'
+      ]"
+      aria-label="Add entry"
+    >
+      <Icon name="ri:add-line" size="24" />
     </button>
   </Transition>
   <!-- End root div -->
@@ -5572,6 +5594,7 @@ async function saveInlineEdit(): Promise<void> {
   const updatedEntry: LogEntry = {
     ...inlineEditEntry.value,
     aircraftCategoryClass: normalizeCategoryClassLabel((inlineEditEntry.value.aircraftCategoryClass || '').trim()),
+    route: (inlineEditEntry.value.route || '').trim().toUpperCase(),
     categoryClassTime: normalizeNumber(inlineEditEntry.value.categoryClassTime),
     flightTime: flightTimeFields.reduce<FlightTimeBreakdown>((acc, field) => {
       const normalized = normalizeNumber(inlineEditEntry.value!.flightTime[field.key])
@@ -8262,6 +8285,13 @@ async function renameCrewMember(oldName: string, newName: string): Promise<void>
   }
 }
 
+// Show aircraft category as acronym (ASEL, AMEL) in the aircraft modal instead of raw "Fixed wing..."
+function derivedAircraftCategoryDisplay(info: { category?: string; make?: string; model?: string } | null): string {
+  if (!info) return ''
+  const derived = deriveCategoryFromInfoShort(info, '')
+  return derived || ''
+}
+
 // Category/Class normalization and autofill helpers
 function normalizeCategoryClassLabel(value: string): string {
   if (!value) return ''
@@ -8308,7 +8338,7 @@ function normalizeCategoryClassLabel(value: string): string {
   if (/(cessna|piper|beech|diamond|cirrus|mooney)/.test(v)) {
     return 'ASEL'
   }
-  return value.trim()
+  return (value.trim() || '').toUpperCase()
 }
 
 function deriveCategoryFromTextShort(text: string): string {
@@ -9163,6 +9193,43 @@ async function tryPopulateAircraftCategory(registration: string): Promise<void> 
   }
 }
 
+async function tryPopulateAircraftCategoryForInline(registration: string): Promise<void> {
+  if (!inlineEditEntry.value) return
+  try {
+    const reg = (registration || '').toUpperCase().trim()
+    if (!reg) return
+    let derived = ''
+    if (isBrowser) {
+      const cacheRaw = window.localStorage.getItem('logifi://aircraft-cache')
+      if (cacheRaw) {
+        try {
+          const cache = JSON.parse(cacheRaw) as Record<string, any>
+          const cachedInfo = cache[reg]
+          if (cachedInfo) {
+            derived = deriveCategoryFromInfoShort(cachedInfo, inlineEditEntry.value.aircraftMakeModel)
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+    if (!derived) {
+      const info = await lookupAircraft(reg)
+      if (info) {
+        derived = deriveCategoryFromInfoShort(info, inlineEditEntry.value.aircraftMakeModel)
+      }
+    }
+    if (!derived && inlineEditEntry.value.aircraftMakeModel) {
+      derived = deriveCategoryFromTextShort(inlineEditEntry.value.aircraftMakeModel)
+    }
+    if (derived && inlineEditEntry.value) {
+      inlineEditEntry.value.aircraftCategoryClass = normalizeCategoryClassLabel(derived)
+    }
+  } catch {
+    // Silent fail
+  }
+}
+
 function cancelEditing(): void {
   showDuplicateOverrideDialog.value = false
   resetForm()
@@ -9906,25 +9973,8 @@ async function autoCalculateNightTime(
     console.error('[NightTime] Failed to get departure airport coordinates for:', departure)
     return null
   }
-  
-  // Get destination coordinates (optional, for more accurate calculation on long flights)
-  let destCoords = getAirportCoordsFromCache(destination)
-  console.log('[NightTime] Destination coords from cache:', destCoords)
-  
-  if (!destCoords && destination) {
-    console.log('[NightTime] Looking up destination airport:', destination)
-    const destInfo = await lookupAirport(destination)
-    console.log('[NightTime] Destination airport lookup result:', destInfo)
-    if (destInfo?.latitude && destInfo?.longitude) {
-      // Ensure coordinates are numbers, not strings
-      destCoords = { 
-        lat: typeof destInfo.latitude === 'string' ? parseFloat(destInfo.latitude) : destInfo.latitude, 
-        lon: typeof destInfo.longitude === 'string' ? parseFloat(destInfo.longitude) : destInfo.longitude 
-      }
-      console.log('[NightTime] Using destination coords from lookup:', destCoords)
-    }
-  }
-  
+
+  // Night time uses departure only (single location) to match common logbook behavior
   // Normalize date to YYYY-MM-DD format
   // Date inputs use YYYY-MM-DD, but we might also receive MM/DD/YYYY
   let normalizedDate = date
@@ -9961,29 +10011,23 @@ async function autoCalculateNightTime(
     return null
   }
   
-  // Ensure all coordinates are numbers
   const depLat = typeof depCoords.lat === 'number' ? depCoords.lat : parseFloat(String(depCoords.lat))
   const depLon = typeof depCoords.lon === 'number' ? depCoords.lon : parseFloat(String(depCoords.lon))
-  const destLat = destCoords ? (typeof destCoords.lat === 'number' ? destCoords.lat : parseFloat(String(destCoords.lat))) : undefined
-  const destLon = destCoords ? (typeof destCoords.lon === 'number' ? destCoords.lon : parseFloat(String(destCoords.lon))) : undefined
-  
-  console.log('[NightTime] Calling calculateNightTime with:', {
+
+  // Use departure-only (single location) for night time so results align with common logbooks
+  console.log('[NightTime] Calling calculateNightTime (departure only):', {
     date: normalizedDate,
     depLatitude: depLat,
     depLongitude: depLon,
-    destLatitude: destLat,
-    destLongitude: destLon,
     outTime: outTimeFormatted,
     inTime: inTimeFormatted,
     isZulu
   })
-  
+
   const result = calculateNightTime({
     date: normalizedDate,
     depLatitude: depLat,
     depLongitude: depLon,
-    destLatitude: destLat,
-    destLongitude: destLon,
     outTime: outTimeFormatted,
     inTime: inTimeFormatted,
     isZulu
@@ -10204,7 +10248,7 @@ async function submitEntry(): Promise<void> {
     flightNumber: newEntry.flightNumber?.trim() || null,
     departure: newEntry.departure.trim(),
     destination: newEntry.destination.trim(),
-    route: newEntry.route.trim(),
+    route: (newEntry.route || '').trim().toUpperCase(),
     trainingElements: newEntry.trainingElements.trim(),
     trainingInstructor: newEntry.trainingInstructor.trim(),
     instructorCertificate: newEntry.instructorCertificate.trim(),
@@ -10238,6 +10282,17 @@ async function submitEntry(): Promise<void> {
   // Debug: Log the flightTime object being saved
   console.log('[SaveEntry] FlightTime being saved:', baseEntry.flightTime)
   console.log('[SaveEntry] Night time value:', baseEntry.flightTime.night)
+
+  // Defensive logging for unreplicated save errors (Phase 1)
+  const savePayloadSummary = {
+    editingEntryId: editingEntryId.value,
+    date: baseEntry.date,
+    totalTime: baseEntry.flightTime?.total,
+    departure: baseEntry.departure,
+    destination: baseEntry.destination,
+    registration: baseEntry.registration
+  }
+  console.log('[SaveEntry] Payload summary:', savePayloadSummary)
 
   // Check for duplicates before saving (always check, but exclude current entry if editing)
   if (isAuthenticated.value && user.value) {
@@ -10306,6 +10361,16 @@ async function submitEntry(): Promise<void> {
     }
   }
 
+  // Past date alone is not a flaggable offense: only set flagged when save-anyway and issues are not solely past-date
+  const allValidationResults = [...validationErrors.value, ...validationWarnings.value]
+  const onlyPastDateIssues = allValidationResults.length > 0 && allValidationResults.every(
+    (r) => r.field === 'date' && (
+      (r.message || '').includes('before 1900') ||
+      (r.message || '').includes('more than 100 years')
+    )
+  )
+  const shouldFlag = saveAnywayValidation.value && !onlyPastDateIssues
+
   // LOCAL-FIRST: Always save to IndexedDB first, then queue for sync
   try {
     // Generate entry ID if new entry
@@ -10315,7 +10380,7 @@ async function submitEntry(): Promise<void> {
     const entryToSave: LogEntry = {
       ...baseEntry,
       id: entryId,
-      flagged: saveAnywayValidation.value,
+      flagged: shouldFlag,
       isImported: false
     }
 
@@ -10357,7 +10422,7 @@ async function submitEntry(): Promise<void> {
       flight_time: baseEntry.flightTime,
       performance: baseEntry.performance,
       oooi: baseEntry.oooi || null,
-      flagged: saveAnywayValidation.value,
+      flagged: shouldFlag,
       is_imported: false
     }
 
@@ -10389,7 +10454,12 @@ async function submitEntry(): Promise<void> {
     // No need to wait for it here - IndexedDB is the source of truth
 
   } catch (error) {
-    console.error('Error saving entry to IndexedDB:', error)
+    console.error('[SaveEntry] Error saving entry:', error)
+    console.error('[SaveEntry] Payload summary at error:', savePayloadSummary)
+    if (error instanceof Error) {
+      console.error('[SaveEntry] Error message:', error.message)
+      console.error('[SaveEntry] Error stack:', error.stack)
+    }
     successMessage.value = 'Error saving entry. Please try again.'
     validationError.value = error instanceof Error ? error.message : 'Failed to save entry'
     return
@@ -11498,6 +11568,9 @@ function selectAircraftForNewEntry(aircraft: { registration: string; makeModel: 
   newEntry.aircraftMakeModel = aircraft.makeModel
   showIdentDropdown.value = false
   highlightedIdentIndex.value = -1
+  if (!(newEntry.aircraftCategoryClass || '').trim()) {
+    tryPopulateAircraftCategory(newEntry.registration)
+  }
 }
 
 function selectAircraftForInlineEdit(aircraft: { registration: string; makeModel: string }): void {
@@ -11506,20 +11579,29 @@ function selectAircraftForInlineEdit(aircraft: { registration: string; makeModel
   inlineEditEntry.value.aircraftMakeModel = aircraft.makeModel
   showInlineIdentDropdown.value = false
   highlightedInlineIdentIndex.value = -1
+  if (!(inlineEditEntry.value.aircraftCategoryClass || '').trim()) {
+    tryPopulateAircraftCategoryForInline(inlineEditEntry.value.registration)
+  }
 }
 
 // Blur handlers for Ident dropdowns (with delay to allow click to register)
 function handleIdentBlur(): void {
-  window.setTimeout(() => { 
+  window.setTimeout(() => {
     showIdentDropdown.value = false
     highlightedIdentIndex.value = -1
+    if (!(newEntry.aircraftCategoryClass || '').trim() && (newEntry.registration || '').trim()) {
+      tryPopulateAircraftCategory(newEntry.registration)
+    }
   }, 150)
 }
 
 function handleInlineIdentBlur(): void {
-  window.setTimeout(() => { 
+  window.setTimeout(() => {
     showInlineIdentDropdown.value = false
     highlightedInlineIdentIndex.value = -1
+    if (inlineEditEntry.value && !(inlineEditEntry.value.aircraftCategoryClass || '').trim() && (inlineEditEntry.value.registration || '').trim()) {
+      tryPopulateAircraftCategoryForInline(inlineEditEntry.value.registration)
+    }
   }, 150)
 }
 
@@ -11656,30 +11738,22 @@ async function checkAndAutoLogCrossCountry(): Promise<void> {
               }
             }
           } else if (crossCountryResult?.autoFix && crossCountryResult.autoFix.field === 'crossCountry') {
-            // Only auto-fill if distance >= 50nm (indicated by presence of autoFix)
-            // The autoFix is only provided when coordinates are available and distance >= 50nm
-            const autoFixValue = crossCountryResult.autoFix.value as number
-            const currentXcTime = getNumValue(newEntry.flightTime.crossCountry)
+            // When distance >= 50nm, XC time = total time. Use current total so we stay in sync when OOOI updates total.
             const currentTotalTime = getNumValue(newEntry.flightTime.total)
-            
-            // Check if XC time was previously auto-filled from air time (OFF→ON) and needs updating to block time (OUT→IN)
-            // This happens when IN is entered after ON, updating total time from air time to block time
-            const wasAutoFilledFromAirTime = currentXcTime > 0 && 
-                                             lastKnownXcTime.value !== null &&
-                                             Math.abs(currentXcTime - lastKnownXcTime.value) < 0.01 &&
-                                             Math.abs(currentXcTime - currentTotalTime) > 0.1 // XC doesn't match new total
-            
-            // Only auto-fill/update if:
-            // 1. We have a valid auto-fix value (which means distance was validated as >= 50nm)
-            // 2. Cross-country time is currently 0 or null, OR it was auto-filled from air time and needs updating
-            // 3. XC time was NOT manually set by the user
-            if (autoFixValue > 0 && 
-                ((!newEntry.flightTime.crossCountry || newEntry.flightTime.crossCountry === 0) || wasAutoFilledFromAirTime) &&
-                !xcTimeManuallySet.value) {
-              newEntry.flightTime.crossCountry = autoFixValue
-              lastKnownXcTime.value = autoFixValue
-              // Also check the cross-country checkbox (use correct value, not label)
-              // Normalize any existing 'Cross-Country' label to 'crossCountry' value
+            const currentXcTime = getNumValue(newEntry.flightTime.crossCountry)
+            const totalValid = currentTotalTime > 0 && currentTotalTime <= 24
+            const wasAutoFilledFromAirTime = currentXcTime > 0 &&
+              lastKnownXcTime.value !== null &&
+              Math.abs(currentXcTime - lastKnownXcTime.value) < 0.01 &&
+              Math.abs(currentXcTime - currentTotalTime) > 0.1
+            const shouldSetXc =
+              totalValid &&
+              !xcTimeManuallySet.value &&
+              ((!newEntry.flightTime.crossCountry || newEntry.flightTime.crossCountry === 0) || wasAutoFilledFromAirTime)
+            if (shouldSetXc) {
+              const xcValue = Math.round(currentTotalTime * 10) / 10
+              newEntry.flightTime.crossCountry = xcValue
+              lastKnownXcTime.value = xcValue
               const indexCrossCountryLabel = newEntry.flightConditions.indexOf('Cross-Country')
               if (indexCrossCountryLabel > -1) {
                 newEntry.flightConditions.splice(indexCrossCountryLabel, 1)
