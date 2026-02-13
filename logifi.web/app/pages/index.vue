@@ -19,7 +19,7 @@
     :is-open="showAuditTrail"
     :entry-id="auditTrailEntryId"
     :is-dark-mode="isDarkMode"
-    :local-entry="logEntries.find(e => e.id === auditTrailEntryId)"
+    :local-entry="logEntries?.find(e => e.id === auditTrailEntryId)"
     @close="showAuditTrail = false"
     @restored="handleEntryRestored"
   />
@@ -847,9 +847,37 @@
                   : 'bg-gray-100 border-gray-300 shadow-sm'
               ]">
                 <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <h2 :class="['text-lg font-quicksand font-semibold', isDarkMode ? 'text-white' : 'text-gray-900']">
-                  Totals Overview
-                </h2>
+                  <div class="flex flex-wrap items-center gap-3">
+                    <h2 :class="['text-lg font-quicksand font-semibold', isDarkMode ? 'text-white' : 'text-gray-900']">
+                      Totals Overview
+                    </h2>
+                    <div class="flex rounded-lg border p-0.5" :class="isDarkMode ? 'border-gray-600 bg-gray-700' : 'border-gray-300 bg-gray-200'">
+                      <button
+                        type="button"
+                        :class="[
+                          'px-3 py-1.5 rounded-md text-xs font-quicksand transition-colors',
+                          totalsViewMode === 'flight'
+                            ? (isDarkMode ? 'bg-gray-600 text-white' : 'bg-white text-gray-900 shadow-sm')
+                            : (isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-600 hover:text-gray-900')
+                        ]"
+                        @click="setActiveLogbook('flight')"
+                      >
+                        Flight
+                      </button>
+                      <button
+                        type="button"
+                        :class="[
+                          'px-3 py-1.5 rounded-md text-xs font-quicksand transition-colors',
+                          totalsViewMode === 'sim'
+                            ? (isDarkMode ? 'bg-gray-600 text-white' : 'bg-white text-gray-900 shadow-sm')
+                            : (isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-600 hover:text-gray-900')
+                        ]"
+                        @click="setActiveLogbook('simulator')"
+                      >
+                        Sim
+                      </button>
+                    </div>
+                  </div>
                   <div class="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
@@ -920,7 +948,8 @@
                     </div>
                   </div>
                 </div>
-                <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                <!-- Flight totals (airplane time) -->
+                <div v-if="totalsViewMode === 'flight'" class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                   <div
                     v-for="summaryField in summaryFields"
                     :key="summaryField.key"
@@ -957,8 +986,46 @@
                     ]">
                       {{ formatTotalValue(summaryField.key) }}
                     </p>
-          </div>
-        </div>
+                  </div>
+                </div>
+                <!-- Sim totals (same categories as Flight; Total Time = sim total, FFS/FTD/ATD from sim, others 0) -->
+                <div v-else class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                  <div
+                    v-for="summaryField in summaryFields"
+                    :key="summaryField.key"
+                    :class="[
+                      'rounded-xl border px-4 py-5 text-left transition-all duration-300 relative overflow-hidden group',
+                      summaryField.key === 'totalTime'
+                        ? (isDarkMode 
+                            ? 'bg-gray-800/80 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.15)]'
+                            : 'bg-gray-100 border-blue-200 shadow-md shadow-blue-100')
+                        : (isDarkMode 
+                            ? 'bg-gray-800/50 border-gray-700 hover:bg-gray-800' 
+                            : 'bg-gray-100 border-gray-200 hover:bg-gray-200 shadow-sm')
+                    ]"
+                  >
+                    <div v-if="summaryField.key === 'totalTime'" class="absolute -right-6 -top-6 w-24 h-24 bg-blue-500/10 rounded-full blur-xl group-hover:bg-blue-500/20 transition-colors duration-500"></div>
+                    <p :class="[
+                      'text-xs uppercase tracking-wider font-semibold font-quicksand relative z-10',
+                      summaryField.key === 'totalTime'
+                        ? (isDarkMode ? 'text-blue-400' : 'text-blue-600')
+                        : (isDarkMode ? 'text-gray-400' : 'text-gray-500')
+                    ]">
+                      {{ summaryField.label }}
+                    </p>
+                    <p :class="[
+                      'font-semibold font-quicksand mt-2 relative z-10',
+                      summaryField.key === 'totalTime'
+                        ? 'text-3xl tracking-tight'
+                        : 'text-2xl',
+                      summaryField.key === 'totalTime'
+                        ? (isDarkMode ? 'text-white drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'text-gray-900')
+                        : (isDarkMode ? 'text-gray-200' : 'text-gray-900')
+                    ]">
+                      {{ formatSimTotalValue(summaryField.key) }}
+                    </p>
+                  </div>
+                </div>
     </div>
               <div :class="[
                 'p-6 rounded-2xl border text-left transition-colors duration-300',
@@ -1246,7 +1313,7 @@
                           {{ formatDisplayDate(entry.date) }}
                         </div>
                         <div :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                          {{ entry.role }}
+                          {{ roleDisplayLabel(entry.role) }}
                           </div>
                         </div>
                       </template>
@@ -1344,7 +1411,7 @@
                       </template>
                       <!-- Approach Column -->
                       <template v-else-if="col.key === 'approach'">
-                        {{ entry.performance.approachCount ?? '—' }}
+                        {{ getTotalApproachCount(entry.performance) || '—' }}
                       </template>
                       <!-- Pilots Column -->
                       <template v-else-if="col.key === 'pilots'">
@@ -1554,7 +1621,7 @@
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Role</label>
                 <select v-model="inlineEditEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
-                  <option v-for="role in roleOptions" :key="role" :value="role">{{ role }}</option>
+                  <option v-for="role in roleOptions" :key="role" :value="role">{{ roleDisplayLabel(role) }}</option>
                 </select>
               </div>
               <div>
@@ -1596,6 +1663,8 @@
                   </button>
                 </div>
               </div>
+            </div>
+            <div class="grid gap-4 md:grid-cols-4 mb-2 items-end">
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Flight Number</label>
                 <input 
@@ -1605,6 +1674,57 @@
                   autocomplete="off"
                   placeholder="Optional"
                 />
+              </div>
+              <div v-if="showInlineSimSection && inlineEditEntry">
+                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Type</label>
+                <select
+                  :value="getSelectedSimType(inlineEditEntry)"
+                  :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                  @change="setSimType(inlineEditEntry, ($event.target as HTMLSelectElement).value as '' | 'FFS' | 'FTD' | 'ATD')"
+                >
+                  <option value="">—</option>
+                  <option v-for="opt in categoryClassSimOptions" :key="opt" :value="opt">{{ opt }}</option>
+                </select>
+              </div>
+              <div v-if="showInlineSimSection && inlineEditEntry">
+                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
+                <input
+                  :value="getSimTimeDisplayValue(inlineEditEntry)"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="0.0"
+                  :disabled="!getSelectedSimType(inlineEditEntry)"
+                  :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300', !getSelectedSimType(inlineEditEntry) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                  @input="(e) => {
+                    const sel = getSelectedSimType(inlineEditEntry);
+                    if (!sel) return;
+                    const input = e.target as HTMLInputElement;
+                    const val = input.value.trim();
+                    if (val === '' || val === '-') { inlineEditEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = null; return; }
+                    const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+                    inlineEditEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = !isNaN(num) && isFinite(num) ? num : null;
+                  }"
+                  @blur="(e) => {
+                    const sel = getSelectedSimType(inlineEditEntry);
+                    if (!sel) return;
+                    const input = e.target as HTMLInputElement;
+                    const val = inlineEditEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'];
+                    if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                  }"
+                />
+              </div>
+              <div class="md:col-start-4">
+                <button
+                  type="button"
+                  @click="showInlineSimSection = !showInlineSimSection"
+                  :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors w-full',
+                    showInlineSimSection
+                      ? (isDarkMode ? 'bg-blue-900/30 text-blue-300 border-blue-700' : 'bg-blue-100 text-blue-700 border-blue-200')
+                      : (isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200')
+                  ]"
+                >
+                  {{ showInlineSimSection ? 'Simulator active' : '+ Simulator' }}
+                </button>
               </div>
             </div>
 
@@ -1680,10 +1800,18 @@
                 </div>
               </div>
               <div>
+                <!-- Category/Class row (aircraft only) -->
                 <div class="flex gap-2">
                   <div class="flex-[0.6]">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class</label>
-                    <input v-model="inlineEditEntry.aircraftCategoryClass" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="e.g. ASEL" @blur="inlineEditEntry.aircraftCategoryClass = (inlineEditEntry.aircraftCategoryClass || '').trim().toUpperCase()" />
+                    <select
+                      :value="categoryClassAircraftOptions.includes(inlineEditEntry.aircraftCategoryClass as any) ? inlineEditEntry.aircraftCategoryClass : ''"
+                      :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                      @change="inlineEditEntry.aircraftCategoryClass = ($event.target as HTMLSelectElement).value"
+                    >
+                      <option value="">—</option>
+                      <option v-for="opt in categoryClassAircraftOptions" :key="opt" :value="opt">{{ opt }}</option>
+                    </select>
                   </div>
                   <div class="flex-[1.4]">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
@@ -1697,24 +1825,24 @@
               </div>
             </div>
             
-            <!-- Flight Times Inline -->
+            <!-- Flight Times Inline (main air time only; sim time is under Category/Class) -->
              <div>
               <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
-              <div class="flex gap-2 w-full">
-                <div v-for="(label, key) in {total: 'Total Time', pic: 'PIC', sic: 'SIC', dual: 'Dual R', solo: 'Solo', night: 'Night', actualInstrument: 'Actual', dualGiven: 'Dual G', crossCountry: 'XC', simulatedInstrument: 'Hood'}" :key="key" class="flex-1">
+              <div class="grid grid-cols-5 gap-3 w-full">
+                <div v-for="field in mainTimeFields" :key="field.key">
                   <div :class="['text-[9px] uppercase font-bold mb-1 text-center whitespace-nowrap', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
-                    {{ label }}
+                    {{ mainTimeShortLabels[field.key] ?? field.label }}
                   </div>
-                    <input 
-                      :value="inlineEditEntry.flightTime[key] === null || inlineEditEntry.flightTime[key] === undefined || inlineEditEntry.flightTime[key] === 0 ? '' : String(inlineEditEntry.flightTime[key])"
-                      type="text"
-                      inputmode="decimal"
-                    :placeholder="'0.0'"
+                  <input
+                    :value="inlineEditEntry.flightTime[field.key] === null || inlineEditEntry.flightTime[field.key] === undefined || inlineEditEntry.flightTime[field.key] === 0 ? '' : String(inlineEditEntry.flightTime[field.key])"
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="0.0"
                     :class="[
                       'w-full rounded border px-2 py-1 text-sm text-center font-mono',
-                      key !== 'total' ? 'cursor-pointer' : '',
+                      field.key !== 'total' ? 'cursor-pointer' : '',
                       isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300',
-                      (inlineEditEntry.flightTime[key] === null || inlineEditEntry.flightTime[key] === 0 || inlineEditEntry.flightTime[key] === undefined)
+                      (inlineEditEntry.flightTime[field.key] === null || inlineEditEntry.flightTime[field.key] === 0 || inlineEditEntry.flightTime[field.key] === undefined)
                         ? (isDarkMode ? 'text-gray-500' : 'text-gray-400')
                         : (isDarkMode ? 'text-white' : 'text-gray-900')
                     ]"
@@ -1722,46 +1850,24 @@
                       if (!inlineEditEntry) return;
                       const input = e.target as HTMLInputElement;
                       const val = input.value.trim();
-                      
-                      // Handle empty input
                       if (val === '' || val === '-') {
-                        inlineEditEntry.flightTime[key as FlightTimeKey] = null;
+                        inlineEditEntry.flightTime[field.key] = null;
                         return;
                       }
-                      
-                      // Remove any non-numeric characters except decimal point and minus
                       const cleaned = val.replace(/[^\d.-]/g, '');
-                      
-                      // Parse as float
                       const num = parseFloat(cleaned);
-                      
-                      if (isNaN(num)) {
-                        // Invalid input - revert to previous value or null
-                        inlineEditEntry.flightTime[key as FlightTimeKey] = null;
-                      } else {
-                        // Ensure it's a valid number (not Infinity, etc.)
-                        inlineEditEntry.flightTime[key as FlightTimeKey] = isFinite(num) ? num : null;
-                      }
+                      inlineEditEntry.flightTime[field.key] = (isNaN(num) ? null : (isFinite(num) ? num : null)) as number | null;
                     }"
-                    @click="key !== 'total' && inlineEditEntry && fillFieldWithTotalTime(key as FlightTimeKey, inlineEditEntry.flightTime.total, true)"
+                    @click="field.key !== 'total' && inlineEditEntry && fillFieldWithTotalTime(field.key, inlineEditEntry.flightTime.total, true)"
                     @blur="(e) => {
                       if (!inlineEditEntry) return;
                       const input = e.target as HTMLInputElement;
-                      const val = inlineEditEntry.flightTime[key];
-                      
-                      // Format display on blur
-                      if (val === null || val === undefined) {
-                        input.value = '';
-                      } else if (val === 0) {
-                        input.value = '0.0';
-                      } else {
-                        // Format to 1 decimal place
-                        input.value = Number(val).toFixed(1);
-                      }
+                      const val = inlineEditEntry.flightTime[field.key];
+                      if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
                     }"
-                    />
-                  </div>
+                  />
                 </div>
+              </div>
              </div>
 
              <!-- Performance Inline -->
@@ -1775,20 +1881,33 @@
                   <input v-model.number="inlineEditEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
                </div>
                <div>
-                  <div class="flex gap-2">
-                    <div class="flex-1">
-                      <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">App #</label>
-                      <input v-model.number="inlineEditEntry.performance.approachCount" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="0" />
-                    </div>
-                    <div class="flex-1">
-                      <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">App Type</label>
-                      <input v-model="inlineEditEntry.performance.approachType" type="text" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="ILS" />
-                    </div>
-                  </div>
-               </div>
-               <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Holds</label>
                   <input v-model.number="inlineEditEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+               </div>
+               <div class="col-span-4">
+                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Approaches</label>
+                  <div class="space-y-1.5">
+                    <div
+                      v-for="(approach, aIdx) in (inlineEditEntry.performance.approaches || [])"
+                      :key="'inline-' + aIdx"
+                      class="flex gap-2 items-center"
+                    >
+                      <select
+                        v-model="approach.type"
+                        :class="['flex-1 max-w-[120px] rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                      >
+                        <option v-for="opt in approachTypeOptions" :key="opt" :value="opt">{{ opt }}</option>
+                        <option value="Other">Other</option>
+                      </select>
+                      <input v-model.number="approach.count" type="number" min="1" class="w-14 rounded border px-2 py-1 text-sm text-center font-mono" :class="isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'" />
+                      <button type="button" aria-label="Remove approach" @click="inlineEditEntry.performance.approaches!.splice(aIdx, 1)" :class="['p-1 rounded', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-500 hover:bg-gray-200']">
+                        <Icon name="ri:close-line" size="16" />
+                      </button>
+                    </div>
+                    <button type="button" @click="(inlineEditEntry.performance.approaches ||= []).push({ type: 'ILS', count: 1 })" :class="['text-xs font-quicksand', isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700']">
+                      + Add approach
+                    </button>
+                  </div>
                </div>
              </div>
 
@@ -1819,6 +1938,22 @@
             </div>
 
             <div>
+              <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Tags</label>
+              <div class="flex flex-wrap gap-2 mb-3">
+                <label
+                  v-for="tag in entryTagOptions"
+                  :key="'inline-' + tag"
+                  :class="[
+                    'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-quicksand cursor-pointer transition-all',
+                    (inlineEditEntry.tags || []).includes(tag)
+                      ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700')
+                      : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-300 bg-gray-100 text-gray-600 hover:border-gray-400')
+                  ]"
+                >
+                  <input v-model="inlineEditEntry.tags" type="checkbox" :value="tag" :class="['h-3.5 w-3.5 rounded']" />
+                  <span>{{ tag }}</span>
+                </label>
+              </div>
               <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Remarks / Applicable 61.51 Notes</label>
               <textarea
                 v-model="inlineEditEntry.remarks"
@@ -2035,12 +2170,12 @@
                 <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Role</label>
                   <select v-model="newEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
-                    <option v-for="role in roleOptions" :key="role" :value="role">{{ role }}</option>
+                    <option v-for="role in roleOptions" :key="role" :value="role">{{ roleDisplayLabel(role) }}</option>
                   </select>
                 </div>
                 <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Aircraft</label>
-                  <input v-model="newEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" required />
+                  <input v-model="newEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" :required="!isLoggingSimTime(newEntry)" />
                 </div>
                 <div class="relative">
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Ident</label>
@@ -2048,7 +2183,7 @@
                     v-model="newEntry.registration" 
                     type="text" 
                     :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
-                    required
+                    :required="!isLoggingSimTime(newEntry)"
                     autocomplete="off"
                     @input="newEntry.registration = ($event.target as HTMLInputElement).value.toUpperCase()"
                     @focus="showIdentDropdown = true; highlightedIdentIndex = filteredAircraftForNewEntry.length > 0 ? 0 : -1"
@@ -2078,6 +2213,8 @@
                     </button>
                   </div>
                 </div>
+              </div>
+              <div class="grid gap-4 md:grid-cols-4 mb-2 items-end">
                 <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Flight Number</label>
                   <input 
@@ -2087,6 +2224,57 @@
                     autocomplete="off"
                     placeholder="Optional"
                   />
+                </div>
+                <div v-if="showSimSection">
+                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Type</label>
+                  <select
+                    :value="getSelectedSimType(newEntry)"
+                    :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                    @change="setSimType(newEntry, ($event.target as HTMLSelectElement).value as '' | 'FFS' | 'FTD' | 'ATD')"
+                  >
+                    <option value="">—</option>
+                    <option v-for="opt in categoryClassSimOptions" :key="opt" :value="opt">{{ opt }}</option>
+                  </select>
+                </div>
+                <div v-if="showSimSection">
+                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
+                  <input
+                    :value="getSimTimeDisplayValue(newEntry)"
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="0.0"
+                    :disabled="!getSelectedSimType(newEntry)"
+                    :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300', !getSelectedSimType(newEntry) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                    @input="(e) => {
+                      const sel = getSelectedSimType(newEntry);
+                      if (!sel) return;
+                      const input = e.target as HTMLInputElement;
+                      const val = input.value.trim();
+                      if (val === '' || val === '-') { newEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = null; return; }
+                      const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+                      newEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = !isNaN(num) && isFinite(num) ? num : null;
+                    }"
+                    @blur="(e) => {
+                      const sel = getSelectedSimType(newEntry);
+                      if (!sel) return;
+                      const input = e.target as HTMLInputElement;
+                      const val = newEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'];
+                      if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                    }"
+                  />
+                </div>
+                <div class="md:col-start-4">
+                  <button
+                    type="button"
+                    @click="showSimSection = !showSimSection"
+                    :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors w-full',
+                      showSimSection
+                        ? (isDarkMode ? 'bg-blue-900/30 text-blue-300 border-blue-700' : 'bg-blue-100 text-blue-700 border-blue-200')
+                        : (isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200')
+                    ]"
+                  >
+                    {{ showSimSection ? 'Simulator active' : '+ Simulator' }}
+                  </button>
                 </div>
               </div>
 
@@ -2172,10 +2360,18 @@
                   </div>
                 </div>
                 <div>
+                  <!-- Category/Class row (aircraft only) -->
                   <div class="flex gap-2">
                     <div class="flex-[0.6]">
                       <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class</label>
-                      <input v-model="newEntry.aircraftCategoryClass" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="e.g. ASEL" @blur="newEntry.aircraftCategoryClass = (newEntry.aircraftCategoryClass || '').trim().toUpperCase()" />
+                      <select
+                        :value="categoryClassAircraftOptions.includes(newEntry.aircraftCategoryClass as any) ? newEntry.aircraftCategoryClass : ''"
+                        :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                        @change="newEntry.aircraftCategoryClass = ($event.target as HTMLSelectElement).value"
+                      >
+                        <option value="">—</option>
+                        <option v-for="opt in categoryClassAircraftOptions" :key="opt" :value="opt">{{ opt }}</option>
+                      </select>
                     </div>
                     <div class="flex-[1.4]">
                       <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
@@ -2189,13 +2385,13 @@
                 </div>
               </div>
               
-              <!-- Flight Times -->
+              <!-- Flight Times (main air time only; sim time is under Category/Class) -->
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
-                <div class="flex gap-2 w-full">
-                  <div v-for="field in flightTimeFields" :key="field.key" class="flex-1">
+                <div class="grid grid-cols-5 gap-3 w-full">
+                  <div v-for="field in mainTimeFields" :key="field.key">
                     <div :class="['text-[9px] uppercase font-bold mb-1 text-center whitespace-nowrap', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
-                      {{ field.key === 'total' ? 'Total Time' : field.key === 'pic' ? 'PIC' : field.key === 'sic' ? 'SIC' : field.key === 'dual' ? 'Dual R' : field.key === 'solo' ? 'Solo' : field.key === 'night' ? 'Night' : field.key === 'actualInstrument' ? 'Actual' : field.key === 'dualGiven' ? 'Dual G' : field.key === 'crossCountry' ? 'XC' : field.key === 'simulatedInstrument' ? 'Hood' : field.label }}
+                      {{ mainTimeShortLabels[field.key] ?? field.label }}
                     </div>
                     <input
                       :value="newEntry.flightTime[field.key] === null || newEntry.flightTime[field.key] === undefined || newEntry.flightTime[field.key] === 0 ? '' : String(newEntry.flightTime[field.key])"
@@ -2276,20 +2472,33 @@
                     <input v-model.number="newEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
                  </div>
                  <div>
-                    <div class="flex gap-2">
-                      <div class="flex-1">
-                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">App #</label>
-                        <input v-model.number="newEntry.performance.approachCount" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="0" />
-                      </div>
-                      <div class="flex-1">
-                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">App Type</label>
-                        <input v-model="newEntry.performance.approachType" type="text" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="ILS" />
-                      </div>
-                    </div>
-                 </div>
-                 <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Holds</label>
                     <input v-model.number="newEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                 </div>
+                 <div class="col-span-4">
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Approaches</label>
+                    <div class="space-y-1.5">
+                      <div
+                        v-for="(approach, aIdx) in (newEntry.performance.approaches || [])"
+                        :key="'new-' + aIdx"
+                        class="flex gap-2 items-center"
+                      >
+                        <select
+                          v-model="approach.type"
+                          :class="['flex-1 max-w-[120px] rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                        >
+                          <option v-for="opt in approachTypeOptions" :key="opt" :value="opt">{{ opt }}</option>
+                          <option value="Other">Other</option>
+                        </select>
+                        <input v-model.number="approach.count" type="number" min="1" class="w-14 rounded border px-2 py-1 text-sm text-center font-mono" :class="isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'" />
+                        <button type="button" aria-label="Remove approach" @click="newEntry.performance.approaches!.splice(aIdx, 1)" :class="['p-1 rounded', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-500 hover:bg-gray-200']">
+                          <Icon name="ri:close-line" size="16" />
+                        </button>
+                      </div>
+                      <button type="button" @click="(newEntry.performance.approaches ||= []).push({ type: 'ILS', count: 1 })" :class="['text-xs font-quicksand', isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700']">
+                        + Add approach
+                      </button>
+                    </div>
                  </div>
                </div>
 
@@ -2317,6 +2526,68 @@
                   />
                   <span>{{ condition.label }}</span>
                 </label>
+              </div>
+
+              <div class="relative">
+                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Tags</label>
+                <button
+                  type="button"
+                  @click="tagsDropdownOpen = !tagsDropdownOpen"
+                  :class="[
+                    'inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-quicksand transition-all',
+                    isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200'
+                  ]"
+                >
+                  <span>{{ (newEntry.tags || []).length ? `Tags (${(newEntry.tags || []).length})` : 'Add tags' }}</span>
+                  <Icon :name="tagsDropdownOpen ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'" size="18" />
+                </button>
+                <div
+                  v-if="tagsDropdownOpen"
+                  :class="['absolute left-0 top-full z-50 mt-1 min-w-[220px] rounded-lg border py-2 shadow-lg', isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-white']"
+                >
+                  <div class="space-y-2 px-2">
+                    <div v-for="tag in fixedTagOptions" :key="tag" class="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        :checked="(newEntry.tags || []).includes(tag)"
+                        :id="'new-tag-' + tag"
+                        :class="['h-3.5 w-3.5 rounded']"
+                        @change="toggleFixedTag(newEntry, tag)"
+                      />
+                      <label :for="'new-tag-' + tag" class="cursor-pointer text-sm font-quicksand">{{ tag }}</label>
+                    </div>
+                  </div>
+                  <div class="mt-2 border-t px-2 pt-2" :class="isDarkMode ? 'border-gray-600' : 'border-gray-200'">
+                    <div class="text-[10px] uppercase font-bold mb-1" :class="isDarkMode ? 'text-gray-500' : 'text-gray-400'">Custom</div>
+                    <div class="flex gap-1">
+                      <input
+                        v-model="customTagInput"
+                        type="text"
+                        placeholder="Label"
+                        class="flex-1 rounded border px-2 py-1 text-sm"
+                        :class="isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'"
+                        @keydown.enter.prevent="addCustomTag(newEntry, customTagInput); customTagInput = ''"
+                      />
+                      <button type="button" @click="addCustomTag(newEntry, customTagInput); customTagInput = ''" :class="['rounded px-2 py-1 text-sm', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
+                    </div>
+                    <div v-if="customTagsFor(newEntry).length" class="mt-1.5 flex flex-wrap gap-1">
+                      <span
+                        v-for="tag in customTagsFor(newEntry)"
+                        :key="tag"
+                        class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+                        :class="isDarkMode ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'"
+                      >
+                        {{ tag }}
+                        <button type="button" aria-label="Remove tag" @click="removeTag(newEntry, tag)" :class="['rounded p-0.5', isDarkMode ? 'hover:bg-gray-500' : 'hover:bg-gray-300']">
+                          <Icon name="ri:close-line" size="14" />
+                        </button>
+                      </span>
+                    </div>
+                  </div>
+                  <div class="mt-2 px-2">
+                    <button type="button" @click="tagsDropdownOpen = false" :class="['w-full rounded py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Done</button>
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -2544,8 +2815,30 @@
                   >
                     {{ hasErrors ? 'Save Despite Errors' : 'Save Anyway' }}
                   </button>
-                  <button 
-                    v-if="!duplicateWarning && !validationWarning"
+                  <template v-if="lastSavedEntry">
+                    <button
+                      type="button"
+                      :class="[
+                        'inline-flex items-center justify-center rounded-lg px-6 py-2 font-semibold font-quicksand transition-all',
+                        isDarkMode ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-600 text-white hover:bg-blue-700'
+                      ]"
+                      @click="prefillForNextFlight(lastSavedEntry!)"
+                    >
+                      Add next flight
+                    </button>
+                    <button
+                      type="button"
+                      :class="[
+                        'inline-flex items-center justify-center rounded-lg px-6 py-2 border font-semibold font-quicksand transition-all',
+                        isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200'
+                      ]"
+                      @click="closeAddEntryAfterSave"
+                    >
+                      Close
+                    </button>
+                  </template>
+                  <button
+                    v-else-if="!duplicateWarning && !validationWarning"
                     type="submit"
                     :class="[
                       'inline-flex items-center justify-center rounded-lg px-6 py-2 font-semibold font-quicksand transition-all',
@@ -4547,12 +4840,15 @@
                 </div>
                 <div v-if="expandedPreviewEntries.has(entry.id)" class="mt-3 pt-3 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
                   <div class="grid grid-cols-2 gap-2 text-xs">
-                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Role:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ entry.role }}</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Role:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ roleDisplayLabel(entry.role) }}</span></div>
                     <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">PIC:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.flightTime.pic ?? 0).toFixed(1) }}h</span></div>
                     <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Night:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.flightTime.night ?? 0).toFixed(1) }}h</span></div>
                     <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">XC:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.flightTime.crossCountry ?? 0).toFixed(1) }}h</span></div>
                     <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Landings:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.performance.dayLandings ?? 0) + (entry.performance.nightLandings ?? 0) }}</span></div>
-                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Approaches:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ entry.performance.approachCount ?? 0 }}</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Approaches:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ getTotalApproachCount(entry.performance) }}</span></div>
+                    <div v-if="(entry.tags || []).length" class="col-span-2 flex flex-wrap gap-1">
+                      <span v-for="t in (entry.tags || [])" :key="t" :class="['inline-block rounded px-1.5 py-0.5 text-xs', isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700']">{{ t }}</span>
+                    </div>
                   </div>
                   <div v-if="entry.remarks" class="mt-2 text-xs" :class="[isDarkMode ? 'text-gray-300' : 'text-gray-600']">
                     {{ entry.remarks }}
@@ -4849,7 +5145,9 @@ import type {
   LogbookColumnConfig,
   LogbookColumnKey,
   PerformanceKey,
-  PerformanceMetrics
+  PerformanceMetrics,
+  getApproachesFromPerformance,
+  getTotalApproachCount
 } from '~/utils/logbookTypes'
 import { useAircraftLookup } from '~/composables/useAircraftLookup'
 import type { AircraftInfo } from '~/composables/useAircraftLookup'
@@ -5024,7 +5322,12 @@ watch(isOnline, (online) => {
   }
 })
 
-const roleOptions = ['PIC', 'SIC', 'Dual Received', 'Solo', 'Safety Pilot'] as const
+const roleOptions = ['PIC', 'SIC', 'Dual Received', 'Solo', 'Safety Pilot', 'Examiner', 'Instructor'] as const
+
+/** Display label for role (e.g. "Student" for "Dual Received") */
+function roleDisplayLabel(role: string): string {
+  return role === 'Dual Received' ? 'Student' : role
+}
 const oooiFields: (keyof OOOITimes)[] = ['out', 'off', 'on', 'in']
 
 const conditionOptions = [
@@ -5045,16 +5348,40 @@ const flightTimeFields: readonly { key: FlightTimeKey; label: string }[] = [
   { key: 'actualInstrument', label: 'Actual Instrument' },
   { key: 'dualGiven', label: 'Dual Given' },
   { key: 'crossCountry', label: 'Cross-Country' },
-  { key: 'simulatedInstrument', label: 'Simulator / Training Device' }
+  { key: 'simulatedInstrument', label: 'Simulator / Training Device' },
+  { key: 'ffs', label: 'FFS (Sim) hrs' },
+  { key: 'ftd', label: 'FTD hrs' },
+  { key: 'atd', label: 'ATD hrs' }
 ] as const
+
+const mainTimeFields = flightTimeFields.filter(
+  (f) => f.key !== 'ffs' && f.key !== 'ftd' && f.key !== 'atd'
+)
+
+const simTimeFields = [
+  { key: 'ffs' as const, label: 'FFS' },
+  { key: 'ftd' as const, label: 'FTD' },
+  { key: 'atd' as const, label: 'ATD' }
+] as const
+
+const mainTimeShortLabels: Record<string, string> = {
+  total: 'Total Time', pic: 'PIC', sic: 'SIC', dual: 'Dual R', solo: 'Solo',
+  night: 'Night', actualInstrument: 'Actual', dualGiven: 'Dual G', crossCountry: 'XC', simulatedInstrument: 'Hood'
+}
+
+// Category/Class dropdown options (Option A: aircraft row + Sim row)
+const categoryClassAircraftOptions = ['ASEL', 'AMEL', 'ASES', 'AMES', 'HELI', 'GYRO', 'GLID', 'BAL', 'AIRS', 'PL', 'WSC-L', 'WSC-S'] as const
+const categoryClassSimOptions = ['FFS', 'FTD', 'ATD'] as const
 
 const performanceFields: readonly { key: PerformanceKey; label: string }[] = [
   { key: 'dayLandings', label: 'Day Landings' },
   { key: 'nightLandings', label: 'Night Landings' },
-  { key: 'approachCount', label: 'Approach Count' },
-  { key: 'approachType', label: 'Approach Type' },
   { key: 'holdingProcedures', label: 'Holding Procedures' }
 ] as const
+
+const approachTypeOptions = ['ILS', 'LOC', 'VOR', 'GPS', 'RNAV', 'LPV', 'LNAV', 'LNAV/VNAV', 'SDF', 'ASR', 'Visual', 'Other'] as const
+
+const fixedTagOptions = ['Checkride', 'Flight Review', 'IPC'] as const
 
 const PILOT_PROFILE_STORAGE_KEY = 'logifi://pilot-profile'
 const CREW_PROFILES_STORAGE_KEY = 'logifi://crew-profiles'
@@ -5125,7 +5452,7 @@ const pilotProfileDefaults: PilotProfilePrefs = {
   certificateNumber: ''
 }
 
-// Available metrics for Totals Overview customization
+// Available metrics for Totals Overview customization (same categories for Flight and Sim)
 type TotalsMetricKey = 
   | 'totalTime'
   | 'soloTime'
@@ -5137,6 +5464,9 @@ type TotalsMetricKey =
   | 'sic'
   | 'dualReceived'
   | 'mostUsedAircraft'
+  | 'ffs'
+  | 'ftd'
+  | 'atd'
 
 const availableTotalsMetrics: readonly { key: TotalsMetricKey; label: string }[] = [
   { key: 'totalTime', label: 'Total Time (hrs)' },
@@ -5148,7 +5478,10 @@ const availableTotalsMetrics: readonly { key: TotalsMetricKey; label: string }[]
   { key: 'dualGiven', label: 'Dual Given (hrs)' },
   { key: 'sic', label: 'SIC (hrs)' },
   { key: 'dualReceived', label: 'Dual Received (hrs)' },
-  { key: 'mostUsedAircraft', label: 'Most Used Aircraft' }
+  { key: 'mostUsedAircraft', label: 'Most Used Aircraft' },
+  { key: 'ffs', label: 'FFS (hrs)' },
+  { key: 'ftd', label: 'FTD (hrs)' },
+  { key: 'atd', label: 'ATD (hrs)' }
 ] as const
 
 // Default selected metrics (Total Time must always be first)
@@ -5519,6 +5852,28 @@ const catalogSections = [
   }
 ] as const satisfies readonly { key: CatalogKey; label: string; icon: string }[]
 
+// Totals view and active logbook must be declared before createBlankEntry() / newEntry (they are used there)
+type TotalsViewMode = 'flight' | 'sim'
+const totalsViewMode = ref<TotalsViewMode>('flight')
+const ACTIVE_LOGBOOK_KEY = 'logifi-active-logbook'
+type ActiveLogbook = 'flight' | 'simulator'
+const activeLogbook = ref<ActiveLogbook>('flight')
+function setActiveLogbook(logbook: ActiveLogbook): void {
+  activeLogbook.value = logbook
+  if (typeof window !== 'undefined' && window.localStorage) {
+    window.localStorage.setItem(ACTIVE_LOGBOOK_KEY, logbook)
+  }
+  totalsViewMode.value = logbook === 'simulator' ? 'sim' : 'flight'
+}
+function loadActiveLogbook(): void {
+  if (typeof window === 'undefined' || !window.localStorage) return
+  const saved = window.localStorage.getItem(ACTIVE_LOGBOOK_KEY)
+  if (saved === 'flight' || saved === 'simulator') {
+    activeLogbook.value = saved
+    totalsViewMode.value = saved === 'simulator' ? 'sim' : 'flight'
+  }
+}
+
 const newEntry = reactive<EditableLogEntry>(createBlankEntry())
 // Track if XC time was manually set by user (to prevent auto-overwrite)
 const xcTimeManuallySet = ref<boolean>(false)
@@ -5533,6 +5888,8 @@ const saveAnyway = ref(false)
 const validationWarning = ref<boolean>(false)
 const saveAnywayValidation = ref(false)
 const isEntryFormOpen = ref(false)
+/** After saving a new entry, hold it so "Add next flight" can prefill departure/date */
+const lastSavedEntry = ref<LogEntry | null>(null)
 const isCommercialMode = ref(false)
 
 // Sticky header refs
@@ -5541,6 +5898,15 @@ const tableHeaderRef = ref<HTMLElement | null>(null)
 const tableContainerRef = ref<HTMLElement | null>(null)
 const tableRef = ref<HTMLTableElement | null>(null)
 const showScrollToTop = ref(false)
+const handleScroll = (): void => {
+  if (!isBrowser) return
+  const scrollTop = window.scrollY || document.documentElement.scrollTop
+  showScrollToTop.value = scrollTop > 300
+}
+const scrollToTop = (): void => {
+  if (!isBrowser) return
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
 const isInlineCommercialMode = ref(false)
 const editingEntryId = ref<string | null>(null)
 const expandedEntryId = ref<string | null>(null)
@@ -5562,6 +5928,10 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
     if (!copy.oooi) {
       copy.oooi = createEmptyOOOI()
     }
+    if (!copy.performance.approaches?.length) {
+      copy.performance.approaches = getApproachesFromPerformance(copy.performance)
+    }
+    if (!Array.isArray(copy.tags)) copy.tags = []
     inlineEditEntry.value = copy
     // Auto-enable commercial mode if OOOI data exists
     if (copy.oooi && Object.values(copy.oooi).some(v => v)) {
@@ -5569,15 +5939,21 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
     } else {
       isInlineCommercialMode.value = false
     }
+    // Open Simulator section if entry has sim time
+    showInlineSimSection.value = getSelectedSimType(copy) !== ''
   }
 }
 
 async function saveInlineEdit(): Promise<void> {
   if (!inlineEditEntry.value) return
   
-  // Basic validation (simplified)
-  if (!inlineEditEntry.value.date || !inlineEditEntry.value.registration) {
-    alert('Date and Aircraft Identification are required.')
+  // Basic validation: date always required; aircraft/ident required only when not logging simulator time
+  if (!inlineEditEntry.value.date) {
+    alert('Date is required.')
+    return
+  }
+  if (!isLoggingSimTime(inlineEditEntry.value) && !(inlineEditEntry.value.registration || '').trim()) {
+    alert('Aircraft Identification is required for flight entries.')
     return
   }
 
@@ -5608,14 +5984,19 @@ async function saveInlineEdit(): Promise<void> {
       }
       return acc
     }, {} as FlightTimeBreakdown),
-    performance: performanceFields.reduce<PerformanceMetrics>((acc, field) => {
-      if (field.key === 'approachType') {
-        acc[field.key] = (inlineEditEntry.value!.performance[field.key] as string | null) ?? null
-      } else {
-        acc[field.key] = inlineEditEntry.value!.performance[field.key] ?? null
-      }
-      return acc
-    }, {} as PerformanceMetrics),
+    performance: (() => {
+      const base = { ...createEmptyPerformance() }
+      performanceFields.forEach((field) => {
+        (base as any)[field.key] = inlineEditEntry.value!.performance[field.key] ?? null
+      })
+      const approaches = (inlineEditEntry.value!.performance.approaches && inlineEditEntry.value!.performance.approaches.length > 0)
+        ? inlineEditEntry.value!.performance.approaches.map((a) => ({ type: (a.type || '').trim() || 'Unknown', count: Math.max(0, a.count || 1) }))
+        : getApproachesFromPerformance(inlineEditEntry.value!.performance)
+      base.approaches = approaches
+      base.approachCount = getTotalApproachCount(base) || null
+      base.approachType = approaches[0]?.type ?? null
+      return base
+    })(),
     flightConditions: sanitizeFlightConditions([...inlineEditEntry.value.flightConditions]),
     oooi: inlineEditEntry.value.oooi && Object.values(inlineEditEntry.value.oooi).some(v => v) ? { ...inlineEditEntry.value.oooi } : undefined
   }
@@ -5654,6 +6035,8 @@ async function saveInlineEdit(): Promise<void> {
         instructor_certificate: updatedEntry.instructorCertificate || null,
         flight_conditions: updatedEntry.flightConditions,
         remarks: updatedEntry.remarks || null,
+        tags: Array.isArray(updatedEntry.tags) ? updatedEntry.tags : [],
+        logbook_type: updatedEntry.logbookType ?? oldEntryData?.logbook_type ?? 'flight',
         flight_time: updatedEntry.flightTime,
         performance: updatedEntry.performance,
         oooi: updatedEntry.oooi || null,
@@ -5750,6 +6133,7 @@ async function saveInlineEdit(): Promise<void> {
         instructorCertificate: dbEntryResult.instructor_certificate || '',
         flightConditions: sanitizeFlightConditions(dbEntryResult.flight_conditions || []),
         remarks: dbEntryResult.remarks || '',
+        logbookType: dbEntryResult.logbook_type === 'simulator' ? 'simulator' : 'flight',
         flightTime: dbEntryResult.flight_time as FlightTimeBreakdown,
         performance: dbEntryResult.performance as PerformanceMetrics,
         oooi: dbEntryResult.oooi as OOOITimes | undefined,
@@ -5771,18 +6155,17 @@ async function saveInlineEdit(): Promise<void> {
       
       const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
       performanceFields.forEach((field) => {
-        if (field.key === 'approachType') {
-          normalizedPerformance[field.key] = (entry.performance?.[field.key] as string | null) ?? null
+        const rawValue = entry.performance?.[field.key]
+        if (typeof rawValue === 'string') {
+          const parsed = parseFloat(rawValue)
+          normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
         } else {
-          const rawValue = entry.performance?.[field.key]
-          if (typeof rawValue === 'string') {
-            const parsed = parseFloat(rawValue)
-            normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
-          } else {
-            normalizedPerformance[field.key] = normalizeNumber(rawValue)
-          }
+          normalizedPerformance[field.key] = normalizeNumber(rawValue)
         }
       })
+      normalizedPerformance.approaches = (entry.performance?.approaches?.length ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance))
+      normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
+      normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
       entry.performance = normalizedPerformance
       
       // Update local state immediately
@@ -5865,9 +6248,15 @@ async function saveInlineEdit(): Promise<void> {
       // Verification is already done - we have the data from updateResult
       // No need to reload, we already updated local state with the returned data
       console.log('[SaveInlineEdit] Save complete - entry persisted and local state updated')
-    } catch (error) {
+    } catch (error: unknown) {
+      const err = error as { message?: string; code?: string; details?: string }
       console.error('[SaveInlineEdit] Error saving entry to Supabase:', error)
-      alert('Error saving entry. Please try again.')
+      console.error('[SaveInlineEdit] Error message:', err?.message ?? String(error))
+      console.error('[SaveInlineEdit] Error code:', err?.code)
+      console.error('[SaveInlineEdit] Error details:', err?.details)
+      console.error('[SaveInlineEdit] Full error JSON:', JSON.stringify(error, null, 2))
+      const userMessage = err?.message ?? (typeof error === 'string' ? error : 'Error saving entry. Please try again.')
+      alert(userMessage)
       return
     }
   } else {
@@ -5919,6 +6308,12 @@ const showToDropdown = ref(false)
 const showInlineToDropdown = ref(false)
 const showPilotNameDropdown = ref(false)
 const showInlinePilotNameDropdown = ref(false)
+const tagsDropdownOpen = ref(false)
+const showInlineTagsDropdown = ref(false)
+const customTagInput = ref('')
+const showSimSection = ref(false)
+const showInlineSimSection = ref(false)
+const customTagInputInline = ref('')
 
 // Highlighted index for keyboard navigation
 const highlightedIdentIndex = ref(-1)
@@ -5963,10 +6358,12 @@ const form8710Warnings = computed<string[]>(() => {
     warnings.push('No entries with valid flight time found. All entries have zero total time.')
   }
   
-  // Check for entries with missing critical fields
-  const entriesWithMissingFields = logEntries.value.filter(e => 
-    !e.date || !e.aircraftCategoryClass || !e.registration
-  )
+  // Check for entries with missing critical fields (sim-only entries don't require aircraft/ident)
+  const entriesWithMissingFields = logEntries.value.filter(e => {
+    if (!e.date) return true
+    if (isLoggingSimTime(e)) return false // simulator time: date (and sim type) are enough
+    return !e.aircraftCategoryClass || !e.registration
+  })
   
   if (entriesWithMissingFields.length > 0) {
     warnings.push(`${entriesWithMissingFields.length} entr${entriesWithMissingFields.length === 1 ? 'y' : 'ies'} missing critical fields (date, category/class, or registration)`)
@@ -6155,6 +6552,7 @@ function exportToCSV(): void {
     'Instructor Certificate',
     'Flight Conditions',
     'Remarks',
+    'Tags',
     'Out',
     'Off',
     'On',
@@ -6252,6 +6650,7 @@ function exportToCSV(): void {
       entry.instructorCertificate || '',
       (entry.flightConditions || []).join('; '),
       entry.remarks || '',
+      (entry.tags || []).join(', '),
       entry.oooi?.out || '',
       entry.oooi?.off || '',
       entry.oooi?.on || '',
@@ -6268,8 +6667,8 @@ function exportToCSV(): void {
       formatTimeValue(entry.flightTime.dualGiven),
       formatCountValue(entry.performance.dayLandings),
       formatCountValue(entry.performance.nightLandings),
-      formatCountValue(entry.performance.approachCount),
-      entry.performance.approachType || '',
+      String(getTotalApproachCount(entry.performance)),
+      getApproachesFromPerformance(entry.performance).map(a => `${a.type} (${a.count})`).join(', ') || '',
       formatCountValue(entry.performance.holdingProcedures),
       // Import metadata
       formatBoolean(entry.isImported),
@@ -7119,6 +7518,12 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
       instructorCertificate: (rawEntry['Instructor Certificate'] || rawEntry.instructorCertificate || '').trim(),
       flightConditions: [],
       remarks: findFieldValue(rawEntry, ['Remarks', 'remarks', 'Comments', 'comments', 'COMMENTS']) || '',
+      tags: (() => {
+        const t = findFieldValue(rawEntry, ['Tags', 'tags'])
+        if (Array.isArray(t)) return t.filter(Boolean)
+        if (typeof t === 'string' && t.trim()) return t.split(/[,;]/).map(s => s.trim()).filter(Boolean)
+        return []
+      })(),
       flightTime: {
         // For Logten imports, we'll calculate total from OOOI times later, so start with null
         // For other imports, use the provided total time
@@ -7171,6 +7576,13 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
         ),
         approachCount: normalizeNumber(rawEntry['Instrument Approaches'] || rawEntry.Approaches || rawEntry.approachCount || rawEntry.performance?.approachCount),
         approachType: findFieldValue(rawEntry, ['Approach Type', 'approach type', 'ApproachType', 'approachType']) || null,
+        approaches: (() => {
+          const count = normalizeNumber(rawEntry['Instrument Approaches'] || rawEntry.Approaches || rawEntry.approachCount || rawEntry.performance?.approachCount) ?? 0
+          const type = (findFieldValue(rawEntry, ['Approach Type', 'approach type', 'ApproachType', 'approachType']) || '').trim() || 'Unknown'
+          if (count > 0) return [{ type, count }]
+          if (type !== 'Unknown') return [{ type, count: 1 }]
+          return []
+        })(),
         holdingProcedures: normalizeNumber(rawEntry['Holding Procedures'] || rawEntry.Hold || rawEntry.holdingProcedures || rawEntry.performance?.holdingProcedures)
       },
       oooi: undefined
@@ -7436,7 +7848,7 @@ async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statist
     dayLandings += entry.performance.dayLandings ?? 0
     nightLandings += entry.performance.nightLandings ?? 0
     totalLandings += (entry.performance.dayLandings ?? 0) + (entry.performance.nightLandings ?? 0)
-    totalApproaches += entry.performance.approachCount ?? 0
+    totalApproaches += getTotalApproachCount(entry.performance)
     
     // Aircraft breakdown
     const aircraftKey = `${entry.aircraftMakeModel} (${entry.registration})`
@@ -7596,6 +8008,7 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
           instructor_certificate: entry.instructorCertificate || null,
           flight_conditions: entry.flightConditions || [],
           remarks: entry.remarks || null,
+          logbook_type: entry.logbookType ?? 'flight',
           flight_time: entry.flightTime,
           performance: entry.performance,
           oooi: entry.oooi || null,
@@ -8486,21 +8899,6 @@ const applyTheme = () => {
   }
 }
 
-// Scroll to top functionality - listen to window scroll
-const handleScroll = () => {
-  if (!isBrowser) return
-  const scrollTop = window.scrollY || document.documentElement.scrollTop
-  showScrollToTop.value = scrollTop > 300
-}
-
-const scrollToTop = () => {
-  if (!isBrowser) return
-  window.scrollTo({
-    top: 0,
-    behavior: 'smooth'
-  })
-}
-
 function sanitizeFlightConditions(conditions: string[]): string[] {
   return (conditions || [])
     .filter(Boolean)
@@ -8531,6 +8929,75 @@ function fillFieldWithTotalTime(fieldKey: FlightTimeKey, totalTime: number | nul
   }
 }
 
+type SimTypeKey = 'FFS' | 'FTD' | 'ATD'
+function getSelectedSimType(entry: { flightTime: { ffs?: number | null; ftd?: number | null; atd?: number | null } }): '' | SimTypeKey {
+  const ft = entry.flightTime
+  // Treat as selected if the key is set (including 0), so the time input is enabled after picking a type
+  if (ft.ffs != null) return 'FFS'
+  if (ft.ftd != null) return 'FTD'
+  if (ft.atd != null) return 'ATD'
+  return ''
+}
+
+/** True when the entry is logging simulator time (FFS/FTD/ATD). Aircraft and Ident are optional in that case. */
+function isLoggingSimTime(entry: { flightTime?: { ffs?: number | null; ftd?: number | null; atd?: number | null } }): boolean {
+  const ft = entry?.flightTime ?? {}
+  return ft.ffs != null || ft.ftd != null || ft.atd != null
+}
+
+function setSimType(entry: { flightTime: { ffs?: number | null; ftd?: number | null; atd?: number | null }; aircraftCategoryClass?: string }, type: '' | SimTypeKey): void {
+  const ft = entry.flightTime
+  if (type === '') {
+    ft.ffs = null
+    ft.ftd = null
+    ft.atd = null
+    return
+  }
+  const key = type.toLowerCase() as 'ffs' | 'ftd' | 'atd'
+  const current = ft[key] ?? 0
+  ft.ffs = type === 'FFS' ? current : null
+  ft.ftd = type === 'FTD' ? current : null
+  ft.atd = type === 'ATD' ? current : null
+  // So sim-only entries display correctly, set aircraftCategoryClass when it's empty or already a sim type
+  const cc = (entry.aircraftCategoryClass || '').toUpperCase()
+  if (!cc || cc === 'FFS' || cc === 'FTD' || cc === 'ATD') {
+    entry.aircraftCategoryClass = type
+  }
+}
+
+function getSimTimeDisplayValue(entry: { flightTime: { ffs?: number | null; ftd?: number | null; atd?: number | null } }): string {
+  const sel = getSelectedSimType(entry)
+  if (!sel) return ''
+  const v = entry.flightTime[sel.toLowerCase() as 'ffs' | 'ftd' | 'atd']
+  return v === null || v === undefined || v === 0 ? '' : String(v)
+}
+
+function toggleFixedTag(entry: { tags?: string[] }, tag: string): void {
+  const tags = entry.tags || (entry.tags = [])
+  const i = tags.indexOf(tag)
+  if (i >= 0) tags.splice(i, 1)
+  else tags.push(tag)
+}
+
+function addCustomTag(entry: { tags?: string[] }, label: string): void {
+  const t = (label || '').trim()
+  if (!t) return
+  const tags = entry.tags || (entry.tags = [])
+  if (!tags.includes(t)) tags.push(t)
+}
+
+function removeTag(entry: { tags?: string[] }, tag: string): void {
+  const tags = entry.tags
+  if (!tags) return
+  const i = tags.indexOf(tag)
+  if (i >= 0) tags.splice(i, 1)
+}
+
+function customTagsFor(entry: { tags?: string[] }): string[] {
+  const tags = entry.tags || []
+  return tags.filter((t) => !fixedTagOptions.includes(t as typeof fixedTagOptions[number]))
+}
+
 function createBlankEntry(): EditableLogEntry {
   return {
     date: '',
@@ -8548,6 +9015,8 @@ function createBlankEntry(): EditableLogEntry {
     instructorCertificate: '',
     flightConditions: [],
     remarks: '',
+    tags: [],
+    logbookType: activeLogbook.value,
     flightTime: createEmptyFlightTime(),
     performance: createEmptyPerformance(),
     oooi: createEmptyOOOI(),
@@ -8574,6 +9043,8 @@ function resetForm(): void {
   validationWarning.value = false
   saveAnywayValidation.value = false
   clearValidation()
+  lastSavedEntry.value = null
+  successMessage.value = null
   Object.assign(newEntry, createBlankEntry())
   editingEntryId.value = null
   // Reset manual XC time tracking when form is reset
@@ -8581,15 +9052,51 @@ function resetForm(): void {
   lastKnownXcTime.value = null
 }
 
+/** Prefill new entry form for "Add next flight": departure = last destination, date = same day; clear rest */
+function prefillForNextFlight(entry: LogEntry): void {
+  lastSavedEntry.value = null
+  successMessage.value = null
+  Object.assign(newEntry, createBlankEntry())
+  newEntry.departure = entry.destination || ''
+  newEntry.date = entry.date ? normalizeDateForInput(entry.date) : newEntry.date
+  duplicateWarning.value = null
+  saveAnyway.value = false
+  validationWarning.value = false
+  saveAnywayValidation.value = false
+  clearValidation()
+  xcTimeManuallySet.value = false
+  lastKnownXcTime.value = null
+}
+
+function closeAddEntryAfterSave(): void {
+  lastSavedEntry.value = null
+  successMessage.value = null
+  Object.assign(newEntry, createBlankEntry())
+  editingEntryId.value = null
+  duplicateWarning.value = null
+  saveAnyway.value = false
+  validationWarning.value = false
+  saveAnywayValidation.value = false
+  clearValidation()
+  xcTimeManuallySet.value = false
+  lastKnownXcTime.value = null
+  isEntryFormOpen.value = false
+}
+
 function toggleEntryForm(): void {
   const willBeOpen = !isEntryFormOpen.value
   isEntryFormOpen.value = willBeOpen
 
-  // If opening the Add Entry form, close any open inline edit
+  // If opening the Add Entry form, close any open inline edit and clear post-save state
   if (willBeOpen) {
     expandedEntryId.value = null
     inlineEditEntry.value = null
     isInlineCommercialMode.value = false
+    lastSavedEntry.value = null
+    successMessage.value = null
+    editingEntryId.value = null
+    Object.assign(newEntry, createBlankEntry())
+    showSimSection.value = activeLogbook.value === 'simulator'
   } else {
     // If closing, reset form if needed
     if (!editingEntryId.value) {
@@ -10193,10 +10700,11 @@ watch(
   { deep: true }
 )
 
-// Watcher to sync Category/Class Time with Total Time (Add Entry form)
+// Watcher to sync Category/Class Time with Total Time (Add Entry form) — only when NOT logging simulator time (sim is a separate logbook)
 watch(
   () => newEntry.categoryClassTime,
   (newVal) => {
+    if (isLoggingSimTime(newEntry)) return
     if (newVal !== null && newVal !== undefined && newVal !== newEntry.flightTime.total) {
       newEntry.flightTime.total = newVal
     }
@@ -10206,17 +10714,19 @@ watch(
 watch(
   () => newEntry.flightTime.total,
   (newVal) => {
+    if (isLoggingSimTime(newEntry)) return
     if (newVal !== null && newVal !== undefined && newVal !== newEntry.categoryClassTime) {
       newEntry.categoryClassTime = newVal
     }
   }
 )
 
-// Watcher to sync Category/Class Time with Total Time (Inline Edit form)
+// Watcher to sync Category/Class Time with Total Time (Inline Edit form) — only when NOT logging simulator time
 watch(
   () => inlineEditEntry.value?.categoryClassTime,
   (newVal) => {
-    if (inlineEditEntry.value && newVal !== null && newVal !== undefined && newVal !== inlineEditEntry.value.flightTime.total) {
+    if (!inlineEditEntry.value || isLoggingSimTime(inlineEditEntry.value)) return
+    if (newVal !== null && newVal !== undefined && newVal !== inlineEditEntry.value.flightTime.total) {
       inlineEditEntry.value.flightTime.total = newVal
     }
   }
@@ -10225,7 +10735,8 @@ watch(
 watch(
   () => inlineEditEntry.value?.flightTime.total,
   (newVal) => {
-    if (inlineEditEntry.value && newVal !== null && newVal !== undefined && newVal !== inlineEditEntry.value.categoryClassTime) {
+    if (!inlineEditEntry.value || isLoggingSimTime(inlineEditEntry.value)) return
+    if (newVal !== null && newVal !== undefined && newVal !== inlineEditEntry.value.categoryClassTime) {
       inlineEditEntry.value.categoryClassTime = newVal
     }
   }
@@ -10254,6 +10765,8 @@ async function submitEntry(): Promise<void> {
     instructorCertificate: newEntry.instructorCertificate.trim(),
     flightConditions: sanitizeFlightConditions([...newEntry.flightConditions]),
     remarks: newEntry.remarks.trim(),
+    tags: Array.isArray(newEntry.tags) ? [...newEntry.tags].filter(Boolean) : [],
+    logbookType: activeLogbook.value,
     flightTime: flightTimeFields.reduce<FlightTimeBreakdown>((acc, field) => {
       const normalized = normalizeNumber(newEntry.flightTime[field.key])
       acc[field.key] = normalized
@@ -10268,14 +10781,20 @@ async function submitEntry(): Promise<void> {
       }
       return acc
     }, {} as FlightTimeBreakdown),
-    performance: performanceFields.reduce<PerformanceMetrics>((acc, field) => {
-      if (field.key === 'approachType') {
-        acc[field.key] = (newEntry.performance[field.key] as string | null) ?? null
-      } else {
-      acc[field.key] = newEntry.performance[field.key] ?? null
-      }
-      return acc
-    }, {} as PerformanceMetrics),
+    performance: (() => {
+      const base = { ...createEmptyPerformance() }
+      performanceFields.forEach((field) => {
+        const v = newEntry.performance[field.key]
+        ;(base as any)[field.key] = v ?? null
+      })
+      const approaches = (newEntry.performance.approaches && newEntry.performance.approaches.length > 0)
+        ? newEntry.performance.approaches.map((a) => ({ type: (a.type || '').trim() || 'Unknown', count: Math.max(0, a.count || 1) }))
+        : []
+      base.approaches = approaches
+      base.approachCount = approaches.reduce((s, a) => s + a.count, 0) || null
+      base.approachType = approaches[0]?.type ?? null
+      return base
+    })(),
     oooi: newEntry.oooi && Object.values(newEntry.oooi).some(v => v) ? { ...newEntry.oooi } : undefined
   }
 
@@ -10419,6 +10938,8 @@ async function submitEntry(): Promise<void> {
       instructor_certificate: baseEntry.instructorCertificate || null,
       flight_conditions: baseEntry.flightConditions,
       remarks: baseEntry.remarks || null,
+      tags: baseEntry.tags && baseEntry.tags.length > 0 ? baseEntry.tags : [],
+      logbook_type: baseEntry.logbookType ?? 'flight',
       flight_time: baseEntry.flightTime,
       performance: baseEntry.performance,
       oooi: baseEntry.oooi || null,
@@ -10450,6 +10971,11 @@ async function submitEntry(): Promise<void> {
     saveAnywayValidation.value = false
     clearValidation()
 
+    // For new entry: offer "Add next flight" (keep panel open). For edit: reset and close below.
+    if (!editingEntryId.value) {
+      lastSavedEntry.value = entryToSave
+    }
+
     // Sync queue will handle Supabase sync in the background
     // No need to wait for it here - IndexedDB is the source of truth
 
@@ -10465,12 +10991,11 @@ async function submitEntry(): Promise<void> {
     return
   }
 
-  resetForm()
-  
-  // Close the add entry panel after successful submission
-  if (!editingEntryId.value) {
+  if (editingEntryId.value) {
+    resetForm()
     isEntryFormOpen.value = false
   }
+  // When !editingEntryId we left lastSavedEntry set; panel stays open for "Add next flight" or "Close"
 }
 
 // Helper function to check if a string is a valid UUID
@@ -10680,24 +11205,22 @@ async function loadEntries(): Promise<void> {
         entry.flightTime = normalizedFlightTime
         
         // Normalize performance values
-        const normalizedPerformance: PerformanceMetrics = {
-          ...createEmptyPerformance()
-        }
+        const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
         performanceFields.forEach((field) => {
-          if (field.key === 'approachType') {
-            normalizedPerformance[field.key] = (entry.performance?.[field.key] as string | null) ?? null
+          const rawValue = entry.performance?.[field.key]
+          if (typeof rawValue === 'string') {
+            const parsed = parseFloat(rawValue)
+            normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
           } else {
-            const rawValue = entry.performance?.[field.key]
-            if (typeof rawValue === 'string') {
-              const parsed = parseFloat(rawValue)
-              normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
-            } else {
-              normalizedPerformance[field.key] = normalizeNumber(rawValue)
-            }
+            normalizedPerformance[field.key] = normalizeNumber(rawValue)
           }
         })
+        normalizedPerformance.approaches = (entry.performance?.approaches?.length ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance))
+        normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
+        normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
         entry.performance = normalizedPerformance
         
+        if (entry.logbookType === undefined) entry.logbookType = getEntryLogbookType(entry)
         return entry
       })
       
@@ -10741,6 +11264,8 @@ async function loadEntries(): Promise<void> {
             instructorCertificate: dbEntry.instructor_certificate || '',
             flightConditions: sanitizeFlightConditions(dbEntry.flight_conditions || []),
             remarks: dbEntry.remarks || '',
+            tags: Array.isArray(dbEntry.tags) ? [...dbEntry.tags] : [],
+            logbookType: dbEntry.logbook_type === 'simulator' ? 'simulator' : 'flight',
             flightTime: dbEntry.flight_time as FlightTimeBreakdown,
             performance: dbEntry.performance as PerformanceMetrics,
             oooi: dbEntry.oooi as OOOITimes | undefined,
@@ -10765,20 +11290,19 @@ async function loadEntries(): Promise<void> {
           
           const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
           performanceFields.forEach((field) => {
-            if (field.key === 'approachType') {
-              normalizedPerformance[field.key] = (entry.performance?.[field.key] as string | null) ?? null
+            const rawValue = entry.performance?.[field.key]
+            if (typeof rawValue === 'string') {
+              const parsed = parseFloat(rawValue)
+              normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
             } else {
-              const rawValue = entry.performance?.[field.key]
-              if (typeof rawValue === 'string') {
-                const parsed = parseFloat(rawValue)
-                normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
-              } else {
-                normalizedPerformance[field.key] = normalizeNumber(rawValue)
-              }
+              normalizedPerformance[field.key] = normalizeNumber(rawValue)
             }
           })
+          normalizedPerformance.approaches = (entry.performance?.approaches?.length ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance))
+          normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
+          normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
           entry.performance = normalizedPerformance
-          
+        
           return entry
         })
         
@@ -10856,23 +11380,19 @@ function loadPersistedEntries(): void {
         })
         
         // Normalize performance values too
-        const normalizedPerformance: PerformanceMetrics = {
-          ...createEmptyPerformance()
-        }
+        const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
         performanceFields.forEach((field) => {
-          if (field.key === 'approachType') {
-            normalizedPerformance[field.key] = (entry.performance?.[field.key] as string | null) ?? null
+          const rawValue = entry.performance?.[field.key]
+          if (typeof rawValue === 'string') {
+            const parsed = parseFloat(rawValue)
+            normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
           } else {
-            const rawValue = entry.performance?.[field.key]
-            // For performance fields, convert strings to numbers
-            if (typeof rawValue === 'string') {
-              const parsed = parseFloat(rawValue)
-              normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
-            } else {
-              normalizedPerformance[field.key] = rawValue ?? null
-            }
+            normalizedPerformance[field.key] = rawValue ?? null
           }
         })
+        normalizedPerformance.approaches = (entry.performance?.approaches?.length ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance))
+        normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
+        normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
         
         return {
           ...entry,
@@ -11080,6 +11600,7 @@ onMounted(async () => {
   loadClockPrefs()
   loadSelectedTotalsMetrics()
   loadColumnConfig()
+  loadActiveLogbook()
   loadPilotProfilePrefs()
   await loadCrewProfiles()
   // Normalize and autofill aircraft category/class labels on load
@@ -11199,6 +11720,14 @@ watch(
   }
 )
 
+function getEntryLogbookType(entry: LogEntry): 'flight' | 'simulator' {
+  if (entry.logbookType === 'flight' || entry.logbookType === 'simulator') return entry.logbookType
+  const ft = entry.flightTime ?? {}
+  const simTime = (ft.ffs ?? 0) + (ft.ftd ?? 0) + (ft.atd ?? 0)
+  const airplaneTotal = Math.max(0, (ft.total ?? 0) - simTime)
+  return simTime > 0 && airplaneTotal === 0 ? 'simulator' : 'flight'
+}
+
 const filteredEntries = computed(() => {
   const term = searchTerm.value.trim().toLowerCase()
   const activeAircraft = new Set(getActiveFilterKeys(selectedFilters.aircraft).map(k => k.toUpperCase()))
@@ -11209,6 +11738,8 @@ const filteredEntries = computed(() => {
   const activeCategoryClass = new Set(getActiveFilterKeys(selectedFilters.categoryClass).map(k => k.toUpperCase()))
 
   const result = logEntries.value.filter((entry) => {
+    if (getEntryLogbookType(entry) !== activeLogbook.value) return false
+
     // text search
     const matchesTerm =
       term.length === 0 ||
@@ -11334,18 +11865,58 @@ const totals = computed(() => {
 
   const performanceAccumulator = performanceFields.reduce<Record<PerformanceKey, any>>(
     (acc, field) => {
-      acc[field.key] = field.key === 'approachType' ? null : 0
+      acc[field.key] = 0
       return acc
     },
-    {} as Record<PerformanceKey, any>
+    { approachCount: 0, approachType: null } as Record<PerformanceKey, any>
   )
 
+  const simOnlyKeys = new Set(['ffs', 'ftd', 'atd'])
+  const simTimeAccumulator = flightTimeFields.reduce<Record<FlightTimeKey, number>>((acc, field) => {
+    acc[field.key] = 0
+    return acc
+  }, {} as Record<FlightTimeKey, number>)
+
   entriesForTotals.value.forEach((entry) => {
+    const ft = entry.flightTime ?? {}
+    const simTime = (ft.ffs ?? 0) + (ft.ftd ?? 0) + (ft.atd ?? 0)
+    const hasSimTime = simTime > 0
+    const entryTotal = ft.total ?? 0
+    const airplaneTotal = Math.max(0, entryTotal - simTime)
+    const ratio = entryTotal > 0 ? airplaneTotal / entryTotal : 0
+
+    if (hasSimTime) {
+      simTimeAccumulator.total += simTime
+      simTimeAccumulator.ffs += ft.ffs ?? 0
+      simTimeAccumulator.ftd += ft.ftd ?? 0
+      simTimeAccumulator.atd += ft.atd ?? 0
+      simTimeAccumulator.pic += ft.pic ?? 0
+      simTimeAccumulator.sic += ft.sic ?? 0
+      simTimeAccumulator.dual += ft.dual ?? 0
+      simTimeAccumulator.solo += ft.solo ?? 0
+      simTimeAccumulator.night += ft.night ?? 0
+      simTimeAccumulator.actualInstrument += ft.actualInstrument ?? 0
+      simTimeAccumulator.simulatedInstrument += ft.simulatedInstrument ?? 0
+      simTimeAccumulator.crossCountry += ft.crossCountry ?? 0
+      simTimeAccumulator.dualGiven += ft.dualGiven ?? 0
+    }
+
     flightTimeFields.forEach((field) => {
-      const rawValue = entry.flightTime[field.key]
+      if (simOnlyKeys.has(field.key)) {
+        timeAccumulator[field.key] += (ft[field.key] ?? 0)
+        return
+      }
+      if (hasSimTime) {
+        if (field.key === 'total') {
+          timeAccumulator.total += airplaneTotal
+        } else {
+          timeAccumulator[field.key] += ((ft[field.key] ?? 0) * ratio)
+        }
+        return
+      }
+      const rawValue = ft[field.key]
       const value = rawValue ?? 0
       timeAccumulator[field.key] += value
-      // Debug logging for night time (log all entries, not just > 0)
       if (field.key === 'night') {
         console.log('[Totals] Processing entry night time:', {
           entryId: entry.id,
@@ -11358,19 +11929,14 @@ const totals = computed(() => {
       }
     })
     performanceFields.forEach((field) => {
-      // Skip approachType since it's a string, not a number
-      if (field.key !== 'approachType') {
-        performanceAccumulator[field.key] += (entry.performance[field.key] as number) ?? 0
-      }
+      performanceAccumulator[field.key] += (entry.performance[field.key] as number) ?? 0
     })
+    performanceAccumulator.approachCount += getTotalApproachCount(entry.performance)
   })
-  
-  // Debug logging for final totals
-  console.log('[Totals] Final night time total:', timeAccumulator.night, 'from', entriesForTotals.value.length, 'entries')
-  console.log('[Totals] All time totals:', timeAccumulator)
 
   return {
     time: timeAccumulator,
+    simTime: simTimeAccumulator,
     performance: performanceAccumulator,
     count: entriesForTotals.value.length
   }
@@ -12175,7 +12741,43 @@ function formatTotalValue(key: TotalsMetricKey): string {
   if (key === 'mostUsedAircraft') {
     return mostUsedAircraft.value || '—'
   }
+  if (key === 'ffs') {
+    return safeNumber(totals.value.time.ffs).toFixed(1)
+  }
+  if (key === 'ftd') {
+    return safeNumber(totals.value.time.ftd).toFixed(1)
+  }
+  if (key === 'atd') {
+    return safeNumber(totals.value.time.atd).toFixed(1)
+  }
   return '—'
+}
+
+/** Value for a totals metric when viewing Sim (from simulator entries: dual, instrument, pic, etc. included) */
+function formatSimTotalValue(key: TotalsMetricKey): string {
+  const safeNumber = (val: any): number => {
+    const num = typeof val === 'number' ? val : Number(val) ?? 0
+    return isNaN(num) || !isFinite(num) ? 0 : num
+  }
+  const sim = totals.value.simTime ?? totals.value.time
+  const t = totals.value.time
+  if (key === 'totalTime') return safeNumber(sim.total).toFixed(1)
+  if (key === 'ffs') return safeNumber(sim.ffs ?? t.ffs).toFixed(1)
+  if (key === 'ftd') return safeNumber(sim.ftd ?? t.ftd).toFixed(1)
+  if (key === 'atd') return safeNumber(sim.atd ?? t.atd).toFixed(1)
+  if (key === 'soloTime') return safeNumber(sim.solo).toFixed(1)
+  if (key === 'picTime') return safeNumber(sim.pic).toFixed(1)
+  if (key === 'nightTime') return safeNumber(sim.night).toFixed(1)
+  if (key === 'instrumentTime') {
+    const inst = safeNumber(sim.actualInstrument) + safeNumber(sim.simulatedInstrument)
+    return inst.toFixed(1)
+  }
+  if (key === 'crossCountry') return safeNumber(sim.crossCountry).toFixed(1)
+  if (key === 'dualGiven') return safeNumber(sim.dualGiven).toFixed(1)
+  if (key === 'sic') return safeNumber(sim.sic).toFixed(1)
+  if (key === 'dualReceived') return safeNumber(sim.dual).toFixed(1)
+  if (key === 'mostUsedAircraft') return '—'
+  return '0.0'
 }
 
 function conditionLabel(value: string): string {

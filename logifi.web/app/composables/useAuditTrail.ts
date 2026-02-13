@@ -310,7 +310,10 @@ export const useAuditTrail = () => {
     actualInstrument: 'Actual Instrument',
     simulatedInstrument: 'Simulated Instrument',
     crossCountry: 'Cross Country',
-    dualGiven: 'Dual Given'
+    dualGiven: 'Dual Given',
+    ffs: 'FFS (Sim)',
+    ftd: 'FTD',
+    atd: 'ATD'
   }
   const PERFORMANCE_LABELS: Record<string, string> = {
     approachCount: 'Approach Count',

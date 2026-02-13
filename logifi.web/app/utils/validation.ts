@@ -530,6 +530,18 @@ export function validateCrossCountry(
 }
 
 /**
+ * True when the entry is logging simulator time (FFS/FTD/ATD).
+ * For these entries, aircraft/ident, departure/destination, and PIC/Solo/SIC/Dual are not required,
+ * since the form may also copy sim time into Total and we still want relaxed rules.
+ */
+function isSimulatorOnlyEntry(entry: LogEntry): boolean {
+  const ft = entry.flightTime ?? {}
+  const simTime =
+    getNumericValue(ft.ffs) + getNumericValue(ft.ftd) + getNumericValue(ft.atd)
+  return simTime > 0
+}
+
+/**
  * Validate Part 61.51(b) required fields for a log entry
  * Per 14 CFR Part 61.51(b), each logbook entry must include:
  * - Date
@@ -539,10 +551,11 @@ export function validateCrossCountry(
  * - PIC time or Solo time (when applicable)
  * - Type of pilot experience or training
  * - Conditions of flight
+ * Simulator-only entries use relaxed rules: aircraft/ident and location are optional.
  */
 export function validatePart61RequiredFields(entry: LogEntry): ValidationResult[] {
   const results: ValidationResult[] = []
-  const flightTime = entry.flightTime || { total: null, pic: null, sic: null, dual: null, solo: null, night: null, actualInstrument: null, simulatedInstrument: null, crossCountry: null, dualGiven: null }
+  const flightTime = entry.flightTime || { total: null, pic: null, sic: null, dual: null, solo: null, night: null, actualInstrument: null, simulatedInstrument: null, crossCountry: null, dualGiven: null, ffs: null, ftd: null, atd: null }
 
   // 1. Date (required per Part 61.51(b))
   if (!entry.date || entry.date.trim() === '') {
@@ -554,13 +567,16 @@ export function validatePart61RequiredFields(entry: LogEntry): ValidationResult[
     })
   }
 
-  // 2. Total flight time OR lesson time (at least one must be > 0)
+  // 2. Total flight time OR lesson time OR simulator time (at least one must be > 0)
   const totalTime = getNumericValue(flightTime.total)
   const dualTime = getNumericValue(flightTime.dual) // Lesson time
+  const simTime = getNumericValue(flightTime.ffs) + getNumericValue(flightTime.ftd) + getNumericValue(flightTime.atd)
   const hasTotalTime = isProvided(flightTime.total) && totalTime > 0
   const hasLessonTime = isProvided(flightTime.dual) && dualTime > 0
+  const hasSimTime = simTime > 0
+  const isSimulatorOnly = hasSimTime
 
-  if (!hasTotalTime && !hasLessonTime) {
+  if (!hasTotalTime && !hasLessonTime && !hasSimTime) {
     results.push({
       type: 'error',
       field: 'total',
@@ -569,77 +585,74 @@ export function validatePart61RequiredFields(entry: LogEntry): ValidationResult[
     })
   }
 
-  // 3. Location: departure AND destination airports (both required)
+  // 3. Location: departure AND destination (required only for non–simulator-only entries)
   const departure = (entry.departure || '').trim()
   const destination = (entry.destination || '').trim()
 
-  if (!departure || departure === '') {
-    results.push({
-      type: 'error',
-      field: 'departure',
-      message: 'Departure airport is required per 14 CFR Part 61.51(b)',
-      suggestion: 'Please enter the departure airport code or location'
-    })
+  if (!isSimulatorOnly) {
+    if (!departure || departure === '') {
+      results.push({
+        type: 'error',
+        field: 'departure',
+        message: 'Departure airport is required per 14 CFR Part 61.51(b)',
+        suggestion: 'Please enter the departure airport code or location'
+      })
+    }
+
+    if (!destination || destination === '') {
+      results.push({
+        type: 'error',
+        field: 'destination',
+        message: 'Destination airport is required per 14 CFR Part 61.51(b)',
+        suggestion: 'Please enter the destination airport code or location'
+      })
+    }
   }
 
-  if (!destination || destination === '') {
-    results.push({
-      type: 'error',
-      field: 'destination',
-      message: 'Destination airport is required per 14 CFR Part 61.51(b)',
-      suggestion: 'Please enter the destination airport code or location'
-    })
-  }
-
-  // 4. Aircraft type and identification
+  // 4. Aircraft type and identification (required only for non–simulator-only entries)
   const categoryClass = (entry.aircraftCategoryClass || '').trim()
   const makeModel = (entry.aircraftMakeModel || '').trim()
   const registration = (entry.registration || '').trim()
 
-  if (!categoryClass || categoryClass === '') {
-    results.push({
-      type: 'error',
-      field: 'aircraftCategoryClass',
-      message: 'Aircraft category and class is required per 14 CFR Part 61.51(b)',
-      suggestion: 'Please enter the aircraft category and class (e.g., "ASEL", "AMEL")'
-    })
+  if (!isSimulatorOnly) {
+    if (!categoryClass || categoryClass === '') {
+      results.push({
+        type: 'error',
+        field: 'aircraftCategoryClass',
+        message: 'Aircraft category and class is required per 14 CFR Part 61.51(b)',
+        suggestion: 'Please enter the aircraft category and class (e.g., "ASEL", "AMEL")'
+      })
+    }
+
+    if (!makeModel || makeModel === '') {
+      results.push({
+        type: 'error',
+        field: 'aircraftMakeModel',
+        message: 'Aircraft make and model is required per 14 CFR Part 61.51(b)',
+        suggestion: 'Please enter the aircraft make and model'
+      })
+    }
+
+    if (!registration || registration === '') {
+      results.push({
+        type: 'error',
+        field: 'registration',
+        message: 'Aircraft identification (registration) is required per 14 CFR Part 61.51(b)',
+        suggestion: 'Please enter the aircraft registration number (N-number)'
+      })
+    }
   }
 
-  if (!makeModel || makeModel === '') {
-    results.push({
-      type: 'error',
-      field: 'aircraftMakeModel',
-      message: 'Aircraft make and model is required per 14 CFR Part 61.51(b)',
-      suggestion: 'Please enter the aircraft make and model'
-    })
-  }
-
-  if (!registration || registration === '') {
-    results.push({
-      type: 'error',
-      field: 'registration',
-      message: 'Aircraft identification (registration) is required per 14 CFR Part 61.51(b)',
-      suggestion: 'Please enter the aircraft registration number (N-number)'
-    })
-  }
-
-  // 5. PIC, Solo, SIC, or Dual Received time (at least one must be logged when applicable)
-  // This is required when logging flight time, but not necessarily for all entries
-  // If total time is logged, we should have at least one of: PIC, Solo, SIC, or Dual Received
-  // Note: dualTime is already declared above (line 559) for lesson time check
-  if (hasTotalTime) {
-    // Check if we have at least one of the required time types
+  // 5. PIC, Solo, SIC, or Dual Received time (required when logging airplane flight time only; skip for sim)
+  if (hasTotalTime && !isSimulatorOnly) {
     const picTime = getNumericValue(flightTime.pic)
     const soloTime = getNumericValue(flightTime.solo)
     const sicTime = getNumericValue(flightTime.sic)
-    // Use dualTime that was already calculated above (line 559)
-    
     const hasPicTime = picTime > 0
     const hasSoloTime = soloTime > 0
     const hasSicTime = sicTime > 0
     const hasDualTime = dualTime > 0
-    
-    // If we don't have any of these time types, show error
+
     if (!hasPicTime && !hasSoloTime && !hasSicTime && !hasDualTime) {
       results.push({
         type: 'error',
@@ -650,24 +663,24 @@ export function validatePart61RequiredFields(entry: LogEntry): ValidationResult[
     }
   }
 
-  // 6. Type of pilot experience (role field must be valid)
-  const validRoles = ['PIC', 'SIC', 'Student', 'Instructor', 'CFI', 'CFII', 'MEI', 'ATP', 'Commercial', 'Private']
+  // 6. Type of pilot experience (role) – required; Dual Received is standard (same as Student for logging)
+  const validRoles = ['PIC', 'SIC', 'Student', 'Instructor', 'CFI', 'CFII', 'MEI', 'ATP', 'Commercial', 'Private', 'Dual Received']
   const role = (entry.role || '').trim()
-  
+  const roleNorm = role.toUpperCase().replace(/\s+/g, ' ')
+
   if (!role || role === '') {
     results.push({
       type: 'error',
       field: 'role',
       message: 'Type of pilot experience or training is required per 14 CFR Part 61.51(b)',
-      suggestion: 'Please select your role for this flight (PIC, SIC, Student, Instructor, etc.)'
+      suggestion: 'Please select your role for this flight (PIC, SIC, Student, Instructor, Dual Received, etc.)'
     })
-  } else if (!validRoles.some(r => role.toUpperCase().includes(r.toUpperCase()))) {
-    // Warn if role doesn't match common values, but don't block
+  } else if (!validRoles.some(r => roleNorm.includes(r.toUpperCase().replace(/\s+/g, ' ')))) {
     results.push({
       type: 'warning',
       field: 'role',
       message: `Role "${role}" may not be a standard pilot experience type`,
-      suggestion: 'Common roles include: PIC, SIC, Student, Instructor, CFI, CFII, MEI, ATP, Commercial, Private'
+      suggestion: 'Common roles include: PIC, SIC, Student, Instructor, CFI, CFII, MEI, ATP, Commercial, Private, Dual Received'
     })
   }
 
