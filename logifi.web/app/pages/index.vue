@@ -219,6 +219,18 @@
                       <Icon name="ri:error-warning-line" size="12" />
                       <span>Sync Error</span>
                     </div>
+                    <button
+                      v-if="queueLength > 0 && isOnline"
+                      type="button"
+                      :disabled="isSyncing"
+                      class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-quicksand font-medium transition-colors disabled:opacity-50"
+                      :class="isDarkMode ? 'bg-blue-600/20 text-blue-400 border border-blue-600/50 hover:bg-blue-600/30' : 'bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200'"
+                      title="Retry syncing pending operations"
+                      @click="retryFailed()"
+                    >
+                      <Icon name="ri:refresh-line" size="12" :class="{ 'animate-spin': isSyncing }" />
+                      <span>Retry sync</span>
+                    </button>
                   </div>
                 </div>
                 <div class="space-y-2 pt-2">
@@ -5196,7 +5208,7 @@ const { validateEntry: validateFlightTimeEntry, validationErrors, validationWarn
 
 // Offline support
 const { isOnline, isSyncing, syncProgress, updateSyncProgress } = useOffline()
-const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync } = useSyncQueue()
+const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync, retryFailed } = useSyncQueue()
 
 // Currency tracking
 const {
@@ -6011,19 +6023,19 @@ async function saveInlineEdit(): Promise<void> {
   // Save to Supabase if authenticated, otherwise save to localStorage
   if (isAuthenticated.value && user.value) {
     try {
-      // Get old entry data before updating
+      // Get old entry data before updating (maybeSingle: 0 rows = null, no throw)
       const { data: oldEntryData, error: fetchError } = await (supabase
         .from('log_entries') as any)
         .select('*')
         .eq('id', targetId)
-        .single()
+        .maybeSingle()
       
       if (fetchError) {
         console.error('[SaveInlineEdit] Failed to fetch old entry data:', fetchError)
         throw fetchError
       }
 
-      // Convert to database format
+      // Convert to database format (id/user_id only for queue insert, not for update body)
       const dbEntry: any = {
         date: updatedEntry.date,
         role: updatedEntry.role,
@@ -6045,7 +6057,7 @@ async function saveInlineEdit(): Promise<void> {
         flight_time: updatedEntry.flightTime,
         performance: updatedEntry.performance,
         oooi: updatedEntry.oooi || null,
-        flagged: oldEntryData?.flagged ?? false,
+        flagged: oldEntryData?.flagged ?? updatedEntry.flagged ?? false,
         is_imported: oldEntryData?.is_imported ?? false,
         import_source: oldEntryData?.import_source ?? null,
         import_batch_id: oldEntryData?.import_batch_id ?? null,
@@ -6053,24 +6065,48 @@ async function saveInlineEdit(): Promise<void> {
         import_metadata: oldEntryData?.import_metadata ?? null
       }
 
+      // Entry not in Supabase yet (0 rows): persist locally and queue for sync
+      if (!oldEntryData) {
+        console.log('[SaveInlineEdit] Entry not in Supabase yet, saving to IndexedDB and queueing for sync')
+        await updateEntryInIndexedDB(updatedEntry)
+        const queueEntry = { ...dbEntry, id: targetId, user_id: user.value.id }
+        await addToQueue('insert', targetId, queueEntry)
+        if (isOnline.value) processQueue()
+        logEntries.value = sortEntriesByDateAndOOOI(
+          logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
+        )
+        expandedEntryId.value = null
+        inlineEditEntry.value = null
+        return
+      }
+
       console.log('[SaveInlineEdit] Updating entry in database:', targetId)
       
-      // Update existing entry and verify it succeeded
+      // Update existing entry (maybeSingle: 0 rows = null, no throw)
       const { data: updateResult, error } = await (supabase
         .from('log_entries') as any)
         .update(dbEntry)
         .eq('id', targetId)
         .select()
-        .single()
+        .maybeSingle()
       
       if (error) {
         console.error('[SaveInlineEdit] Update error:', error)
         throw error
       }
       
+      // 0 rows updated (e.g. RLS): persist locally and queue for sync
       if (!updateResult) {
-        console.error('[SaveInlineEdit] Update succeeded but no data returned')
-        throw new Error('Update succeeded but no data returned')
+        console.log('[SaveInlineEdit] Update returned 0 rows, saving to IndexedDB and queueing for sync')
+        await updateEntryInIndexedDB(updatedEntry)
+        await addToQueue('update', targetId, dbEntry)
+        if (isOnline.value) processQueue()
+        logEntries.value = sortEntriesByDateAndOOOI(
+          logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
+        )
+        expandedEntryId.value = null
+        inlineEditEntry.value = null
+        return
       }
       
       console.log('[SaveInlineEdit] Entry updated successfully in database:', updateResult)
@@ -9849,17 +9885,19 @@ const airportTimezoneCache = new Map<string, string | null>()
  * This function normalizes them to IANA format
  */
 function normalizeTimezoneToIANA(timezone: string | undefined | null): string | null {
-  if (!timezone) return null
+  if (timezone == null) return null
+  const tz = typeof timezone === 'string' ? timezone : String(timezone)
+  if (!tz) return null
   
   // If already in IANA format (contains '/'), return as-is
-  if (timezone.includes('/')) {
-    return timezone
+  if (tz.includes('/')) {
+    return tz
   }
   
   // Handle UTC offset strings like "-6", "-5", "UTC-6", "+5", etc.
   // Try patterns: "-6", "+5", "UTC-6", "UTC+5", "-06:00", etc.
-  const offsetMatch1 = timezone.match(/^([+-]?)(\d{1,2})(?::\d{2})?$/)
-  const offsetMatch2 = timezone.match(/^UTC([+-])(\d{1,2})$/i)
+  const offsetMatch1 = tz.match(/^([+-]?)(\d{1,2})(?::\d{2})?$/)
+  const offsetMatch2 = tz.match(/^UTC([+-])(\d{1,2})$/i)
   
   let offset: number | null = null
   
@@ -11915,16 +11953,6 @@ const totals = computed(() => {
       const rawValue = ft[field.key]
       const value = rawValue ?? 0
       timeAccumulator[field.key] += value
-      if (field.key === 'night') {
-        console.log('[Totals] Processing entry night time:', {
-          entryId: entry.id,
-          date: entry.date,
-          departure: entry.departure,
-          rawNightValue: rawValue,
-          nightTime: value,
-          totalSoFar: timeAccumulator[field.key]
-        })
-      }
     })
     performanceFields.forEach((field) => {
       performanceAccumulator[field.key] += (entry.performance[field.key] as number) ?? 0

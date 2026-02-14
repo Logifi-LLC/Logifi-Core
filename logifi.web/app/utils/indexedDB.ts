@@ -204,9 +204,9 @@ export async function getAllEntriesFromIndexedDB(): Promise<LogEntry[]> {
 export async function markEntryAsSynced(entryId: string): Promise<void> {
   const db = await getDB()
   const entry = await getEntryFromIndexedDB(entryId)
-  
+
   if (!entry) {
-    throw new Error(`Entry ${entryId} not found`)
+    return // Entry no longer in IndexedDB (e.g. deleted after queue); nothing to mark
   }
 
   const updated: IDBLogEntry = {
