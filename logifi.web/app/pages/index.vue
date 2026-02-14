@@ -1696,6 +1696,7 @@
                   :disabled="!getSelectedSimType(inlineEditEntry)"
                   :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300', !getSelectedSimType(inlineEditEntry) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
                   @input="(e) => {
+                    if (!inlineEditEntry) return;
                     const sel = getSelectedSimType(inlineEditEntry);
                     if (!sel) return;
                     const input = e.target as HTMLInputElement;
@@ -1705,6 +1706,7 @@
                     inlineEditEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = !isNaN(num) && isFinite(num) ? num : null;
                   }"
                   @blur="(e) => {
+                    if (!inlineEditEntry) return;
                     const sel = getSelectedSimType(inlineEditEntry);
                     if (!sel) return;
                     const input = e.target as HTMLInputElement;
@@ -5134,8 +5136,10 @@ import {
   createEmptyFlightTime,
   createEmptyPerformance,
   createEmptyOOOI,
-  DEFAULT_COLUMN_CONFIG
-} from '~/utils/logbookTypes'
+  DEFAULT_COLUMN_CONFIG,
+  getApproachesFromPerformance,
+  getTotalApproachCount
+} from '../utils/logbookTypes'
 import type {
   CatalogKey,
   EditableLogEntry,
@@ -5144,36 +5148,35 @@ import type {
   LogEntry,
   LogbookColumnConfig,
   LogbookColumnKey,
+  OOOITimes,
   PerformanceKey,
-  PerformanceMetrics,
-  getApproachesFromPerformance,
-  getTotalApproachCount
-} from '~/utils/logbookTypes'
-import { useAircraftLookup } from '~/composables/useAircraftLookup'
-import type { AircraftInfo } from '~/composables/useAircraftLookup'
-import { useAirportLookup } from '~/composables/useAirportLookup'
-import type { AirportInfo } from '~/composables/useAirportLookup'
-import { validateCrossCountry } from '~/utils/validation'
-import { calculateNightTime } from '~/utils/nightTimeCalculator'
+  PerformanceMetrics
+} from '../utils/logbookTypes'
+import { useAircraftLookup } from '../composables/useAircraftLookup'
+import type { AircraftInfo } from '../composables/useAircraftLookup'
+import { useAirportLookup } from '../composables/useAirportLookup'
+import type { AirportInfo } from '../composables/useAirportLookup'
+import { validateCrossCountry } from '../utils/validation'
+import { calculateNightTime } from '../utils/nightTimeCalculator'
 import { DateTime } from 'luxon'
-import { calculateSectionII, calculateSectionIII } from '~/utils/form8710Calculator'
-import type { Form8710Data, AircraftCategory8710, ComplianceMetadata } from '~/utils/form8710Types'
-import { mapCategoryTo8710, isTrainingDevice } from '~/utils/form8710Types'
-import { supabase } from '~/lib/supabase'
-import { useAuth } from '~/composables/useAuth'
-import { useDataIntegrity } from '~/composables/useDataIntegrity'
-import { useValidation } from '~/composables/useValidation'
-import { useOffline } from '~/composables/useOffline'
-import { useSyncQueue } from '~/composables/useSyncQueue'
-import { useExport } from '~/composables/useExport'
-import { useCurrency } from '~/composables/useCurrency'
-import AuthModal from '~/components/AuthModal.vue'
-import AuditTrail from '~/components/AuditTrail.vue'
-import IntegrityStatus from '~/components/IntegrityStatus.vue'
-import ComplianceChecklist from '~/components/ComplianceChecklist.vue'
-import CurrencyDashboard from '~/components/CurrencyDashboard.vue'
-import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '~/utils/migrateLocalStorage'
-import { findDuplicateEntries, checkDuplicatesInDatabase } from '~/utils/duplicateDetection'
+import { calculateSectionII, calculateSectionIII } from '../utils/form8710Calculator'
+import type { Form8710Data, AircraftCategory8710, ComplianceMetadata } from '../utils/form8710Types'
+import { mapCategoryTo8710, isTrainingDevice } from '../utils/form8710Types'
+import { supabase } from '../lib/supabase'
+import { useAuth } from '../composables/useAuth'
+import { useDataIntegrity } from '../composables/useDataIntegrity'
+import { useValidation } from '../composables/useValidation'
+import { useOffline } from '../composables/useOffline'
+import { useSyncQueue } from '../composables/useSyncQueue'
+import { useExport } from '../composables/useExport'
+import { useCurrency } from '../composables/useCurrency'
+import AuthModal from '../components/AuthModal.vue'
+import AuditTrail from '../components/AuditTrail.vue'
+import IntegrityStatus from '../components/IntegrityStatus.vue'
+import ComplianceChecklist from '../components/ComplianceChecklist.vue'
+import CurrencyDashboard from '../components/CurrencyDashboard.vue'
+import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '../utils/migrateLocalStorage'
+import { findDuplicateEntries, checkDuplicatesInDatabase } from '../utils/duplicateDetection'
 import {
   initIndexedDB,
   saveEntryToIndexedDB,
@@ -5181,7 +5184,7 @@ import {
   deleteEntryFromIndexedDB,
   getAllEntriesFromIndexedDB,
   type IDBLogEntry
-} from '~/utils/indexedDB'
+} from '../utils/indexedDB'
 
 // Browser check (must be defined early for watchers with immediate: true)
 const isBrowser = typeof window !== 'undefined'
@@ -5329,6 +5332,8 @@ function roleDisplayLabel(role: string): string {
   return role === 'Dual Received' ? 'Student' : role
 }
 const oooiFields: (keyof OOOITimes)[] = ['out', 'off', 'on', 'in']
+
+const entryTagOptions = ['Checkride', 'Flight Review', 'IPC', '61.58', 'NVG', 'Part 135'] as const
 
 const conditionOptions = [
   { value: 'nightVfr', label: 'Night' },
@@ -6156,12 +6161,10 @@ async function saveInlineEdit(): Promise<void> {
       const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
       performanceFields.forEach((field) => {
         const rawValue = entry.performance?.[field.key]
-        if (typeof rawValue === 'string') {
-          const parsed = parseFloat(rawValue)
-          normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
-        } else {
-          normalizedPerformance[field.key] = normalizeNumber(rawValue)
-        }
+        const val = typeof rawValue === 'string'
+          ? (isNaN(parseFloat(rawValue)) ? null : parseFloat(rawValue))
+          : normalizeNumber(rawValue)
+        ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
       })
       normalizedPerformance.approaches = (entry.performance?.approaches?.length ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance))
       normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
@@ -8930,7 +8933,8 @@ function fillFieldWithTotalTime(fieldKey: FlightTimeKey, totalTime: number | nul
 }
 
 type SimTypeKey = 'FFS' | 'FTD' | 'ATD'
-function getSelectedSimType(entry: { flightTime: { ffs?: number | null; ftd?: number | null; atd?: number | null } }): '' | SimTypeKey {
+function getSelectedSimType(entry: { flightTime: { ffs?: number | null; ftd?: number | null; atd?: number | null } } | null): '' | SimTypeKey {
+  if (!entry?.flightTime) return ''
   const ft = entry.flightTime
   // Treat as selected if the key is set (including 0), so the time input is enabled after picking a type
   if (ft.ffs != null) return 'FFS'
@@ -11009,7 +11013,7 @@ async function removeEntry(id: string): Promise<void> {
   if (isAuthenticated.value && user.value) {
     try {
       let supabaseId = id
-      let entryData = null
+      let entryData: { date?: string } | null = null
       
       // If ID is not a UUID, try to find the entry in Supabase by matching other fields
       if (!isValidUUID(id)) {
@@ -11208,12 +11212,10 @@ async function loadEntries(): Promise<void> {
         const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
         performanceFields.forEach((field) => {
           const rawValue = entry.performance?.[field.key]
-          if (typeof rawValue === 'string') {
-            const parsed = parseFloat(rawValue)
-            normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
-          } else {
-            normalizedPerformance[field.key] = normalizeNumber(rawValue)
-          }
+          const val = typeof rawValue === 'string'
+            ? (isNaN(parseFloat(rawValue)) ? null : parseFloat(rawValue))
+            : normalizeNumber(rawValue)
+          ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
         })
         normalizedPerformance.approaches = (entry.performance?.approaches?.length ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance))
         normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
@@ -11291,12 +11293,10 @@ async function loadEntries(): Promise<void> {
           const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
           performanceFields.forEach((field) => {
             const rawValue = entry.performance?.[field.key]
-            if (typeof rawValue === 'string') {
-              const parsed = parseFloat(rawValue)
-              normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
-            } else {
-              normalizedPerformance[field.key] = normalizeNumber(rawValue)
-            }
+            const val = typeof rawValue === 'string'
+              ? (isNaN(parseFloat(rawValue)) ? null : parseFloat(rawValue))
+              : normalizeNumber(rawValue)
+            ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
           })
           normalizedPerformance.approaches = (entry.performance?.approaches?.length ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance))
           normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
@@ -11383,12 +11383,10 @@ function loadPersistedEntries(): void {
         const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
         performanceFields.forEach((field) => {
           const rawValue = entry.performance?.[field.key]
-          if (typeof rawValue === 'string') {
-            const parsed = parseFloat(rawValue)
-            normalizedPerformance[field.key] = isNaN(parsed) ? null : parsed
-          } else {
-            normalizedPerformance[field.key] = rawValue ?? null
-          }
+          const val = typeof rawValue === 'string'
+            ? (isNaN(parseFloat(rawValue)) ? null : parseFloat(rawValue))
+            : (rawValue ?? null)
+          ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
         })
         normalizedPerformance.approaches = (entry.performance?.approaches?.length ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance))
         normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
@@ -11456,7 +11454,7 @@ if (typeof window !== 'undefined') {
       console.error('You must be logged in to reset migration')
       return
     }
-    const { resetMigration } = await import('~/utils/migrateLocalStorage')
+    const { resetMigration } = await import('../utils/migrateLocalStorage')
     const result = await resetMigration(user.value.id)
     if (result.success) {
       alert('Migration reset complete! Refreshing page...')
@@ -11472,7 +11470,7 @@ if (typeof window !== 'undefined') {
       console.error('You must be logged in to re-migrate crew profiles')
       return
     }
-    const { remigrateCrewProfiles } = await import('~/utils/migrateLocalStorage')
+    const { remigrateCrewProfiles } = await import('../utils/migrateLocalStorage')
     const result = await remigrateCrewProfiles(user.value.id)
     if (result.success) {
       alert(`Re-migrated ${result.migrated} crew profiles! Refreshing page...`)
@@ -11489,7 +11487,7 @@ if (typeof window !== 'undefined') {
       console.error('You must be logged in to migrate crew from entries')
       return
     }
-    const { migrateCrewFromLogEntries } = await import('~/utils/migrateLocalStorage')
+    const { migrateCrewFromLogEntries } = await import('../utils/migrateLocalStorage')
     const result = await migrateCrewFromLogEntries(user.value.id, logEntries.value)
     if (result.success) {
       alert(`Migrated ${result.migrated} crew profiles from log entries! Refreshing page...`)
@@ -11506,7 +11504,7 @@ if (typeof window !== 'undefined') {
       console.error('You must be logged in to find duplicates')
       return
     }
-    const { findDuplicateCrewProfiles } = await import('~/utils/migrateLocalStorage')
+    const { findDuplicateCrewProfiles } = await import('../utils/migrateLocalStorage')
     const result = await findDuplicateCrewProfiles(user.value.id)
     if (result.duplicates.length > 0) {
       console.log('Duplicate crew profiles found:', result.duplicates)
@@ -11528,7 +11526,7 @@ if (typeof window !== 'undefined') {
       return
     }
     
-    const { mergeDuplicateCrewProfiles } = await import('~/utils/migrateLocalStorage')
+    const { mergeDuplicateCrewProfiles } = await import('../utils/migrateLocalStorage')
     
     // Create update function that updates log entries in Supabase
     const updateLogEntries = async (oldName: string, newName: string) => {
@@ -11942,7 +11940,15 @@ const totals = computed(() => {
   }
 })
 
-const catalogs = computed<Record<CatalogKey, string[]> & { families?: string[], familyToItems?: Record<string, string[]> }>(() => {
+interface CatalogsValue {
+  aircraft: string[]
+  airports: string[]
+  pilots: string[]
+  categoryClass: string[]
+  families: string[]
+  familyToItems: Record<string, string[]>
+}
+const catalogs = computed<CatalogsValue>(() => {
   const aircraft = new Set<string>()
   const airports = new Set<string>()
   const pilots = new Set<string>()
