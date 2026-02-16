@@ -1000,10 +1000,10 @@
                     </p>
                   </div>
                 </div>
-                <!-- Sim totals (same categories as Flight; Total Time = sim total, FFS/FTD/ATD from sim, others 0) -->
+                <!-- Sim totals (simplified: Total, Instrument, Dual Received only) -->
                 <div v-else class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                   <div
-                    v-for="summaryField in summaryFields"
+                    v-for="summaryField in simOverviewFields"
                     :key="summaryField.key"
                     :class="[
                       'rounded-xl border px-4 py-5 text-left transition-all duration-300 relative overflow-hidden group',
@@ -1543,8 +1543,14 @@
               isDarkMode ? 'text-gray-100' : 'text-gray-900'
             ]"
           >
-            Edit Flight Entry
+            {{ inlineEditEntry?.logbookType === 'simulator' ? 'Edit Simulator Entry' : 'Edit Flight Entry' }}
           </h2>
+          <span
+            v-if="inlineEditEntry?.logbookType === 'simulator'"
+            :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded', isDarkMode ? 'bg-blue-900/40 text-blue-300 border border-blue-700/50' : 'bg-blue-100 text-blue-700 border border-blue-200']"
+          >
+            Simulator
+          </span>
           </div>
           <button
             type="button"
@@ -1564,13 +1570,242 @@
           <!-- Scrollable Form Content -->
           <div class="flex-1 overflow-y-auto p-6" data-edit-panel>
           <div v-if="inlineEditEntry" class="grid gap-6">
-            
-            <!-- Inline Edit Form (Simplified Version) -->
+
+            <!-- Simulator edit layout -->
+            <template v-if="inlineEditEntry.logbookType === 'simulator'">
+              <div class="flex justify-between mb-2">
+                <button
+                  type="button"
+                  @click="toggleEntryFlag(inlineEditEntry)"
+                  :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors',
+                    inlineEditEntry.flagged
+                      ? (isDarkMode ? 'bg-amber-900/30 text-amber-300 border-amber-700' : 'bg-amber-100 text-amber-700 border-amber-200')
+                      : (isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200')
+                  ]"
+                  :aria-label="inlineEditEntry.flagged ? 'Unflag entry' : 'Flag entry'"
+                >
+                  {{ inlineEditEntry.flagged ? 'Flagged' : '+ Flag' }}
+                </button>
+              </div>
+              <!-- Session block -->
+              <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white']">
+                <div :class="['text-[10px] uppercase font-bold mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Session</div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Date</label>
+                    <input v-model="inlineEditEntry.date" type="date" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                  </div>
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Type</label>
+                    <select
+                      :value="getSelectedSimType(inlineEditEntry)"
+                      :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                      @change="setSimType(inlineEditEntry, ($event.target as HTMLSelectElement).value as '' | 'FFS' | 'FTD' | 'ATD')"
+                    >
+                      <option value="">—</option>
+                      <option v-for="opt in categoryClassSimOptions" :key="opt" :value="opt">{{ opt }}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
+                    <input
+                      :value="getSimTimeDisplayValue(inlineEditEntry)"
+                      type="text"
+                      inputmode="decimal"
+                      placeholder="0.0"
+                      :disabled="!getSelectedSimType(inlineEditEntry)"
+                      :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300', !getSelectedSimType(inlineEditEntry) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                      @input="(e) => {
+                        if (!inlineEditEntry) return;
+                        const sel = getSelectedSimType(inlineEditEntry);
+                        if (!sel) return;
+                        const input = e.target as HTMLInputElement;
+                        const val = input.value.trim();
+                        if (val === '' || val === '-') {
+                          inlineEditEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = null;
+                          inlineEditEntry.flightTime.total = null;
+                          return;
+                        }
+                        const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+                        const ok = !isNaN(num) && isFinite(num);
+                        inlineEditEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = ok ? num : null;
+                        inlineEditEntry.flightTime.total = ok ? num : null;
+                      }"
+                      @blur="(e) => {
+                        if (!inlineEditEntry) return;
+                        const sel = getSelectedSimType(inlineEditEntry);
+                        if (!sel) return;
+                        const input = e.target as HTMLInputElement;
+                        const val = inlineEditEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'];
+                        if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                      }"
+                    />
+                  </div>
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Role</label>
+                    <select v-model="inlineEditEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                      <option v-for="role in roleOptions" :key="role" :value="role">{{ roleDisplayLabel(role) }}</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="mt-4 pt-3 border-t" :class="isDarkMode ? 'border-gray-600' : 'border-gray-200'">
+                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Simulated instrument (hrs)</label>
+                  <input
+                    :value="inlineEditEntry?.flightTime.simulatedInstrument === null || inlineEditEntry?.flightTime.simulatedInstrument === undefined || inlineEditEntry?.flightTime.simulatedInstrument === 0 ? '' : String(inlineEditEntry?.flightTime.simulatedInstrument ?? '')"
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="0.0"
+                    :class="['w-full max-w-[120px] rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300', (inlineEditEntry?.flightTime.simulatedInstrument === null || inlineEditEntry?.flightTime.simulatedInstrument === 0 || inlineEditEntry?.flightTime.simulatedInstrument === undefined) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                    @input="(e) => {
+                      if (!inlineEditEntry) return;
+                      const input = e.target as HTMLInputElement;
+                      const val = input.value.trim();
+                      if (val === '' || val === '-') { inlineEditEntry.flightTime.simulatedInstrument = null; return; }
+                      const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+                      inlineEditEntry.flightTime.simulatedInstrument = !isNaN(num) && isFinite(num) ? num : null;
+                    }"
+                    @blur="(e) => {
+                      if (!inlineEditEntry) return;
+                      const input = e.target as HTMLInputElement;
+                      const val = inlineEditEntry.flightTime.simulatedInstrument;
+                      if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                    }"
+                  />
+                </div>
+              </div>
+              <!-- Optional details -->
+              <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-800/30' : 'border-gray-200 bg-gray-50/50']">
+                <div :class="['text-[10px] uppercase font-bold mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Optional — Aircraft &amp; Route</div>
+                <div class="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Aircraft</label>
+                    <input v-model="inlineEditEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Optional" />
+                  </div>
+                  <div class="relative">
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Ident</label>
+                    <input
+                      v-model="inlineEditEntry.registration"
+                      type="text"
+                      :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                      placeholder="Optional"
+                      autocomplete="off"
+                      @input="inlineEditEntry.registration = ($event.target as HTMLInputElement).value.toUpperCase()"
+                      @focus="showInlineIdentDropdown = true; highlightedInlineIdentIndex = filteredAircraftForInlineEdit.length > 0 ? 0 : -1"
+                      @keydown="(e) => handleDropdownKeydown(e, 'inlineIdent', filteredAircraftForInlineEdit, (item) => selectAircraftForInlineEdit(item))"
+                      @blur="handleInlineIdentBlur"
+                    />
+                    <div v-if="showInlineIdentDropdown && filteredAircraftForInlineEdit.length > 0" data-dropdown="inlineIdent" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']">
+                      <button v-for="(aircraft, index) in filteredAircraftForInlineEdit" :key="aircraft.registration" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedInlineIdentIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectAircraftForInlineEdit(aircraft)">{{ aircraft.registration }}</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="grid gap-4 mt-3 grid-cols-1 md:grid-cols-[1fr_1fr_2fr]">
+                  <div class="relative">
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">From</label>
+                    <input v-model="inlineEditEntry.departure" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Optional" autocomplete="off" @input="inlineEditEntry.departure = ($event.target as HTMLInputElement).value.toUpperCase()" @focus="showInlineFromDropdown = true; highlightedInlineFromIndex = filteredAirportsForInlineFrom.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'inlineFrom', filteredAirportsForInlineFrom, (item) => selectAirportForInlineFrom(item))" @blur="handleInlineFromBlur" />
+                    <div v-if="showInlineFromDropdown && filteredAirportsForInlineFrom.length > 0" data-dropdown="inlineFrom" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']">
+                      <button v-for="(airport, index) in filteredAirportsForInlineFrom" :key="airport" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedInlineFromIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectAirportForInlineFrom(airport)">{{ airport }}</button>
+                    </div>
+                  </div>
+                  <div class="relative">
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">To</label>
+                    <input v-model="inlineEditEntry.destination" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Optional" autocomplete="off" @input="inlineEditEntry.destination = ($event.target as HTMLInputElement).value.toUpperCase()" @focus="showInlineToDropdown = true; highlightedInlineToIndex = filteredAirportsForInlineTo.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'inlineTo', filteredAirportsForInlineTo, (item) => selectAirportForInlineTo(item))" @blur="handleInlineToBlur" />
+                    <div v-if="showInlineToDropdown && filteredAirportsForInlineTo.length > 0" data-dropdown="inlineTo" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']">
+                      <button v-for="(airport, index) in filteredAirportsForInlineTo" :key="airport" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedInlineToIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectAirportForInlineTo(airport)">{{ airport }}</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
+                    <input v-model="inlineEditEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Optional" @blur="inlineEditEntry.route = (inlineEditEntry.route || '').trim().toUpperCase()" />
+                  </div>
+                </div>
+              </div>
+              <!-- Performance -->
+              <div>
+                <div :class="['text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Performance</div>
+                <div class="grid gap-4 grid-cols-2 md:grid-cols-4">
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day Ldg</label>
+                    <input v-model.number="inlineEditEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                  </div>
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night Ldg</label>
+                    <input v-model.number="inlineEditEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                  </div>
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Holds</label>
+                    <input v-model.number="inlineEditEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                  </div>
+                </div>
+                <div class="mt-3">
+                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Approaches</label>
+                  <div class="space-y-1.5">
+                    <div v-for="(approach, aIdx) in (inlineEditEntry.performance.approaches || [])" :key="'sim-inline-' + aIdx" class="flex gap-2 items-center">
+                      <select v-model="approach.type" :class="['flex-1 max-w-[120px] rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                        <option v-for="opt in approachTypeOptions" :key="opt" :value="opt">{{ opt }}</option>
+                        <option value="Other">Other</option>
+                      </select>
+                      <input v-model.number="approach.count" type="number" min="1" class="w-14 rounded border px-2 py-1 text-sm text-center font-mono" :class="isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'" />
+                      <button type="button" aria-label="Remove approach" @click="inlineEditEntry.performance.approaches!.splice(aIdx, 1)" :class="['p-1 rounded', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-500 hover:bg-gray-200']"><Icon name="ri:close-line" size="16" /></button>
+                    </div>
+                    <button type="button" @click="(inlineEditEntry.performance.approaches ||= []).push({ type: 'ILS', count: 1 })" :class="['text-xs font-quicksand', isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700']">+ Add approach</button>
+                  </div>
+                </div>
+              </div>
+              <!-- Conditions, Tags, Remarks, Pilot -->
+              <div class="flex flex-wrap gap-3">
+                <label v-for="condition in conditionOptions" :key="condition.value" :class="['inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200']">
+                  <input v-model="inlineEditEntry.flightConditions" :value="condition.value" type="checkbox" :class="['h-4 w-4 rounded border transition-colors', isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500']" />
+                  <span>{{ condition.label }}</span>
+                </label>
+              </div>
+              <div>
+                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Tags</label>
+                <div class="flex flex-wrap gap-2 mb-3">
+                  <label v-for="tag in entryTagOptions" :key="'sim-inline-' + tag" :class="['inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-quicksand cursor-pointer transition-all', (inlineEditEntry.tags || []).includes(tag) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-300 bg-gray-100 text-gray-600 hover:border-gray-400')]">
+                    <input v-model="inlineEditEntry.tags" type="checkbox" :value="tag" :class="['h-3.5 w-3.5 rounded']" />
+                    <span>{{ tag }}</span>
+                  </label>
+                </div>
+                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Remarks / Applicable 61.51 Notes</label>
+                <textarea v-model="inlineEditEntry.remarks" rows="3" placeholder="Document training received, endorsements pending, or other relevant notes." :class="['w-full rounded border px-2 py-2 text-sm font-quicksand transition-colors duration-300', isDarkMode ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-400' : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400']"></textarea>
+              </div>
+              <div>
+                <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Pilot</label>
+                <div class="grid gap-4 md:grid-cols-3">
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Job</label>
+                    <select v-model="inlineEditEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                      <option value="">Select...</option>
+                      <option value="Student">Student</option>
+                      <option value="Instructor">Instructor</option>
+                      <option value="Safety Pilot">Safety Pilot</option>
+                      <option value="Captain">Captain</option>
+                      <option value="First Officer">First Officer</option>
+                    </select>
+                  </div>
+                  <div class="relative">
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Name</label>
+                    <input v-model="inlineEditEntry.trainingElements" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Pilot Name" autocomplete="off" @focus="showInlinePilotNameDropdown = true; highlightedInlinePilotIndex = filteredPilotsForInline.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'inlinePilot', filteredPilotsForInline, (item) => selectPilotNameForInline(item))" @blur="handleInlinePilotNameBlur" />
+                    <div v-if="showInlinePilotNameDropdown && filteredPilotsForInline.length > 0" data-dropdown="inlinePilot" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']">
+                      <button v-for="(pilot, index) in filteredPilotsForInline" :key="pilot" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm transition-colors', highlightedInlinePilotIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectPilotNameForInline(pilot)">{{ pilot }}</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
+                    <input v-model="inlineEditEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Certificate #" />
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- Flight edit layout -->
+            <template v-else>
             <div class="flex justify-between mb-2">
               <button
                 type="button"
                 @click="toggleEntryFlag(inlineEditEntry)"
-                :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors', 
+                :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors',
                   inlineEditEntry.flagged
                     ? (isDarkMode ? 'bg-amber-900/30 text-amber-300 border-amber-700' : 'bg-amber-100 text-amber-700 border-amber-200')
                     : (isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200')
@@ -1582,8 +1817,8 @@
               <button
                 type="button"
                 @click="isInlineCommercialMode = !isInlineCommercialMode"
-                :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors', 
-                  isInlineCommercialMode 
+                :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors',
+                  isInlineCommercialMode
                     ? (isDarkMode ? 'bg-blue-900/30 text-blue-300 border-blue-700' : 'bg-blue-100 text-blue-700 border-blue-200')
                     : (isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200')
                 ]"
@@ -2039,6 +2274,8 @@
                </div>
              </div>
 
+            </template>
+
             <div 
               class="flex items-center justify-between mt-2 pt-4 border-t"
               :class="[
@@ -2108,9 +2345,17 @@
         <div class="h-full flex flex-col shadow-2xl" :class="isDarkMode ? 'bg-gray-900 border-l border-gray-700' : 'bg-gray-50 border-l border-gray-200'">
           <!-- Panel Header -->
           <div class="flex items-center justify-between p-4 border-b" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-200']">
-            <h2 class="text-lg font-semibold font-quicksand" :class="[isDarkMode ? 'text-gray-100' : 'text-gray-900']">
-              {{ editingEntryId ? 'Edit Log Entry' : 'New Log Entry' }}
-            </h2>
+            <div class="flex items-center gap-2">
+              <h2 class="text-lg font-semibold font-quicksand" :class="[isDarkMode ? 'text-gray-100' : 'text-gray-900']">
+                {{ activeLogbook === 'simulator' ? (editingEntryId ? 'Edit Simulator Entry' : 'New Simulator Entry') : (editingEntryId ? 'Edit Log Entry' : 'New Log Entry') }}
+              </h2>
+              <span
+                v-if="activeLogbook === 'simulator'"
+                :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded', isDarkMode ? 'bg-blue-900/40 text-blue-300 border border-blue-700/50' : 'bg-blue-100 text-blue-700 border border-blue-200']"
+              >
+                Simulator
+              </span>
+            </div>
             <button
               type="button"
               @click="toggleEntryForm"
@@ -2130,6 +2375,282 @@
           <div class="flex-1 overflow-y-auto p-6" data-add-entry-panel>
             <form class="grid gap-6" @submit.prevent="submitEntry">
 
+              <!-- Simulator layout -->
+              <template v-if="activeLogbook === 'simulator'">
+                <div class="grid gap-6">
+                  <!-- Session block: Date, Type, Time, Role -->
+                  <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white']">
+                    <div :class="['text-[10px] uppercase font-bold mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Session</div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Date</label>
+                        <input v-model="newEntry.date" type="date" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" required />
+                      </div>
+                      <div>
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Type</label>
+                        <select
+                          :value="getSelectedSimType(newEntry)"
+                          :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                          @change="setSimType(newEntry, ($event.target as HTMLSelectElement).value as '' | 'FFS' | 'FTD' | 'ATD')"
+                        >
+                          <option value="">—</option>
+                          <option v-for="opt in categoryClassSimOptions" :key="opt" :value="opt">{{ opt }}</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
+                        <input
+                          :value="getSimTimeDisplayValue(newEntry)"
+                          type="text"
+                          inputmode="decimal"
+                          placeholder="0.0"
+                          :disabled="!getSelectedSimType(newEntry)"
+                          :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300', !getSelectedSimType(newEntry) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                          @input="(e) => {
+                            const sel = getSelectedSimType(newEntry);
+                            if (!sel) return;
+                            const input = e.target as HTMLInputElement;
+                            const val = input.value.trim();
+                            if (val === '' || val === '-') {
+                              newEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = null;
+                              newEntry.flightTime.total = null;
+                              return;
+                            }
+                            const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+                            const ok = !isNaN(num) && isFinite(num);
+                            newEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = ok ? num : null;
+                            newEntry.flightTime.total = ok ? num : null;
+                          }"
+                          @blur="(e) => {
+                            const sel = getSelectedSimType(newEntry);
+                            if (!sel) return;
+                            const input = e.target as HTMLInputElement;
+                            const val = newEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'];
+                            if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                          }"
+                        />
+                      </div>
+                      <div>
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Role</label>
+                        <select v-model="newEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                          <option v-for="role in roleOptions" :key="role" :value="role">{{ roleDisplayLabel(role) }}</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="mt-4 pt-3 border-t" :class="isDarkMode ? 'border-gray-600' : 'border-gray-200'">
+                      <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Simulated instrument (hrs)</label>
+                      <input
+                        :value="newEntry.flightTime.simulatedInstrument === null || newEntry.flightTime.simulatedInstrument === undefined || newEntry.flightTime.simulatedInstrument === 0 ? '' : String(newEntry.flightTime.simulatedInstrument)"
+                        type="text"
+                        inputmode="decimal"
+                        placeholder="0.0"
+                        :class="['w-full max-w-[120px] rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300', (newEntry.flightTime.simulatedInstrument === null || newEntry.flightTime.simulatedInstrument === 0 || newEntry.flightTime.simulatedInstrument === undefined) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                        @input="(e) => {
+                          const input = e.target as HTMLInputElement;
+                          const val = input.value.trim();
+                          if (val === '' || val === '-') { newEntry.flightTime.simulatedInstrument = null; return; }
+                          const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+                          newEntry.flightTime.simulatedInstrument = !isNaN(num) && isFinite(num) ? num : null;
+                        }"
+                        @blur="(e) => {
+                          const input = e.target as HTMLInputElement;
+                          const val = newEntry.flightTime.simulatedInstrument;
+                          if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                        }"
+                      />
+                    </div>
+                  </div>
+
+                  <!-- Optional details (collapsible) -->
+                  <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-800/30' : 'border-gray-200 bg-gray-50/50']">
+                    <div :class="['text-[10px] uppercase font-bold mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Optional — Aircraft &amp; Route</div>
+                    <div class="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Aircraft</label>
+                        <input v-model="newEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Optional" />
+                      </div>
+                      <div class="relative">
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Ident</label>
+                        <input
+                          v-model="newEntry.registration"
+                          type="text"
+                          :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                          placeholder="Optional"
+                          autocomplete="off"
+                          @input="newEntry.registration = ($event.target as HTMLInputElement).value.toUpperCase()"
+                          @focus="showIdentDropdown = true; highlightedIdentIndex = filteredAircraftForNewEntry.length > 0 ? 0 : -1"
+                          @blur="handleIdentBlur"
+                          @keydown="(e) => handleDropdownKeydown(e, 'ident', filteredAircraftForNewEntry, (item) => selectAircraftForNewEntry(item))"
+                        />
+                        <div
+                          v-if="showIdentDropdown && filteredAircraftForNewEntry.length > 0"
+                          data-dropdown="ident"
+                          :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
+                        >
+                          <button
+                            v-for="(aircraft, index) in filteredAircraftForNewEntry"
+                            :key="aircraft.registration"
+                            :data-index="index"
+                            type="button"
+                            :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedIdentIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]"
+                            @mousedown.prevent="selectAircraftForNewEntry(aircraft)"
+                          >
+                            {{ aircraft.registration }}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="grid gap-4 mt-3 grid-cols-1 md:grid-cols-[1fr_1fr_2fr]">
+                      <div class="relative">
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">From</label>
+                        <input
+                          v-model="newEntry.departure"
+                          type="text"
+                          :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                          placeholder="Optional"
+                          autocomplete="off"
+                          @input="(e) => { newEntry.departure = (e.target as HTMLInputElement).value.toUpperCase(); nextTick(() => checkAndAutoLogCrossCountry()) }"
+                          @focus="showFromDropdown = true; highlightedFromIndex = filteredAirportsForFrom.length > 0 ? 0 : -1"
+                          @keydown="(e) => handleDropdownKeydown(e, 'from', filteredAirportsForFrom, (item) => selectAirportForFrom(item))"
+                          @blur="handleFromBlur"
+                        />
+                        <div v-if="showFromDropdown && filteredAirportsForFrom.length > 0" data-dropdown="from" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']">
+                          <button v-for="(airport, index) in filteredAirportsForFrom" :key="airport" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedFromIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectAirportForFrom(airport)">{{ airport }}</button>
+                        </div>
+                      </div>
+                      <div class="relative">
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">To</label>
+                        <input
+                          v-model="newEntry.destination"
+                          type="text"
+                          :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                          placeholder="Optional"
+                          autocomplete="off"
+                          @input="(e) => { newEntry.destination = (e.target as HTMLInputElement).value.toUpperCase(); nextTick(() => checkAndAutoLogCrossCountry()) }"
+                          @focus="showToDropdown = true; highlightedToIndex = filteredAirportsForTo.length > 0 ? 0 : -1"
+                          @keydown="(e) => handleDropdownKeydown(e, 'to', filteredAirportsForTo, (item) => selectAirportForTo(item))"
+                          @blur="handleToBlur"
+                        />
+                        <div v-if="showToDropdown && filteredAirportsForTo.length > 0" data-dropdown="to" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']">
+                          <button v-for="(airport, index) in filteredAirportsForTo" :key="airport" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedToIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectAirportForTo(airport)">{{ airport }}</button>
+                        </div>
+                      </div>
+                      <div>
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
+                        <input v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Optional" @blur="newEntry.route = (newEntry.route || '').trim().toUpperCase()" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Performance: Approaches & Holds -->
+                  <div>
+                    <div :class="['text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Performance</div>
+                    <div class="grid gap-4 grid-cols-2 md:grid-cols-4">
+                      <div>
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day Ldg</label>
+                        <input v-model.number="newEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                      </div>
+                      <div>
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night Ldg</label>
+                        <input v-model.number="newEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                      </div>
+                      <div>
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Holds</label>
+                        <input v-model.number="newEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                      </div>
+                    </div>
+                    <div class="mt-3">
+                      <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Approaches</label>
+                      <div class="space-y-1.5">
+                        <div v-for="(approach, aIdx) in (newEntry.performance.approaches || [])" :key="'sim-new-' + aIdx" class="flex gap-2 items-center">
+                          <select v-model="approach.type" :class="['flex-1 max-w-[120px] rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                            <option v-for="opt in approachTypeOptions" :key="opt" :value="opt">{{ opt }}</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          <input v-model.number="approach.count" type="number" min="1" class="w-14 rounded border px-2 py-1 text-sm text-center font-mono" :class="isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'" />
+                          <button type="button" aria-label="Remove approach" @click="newEntry.performance.approaches!.splice(aIdx, 1)" :class="['p-1 rounded', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-500 hover:bg-gray-200']">
+                            <Icon name="ri:close-line" size="16" />
+                          </button>
+                        </div>
+                        <button type="button" @click="(newEntry.performance.approaches ||= []).push({ type: 'ILS', count: 1 })" :class="['text-xs font-quicksand', isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700']">+ Add approach</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Conditions, Tags, Remarks, Pilot -->
+                  <div class="flex flex-wrap gap-3">
+                    <label v-for="condition in conditionOptions" :key="condition.value" :class="['inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200']">
+                      <input v-model="newEntry.flightConditions" :value="condition.value" type="checkbox" :class="['h-4 w-4 rounded border transition-colors', isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500']" />
+                      <span>{{ condition.label }}</span>
+                    </label>
+                  </div>
+                  <div class="relative">
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Tags</label>
+                    <button type="button" @click="tagsDropdownOpen = !tagsDropdownOpen" :class="['inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-quicksand transition-all', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200']">
+                      <span>{{ (newEntry.tags || []).length ? `Tags (${(newEntry.tags || []).length})` : 'Add tags' }}</span>
+                      <Icon :name="tagsDropdownOpen ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'" size="18" />
+                    </button>
+                    <div v-if="tagsDropdownOpen" :class="['absolute left-0 top-full z-50 mt-1 min-w-56 rounded-lg border py-2 shadow-lg', isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-white']">
+                      <div class="space-y-2 px-2">
+                        <div v-for="tag in fixedTagOptions" :key="tag" class="flex items-center gap-2">
+                          <input type="checkbox" :checked="(newEntry.tags || []).includes(tag)" :id="'sim-new-tag-' + tag" :class="['h-3.5 w-3.5 rounded']" @change="toggleFixedTag(newEntry, tag)" />
+                          <label :for="'sim-new-tag-' + tag" class="cursor-pointer text-sm font-quicksand">{{ tag }}</label>
+                        </div>
+                      </div>
+                      <div class="mt-2 border-t px-2 pt-2" :class="isDarkMode ? 'border-gray-600' : 'border-gray-200'">
+                        <div class="text-[10px] uppercase font-bold mb-1" :class="isDarkMode ? 'text-gray-500' : 'text-gray-400'">Custom</div>
+                        <div class="flex gap-1">
+                          <input v-model="customTagInput" type="text" placeholder="Label" class="flex-1 rounded border px-2 py-1 text-sm" :class="isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'" @keydown.enter.prevent="addCustomTag(newEntry, customTagInput); customTagInput = ''" />
+                          <button type="button" @click="addCustomTag(newEntry, customTagInput); customTagInput = ''" :class="['rounded px-2 py-1 text-sm', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
+                        </div>
+                        <div v-if="customTagsFor(newEntry).length" class="mt-1.5 flex flex-wrap gap-1">
+                          <span v-for="tag in customTagsFor(newEntry)" :key="tag" class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs" :class="isDarkMode ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'">
+                            {{ tag }}
+                            <button type="button" aria-label="Remove tag" @click="removeTag(newEntry, tag)" :class="['rounded p-0.5', isDarkMode ? 'hover:bg-gray-500' : 'hover:bg-gray-300']"><Icon name="ri:close-line" size="14" /></button>
+                          </span>
+                        </div>
+                      </div>
+                      <div class="mt-2 px-2">
+                        <button type="button" @click="tagsDropdownOpen = false" :class="['w-full rounded py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Done</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Remarks / Applicable 61.51 Notes</label>
+                    <textarea v-model="newEntry.remarks" rows="3" placeholder="Document training received, endorsements pending, or other relevant notes." :class="['w-full rounded border px-2 py-2 text-sm font-quicksand transition-colors duration-300', isDarkMode ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-400' : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400']"></textarea>
+                  </div>
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Pilot</label>
+                    <div class="grid gap-4 md:grid-cols-3">
+                      <div>
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Job</label>
+                        <select v-model="newEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                          <option value="">Select...</option>
+                          <option value="Student">Student</option>
+                          <option value="Instructor">Instructor</option>
+                          <option value="Safety Pilot">Safety Pilot</option>
+                          <option value="Captain">Captain</option>
+                          <option value="First Officer">First Officer</option>
+                        </select>
+                      </div>
+                      <div class="relative">
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Name</label>
+                        <input v-model="newEntry.trainingElements" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Pilot Name" autocomplete="off" @focus="showPilotNameDropdown = true; highlightedPilotIndex = filteredPilots.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'pilot', filteredPilots, (item) => selectPilotName(item))" @blur="handlePilotNameBlur" />
+                        <div v-if="showPilotNameDropdown && filteredPilots.length > 0" data-dropdown="pilot" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']">
+                          <button v-for="(pilot, index) in filteredPilots" :key="pilot" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm transition-colors', highlightedPilotIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectPilotName(pilot)">{{ pilot }}</button>
+                        </div>
+                      </div>
+                      <div>
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
+                        <input v-model="newEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Certificate #" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Flight layout -->
+              <template v-else>
               <div class="flex items-center justify-between mb-2">
                 <button
                   type="button"
@@ -2238,57 +2759,6 @@
                     autocomplete="off"
                     placeholder="Optional"
                   />
-                </div>
-                <div v-if="showSimSection">
-                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Type</label>
-                  <select
-                    :value="getSelectedSimType(newEntry)"
-                    :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
-                    @change="setSimType(newEntry, ($event.target as HTMLSelectElement).value as '' | 'FFS' | 'FTD' | 'ATD')"
-                  >
-                    <option value="">—</option>
-                    <option v-for="opt in categoryClassSimOptions" :key="opt" :value="opt">{{ opt }}</option>
-                  </select>
-                </div>
-                <div v-if="showSimSection">
-                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
-                  <input
-                    :value="getSimTimeDisplayValue(newEntry)"
-                    type="text"
-                    inputmode="decimal"
-                    placeholder="0.0"
-                    :disabled="!getSelectedSimType(newEntry)"
-                    :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300', !getSelectedSimType(newEntry) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
-                    @input="(e) => {
-                      const sel = getSelectedSimType(newEntry);
-                      if (!sel) return;
-                      const input = e.target as HTMLInputElement;
-                      const val = input.value.trim();
-                      if (val === '' || val === '-') { newEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = null; return; }
-                      const num = parseFloat(val.replace(/[^\d.-]/g, ''));
-                      newEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = !isNaN(num) && isFinite(num) ? num : null;
-                    }"
-                    @blur="(e) => {
-                      const sel = getSelectedSimType(newEntry);
-                      if (!sel) return;
-                      const input = e.target as HTMLInputElement;
-                      const val = newEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'];
-                      if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
-                    }"
-                  />
-                </div>
-                <div class="md:col-start-4">
-                  <button
-                    type="button"
-                    @click="showSimSection = !showSimSection"
-                    :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors w-full',
-                      showSimSection
-                        ? (isDarkMode ? 'bg-blue-900/30 text-blue-300 border-blue-700' : 'bg-blue-100 text-blue-700 border-blue-200')
-                        : (isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200')
-                    ]"
-                  >
-                    {{ showSimSection ? 'Simulator active' : '+ Simulator' }}
-                  </button>
                 </div>
               </div>
 
@@ -2675,6 +3145,8 @@
                   </div>
                 </div>
               </div>
+
+              </template>
 
               <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div class="flex flex-col gap-2">
@@ -5500,6 +5972,13 @@ const availableTotalsMetrics: readonly { key: TotalsMetricKey; label: string }[]
   { key: 'ftd', label: 'FTD (hrs)' },
   { key: 'atd', label: 'ATD (hrs)' }
 ] as const
+
+// Fixed metrics for Simulator Totals Overview (simpler than Flight)
+const simOverviewFields: readonly { key: TotalsMetricKey; label: string }[] = [
+  { key: 'totalTime', label: 'Total Time (hrs)' },
+  { key: 'instrumentTime', label: 'Instrument Time (hrs)' },
+  { key: 'dualReceived', label: 'Dual Received (hrs)' }
+]
 
 // Default selected metrics (Total Time must always be first)
 const defaultSelectedMetrics: TotalsMetricKey[] = [
@@ -10799,8 +11278,8 @@ async function submitEntry(): Promise<void> {
     aircraftMakeModel: newEntry.aircraftMakeModel.trim(),
     registration: newEntry.registration.trim(),
     flightNumber: newEntry.flightNumber?.trim() || null,
-    departure: newEntry.departure.trim(),
-    destination: newEntry.destination.trim(),
+    departure: (activeLogbook.value === 'simulator' && !newEntry.departure.trim()) ? '—' : newEntry.departure.trim(),
+    destination: (activeLogbook.value === 'simulator' && !newEntry.destination.trim()) ? '—' : newEntry.destination.trim(),
     route: (newEntry.route || '').trim().toUpperCase(),
     trainingElements: newEntry.trainingElements.trim(),
     trainingInstructor: newEntry.trainingInstructor.trim(),
