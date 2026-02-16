@@ -3,9 +3,16 @@
  * 
  * Queries airport information by ICAO/IATA/FAA code
  * Uses static airport database for instant, offline lookups
+ * Coordinate overrides fix known wrong data from the package (e.g. KMCX resolving to MCX Russia)
  */
 
 import { airports } from '@nwpr/airport-codes'
+
+/** Coordinate overrides for airports where @nwpr/airport-codes has wrong or ambiguous data (e.g. KMCX → MCX Russia). */
+const COORDINATE_OVERRIDES: Record<string, { latitude: number; longitude: number; name?: string; city?: string; state?: string; country?: string }> = {
+  KLAF: { latitude: 40.4123, longitude: -86.9369, name: 'Purdue University Airport', city: 'West Lafayette', state: 'IN', country: 'US' },
+  KMCX: { latitude: 40.71019, longitude: -86.76679, name: 'White County Airport', city: 'Monticello', state: 'IN', country: 'US' }
+}
 
 interface Airport {
   icao?: string
@@ -53,6 +60,25 @@ export default defineEventHandler(async (event): Promise<{ success: boolean; dat
       // Some US airports use FAA codes that match their IATA
       const iataCode = normalizedCode.substring(1) // Try last 3 chars
       airport = airports.find(a => a.iata === iataCode)
+    }
+
+    const override = COORDINATE_OVERRIDES[normalizedCode]
+    if (override) {
+      return {
+        success: true,
+        data: {
+          code: normalizedCode,
+          icao: normalizedCode.length === 4 ? normalizedCode : undefined,
+          iata: normalizedCode.length === 3 ? normalizedCode : undefined,
+          name: override.name ?? `${normalizedCode} Airport`,
+          city: override.city ?? undefined,
+          state: override.state ?? undefined,
+          country: override.country ?? undefined,
+          latitude: override.latitude,
+          longitude: override.longitude,
+          source: 'Coordinate override'
+        }
+      }
     }
 
     if (airport) {

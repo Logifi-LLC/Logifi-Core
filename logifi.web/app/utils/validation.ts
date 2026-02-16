@@ -62,7 +62,7 @@ function parseOOOITimeForValidation(time: string | null | undefined): number | n
  * Calculate distance between two coordinates using Haversine formula
  * Returns distance in nautical miles
  */
-function calculateDistanceNM(coord1: AirportCoordinates, coord2: AirportCoordinates): number {
+export function calculateDistanceNM(coord1: AirportCoordinates, coord2: AirportCoordinates): number {
   const R = 3440.065 // Earth's radius in nautical miles
   const dLat = (coord2.latitude - coord1.latitude) * Math.PI / 180
   const dLon = (coord2.longitude - coord1.longitude) * Math.PI / 180

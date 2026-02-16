@@ -1679,7 +1679,7 @@
                 <div class="grid gap-4 md:grid-cols-2">
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Aircraft</label>
-                    <input v-model="inlineEditEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Optional" />
+                    <input v-model="inlineEditEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="OPTIONAL" />
                   </div>
                   <div class="relative">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Ident</label>
@@ -1687,7 +1687,7 @@
                       v-model="inlineEditEntry.registration"
                       type="text"
                       :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
-                      placeholder="Optional"
+                      placeholder="OPTIONAL"
                       autocomplete="off"
                       @input="inlineEditEntry.registration = ($event.target as HTMLInputElement).value.toUpperCase()"
                       @focus="showInlineIdentDropdown = true; highlightedInlineIdentIndex = filteredAircraftForInlineEdit.length > 0 ? 0 : -1"
@@ -1702,21 +1702,21 @@
                 <div class="grid gap-4 mt-3 grid-cols-1 md:grid-cols-[1fr_1fr_2fr]">
                   <div class="relative">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">From</label>
-                    <input v-model="inlineEditEntry.departure" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Optional" autocomplete="off" @input="inlineEditEntry.departure = ($event.target as HTMLInputElement).value.toUpperCase()" @focus="showInlineFromDropdown = true; highlightedInlineFromIndex = filteredAirportsForInlineFrom.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'inlineFrom', filteredAirportsForInlineFrom, (item) => selectAirportForInlineFrom(item))" @blur="handleInlineFromBlur" />
+                    <input v-model="inlineEditEntry.departure" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="OPTIONAL" autocomplete="off" @input="inlineEditEntry.departure = ($event.target as HTMLInputElement).value.toUpperCase()" @focus="showInlineFromDropdown = true; highlightedInlineFromIndex = filteredAirportsForInlineFrom.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'inlineFrom', filteredAirportsForInlineFrom, (item) => selectAirportForInlineFrom(item))" @blur="handleInlineFromBlur" />
                     <div v-if="showInlineFromDropdown && filteredAirportsForInlineFrom.length > 0" data-dropdown="inlineFrom" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']">
                       <button v-for="(airport, index) in filteredAirportsForInlineFrom" :key="airport" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedInlineFromIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectAirportForInlineFrom(airport)">{{ airport }}</button>
                     </div>
                   </div>
                   <div class="relative">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">To</label>
-                    <input v-model="inlineEditEntry.destination" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Optional" autocomplete="off" @input="inlineEditEntry.destination = ($event.target as HTMLInputElement).value.toUpperCase()" @focus="showInlineToDropdown = true; highlightedInlineToIndex = filteredAirportsForInlineTo.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'inlineTo', filteredAirportsForInlineTo, (item) => selectAirportForInlineTo(item))" @blur="handleInlineToBlur" />
+                    <input v-model="inlineEditEntry.destination" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="OPTIONAL" autocomplete="off" @input="inlineEditEntry.destination = ($event.target as HTMLInputElement).value.toUpperCase()" @focus="showInlineToDropdown = true; highlightedInlineToIndex = filteredAirportsForInlineTo.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'inlineTo', filteredAirportsForInlineTo, (item) => selectAirportForInlineTo(item))" @blur="handleInlineToBlur" />
                     <div v-if="showInlineToDropdown && filteredAirportsForInlineTo.length > 0" data-dropdown="inlineTo" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']">
                       <button v-for="(airport, index) in filteredAirportsForInlineTo" :key="airport" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedInlineToIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectAirportForInlineTo(airport)">{{ airport }}</button>
                     </div>
                   </div>
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
-                    <input v-model="inlineEditEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Optional" @blur="inlineEditEntry.route = (inlineEditEntry.route || '').trim().toUpperCase()" />
+                    <input v-model="inlineEditEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="OPTIONAL" @blur="inlineEditEntry.route = (inlineEditEntry.route || '').trim().toUpperCase()" />
                   </div>
                 </div>
               </div>
@@ -1919,7 +1919,7 @@
                   type="text" 
                   :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
                   autocomplete="off"
-                  placeholder="Optional"
+                  placeholder="OPTIONAL"
                 />
               </div>
               <div v-if="showInlineSimSection && inlineEditEntry">
@@ -2467,7 +2467,7 @@
                     <div class="grid gap-4 md:grid-cols-2">
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Aircraft</label>
-                        <input v-model="newEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Optional" />
+                        <input v-model="newEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="OPTIONAL" />
                       </div>
                       <div class="relative">
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Ident</label>
@@ -2475,7 +2475,7 @@
                           v-model="newEntry.registration"
                           type="text"
                           :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
-                          placeholder="Optional"
+                          placeholder="OPTIONAL"
                           autocomplete="off"
                           @input="newEntry.registration = ($event.target as HTMLInputElement).value.toUpperCase()"
                           @focus="showIdentDropdown = true; highlightedIdentIndex = filteredAircraftForNewEntry.length > 0 ? 0 : -1"
@@ -2507,7 +2507,7 @@
                           v-model="newEntry.departure"
                           type="text"
                           :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
-                          placeholder="Optional"
+                          placeholder="OPTIONAL"
                           autocomplete="off"
                           @input="(e) => { newEntry.departure = (e.target as HTMLInputElement).value.toUpperCase(); nextTick(() => checkAndAutoLogCrossCountry()) }"
                           @focus="showFromDropdown = true; highlightedFromIndex = filteredAirportsForFrom.length > 0 ? 0 : -1"
@@ -2524,7 +2524,7 @@
                           v-model="newEntry.destination"
                           type="text"
                           :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
-                          placeholder="Optional"
+                          placeholder="OPTIONAL"
                           autocomplete="off"
                           @input="(e) => { newEntry.destination = (e.target as HTMLInputElement).value.toUpperCase(); nextTick(() => checkAndAutoLogCrossCountry()) }"
                           @focus="showToDropdown = true; highlightedToIndex = filteredAirportsForTo.length > 0 ? 0 : -1"
@@ -2537,7 +2537,7 @@
                       </div>
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
-                        <input v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Optional" @blur="newEntry.route = (newEntry.route || '').trim().toUpperCase()" />
+                        <input v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="OPTIONAL" @blur="newEntry.route = (newEntry.route || '').trim().toUpperCase()" />
                       </div>
                     </div>
                   </div>
@@ -2757,7 +2757,7 @@
                     type="text" 
                     :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
                     autocomplete="off"
-                    placeholder="Optional"
+                    placeholder="OPTIONAL"
                   />
                 </div>
               </div>
@@ -5640,7 +5640,7 @@ import { useAircraftLookup } from '../composables/useAircraftLookup'
 import type { AircraftInfo } from '../composables/useAircraftLookup'
 import { useAirportLookup } from '../composables/useAirportLookup'
 import type { AirportInfo } from '../composables/useAirportLookup'
-import { validateCrossCountry } from '../utils/validation'
+import { validateCrossCountry, calculateDistanceNM } from '../utils/validation'
 import { calculateNightTime } from '../utils/nightTimeCalculator'
 import { DateTime } from 'luxon'
 import { calculateSectionII, calculateSectionIII } from '../utils/form8710Calculator'
@@ -10816,8 +10816,26 @@ watch(() => [newEntry.oooi?.out, newEntry.oooi?.in, newEntry.oooi?.off, newEntry
 const validationTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 // Track last known XC time to detect manual changes
 const lastKnownXcTime = ref<number | null>(null)
+
+/** Clear cross-country time and remove cross-country condition from an entry (strict rule: else XC = null). */
+function clearCrossCountryFromEntry(entry: { flightTime?: { crossCountry?: number | null }; flightConditions?: string[] }): void {
+  if (!entry?.flightTime) return
+  entry.flightTime.crossCountry = null
+  const conditions = entry.flightConditions || []
+  const idxCc = conditions.indexOf('crossCountry')
+  const idxLabel = conditions.indexOf('Cross-Country')
+  if (idxLabel > idxCc) {
+    if (idxLabel > -1) conditions.splice(idxLabel, 1)
+    if (idxCc > -1) conditions.splice(idxCc, 1)
+  } else {
+    if (idxCc > -1) conditions.splice(idxCc, 1)
+    if (idxLabel > -1) conditions.splice(idxLabel, 1)
+  }
+}
+
 watch(() => [newEntry.departure, newEntry.destination, newEntry.flightTime.crossCountry, newEntry.date, newEntry.flightTime.total, newEntry.oooi?.out, newEntry.oooi?.in], async () => {
   if (!newEntry.departure || !newEntry.destination || newEntry.departure === 'UNKNOWN' || newEntry.destination === 'UNKNOWN') {
+    clearCrossCountryFromEntry(newEntry)
     return
   }
   
@@ -10830,16 +10848,42 @@ watch(() => [newEntry.departure, newEntry.destination, newEntry.flightTime.cross
     return
   }
   
-  // Detect if XC time was manually changed (not by auto-fill)
-  const currentXcTime = newEntry.flightTime.crossCountry ?? 0
-  if (lastKnownXcTime.value !== null && currentXcTime !== lastKnownXcTime.value) {
-    // Check if this looks like a manual change (not matching total time exactly)
-    const totalTime = newEntry.flightTime.total ?? 0
-    if (Math.abs(currentXcTime - totalTime) > 0.01) {
-      xcTimeManuallySet.value = true
-    }
+  // Only run XC check when we have a valid total time (avoids running before total is in)
+  const totalTimeForWatch = newEntry.flightTime.total ?? 0
+  if (totalTimeForWatch <= 0 || totalTimeForWatch > 24) {
+    clearCrossCountryFromEntry(newEntry)
+    return
   }
+  
+  const currentXcTime = newEntry.flightTime.crossCountry ?? 0
   lastKnownXcTime.value = currentXcTime
+  
+  const MIN_CROSS_COUNTRY_DISTANCE_NM = 50
+  // Synchronous XC update when both airports are in cache (instant when cached)
+  const depCoords = getAirportCoordsFromCache(newEntry.departure || '')
+  const destCoords = getAirportCoordsFromCache(newEntry.destination || '')
+  if (depCoords && destCoords) {
+    const airportCoordsDep = { latitude: depCoords.lat, longitude: depCoords.lon }
+    const airportCoordsDest = { latitude: destCoords.lat, longitude: destCoords.lon }
+    const distanceNm = calculateDistanceNM(airportCoordsDep, airportCoordsDest)
+    if (distanceNm >= MIN_CROSS_COUNTRY_DISTANCE_NM && !xcTimeManuallySet.value) {
+      const xcValue = Math.round(totalTimeForWatch * 10) / 10
+      newEntry.flightTime.crossCountry = xcValue
+      lastKnownXcTime.value = xcValue
+      const indexCrossCountryLabel = newEntry.flightConditions.indexOf('Cross-Country')
+      if (indexCrossCountryLabel > -1) {
+        newEntry.flightConditions.splice(indexCrossCountryLabel, 1)
+      }
+      if (!newEntry.flightConditions.includes('crossCountry')) {
+        newEntry.flightConditions.push('crossCountry')
+      }
+    } else if (distanceNm < MIN_CROSS_COUNTRY_DISTANCE_NM) {
+      clearCrossCountryFromEntry(newEntry)
+    }
+  } else {
+    // Both airports present but not both in cache: clear XC so no stale value; async will set if distance >= 50
+    clearCrossCountryFromEntry(newEntry)
+  }
   
   // Clear existing timeout
   if (validationTimeout.value) {
@@ -12745,6 +12789,7 @@ async function checkAndAutoLogCrossCountry(): Promise<void> {
   // Only require airports - date is not needed for cross-country distance calculation
   if (!newEntry.departure || !newEntry.destination || 
       newEntry.departure === 'UNKNOWN' || newEntry.destination === 'UNKNOWN') {
+    clearCrossCountryFromEntry(newEntry)
     return
   }
   
@@ -12798,37 +12843,14 @@ async function checkAndAutoLogCrossCountry(): Promise<void> {
             return val === null || val === undefined || isNaN(val) ? 0 : val
           }
           
-          // If there's a warning about distance being too short, remove auto-filled cross-country time
+          // If distance is too short (< 50nm), always clear XC and remove condition
           if (crossCountryWarning) {
-            // Distance is too short - clear cross-country time if it was auto-filled
-            // Only clear if it matches the total time (likely auto-filled)
-            const totalTime = getNumValue(newEntry.flightTime.total)
-            const xcTime = getNumValue(newEntry.flightTime.crossCountry)
-            if (xcTime > 0 && Math.abs(xcTime - totalTime) < 0.01) {
-              newEntry.flightTime.crossCountry = 0
-              // Remove cross-country checkbox (normalize both possible values)
-              const indexCrossCountry = newEntry.flightConditions.indexOf('crossCountry')
-              const indexCrossCountryLabel = newEntry.flightConditions.indexOf('Cross-Country')
-              if (indexCrossCountry > -1) {
-                newEntry.flightConditions.splice(indexCrossCountry, 1)
-              }
-              if (indexCrossCountryLabel > -1) {
-                newEntry.flightConditions.splice(indexCrossCountryLabel, 1)
-              }
-            }
+            clearCrossCountryFromEntry(newEntry)
           } else if (crossCountryResult?.autoFix && crossCountryResult.autoFix.field === 'crossCountry') {
-            // When distance >= 50nm, XC time = total time. Use current total so we stay in sync when OOOI updates total.
+            // When distance >= 50nm, XC time = total time 1:1 at all times (stay in sync when OOOI updates total)
             const currentTotalTime = getNumValue(newEntry.flightTime.total)
-            const currentXcTime = getNumValue(newEntry.flightTime.crossCountry)
             const totalValid = currentTotalTime > 0 && currentTotalTime <= 24
-            const wasAutoFilledFromAirTime = currentXcTime > 0 &&
-              lastKnownXcTime.value !== null &&
-              Math.abs(currentXcTime - lastKnownXcTime.value) < 0.01 &&
-              Math.abs(currentXcTime - currentTotalTime) > 0.1
-            const shouldSetXc =
-              totalValid &&
-              !xcTimeManuallySet.value &&
-              ((!newEntry.flightTime.crossCountry || newEntry.flightTime.crossCountry === 0) || wasAutoFilledFromAirTime)
+            const shouldSetXc = totalValid && !xcTimeManuallySet.value
             if (shouldSetXc) {
               const xcValue = Math.round(currentTotalTime * 10) / 10
               newEntry.flightTime.crossCountry = xcValue
@@ -12842,6 +12864,9 @@ async function checkAndAutoLogCrossCountry(): Promise<void> {
               }
             }
           }
+        } else {
+          // Do not have both coords (lookup failed or one missing): clear XC so we never leave it set when unsure
+          clearCrossCountryFromEntry(newEntry)
         }
       } catch (err) {
         console.warn('Failed to lookup airport coordinates for cross-country check:', err)
