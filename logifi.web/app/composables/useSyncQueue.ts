@@ -179,7 +179,17 @@ export const useSyncQueue = () => {
     // All new entries now have UUIDs, so we can always include the ID
     // The trigger will automatically compute the hash
     const insertData = { ...item.entryData }
-    
+
+    // Ensure user_id is set for RLS (use current session if missing from queued payload)
+    if (!insertData.user_id) {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (authUser?.id) {
+        insertData.user_id = authUser.id
+      } else {
+        throw new Error('Not authenticated – cannot sync insert')
+      }
+    }
+
     // Safety check: verify ID is a UUID (should always be true for new entries)
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (insertData.id && !uuidRegex.test(insertData.id)) {
@@ -192,10 +202,14 @@ export const useSyncQueue = () => {
       .from('log_entries')
       .insert(insertData)
       .select()
-      .single()
+      .maybeSingle()
 
     if (error) {
+      console.error('[SyncQueue] Insert error:', error.code, error.message, error.details)
       throw error
+    }
+    if (!data) {
+      throw new Error('Insert returned no row (possible RLS or constraint issue)')
     }
 
     // Verify that hash was computed by the trigger
@@ -247,10 +261,14 @@ export const useSyncQueue = () => {
       .update(updateData)
       .eq('id', supabaseId)
       .select()
-      .single()
+      .maybeSingle()
 
     if (error) {
+      console.error('[SyncQueue] Update error:', error.code, error.message, error.details)
       throw error
+    }
+    if (!data) {
+      throw new Error('Update returned no row (possible RLS or row not found)')
     }
 
     // Verify that hash was recomputed by the trigger

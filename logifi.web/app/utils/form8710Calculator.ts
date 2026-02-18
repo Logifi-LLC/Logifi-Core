@@ -29,9 +29,34 @@ export function calculateSectionIII(entries: LogEntry[]): Form8710SectionIII {
 
   // Process each entry
   entries.forEach(entry => {
+    const ffs = entry.flightTime.ffs ?? 0
+    const ftd = entry.flightTime.ftd ?? 0
+    const atd = entry.flightTime.atd ?? 0
+    if (ffs > 0 || ftd > 0 || atd > 0) {
+      if (ffs > 0) {
+        const d = categoryMap.get('ffs')!
+        d.totalFlights++
+        d.instructionReceived += ffs
+        d.instrument += ffs
+      }
+      if (ftd > 0) {
+        const d = categoryMap.get('ftd')!
+        d.totalFlights++
+        d.instructionReceived += ftd
+        d.instrument += ftd
+      }
+      if (atd > 0) {
+        const d = categoryMap.get('atd')!
+        d.totalFlights++
+        d.instructionReceived += atd
+        d.instrument += atd
+      }
+      return
+    }
+
     let category: AircraftCategory8710 | null = null
 
-    // First check if it's a training device
+    // First check if it's a training device (inferred from make/model etc.)
     if (checkTrainingDevice(entry)) {
       // Try to determine which type of training device
       const makeModel = entry.aircraftMakeModel.toUpperCase()
@@ -200,6 +225,7 @@ function calculateTimeTotalsForPeriod(
     totals.soloTime += entry.flightTime.solo ?? 0
     totals.crossCountryTime += entry.flightTime.crossCountry ?? 0
     totals.instrumentTime += (entry.flightTime.actualInstrument ?? 0) + (entry.flightTime.simulatedInstrument ?? 0)
+      + (entry.flightTime.ffs ?? 0) + (entry.flightTime.ftd ?? 0) + (entry.flightTime.atd ?? 0)
     totals.nightTime += entry.flightTime.night ?? 0
   })
 

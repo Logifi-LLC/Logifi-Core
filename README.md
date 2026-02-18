@@ -1,6 +1,6 @@
 # Logifi-Core
 
-The open-source core digital flight logbook used by Logifi.io. Community driven, pilot focused.
+An open-source, community-driven digital flight logbook built by pilots, for pilots. Logifi-Core provides a robust, AC 120-78B compliant foundation that empowers the aviation community to build the digital logbook tools they need.
 
 **Phase 1 Complete** - AC 120-78B compliant digital flight logbook with data migration, compliance features, and export capabilities.
 
@@ -48,27 +48,21 @@ See [SETUP_INSTRUCTIONS.md](SETUP_INSTRUCTIONS.md) for detailed setup instructio
 - **[SCHEMA.md](SCHEMA.md)** - Database schema documentation
 - **[API.md](API.md)** - API reference for developers
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment and testing guide (Vercel, Netlify, local tunnels)
-- **[PHASE1_ROADMAP.md](PHASE1_ROADMAP.md)** - Development roadmap and status
 - **[RELEASE_NOTES.md](RELEASE_NOTES.md)** - Phase 1 release notes
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history
+- **[PHASE1_ROADMAP.md](PHASE1_ROADMAP.md)** - Development roadmap and future plans
 
 ## Testing
 
 Run tests:
-
 ```bash
-# Unit and integration tests
-npm run test
-
-# Watch mode
-npm run test:watch
-
-# Coverage
-npm run test:coverage
-
-# E2E tests
-npm run test:e2e
+npm run test          # Unit and integration tests
+npm run test:e2e      # End-to-end tests
+npm run test:watch    # Watch mode
+npm run test:coverage # Coverage report
 ```
+
+See [TESTING.md](TESTING.md) for detailed testing documentation.
 
 ## Technology Stack
 
@@ -77,20 +71,26 @@ npm run test:e2e
 - **Storage**: IndexedDB (local) + Supabase (cloud)
 - **Testing**: Vitest, Playwright
 
-## Community
+## Community & Governance
 
-- **Discord**: https://discord.gg/hBaDkNt2ev
-- **Website**: www.logifi.io
+Logifi-Core is a community-driven project. We believe the best digital logbook tools emerge when pilots, developers, and aviation enthusiasts collaborate together.
+
+### Get Involved
+
+- **Discord**: Join our [Discord community](https://discord.gg/hBaDkNt2ev) - the primary space for collaboration, discussions, and getting help
+- **Website**: Visit [www.logifi.io](https://www.logifi.io) to learn more
+
+### Community-Driven Development
+
+- **The `dev` branch** is where innovation happens. All new features, improvements, and contributions are developed here before being merged to `main`
+- **Community shapes the roadmap** - Features and priorities are driven by community needs and contributions
+- **Open governance** - Major decisions are discussed transparently with the community
+
+This project thrives because of the collective efforts of pilots and developers who share a vision for better flight logbook software.
 
 ## Roadmap
 
-### Phase 2 (Planned)
-- Electronic signatures
-- Student/instructor update workflow
-- Enhanced non-repudiation features
-- Additional currency requirements
-
-See [PHASE1_ROADMAP.md](PHASE1_ROADMAP.md) for detailed roadmap.
+See [PHASE1_ROADMAP.md](PHASE1_ROADMAP.md) for the complete development roadmap and upcoming features.
 
 ## License
 
@@ -98,7 +98,21 @@ See [PHASE1_ROADMAP.md](PHASE1_ROADMAP.md) for detailed roadmap.
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions are what make Logifi-Core great! Whether you're fixing bugs, adding features, improving documentation, or sharing ideas, we welcome your participation.
+
+### How to Contribute
+
+1. **Fork the repository** and create a feature branch from `dev`
+2. **Make your changes** following our contribution guidelines
+3. **Submit a pull request** to the `dev` branch
+4. **Join the discussion** on Discord to share ideas and get feedback
+
+We're especially excited to see contributions from:
+- Pilots who can help shape features based on real-world needs
+- Developers who can help improve the codebase and add new capabilities
+- Anyone passionate about building better tools for the aviation community
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines and code scope information.
 
 ---
 

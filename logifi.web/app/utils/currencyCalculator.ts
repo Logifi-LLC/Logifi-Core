@@ -5,6 +5,7 @@
 
 import { DateTime } from 'luxon'
 import type { LogEntry, CurrencyStatus, AnnualCurrencyStatus, CurrencyStatusType } from './logbookTypes'
+import { getTotalApproachCount } from './logbookTypes'
 
 /**
  * Calculate 90-day passenger currency (Part 61.57(a))
@@ -225,7 +226,7 @@ export function calculateInstrumentCurrency(
     ) ?? false
     const hasInstrumentTime = ((entry.flightTime?.actualInstrument ?? 0) + 
                                 (entry.flightTime?.simulatedInstrument ?? 0)) > 0
-    const hasApproaches = (entry.performance?.approachCount ?? 0) > 0
+    const hasApproaches = getTotalApproachCount(entry.performance) > 0
     
     return hasInstrumentConditions || hasInstrumentTime || hasApproaches
   })
@@ -235,7 +236,7 @@ export function calculateInstrumentCurrency(
   let holdingProcedures = 0
   
   qualifyingEntries.forEach(entry => {
-    approaches += entry.performance?.approachCount ?? 0
+    approaches += getTotalApproachCount(entry.performance)
     holdingProcedures += entry.performance?.holdingProcedures ?? 0
   })
   
@@ -266,7 +267,7 @@ export function calculateInstrumentCurrency(
     let oldestContributingEntry: LogEntry | null = null
     
     for (const entry of sortedEntries) {
-      const entryApproaches = entry.performance?.approachCount ?? 0
+      const entryApproaches = getTotalApproachCount(entry.performance)
       
       if (entryApproaches > 0) {
         // Since we're going from newest to oldest, always update the oldest contributing entry

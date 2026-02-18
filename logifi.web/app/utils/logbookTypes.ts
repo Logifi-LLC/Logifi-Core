@@ -11,6 +11,9 @@ export type FlightTimeKey =
   | 'dualGiven'
   | 'crossCountry'
   | 'simulatedInstrument'
+  | 'ffs'
+  | 'ftd'
+  | 'atd'
 
 export interface FlightTimeBreakdown {
   total: number | null
@@ -23,6 +26,12 @@ export interface FlightTimeBreakdown {
   dualGiven: number | null
   crossCountry: number | null
   simulatedInstrument: number | null
+  /** Full Flight Simulator hours (8710) */
+  ffs?: number | null
+  /** Flight Training Device hours (8710) */
+  ftd?: number | null
+  /** Aviation Training Device hours (8710) */
+  atd?: number | null
 }
 
 export type PerformanceKey =
@@ -34,13 +43,23 @@ export type PerformanceKey =
   | 'approachType'
   | 'holdingProcedures'
 
+/** Single approach record (type + count). Replaces single approachCount/approachType when present. */
+export interface ApproachRecord {
+  type: string
+  count: number
+}
+
 export interface PerformanceMetrics {
   dayTakeoffs: number | null
   nightTakeoffs: number | null
   dayLandings: number | null
   nightLandings: number | null
+  /** @deprecated Use approaches[].count sum instead. Kept for backward compatibility. */
   approachCount: number | null
+  /** @deprecated Use approaches[].type instead. Kept for backward compatibility. */
   approachType: string | null
+  /** List of approach types with counts. When present, this is the source of truth. */
+  approaches?: ApproachRecord[]
   holdingProcedures: number | null
 }
 
@@ -69,6 +88,10 @@ export interface LogEntry {
   instructorCertificate: string
   flightConditions: string[]
   remarks: string
+  /** Optional tags (e.g. Checkride, Flight Review, IPC, Part 135) */
+  tags?: string[]
+  /** Which logbook this entry belongs to (filtered by switch). Default 'flight' for existing entries. */
+  logbookType?: 'flight' | 'simulator'
   flightTime: FlightTimeBreakdown
   performance: PerformanceMetrics
   oooi?: OOOITimes
@@ -157,7 +180,10 @@ export const createEmptyFlightTime = (): FlightTimeBreakdown => ({
   actualInstrument: null,
   dualGiven: null,
   crossCountry: null,
-  simulatedInstrument: null
+  simulatedInstrument: null,
+  ffs: null,
+  ftd: null,
+  atd: null
 })
 
 export const createEmptyPerformance = (): PerformanceMetrics => ({
@@ -167,8 +193,24 @@ export const createEmptyPerformance = (): PerformanceMetrics => ({
   nightLandings: null,
   approachCount: null,
   approachType: null,
+  approaches: [],
   holdingProcedures: null
 })
+
+/** Get approaches list; supports legacy approachCount/approachType when approaches is empty or missing. */
+export function getApproachesFromPerformance(perf: PerformanceMetrics | null | undefined): ApproachRecord[] {
+  if (!perf) return []
+  if (perf.approaches && perf.approaches.length > 0) return perf.approaches
+  const count = perf.approachCount ?? 0
+  const type = (perf.approachType || '').trim() || 'Unknown'
+  if (count <= 0 && !type) return []
+  return [{ type, count: count || 1 }]
+}
+
+/** Total approach count from performance (for display/export). */
+export function getTotalApproachCount(perf: PerformanceMetrics | null | undefined): number {
+  return getApproachesFromPerformance(perf).reduce((sum, a) => sum + a.count, 0)
+}
 
 export const createEmptyOOOI = (): OOOITimes => ({
   out: null,
