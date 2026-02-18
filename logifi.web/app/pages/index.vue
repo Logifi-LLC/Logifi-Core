@@ -627,13 +627,13 @@
                               type="button"
                               :aria-expanded="familyOpenState[fam]"
                               @click="familyOpenState[fam] = !familyOpenState[fam]"
-                              @contextmenu.prevent="showRenameFamilyContextMenu($event, fam)"
+                              @contextmenu.prevent="showRenameFamilyContextMenu($event, catalogs.familyDisplayName?.[fam] ?? fam)"
                               :class="[
                                 'px-1 py-0.5 rounded',
                                 isDarkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-300'
                               ]"
                             >
-                              <span class="font-medium">{{ fam }}</span>
+                              <span class="font-medium">{{ catalogs.familyDisplayName?.[fam] ?? fam }}</span>
                             </button>
                             <span :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
                               ({{ catalogs.familyToItems?.[fam]?.length || 0 }})
@@ -734,9 +734,11 @@
                 <label
                   v-for="opt in conditionOptions"
                   :key="'filter-cond-' + opt.value"
-                    :class="[
+                  :class="[
                     'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-quicksand cursor-pointer transition-all',
-                    isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200'
+                    selectedFilters.conditions[opt.value]
+                      ? (isDarkMode ? 'border-blue-500 bg-blue-900/40 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700')
+                      : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')
                   ]"
                 >
                   <input
@@ -744,18 +746,18 @@
                     @click.stop
                     :checked="!!selectedFilters.conditions[opt.value]"
                     @change="(e) => { const c = (e.target as HTMLInputElement).checked; selectedFilters.conditions[opt.value] = c }"
-                      :class="[
+                    :class="[
                       'h-4 w-4 rounded border transition-colors',
                       isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500'
-                      ]"
-                    />
+                    ]"
+                  />
                   <span>{{ opt.label }}</span>
                 </label>
             </div>
                   </div>
                 </div>
 
-          <!-- Flagged Entries filter section -->
+          <!-- Flag/Tag Entries filter section -->
           <div v-show="!isSidebarCollapsed">
             <div
               :class="[
@@ -765,7 +767,7 @@
             >
               <div class="flex items-center justify-between mb-2">
                 <h3 :class="['text-sm font-semibold font-quicksand', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                  Flagged Entries
+                  Flag/Tag Entries
                 </h3>
                 <span :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                   Optional filter
@@ -789,6 +791,29 @@
                 <Icon name="ri:flag-fill" :size="14" :class="[isDarkMode ? 'text-amber-400' : 'text-amber-600']" />
                 <span>Show flagged entries only</span>
               </label>
+              <div v-if="catalogTags.length > 0" class="mt-3 pt-3 border-t" :class="[isDarkMode ? 'border-gray-600' : 'border-gray-300']">
+                <div :class="['text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Filter by tag</div>
+                <div class="flex flex-wrap gap-1.5">
+                  <label
+                    v-for="tag in catalogTags"
+                    :key="tag"
+                    :class="[
+                      'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-quicksand cursor-pointer transition-all',
+                      selectedFilters.tags[tag]
+                        ? (isDarkMode ? 'border-blue-500 bg-blue-900/40 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700')
+                        : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-300 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200')
+                    ]"
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="!!selectedFilters.tags[tag]"
+                      @change="(e) => { selectedFilters.tags[tag] = (e.target as HTMLInputElement).checked }"
+                      :class="['h-3.5 w-3.5 rounded border transition-colors', isDarkMode ? 'border-gray-500 bg-gray-700' : 'border-gray-400 bg-gray-100']"
+                    />
+                    <span>{{ tag }}</span>
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -805,6 +830,7 @@
                     Object.values(selectedFilters.conditions).filter(Boolean).length +
                     Object.values(selectedFilters.families).filter(Boolean).length +
                     Object.values(selectedFilters.categoryClass).filter(Boolean).length +
+                    Object.values(selectedFilters.tags).filter(Boolean).length +
                     (selectedFilters.flagged ? 1 : 0)
                   }}
                 </span>
@@ -1754,18 +1780,30 @@
               </div>
               <!-- Conditions, Tags, Remarks, Pilot -->
               <div class="flex flex-wrap gap-3">
-                <label v-for="condition in conditionOptions" :key="condition.value" :class="['inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200']">
+                <label v-for="condition in conditionOptions" :key="condition.value" :class="['inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all', (inlineEditEntry.flightConditions || []).includes(condition.value) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')]">
                   <input v-model="inlineEditEntry.flightConditions" :value="condition.value" type="checkbox" :class="['h-4 w-4 rounded border transition-colors', isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500']" />
                   <span>{{ condition.label }}</span>
                 </label>
               </div>
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Tags</label>
-                <div class="flex flex-wrap gap-2 mb-3">
-                  <label v-for="tag in entryTagOptions" :key="'sim-inline-' + tag" :class="['inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-quicksand cursor-pointer transition-all', (inlineEditEntry.tags || []).includes(tag) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-300 bg-gray-100 text-gray-600 hover:border-gray-400')]">
-                    <input v-model="inlineEditEntry.tags" type="checkbox" :value="tag" :class="['h-3.5 w-3.5 rounded']" />
-                    <span>{{ tag }}</span>
-                  </label>
+                <div class="flex flex-wrap gap-2 mb-3 items-center">
+                  <template v-for="tag in [...allTagOptions, ...customTagsFor(inlineEditEntry)]" :key="'sim-inline-' + tag">
+                    <label :class="['inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-quicksand cursor-pointer transition-all', (inlineEditEntry.tags || []).includes(tag) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-300 bg-gray-100 text-gray-600 hover:border-gray-400')]">
+                      <input v-model="inlineEditEntry.tags" type="checkbox" :value="tag" :class="['h-3.5 w-3.5 rounded']" />
+                      <span>{{ tag }}</span>
+                    </label>
+                  </template>
+                  <template v-if="!showInlineCustomTagInput">
+                    <button type="button" @click="showInlineCustomTagInput = true" :class="['inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-sm font-quicksand transition-all', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200']" aria-label="Add custom tag">+</button>
+                  </template>
+                  <template v-else>
+                    <div class="inline-flex gap-1 items-center">
+                      <input v-model="customTagInputInline" type="text" placeholder="Custom tag" :class="['w-28 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" @keydown.enter.prevent="addCustomTag(inlineEditEntry, customTagInputInline); customTagInputInline = ''; showInlineCustomTagInput = false" />
+                      <button type="button" @click="addCustomTag(inlineEditEntry, customTagInputInline); customTagInputInline = ''; showInlineCustomTagInput = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
+                      <button type="button" @click="showInlineCustomTagInput = false; customTagInputInline = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
+                    </div>
+                  </template>
                 </div>
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Remarks / Applicable 61.51 Notes</label>
                 <textarea v-model="inlineEditEntry.remarks" rows="3" placeholder="Document training received, endorsements pending, or other relevant notes." :class="['w-full rounded border px-2 py-2 text-sm font-quicksand transition-colors duration-300', isDarkMode ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-400' : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400']"></textarea>
@@ -2166,9 +2204,9 @@
                 :key="condition.value"
                 :class="[
                   'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all',
-                  isDarkMode 
-                    ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' 
-                    : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200'
+                  (inlineEditEntry.flightConditions || []).includes(condition.value)
+                    ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700')
+                    : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')
                 ]"
               >
                 <input
@@ -2188,20 +2226,30 @@
 
             <div>
               <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Tags</label>
-              <div class="flex flex-wrap gap-2 mb-3">
-                <label
-                  v-for="tag in entryTagOptions"
-                  :key="'inline-' + tag"
-                  :class="[
-                    'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-quicksand cursor-pointer transition-all',
-                    (inlineEditEntry.tags || []).includes(tag)
-                      ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700')
-                      : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-300 bg-gray-100 text-gray-600 hover:border-gray-400')
-                  ]"
-                >
-                  <input v-model="inlineEditEntry.tags" type="checkbox" :value="tag" :class="['h-3.5 w-3.5 rounded']" />
-                  <span>{{ tag }}</span>
-                </label>
+              <div class="flex flex-wrap gap-2 mb-3 items-center">
+                <template v-for="tag in [...allTagOptions, ...customTagsFor(inlineEditEntry)]" :key="'inline-' + tag">
+                  <label
+                    :class="[
+                      'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-quicksand cursor-pointer transition-all',
+                      (inlineEditEntry.tags || []).includes(tag)
+                        ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700')
+                        : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-300 bg-gray-100 text-gray-600 hover:border-gray-400')
+                    ]"
+                  >
+                    <input v-model="inlineEditEntry.tags" type="checkbox" :value="tag" :class="['h-3.5 w-3.5 rounded']" />
+                    <span>{{ tag }}</span>
+                  </label>
+                </template>
+                <template v-if="!showInlineCustomTagInput">
+                  <button type="button" @click="showInlineCustomTagInput = true" :class="['inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-sm font-quicksand transition-all', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200']" aria-label="Add custom tag">+</button>
+                </template>
+                <template v-else>
+                  <div class="inline-flex gap-1 items-center">
+                    <input v-model="customTagInputInline" type="text" placeholder="Custom tag" :class="['w-28 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" @keydown.enter.prevent="addCustomTag(inlineEditEntry, customTagInputInline); customTagInputInline = ''; showInlineCustomTagInput = false" />
+                    <button type="button" @click="addCustomTag(inlineEditEntry, customTagInputInline); customTagInputInline = ''; showInlineCustomTagInput = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
+                    <button type="button" @click="showInlineCustomTagInput = false; customTagInputInline = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
+                  </div>
+                </template>
               </div>
               <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Remarks / Applicable 61.51 Notes</label>
               <textarea
@@ -2579,7 +2627,7 @@
 
                   <!-- Conditions, Tags, Remarks, Pilot -->
                   <div class="flex flex-wrap gap-3">
-                    <label v-for="condition in conditionOptions" :key="condition.value" :class="['inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200']">
+                    <label v-for="condition in conditionOptions" :key="condition.value" :class="['inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all', (newEntry.flightConditions || []).includes(condition.value) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')]">
                       <input v-model="newEntry.flightConditions" :value="condition.value" type="checkbox" :class="['h-4 w-4 rounded border transition-colors', isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500']" />
                       <span>{{ condition.label }}</span>
                     </label>
@@ -2592,17 +2640,20 @@
                     </button>
                     <div v-if="tagsDropdownOpen" :class="['absolute left-0 top-full z-50 mt-1 min-w-56 rounded-lg border py-2 shadow-lg', isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-white']">
                       <div class="space-y-2 px-2">
-                        <div v-for="tag in fixedTagOptions" :key="tag" class="flex items-center gap-2">
+                        <div v-for="tag in allTagOptions" :key="tag" class="flex items-center gap-2">
                           <input type="checkbox" :checked="(newEntry.tags || []).includes(tag)" :id="'sim-new-tag-' + tag" :class="['h-3.5 w-3.5 rounded']" @change="toggleFixedTag(newEntry, tag)" />
                           <label :for="'sim-new-tag-' + tag" class="cursor-pointer text-sm font-quicksand">{{ tag }}</label>
                         </div>
-                      </div>
-                      <div class="mt-2 border-t px-2 pt-2" :class="isDarkMode ? 'border-gray-600' : 'border-gray-200'">
-                        <div class="text-[10px] uppercase font-bold mb-1" :class="isDarkMode ? 'text-gray-500' : 'text-gray-400'">Custom</div>
-                        <div class="flex gap-1">
-                          <input v-model="customTagInput" type="text" placeholder="Label" class="flex-1 rounded border px-2 py-1 text-sm" :class="isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'" @keydown.enter.prevent="addCustomTag(newEntry, customTagInput); customTagInput = ''" />
-                          <button type="button" @click="addCustomTag(newEntry, customTagInput); customTagInput = ''" :class="['rounded px-2 py-1 text-sm', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
-                        </div>
+                        <template v-if="!showNewEntryCustomTagInput">
+                          <button type="button" @click="showNewEntryCustomTagInput = true" class="flex items-center gap-2 rounded-lg border px-2 py-1.5 text-sm font-quicksand w-full text-left" :class="isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-100'">+ Add custom tag</button>
+                        </template>
+                        <template v-else>
+                          <div class="flex gap-1 items-center">
+                            <input v-model="customTagInput" type="text" placeholder="Custom tag" class="flex-1 rounded border px-2 py-1 text-sm" :class="isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'" @keydown.enter.prevent="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" />
+                            <button type="button" @click="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" :class="['rounded px-2 py-1 text-sm', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
+                            <button type="button" @click="showNewEntryCustomTagInput = false; customTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
+                          </div>
+                        </template>
                         <div v-if="customTagsFor(newEntry).length" class="mt-1.5 flex flex-wrap gap-1">
                           <span v-for="tag in customTagsFor(newEntry)" :key="tag" class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs" :class="isDarkMode ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'">
                             {{ tag }}
@@ -2611,7 +2662,7 @@
                         </div>
                       </div>
                       <div class="mt-2 px-2">
-                        <button type="button" @click="tagsDropdownOpen = false" :class="['w-full rounded py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Done</button>
+                        <button type="button" @click="tagsDropdownOpen = false; showNewEntryCustomTagInput = false" :class="['w-full rounded py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Done</button>
                       </div>
                     </div>
                   </div>
@@ -2992,9 +3043,9 @@
                   :key="condition.value"
                   :class="[
                     'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all',
-                    isDarkMode 
-                      ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' 
-                      : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200'
+                    (newEntry.flightConditions || []).includes(condition.value)
+                      ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700')
+                      : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')
                   ]"
                 >
                   <input
@@ -3030,7 +3081,7 @@
                   :class="['absolute left-0 top-full z-50 mt-1 min-w-[220px] rounded-lg border py-2 shadow-lg', isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-white']"
                 >
                   <div class="space-y-2 px-2">
-                    <div v-for="tag in fixedTagOptions" :key="tag" class="flex items-center gap-2">
+                    <div v-for="tag in allTagOptions" :key="tag" class="flex items-center gap-2">
                       <input
                         type="checkbox"
                         :checked="(newEntry.tags || []).includes(tag)"
@@ -3040,20 +3091,23 @@
                       />
                       <label :for="'new-tag-' + tag" class="cursor-pointer text-sm font-quicksand">{{ tag }}</label>
                     </div>
-                  </div>
-                  <div class="mt-2 border-t px-2 pt-2" :class="isDarkMode ? 'border-gray-600' : 'border-gray-200'">
-                    <div class="text-[10px] uppercase font-bold mb-1" :class="isDarkMode ? 'text-gray-500' : 'text-gray-400'">Custom</div>
-                    <div class="flex gap-1">
-                      <input
-                        v-model="customTagInput"
-                        type="text"
-                        placeholder="Label"
-                        class="flex-1 rounded border px-2 py-1 text-sm"
-                        :class="isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'"
-                        @keydown.enter.prevent="addCustomTag(newEntry, customTagInput); customTagInput = ''"
-                      />
-                      <button type="button" @click="addCustomTag(newEntry, customTagInput); customTagInput = ''" :class="['rounded px-2 py-1 text-sm', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
-                    </div>
+                    <template v-if="!showNewEntryCustomTagInput">
+                      <button type="button" @click="showNewEntryCustomTagInput = true" class="flex items-center gap-2 rounded-lg border px-2 py-1.5 text-sm font-quicksand w-full text-left" :class="isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-100'">+ Add custom tag</button>
+                    </template>
+                    <template v-else>
+                      <div class="flex gap-1 items-center">
+                        <input
+                          v-model="customTagInput"
+                          type="text"
+                          placeholder="Custom tag"
+                          class="flex-1 rounded border px-2 py-1 text-sm"
+                          :class="isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'"
+                          @keydown.enter.prevent="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false"
+                        />
+                        <button type="button" @click="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" :class="['rounded px-2 py-1 text-sm', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
+                        <button type="button" @click="showNewEntryCustomTagInput = false; customTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
+                      </div>
+                    </template>
                     <div v-if="customTagsFor(newEntry).length" class="mt-1.5 flex flex-wrap gap-1">
                       <span
                         v-for="tag in customTagsFor(newEntry)"
@@ -3069,7 +3123,7 @@
                     </div>
                   </div>
                   <div class="mt-2 px-2">
-                    <button type="button" @click="tagsDropdownOpen = false" :class="['w-full rounded py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Done</button>
+                    <button type="button" @click="tagsDropdownOpen = false; showNewEntryCustomTagInput = false" :class="['w-full rounded py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Done</button>
                   </div>
                 </div>
               </div>
@@ -4595,6 +4649,45 @@
         </div>
       </div>
 
+            <!-- Tags for this aircraft (applied to all entries with this registration, autofill on new entries) -->
+            <div v-if="isAuthenticated && currentAircraftInfo?.registration" class="pt-4 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+              <div :class="['text-sm font-semibold font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Tags</div>
+              <!-- Family tags (from aircraft family; also applied to log entries) -->
+              <div v-if="currentAircraftFamilyName && getEntityTags('family', currentAircraftFamilyName).length" class="mb-2">
+                <span :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">From family: </span>
+                <span v-for="tag in getEntityTags('family', currentAircraftFamilyName)" :key="'fam-' + tag" class="inline-flex items-center rounded-full px-2.5 py-1 text-sm mr-1" :class="[isDarkMode ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700']">{{ tag }}</span>
+              </div>
+              <div class="flex flex-wrap gap-2 items-center">
+                <span v-for="tag in getEntityTags('aircraft', currentAircraftInfo.registration)" :key="tag" class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm" :class="[isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-300 text-gray-800']">
+                  {{ tag }}
+                  <button type="button" aria-label="Remove tag" @click="removeEntityTag('aircraft', currentAircraftInfo.registration, tag); aircraftModalNewTagInput = ''" :class="['rounded p-0.5', isDarkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-400']"><Icon name="ri:close-line" size="14" /></button>
+                </span>
+                <template v-if="!aircraftModalShowAddTag">
+                  <button type="button" @click="aircraftModalShowAddTag = true" :class="['inline-flex items-center justify-center rounded-lg border px-2.5 py-1 text-sm font-quicksand', isDarkMode ? 'border-gray-600 text-gray-400 hover:bg-gray-700' : 'border-gray-400 text-gray-600 hover:bg-gray-200']">+ Add tag</button>
+                </template>
+                <template v-else>
+                  <div class="flex flex-col gap-2">
+                    <div v-if="[...fixedTagOptions, ...presetsInUse].filter(t => !getEntityTags('aircraft', currentAircraftInfo.registration).includes(t)).length" class="flex flex-wrap gap-1">
+                      <span :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">Presets: </span>
+                      <button v-for="tag in [...fixedTagOptions, ...presetsInUse].filter(t => !getEntityTags('aircraft', currentAircraftInfo.registration).includes(t))" :key="'preset-' + tag" type="button" @click="addEntityTag('aircraft', currentAircraftInfo.registration, tag); aircraftModalShowAddTag = false" :class="['rounded-full px-2 py-0.5 text-xs font-quicksand', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']">{{ tag }}</button>
+                    </div>
+                    <div v-if="presetsUnused.length" class="flex flex-wrap gap-1 items-center">
+                      <span :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">Unused (remove): </span>
+                      <span v-for="tag in presetsUnused" :key="'unused-' + tag" class="inline-flex items-center gap-0.5 rounded-full pl-2 pr-0.5 py-0.5 text-xs" :class="[isDarkMode ? 'bg-gray-600 text-gray-400' : 'bg-gray-200 text-gray-600']">
+                        {{ tag }}
+                        <button type="button" aria-label="Remove from presets" @click="removeTagPreset(tag)" :class="['rounded p-0.5', isDarkMode ? 'hover:bg-gray-500' : 'hover:bg-gray-300']"><Icon name="ri:close-line" size="12" /></button>
+                      </span>
+                    </div>
+                    <div class="inline-flex gap-1 items-center">
+                      <input v-model="aircraftModalNewTagInput" type="text" placeholder="Or type new tag" :class="['w-32 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addEntityTag('aircraft', currentAircraftInfo.registration, aircraftModalNewTagInput); aircraftModalNewTagInput = ''; aircraftModalShowAddTag = false" />
+                      <button type="button" @click="addEntityTag('aircraft', currentAircraftInfo.registration, aircraftModalNewTagInput); aircraftModalNewTagInput = ''; aircraftModalShowAddTag = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
+                      <button type="button" @click="aircraftModalShowAddTag = false; aircraftModalNewTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
             <div v-if="currentAircraftInfo.source" class="pt-4 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
               <div :class="['text-xs font-quicksand italic', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
                 Source: {{ currentAircraftInfo.source }}
@@ -4830,6 +4923,44 @@
               placeholder="Add notes about this crew member..."
             />
           </div>
+
+          <!-- Tags for this person (applied to all entries with this crew, autofill on new entries) -->
+          <div v-if="isAuthenticated && currentCrewName" class="pt-4 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+            <div :class="['text-sm font-semibold font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Tags</div>
+            <p :class="['text-xs mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-500']">Crew tags are also applied to all log entries that list this person.</p>
+            <div v-if="crewModalLastTagEntryCount !== null" :class="['text-xs mb-2', isDarkMode ? 'text-green-400' : 'text-green-600']">
+              {{ crewModalLastTagEntryCount === 0 ? 'Tag added to this crew member.' : `Tag added to this crew member and to ${crewModalLastTagEntryCount} log entry${crewModalLastTagEntryCount === 1 ? '' : 's'}.` }}
+            </div>
+            <div class="flex flex-wrap gap-2 items-center">
+              <span v-for="tag in getEntityTags('person', currentCrewName)" :key="tag" class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm" :class="[isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-300 text-gray-800']">
+                {{ tag }}
+                <button type="button" aria-label="Remove tag" @click="removeEntityTag('person', currentCrewName, tag); crewModalNewTagInput = ''" :class="['rounded p-0.5', isDarkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-400']"><Icon name="ri:close-line" size="14" /></button>
+              </span>
+              <template v-if="!crewModalShowAddTag">
+                <button type="button" @click="crewModalShowAddTag = true" :class="['inline-flex items-center justify-center rounded-lg border px-2.5 py-1 text-sm font-quicksand', isDarkMode ? 'border-gray-600 text-gray-400 hover:bg-gray-700' : 'border-gray-400 text-gray-600 hover:bg-gray-200']">+ Add tag</button>
+              </template>
+              <template v-else>
+                <div class="flex flex-col gap-2">
+                  <div v-if="[...fixedTagOptions, ...presetsInUse].filter(t => !getEntityTags('person', currentCrewName).includes(t)).length" class="flex flex-wrap gap-1">
+                    <span :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">Presets: </span>
+                    <button v-for="tag in [...fixedTagOptions, ...presetsInUse].filter(t => !getEntityTags('person', currentCrewName).includes(t))" :key="'preset-' + tag" type="button" @click="addEntityTag('person', currentCrewName, tag); crewModalShowAddTag = false" :class="['rounded-full px-2 py-0.5 text-xs font-quicksand', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']">{{ tag }}</button>
+                  </div>
+                  <div v-if="presetsUnused.length" class="flex flex-wrap gap-1 items-center">
+                    <span :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">Unused (remove): </span>
+                    <span v-for="tag in presetsUnused" :key="'unused-' + tag" class="inline-flex items-center gap-0.5 rounded-full pl-2 pr-0.5 py-0.5 text-xs" :class="[isDarkMode ? 'bg-gray-600 text-gray-400' : 'bg-gray-200 text-gray-600']">
+                      {{ tag }}
+                      <button type="button" aria-label="Remove from presets" @click="removeTagPreset(tag)" :class="['rounded p-0.5', isDarkMode ? 'hover:bg-gray-500' : 'hover:bg-gray-300']"><Icon name="ri:close-line" size="12" /></button>
+                    </span>
+                  </div>
+                  <div class="inline-flex gap-1 items-center">
+                    <input v-model="crewModalNewTagInput" type="text" placeholder="Or type new tag" :class="['w-32 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addEntityTag('person', currentCrewName, crewModalNewTagInput); crewModalNewTagInput = ''; crewModalShowAddTag = false" />
+                    <button type="button" @click="addEntityTag('person', currentCrewName, crewModalNewTagInput); crewModalNewTagInput = ''; crewModalShowAddTag = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
+                    <button type="button" @click="crewModalShowAddTag = false; crewModalNewTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
           
           <!-- Statistics Section -->
           <div v-if="crewStats">
@@ -4936,7 +5067,7 @@
         >
           <div class="flex items-center gap-2">
             <Icon name="ri:edit-line" :size="16" />
-            <span>Rename Family...</span>
+            <span>Edit Family</span>
           </div>
         </button>
       </div>
@@ -4959,7 +5090,7 @@
       >
         <div class="flex items-center justify-between p-6 border-b" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
           <h3 :class="['text-xl font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
-            Rename Aircraft Family
+            Edit Aircraft Family
           </h3>
           <button
             @click="closeRenameFamilyModal"
@@ -5008,15 +5139,56 @@
             />
           </div>
 
-          <div v-if="renameFamilyNewName.trim() && normalizeAircraftFamily(renameFamilyNewName.trim()) !== renameFamilyOldName" class="rounded-lg p-3" :class="[isDarkMode ? 'bg-gray-700/50' : 'bg-gray-100']">
+          <div v-if="renameFamilyNewName.trim()" class="rounded-lg p-3" :class="[isDarkMode ? 'bg-gray-700/50' : 'bg-gray-100']">
             <div :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
-              <span class="font-semibold">Note:</span> 
-              <span v-if="catalogs.families?.includes(normalizeAircraftFamily(renameFamilyNewName.trim()))">
+              <span class="font-semibold">Note:</span>
+              <span v-if="normalizeAircraftFamily(renameFamilyNewName.trim()) === normalizeAircraftFamily(renameFamilyOldName)">
+                Display name will update; same family and tags.
+              </span>
+              <span v-else-if="catalogs.families?.includes(normalizeAircraftFamily(renameFamilyNewName.trim()))">
                 This will merge with the existing "{{ normalizeAircraftFamily(renameFamilyNewName.trim()) }}" family.
               </span>
               <span v-else>
                 This will create a new family group.
               </span>
+            </div>
+          </div>
+
+          <!-- Tags for this family (applied to all entries in family, autofill on new entries) -->
+          <div v-if="isAuthenticated" class="pt-4 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+            <div :class="['text-sm font-semibold font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Tags</div>
+            <p :class="['text-xs mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-500']">Family tags are also applied to all log entries that use this aircraft family.</p>
+            <div v-if="editFamilyLastTagEntryCount !== null" :class="['text-xs mb-2', isDarkMode ? 'text-green-400' : 'text-green-600']">
+              {{ editFamilyLastTagEntryCount === 0 ? 'Tag added to this family.' : `Tag added to this family and to ${editFamilyLastTagEntryCount} log entry${editFamilyLastTagEntryCount === 1 ? '' : 's'}.` }}
+            </div>
+            <div class="flex flex-wrap gap-2 items-center">
+              <span v-for="tag in getEntityTags('family', renameFamilyOldName)" :key="tag" class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm" :class="[isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-300 text-gray-800']">
+                {{ tag }}
+                <button type="button" aria-label="Remove tag" @click="removeEntityTag('family', renameFamilyOldName, tag); editFamilyNewTagInput = ''" :class="['rounded p-0.5', isDarkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-400']"><Icon name="ri:close-line" size="14" /></button>
+              </span>
+              <template v-if="!editFamilyShowAddTag">
+                <button type="button" @click="editFamilyShowAddTag = true" :class="['inline-flex items-center justify-center rounded-lg border px-2.5 py-1 text-sm font-quicksand', isDarkMode ? 'border-gray-600 text-gray-400 hover:bg-gray-700' : 'border-gray-400 text-gray-600 hover:bg-gray-200']">+ Add tag</button>
+              </template>
+              <template v-else>
+                <div class="flex flex-col gap-2">
+                  <div v-if="[...fixedTagOptions, ...presetsInUse].filter(t => !getEntityTags('family', renameFamilyOldName).includes(t)).length" class="flex flex-wrap gap-1">
+                    <span :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">Presets: </span>
+                    <button v-for="tag in [...fixedTagOptions, ...presetsInUse].filter(t => !getEntityTags('family', renameFamilyOldName).includes(t))" :key="'preset-' + tag" type="button" @click="addEntityTag('family', renameFamilyOldName, tag); editFamilyShowAddTag = false" :class="['rounded-full px-2 py-0.5 text-xs font-quicksand', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']">{{ tag }}</button>
+                  </div>
+                  <div v-if="presetsUnused.length" class="flex flex-wrap gap-1 items-center">
+                    <span :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">Unused (remove): </span>
+                    <span v-for="tag in presetsUnused" :key="'unused-' + tag" class="inline-flex items-center gap-0.5 rounded-full pl-2 pr-0.5 py-0.5 text-xs" :class="[isDarkMode ? 'bg-gray-600 text-gray-400' : 'bg-gray-200 text-gray-600']">
+                      {{ tag }}
+                      <button type="button" aria-label="Remove from presets" @click="removeTagPreset(tag)" :class="['rounded p-0.5', isDarkMode ? 'hover:bg-gray-500' : 'hover:bg-gray-300']"><Icon name="ri:close-line" size="12" /></button>
+                    </span>
+                  </div>
+                  <div class="inline-flex gap-1 items-center">
+                    <input v-model="editFamilyNewTagInput" type="text" placeholder="Or type new tag" :class="['w-32 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addEntityTag('family', renameFamilyOldName, editFamilyNewTagInput); editFamilyNewTagInput = ''; editFamilyShowAddTag = false" />
+                    <button type="button" @click="addEntityTag('family', renameFamilyOldName, editFamilyNewTagInput); editFamilyNewTagInput = ''; editFamilyShowAddTag = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
+                    <button type="button" @click="editFamilyShowAddTag = false; editFamilyNewTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
         </div>
@@ -5744,6 +5916,8 @@ watch(isAuthenticated, async (authenticated) => {
           console.log('Migration completed:', result)
           // Reload entries from Supabase after migration
           await loadEntries()
+          await fetchEntityTags()
+          await fetchUserTagPresets()
         } else {
           console.error('Migration failed:', result.error)
         }
@@ -5755,6 +5929,8 @@ watch(isAuthenticated, async (authenticated) => {
     } else {
       // Migration already completed - load entries directly
       await loadEntries()
+      await fetchEntityTags()
+      await fetchUserTagPresets()
     }
   } else if (!authenticated) {
     // Show auth modal when not authenticated
@@ -5809,6 +5985,287 @@ watch(isOnline, (online) => {
   }
 })
 
+// Catalog entity tags (family, aircraft, person) - loaded from Supabase when authenticated
+type CatalogEntityTagRow = { id: string; user_id: string; entity_type: 'family' | 'aircraft' | 'person'; entity_id: string; tag: string }
+const entityTagsList = ref<CatalogEntityTagRow[]>([])
+
+async function fetchEntityTags(): Promise<void> {
+  if (!isAuthenticated.value || !user.value) {
+    entityTagsList.value = []
+    return
+  }
+  try {
+    const { data, error } = await (supabase
+      .from('catalog_entity_tags') as any)
+      .select('id, user_id, entity_type, entity_id, tag')
+      .eq('user_id', user.value.id)
+    if (error) {
+      console.error('[fetchEntityTags]', error)
+      return
+    }
+    entityTagsList.value = (data || []) as CatalogEntityTagRow[]
+  } catch (e) {
+    console.error('[fetchEntityTags]', e)
+  }
+}
+
+// User tag presets (saved custom tag labels so they appear as options next time)
+const userTagPresets = ref<string[]>([])
+
+async function fetchUserTagPresets(): Promise<void> {
+  if (!isAuthenticated.value || !user.value) {
+    userTagPresets.value = []
+    return
+  }
+  try {
+    const { data, error } = await (supabase.from('user_tag_presets') as any)
+      .select('tag')
+      .eq('user_id', user.value.id)
+    if (error) {
+      console.error('[fetchUserTagPresets]', error)
+      return
+    }
+    userTagPresets.value = (data || []).map((r: { tag: string }) => r.tag).sort((a: string, b: string) => a.localeCompare(b))
+  } catch (e) {
+    console.error('[fetchUserTagPresets]', e)
+  }
+}
+
+/** All tag options to show: fixed (Checkride, Flight Review, IPC) + saved presets. */
+const allTagOptions = computed(() => {
+  const fixed = [...fixedTagOptions]
+  const presets = userTagPresets.value.filter((p) => !fixed.includes(p as typeof fixedTagOptions[number]))
+  return [...fixed, ...presets]
+})
+
+/** Presets that are in use (on at least one entity or log entry). Shown first in Add tag. */
+const presetsInUse = computed(() => {
+  const fixed = [...fixedTagOptions]
+  const presetList = userTagPresets.value.filter((p) => !fixed.includes(p as typeof fixedTagOptions[number]))
+  const used = new Set<string>()
+  entityTagsList.value.forEach((r) => used.add(r.tag))
+  logEntries.value.forEach((entry) => (entry.tags || []).forEach((t) => used.add(t)))
+  return presetList.filter((p) => used.has(p))
+})
+
+/** Presets not used anywhere (e.g. misspelled). Shown with option to remove from presets. */
+const presetsUnused = computed(() => {
+  const inUse = new Set(presetsInUse.value)
+  const fixed = [...fixedTagOptions]
+  return userTagPresets.value.filter((p) => !fixed.includes(p as typeof fixedTagOptions[number]) && !inUse.has(p))
+})
+
+async function addTagPreset(tag: string): Promise<void> {
+  const t = (tag || '').trim()
+  if (!t) return
+  if (fixedTagOptions.includes(t as typeof fixedTagOptions[number])) return
+  if (!isAuthenticated.value || !user.value) return
+  try {
+    const { error } = await (supabase.from('user_tag_presets') as any).insert({
+      user_id: user.value.id,
+      tag: t
+    })
+    if (error) {
+      if (error.code === '23505') return // unique, already saved
+      console.error('[addTagPreset]', error)
+      return
+    }
+    await fetchUserTagPresets()
+  } catch (e) {
+    console.error('[addTagPreset]', e)
+  }
+}
+
+async function removeTagPreset(tag: string): Promise<void> {
+  const t = (tag || '').trim()
+  if (!t) return
+  if (!isAuthenticated.value || !user.value) return
+  try {
+    await (supabase.from('user_tag_presets') as any)
+      .delete()
+      .eq('user_id', user.value.id)
+      .eq('tag', t)
+    await fetchUserTagPresets()
+  } catch (e) {
+    console.error('[removeTagPreset]', e)
+  }
+}
+
+type EntityType = 'family' | 'aircraft' | 'person'
+
+async function addEntityTag(entityType: EntityType, entityId: string, tag: string): Promise<void> {
+  const t = (tag || '').trim()
+  if (!t) return
+  if (!isAuthenticated.value || !user.value) return
+  const eid = entityType === 'family' ? normalizeAircraftFamily(entityId) : entityType === 'person' ? entityId.trim().toLowerCase() : entityId.trim().toUpperCase()
+  if (!eid) return
+  try {
+    const { error } = await (supabase.from('catalog_entity_tags') as any).insert({
+      user_id: user.value.id,
+      entity_type: entityType,
+      entity_id: eid,
+      tag: t
+    })
+    if (error) {
+      if (error.code === '23505') {
+        // Tag already on entity; still save as preset and refresh UI
+        await fetchEntityTags()
+        await addTagPreset(t)
+        return
+      }
+      console.error('[addEntityTag]', error)
+      throw error
+    }
+    const entryCount = await backfillEntityTagToEntries(entityType, eid, t)
+    if (entityType === 'family') editFamilyLastTagEntryCount.value = entryCount
+    if (entityType === 'person') crewModalLastTagEntryCount.value = entryCount
+    await fetchEntityTags()
+    await addTagPreset(t)
+  } catch (e) {
+    console.error('[addEntityTag]', e)
+    throw e
+  }
+}
+
+/** Remove a tag from all log entries that match this entity (reverse of backfill). */
+async function removeEntityTagFromEntries(entityType: EntityType, entityId: string, tag: string): Promise<void> {
+  const matches = logEntries.value.filter((entry) => {
+    if (entityType === 'family') {
+      return normalizeAircraftFamily(entry.aircraftMakeModel || '') === normalizeAircraftFamily(entityId)
+    }
+    if (entityType === 'aircraft') {
+      return (entry.registration || '').trim().toUpperCase() === entityId
+    }
+    // person (case-insensitive; entityId is already lowercase when called from removeEntityTag)
+    return (entry.trainingElements || '').trim().toLowerCase() === entityId.toLowerCase()
+  })
+  if (matches.length === 0) return
+  const t = (tag || '').trim()
+  if (!t) return
+  for (const entry of matches) {
+    const tags = entry.tags || []
+    const next = tags.filter((x) => x !== t)
+    if (next.length === tags.length) continue
+    entry.tags = next
+  }
+  if (!isAuthenticated.value || !user.value) return
+  for (const entry of matches) {
+    const tags = entry.tags || []
+    try {
+      await (supabase.from('log_entries') as any)
+        .update({ tags })
+        .eq('id', entry.id)
+        .eq('user_id', user.value.id)
+    } catch (e) {
+      console.error('[removeEntityTagFromEntries]', entry.id, e)
+    }
+  }
+}
+
+async function removeEntityTag(entityType: EntityType, entityId: string, tag: string): Promise<void> {
+  const t = (tag || '').trim()
+  if (!t) return
+  if (!isAuthenticated.value || !user.value) return
+  const eid = entityType === 'family' ? normalizeAircraftFamily(entityId) : entityType === 'person' ? entityId.trim().toLowerCase() : entityId.trim().toUpperCase()
+  if (!eid) return
+  try {
+    const entityIdsToRemove = [eid]
+    for (const id of entityIdsToRemove) {
+      await (supabase.from('catalog_entity_tags') as any)
+        .delete()
+        .eq('user_id', user.value.id)
+        .eq('entity_type', entityType)
+        .eq('entity_id', id)
+        .eq('tag', t)
+    }
+    await removeEntityTagFromEntries(entityType, eid, t)
+    await removeTagPreset(t)
+    await fetchEntityTags()
+  } catch (e) {
+    console.error('[removeEntityTag]', e)
+    throw e
+  }
+}
+
+async function backfillEntityTagToEntries(entityType: EntityType, entityId: string, tag: string): Promise<number> {
+  const matches = logEntries.value.filter((entry) => {
+    if (entityType === 'family') {
+      return normalizeAircraftFamily(entry.aircraftMakeModel || '') === normalizeAircraftFamily(entityId)
+    }
+    if (entityType === 'aircraft') {
+      return (entry.registration || '').trim().toUpperCase() === entityId
+    }
+    // person (case-insensitive so backfill finds all matching entries)
+    return (entry.trainingElements || '').trim().toLowerCase() === entityId.toLowerCase()
+  })
+  if (matches.length === 0) return 0
+  const tagSet = new Set<string>([tag])
+  for (const entry of matches) {
+    const existing = entry.tags || []
+    const merged = [...new Set([...existing, ...tagSet])]
+    entry.tags = merged
+  }
+  if (!isAuthenticated.value || !user.value) return matches.length
+  for (const entry of matches) {
+    try {
+      await (supabase.from('log_entries') as any)
+        .update({ tags: entry.tags })
+        .eq('id', entry.id)
+        .eq('user_id', user.value.id)
+    } catch (e) {
+      console.error('[backfillEntityTagToEntries] update entry', entry.id, e)
+    }
+  }
+  return matches.length
+}
+
+function normalizeEntityIdForLookup(entityType: 'family' | 'aircraft' | 'person', entityId: string): string {
+  const s = (entityId || '').trim()
+  if (entityType === 'family') return normalizeAircraftFamily(s)
+  if (entityType === 'aircraft') return s.toUpperCase()
+  if (entityType === 'person') return s.toLowerCase()
+  return s
+}
+
+function getEntityTags(entityType: 'family' | 'aircraft' | 'person', entityId: string): string[] {
+  const key = normalizeEntityIdForLookup(entityType, entityId)
+  if (!key) return []
+  return entityTagsList.value
+    .filter((r) => r.entity_type === entityType && normalizeEntityIdForLookup(entityType, r.entity_id) === key)
+    .map((r) => r.tag)
+}
+
+/** Consolidation groups for rename: same logical family + typos (e.g. FMB-170). Used only for rename and tag migration. */
+const FAMILY_RENAME_GROUPS: string[][] = [
+  ['EMB-170', 'ERJ-170', 'FMB-170'],
+  ['EMB-175', 'ERJ-175'],
+  ['EMB-190', 'ERJ-190']
+]
+
+function getFamilyRenameGroup(familyName: string): string[] {
+  const key = (familyName || '').trim().toUpperCase()
+  if (!key) return [key]
+  for (const group of FAMILY_RENAME_GROUPS) {
+    if (group.some((s) => s.toUpperCase() === key)) return group
+  }
+  return [key]
+}
+
+/** Merge entity-level tags (aircraft, family, person) into entry.tags for autofill. */
+function mergeEntityTagsIntoEntry(entry: { tags?: string[]; registration?: string; aircraftMakeModel?: string; trainingElements?: string }): void {
+  if (!entry) return
+  const reg = (entry.registration || '').trim().toUpperCase()
+  const family = normalizeAircraftFamily(entry.aircraftMakeModel || '')
+  const person = (entry.trainingElements || '').trim()
+  const aircraftTags = getEntityTags('aircraft', reg)
+  const familyTags = family ? getEntityTags('family', family) : []
+  const personTags = person ? getEntityTags('person', person) : []
+  const toAdd = [...aircraftTags, ...familyTags, ...personTags]
+  if (toAdd.length === 0) return
+  const existing = entry.tags || []
+  entry.tags = [...new Set([...existing, ...toAdd])]
+}
+
 const roleOptions = ['PIC', 'SIC', 'Dual Received', 'Solo', 'Safety Pilot', 'Examiner', 'Instructor'] as const
 
 /** Display label for role (e.g. "Student" for "Dual Received") */
@@ -5817,7 +6274,7 @@ function roleDisplayLabel(role: string): string {
 }
 const oooiFields: (keyof OOOITimes)[] = ['out', 'off', 'on', 'in']
 
-const entryTagOptions = ['Checkride', 'Flight Review', 'IPC', '61.58', 'NVG', 'Part 135'] as const
+const entryTagOptions = ['Checkride', 'Flight Review', 'IPC'] as const
 
 const conditionOptions = [
   { value: 'nightVfr', label: 'Night' },
@@ -6801,6 +7258,8 @@ function cancelInlineEdit(): void {
   expandedEntryId.value = null
   inlineEditEntry.value = null
   isInlineCommercialMode.value = false
+  showInlineCustomTagInput.value = false
+  customTagInputInline.value = ''
 }
 
 const catalogOpenState = reactive<Record<CatalogKey, boolean>>({
@@ -6832,6 +7291,8 @@ const customTagInput = ref('')
 const showSimSection = ref(false)
 const showInlineSimSection = ref(false)
 const customTagInputInline = ref('')
+const showInlineCustomTagInput = ref(false)
+const showNewEntryCustomTagInput = ref(false)
 
 // Highlighted index for keyboard navigation
 const highlightedIdentIndex = ref(-1)
@@ -6982,7 +7443,8 @@ const selectedFilters = reactive({
   conditions: {} as Record<string, boolean>, // key: condition value (e.g., 'ifr', 'nightVfr')
   families: {} as Record<string, boolean>, // key: normalized aircraft family (e.g., 'C172', 'PA-28')
   categoryClass: {} as Record<string, boolean>, // key: category/class (e.g., 'ASEL', 'AMEL')
-  flagged: false // filter for flagged entries
+  flagged: false, // filter for flagged entries
+  tags: {} as Record<string, boolean> // key: tag label (e.g., 'Checkride', 'IPC')
 })
 // Aircraft family section open/closed state
 const familyOpenState = reactive<Record<string, boolean>>({})
@@ -8954,8 +9416,25 @@ function savePilotProfilePrefs(): void {
 const { lookupAircraft } = useAircraftLookup()
 const showAircraftModal = ref(false)
 const currentAircraftInfo = ref<AircraftInfo | null>(null)
+const aircraftModalNewTagInput = ref('')
+const aircraftModalShowAddTag = ref(false)
 const loadingAircraftInfo = ref(false)
 const aircraftInfoError = ref<string | null>(null)
+/** Family name for the aircraft currently shown in the Aircraft Information modal. Prefer catalog family from log entries (so renames are reflected); else from make/model. */
+const currentAircraftFamilyName = computed(() => {
+  const info = currentAircraftInfo.value
+  if (!info) return ''
+  const reg = (info.registration || '').trim().toUpperCase()
+  if (reg) {
+    const entryWithReg = logEntries.value.find(
+      (e) => (e.registration || '').trim().toUpperCase() === reg
+    )
+    if (entryWithReg?.aircraftMakeModel)
+      return normalizeAircraftFamily(entryWithReg.aircraftMakeModel)
+  }
+  const makeModel = [info.make, info.model].filter(Boolean).join(' ')
+  return normalizeAircraftFamily(makeModel)
+})
 
 // Airport lookup
 const { lookupAirport } = useAirportLookup()
@@ -8982,11 +9461,19 @@ const currentCrewName = ref<string>('')
 const crewProfiles = ref<Record<string, CrewProfile>>({})
 const isEditingCrewName = ref(false)
 const editingCrewName = ref<string>('')
+const crewModalNewTagInput = ref('')
+const crewModalShowAddTag = ref(false)
+/** After adding a person tag, number of log entries it was applied to (for Crew modal). */
+const crewModalLastTagEntryCount = ref<number | null>(null)
 
 // Aircraft family rename modal
 const showRenameFamilyModal = ref(false)
 const renameFamilyOldName = ref<string>('')
 const renameFamilyNewName = ref<string>('')
+const editFamilyNewTagInput = ref('')
+const editFamilyShowAddTag = ref(false)
+/** After adding a family tag, number of log entries it was applied to (for Edit Family modal). */
+const editFamilyLastTagEntryCount = ref<number | null>(null)
 const contextMenuVisible = ref(false)
 const contextMenuX = ref(0)
 const contextMenuY = ref(0)
@@ -9193,12 +9680,31 @@ async function renameCrewMember(oldName: string, newName: string): Promise<void>
     return entry
   })
   
+  // Migrate person tags to the new name so Crew modal still shows them (same as family rename)
+  if (isAuthenticated.value && user.value) {
+    const oldId = (oldName || '').trim()
+    const newId = trimmedNewName
+    if (oldId && newId && oldId !== newId) {
+      try {
+        const { error } = await (supabase.from('catalog_entity_tags') as any)
+          .update({ entity_id: newId })
+          .eq('user_id', user.value.id)
+          .eq('entity_type', 'person')
+          .eq('entity_id', oldId)
+        if (error) console.error('[renameCrewMember] catalog_entity_tags', error)
+        else await fetchEntityTags()
+      } catch (e) {
+        console.error('[renameCrewMember]', e)
+      }
+    }
+  }
+
   // Update the crew profile key (move profile from old name to new name)
   // Find profile by case-insensitive key match
   const profileKey = Object.keys(crewProfiles.value).find(
     key => key.toLowerCase() === oldNameLower
   )
-  
+
   if (profileKey && crewProfiles.value[profileKey]) {
     const profile = crewProfiles.value[profileKey]
     crewProfiles.value[trimmedNewName] = {
@@ -9209,7 +9715,7 @@ async function renameCrewMember(oldName: string, newName: string): Promise<void>
     delete crewProfiles.value[profileKey]
     saveCrewProfiles()
   }
-  
+
   // Update currentCrewName if it matches the old name
   if (currentCrewName.value.toLowerCase() === oldNameLower) {
     currentCrewName.value = trimmedNewName
@@ -9503,6 +10009,7 @@ function addCustomTag(entry: { tags?: string[] }, label: string): void {
   if (!t) return
   const tags = entry.tags || (entry.tags = [])
   if (!tags.includes(t)) tags.push(t)
+  addTagPreset(t)
 }
 
 function removeTag(entry: { tags?: string[] }, tag: string): void {
@@ -9512,9 +10019,10 @@ function removeTag(entry: { tags?: string[] }, tag: string): void {
   if (i >= 0) tags.splice(i, 1)
 }
 
+/** Tags on entry that are not in the preset list (one-off customs). */
 function customTagsFor(entry: { tags?: string[] }): string[] {
   const tags = entry.tags || []
-  return tags.filter((t) => !fixedTagOptions.includes(t as typeof fixedTagOptions[number]))
+  return tags.filter((t) => !allTagOptions.value.includes(t))
 }
 
 function createBlankEntry(): EditableLogEntry {
@@ -9779,6 +10287,7 @@ function clearAllFilters(): void {
   selectedFilters.families = {}
   selectedFilters.categoryClass = {}
   selectedFilters.flagged = false
+  selectedFilters.tags = {}
 }
 
 // Aircraft family normalization (maps model variants to a base family)
@@ -9817,6 +10326,10 @@ function normalizeAircraftFamily(makeModel: string): string {
   // Beechcraft Baron/Bonanza
   if (s.includes('BE58') || s.includes('BARON')) return 'BE-58'
   if (s.includes('BE36') || s.includes('BONANZA')) return 'BE-36'
+  // Embraer ERJ 170/175/190: single canonical key per family so renames don't create duplicate parents
+  if (s.includes('ERJ 170') || s.includes('ERJ170') || s.includes('EMB-170') || s.includes('ERJ-170') || s.includes('FMB-170')) return 'ERJ-170'
+  if (s.includes('ERJ 175') || s.includes('ERJ175') || s.includes('EMB-175') || s.includes('ERJ-175')) return 'ERJ-175'
+  if (s.includes('ERJ 190') || s.includes('ERJ190') || s.includes('EMB-190') || s.includes('ERJ-190')) return 'ERJ-190'
   // Fallback: take first token with letters+digits (e.g., 'C172S' -> 'C172S'), then strip trailing letters to form family
   const token = (s.match(/\b[A-Z]+\d+[A-Z]*\b/) || [])[0]
   if (token) {
@@ -9880,6 +10393,8 @@ function closeAircraftModal(): void {
   showAircraftModal.value = false
   currentAircraftInfo.value = null
   aircraftInfoError.value = null
+  aircraftModalShowAddTag.value = false
+  aircraftModalNewTagInput.value = ''
 }
 
 // Aircraft family rename functions
@@ -9908,32 +10423,47 @@ function closeRenameFamilyModal(): void {
   showRenameFamilyModal.value = false
   renameFamilyOldName.value = ''
   renameFamilyNewName.value = ''
+  editFamilyShowAddTag.value = false
+  editFamilyNewTagInput.value = ''
+  editFamilyLastTagEntryCount.value = null
 }
 
-function renameAircraftFamily(oldFamilyName: string, newFamilyName: string): void {
+async function renameAircraftFamily(oldFamilyName: string, newFamilyName: string): Promise<void> {
   if (!oldFamilyName || !newFamilyName || oldFamilyName.trim() === newFamilyName.trim()) {
     return
   }
-  
+
   const trimmedNewName = newFamilyName.trim()
   if (!trimmedNewName) {
     return
   }
-  
-  // Find all entries where normalizeAircraftFamily(entry.aircraftMakeModel) === oldFamilyName
-  const entriesToUpdate = logEntries.value.filter(entry => {
+
+  const group = getFamilyRenameGroup(oldFamilyName)
+  const groupSet = new Set(group.map((s) => s.toUpperCase()))
+
+  // All entries in this logical family (including typos like FMB-170) — in memory
+  const entriesToUpdate = logEntries.value.filter((entry) => {
     const normalized = normalizeAircraftFamily(entry.aircraftMakeModel)
-    return normalized === oldFamilyName
+    return normalized && groupSet.has(normalized.toUpperCase())
   })
-  
-  if (entriesToUpdate.length === 0) {
-    return
+
+  // Persist to Supabase: update ALL matching rows (not just in-memory) so rename works even when list is filtered
+  if (isAuthenticated.value && user.value) {
+    try {
+      const { error } = await (supabase.from('log_entries') as any)
+        .update({ aircraft_make_model: trimmedNewName })
+        .eq('user_id', user.value.id)
+        .in('aircraft_make_model', group)
+      if (error) console.error('[renameAircraftFamily] log_entries', error)
+    } catch (e) {
+      console.error('[renameAircraftFamily] log_entries', e)
+    }
   }
-  
-  // Update all matching entries
-  logEntries.value = logEntries.value.map(entry => {
+
+  // Update all matching entries in memory so UI updates immediately
+  logEntries.value = logEntries.value.map((entry) => {
     const normalized = normalizeAircraftFamily(entry.aircraftMakeModel)
-    if (normalized === oldFamilyName) {
+    if (normalized && groupSet.has(normalized.toUpperCase())) {
       return {
         ...entry,
         aircraftMakeModel: trimmedNewName
@@ -9941,33 +10471,98 @@ function renameAircraftFamily(oldFamilyName: string, newFamilyName: string): voi
     }
     return entry
   })
-  
-  // Note: logEntries is watched and auto-saves to localStorage
+
+  // Write renamed entries to IndexedDB so local-first load shows new name after refresh
+  const idSet = new Set(entriesToUpdate.map((e) => e.id))
+  for (const entry of logEntries.value) {
+    if (idSet.has(entry.id)) {
+      try {
+        await updateEntryInIndexedDB(entry)
+      } catch (e) {
+        console.warn('[renameAircraftFamily] IndexedDB update failed for', entry.id, e)
+      }
+    }
+  }
+
+  // Migrate all family tags (every entity_id in group) to the new name, then dedupe
+  const newId = (trimmedNewName || '').trim().toUpperCase()
+  if (isAuthenticated.value && user.value && newId) {
+    try {
+      for (const oldId of group) {
+        const id = (oldId || '').trim().toUpperCase()
+        if (!id || id === newId) continue
+        const { error } = await (supabase.from('catalog_entity_tags') as any)
+          .update({ entity_id: newId })
+          .eq('user_id', user.value.id)
+          .eq('entity_type', 'family')
+          .eq('entity_id', id)
+        if (error) console.error('[renameAircraftFamily] catalog_entity_tags', id, error)
+      }
+      // Dedupe: after merging, same (user, family, newId, tag) may appear multiple times; keep one per tag
+      const { data: rows } = await (supabase.from('catalog_entity_tags') as any)
+        .select('id, tag')
+        .eq('user_id', user.value.id)
+        .eq('entity_type', 'family')
+        .eq('entity_id', newId)
+      if (rows && rows.length > 1) {
+        const byTag: Record<string, string[]> = {}
+        for (const r of rows) {
+          if (!byTag[r.tag]) byTag[r.tag] = []
+          byTag[r.tag].push(r.id)
+        }
+        for (const tag of Object.keys(byTag)) {
+          const ids = byTag[tag]
+          if (ids.length > 1) {
+            const [, ...toRemove] = ids
+            for (const id of toRemove) {
+              await (supabase.from('catalog_entity_tags') as any).delete().eq('id', id)
+            }
+          }
+        }
+      }
+      await fetchEntityTags()
+    } catch (e) {
+      console.error('[renameAircraftFamily] catalog_entity_tags', e)
+    }
+  }
+
   closeRenameFamilyModal()
 }
 
-function confirmRenameFamily(): void {
+async function confirmRenameFamily(): Promise<void> {
   if (!renameFamilyOldName.value || !renameFamilyNewName.value) {
     return
   }
-  
+
   const trimmedNewName = renameFamilyNewName.value.trim()
   if (!trimmedNewName) {
     return
   }
-  
+
   if (trimmedNewName === renameFamilyOldName.value) {
     closeRenameFamilyModal()
     return
   }
-  
-  renameAircraftFamily(renameFamilyOldName.value, trimmedNewName)
+
+  const newCanonical = normalizeAircraftFamily(trimmedNewName)
+  const oldCanonical = normalizeAircraftFamily(renameFamilyOldName.value)
+  const wouldCreateNewFamily = newCanonical !== oldCanonical && !catalogs.value.families?.includes(newCanonical)
+  if (wouldCreateNewFamily && !window.confirm('This will create a new family group. Continue?')) {
+    return
+  }
+
+  await renameAircraftFamily(renameFamilyOldName.value, trimmedNewName)
 }
 
-// Computed: count of entries that will be renamed
+// Computed: count of entries that will be renamed (full consolidation group, including typos)
 const entriesToRenameCount = computed(() => {
   if (!renameFamilyOldName.value) return 0
-  return logEntries.value.filter(e => normalizeAircraftFamily(e.aircraftMakeModel) === renameFamilyOldName.value).length
+  const group = getFamilyRenameGroup(renameFamilyOldName.value)
+  const groupSet = new Set(group.map((s) => s.toUpperCase()))
+  return logEntries.value.filter((e) => {
+    const norm = normalizeAircraftFamily(e.aircraftMakeModel)
+    return norm && groupSet.has(norm.toUpperCase())
+  }).length
 })
 
 async function showAirportInfo(airportCode: string): Promise<void> {
@@ -10021,6 +10616,9 @@ function closeCrewProfileModal(): void {
   currentCrewName.value = ''
   isEditingCrewName.value = false
   editingCrewName.value = ''
+  crewModalShowAddTag.value = false
+  crewModalNewTagInput.value = ''
+  crewModalLastTagEntryCount.value = null
 }
 
 // Start editing crew name
@@ -12375,6 +12973,15 @@ const filteredEntries = computed(() => {
       }
     }
 
+    // tags filter (entry must have all selected tags)
+    const activeTags = getActiveFilterKeys(selectedFilters.tags)
+    if (activeTags.length > 0) {
+      const entryTagSet = new Set(entry.tags || [])
+      if (!activeTags.every((tag) => entryTagSet.has(tag))) {
+        return false
+      }
+    }
+
     return true
   })
 
@@ -12498,6 +13105,7 @@ interface CatalogsValue {
   categoryClass: string[]
   families: string[]
   familyToItems: Record<string, string[]>
+  familyDisplayName: Record<string, string>
 }
 const catalogs = computed<CatalogsValue>(() => {
   const aircraft = new Set<string>()
@@ -12505,6 +13113,7 @@ const catalogs = computed<CatalogsValue>(() => {
   const pilots = new Set<string>()
   const categoryClass = new Set<string>()
   const familiesSet = new Set<string>()
+  const familyMakeModelCounts: Record<string, Record<string, number>> = {}
   const familyToItemsMap: Record<string, Set<string>> = {}
 
   logEntries.value.forEach((entry) => {
@@ -12515,11 +13124,11 @@ const catalogs = computed<CatalogsValue>(() => {
     }
     if (makeModel) {
       const fam = normalizeAircraftFamily(makeModel)
-      if (fam) familiesSet.add(fam)
       if (fam) {
+        familiesSet.add(fam)
+        if (!familyMakeModelCounts[fam]) familyMakeModelCounts[fam] = {}
+        familyMakeModelCounts[fam][makeModel] = (familyMakeModelCounts[fam][makeModel] || 0) + 1
         if (!familyToItemsMap[fam]) familyToItemsMap[fam] = new Set<string>()
-        const item = tail ? `${makeModel || 'Airframe'} · ${tail}` : makeModel
-        familyToItemsMap[fam].add(item)
       }
     }
     if (entry.departure.trim()) {
@@ -12533,6 +13142,28 @@ const catalogs = computed<CatalogsValue>(() => {
     }
     if (entry.aircraftCategoryClass.trim()) {
       categoryClass.add(entry.aircraftCategoryClass.trim().toUpperCase())
+    }
+  })
+
+  // Display name per family = most common makeModel so rename is visible
+  const familyDisplayName: Record<string, string> = {}
+  for (const fam of Object.keys(familyMakeModelCounts)) {
+    const counts = familyMakeModelCounts[fam]
+    const mode = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? fam
+    familyDisplayName[fam] = mode
+  }
+
+  // Build items using display name so parent and children match and renames show up
+  logEntries.value.forEach((entry) => {
+    const makeModel = entry.aircraftMakeModel.trim()
+    const tail = entry.registration.trim().toUpperCase()
+    if (makeModel) {
+      const fam = normalizeAircraftFamily(makeModel)
+      if (fam) {
+        const displayName = familyDisplayName[fam] ?? fam
+        const item = tail ? `${displayName} · ${tail}` : displayName
+        familyToItemsMap[fam].add(item)
+      }
     }
   })
 
@@ -12554,8 +13185,20 @@ const catalogs = computed<CatalogsValue>(() => {
     pilots: Array.from(pilots).sort((a, b) => a.localeCompare(b)),
     categoryClass: Array.from(categoryClass).sort((a, b) => a.localeCompare(b)),
     families: Array.from(familiesSet).sort((a, b) => a.localeCompare(b)),
-    familyToItems
+    familyToItems,
+    familyDisplayName
   }
+})
+
+// Tags that appear in the logbook (for sidebar filter)
+const catalogTags = computed(() => {
+  const set = new Set<string>()
+  logEntries.value.forEach((entry) => {
+    ;(entry.tags || []).forEach((t) => {
+      if (t?.trim()) set.add(t.trim())
+    })
+  })
+  return Array.from(set).sort((a, b) => a.localeCompare(b))
 })
 
 // Lazy load airport names for display in catalog
@@ -12694,6 +13337,7 @@ function selectAircraftForNewEntry(aircraft: { registration: string; makeModel: 
   if (!(newEntry.aircraftCategoryClass || '').trim()) {
     tryPopulateAircraftCategory(newEntry.registration)
   }
+  mergeEntityTagsIntoEntry(newEntry)
 }
 
 function selectAircraftForInlineEdit(aircraft: { registration: string; makeModel: string }): void {
@@ -12705,6 +13349,7 @@ function selectAircraftForInlineEdit(aircraft: { registration: string; makeModel
   if (!(inlineEditEntry.value.aircraftCategoryClass || '').trim()) {
     tryPopulateAircraftCategoryForInline(inlineEditEntry.value.registration)
   }
+  mergeEntityTagsIntoEntry(inlineEditEntry.value)
 }
 
 // Blur handlers for Ident dropdowns (with delay to allow click to register)
@@ -12919,6 +13564,7 @@ function selectPilotName(pilot: string): void {
   newEntry.trainingElements = pilot
   showPilotNameDropdown.value = false
   highlightedPilotIndex.value = -1
+  mergeEntityTagsIntoEntry(newEntry)
 }
 
 function selectPilotNameForInline(pilot: string): void {
@@ -12926,6 +13572,7 @@ function selectPilotNameForInline(pilot: string): void {
   inlineEditEntry.value.trainingElements = pilot
   showInlinePilotNameDropdown.value = false
   highlightedInlinePilotIndex.value = -1
+  mergeEntityTagsIntoEntry(inlineEditEntry.value)
 }
 
 // Blur handlers for airport and pilot dropdowns

@@ -23,6 +23,7 @@ export type Database = {
           training_instructor: string | null
           instructor_certificate: string | null
           flight_conditions: string[]
+          tags: string[]
           remarks: string | null
           flight_time: Record<string, any>
           performance: Record<string, any>
@@ -55,6 +56,7 @@ export type Database = {
           training_instructor?: string | null
           instructor_certificate?: string | null
           flight_conditions?: string[]
+          tags?: string[]
           remarks?: string | null
           flight_time?: Record<string, any>
           performance?: Record<string, any>
@@ -87,6 +89,7 @@ export type Database = {
           training_instructor?: string | null
           instructor_certificate?: string | null
           flight_conditions?: string[]
+          tags?: string[]
           remarks?: string | null
           flight_time?: Record<string, any>
           performance?: Record<string, any>
@@ -185,7 +188,46 @@ export type Database = {
           reason?: string | null
         }
       }
-      // Add other tables as needed
+      catalog_entity_tags: {
+        Row: {
+          id: string
+          user_id: string
+          entity_type: 'family' | 'aircraft' | 'person'
+          entity_id: string
+          tag: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          entity_type: 'family' | 'aircraft' | 'person'
+          entity_id: string
+          tag: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          entity_type?: 'family' | 'aircraft' | 'person'
+          entity_id?: string
+          tag?: string
+        }
+      }
+      user_tag_presets: {
+        Row: {
+          id: string
+          user_id: string
+          tag: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          tag: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          tag?: string
+        }
+      }
     }
     Views: {
       // Views will be added here
