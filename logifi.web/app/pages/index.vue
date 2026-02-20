@@ -2632,38 +2632,32 @@
                       <span>{{ condition.label }}</span>
                     </label>
                   </div>
-                  <div class="relative">
+                  <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Tags</label>
-                    <button type="button" @click="tagsDropdownOpen = !tagsDropdownOpen" :class="['inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-quicksand transition-all', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200']">
-                      <span>{{ (newEntry.tags || []).length ? `Tags (${(newEntry.tags || []).length})` : 'Add tags' }}</span>
-                      <Icon :name="tagsDropdownOpen ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'" size="18" />
-                    </button>
-                    <div v-if="tagsDropdownOpen" :class="['absolute left-0 top-full z-50 mt-1 min-w-56 rounded-lg border py-2 shadow-lg', isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-white']">
-                      <div class="space-y-2 px-2">
-                        <div v-for="tag in allTagOptions" :key="tag" class="flex items-center gap-2">
-                          <input type="checkbox" :checked="(newEntry.tags || []).includes(tag)" :id="'sim-new-tag-' + tag" :class="['h-3.5 w-3.5 rounded']" @change="toggleFixedTag(newEntry, tag)" />
-                          <label :for="'sim-new-tag-' + tag" class="cursor-pointer text-sm font-quicksand">{{ tag }}</label>
+                    <div class="flex flex-wrap gap-2 mb-3 items-center">
+                      <template v-for="tag in [...allTagOptions, ...customTagsFor(newEntry)]" :key="'sim-new-' + tag">
+                        <label
+                          :class="[
+                            'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-quicksand cursor-pointer transition-all',
+                            (newEntry.tags || []).includes(tag)
+                              ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700')
+                              : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-300 bg-gray-100 text-gray-600 hover:border-gray-400')
+                          ]"
+                        >
+                          <input v-model="newEntry.tags" type="checkbox" :value="tag" :class="['h-3.5 w-3.5 rounded']" />
+                          <span>{{ tag }}</span>
+                        </label>
+                      </template>
+                      <template v-if="!showNewEntryCustomTagInput">
+                        <button type="button" @click="showNewEntryCustomTagInput = true" :class="['inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-sm font-quicksand transition-all', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200']" aria-label="Add custom tag">+</button>
+                      </template>
+                      <template v-else>
+                        <div class="inline-flex gap-1 items-center">
+                          <input v-model="customTagInput" type="text" placeholder="Custom tag" :class="['w-28 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" @keydown.enter.prevent="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" />
+                          <button type="button" @click="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
+                          <button type="button" @click="showNewEntryCustomTagInput = false; customTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
                         </div>
-                        <template v-if="!showNewEntryCustomTagInput">
-                          <button type="button" @click="showNewEntryCustomTagInput = true" class="flex items-center gap-2 rounded-lg border px-2 py-1.5 text-sm font-quicksand w-full text-left" :class="isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-100'">+ Add custom tag</button>
-                        </template>
-                        <template v-else>
-                          <div class="flex gap-1 items-center">
-                            <input v-model="customTagInput" type="text" placeholder="Custom tag" class="flex-1 rounded border px-2 py-1 text-sm" :class="isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'" @keydown.enter.prevent="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" />
-                            <button type="button" @click="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" :class="['rounded px-2 py-1 text-sm', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
-                            <button type="button" @click="showNewEntryCustomTagInput = false; customTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
-                          </div>
-                        </template>
-                        <div v-if="customTagsFor(newEntry).length" class="mt-1.5 flex flex-wrap gap-1">
-                          <span v-for="tag in customTagsFor(newEntry)" :key="tag" class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs" :class="isDarkMode ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'">
-                            {{ tag }}
-                            <button type="button" aria-label="Remove tag" @click="removeTag(newEntry, tag)" :class="['rounded p-0.5', isDarkMode ? 'hover:bg-gray-500' : 'hover:bg-gray-300']"><Icon name="ri:close-line" size="14" /></button>
-                          </span>
-                        </div>
-                      </div>
-                      <div class="mt-2 px-2">
-                        <button type="button" @click="tagsDropdownOpen = false; showNewEntryCustomTagInput = false" :class="['w-full rounded py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Done</button>
-                      </div>
+                      </template>
                     </div>
                   </div>
                   <div>
@@ -3063,68 +3057,32 @@
                 </label>
               </div>
 
-              <div class="relative">
+              <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Tags</label>
-                <button
-                  type="button"
-                  @click="tagsDropdownOpen = !tagsDropdownOpen"
-                  :class="[
-                    'inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-quicksand transition-all',
-                    isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200'
-                  ]"
-                >
-                  <span>{{ (newEntry.tags || []).length ? `Tags (${(newEntry.tags || []).length})` : 'Add tags' }}</span>
-                  <Icon :name="tagsDropdownOpen ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'" size="18" />
-                </button>
-                <div
-                  v-if="tagsDropdownOpen"
-                  :class="['absolute left-0 top-full z-50 mt-1 min-w-[220px] rounded-lg border py-2 shadow-lg', isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300 bg-white']"
-                >
-                  <div class="space-y-2 px-2">
-                    <div v-for="tag in allTagOptions" :key="tag" class="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        :checked="(newEntry.tags || []).includes(tag)"
-                        :id="'new-tag-' + tag"
-                        :class="['h-3.5 w-3.5 rounded']"
-                        @change="toggleFixedTag(newEntry, tag)"
-                      />
-                      <label :for="'new-tag-' + tag" class="cursor-pointer text-sm font-quicksand">{{ tag }}</label>
+                <div class="flex flex-wrap gap-2 mb-3 items-center">
+                  <template v-for="tag in [...allTagOptions, ...customTagsFor(newEntry)]" :key="'new-' + tag">
+                    <label
+                      :class="[
+                        'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-quicksand cursor-pointer transition-all',
+                        (newEntry.tags || []).includes(tag)
+                          ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700')
+                          : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-300 bg-gray-100 text-gray-600 hover:border-gray-400')
+                      ]"
+                    >
+                      <input v-model="newEntry.tags" type="checkbox" :value="tag" :class="['h-3.5 w-3.5 rounded']" />
+                      <span>{{ tag }}</span>
+                    </label>
+                  </template>
+                  <template v-if="!showNewEntryCustomTagInput">
+                    <button type="button" @click="showNewEntryCustomTagInput = true" :class="['inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-sm font-quicksand transition-all', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200']" aria-label="Add custom tag">+</button>
+                  </template>
+                  <template v-else>
+                    <div class="inline-flex gap-1 items-center">
+                      <input v-model="customTagInput" type="text" placeholder="Custom tag" :class="['w-28 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" @keydown.enter.prevent="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" />
+                      <button type="button" @click="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
+                      <button type="button" @click="showNewEntryCustomTagInput = false; customTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
                     </div>
-                    <template v-if="!showNewEntryCustomTagInput">
-                      <button type="button" @click="showNewEntryCustomTagInput = true" class="flex items-center gap-2 rounded-lg border px-2 py-1.5 text-sm font-quicksand w-full text-left" :class="isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : 'border-gray-300 text-gray-700 hover:bg-gray-100'">+ Add custom tag</button>
-                    </template>
-                    <template v-else>
-                      <div class="flex gap-1 items-center">
-                        <input
-                          v-model="customTagInput"
-                          type="text"
-                          placeholder="Custom tag"
-                          class="flex-1 rounded border px-2 py-1 text-sm"
-                          :class="isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-300 text-gray-900'"
-                          @keydown.enter.prevent="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false"
-                        />
-                        <button type="button" @click="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" :class="['rounded px-2 py-1 text-sm', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
-                        <button type="button" @click="showNewEntryCustomTagInput = false; customTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
-                      </div>
-                    </template>
-                    <div v-if="customTagsFor(newEntry).length" class="mt-1.5 flex flex-wrap gap-1">
-                      <span
-                        v-for="tag in customTagsFor(newEntry)"
-                        :key="tag"
-                        class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
-                        :class="isDarkMode ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'"
-                      >
-                        {{ tag }}
-                        <button type="button" aria-label="Remove tag" @click="removeTag(newEntry, tag)" :class="['rounded p-0.5', isDarkMode ? 'hover:bg-gray-500' : 'hover:bg-gray-300']">
-                          <Icon name="ri:close-line" size="14" />
-                        </button>
-                      </span>
-                    </div>
-                  </div>
-                  <div class="mt-2 px-2">
-                    <button type="button" @click="tagsDropdownOpen = false; showNewEntryCustomTagInput = false" :class="['w-full rounded py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Done</button>
-                  </div>
+                  </template>
                 </div>
               </div>
 
