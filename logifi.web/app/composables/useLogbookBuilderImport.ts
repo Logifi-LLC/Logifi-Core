@@ -6,6 +6,7 @@ import {
 } from '~/utils/logbookTypes'
 import type { BuilderRow, BuilderColumn } from '~/utils/logbookBuilderTypes'
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
+import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { useValidation } from '~/composables/useValidation'
 import { useAuth } from '~/composables/useAuth'
 import { supabase } from '~/lib/supabase'
@@ -188,6 +189,112 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
     entries.push(entry)
   }
   return entries
+}
+
+/** Summable numeric field keys (times, landings, approaches). */
+const SUMMABLE_FIELD_KEYS = new Set<LogbookColumnKey>([
+  'pic', 'sic', 'dualR', 'solo', 'night', 'actual', 'hood', 'dualG', 'xc',
+  'dayLandings', 'nightLandings', 'approach', 'total',
+])
+
+/** Integer-valued summable keys (no decimals in display). */
+const INTEGER_FIELD_KEYS = new Set<LogbookColumnKey>(['dayLandings', 'nightLandings', 'approach'])
+
+function getEntryNumericValue(entry: LogEntry, fieldKey: LogbookColumnKey): number {
+  const ft = entry.flightTime ?? createEmptyFlightTime()
+  const perf = entry.performance ?? createEmptyPerformance()
+  switch (fieldKey) {
+    case 'pic': return ft.pic ?? 0
+    case 'sic': return ft.sic ?? 0
+    case 'dualR': return ft.dual ?? 0
+    case 'solo': return ft.solo ?? 0
+    case 'night': return ft.night ?? 0
+    case 'actual': return ft.actualInstrument ?? 0
+    case 'hood': return ft.simulatedInstrument ?? 0
+    case 'dualG': return ft.dualGiven ?? 0
+    case 'xc': return ft.crossCountry ?? 0
+    case 'total': return ft.total ?? 0
+    case 'dayLandings': return perf.dayLandings ?? 0
+    case 'nightLandings': return perf.nightLandings ?? 0
+    case 'approach': return perf.approachCount ?? 0
+    default: return 0
+  }
+}
+
+export interface ColumnTotalRow {
+  fieldKey: LogbookColumnKey
+  label: string
+  total: number
+  isInteger: boolean
+}
+
+export interface ValidateOnlyResult {
+  valid: boolean
+  errors: { rowIndex: number; message: string }[]
+  validRowCount?: number
+  columnTotals?: ColumnTotalRow[]
+}
+
+export async function validateOnly(
+  grid: ReturnType<typeof useLogbookBuilderGrid>
+): Promise<ValidateOnlyResult> {
+  const result: ValidateOnlyResult = { valid: false, errors: [] }
+  const { validateEntry } = useValidation()
+  const { isAuthenticated, user } = useAuth()
+
+  const entries = gridToEntries({
+    columns: grid.columns.value,
+    rows: grid.rows.value,
+  })
+
+  if (entries.length === 0) {
+    result.errors.push({ rowIndex: -1, message: 'No rows with data to import.' })
+    return result
+  }
+
+  if (!isAuthenticated.value || !user.value) {
+    result.errors.push({ rowIndex: -1, message: 'Please sign in to import entries.' })
+    return result
+  }
+
+  const validationErrors: { rowIndex: number; message: string }[] = []
+  for (let i = 0; i < entries.length; i++) {
+    const results = await validateEntry(entries[i])
+    const firstError = results.find((r) => r.type === 'error')
+    if (firstError) {
+      validationErrors.push({ rowIndex: i + 1, message: firstError.message })
+    }
+  }
+  if (validationErrors.length > 0) {
+    result.errors = validationErrors
+    return result
+  }
+
+  const sortedCols = [...grid.columns.value].sort((a, b) => a.order - b.order)
+  const columnTotals: ColumnTotalRow[] = []
+  const seenKeys = new Set<LogbookColumnKey>()
+  for (const col of sortedCols) {
+    const key = col.fieldKey
+    if (!key || !SUMMABLE_FIELD_KEYS.has(key) || seenKeys.has(key)) continue
+    seenKeys.add(key)
+    let total = 0
+    for (const entry of entries) {
+      total += getEntryNumericValue(entry, key)
+    }
+    const isInteger = INTEGER_FIELD_KEYS.has(key)
+    columnTotals.push({
+      fieldKey: key,
+      label: col.label,
+      total: isInteger ? Math.round(total) : Math.round(total * 10) / 10,
+      isInteger,
+    })
+  }
+
+  result.valid = true
+  result.errors = []
+  result.validRowCount = entries.length
+  result.columnTotals = columnTotals
+  return result
 }
 
 export interface ValidateAndImportResult {

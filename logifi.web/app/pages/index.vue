@@ -385,7 +385,7 @@
                         ]"
                       >
                         <Icon name="ri:table-line" size="16" />
-                        Logbook Builder (transcribe paper)
+                        Add Pages
                       </NuxtLink>
                     </div>
                     <p :class="['text-xs mt-2', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
@@ -2404,18 +2404,28 @@
       <div v-if="isEntryFormOpen" class="fixed right-0 top-0 h-full w-full md:w-[500px] lg:w-[600px] z-50" @keydown.escape="toggleEntryForm" tabindex="-1">
         <div class="h-full flex flex-col shadow-2xl" :class="isDarkMode ? 'bg-gray-900 border-l border-gray-700' : 'bg-gray-50 border-l border-gray-200'">
           <!-- Panel Header -->
-          <div class="flex items-center justify-between p-4 border-b" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-200']">
-            <div class="flex items-center gap-2">
-              <h2 class="text-lg font-semibold font-quicksand" :class="[isDarkMode ? 'text-gray-100' : 'text-gray-900']">
+          <div class="flex items-center justify-between gap-3 p-4 border-b" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-200']">
+            <div class="flex items-center gap-2 min-w-0">
+              <h2 class="text-lg font-semibold font-quicksand truncate" :class="[isDarkMode ? 'text-gray-100' : 'text-gray-900']">
                 {{ activeLogbook === 'simulator' ? (editingEntryId ? 'Edit Simulator Entry' : 'New Simulator Entry') : (editingEntryId ? 'Edit Log Entry' : 'New Log Entry') }}
               </h2>
               <span
                 v-if="activeLogbook === 'simulator'"
-                :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded', isDarkMode ? 'bg-blue-900/40 text-blue-300 border border-blue-700/50' : 'bg-blue-100 text-blue-700 border border-blue-200']"
+                :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded flex-shrink-0', isDarkMode ? 'bg-blue-900/40 text-blue-300 border border-blue-700/50' : 'bg-blue-100 text-blue-700 border border-blue-200']"
               >
                 Simulator
               </span>
             </div>
+            <NuxtLink
+              to="/logbook-builder"
+              :class="[
+                'flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-quicksand font-medium transition-colors',
+                isDarkMode ? 'border border-gray-600 hover:bg-gray-700 text-gray-200' : 'border border-gray-300 hover:bg-gray-200 text-gray-800'
+              ]"
+            >
+              <Icon name="ri:table-line" size="14" />
+              Add Pages
+            </NuxtLink>
             <button
               type="button"
               @click="toggleEntryForm"
