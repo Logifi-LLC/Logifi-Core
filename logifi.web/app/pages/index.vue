@@ -377,6 +377,16 @@
                         <Icon name="ri:file-code-line" size="16" />
                         Import from JSON
                       </button>
+                      <NuxtLink
+                        to="/logbook-builder"
+                        :class="[
+                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all border',
+                          isDarkMode ? 'border-gray-600 hover:bg-gray-700 text-gray-200' : 'border-gray-300 hover:bg-gray-100 text-gray-800'
+                        ]"
+                      >
+                        <Icon name="ri:table-line" size="16" />
+                        Logbook Builder (transcribe paper)
+                      </NuxtLink>
                     </div>
                     <p :class="['text-xs mt-2', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
                       {{ isDragOverImport ? 'Drop file here to import' : 'Drag & drop or click to import. Duplicates (same date + registration) will be skipped.' }}
@@ -1458,9 +1468,11 @@
                       <!-- Total Column -->
                       <template v-else-if="col.key === 'total'">
                         <span :class="[
-                          entry.isImported && entry.importSource !== 'localStorage'
-                            ? (isDarkMode ? 'text-red-400' : 'text-red-600')
-                            : (isDarkMode ? 'text-blue-400' : 'text-blue-600')
+                          entry.importSource === 'logbook_builder'
+                            ? (isDarkMode ? 'text-green-400' : 'text-green-600')
+                            : entry.isImported && entry.importSource !== 'localStorage'
+                              ? (isDarkMode ? 'text-red-400' : 'text-red-600')
+                              : (isDarkMode ? 'text-blue-400' : 'text-blue-600')
                         ]">
                           {{ formatNumber(entry.flightTime.total) }}
                         </span>
