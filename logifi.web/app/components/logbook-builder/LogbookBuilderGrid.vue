@@ -115,7 +115,7 @@ defineExpose({
 <template>
   <div
     ref="gridContainerRef"
-    class="overflow-auto border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800"
+    class="overflow-auto border border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-800 pb-4"
   >
     <table ref="tableRef" class="w-full border-collapse font-quicksand text-sm" style="table-layout: fixed">
       <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
@@ -125,7 +125,7 @@ defineExpose({
               v-for="col in leftColumns"
               :key="col.id"
               class="logbook-builder-data-col relative border border-gray-300 px-1.5 py-1 text-left text-xs font-semibold text-gray-700 dark:border-gray-600 dark:text-gray-300"
-              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') ? 'text-right' : ''"
+              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') || (col.fieldKey === 'categoryClass' && col.categoryClassValue) ? 'text-right' : ''"
               :style="getColumnStyle(col)"
             >
               <LogbookBuilderHeader :column="col" @update="(_, updates) => updateColumn(col.id, updates)" />
@@ -146,7 +146,7 @@ defineExpose({
               v-for="col in rightColumns"
               :key="col.id"
               class="logbook-builder-data-col relative border border-gray-300 px-1.5 py-1 text-left text-xs font-semibold text-gray-700 dark:border-gray-600 dark:text-gray-300"
-              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') ? 'text-right' : ''"
+              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') || (col.fieldKey === 'categoryClass' && col.categoryClassValue) ? 'text-right' : ''"
               :style="getColumnStyle(col)"
             >
               <LogbookBuilderHeader :column="col" @update="(_, updates) => updateColumn(col.id, updates)" />
@@ -162,7 +162,7 @@ defineExpose({
               v-for="col in visibleColumns"
               :key="col.id"
               class="relative border border-gray-300 px-1.5 py-1 text-left text-xs font-semibold text-gray-700 dark:border-gray-600 dark:text-gray-300"
-              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') ? 'text-right' : ''"
+              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') || (col.fieldKey === 'categoryClass' && col.categoryClassValue) ? 'text-right' : ''"
               :style="getColumnStyle(col)"
             >
               <LogbookBuilderHeader :column="col" @update="(_, updates) => updateColumn(col.id, updates)" />
@@ -193,13 +193,14 @@ defineExpose({
               v-for="(col, colIdx) in leftColumns"
               :key="col.id"
               class="border border-gray-300 p-0 dark:border-gray-600"
-              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') ? 'text-right' : ''"
+              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') || (col.fieldKey === 'categoryClass' && col.categoryClassValue) ? 'text-right' : ''"
               :style="getColumnStyle(col)"
             >
               <LogbookBuilderCell
                 :ref="(el) => setCellRef(rowIdx, col.id, el as { focus: () => void } | null)"
                 :model-value="getCellValue(rowIdx, col.id)"
                 :field-key="col.fieldKey"
+                :category-class-value="col.categoryClassValue"
                 :builder-row="rowIdx"
                 :builder-col="colIdx"
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
@@ -210,13 +211,14 @@ defineExpose({
               v-for="(col, colIdx) in rightColumns"
               :key="col.id"
               class="border border-gray-300 p-0 dark:border-gray-600"
-              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') ? 'text-right' : ''"
+              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') || (col.fieldKey === 'categoryClass' && col.categoryClassValue) ? 'text-right' : ''"
               :style="getColumnStyle(col)"
             >
               <LogbookBuilderCell
                 :ref="(el) => setCellRef(rowIdx, col.id, el as { focus: () => void } | null)"
                 :model-value="getCellValue(rowIdx, col.id)"
                 :field-key="col.fieldKey"
+                :category-class-value="col.categoryClassValue"
                 :builder-row="rowIdx"
                 :builder-col="splitIndex + colIdx"
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
@@ -228,13 +230,14 @@ defineExpose({
               v-for="(col, colIdx) in visibleColumns"
               :key="col.id"
               class="border border-gray-300 p-0 dark:border-gray-600"
-              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') ? 'text-right' : ''"
+              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') || (col.fieldKey === 'categoryClass' && col.categoryClassValue) ? 'text-right' : ''"
               :style="getColumnStyle(col)"
             >
               <LogbookBuilderCell
                 :ref="(el) => setCellRef(rowIdx, col.id, el as { focus: () => void } | null)"
                 :model-value="getCellValue(rowIdx, col.id)"
                 :field-key="col.fieldKey"
+                :category-class-value="col.categoryClassValue"
                 :builder-row="rowIdx"
                 :builder-col="colIdx"
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"

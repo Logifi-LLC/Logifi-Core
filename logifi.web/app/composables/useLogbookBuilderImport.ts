@@ -53,11 +53,21 @@ function parseFromTo(val: string): { departure: string; destination: string; rou
 export interface GridToEntriesOptions {
   columns: BuilderColumn[]
   rows: BuilderRow[]
+  /** Default role when no Role column value (e.g. 'Dual Received'). */
+  defaultRole?: string
+}
+
+/** Normalize role from builder cell (e.g. "Student" -> "Dual Received"). */
+function normalizeRoleFromCell(val: string): string {
+  const v = (val || '').trim()
+  if (!v) return ''
+  if (/student|dual\s*received/i.test(v)) return 'Dual Received'
+  return v
 }
 
 /** Build LogEntry[] from grid rows using column mapping. Only includes rows that have at least one non-empty cell. */
 export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
-  const { columns, rows } = options
+  const { columns, rows, defaultRole = 'PIC' } = options
   const sortedCols = [...columns].sort((a, b) => a.order - b.order)
   const entries: LogEntry[] = []
 
@@ -77,6 +87,8 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
     let aircraftCategoryClass = ''
     let remarks = ''
     let flightConditions: string[] = []
+    let isSimulator = false
+    let rowRole = ''
 
     for (const col of sortedCols) {
       const val = (cells[col.id] ?? '').trim()
@@ -92,6 +104,31 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
             departure = ft.departure
             destination = ft.destination
             route = ft.route
+          }
+          break
+        }
+        case 'departure':
+          if (val) departure = val
+          break
+        case 'destination':
+          if (val) destination = val
+          break
+        case 'route':
+          if (val) route = val
+          break
+        case 'simulator':
+          if (val.trim()) isSimulator = true
+          break
+        case 'role':
+          if (val) rowRole = normalizeRoleFromCell(val) || val.trim()
+          break
+        case 'categoryClass': {
+          const ccVal = (col as { categoryClassValue?: string }).categoryClassValue
+          if (ccVal && val) {
+            aircraftCategoryClass = ccVal
+            flightTime.total = parseDecimal(val) ?? flightTime.total
+          } else if (val) {
+            aircraftCategoryClass = val.trim()
           }
           break
         }
@@ -158,12 +195,27 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
       }
     }
 
+    if ((flightTime.night ?? 0) > 0 && !flightConditions.includes('nightVfr')) {
+      flightConditions = [...flightConditions, 'nightVfr']
+    }
+    if ((flightTime.actualInstrument ?? 0) > 0) {
+      if (!flightConditions.includes('actualInstrument')) flightConditions = [...flightConditions, 'actualInstrument']
+      if (!flightConditions.includes('ifr')) flightConditions = [...flightConditions, 'ifr']
+    }
+    if ((flightTime.crossCountry ?? 0) > 0 && !flightConditions.includes('crossCountry')) {
+      flightConditions = [...flightConditions, 'crossCountry']
+    }
+    if ((flightTime.simulatedInstrument ?? 0) > 0 && !flightConditions.includes('simInstrument')) {
+      flightConditions = [...flightConditions, 'simInstrument']
+    }
+    flightConditions = sanitizeFlightConditions(flightConditions)
+
     if (!date) date = new Date().toISOString().slice(0, 10)
 
     const entry: LogEntry = {
       id: generateEntryId(),
       date,
-      role: 'PIC',
+      role: rowRole || defaultRole,
       aircraftCategoryClass: aircraftCategoryClass || 'Airplane Single Engine Land',
       categoryClassTime: null,
       aircraftMakeModel: aircraftMakeModel || 'Unknown',
@@ -178,7 +230,7 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
       flightConditions,
       remarks,
       tags: row.tags?.filter(Boolean) ?? [],
-      logbookType: 'flight',
+      logbookType: isSimulator ? 'simulator' : 'flight',
       flightTime,
       performance,
       oooi: createEmptyOOOI(),
@@ -245,6 +297,7 @@ export async function validateOnly(
   const entries = gridToEntries({
     columns: grid.columns.value,
     rows: grid.rows.value,
+    defaultRole: grid.defaultImportRole?.value ?? 'PIC',
   })
 
   if (entries.length === 0) {
@@ -273,8 +326,24 @@ export async function validateOnly(
   const sortedCols = [...grid.columns.value].sort((a, b) => a.order - b.order)
   const columnTotals: ColumnTotalRow[] = []
   const seenKeys = new Set<LogbookColumnKey>()
+  const rows = grid.rows.value
   for (const col of sortedCols) {
     const key = col.fieldKey
+    const ccVal = (col as { categoryClassValue?: string }).categoryClassValue
+    if (key === 'categoryClass' && ccVal) {
+      let total = 0
+      for (const row of rows) {
+        const val = (row.cells?.[col.id] ?? '').trim()
+        total += parseDecimal(val) ?? 0
+      }
+      columnTotals.push({
+        fieldKey: 'total',
+        label: col.label,
+        total: Math.round(total * 10) / 10,
+        isInteger: false,
+      })
+      continue
+    }
     if (!key || !SUMMABLE_FIELD_KEYS.has(key) || seenKeys.has(key)) continue
     seenKeys.add(key)
     let total = 0
@@ -312,6 +381,7 @@ export async function runValidateAndImport(
   const entries = gridToEntries({
     columns: grid.columns.value,
     rows: grid.rows.value,
+    defaultRole: grid.defaultImportRole?.value ?? 'PIC',
   })
 
   if (entries.length === 0) {

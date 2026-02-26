@@ -6922,11 +6922,14 @@ async function saveInlineEdit(): Promise<void> {
       performanceFields.forEach((field) => {
         (base as any)[field.key] = inlineEditEntry.value!.performance[field.key] ?? null
       })
-      const approaches = (inlineEditEntry.value!.performance.approaches && inlineEditEntry.value!.performance.approaches.length > 0)
-        ? inlineEditEntry.value!.performance.approaches.map((a) => ({ type: (a.type || '').trim() || 'Unknown', count: Math.max(0, a.count || 1) }))
-        : getApproachesFromPerformance(inlineEditEntry.value!.performance)
+      const formApproaches = inlineEditEntry.value!.performance.approaches
+      const approaches = Array.isArray(formApproaches) && formApproaches.length > 0
+        ? formApproaches.map((a) => ({ type: (a.type || '').trim() || 'Unknown', count: Math.max(0, a.count || 1) }))
+        : Array.isArray(formApproaches) && formApproaches.length === 0
+          ? []
+          : getApproachesFromPerformance(inlineEditEntry.value!.performance)
       base.approaches = approaches
-      base.approachCount = getTotalApproachCount(base) || null
+      base.approachCount = approaches.length > 0 ? getTotalApproachCount(base) || null : null
       base.approachType = approaches[0]?.type ?? null
       return base
     })(),
@@ -7118,7 +7121,7 @@ async function saveInlineEdit(): Promise<void> {
           : normalizeNumber(rawValue)
         ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
       })
-      normalizedPerformance.approaches = (entry.performance?.approaches?.length ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance))
+      normalizedPerformance.approaches = Array.isArray(entry.performance?.approaches) ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance)
       normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
       normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
       entry.performance = normalizedPerformance
@@ -12356,7 +12359,7 @@ async function loadEntries(): Promise<void> {
             : normalizeNumber(rawValue)
           ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
         })
-        normalizedPerformance.approaches = (entry.performance?.approaches?.length ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance))
+        normalizedPerformance.approaches = Array.isArray(entry.performance?.approaches) ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance)
         normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
         normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
         entry.performance = normalizedPerformance
@@ -12437,7 +12440,7 @@ async function loadEntries(): Promise<void> {
               : normalizeNumber(rawValue)
             ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
           })
-          normalizedPerformance.approaches = (entry.performance?.approaches?.length ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance))
+          normalizedPerformance.approaches = Array.isArray(entry.performance?.approaches) ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance)
           normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
           normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
           entry.performance = normalizedPerformance
@@ -12527,7 +12530,7 @@ function loadPersistedEntries(): void {
             : (rawValue ?? null)
           ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
         })
-        normalizedPerformance.approaches = (entry.performance?.approaches?.length ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance))
+        normalizedPerformance.approaches = Array.isArray(entry.performance?.approaches) ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance)
         normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
         normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
         

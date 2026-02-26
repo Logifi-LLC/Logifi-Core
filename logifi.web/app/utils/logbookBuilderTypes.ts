@@ -8,6 +8,8 @@ export interface BuilderColumn {
   order: number
   /** Width in pixels (optional; default applied in composable). */
   width?: number
+  /** When fieldKey is 'categoryClass', specific category (ASEL, AMEL, etc.) so column title is that value. */
+  categoryClassValue?: string
 }
 
 /** One row in the draft grid: cell values by column id plus optional tags. */
@@ -37,6 +39,7 @@ export interface BuilderTemplateColumn {
   label: string
   order: number
   width?: number
+  categoryClassValue?: string
 }
 
 /** Default number of rows when creating a new grid. */
@@ -47,12 +50,19 @@ export const DEFAULT_COLUMN_WIDTH = 100
 /** Default width for Tags column (px). */
 export const DEFAULT_TAGS_COLUMN_WIDTH = 180
 
-/** Default columns for a new grid (Date, From→To, PIC, Total + Tags column is fixed in UI). */
+/** Category/Class options for the builder (match main logbook Add Entry). */
+export const CATEGORY_CLASS_OPTIONS = [
+  'ASEL', 'AMEL', 'ASES', 'AMES', 'HELI', 'GYRO', 'GLID', 'BAL', 'AIRS', 'PL', 'WSC-L', 'WSC-S',
+] as const
+
+/** Default columns for a new grid (Date, From, To, Route, PIC, Total + Tags column is fixed in UI). */
 export const DEFAULT_BUILDER_COLUMNS: Omit<BuilderColumn, 'id'>[] = [
   { fieldKey: 'date', label: 'Date', order: 0, width: 100 },
-  { fieldKey: 'fromTo', label: 'From → To', order: 1, width: 140 },
-  { fieldKey: 'pic', label: 'PIC', order: 2, width: 70 },
-  { fieldKey: 'total', label: 'Total', order: 3, width: 70 },
+  { fieldKey: 'departure', label: 'From', order: 1, width: 80 },
+  { fieldKey: 'destination', label: 'To', order: 2, width: 80 },
+  { fieldKey: 'route', label: 'Route', order: 3, width: 100 },
+  { fieldKey: 'pic', label: 'PIC', order: 4, width: 70 },
+  { fieldKey: 'total', label: 'Total', order: 5, width: 70 },
 ]
 
 function generateId(): string {
@@ -66,6 +76,8 @@ export function createBuilderColumn(overrides: Partial<BuilderColumn> & { label:
     fieldKey: overrides.fieldKey ?? null,
     label: overrides.label,
     order: overrides.order,
+    width: overrides.width,
+    categoryClassValue: overrides.categoryClassValue,
   }
 }
 

@@ -17,6 +17,11 @@ const FIELD_LABELS: Record<LogbookColumnKey, string> = {
   identification: 'Identification',
   flightNumber: 'Flight Number',
   fromTo: 'From → To',
+  departure: 'From',
+  destination: 'To',
+  route: 'Route',
+  simulator: 'Simulator',
+  categoryClass: 'Category/Class',
   conditions: 'Conditions',
   remarks: 'Remarks',
   pic: 'PIC',
@@ -32,6 +37,7 @@ const FIELD_LABELS: Record<LogbookColumnKey, string> = {
   nightLandings: 'Night Landings',
   approach: 'Approach',
   pilots: 'Pilots',
+  role: 'Role',
   total: 'Total',
 }
 
@@ -47,6 +53,8 @@ export function useLogbookBuilderGrid() {
   const twoPageSplitIndex: Ref<number> = ref(2)
   /** Tags column width in pixels. */
   const tagsColumnWidth: Ref<number> = ref(DEFAULT_TAGS_COLUMN_WIDTH)
+  /** Default role for builder imports when no Role column value (e.g. 'Dual Received' for student). */
+  const defaultImportRole: Ref<string> = ref('Dual Received')
   const MIN_COLUMN_WIDTH = 40
   const MAX_COLUMN_WIDTH = 500
 
@@ -120,13 +128,14 @@ export function useLogbookBuilderGrid() {
     }
   }
 
-  function updateColumn(colId: string, updates: Partial<Pick<BuilderColumn, 'fieldKey' | 'label' | 'order' | 'width'>>) {
+  function updateColumn(colId: string, updates: Partial<Pick<BuilderColumn, 'fieldKey' | 'label' | 'order' | 'width' | 'categoryClassValue'>>) {
     const col = columns.value.find((c) => c.id === colId)
     if (!col) return
     if (updates.fieldKey !== undefined) col.fieldKey = updates.fieldKey
     if (updates.label !== undefined) col.label = updates.label
     if (updates.order !== undefined) col.order = updates.order
     if (updates.width !== undefined) col.width = updates.width
+    if (updates.categoryClassValue !== undefined) col.categoryClassValue = updates.categoryClassValue
   }
 
   function setColumnWidth(colId: string, widthPx: number) {
@@ -144,21 +153,28 @@ export function useLogbookBuilderGrid() {
     })
   }
 
-  function loadTemplate(template: { columns: BuilderTemplateColumn[]; layout: BuilderLayout; default_row_count?: number; tags_column_width?: number }) {
+  function loadTemplate(template: { columns: BuilderTemplateColumn[]; layout: BuilderLayout; default_row_count?: number; tags_column_width?: number; default_import_role?: string; two_page_split_index?: number }) {
     const cols = template.columns
       .sort((a, b) => a.order - b.order)
-      .map((c) => createBuilderColumn({ ...c, width: c.width ?? DEFAULT_COLUMN_WIDTH }))
+      .map((c) => createBuilderColumn({ ...c, width: c.width ?? DEFAULT_COLUMN_WIDTH, categoryClassValue: c.categoryClassValue }))
     columns.value = cols
     layout.value = template.layout
     const n = template.default_row_count ?? DEFAULT_BUILDER_ROW_COUNT
     rowCount.value = n
     if (template.layout === 'two-page' && cols.length > 1) {
-      twoPageSplitIndex.value = Math.min(Math.max(1, twoPageSplitIndex.value), cols.length - 1)
-    } else     if (template.layout === 'two-page') {
+      if (template.two_page_split_index != null && template.two_page_split_index >= 1 && template.two_page_split_index <= cols.length - 1) {
+        twoPageSplitIndex.value = template.two_page_split_index
+      } else {
+        twoPageSplitIndex.value = Math.min(Math.max(1, twoPageSplitIndex.value), cols.length - 1)
+      }
+    } else if (template.layout === 'two-page') {
       twoPageSplitIndex.value = Math.ceil(cols.length / 2) || 1
     }
     if (template.tags_column_width != null) {
       tagsColumnWidth.value = Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, template.tags_column_width))
+    }
+    if (template.default_import_role != null && template.default_import_role !== '') {
+      defaultImportRole.value = template.default_import_role
     }
     const ids = cols.map((c) => c.id)
     rows.value = Array.from({ length: n }, () => createEmptyBuilderRow(ids))
@@ -178,6 +194,7 @@ export function useLogbookBuilderGrid() {
     effectiveSplitIndex,
     setTwoPageSplitIndex,
     tagsColumnWidth,
+    defaultImportRole,
     setColumnWidth,
     setTagsColumnWidth,
     MIN_COLUMN_WIDTH,
