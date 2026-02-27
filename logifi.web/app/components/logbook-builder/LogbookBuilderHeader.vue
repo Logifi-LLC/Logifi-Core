@@ -135,14 +135,14 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
 </script>
 
 <template>
-  <div :id="dropdownId" class="relative flex flex-col gap-0.5">
+  <div :id="dropdownId" class="relative flex min-w-0 flex-col gap-0.5">
     <button
       type="button"
       :class="[
-        'w-full max-w-[140px] rounded border-0 bg-transparent py-0.5 text-left text-xs font-semibold uppercase tracking-wider focus:ring-1 focus:ring-blue-500',
-        isNumeric || isCategoryClassTime ? 'text-right' : '',
+        'w-full min-w-0 truncate rounded border-0 bg-transparent py-0.5 text-center text-xs font-semibold uppercase tracking-wider focus:ring-1 focus:ring-blue-500',
         'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
       ]"
+      :title="displayLabel"
       @click="open = !open"
     >
       {{ displayLabel }}

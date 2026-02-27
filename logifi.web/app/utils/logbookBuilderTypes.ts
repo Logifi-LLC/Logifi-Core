@@ -45,8 +45,8 @@ export interface BuilderTemplateColumn {
 /** Default number of rows when creating a new grid. */
 export const DEFAULT_BUILDER_ROW_COUNT = 10
 
-/** Default width for data columns (px). */
-export const DEFAULT_COLUMN_WIDTH = 100
+/** Default width for data columns (px); wide enough so headers like "IDENTIFICATION" don't overlap. */
+export const DEFAULT_COLUMN_WIDTH = 120
 /** Default width for Tags column (px). */
 export const DEFAULT_TAGS_COLUMN_WIDTH = 180
 
@@ -55,11 +55,22 @@ export const CATEGORY_CLASS_OPTIONS = [
   'ASEL', 'AMEL', 'ASES', 'AMES', 'HELI', 'GYRO', 'GLID', 'BAL', 'AIRS', 'PL', 'WSC-L', 'WSC-S',
 ] as const
 
+/** Role options for Default role and Role column (match main logbook). */
+export const ROLE_OPTIONS = [
+  { value: 'PIC', label: 'PIC' },
+  { value: 'SIC', label: 'SIC' },
+  { value: 'Dual Received', label: 'Dual Received' },
+  { value: 'Solo', label: 'Solo' },
+  { value: 'Safety Pilot', label: 'Safety Pilot' },
+  { value: 'Examiner', label: 'Examiner' },
+  { value: 'Instructor', label: 'Instructor' },
+] as const
+
 /** Default columns for a new grid (Date, From, To, Route, PIC, Total + Tags column is fixed in UI). */
 export const DEFAULT_BUILDER_COLUMNS: Omit<BuilderColumn, 'id'>[] = [
   { fieldKey: 'date', label: 'Date', order: 0, width: 100 },
-  { fieldKey: 'departure', label: 'From', order: 1, width: 80 },
-  { fieldKey: 'destination', label: 'To', order: 2, width: 80 },
+  { fieldKey: 'departure', label: 'From', order: 1, width: 90 },
+  { fieldKey: 'destination', label: 'To', order: 2, width: 90 },
   { fieldKey: 'route', label: 'Route', order: 3, width: 100 },
   { fieldKey: 'pic', label: 'PIC', order: 4, width: 70 },
   { fieldKey: 'total', label: 'Total', order: 5, width: 70 },

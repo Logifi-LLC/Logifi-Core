@@ -4,6 +4,7 @@ import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { useAuth } from '~/composables/useAuth'
 import { supabase } from '~/lib/supabase'
 import type { BuilderTemplateColumn } from '~/utils/logbookBuilderTypes'
+import { ROLE_OPTIONS } from '~/utils/logbookBuilderTypes'
 
 const DEFAULT_ROLE_STORAGE_KEY = 'logifi-logbook-builder-default-role'
 
@@ -11,27 +12,17 @@ const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGri
 if (!grid) throw new Error('LogbookBuilderToolbar must be used inside a page that provides logbookBuilderGrid')
 
 const { user, isAuthenticated } = useAuth()
-const { rowCount, setRowCount, addColumn, layout, columns, removeColumn, loadTemplate, visibleColumns, setTwoPageSplitIndex, twoPageSplitIndex, effectiveSplitIndex, tagsColumnWidth, defaultImportRole } = grid
+const { rowCount, setRowCount, addColumn, layout, columns, removeColumn, loadTemplate, visibleColumns, setTwoPageSplitIndex, twoPageSplitIndex, effectiveSplitIndex, tagsColumnWidth, defaultImportRole, defaultYear } = grid
 
 const layoutOptions = [
   { value: 'single' as const, label: 'Single page' },
   { value: 'two-page' as const, label: 'Two-page' },
 ]
 
-const defaultRoleOptions = [
-  { value: 'PIC', label: 'PIC' },
-  { value: 'SIC', label: 'SIC' },
-  { value: 'Dual Received', label: 'Dual Received' },
-  { value: 'Solo', label: 'Solo' },
-  { value: 'Safety Pilot', label: 'Safety Pilot' },
-  { value: 'Examiner', label: 'Examiner' },
-  { value: 'Instructor', label: 'Instructor' },
-]
-
 onMounted(() => {
   try {
     const stored = localStorage.getItem(DEFAULT_ROLE_STORAGE_KEY)
-    if (stored && defaultRoleOptions.some((o) => o.value === stored)) {
+    if (stored && ROLE_OPTIONS.some((o) => o.value === stored)) {
       defaultImportRole.value = stored
     }
   } catch (_) {}
@@ -44,6 +35,14 @@ function onDefaultRoleChange(e: Event) {
     localStorage.setItem(DEFAULT_ROLE_STORAGE_KEY, value)
   } catch (_) {}
 }
+
+const defaultYearValue = computed({
+  get: () => defaultYear.value ?? new Date().getFullYear(),
+  set: (v: number) => {
+    const n = typeof v === 'number' && Number.isFinite(v) ? v : new Date().getFullYear()
+    defaultYear.value = Math.min(2100, Math.max(1900, n))
+  },
+})
 
 const showSaveModal = ref(false)
 const showLoadModal = ref(false)
@@ -159,13 +158,23 @@ function onRowCountInput(e: Event) {
       </select>
     </div>
     <div class="flex items-center gap-2">
+      <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Year:</span>
+      <input
+        v-model.number="defaultYearValue"
+        type="number"
+        min="1900"
+        max="2100"
+        class="w-20 rounded border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+      />
+    </div>
+    <div class="flex items-center gap-2">
       <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Default role:</span>
       <select
         :value="defaultImportRole"
         class="rounded border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
         @change="onDefaultRoleChange"
       >
-        <option v-for="opt in defaultRoleOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        <option v-for="opt in ROLE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
     </div>
     <div v-if="layout === 'two-page'" class="flex items-center gap-2">

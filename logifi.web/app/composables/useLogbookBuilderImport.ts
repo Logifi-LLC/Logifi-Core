@@ -1,3 +1,4 @@
+import { unref } from 'vue'
 import type { LogEntry } from '~/utils/logbookTypes'
 import {
   createEmptyFlightTime,
@@ -55,6 +56,58 @@ export interface GridToEntriesOptions {
   rows: BuilderRow[]
   /** Default role when no Role column value (e.g. 'Dual Received'). */
   defaultRole?: string
+  /** Default year when date is partial (e.g. MM/DD). Null = use current year. */
+  defaultYear?: number | null
+}
+
+/** Parse YYYY-MM-DD to { y, m, d } or null. */
+function parseIsoDate(iso: string): { y: number; m: number; d: number } | null {
+  const match = (iso || '').trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
+  if (!match) return null
+  const y = parseInt(match[1], 10)
+  const m = parseInt(match[2], 10)
+  const d = parseInt(match[3], 10)
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d) || m < 1 || m > 12 || d < 1 || d > 31) return null
+  return { y, m, d }
+}
+
+/** Normalize date string to YYYY-MM-DD. Handles MM/DD, M/D, MM-DD, MM/DD/YY, MM/DD/YYYY, YYYY-MM-DD.
+ * When date is MM/DD only: uses defaultYear; if lastDateIso is set and (defaultYear, MM, DD) would be
+ * before or equal to lastDateIso (e.g. Dec 28 -> Jan 5), uses defaultYear+1 so the page can span year-end. */
+function normalizeDateWithRollover(
+  dateStr: string,
+  defaultYear: number | null | undefined,
+  lastDateIso: string | null
+): string {
+  const s = (dateStr || '').trim()
+  if (!s) return ''
+  const year = typeof defaultYear === 'number' && Number.isFinite(defaultYear) ? defaultYear : new Date().getFullYear()
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) return s
+  const slashParts = s.split(/[/-]/).map((p) => p.trim())
+  if (slashParts.length === 2) {
+    const m = parseInt(slashParts[0], 10)
+    const d = parseInt(slashParts[1], 10)
+    if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      let y = year
+      const last = lastDateIso ? parseIsoDate(lastDateIso) : null
+      if (last) {
+        const candidateTime = new Date(y, m - 1, d).getTime()
+        const lastTime = new Date(last.y, last.m - 1, last.d).getTime()
+        if (candidateTime <= lastTime) y = year + 1
+      }
+      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    }
+  }
+  if (slashParts.length === 3) {
+    const m = parseInt(slashParts[0], 10)
+    const d = parseInt(slashParts[1], 10)
+    let y = parseInt(slashParts[2], 10)
+    if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      if (slashParts[2].length === 2 || !Number.isFinite(y) || y < 1000) y = year
+      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+    }
+  }
+  return s
 }
 
 /** Normalize role from builder cell (e.g. "Student" -> "Dual Received"). */
@@ -67,9 +120,10 @@ function normalizeRoleFromCell(val: string): string {
 
 /** Build LogEntry[] from grid rows using column mapping. Only includes rows that have at least one non-empty cell. */
 export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
-  const { columns, rows, defaultRole = 'PIC' } = options
+  const { columns, rows, defaultRole = 'PIC', defaultYear } = options
   const sortedCols = [...columns].sort((a, b) => a.order - b.order)
   const entries: LogEntry[] = []
+  let lastDateIso: string | null = null
 
   for (const row of rows) {
     const cells = row.cells ?? {}
@@ -195,6 +249,11 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
       }
     }
 
+    const rawDateStr = date
+    date = normalizeDateWithRollover(date, defaultYear, lastDateIso)
+    if (!date) date = new Date().toISOString().slice(0, 10)
+    if (rawDateStr.trim()) lastDateIso = date
+
     if ((flightTime.night ?? 0) > 0 && !flightConditions.includes('nightVfr')) {
       flightConditions = [...flightConditions, 'nightVfr']
     }
@@ -209,8 +268,6 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
       flightConditions = [...flightConditions, 'simInstrument']
     }
     flightConditions = sanitizeFlightConditions(flightConditions)
-
-    if (!date) date = new Date().toISOString().slice(0, 10)
 
     const entry: LogEntry = {
       id: generateEntryId(),
@@ -298,6 +355,7 @@ export async function validateOnly(
     columns: grid.columns.value,
     rows: grid.rows.value,
     defaultRole: grid.defaultImportRole?.value ?? 'PIC',
+    defaultYear: unref((grid as { defaultYear?: { value: number | null } }).defaultYear) ?? null,
   })
 
   if (entries.length === 0) {
@@ -382,6 +440,7 @@ export async function runValidateAndImport(
     columns: grid.columns.value,
     rows: grid.rows.value,
     defaultRole: grid.defaultImportRole?.value ?? 'PIC',
+    defaultYear: unref((grid as { defaultYear?: { value: number | null } }).defaultYear) ?? null,
   })
 
   if (entries.length === 0) {

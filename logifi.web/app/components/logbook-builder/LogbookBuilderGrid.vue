@@ -39,6 +39,18 @@ const splitIndex = computed(() => effectiveSplitIndex.value)
 const leftColumns = computed(() => visibleColumns.value.slice(0, splitIndex.value))
 const rightColumns = computed(() => visibleColumns.value.slice(splitIndex.value))
 
+const identificationColumn = computed(() => visibleColumns.value.find((c) => c.fieldKey === 'identification'))
+const identificationUsedOnPage = computed(() => {
+  const col = identificationColumn.value
+  if (!col) return []
+  const values: string[] = []
+  for (const row of rows.value) {
+    const v = (row.cells?.[col.id] ?? '').trim()
+    if (v) values.push(v)
+  }
+  return [...new Set(values)]
+})
+
 const tableRef = ref<HTMLTableElement | null>(null)
 const isDraggingDivider = ref(false)
 function startDividerDrag() {
@@ -124,8 +136,7 @@ defineExpose({
             <th
               v-for="col in leftColumns"
               :key="col.id"
-              class="logbook-builder-data-col relative border border-gray-300 px-1.5 py-1 text-left text-xs font-semibold text-gray-700 dark:border-gray-600 dark:text-gray-300"
-              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') || (col.fieldKey === 'categoryClass' && col.categoryClassValue) ? 'text-right' : ''"
+              class="logbook-builder-data-col relative min-w-0 border border-gray-300 px-1.5 py-1 text-center text-xs font-semibold text-gray-700 dark:border-gray-600 dark:text-gray-300"
               :style="getColumnStyle(col)"
             >
               <LogbookBuilderHeader :column="col" @update="(_, updates) => updateColumn(col.id, updates)" />
@@ -145,8 +156,7 @@ defineExpose({
             <th
               v-for="col in rightColumns"
               :key="col.id"
-              class="logbook-builder-data-col relative border border-gray-300 px-1.5 py-1 text-left text-xs font-semibold text-gray-700 dark:border-gray-600 dark:text-gray-300"
-              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') || (col.fieldKey === 'categoryClass' && col.categoryClassValue) ? 'text-right' : ''"
+              class="logbook-builder-data-col relative min-w-0 border border-gray-300 px-1.5 py-1 text-center text-xs font-semibold text-gray-700 dark:border-gray-600 dark:text-gray-300"
               :style="getColumnStyle(col)"
             >
               <LogbookBuilderHeader :column="col" @update="(_, updates) => updateColumn(col.id, updates)" />
@@ -161,8 +171,7 @@ defineExpose({
             <th
               v-for="col in visibleColumns"
               :key="col.id"
-              class="relative border border-gray-300 px-1.5 py-1 text-left text-xs font-semibold text-gray-700 dark:border-gray-600 dark:text-gray-300"
-              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') || (col.fieldKey === 'categoryClass' && col.categoryClassValue) ? 'text-right' : ''"
+              class="logbook-builder-data-col relative min-w-0 border border-gray-300 px-1.5 py-1 text-center text-xs font-semibold text-gray-700 dark:border-gray-600 dark:text-gray-300"
               :style="getColumnStyle(col)"
             >
               <LogbookBuilderHeader :column="col" @update="(_, updates) => updateColumn(col.id, updates)" />
@@ -174,7 +183,7 @@ defineExpose({
             </th>
           </template>
           <th
-            class="relative border border-gray-300 px-1.5 py-1 text-left text-xs font-semibold uppercase tracking-wider text-gray-700 dark:border-gray-600 dark:text-gray-300"
+            class="relative border border-gray-300 px-1.5 py-1 text-center text-xs font-semibold uppercase tracking-wider text-gray-700 dark:border-gray-600 dark:text-gray-300"
             :style="{ width: tagsColumnWidth + 'px', minWidth: tagsColumnWidth + 'px' }"
           >
             Tags
@@ -192,8 +201,7 @@ defineExpose({
             <td
               v-for="(col, colIdx) in leftColumns"
               :key="col.id"
-              class="border border-gray-300 p-0 dark:border-gray-600"
-              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') || (col.fieldKey === 'categoryClass' && col.categoryClassValue) ? 'text-right' : ''"
+              class="border border-gray-300 p-0 text-center dark:border-gray-600"
               :style="getColumnStyle(col)"
             >
               <LogbookBuilderCell
@@ -201,6 +209,8 @@ defineExpose({
                 :model-value="getCellValue(rowIdx, col.id)"
                 :field-key="col.fieldKey"
                 :category-class-value="col.categoryClassValue"
+                :default-role="col.fieldKey === 'role' ? (grid.defaultImportRole?.value ?? 'PIC') : undefined"
+                :suggestions="col.fieldKey === 'identification' ? identificationUsedOnPage : []"
                 :builder-row="rowIdx"
                 :builder-col="colIdx"
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
@@ -210,8 +220,7 @@ defineExpose({
             <td
               v-for="(col, colIdx) in rightColumns"
               :key="col.id"
-              class="border border-gray-300 p-0 dark:border-gray-600"
-              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') || (col.fieldKey === 'categoryClass' && col.categoryClassValue) ? 'text-right' : ''"
+              class="border border-gray-300 p-0 text-center dark:border-gray-600"
               :style="getColumnStyle(col)"
             >
               <LogbookBuilderCell
@@ -219,6 +228,8 @@ defineExpose({
                 :model-value="getCellValue(rowIdx, col.id)"
                 :field-key="col.fieldKey"
                 :category-class-value="col.categoryClassValue"
+                :default-role="col.fieldKey === 'role' ? (grid.defaultImportRole?.value ?? 'PIC') : undefined"
+                :suggestions="col.fieldKey === 'identification' ? identificationUsedOnPage : []"
                 :builder-row="rowIdx"
                 :builder-col="splitIndex + colIdx"
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
@@ -229,8 +240,7 @@ defineExpose({
             <td
               v-for="(col, colIdx) in visibleColumns"
               :key="col.id"
-              class="border border-gray-300 p-0 dark:border-gray-600"
-              :class="['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(col.fieldKey ?? '') || (col.fieldKey === 'categoryClass' && col.categoryClassValue) ? 'text-right' : ''"
+              class="border border-gray-300 p-0 text-center dark:border-gray-600"
               :style="getColumnStyle(col)"
             >
               <LogbookBuilderCell
@@ -238,13 +248,15 @@ defineExpose({
                 :model-value="getCellValue(rowIdx, col.id)"
                 :field-key="col.fieldKey"
                 :category-class-value="col.categoryClassValue"
+                :default-role="col.fieldKey === 'role' ? (grid.defaultImportRole?.value ?? 'PIC') : undefined"
+                :suggestions="col.fieldKey === 'identification' ? identificationUsedOnPage : []"
                 :builder-row="rowIdx"
                 :builder-col="colIdx"
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
               />
             </td>
           </template>
-          <td class="border border-gray-300 p-0.5 dark:border-gray-600" :style="{ width: tagsColumnWidth + 'px', minWidth: tagsColumnWidth + 'px' }">
+          <td class="border border-gray-300 p-0.5 text-center dark:border-gray-600" :style="{ width: tagsColumnWidth + 'px', minWidth: tagsColumnWidth + 'px' }">
             <LogbookBuilderRowTags
               :model-value="row.tags ?? []"
               @update:model-value="(tags) => setRowTags(rowIdx, tags)"

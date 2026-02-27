@@ -55,6 +55,8 @@ export function useLogbookBuilderGrid() {
   const tagsColumnWidth: Ref<number> = ref(DEFAULT_TAGS_COLUMN_WIDTH)
   /** Default role for builder imports when no Role column value (e.g. 'Dual Received' for student). */
   const defaultImportRole: Ref<string> = ref('Dual Received')
+  /** Default year for date column when user enters MM/DD only (null = use current year). */
+  const defaultYear: Ref<number | null> = ref(new Date().getFullYear())
   const MIN_COLUMN_WIDTH = 40
   const MAX_COLUMN_WIDTH = 500
 
@@ -195,6 +197,7 @@ export function useLogbookBuilderGrid() {
     setTwoPageSplitIndex,
     tagsColumnWidth,
     defaultImportRole,
+    defaultYear,
     setColumnWidth,
     setTagsColumnWidth,
     MIN_COLUMN_WIDTH,

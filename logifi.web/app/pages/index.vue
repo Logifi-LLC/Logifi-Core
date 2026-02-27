@@ -10242,18 +10242,18 @@ function toggleSidebar(): void {
 
 // Helpers to extract keys for filters
 function extractTailFromCatalogItem(item: string): string | null {
-  let text = (item || '').trim()
+  const text = (item || '').trim()
   const seps = ['·', '•', '-', '|', '–', '—']
   for (const s of seps) {
     if (text.includes(s)) {
-      const parts = text.split(s).map(p => p.trim())
-      const nPart = parts.find(p => /^N[A-Z0-9]+$/i.test(p) || p.toUpperCase().startsWith('N'))
-      if (nPart) {
-        text = nPart
-        break
+      const parts = text.split(s).map((p) => p.trim()).filter(Boolean)
+      // Catalog items are "Family · Registration" — use the part after the separator (any tail, not only N-numbers)
+      if (parts.length >= 2) {
+        return parts[parts.length - 1].toUpperCase()
       }
     }
   }
+  // No separator: fall back to N-number pattern for backwards compatibility
   const m = text.match(/N[A-Z0-9]+/i)
   return m ? m[0].toUpperCase() : null
 }
