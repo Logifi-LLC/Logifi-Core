@@ -4,6 +4,7 @@ import {
   createEmptyFlightTime,
   createEmptyPerformance,
   createEmptyOOOI,
+  getApproachesFromPerformance,
 } from '~/utils/logbookTypes'
 import type { BuilderRow, BuilderColumn } from '~/utils/logbookBuilderTypes'
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
@@ -239,6 +240,9 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
         case 'approach':
           performance.approachCount = parseDecimal(val) ?? performance.approachCount
           break
+        case 'approachType':
+          if (val) performance.approachType = val
+          break
         case 'pilots':
           break
         case 'total':
@@ -268,6 +272,11 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
       flightConditions = [...flightConditions, 'simInstrument']
     }
     flightConditions = sanitizeFlightConditions(flightConditions)
+
+    // Ensure structured approaches array is populated for imported entries.
+    if (!performance.approaches || performance.approaches.length === 0) {
+      performance.approaches = getApproachesFromPerformance(performance)
+    }
 
     const entry: LogEntry = {
       id: generateEntryId(),

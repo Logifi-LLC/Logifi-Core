@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useTheme } from '~/composables/useTheme'
+
 const props = defineProps<{ modelValue: string[] }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
+
+const { isDark } = useTheme()
 
 const presetTags = ['Checkride', 'Flight Review', 'IPC'] as const
 const showCustomInput = ref(false)
@@ -33,10 +37,10 @@ function addCustomTag() {
       :key="tag"
       type="button"
       :class="[
-        'rounded px-2 py-0.5 text-xs font-medium transition-colors',
+        'rounded border px-2 py-0.5 text-xs font-medium transition-colors',
         (modelValue ?? []).includes(tag)
-          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200'
-          : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+          ? (isDark ? 'border-blue-800 bg-blue-900/50 text-blue-200' : 'border-blue-200 bg-blue-50 text-blue-700')
+          : (isDark ? 'border-gray-600 bg-transparent text-gray-300 hover:bg-gray-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50')
       ]"
       @click="toggleTag(tag)"
     >
@@ -47,7 +51,10 @@ function addCustomTag() {
         v-model="customTagInput"
         type="text"
         placeholder="Custom"
-        class="w-20 rounded border border-gray-300 px-1.5 py-0.5 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+        :class="[
+          'w-20 rounded border px-1.5 py-0.5 text-xs shadow-sm transition-colors',
+          isDark ? 'border-gray-600 bg-gray-700 text-white' : 'border-gray-300 bg-white text-gray-900'
+        ]"
         @keydown.enter.prevent="addCustomTag()"
         @blur="addCustomTag(); showCustomInput = false"
       />
@@ -55,7 +62,12 @@ function addCustomTag() {
     <button
       v-else
       type="button"
-      class="rounded px-1.5 py-0.5 text-xs text-gray-500 hover:bg-gray-200 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-600"
+      :class="[
+        'rounded border border-dashed px-1.5 py-0.5 text-xs transition-colors',
+        isDark 
+          ? 'border-gray-600 bg-transparent text-gray-400 hover:border-gray-500 hover:bg-gray-700' 
+          : 'border-gray-300 bg-white text-gray-500 hover:border-gray-400 hover:bg-gray-50 hover:text-gray-700'
+      ]"
       aria-label="Add tag"
       @click="showCustomInput = true"
     >

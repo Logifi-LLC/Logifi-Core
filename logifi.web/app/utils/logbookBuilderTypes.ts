@@ -66,6 +66,20 @@ export const ROLE_OPTIONS = [
   { value: 'Instructor', label: 'Instructor' },
 ] as const
 
+/** Approach type options for the builder (aligned with main logbook). */
+export const APPROACH_TYPE_OPTIONS = [
+  'ILS',
+  'LOC',
+  'VOR',
+  'GPS',
+  'RNAV',
+  'LPV',
+  'LNAV',
+  'LNAV/VNAV',
+  'Visual',
+  'Other',
+] as const
+
 /** Default columns for a new grid (Date, From, To, Route, PIC, Total + Tags column is fixed in UI). */
 export const DEFAULT_BUILDER_COLUMNS: Omit<BuilderColumn, 'id'>[] = [
   { fieldKey: 'date', label: 'Date', order: 0, width: 100 },
@@ -74,6 +88,8 @@ export const DEFAULT_BUILDER_COLUMNS: Omit<BuilderColumn, 'id'>[] = [
   { fieldKey: 'route', label: 'Route', order: 3, width: 100 },
   { fieldKey: 'pic', label: 'PIC', order: 4, width: 70 },
   { fieldKey: 'total', label: 'Total', order: 5, width: 70 },
+  { fieldKey: 'approach', label: 'Approach', order: 6, width: 80 },
+  { fieldKey: 'approachType', label: 'Approach Type', order: 7, width: 130 },
 ]
 
 function generateId(): string {

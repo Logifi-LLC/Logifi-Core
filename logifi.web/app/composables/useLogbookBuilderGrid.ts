@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import type { Ref } from 'vue'
 import type { BuilderColumn, BuilderRow, BuilderLayout, BuilderTemplateColumn } from '~/utils/logbookBuilderTypes'
+import { supabase } from '~/lib/supabase'
 import {
   DEFAULT_BUILDER_ROW_COUNT,
   DEFAULT_BUILDER_COLUMNS,
@@ -36,6 +37,7 @@ const FIELD_LABELS: Record<LogbookColumnKey, string> = {
   dayLandings: 'Day Landings',
   nightLandings: 'Night Landings',
   approach: 'Approach',
+  approachType: 'Approach Type',
   pilots: 'Pilots',
   role: 'Role',
   total: 'Total',
@@ -78,6 +80,13 @@ export function useLogbookBuilderGrid() {
       createEmptyBuilderRow(columnIds.value)
     )
   )
+
+  /** Index of the row that currently has focus in the grid (for highlighting). */
+  const activeRowIndex: Ref<number | null> = ref(null)
+
+  function setActiveRowIndex(index: number | null) {
+    activeRowIndex.value = index
+  }
 
   function setCell(rowIdx: number, colId: string, value: string) {
     if (rowIdx < 0 || rowIdx >= rows.value.length) return
@@ -187,6 +196,16 @@ export function useLogbookBuilderGrid() {
     rows.value = Array.from({ length: rowCount.value }, () => createEmptyBuilderRow(ids))
   }
 
+  /** Delete a saved template by id. Only removes the template record; does not touch logbook entries. */
+  async function deleteTemplate(id: string): Promise<{ ok: boolean; error?: string }> {
+    const { error } = await (supabase as any)
+      .from('logbook_builder_templates')
+      .delete()
+      .eq('id', id)
+    if (error) return { ok: false, error: error.message ?? 'Failed to delete template' }
+    return { ok: true }
+  }
+
   return {
     columns,
     rows,
@@ -198,6 +217,7 @@ export function useLogbookBuilderGrid() {
     tagsColumnWidth,
     defaultImportRole,
     defaultYear,
+    activeRowIndex,
     setColumnWidth,
     setTagsColumnWidth,
     MIN_COLUMN_WIDTH,
@@ -214,5 +234,7 @@ export function useLogbookBuilderGrid() {
     reorderColumns,
     loadTemplate,
     clearGrid,
+    deleteTemplate,
+    setActiveRowIndex,
   }
 }

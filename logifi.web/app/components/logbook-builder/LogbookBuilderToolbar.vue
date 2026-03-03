@@ -5,6 +5,7 @@ import { useAuth } from '~/composables/useAuth'
 import { supabase } from '~/lib/supabase'
 import type { BuilderTemplateColumn } from '~/utils/logbookBuilderTypes'
 import { ROLE_OPTIONS } from '~/utils/logbookBuilderTypes'
+import { useTheme } from '~/composables/useTheme'
 
 const DEFAULT_ROLE_STORAGE_KEY = 'logifi-logbook-builder-default-role'
 
@@ -12,7 +13,9 @@ const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGri
 if (!grid) throw new Error('LogbookBuilderToolbar must be used inside a page that provides logbookBuilderGrid')
 
 const { user, isAuthenticated } = useAuth()
-const { rowCount, setRowCount, addColumn, layout, columns, removeColumn, loadTemplate, visibleColumns, setTwoPageSplitIndex, twoPageSplitIndex, effectiveSplitIndex, tagsColumnWidth, defaultImportRole, defaultYear } = grid
+const { rowCount, setRowCount, addColumn, layout, columns, removeColumn, loadTemplate, deleteTemplate, visibleColumns, setTwoPageSplitIndex, twoPageSplitIndex, effectiveSplitIndex, tagsColumnWidth, defaultImportRole, defaultYear } = grid
+
+const { isDark } = useTheme()
 
 const layoutOptions = [
   { value: 'single' as const, label: 'Single page' },
@@ -49,6 +52,9 @@ const showLoadModal = ref(false)
 const templateName = ref('')
 const savedTemplates = ref<{ id: string; name: string; layout: string; default_row_count: number; columns: BuilderTemplateColumn[]; tags_column_width?: number; default_import_role?: string; two_page_split_index?: number }[]>([])
 const loadError = ref<string | null>(null)
+const deleteError = ref<string | null>(null)
+const templateToDelete = ref<{ id: string; name: string } | null>(null)
+const deletingTemplateId = ref<string | null>(null)
 
 async function handleSaveTemplate() {
   if (!isAuthenticated.value || !user.value) {
@@ -69,8 +75,8 @@ async function confirmSaveTemplate() {
     default_row_count: rowCount.value,
     tags_column_width: tagsColumnWidth.value,
     default_import_role: defaultImportRole.value || null,
-    two_page_split_index: layout.value === 'two-page' ? grid.effectiveSplitIndex.value : null,
-    columns: grid.visibleColumns.value.map((c) => ({
+    two_page_split_index: layout.value === 'two-page' ? grid!.effectiveSplitIndex.value : null,
+    columns: grid!.visibleColumns.value.map((c) => ({
       id: c.id,
       fieldKey: c.fieldKey,
       label: c.label,
@@ -94,6 +100,7 @@ async function handleLoadTemplate() {
     return
   }
   loadError.value = null
+  deleteError.value = null
   const { data, error } = await (supabase as any)
     .from('logbook_builder_templates')
     .select('id, name, layout, default_row_count, columns, tags_column_width, default_import_role, two_page_split_index')
@@ -119,6 +126,33 @@ function selectTemplate(t: (typeof savedTemplates.value)[0]) {
   showLoadModal.value = false
 }
 
+function requestDeleteTemplate(t: (typeof savedTemplates.value)[0]) {
+  deleteError.value = null
+  templateToDelete.value = { id: t.id, name: t.name }
+}
+
+function clearDeleteConfirm() {
+  templateToDelete.value = null
+  deleteError.value = null
+  deletingTemplateId.value = null
+}
+
+async function confirmDeleteTemplate() {
+  if (!templateToDelete.value || !isAuthenticated.value) return
+  const id = templateToDelete.value.id
+  deletingTemplateId.value = id
+  deleteError.value = null
+  const result = await deleteTemplate(id)
+  deletingTemplateId.value = null
+  if (result.ok) {
+    savedTemplates.value = savedTemplates.value.filter((t) => t.id !== id)
+    templateToDelete.value = null
+  } else {
+    deleteError.value = result.error ?? 'Failed to delete template'
+    templateToDelete.value = null
+  }
+}
+
 function setLayout(value: string) {
   layout.value = value as 'single' | 'two-page'
   if (value === 'two-page' && visibleColumns.value.length > 1) {
@@ -135,62 +169,95 @@ function onRowCountInput(e: Event) {
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center gap-4 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-600 dark:bg-gray-800">
+  <div
+    class="flex flex-wrap items-center gap-4 rounded-lg border p-3"
+    :class="isDark ? 'border-gray-600 bg-gray-800' : 'border-gray-200 bg-white'"
+  >
     <div class="flex items-center gap-2">
-      <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Rows:</span>
+      <span class="text-sm font-medium transition-colors" :class="isDark ? 'text-gray-300' : 'text-gray-900'">Rows:</span>
       <input
         type="number"
         :value="rowCount"
         min="1"
         max="100"
-        class="w-16 rounded border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+        :class="[
+          'w-16 rounded border px-2 py-1 text-sm shadow-sm transition-colors',
+          isDark
+            ? 'border-gray-600 bg-gray-700 text-white'
+            : 'border-gray-300 bg-white text-gray-900'
+        ]"
         @input="onRowCountInput($event)"
       />
     </div>
     <div class="flex items-center gap-2">
-      <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Layout:</span>
+      <span class="text-sm font-medium transition-colors" :class="isDark ? 'text-gray-300' : 'text-gray-900'">Layout:</span>
       <select
         :value="layout"
-        class="rounded border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+        :class="[
+          'rounded border px-2 py-1 text-sm shadow-sm transition-colors',
+          isDark
+            ? 'border-gray-600 bg-gray-700 text-white'
+            : 'border-gray-300 bg-white text-gray-900'
+        ]"
         @change="(e) => setLayout((e.target as HTMLSelectElement).value)"
       >
         <option v-for="opt in layoutOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
     </div>
     <div class="flex items-center gap-2">
-      <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Year:</span>
+      <span class="text-sm font-medium transition-colors" :class="isDark ? 'text-gray-300' : 'text-gray-900'">Year:</span>
       <input
         v-model.number="defaultYearValue"
         type="number"
         min="1900"
         max="2100"
-        class="w-20 rounded border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+        :class="[
+          'w-20 rounded border px-2 py-1 text-sm shadow-sm transition-colors',
+          isDark
+            ? 'border-gray-600 bg-gray-700 text-white'
+            : 'border-gray-300 bg-white text-gray-900'
+        ]"
       />
     </div>
     <div class="flex items-center gap-2">
-      <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Default role:</span>
+      <span class="text-sm font-medium transition-colors" :class="isDark ? 'text-gray-300' : 'text-gray-900'">Default role:</span>
       <select
         :value="defaultImportRole"
-        class="rounded border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+        :class="[
+          'rounded border px-2 py-1 text-sm shadow-sm transition-colors',
+          isDark
+            ? 'border-gray-600 bg-gray-700 text-white'
+            : 'border-gray-300 bg-white text-gray-900'
+        ]"
         @change="onDefaultRoleChange"
       >
         <option v-for="opt in ROLE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
     </div>
     <div v-if="layout === 'two-page'" class="flex items-center gap-2">
-      <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Columns on left:</span>
+      <span class="text-sm font-medium transition-colors" :class="isDark ? 'text-gray-300' : 'text-gray-900'">Columns on left:</span>
       <input
         type="number"
         :value="effectiveSplitIndex"
         :min="1"
         :max="Math.max(1, visibleColumns.length - 1)"
-        class="w-14 rounded border border-gray-300 bg-white px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+        :class="[
+          'w-14 rounded border px-2 py-1 text-sm shadow-sm transition-colors',
+          isDark
+            ? 'border-gray-600 bg-gray-700 text-white'
+            : 'border-gray-300 bg-white text-gray-900'
+        ]"
         @input="(e) => setTwoPageSplitIndex(parseInt((e.target as HTMLInputElement).value, 10) || 1)"
       />
     </div>
     <button
       type="button"
-      class="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+      :class="[
+        'rounded px-3 py-1.5 text-sm font-medium transition-colors border',
+        isDark
+          ? 'bg-blue-600 hover:bg-blue-500 text-white border-blue-600'
+          : 'bg-gray-200 hover:bg-gray-300 text-black border-gray-300 shadow-sm'
+      ]"
       @click="addColumn(null)"
     >
       + Add column
@@ -198,22 +265,37 @@ function onRowCountInput(e: Event) {
     <button
       v-if="columns.length > 1"
       type="button"
-      class="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-      @click="removeColumn(columns[columns.length - 1]?.id)"
+      :class="[
+        'rounded border px-3 py-1.5 text-sm transition-colors',
+        isDark 
+          ? 'border-gray-600 bg-transparent text-gray-300 hover:bg-gray-700' 
+          : 'border-gray-300 bg-gray-200 text-black hover:bg-gray-300 shadow-sm'
+      ]"
+      @click="removeColumn(columns[columns.length - 1]!.id)"
     >
       Remove column
     </button>
     <div class="ml-auto flex gap-2">
       <button
         type="button"
-        class="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+        :class="[
+          'rounded border px-3 py-1.5 text-sm transition-colors',
+          isDark 
+            ? 'border-gray-600 bg-transparent text-gray-300 hover:bg-gray-700' 
+            : 'border-gray-300 bg-gray-200 text-black hover:bg-gray-300 shadow-sm'
+        ]"
         @click="handleLoadTemplate"
       >
         Load template
       </button>
       <button
         type="button"
-        class="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+        :class="[
+          'rounded border px-3 py-1.5 text-sm transition-colors',
+          isDark 
+            ? 'border-gray-600 bg-transparent text-gray-300 hover:bg-gray-700' 
+            : 'border-gray-300 bg-gray-200 text-black hover:bg-gray-300 shadow-sm'
+        ]"
         @click="handleSaveTemplate"
       >
         Save template
@@ -247,7 +329,7 @@ function onRowCountInput(e: Event) {
         </div>
         <div class="p-4 space-y-4">
           <div>
-            <label class="mb-1.5 block text-sm font-medium font-quicksand text-gray-700 dark:text-gray-300">Template name</label>
+            <label class="mb-1.5 block text-sm font-medium font-quicksand transition-colors" :class="isDark ? 'text-gray-300' : 'text-gray-700'">Template name</label>
             <input
               v-model="templateName"
               type="text"
@@ -307,15 +389,32 @@ function onRowCountInput(e: Event) {
           <p v-if="loadError" class="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-quicksand text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
             {{ loadError }}
           </p>
-          <ul v-else class="space-y-2">
+          <p v-if="deleteError" class="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-quicksand text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+            {{ deleteError }}
+          </p>
+          <ul class="space-y-2">
             <li
               v-for="t in savedTemplates"
               :key="t.id"
-              class="cursor-pointer rounded-lg border border-gray-200 px-3 py-2.5 text-sm font-quicksand text-gray-800 transition-colors hover:border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:border-gray-500 dark:hover:bg-gray-700"
-              @click="selectTemplate(t)"
+              class="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2.5 text-sm font-quicksand text-gray-800 transition-colors hover:border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:border-gray-500 dark:hover:bg-gray-700"
             >
-              <span class="break-words">{{ t.name }}</span>
-              <span class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">{{ t.default_row_count }} rows, {{ t.layout }}</span>
+              <button
+                type="button"
+                class="min-w-0 flex-1 cursor-pointer text-left"
+                @click="selectTemplate(t)"
+              >
+                <span class="break-words">{{ t.name }}</span>
+                <span class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">{{ t.default_row_count }} rows, {{ t.layout }}</span>
+              </button>
+              <button
+                type="button"
+                class="flex-shrink-0 rounded p-1.5 text-gray-500 hover:bg-red-100 hover:text-red-700 dark:text-gray-400 dark:hover:bg-red-900/30 dark:hover:text-red-300 transition-colors"
+                :disabled="deletingTemplateId !== null"
+                aria-label="Delete template"
+                @click.stop="requestDeleteTemplate(t)"
+              >
+                <Icon name="ri:delete-bin-line" size="18" />
+              </button>
             </li>
           </ul>
           <p v-if="savedTemplates.length === 0 && !loadError" class="py-6 text-center text-sm font-quicksand text-gray-500 dark:text-gray-400">
@@ -331,6 +430,58 @@ function onRowCountInput(e: Event) {
           >
             Close
           </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Delete template confirmation -->
+  <Teleport to="body">
+    <div
+      v-if="templateToDelete"
+      class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
+      @click.self="clearDeleteConfirm"
+    >
+      <div
+        class="relative w-full max-w-md rounded-xl border border-gray-300 bg-white shadow-2xl transition-colors dark:border-gray-700 dark:bg-gray-800"
+        @click.stop
+      >
+        <div class="flex items-center justify-between flex-shrink-0 border-b border-gray-300 p-4 dark:border-gray-700">
+          <h3 class="text-lg font-semibold font-quicksand text-gray-900 dark:text-white">
+            Delete template?
+          </h3>
+          <button
+            type="button"
+            class="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+            aria-label="Cancel"
+            :disabled="deletingTemplateId !== null"
+            @click="clearDeleteConfirm"
+          >
+            <Icon name="ri:close-line" size="22" />
+          </button>
+        </div>
+        <div class="p-4 space-y-4">
+          <p class="text-sm font-quicksand text-gray-700 dark:text-gray-300">
+            Delete the page layout template &quot;{{ templateToDelete.name }}&quot;? This does not delete any logbook entries.
+          </p>
+          <div class="flex justify-end gap-2 border-t border-gray-300 pt-4 dark:border-gray-700">
+            <button
+              type="button"
+              class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium font-quicksand text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 disabled:opacity-50"
+              :disabled="deletingTemplateId !== null"
+              @click="clearDeleteConfirm"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              class="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium font-quicksand text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+              :disabled="deletingTemplateId !== null"
+              @click="confirmDeleteTemplate"
+            >
+              {{ deletingTemplateId ? 'Deleting…' : 'Delete' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
