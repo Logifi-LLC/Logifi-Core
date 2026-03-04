@@ -10,6 +10,38 @@ export interface ExportOptions {
   includeAuditTrail?: boolean
 }
 
+export type ExportScopeType = 'all' | 'month' | 'dateRange' | 'aircraft'
+
+export interface ExportScopeOptions {
+  month?: { year: number; month: number }
+  dateStart?: string
+  dateEnd?: string
+  selectedAircraft?: string[]
+}
+
+/**
+ * Returns a filename segment for the given scope (e.g. '-2025-03' for month, '-N123AB' for single aircraft).
+ * Use with base name like `logifi-logbook-${date}${segment}.csv`.
+ */
+export function getExportFilenameSegment(
+  scope: ExportScopeType,
+  options?: ExportScopeOptions
+): string {
+  if (scope === 'all') return ''
+  if (scope === 'month' && options?.month) {
+    const { year, month } = options.month
+    return `-${year}-${String(month).padStart(2, '0')}`
+  }
+  if (scope === 'dateRange' && options?.dateStart && options?.dateEnd) {
+    return `-${options.dateStart}-to-${options.dateEnd}`
+  }
+  if (scope === 'aircraft' && options?.selectedAircraft?.length) {
+    const regs = options.selectedAircraft
+    return regs.length === 1 ? `-${regs[0]}` : '-filtered'
+  }
+  return ''
+}
+
 /**
  * Composable for export functionality
  * Handles fetching audit trail data and preparing entries for export
@@ -167,7 +199,8 @@ export const useExport = () => {
   return {
     fetchAuditTrailForEntries,
     prepareEntryForExport,
-    prepareEntriesForExport
+    prepareEntriesForExport,
+    getExportFilenameSegment
   }
 }
 

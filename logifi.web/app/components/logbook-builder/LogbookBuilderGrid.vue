@@ -45,10 +45,10 @@ type ClipboardPayload = {
 }
 
 const activeCell = ref<ActiveCell | null>(null)
-const selectionRange = ref<SelectionRange | null>(null)
+const activeSelection = ref<SelectionRange | null>(null)
 const dragFill = ref<DragFillState | null>(null)
 const clipboard = ref<ClipboardPayload | null>(null)
-const isSelecting = ref(false)
+const isDraggingSelection = ref(false)
 const selectionAnchor = ref<ActiveCell | null>(null)
 
 function onHeaderDragStart(colId: string, e: DragEvent) {
@@ -88,7 +88,7 @@ function getColumnStyle(col: { width?: number }) {
 }
 
 function isCellInSelection(rowIdx: number, colIdx: number): boolean {
-  const range = selectionRange.value
+  const range = activeSelection.value
   if (!range) return false
   return (
     rowIdx >= range.startRow &&
@@ -105,7 +105,7 @@ function isActiveCell(rowIdx: number, colIdx: number): boolean {
 }
 
 function isHandleCell(rowIdx: number, colIdx: number): boolean {
-  const range = selectionRange.value
+  const range = activeSelection.value
   if (range) {
     return rowIdx === range.endRow && colIdx === range.endCol
   }
@@ -143,6 +143,41 @@ function unionRanges(a: SelectionRange, b: SelectionRange): SelectionRange {
     startCol: Math.min(a.startCol, b.startCol),
     endCol: Math.max(a.endCol, b.endCol),
   }
+}
+
+function setSelectionFromAnchor(anchor: ActiveCell, focus: ActiveCell) {
+  selectionAnchor.value = anchor
+  activeSelection.value = makeSelectionRange(
+    anchor.rowIndex,
+    anchor.colIndex,
+    focus.rowIndex,
+    focus.colIndex,
+  )
+  activeCell.value = clampRowCol(focus.rowIndex, focus.colIndex)
+}
+
+function isSelectionTopEdge(rowIdx: number, colIdx: number): boolean {
+  const sel = activeSelection.value
+  if (!sel) return false
+  return rowIdx === sel.startRow && colIdx >= sel.startCol && colIdx <= sel.endCol
+}
+
+function isSelectionBottomEdge(rowIdx: number, colIdx: number): boolean {
+  const sel = activeSelection.value
+  if (!sel) return false
+  return rowIdx === sel.endRow && colIdx >= sel.startCol && colIdx <= sel.endCol
+}
+
+function isSelectionLeftEdge(rowIdx: number, colIdx: number): boolean {
+  const sel = activeSelection.value
+  if (!sel) return false
+  return colIdx === sel.startCol && rowIdx >= sel.startRow && rowIdx <= sel.endRow
+}
+
+function isSelectionRightEdge(rowIdx: number, colIdx: number): boolean {
+  const sel = activeSelection.value
+  if (!sel) return false
+  return colIdx === sel.endCol && rowIdx >= sel.startRow && rowIdx <= sel.endRow
 }
 
 function applyFillFromActiveToRange(range: SelectionRange, source: ActiveCell | null) {
@@ -252,52 +287,16 @@ function computeDestRange(base: SelectionRange, target: ActiveCell): SelectionRa
 function onCellFocus(rowIdx: number, colIdx: number) {
   activeCell.value = clampRowCol(rowIdx, colIdx)
   setActiveRowIndex(rowIdx)
+  const cell = activeCell.value
+  const currentSelection = activeSelection.value
+  if (!cell) return
+  if (!currentSelection || !isCellInSelection(cell.rowIndex, cell.colIndex)) {
+    setSelectionFromAnchor(cell, cell)
+  }
 }
 
 function onCellBlur() {
   setActiveRowIndex(null)
-}
-
-function onCellMouseDown(event: MouseEvent, rowIdx: number, colIdx: number) {
-  if (event.button !== 0) return
-  const targetCell: ActiveCell = clampRowCol(rowIdx, colIdx)
-
-  // Shift+click: extend selection from existing active cell, like Excel.
-  if (event.shiftKey && activeCell.value) {
-    const anchor = activeCell.value
-    selectionRange.value = makeSelectionRange(anchor.rowIndex, anchor.colIndex, targetCell.rowIndex, targetCell.colIndex)
-    setActiveRowIndex(anchor.rowIndex)
-    return
-  }
-
-  // Start a new drag-selection from this cell.
-  activeCell.value = targetCell
-  selectionAnchor.value = targetCell
-  selectionRange.value = makeSelectionRange(targetCell.rowIndex, targetCell.colIndex, targetCell.rowIndex, targetCell.colIndex)
-  setActiveRowIndex(targetCell.rowIndex)
-  isSelecting.value = true
-
-  const handleSelectionMove = (e: MouseEvent) => {
-    if (!isSelecting.value || !selectionAnchor.value) return
-    const cell = findCellFromPoint(e.clientX, e.clientY)
-    if (!cell) return
-    selectionRange.value = makeSelectionRange(
-      selectionAnchor.value.rowIndex,
-      selectionAnchor.value.colIndex,
-      cell.rowIndex,
-      cell.colIndex,
-    )
-  }
-
-  const handleSelectionUp = () => {
-    isSelecting.value = false
-    selectionAnchor.value = null
-    document.removeEventListener('mousemove', handleSelectionMove)
-    document.removeEventListener('mouseup', handleSelectionUp)
-  }
-
-  document.addEventListener('mousemove', handleSelectionMove)
-  document.addEventListener('mouseup', handleSelectionUp)
 }
 
 function findCellFromPoint(clientX: number, clientY: number): ActiveCell | null {
@@ -318,13 +317,75 @@ function findCellFromPoint(clientX: number, clientY: number): ActiveCell | null 
   return null
 }
 
+function getCellFromEvent(event: MouseEvent): ActiveCell | null {
+  let node = event.target as HTMLElement | null
+  while (node) {
+    const dataset = (node as HTMLElement).dataset
+    if (dataset && dataset.builderRow != null && dataset.builderCol != null) {
+      const row = parseInt(dataset.builderRow, 10)
+      const col = parseInt(dataset.builderCol, 10)
+      if (!Number.isNaN(row) && !Number.isNaN(col)) {
+        return clampRowCol(row, col)
+      }
+    }
+    node = node.parentElement
+  }
+  return null
+}
+
+function onGridMouseDown(event: MouseEvent) {
+  if (event.button !== 0) return
+
+  const cellFromEvent = getCellFromEvent(event)
+  const cell = cellFromEvent ?? findCellFromPoint(event.clientX, event.clientY)
+  if (!cell) return
+
+  const targetTag = (event.target as HTMLElement | null)?.tagName?.toLowerCase()
+  const isFormControl = targetTag === 'input' || targetTag === 'select' || targetTag === 'textarea'
+  if (!isFormControl) {
+    // Prevent native text selection when dragging over plain cell area,
+    // but allow normal focus behavior when interacting directly with inputs/selects.
+    event.preventDefault()
+  }
+
+  if (event.shiftKey) {
+    const anchor = selectionAnchor.value ?? activeCell.value ?? cell
+    setSelectionFromAnchor(anchor, cell)
+    setActiveRowIndex(anchor.rowIndex)
+  } else {
+    setSelectionFromAnchor(cell, cell)
+    setActiveRowIndex(cell.rowIndex)
+  }
+
+  // Ensure the inner input/select receives focus so typing works even when clicking cell background.
+  focusCellByIndex(cell.rowIndex, cell.colIndex)
+
+  isDraggingSelection.value = true
+
+  const handleSelectionMove = (e: MouseEvent) => {
+    if (!isDraggingSelection.value || !selectionAnchor.value) return
+    const nextCell = findCellFromPoint(e.clientX, e.clientY)
+    if (!nextCell) return
+    setSelectionFromAnchor(selectionAnchor.value, nextCell)
+  }
+
+  const handleSelectionUp = () => {
+    isDraggingSelection.value = false
+    document.removeEventListener('mousemove', handleSelectionMove)
+    document.removeEventListener('mouseup', handleSelectionUp)
+  }
+
+  document.addEventListener('mousemove', handleSelectionMove)
+  document.addEventListener('mouseup', handleSelectionUp)
+}
+
 function onFillHandleMouseDown(event: MouseEvent) {
   event.preventDefault()
   event.stopPropagation()
-  if (!activeCell.value && !selectionRange.value) return
+  if (!activeCell.value && !activeSelection.value) return
 
   const base: SelectionRange | null =
-    selectionRange.value ??
+    activeSelection.value ??
     (activeCell.value
       ? {
           startRow: activeCell.value.rowIndex,
@@ -357,7 +418,7 @@ function onFillHandleMouseDown(event: MouseEvent) {
       isDragging: true,
     }
     // Ensure the original block stays highlighted while dragging.
-    selectionRange.value = base
+    activeSelection.value = base
   }
 
   const handleMouseMove = (e: MouseEvent) => {
@@ -370,7 +431,7 @@ function onFillHandleMouseDown(event: MouseEvent) {
       if (!cell) return
       state.currentRow = cell.rowIndex
       state.currentCol = cell.colIndex
-      selectionRange.value = makeSelectionRange(
+      activeSelection.value = makeSelectionRange(
         state.startRow as number,
         state.startCol as number,
         state.currentRow as number,
@@ -385,13 +446,13 @@ function onFillHandleMouseDown(event: MouseEvent) {
 
     if (!cell) {
       state.previewDestRange = null
-      selectionRange.value = baseRange
+      activeSelection.value = baseRange
       return
     }
 
     const dest = computeDestRange(baseRange, cell)
     state.previewDestRange = dest
-    selectionRange.value = dest ? unionRanges(baseRange, dest) : baseRange
+    activeSelection.value = dest ? unionRanges(baseRange, dest) : baseRange
   }
 
   const handleMouseUp = () => {
@@ -403,10 +464,10 @@ function onFillHandleMouseDown(event: MouseEvent) {
     if (!state || !state.isDragging) return
 
     if (state.mode === 'single') {
-      const range = selectionRange.value
+      const range = activeSelection.value
       const source = activeCell.value
       if (!range || !source) {
-        selectionRange.value = null
+        activeSelection.value = null
         return
       }
 
@@ -417,7 +478,7 @@ function onFillHandleMouseDown(event: MouseEvent) {
         range.startCol === source.colIndex
 
       if (singleCell) {
-        selectionRange.value = null
+        activeSelection.value = null
         return
       }
 
@@ -426,11 +487,11 @@ function onFillHandleMouseDown(event: MouseEvent) {
       const baseRange = state.baseRange
       const destRange = state.previewDestRange
       if (!baseRange || !destRange) {
-        selectionRange.value = baseRange ?? null
+        activeSelection.value = baseRange ?? null
         return
       }
       applyBlockCopy(baseRange, destRange)
-      selectionRange.value = unionRanges(baseRange, destRange)
+      activeSelection.value = unionRanges(baseRange, destRange)
     }
   }
 
@@ -439,10 +500,9 @@ function onFillHandleMouseDown(event: MouseEvent) {
 }
 
 function handleKeyDown(e: KeyboardEvent) {
-  const key = e.key.toLowerCase()
+  const keyRaw = e.key
+  const key = keyRaw.toLowerCase()
   const isMeta = e.metaKey || e.ctrlKey
-  if (!isMeta || (key !== 'c' && key !== 'v')) return
-
   const target = e.target as HTMLElement | null
   if (!target) return
   const tagName = target.tagName?.toLowerCase()
@@ -458,8 +518,59 @@ function handleKeyDown(e: KeyboardEvent) {
 
   const cell = clampRowCol(row, col)
 
+  const isArrowKey =
+    key === 'arrowup' ||
+    key === 'arrowdown' ||
+    key === 'arrowleft' ||
+    key === 'arrowright'
+
+  if (!isMeta && !e.altKey && isArrowKey) {
+    const maxRow = Math.max(0, rows.value.length - 1)
+    const maxCol = Math.max(0, visibleColumns.value.length - 1)
+
+    let anchor = selectionAnchor.value ?? activeCell.value ?? cell
+    anchor = clampRowCol(anchor.rowIndex, anchor.colIndex)
+
+    let focus = activeCell.value ?? cell
+    focus = clampRowCol(focus.rowIndex, focus.colIndex)
+
+    const delta = { row: 0, col: 0 }
+    switch (key) {
+      case 'arrowup':
+        delta.row = -1
+        break
+      case 'arrowdown':
+        delta.row = 1
+        break
+      case 'arrowleft':
+        delta.col = -1
+        break
+      case 'arrowright':
+        delta.col = 1
+        break
+    }
+
+    const nextFocus = clampRowCol(
+      focus.rowIndex + delta.row,
+      focus.colIndex + delta.col,
+    )
+
+    if (e.shiftKey) {
+      setSelectionFromAnchor(anchor, nextFocus)
+    } else {
+      setSelectionFromAnchor(nextFocus, nextFocus)
+    }
+
+    focusCellByIndex(nextFocus.rowIndex, nextFocus.colIndex)
+    setActiveRowIndex(nextFocus.rowIndex)
+    e.preventDefault()
+    return
+  }
+
+  if (!isMeta || (key !== 'c' && key !== 'v')) return
+
   if (key === 'c') {
-    const base = selectionRange.value ?? {
+    const base = activeSelection.value ?? {
       startRow: cell.rowIndex,
       endRow: cell.rowIndex,
       startCol: cell.colIndex,
@@ -799,7 +910,7 @@ defineExpose({
           </th>
         </tr>
       </thead>
-      <tbody>
+      <tbody @mousedown="onGridMouseDown">
         <tr
           v-for="(row, rowIdx) in rows"
           :key="rowIdx"
@@ -817,9 +928,14 @@ defineExpose({
                 isDark ? 'border-gray-600' : 'border-gray-200',
                 isCellInSelection(rowIdx, colIdx) ? (isDark ? 'bg-blue-900/40' : 'bg-blue-100/60') : '',
                 isActiveCell(rowIdx, colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400' : 'ring-1 ring-inset ring-blue-500') : '',
+                isSelectionTopEdge(rowIdx, colIdx) ? 'border-t-2 border-t-blue-500' : '',
+                isSelectionBottomEdge(rowIdx, colIdx) ? 'border-b-2 border-b-blue-500' : '',
+                isSelectionLeftEdge(rowIdx, colIdx) ? 'border-l-2 border-l-blue-500' : '',
+                isSelectionRightEdge(rowIdx, colIdx) ? 'border-r-2 border-r-blue-500' : '',
               ]"
               :style="getColumnStyle(col)"
-              @mousedown="onCellMouseDown($event, rowIdx, colIdx)"
+              :data-builder-row="rowIdx"
+              :data-builder-col="colIdx"
             >
               <LogbookBuilderCell
                 :ref="(el) => setCellRef(rowIdx, col.id, el as { focus: () => void } | null)"
@@ -837,7 +953,7 @@ defineExpose({
               <button
                 v-if="isHandleCell(rowIdx, colIdx)"
                 type="button"
-                class="absolute bottom-0 right-0 h-2 w-2 translate-x-1/2 translate-y-1/2 rounded-sm border border-blue-500 bg-blue-500 hover:bg-blue-600 dark:border-blue-300 dark:bg-blue-300 dark:hover:bg-blue-200 cursor-crosshair"
+                class="absolute bottom-0 right-0 h-2 w-2 translate-x-1/2 translate-y-1/2 rounded-sm border border-blue-500 bg-blue-500 hover:bg-blue-600 dark:border-blue-300 dark:bg-blue-300 dark:hover:bg-blue-200 cursor-crosshair z-10"
                 aria-label="Drag to fill"
                 @mousedown="onFillHandleMouseDown"
               />
@@ -857,9 +973,14 @@ defineExpose({
                 isDark ? 'border-gray-600' : 'border-gray-200',
                 isCellInSelection(rowIdx, splitIndex + colIdx) ? (isDark ? 'bg-blue-900/40' : 'bg-blue-100/60') : '',
                 isActiveCell(rowIdx, splitIndex + colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400' : 'ring-1 ring-inset ring-blue-500') : '',
+                isSelectionTopEdge(rowIdx, splitIndex + colIdx) ? 'border-t-2 border-t-blue-500' : '',
+                isSelectionBottomEdge(rowIdx, splitIndex + colIdx) ? 'border-b-2 border-b-blue-500' : '',
+                isSelectionLeftEdge(rowIdx, splitIndex + colIdx) ? 'border-l-2 border-l-blue-500' : '',
+                isSelectionRightEdge(rowIdx, splitIndex + colIdx) ? 'border-r-2 border-r-blue-500' : '',
               ]"
               :style="getColumnStyle(col)"
-              @mousedown="onCellMouseDown($event, rowIdx, splitIndex + colIdx)"
+              :data-builder-row="rowIdx"
+              :data-builder-col="splitIndex + colIdx"
             >
               <LogbookBuilderCell
                 :ref="(el) => setCellRef(rowIdx, col.id, el as { focus: () => void } | null)"
@@ -877,7 +998,7 @@ defineExpose({
               <button
                 v-if="isHandleCell(rowIdx, splitIndex + colIdx)"
                 type="button"
-                class="absolute bottom-0 right-0 h-2 w-2 translate-x-1/2 translate-y-1/2 rounded-sm border border-blue-500 bg-blue-500 hover:bg-blue-600 dark:border-blue-300 dark:bg-blue-300 dark:hover:bg-blue-200 cursor-crosshair"
+                class="absolute bottom-0 right-0 h-2 w-2 translate-x-1/2 translate-y-1/2 rounded-sm border border-blue-500 bg-blue-500 hover:bg-blue-600 dark:border-blue-300 dark:bg-blue-300 dark:hover:bg-blue-200 cursor-crosshair z-10"
                 aria-label="Drag to fill"
                 @mousedown="onFillHandleMouseDown"
               />
@@ -892,9 +1013,14 @@ defineExpose({
                 isDark ? 'border-gray-600' : 'border-gray-200',
                 isCellInSelection(rowIdx, colIdx) ? (isDark ? 'bg-blue-900/40' : 'bg-blue-100/60') : '',
                 isActiveCell(rowIdx, colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400' : 'ring-1 ring-inset ring-blue-500') : '',
+                isSelectionTopEdge(rowIdx, colIdx) ? 'border-t-2 border-t-blue-500' : '',
+                isSelectionBottomEdge(rowIdx, colIdx) ? 'border-b-2 border-b-blue-500' : '',
+                isSelectionLeftEdge(rowIdx, colIdx) ? 'border-l-2 border-l-blue-500' : '',
+                isSelectionRightEdge(rowIdx, colIdx) ? 'border-r-2 border-r-blue-500' : '',
               ]"
               :style="getColumnStyle(col)"
-              @mousedown="onCellMouseDown($event, rowIdx, colIdx)"
+              :data-builder-row="rowIdx"
+              :data-builder-col="colIdx"
             >
               <LogbookBuilderCell
                 :ref="(el) => setCellRef(rowIdx, col.id, el as { focus: () => void } | null)"
@@ -912,7 +1038,7 @@ defineExpose({
               <button
                 v-if="isHandleCell(rowIdx, colIdx)"
                 type="button"
-                class="absolute bottom-0 right-0 h-2 w-2 translate-x-1/2 translate-y-1/2 rounded-sm border border-blue-500 bg-blue-500 hover:bg-blue-600 dark:border-blue-300 dark:bg-blue-300 dark:hover:bg-blue-200 cursor-crosshair"
+                class="absolute bottom-0 right-0 h-2 w-2 translate-x-1/2 translate-y-1/2 rounded-sm border border-blue-500 bg-blue-500 hover:bg-blue-600 dark:border-blue-300 dark:bg-blue-300 dark:hover:bg-blue-200 cursor-crosshair z-10"
                 aria-label="Drag to fill"
                 @mousedown="onFillHandleMouseDown"
               />

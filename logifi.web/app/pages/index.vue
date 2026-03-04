@@ -451,7 +451,7 @@
                     <div class="space-y-2">
                       <button
                         type="button"
-                        @click="exportToCSV"
+                        @click="openExportDialog"
                         :disabled="logEntries.length === 0"
                         :class="[
                           'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
@@ -465,7 +465,7 @@
                       </button>
                       <button
                         type="button"
-                        @click="exportToJSON"
+                        @click="openExportDialog"
                         :disabled="logEntries.length === 0"
                         :class="[
                           'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
@@ -1879,7 +1879,7 @@
               </button>
               <button
                 type="button"
-                @click="isInlineCommercialMode = !isInlineCommercialMode"
+                @click="toggleInlineOOOIMode"
                 :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors',
                   isInlineCommercialMode
                     ? (isDarkMode ? 'bg-blue-900/30 text-blue-300 border-blue-700' : 'bg-blue-100 text-blue-700 border-blue-200')
@@ -2734,7 +2734,7 @@
               <div class="flex items-center justify-between mb-2">
                 <button
                   type="button"
-                  @click="isCommercialMode = !isCommercialMode"
+                  @click="toggleCommercialMode"
                   :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors', 
                     isCommercialMode 
                       ? (isDarkMode ? 'bg-blue-900/30 text-blue-300 border-blue-700' : 'bg-blue-100 text-blue-700 border-blue-200')
@@ -5710,6 +5710,274 @@
       </div>
     </div>
   </div>
+
+  <!-- Export Dialog (trust-first: scope + preview) -->
+  <div
+    v-if="showExportDialog"
+    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    @click.self="closeExportDialog"
+  >
+    <div
+      :class="[
+        'relative w-full max-w-4xl max-h-[90vh] rounded-2xl border shadow-2xl transition-colors duration-300 flex flex-col',
+        isDarkMode 
+          ? 'bg-gray-800 border-gray-700' 
+          : 'bg-white border-gray-200 shadow-sm'
+      ]"
+      @click.stop
+    >
+      <div class="flex items-center justify-between p-6 border-b flex-shrink-0" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+        <div>
+          <h3 :class="['text-xl font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+            Export Logbook
+          </h3>
+          <p :class="['text-sm font-quicksand mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+            Choose what to export and review the entries before downloading.
+          </p>
+        </div>
+        <button
+          @click="closeExportDialog"
+          :class="[
+            'p-1 rounded-lg transition-colors',
+            isDarkMode 
+              ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-300'
+          ]"
+          aria-label="Close"
+        >
+          <Icon name="ri:close-line" size="24" />
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+        <!-- Scope -->
+        <div>
+          <h4 :class="['text-lg font-semibold font-quicksand mb-3', isDarkMode ? 'text-white' : 'text-gray-900']">
+            What to export
+          </h4>
+          <div class="flex flex-wrap gap-4">
+            <label :class="['flex items-center gap-2 cursor-pointer', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              <input type="radio" v-model="exportScope" value="all" class="rounded" />
+              <span class="font-quicksand">All entries</span>
+            </label>
+            <label :class="['flex items-center gap-2 cursor-pointer', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              <input type="radio" v-model="exportScope" value="month" class="rounded" />
+              <span class="font-quicksand">By month</span>
+            </label>
+            <label :class="['flex items-center gap-2 cursor-pointer', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              <input type="radio" v-model="exportScope" value="dateRange" class="rounded" />
+              <span class="font-quicksand">By date range</span>
+            </label>
+            <label :class="['flex items-center gap-2 cursor-pointer', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              <input type="radio" v-model="exportScope" value="aircraft" class="rounded" />
+              <span class="font-quicksand">By aircraft</span>
+            </label>
+          </div>
+          <div v-if="exportScope === 'month'" class="mt-3 flex flex-wrap items-center gap-3">
+            <select
+              v-model.number="exportMonth.month"
+              :class="['rounded border px-2 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']"
+            >
+              <option v-for="m in 12" :key="m" :value="m">{{ ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1] }}</option>
+            </select>
+            <input
+              v-model.number="exportMonth.year"
+              type="number"
+              min="1900"
+              max="2100"
+              :class="['w-24 rounded border px-2 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']"
+              placeholder="Year"
+            />
+          </div>
+          <div v-if="exportScope === 'dateRange'" class="mt-3 flex flex-wrap items-center gap-3">
+            <input
+              v-model="exportDateStart"
+              type="date"
+              :class="['rounded border px-2 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']"
+            />
+            <span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">to</span>
+            <input
+              v-model="exportDateEnd"
+              type="date"
+              :class="['rounded border px-2 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']"
+            />
+          </div>
+          <div v-if="exportScope === 'aircraft'" class="mt-3 max-h-40 overflow-y-auto rounded-lg border p-2" :class="[isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-gray-50']">
+            <div class="flex flex-wrap gap-2">
+              <label
+                v-for="a in uniqueAircraftForExport"
+                :key="a.registration"
+                :class="['inline-flex items-center gap-2 rounded border px-2 py-1 text-sm font-quicksand cursor-pointer', exportSelectedAircraft.includes(a.registration) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30' : 'border-blue-500 bg-blue-50') : (isDarkMode ? 'border-gray-600 text-gray-300' : 'border-gray-300 text-gray-700')]"
+              >
+                <input type="checkbox" :value="a.registration" v-model="exportSelectedAircraft" class="rounded" />
+                <span>{{ a.label }}</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preview -->
+        <div v-if="exportPreviewStatistics">
+          <h4 :class="['text-lg font-semibold font-quicksand mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
+            Summary
+          </h4>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+              <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Entries to export</div>
+              <div :class="['text-2xl font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ exportPreviewStatistics.totalEntries }}</div>
+            </div>
+            <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+              <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Total time</div>
+              <div :class="['text-2xl font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ exportPreviewStatistics.totalFlightTime.toFixed(1) }}h</div>
+            </div>
+            <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+              <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">PIC</div>
+              <div :class="['text-2xl font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ exportPreviewStatistics.picTime.toFixed(1) }}h</div>
+            </div>
+            <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+              <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Night</div>
+              <div :class="['text-2xl font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ exportPreviewStatistics.nightTime.toFixed(1) }}h</div>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+            <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+              <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">XC</div>
+              <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ exportPreviewStatistics.crossCountryTime.toFixed(1) }}h</div>
+            </div>
+            <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+              <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Instrument</div>
+              <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ (exportPreviewStatistics.actualInstrumentTime + exportPreviewStatistics.simulatedInstrumentTime).toFixed(1) }}h</div>
+            </div>
+            <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+              <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Landings</div>
+              <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ exportPreviewStatistics.totalLandings }}</div>
+            </div>
+            <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+              <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Approaches</div>
+              <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ exportPreviewStatistics.totalApproaches }}</div>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div>
+              <h4 :class="['text-sm font-semibold font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Date range</h4>
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <span :class="['text-sm font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ exportPreviewStatistics.dateRange.earliest ? formatDisplayDate(exportPreviewStatistics.dateRange.earliest) : 'N/A' }}
+                  <span :class="[isDarkMode ? 'text-gray-500' : 'text-gray-400']"> → </span>
+                  {{ exportPreviewStatistics.dateRange.latest ? formatDisplayDate(exportPreviewStatistics.dateRange.latest) : 'N/A' }}
+                </span>
+              </div>
+            </div>
+            <div>
+              <h4 :class="['text-sm font-semibold font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Aircraft ({{ Object.keys(exportPreviewStatistics.aircraftBreakdown).length }})</h4>
+              <div :class="['rounded-lg border p-3 max-h-32 overflow-y-auto', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div v-for="(count, aircraft) in exportPreviewStatistics.aircraftBreakdown" :key="aircraft"
+                     :class="['text-xs font-quicksand py-1', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+                  {{ aircraft }}: {{ count }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4">
+            <h4 :class="['text-lg font-semibold font-quicksand mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
+              Entries to export ({{ exportFilteredEntries.length }})
+            </h4>
+            <div class="space-y-2 max-h-96 overflow-y-auto">
+              <div
+                v-for="entry in exportFilteredEntries"
+                :key="entry.id"
+                :class="[
+                  'rounded-lg border p-3 cursor-pointer transition-colors',
+                  isDarkMode 
+                    ? 'border-gray-700 bg-gray-900/30 hover:bg-gray-900/50' 
+                    : 'border-gray-300 bg-white hover:bg-gray-50'
+                ]"
+                @click="toggleExportPreviewEntry(entry.id)"
+              >
+                <div class="flex items-center justify-between">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-3">
+                      <div :class="['text-sm font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ formatDisplayDate(entry.date) }}</div>
+                      <div :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">{{ entry.registration }}</div>
+                      <div :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">{{ entry.aircraftMakeModel }}</div>
+                    </div>
+                    <div class="flex items-center gap-2 mt-1">
+                      <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">{{ entry.departure }} → {{ entry.destination }}</div>
+                      <div :class="['text-xs font-mono', isDarkMode ? 'text-blue-400' : 'text-blue-600']">{{ (entry.flightTime.total ?? 0).toFixed(1) }}h</div>
+                    </div>
+                  </div>
+                  <Icon 
+                    :name="expandedExportPreviewEntries.has(entry.id) ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'" 
+                    size="20" 
+                    :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+                  />
+                </div>
+                <div v-if="expandedExportPreviewEntries.has(entry.id)" class="mt-3 pt-3 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+                  <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Role:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ roleDisplayLabel(entry.role) }}</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">PIC:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.flightTime.pic ?? 0).toFixed(1) }}h</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Night:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.flightTime.night ?? 0).toFixed(1) }}h</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">XC:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.flightTime.crossCountry ?? 0).toFixed(1) }}h</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Landings:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.performance.dayLandings ?? 0) + (entry.performance.nightLandings ?? 0) }}</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Approaches:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ getTotalApproachCount(entry.performance) }}</span></div>
+                    <div v-if="(entry.tags || []).length" class="col-span-2 flex flex-wrap gap-1">
+                      <span v-for="t in (entry.tags || [])" :key="t" :class="['inline-block rounded px-1.5 py-0.5 text-xs', isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700']">{{ t }}</span>
+                    </div>
+                  </div>
+                  <div v-if="entry.remarks" class="mt-2 text-xs" :class="[isDarkMode ? 'text-gray-300' : 'text-gray-600']">{{ entry.remarks }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-else class="rounded-lg border p-6 text-center" :class="[isDarkMode ? 'border-gray-700 bg-gray-900/30 text-gray-400' : 'border-gray-300 bg-gray-50 text-gray-600']">
+          No entries match this scope. Adjust filters or choose "All entries".
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 p-6 border-t flex-shrink-0" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+        <button
+          @click="closeExportDialog"
+          :class="[
+            'px-4 py-2 rounded-lg font-quicksand transition-colors',
+            isDarkMode 
+              ? 'bg-gray-700 hover:bg-gray-600 text-white' 
+              : 'bg-gray-300 hover:bg-gray-400 text-gray-900'
+          ]"
+        >
+          Cancel
+        </button>
+        <button
+          :disabled="!exportPreviewStatistics || exportFilteredEntries.length === 0"
+          @click="exportToCSV(exportFilteredEntries); closeExportDialog()"
+          :class="[
+            'px-4 py-2 rounded-lg font-quicksand transition-colors flex items-center gap-2',
+            !exportPreviewStatistics || exportFilteredEntries.length === 0
+              ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
+              : 'bg-blue-600 hover:bg-blue-700 text-white'
+          ]"
+        >
+          <Icon name="ri:file-excel-2-line" size="18" />
+          Export as CSV
+        </button>
+        <button
+          :disabled="!exportPreviewStatistics || exportFilteredEntries.length === 0"
+          @click="exportToJSON(exportFilteredEntries); closeExportDialog()"
+          :class="[
+            'px-4 py-2 rounded-lg font-quicksand transition-colors flex items-center gap-2',
+            !exportPreviewStatistics || exportFilteredEntries.length === 0
+              ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
+              : 'bg-blue-600 hover:bg-blue-700 text-white'
+          ]"
+        >
+          <Icon name="ri:file-code-line" size="18" />
+          Export as JSON
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- End Main Content -->
   
   <!-- Loading State -->
@@ -6838,6 +7106,14 @@ const isEntryFormOpen = ref(false)
 const lastSavedEntry = ref<LogEntry | null>(null)
 const isCommercialMode = ref(false)
 
+function toggleCommercialMode(): void {
+  const next = !isCommercialMode.value
+  if (next && !newEntry.oooi) {
+    newEntry.oooi = createEmptyOOOI()
+  }
+  isCommercialMode.value = next
+}
+
 // Sticky header refs
 const rootScrollContainerRef = ref<HTMLElement | null>(null)
 const tableHeaderRef = ref<HTMLElement | null>(null)
@@ -6871,23 +7147,40 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
     const copy = JSON.parse(JSON.stringify(entry))
     // Normalize the date for the input field
     copy.date = normalizeDateForInput(entry.date)
-    if (!copy.oooi) {
-      copy.oooi = createEmptyOOOI()
-    }
     if (!copy.performance.approaches?.length) {
       copy.performance.approaches = getApproachesFromPerformance(copy.performance)
     }
     if (!Array.isArray(copy.tags)) copy.tags = []
     inlineEditEntry.value = copy
-    // Auto-enable commercial mode if OOOI data exists
-    if (copy.oooi && Object.values(copy.oooi).some(v => v)) {
-      isInlineCommercialMode.value = true
-    } else {
-      isInlineCommercialMode.value = false
-    }
+    // Auto-enable commercial mode only when existing OOOI time fields are present
+    const hasOOOITimes =
+      !!copy.oooi &&
+      !!(
+        (copy.oooi.out && copy.oooi.out.trim()) ||
+        (copy.oooi.off && copy.oooi.off.trim()) ||
+        (copy.oooi.on && copy.oooi.on.trim()) ||
+        (copy.oooi.in && copy.oooi.in.trim())
+      )
+    isInlineCommercialMode.value = hasOOOITimes
     // Open Simulator section if entry has sim time
     showInlineSimSection.value = getSelectedSimType(copy) !== ''
   }
+}
+
+function ensureInlineOOOI(): void {
+  if (!inlineEditEntry.value) return
+  if (!inlineEditEntry.value.oooi) {
+    inlineEditEntry.value.oooi = createEmptyOOOI()
+  }
+}
+
+function toggleInlineOOOIMode(): void {
+  if (!inlineEditEntry.value) return
+  const next = !isInlineCommercialMode.value
+  if (next && !inlineEditEntry.value.oooi) {
+    inlineEditEntry.value.oooi = createEmptyOOOI()
+  }
+  isInlineCommercialMode.value = next
 }
 
 async function saveInlineEdit(): Promise<void> {
@@ -7416,6 +7709,86 @@ interface ImportMetadata {
   importedAt: string
 }
 
+interface ExportStatistics {
+  totalEntries: number
+  totalFlightTime: number
+  picTime: number
+  sicTime: number
+  nightTime: number
+  crossCountryTime: number
+  actualInstrumentTime: number
+  simulatedInstrumentTime: number
+  dualReceivedTime: number
+  dualGivenTime: number
+  soloTime: number
+  totalLandings: number
+  dayLandings: number
+  nightLandings: number
+  totalApproaches: number
+  aircraftBreakdown: Record<string, number>
+  dateRange: { earliest: string | null; latest: string | null }
+}
+
+function calculateExportStatistics(entries: LogEntry[]): ExportStatistics {
+  const aircraftBreakdown: Record<string, number> = {}
+  let totalFlightTime = 0
+  let picTime = 0
+  let sicTime = 0
+  let nightTime = 0
+  let crossCountryTime = 0
+  let actualInstrumentTime = 0
+  let simulatedInstrumentTime = 0
+  let dualReceivedTime = 0
+  let dualGivenTime = 0
+  let soloTime = 0
+  let totalLandings = 0
+  let dayLandings = 0
+  let nightLandings = 0
+  let totalApproaches = 0
+  const dates: string[] = []
+  for (const entry of entries) {
+    dates.push(entry.date || '')
+    totalFlightTime += entry.flightTime.total ?? 0
+    picTime += entry.flightTime.pic ?? 0
+    sicTime += entry.flightTime.sic ?? 0
+    nightTime += entry.flightTime.night ?? 0
+    crossCountryTime += entry.flightTime.crossCountry ?? 0
+    actualInstrumentTime += entry.flightTime.actualInstrument ?? 0
+    simulatedInstrumentTime += entry.flightTime.simulatedInstrument ?? 0
+    dualReceivedTime += entry.flightTime.dual ?? 0
+    dualGivenTime += entry.flightTime.dualGiven ?? 0
+    soloTime += entry.flightTime.solo ?? 0
+    dayLandings += entry.performance.dayLandings ?? 0
+    nightLandings += entry.performance.nightLandings ?? 0
+    totalLandings += (entry.performance.dayLandings ?? 0) + (entry.performance.nightLandings ?? 0)
+    totalApproaches += getTotalApproachCount(entry.performance)
+    const aircraftKey = `${entry.aircraftMakeModel || 'Unknown'} (${entry.registration || ''})`
+    aircraftBreakdown[aircraftKey] = (aircraftBreakdown[aircraftKey] || 0) + 1
+  }
+  dates.sort()
+  const earliest = dates.length > 0 ? (dates[0] || null) : null
+  const latest = dates.length > 0 ? (dates[dates.length - 1] || null) : null
+  return {
+    totalEntries: entries.length,
+    totalFlightTime,
+    picTime,
+    sicTime,
+    nightTime,
+    crossCountryTime,
+    actualInstrumentTime,
+    simulatedInstrumentTime,
+    dualReceivedTime,
+    dualGivenTime,
+    soloTime,
+    totalLandings,
+    dayLandings,
+    nightLandings,
+    totalApproaches,
+    aircraftBreakdown,
+    dateRange: { earliest, latest }
+  }
+}
+
 const showImportPreview = ref(false)
 const importPreviewEntries = ref<LogEntry[]>([])
 const importPreviewStatistics = ref<ImportStatistics | null>(null)
@@ -7425,6 +7798,127 @@ const showDuplicateConfirmDialog = ref(false)
 const importWithDuplicates = ref(false)
 const importWithErrors = ref(false)
 const showDuplicateOverrideDialog = ref(false)
+
+// Export dialog state (trust-first export: scope + preview)
+const showExportDialog = ref(false)
+type ExportScopeType = 'all' | 'month' | 'dateRange' | 'aircraft'
+const exportScope = ref<ExportScopeType>('all')
+const exportNow = new Date()
+const exportMonth = ref({ year: exportNow.getFullYear(), month: exportNow.getMonth() + 1 })
+const exportDateStart = ref('')
+const exportDateEnd = ref('')
+const exportSelectedAircraft = ref<string[]>([])
+const expandedExportPreviewEntries = ref<Set<string>>(new Set())
+
+function applyExportScope(
+  entries: LogEntry[],
+  scope: ExportScopeType,
+  month: { year: number; month: number },
+  dateStart: string,
+  dateEnd: string,
+  selectedAircraft: string[]
+): LogEntry[] {
+  if (scope === 'all') return entries
+  if (scope === 'month') {
+    const [y, m] = [month.year, month.month]
+    return entries.filter((e) => {
+      const match = (e.date || '').trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
+      if (!match) return false
+      const ey = parseInt(match[1], 10)
+      const em = parseInt(match[2], 10)
+      return ey === y && em === m
+    })
+  }
+  if (scope === 'dateRange') {
+    const start = (dateStart || '').trim()
+    const end = (dateEnd || '').trim()
+    if (!start || !end) return []
+    return entries.filter((e) => {
+      const d = (e.date || '').trim()
+      return d >= start && d <= end
+    })
+  }
+  if (scope === 'aircraft') {
+    if (selectedAircraft.length === 0) return []
+    const set = new Set(selectedAircraft.map((r) => (r || '').trim().toUpperCase()))
+    return entries.filter((e) => set.has((e.registration || '').trim().toUpperCase()))
+  }
+  return entries
+}
+
+const uniqueAircraftForExport = computed(() => {
+  const seen = new Set<string>()
+  const list: { registration: string; label: string }[] = []
+  for (const e of logEntries.value) {
+    const reg = (e.registration || '').trim().toUpperCase()
+    if (!reg || seen.has(reg)) continue
+    seen.add(reg)
+    list.push({
+      registration: reg,
+      label: `${e.aircraftMakeModel || 'Unknown'} (${reg})`
+    })
+  }
+  list.sort((a, b) => a.label.localeCompare(b.label))
+  return list
+})
+
+const exportFilteredEntries = computed(() =>
+  applyExportScope(
+    logEntries.value,
+    exportScope.value,
+    exportMonth.value,
+    exportDateStart.value,
+    exportDateEnd.value,
+    exportSelectedAircraft.value
+  )
+)
+
+const exportPreviewStatistics = computed<ExportStatistics | null>(() => {
+  const entries = exportFilteredEntries.value
+  if (entries.length === 0) return null
+  return calculateExportStatistics(entries)
+})
+
+function toggleExportPreviewEntry(id: string) {
+  const set = new Set(expandedExportPreviewEntries.value)
+  if (set.has(id)) set.delete(id)
+  else set.add(id)
+  expandedExportPreviewEntries.value = set
+}
+
+function openExportDialog() {
+  exportScope.value = 'all'
+  const n = new Date()
+  exportMonth.value = { year: n.getFullYear(), month: n.getMonth() + 1 }
+  exportDateStart.value = ''
+  exportDateEnd.value = ''
+  exportSelectedAircraft.value = []
+  expandedExportPreviewEntries.value = new Set()
+  showExportDialog.value = true
+}
+
+function closeExportDialog() {
+  showExportDialog.value = false
+}
+
+function getExportFilenameSegment(): string {
+  const scope = exportScope.value
+  if (scope === 'all') return ''
+  if (scope === 'month') {
+    const { year, month } = exportMonth.value
+    return `-${year}-${String(month).padStart(2, '0')}`
+  }
+  if (scope === 'dateRange' && exportDateStart.value && exportDateEnd.value) {
+    return `-${exportDateStart.value}-to-${exportDateEnd.value}`
+  }
+  if (scope === 'aircraft' && exportSelectedAircraft.value.length > 0) {
+    const regs = exportSelectedAircraft.value
+    if (regs.length === 1) return `-${regs[0]}`
+    return '-filtered'
+  }
+  return ''
+}
+
 const pilotInitials = computed(() => {
   const name = pilotProfile.name.trim()
   if (!name) return 'PP'
@@ -7511,9 +8005,14 @@ function escapeCSVValue(value: string | null | undefined): string {
   return str
 }
 
-function exportToCSV(): void {
-  if (logEntries.value.length === 0) return
-  
+function exportToCSV(entries?: LogEntry[]): void {
+  const list = entries ?? logEntries.value
+  if (list.length === 0) return
+
+  const baseDate = new Date().toISOString().split('T')[0]
+  const segment = entries != null ? getExportFilenameSegment() : ''
+  const filename = `logifi-logbook-${baseDate}${segment}.csv`
+
   const headers = [
     'Date',
     'Role',
@@ -7611,7 +8110,7 @@ function exportToCSV(): void {
     }
   }
 
-  const rows = logEntries.value.map((entry) => {
+  const rows = list.map((entry) => {
     return [
       formatDisplayDate(entry.date),
       entry.role || '',
@@ -7670,7 +8169,7 @@ function exportToCSV(): void {
   const link = document.createElement('a')
   const url = URL.createObjectURL(blob)
   link.setAttribute('href', url)
-  link.setAttribute('download', `logifi-logbook-${new Date().toISOString().split('T')[0]}.csv`)
+  link.setAttribute('download', filename)
   link.style.visibility = 'hidden'
   document.body.appendChild(link)
   link.click()
@@ -7678,19 +8177,21 @@ function exportToCSV(): void {
   URL.revokeObjectURL(url)
 }
 
-async function exportToJSON(): Promise<void> {
-  if (logEntries.value.length === 0) return
-  
+async function exportToJSON(entries?: LogEntry[]): Promise<void> {
+  const list = entries ?? logEntries.value
+  if (list.length === 0) return
+
+  const baseDate = new Date().toISOString().split('T')[0]
+  const segment = entries != null ? getExportFilenameSegment() : ''
+  const filename = `logifi-logbook-${baseDate}${segment}.json`
+
   // Use the export composable to prepare entries with audit trail
   const { prepareEntriesForExport } = useExport()
-  
-  // Show a brief loading indicator if we have many entries (audit trail fetching may take time)
-  const isFetchingAuditTrail = logEntries.value.length > 10
-  
+
   try {
     // Prepare entries with audit trail
     const preparedEntries = await prepareEntriesForExport(
-      logEntries.value,
+      list,
       true // include audit trail
     )
     
@@ -7706,7 +8207,7 @@ async function exportToJSON(): Promise<void> {
     const link = document.createElement('a')
     const url = URL.createObjectURL(blob)
     link.setAttribute('href', url)
-    link.setAttribute('download', `logifi-logbook-${new Date().toISOString().split('T')[0]}.json`)
+    link.setAttribute('download', filename)
     link.style.visibility = 'hidden'
     document.body.appendChild(link)
     link.click()
@@ -7719,7 +8220,7 @@ async function exportToJSON(): Promise<void> {
       exportedAt: new Date().toISOString(),
       version: '1.1',
       pilotProfile: pilotProfileLoaded.value ? { ...pilotProfile } : null,
-      entries: logEntries.value.map((entry) => {
+      entries: list.map((entry) => {
         const baseEntry: any = {
           id: entry.id,
           date: entry.date,
@@ -7773,7 +8274,7 @@ async function exportToJSON(): Promise<void> {
     const link = document.createElement('a')
     const url = URL.createObjectURL(blob)
     link.setAttribute('href', url)
-    link.setAttribute('download', `logifi-logbook-${new Date().toISOString().split('T')[0]}.json`)
+    link.setAttribute('download', filename)
     link.style.visibility = 'hidden'
     document.body.appendChild(link)
     link.click()
@@ -10667,11 +11168,14 @@ async function beginEditing(entry: LogEntry): Promise<void> {
   lastKnownXcTime.value = entry.flightTime.crossCountry ?? null
   if (entry.oooi) {
     newEntry.oooi = { ...entry.oooi }
-    if (Object.values(entry.oooi).some(v => v)) {
-      isCommercialMode.value = true
-    } else {
-      isCommercialMode.value = false
-    }
+    const hasOOOITimes =
+      !!(
+        (entry.oooi.out && entry.oooi.out.trim()) ||
+        (entry.oooi.off && entry.oooi.off.trim()) ||
+        (entry.oooi.on && entry.oooi.on.trim()) ||
+        (entry.oooi.in && entry.oooi.in.trim())
+      )
+    isCommercialMode.value = hasOOOITimes
   } else {
     newEntry.oooi = createEmptyOOOI()
     isCommercialMode.value = false
@@ -11918,7 +12422,15 @@ async function submitEntry(): Promise<void> {
       base.approachType = approaches[0]?.type ?? null
       return base
     })(),
-    oooi: newEntry.oooi && Object.values(newEntry.oooi).some(v => v) ? { ...newEntry.oooi } : undefined
+    oooi: (() => {
+      if (!newEntry.oooi) return undefined
+      const hasOOOITimes =
+        (newEntry.oooi.out && newEntry.oooi.out.trim()) ||
+        (newEntry.oooi.off && newEntry.oooi.off.trim()) ||
+        (newEntry.oooi.on && newEntry.oooi.on.trim()) ||
+        (newEntry.oooi.in && newEntry.oooi.in.trim())
+      return hasOOOITimes ? { ...newEntry.oooi } : undefined
+    })()
   }
 
   // Debug: Log the flightTime object being saved

@@ -37,6 +37,7 @@ const FIELD_OPTIONS: { value: LogbookColumnKey | ''; label: string }[] = [
   { value: 'approach', label: 'Approach' },
   { value: 'approachType', label: 'Approach Type' },
   { value: 'pilots', label: 'Pilots' },
+  { value: 'pilotRole', label: 'Pilot Role' },
   { value: 'role', label: 'Role' },
   { value: 'total', label: 'Total' },
 ]

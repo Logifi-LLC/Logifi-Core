@@ -66,6 +66,16 @@ export const ROLE_OPTIONS = [
   { value: 'Instructor', label: 'Instructor' },
 ] as const
 
+/** Pilot Role options (other pilot's job: trainingInstructor; match main logbook). */
+export const PILOT_ROLE_OPTIONS = [
+  { value: '', label: '—' },
+  { value: 'Student', label: 'Student' },
+  { value: 'Instructor', label: 'Instructor' },
+  { value: 'Safety Pilot', label: 'Safety Pilot' },
+  { value: 'Captain', label: 'Captain' },
+  { value: 'First Officer', label: 'First Officer' },
+] as const
+
 /** Approach type options for the builder (aligned with main logbook). */
 export const APPROACH_TYPE_OPTIONS = [
   'ILS',

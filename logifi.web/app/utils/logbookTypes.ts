@@ -140,6 +140,7 @@ export type LogbookColumnKey =
   | 'approach'
   | 'approachType'
   | 'pilots'
+  | 'pilotRole'
   | 'role'
   | 'total'
 

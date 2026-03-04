@@ -1,7 +1,7 @@
 <script lang="ts">
 import { defineComponent, computed, ref } from 'vue'
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
-import { CATEGORY_CLASS_OPTIONS, ROLE_OPTIONS, APPROACH_TYPE_OPTIONS } from '~/utils/logbookBuilderTypes'
+import { CATEGORY_CLASS_OPTIONS, ROLE_OPTIONS, APPROACH_TYPE_OPTIONS, PILOT_ROLE_OPTIONS } from '~/utils/logbookBuilderTypes'
 import { useTheme } from '~/composables/useTheme'
 
 const numericKeys: LogbookColumnKey[] = [
@@ -29,6 +29,7 @@ export default defineComponent({
     const inputRef = ref<HTMLInputElement | null>(null)
     const selectRef = ref<HTMLSelectElement | null>(null)
     const roleSelectRef = ref<HTMLSelectElement | null>(null)
+    const overwriteOnNextKey = ref(false)
     const isNumeric = computed(() =>
       props.fieldKey != null && numericKeys.includes(props.fieldKey as LogbookColumnKey)
     )
@@ -36,6 +37,7 @@ export default defineComponent({
     const isCategoryClass = computed(() => props.fieldKey === 'categoryClass')
     const isCategoryClassTimeColumn = computed(() => props.fieldKey === 'categoryClass' && props.categoryClassValue != null)
     const isApproachType = computed(() => props.fieldKey === 'approachType')
+    const isPilotRole = computed(() => props.fieldKey === 'pilotRole')
     const roleDisplayValue = computed(() => (props.modelValue || props.defaultRole || 'PIC').trim() || 'PIC')
     const { isDark } = useTheme()
     
@@ -57,10 +59,48 @@ export default defineComponent({
       if (isRole.value) roleSelectRef.value?.focus()
       else if (isCategoryClass.value && !isCategoryClassTimeColumn.value) selectRef.value?.focus()
       else if (isApproachType.value) selectRef.value?.focus()
+      else if (isPilotRole.value) selectRef.value?.focus()
       else inputRef.value?.focus()
     }
     function onInput(e: Event) {
       emit('update:modelValue', (e.target as HTMLInputElement).value)
+    }
+    function onInputKeydown(e: KeyboardEvent) {
+      // Excel-like overwrite: first printable key after focus replaces the whole cell.
+      if (!overwriteOnNextKey.value) return
+
+      const key = e.key
+
+      if (key === 'Backspace' || key === 'Delete') {
+        e.preventDefault()
+        emit('update:modelValue', '')
+        if (inputRef.value) inputRef.value.value = ''
+        // Keep overwrite flag so the next printable key starts fresh.
+        return
+      }
+
+      // Ignore control/navigation keys.
+      if (
+        e.ctrlKey ||
+        e.metaKey ||
+        e.altKey ||
+        key.length !== 1 // non-printable (e.g. ArrowUp, Enter)
+      ) {
+        return
+      }
+
+      e.preventDefault()
+      emit('update:modelValue', key)
+      if (inputRef.value) inputRef.value.value = key
+      overwriteOnNextKey.value = false
+    }
+    function onInputFocus() {
+      overwriteOnNextKey.value = true
+      emit('focus')
+    }
+    function onInputBlur() {
+      overwriteOnNextKey.value = false
+      emit('blur')
     }
     function onSelectChange(e: Event) {
       emit('update:modelValue', (e.target as HTMLSelectElement).value)
@@ -75,13 +115,18 @@ export default defineComponent({
       isCategoryClass,
       isCategoryClassTimeColumn,
       isApproachType,
+      isPilotRole,
       roleDisplayValue,
       categoryClassOptions: CATEGORY_CLASS_OPTIONS,
       roleOptions: ROLE_OPTIONS,
       approachTypeOptions: APPROACH_TYPE_OPTIONS,
+      pilotRoleOptions: PILOT_ROLE_OPTIONS,
       focus,
       onInput,
       onSelectChange,
+      onInputKeydown,
+      onInputFocus,
+      onInputBlur,
     }
   },
 })
@@ -132,6 +177,20 @@ export default defineComponent({
     <option value="">—</option>
     <option v-for="opt in approachTypeOptions" :key="opt" :value="opt">{{ opt }}</option>
   </select>
+  <select
+    v-else-if="isPilotRole"
+    ref="selectRef"
+    :value="modelValue"
+    :class="selectClass"
+    :disabled="disabled"
+    :data-builder-row="builderRow"
+    :data-builder-col="builderCol"
+    @focus="$emit('focus')"
+    @blur="$emit('blur')"
+    @change="onSelectChange($event)"
+  >
+    <option v-for="opt in pilotRoleOptions" :key="opt.value || 'empty'" :value="opt.value">{{ opt.label }}</option>
+  </select>
   <template v-else>
     <input
     ref="inputRef"
@@ -143,8 +202,9 @@ export default defineComponent({
     :data-builder-col="builderCol"
     :list="(fieldKey === 'identification' && suggestions.length) ? `ident-list-${builderRow}-${builderCol}` : undefined"
     :placeholder="fieldKey === 'date' ? 'MM/DD' : undefined"
-    @focus="$emit('focus')"
-    @blur="$emit('blur')"
+    @focus="onInputFocus"
+    @blur="onInputBlur"
+    @keydown="onInputKeydown"
     @input="onInput($event)"
   />
     <datalist

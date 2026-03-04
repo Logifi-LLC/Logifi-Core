@@ -39,6 +39,7 @@ const FIELD_LABELS: Record<LogbookColumnKey, string> = {
   approach: 'Approach',
   approachType: 'Approach Type',
   pilots: 'Pilots',
+  pilotRole: 'Pilot Role',
   role: 'Role',
   total: 'Total',
 }

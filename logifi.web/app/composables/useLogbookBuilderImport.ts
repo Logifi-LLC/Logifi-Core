@@ -73,8 +73,9 @@ function parseIsoDate(iso: string): { y: number; m: number; d: number } | null {
 }
 
 /** Normalize date string to YYYY-MM-DD. Handles MM/DD, M/D, MM-DD, MM/DD/YY, MM/DD/YYYY, YYYY-MM-DD.
- * When date is MM/DD only: uses defaultYear; if lastDateIso is set and (defaultYear, MM, DD) would be
- * before or equal to lastDateIso (e.g. Dec 28 -> Jan 5), uses defaultYear+1 so the page can span year-end. */
+* When date is MM/DD only: uses defaultYear; if lastDateIso is set and (defaultYear, MM, DD) would be
+* before or equal to lastDateIso (e.g. Dec 28 -> Jan 5), uses defaultYear+1 so the page can span year-end.
+* When date is MM/DD/YY: uses the same century as defaultYear/current year and lets YY override the year. */
 function normalizeDateWithRollover(
   dateStr: string,
   defaultYear: number | null | undefined,
@@ -102,9 +103,24 @@ function normalizeDateWithRollover(
   if (slashParts.length === 3) {
     const m = parseInt(slashParts[0], 10)
     const d = parseInt(slashParts[1], 10)
-    let y = parseInt(slashParts[2], 10)
+    const yRaw = slashParts[2]
+    const parsedY = parseInt(yRaw, 10)
     if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      if (slashParts[2].length === 2 || !Number.isFinite(y) || y < 1000) y = year
+      let y: number
+      if (!Number.isFinite(parsedY)) {
+        // Fall back to the default/base year if year part is not a valid number.
+        y = year
+      } else if (yRaw.length === 2) {
+        // Two-digit year: keep the same century as the base year and override the last two digits.
+        const century = Math.floor(year / 100) * 100
+        y = century + parsedY
+      } else if (parsedY >= 1000) {
+        // Full four-digit year: use as-is.
+        y = parsedY
+      } else {
+        // Short/ambiguous year (e.g. "5"): fall back to the base year.
+        y = year
+      }
       return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     }
   }
@@ -144,6 +160,8 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
     let flightConditions: string[] = []
     let isSimulator = false
     let rowRole = ''
+    let trainingElements = ''
+    let trainingInstructor = ''
 
     for (const col of sortedCols) {
       const val = (cells[col.id] ?? '').trim()
@@ -244,6 +262,10 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
           if (val) performance.approachType = val
           break
         case 'pilots':
+          if (val) trainingElements = val
+          break
+        case 'pilotRole':
+          if (val) trainingInstructor = val
           break
         case 'total':
           flightTime.total = parseDecimal(val) ?? flightTime.total
@@ -254,9 +276,24 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
     }
 
     const rawDateStr = date
+    const baseYear =
+      typeof defaultYear === 'number' && Number.isFinite(defaultYear)
+        ? defaultYear
+        : new Date().getFullYear()
     date = normalizeDateWithRollover(date, defaultYear, lastDateIso)
     if (!date) date = new Date().toISOString().slice(0, 10)
-    if (rawDateStr.trim()) lastDateIso = date
+    if (rawDateStr.trim()) {
+      lastDateIso = date
+
+      // If the user entered a two-digit year (MM/DD/YY) and it changed the year
+      // away from the builder's base/default year, append a note to remarks.
+      const overrideMatch = rawDateStr.trim().match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2})$/)
+      const parsedNorm = parseIsoDate(date)
+      if (overrideMatch && parsedNorm && parsedNorm.y !== baseYear) {
+        const note = `Date year override (builder): ${rawDateStr.trim()} → ${date}`
+        remarks = remarks ? `${remarks} | ${note}` : note
+      }
+    }
 
     if ((flightTime.night ?? 0) > 0 && !flightConditions.includes('nightVfr')) {
       flightConditions = [...flightConditions, 'nightVfr']
@@ -290,8 +327,8 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
       departure,
       destination,
       route,
-      trainingElements: '',
-      trainingInstructor: '',
+      trainingElements,
+      trainingInstructor,
       instructorCertificate: '',
       flightConditions,
       remarks,
