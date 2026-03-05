@@ -171,7 +171,7 @@ function onRowCountInput(e: Event) {
 <template>
   <div
     class="flex flex-wrap items-center gap-4 rounded-lg border p-3"
-    :class="isDark ? 'border-gray-600 bg-gray-800' : 'border-gray-200 bg-white'"
+    :class="isDark ? 'border-white/10 bg-gray-900 shadow-md shadow-black/40' : 'border-gray-200 bg-white'"
   >
     <div class="flex items-center gap-2">
       <span class="text-sm font-medium transition-colors" :class="isDark ? 'text-gray-300' : 'text-gray-900'">Rows:</span>
@@ -183,7 +183,7 @@ function onRowCountInput(e: Event) {
         :class="[
           'w-16 rounded border px-2 py-1 text-sm shadow-sm transition-colors',
           isDark
-            ? 'border-gray-600 bg-gray-700 text-white'
+            ? 'border-white/10 bg-black/20 text-white shadow-inner'
             : 'border-gray-300 bg-white text-gray-900'
         ]"
         @input="onRowCountInput($event)"
@@ -196,7 +196,7 @@ function onRowCountInput(e: Event) {
         :class="[
           'rounded border px-2 py-1 text-sm shadow-sm transition-colors',
           isDark
-            ? 'border-gray-600 bg-gray-700 text-white'
+            ? 'border-white/10 bg-black/20 text-white shadow-inner'
             : 'border-gray-300 bg-white text-gray-900'
         ]"
         @change="(e) => setLayout((e.target as HTMLSelectElement).value)"
@@ -214,7 +214,7 @@ function onRowCountInput(e: Event) {
         :class="[
           'w-20 rounded border px-2 py-1 text-sm shadow-sm transition-colors',
           isDark
-            ? 'border-gray-600 bg-gray-700 text-white'
+            ? 'border-white/10 bg-black/20 text-white shadow-inner'
             : 'border-gray-300 bg-white text-gray-900'
         ]"
       />
@@ -226,7 +226,7 @@ function onRowCountInput(e: Event) {
         :class="[
           'rounded border px-2 py-1 text-sm shadow-sm transition-colors',
           isDark
-            ? 'border-gray-600 bg-gray-700 text-white'
+            ? 'border-white/10 bg-black/20 text-white shadow-inner'
             : 'border-gray-300 bg-white text-gray-900'
         ]"
         @change="onDefaultRoleChange"
@@ -244,7 +244,7 @@ function onRowCountInput(e: Event) {
         :class="[
           'w-14 rounded border px-2 py-1 text-sm shadow-sm transition-colors',
           isDark
-            ? 'border-gray-600 bg-gray-700 text-white'
+            ? 'border-white/10 bg-black/20 text-white shadow-inner'
             : 'border-gray-300 bg-white text-gray-900'
         ]"
         @input="(e) => setTwoPageSplitIndex(parseInt((e.target as HTMLInputElement).value, 10) || 1)"
@@ -268,7 +268,7 @@ function onRowCountInput(e: Event) {
       :class="[
         'rounded border px-3 py-1.5 text-sm transition-colors',
         isDark 
-          ? 'border-gray-600 bg-transparent text-gray-300 hover:bg-gray-700' 
+          ? 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 shadow-sm shadow-black/20' 
           : 'border-gray-300 bg-gray-200 text-black hover:bg-gray-300 shadow-sm'
       ]"
       @click="removeColumn(columns[columns.length - 1]!.id)"
@@ -281,7 +281,7 @@ function onRowCountInput(e: Event) {
         :class="[
           'rounded border px-3 py-1.5 text-sm transition-colors',
           isDark 
-            ? 'border-gray-600 bg-transparent text-gray-300 hover:bg-gray-700' 
+            ? 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 shadow-sm shadow-black/20' 
             : 'border-gray-300 bg-gray-200 text-black hover:bg-gray-300 shadow-sm'
         ]"
         @click="handleLoadTemplate"
@@ -293,7 +293,7 @@ function onRowCountInput(e: Event) {
         :class="[
           'rounded border px-3 py-1.5 text-sm transition-colors',
           isDark 
-            ? 'border-gray-600 bg-transparent text-gray-300 hover:bg-gray-700' 
+            ? 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 shadow-sm shadow-black/20' 
             : 'border-gray-300 bg-gray-200 text-black hover:bg-gray-300 shadow-sm'
         ]"
         @click="handleSaveTemplate"
@@ -311,7 +311,7 @@ function onRowCountInput(e: Event) {
       @click.self="showSaveModal = false"
     >
       <div
-        class="relative w-full max-w-md rounded-xl border border-gray-300 bg-white shadow-2xl transition-colors dark:border-gray-700 dark:bg-gray-800"
+        class="relative w-full max-w-md rounded-xl border border-gray-300 bg-white shadow-2xl transition-colors dark:border-white/10 dark:bg-gray-900 dark:shadow-xl dark:shadow-black/50"
         @click.stop
       >
         <div class="flex items-center justify-between flex-shrink-0 border-b border-gray-300 p-4 dark:border-gray-700">
@@ -320,7 +320,7 @@ function onRowCountInput(e: Event) {
           </h3>
           <button
             type="button"
-            class="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+            class="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-white/10 transition-colors"
             aria-label="Close"
             @click="showSaveModal = false"
           >
@@ -334,14 +334,14 @@ function onRowCountInput(e: Event) {
               v-model="templateName"
               type="text"
               placeholder="e.g. Jeppesen 10-row"
-              class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-quicksand text-gray-900 placeholder-gray-500 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
+              class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-quicksand text-gray-900 placeholder-gray-500 transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-white/10 dark:bg-black/20 dark:text-white dark:placeholder-gray-400 dark:shadow-inner"
               @keydown.enter="confirmSaveTemplate"
             />
           </div>
           <div class="flex justify-end gap-2 border-t border-gray-300 pt-4 dark:border-gray-700">
             <button
               type="button"
-              class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium font-quicksand text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+              class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium font-quicksand text-gray-700 transition-colors hover:bg-gray-50 dark:border-white/10 dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10 dark:shadow-sm dark:shadow-black/20"
               @click="showSaveModal = false"
             >
               Cancel
@@ -367,7 +367,7 @@ function onRowCountInput(e: Event) {
       @click.self="showLoadModal = false"
     >
       <div
-        class="relative w-full max-w-md max-h-[85vh] flex flex-col rounded-xl border border-gray-300 bg-white shadow-2xl transition-colors dark:border-gray-700 dark:bg-gray-800"
+        class="relative w-full max-w-md max-h-[85vh] flex flex-col rounded-xl border border-gray-300 bg-white shadow-2xl transition-colors dark:border-white/10 dark:bg-gray-900 dark:shadow-xl dark:shadow-black/50"
         @click.stop
       >
         <!-- Header -->
@@ -377,7 +377,7 @@ function onRowCountInput(e: Event) {
           </h3>
           <button
             type="button"
-            class="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+            class="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-white/10 transition-colors"
             aria-label="Close"
             @click="showLoadModal = false"
           >
@@ -396,7 +396,7 @@ function onRowCountInput(e: Event) {
             <li
               v-for="t in savedTemplates"
               :key="t.id"
-              class="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2.5 text-sm font-quicksand text-gray-800 transition-colors hover:border-gray-300 hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:border-gray-500 dark:hover:bg-gray-700"
+              class="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2.5 text-sm font-quicksand text-gray-800 transition-colors hover:border-gray-300 hover:bg-gray-50 dark:border-white/10 dark:text-gray-200 dark:hover:border-white/20 dark:hover:bg-white/10"
             >
               <button
                 type="button"
@@ -425,7 +425,7 @@ function onRowCountInput(e: Event) {
         <div class="flex flex-shrink-0 justify-end border-t border-gray-300 p-4 dark:border-gray-700">
           <button
             type="button"
-            class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium font-quicksand text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
+            class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium font-quicksand text-gray-700 transition-colors hover:bg-gray-50 dark:border-white/10 dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10 dark:shadow-sm dark:shadow-black/20"
             @click="showLoadModal = false"
           >
             Close
@@ -443,7 +443,7 @@ function onRowCountInput(e: Event) {
       @click.self="clearDeleteConfirm"
     >
       <div
-        class="relative w-full max-w-md rounded-xl border border-gray-300 bg-white shadow-2xl transition-colors dark:border-gray-700 dark:bg-gray-800"
+        class="relative w-full max-w-md rounded-xl border border-gray-300 bg-white shadow-2xl transition-colors dark:border-white/10 dark:bg-gray-900 dark:shadow-xl dark:shadow-black/50"
         @click.stop
       >
         <div class="flex items-center justify-between flex-shrink-0 border-b border-gray-300 p-4 dark:border-gray-700">
@@ -452,7 +452,7 @@ function onRowCountInput(e: Event) {
           </h3>
           <button
             type="button"
-            class="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+            class="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-white/10 transition-colors"
             aria-label="Cancel"
             :disabled="deletingTemplateId !== null"
             @click="clearDeleteConfirm"
@@ -467,7 +467,7 @@ function onRowCountInput(e: Event) {
           <div class="flex justify-end gap-2 border-t border-gray-300 pt-4 dark:border-gray-700">
             <button
               type="button"
-              class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium font-quicksand text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 disabled:opacity-50"
+              class="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium font-quicksand text-gray-700 transition-colors hover:bg-gray-50 dark:border-white/10 dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10 dark:shadow-sm dark:shadow-black/20 disabled:opacity-50"
               :disabled="deletingTemplateId !== null"
               @click="clearDeleteConfirm"
             >

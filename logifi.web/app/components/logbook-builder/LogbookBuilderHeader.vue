@@ -145,7 +145,7 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
       type="button"
       :class="[
         'w-full min-w-0 truncate rounded border-0 bg-transparent py-0.5 text-center text-xs font-semibold uppercase tracking-wider focus:ring-1 focus:ring-blue-500 transition-colors',
-        isDark ? 'text-gray-400 hover:bg-gray-700' : 'text-black hover:bg-gray-50'
+        isDark ? 'text-gray-400 hover:bg-white/10 hover:text-gray-300' : 'text-black hover:bg-gray-50'
       ]"
       :title="displayLabel"
       @click="open = !open"
@@ -155,12 +155,12 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
     <div
       v-if="open"
       ref="mainDropdownRef"
-      class="absolute left-0 top-full z-50 mt-0.5 max-h-64 min-w-[160px] overflow-y-auto rounded border bg-white shadow-lg dark:border-gray-600 dark:bg-gray-800"
+      class="absolute left-0 top-full z-50 mt-0.5 max-h-64 min-w-[160px] overflow-y-auto rounded border bg-white shadow-lg dark:border-white/10 dark:bg-gray-900 dark:shadow-xl dark:shadow-black/50"
     >
       <template v-for="opt in FIELD_OPTIONS" :key="opt.value || 'none'">
         <div
           v-if="opt.value !== 'categoryClass'"
-          class="cursor-pointer px-2 py-1.5 text-xs text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700"
+          class="cursor-pointer px-2 py-1.5 text-xs text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/10"
           :class="opt.value !== '' && column.fieldKey === opt.value && !column.categoryClassValue ? 'bg-blue-50 dark:bg-blue-900/30' : ''"
           @click="onSelectOption(opt)"
         >
@@ -175,7 +175,7 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
           @mouseleave="scheduleClose()"
         >
           <div
-            class="flex-1 px-2 py-1.5 text-xs text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700"
+            class="flex-1 px-2 py-1.5 text-xs text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/10"
             :class="column.fieldKey === 'categoryClass' && !column.categoryClassValue ? 'bg-blue-50 dark:bg-blue-900/30' : ''"
             @click.stop="categorySubmenuOpen = !categorySubmenuOpen"
           >
@@ -192,7 +192,7 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
       <div
         v-if="open && categorySubmenuOpen"
         ref="submenuRef"
-        class="fixed z-[100] w-[5rem] max-h-[11rem] overflow-y-auto rounded border bg-white py-px shadow dark:border-gray-600 dark:bg-gray-800"
+        class="fixed z-[100] w-[5rem] max-h-[11rem] overflow-y-auto rounded border bg-white py-px shadow dark:border-white/10 dark:bg-gray-900 dark:shadow-xl dark:shadow-black/50"
         :style="{ top: submenuPosition.top + 'px', left: submenuPosition.left + 'px' }"
         @mouseenter="cancelClose()"
         @mouseleave="scheduleClose()"
@@ -201,7 +201,7 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
           v-for="cc in categoryClassOptions"
           :key="cc"
           type="button"
-          class="w-full px-1.5 py-px text-left text-[10px] leading-tight text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-gray-700"
+          class="w-full px-1.5 py-px text-left text-[10px] leading-tight text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/10"
           :class="column.categoryClassValue === cc ? 'bg-blue-50 dark:bg-blue-900/30' : ''"
           @click="onSelectCategoryClass(cc)"
         >

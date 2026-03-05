@@ -70,7 +70,7 @@ function formatTotal(row: ColumnTotalRow): string {
 <template>
   <div
     class="rounded-lg border p-3"
-    :class="isDark ? 'border-gray-600 bg-gray-800' : 'border-gray-200 bg-white shadow-sm'"
+    :class="isDark ? 'border-white/10 bg-gray-900 shadow-md shadow-black/40' : 'border-gray-200 bg-white shadow-sm'"
   >
     <template v-if="!showConfirm">
       <div class="flex flex-wrap items-center gap-4">
@@ -92,7 +92,7 @@ function formatTotal(row: ColumnTotalRow): string {
         <p class="text-sm font-medium text-gray-900 dark:text-white">
           {{ confirmResult?.validRowCount ?? 0 }} row(s) will be imported.
         </p>
-        <div v-if="confirmResult?.columnTotals?.length" class="rounded border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-700/50">
+        <div v-if="confirmResult?.columnTotals?.length" class="rounded border border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-white/5 dark:shadow-sm dark:shadow-black/20">
           <p class="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">Column totals</p>
           <ul class="space-y-1 text-sm text-gray-800 dark:text-gray-200">
             <li v-for="row in confirmResult.columnTotals" :key="row.fieldKey" class="flex justify-between gap-4">
@@ -104,7 +104,7 @@ function formatTotal(row: ColumnTotalRow): string {
         <div class="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            class="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50 shadow-sm dark:border-gray-600 dark:bg-transparent dark:text-gray-200 dark:hover:bg-gray-600 dark:shadow-none"
+            class="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10 dark:shadow-sm dark:shadow-black/20"
             @click="handleBack"
           >
             Back

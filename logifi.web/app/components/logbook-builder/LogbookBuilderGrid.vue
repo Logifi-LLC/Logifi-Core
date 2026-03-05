@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, inject, computed, onMounted, onUnmounted } from 'vue'
+import type { Ref } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { DEFAULT_COLUMN_WIDTH } from '~/utils/logbookBuilderTypes'
 import LogbookBuilderCell from './LogbookBuilderCell.vue'
@@ -10,6 +11,8 @@ import { useTheme } from '~/composables/useTheme'
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
 if (!grid) throw new Error('LogbookBuilderGrid must be used inside a page that provides logbookBuilderGrid')
 const { visibleColumns, rows, setCell, setRowTags, updateColumn, reorderColumns, layout, effectiveSplitIndex, setTwoPageSplitIndex, tagsColumnWidth, setColumnWidth, setTagsColumnWidth, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH, activeRowIndex, setActiveRowIndex } = grid
+
+const builderPilots = inject<Ref<string[]> | null>('builderPilots', null)
 
 const { isDark } = useTheme()
 
@@ -704,6 +707,11 @@ const identificationUsedOnPage = computed(() => {
   return [...new Set(values)]
 })
 
+const builderPilotSuggestions = computed<string[]>(() => {
+  if (!builderPilots) return []
+  return builderPilots.value ?? []
+})
+
 const tableRef = ref<HTMLTableElement | null>(null)
 const isDraggingDivider = ref(false)
 function startDividerDrag() {
@@ -790,13 +798,13 @@ defineExpose({
     ref="gridContainerRef"
     class="overflow-auto border pb-4"
     :class="isDark
-      ? 'border-gray-600 bg-gray-800'
+      ? 'border-white/10 bg-gray-900 shadow-md shadow-black/40'
       : 'border-gray-200 bg-white shadow-sm'"
   >
     <table ref="tableRef" class="w-full border-collapse font-quicksand text-sm" style="table-layout: fixed">
       <thead
         class="sticky top-0 z-10 border-b"
-        :class="isDark ? 'bg-gray-800 border-gray-600' : 'bg-gray-50 border-gray-200'"
+        :class="isDark ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' : 'bg-gray-50 border-gray-200'"
       >
         <tr>
           <template v-if="isTwoPage">
@@ -805,9 +813,9 @@ defineExpose({
               :key="col.id"
               :class="[
                 'logbook-builder-data-col relative min-w-0 cursor-move border px-1.5 py-1 text-center text-xs font-semibold',
-                isDark ? 'border-gray-600 text-gray-300' : 'border-gray-200 text-black',
-                draggedColumnId === col.id ? (isDark ? 'opacity-50 bg-gray-700' : 'opacity-50 bg-gray-200') : '',
-                draggedColumnId && draggedColumnId !== col.id ? (isDark ? 'bg-gray-700/70' : 'bg-gray-50') : ''
+                isDark ? 'border-white/10 text-gray-300' : 'border-gray-200 text-black',
+                draggedColumnId === col.id ? (isDark ? 'opacity-50 bg-white/5' : 'opacity-50 bg-gray-200') : '',
+                draggedColumnId && draggedColumnId !== col.id ? (isDark ? 'bg-white/5' : 'bg-gray-50') : ''
               ]"
               :style="getColumnStyle(col)"
               aria-label="Drag to reorder column"
@@ -829,7 +837,7 @@ defineExpose({
             <th 
               :class="[
                 'relative w-4 border-b border-l-4',
-                isDark ? 'border-gray-500 bg-gray-700' : 'border-gray-400 bg-gray-200'
+                isDark ? 'border-white/10 bg-gray-900' : 'border-gray-400 bg-gray-200'
               ]"
               aria-hidden="true"
             >
@@ -844,9 +852,9 @@ defineExpose({
               :key="col.id"
               :class="[
                 'logbook-builder-data-col relative min-w-0 cursor-move border px-1.5 py-1 text-center text-xs font-semibold',
-                isDark ? 'border-gray-600 text-gray-300' : 'border-gray-200 text-black',
-                draggedColumnId === col.id ? (isDark ? 'opacity-50 bg-gray-700' : 'opacity-50 bg-gray-200') : '',
-                draggedColumnId && draggedColumnId !== col.id ? (isDark ? 'bg-gray-700/70' : 'bg-gray-50') : ''
+                isDark ? 'border-white/10 text-gray-300' : 'border-gray-200 text-black',
+                draggedColumnId === col.id ? (isDark ? 'opacity-50 bg-white/5' : 'opacity-50 bg-gray-200') : '',
+                draggedColumnId && draggedColumnId !== col.id ? (isDark ? 'bg-white/5' : 'bg-gray-50') : ''
               ]"
               :style="getColumnStyle(col)"
               aria-label="Drag to reorder column"
@@ -872,9 +880,9 @@ defineExpose({
               :key="col.id"
               :class="[
                 'logbook-builder-data-col relative min-w-0 cursor-move border px-1.5 py-1 text-center text-xs font-semibold',
-                isDark ? 'border-gray-600 text-gray-300' : 'border-gray-200 text-black',
-                draggedColumnId === col.id ? (isDark ? 'opacity-50 bg-gray-700' : 'opacity-50 bg-gray-200') : '',
-                draggedColumnId && draggedColumnId !== col.id ? (isDark ? 'bg-gray-700/70' : 'bg-gray-50') : ''
+                isDark ? 'border-white/10 text-gray-300' : 'border-gray-200 text-black',
+                draggedColumnId === col.id ? (isDark ? 'opacity-50 bg-white/5' : 'opacity-50 bg-gray-200') : '',
+                draggedColumnId && draggedColumnId !== col.id ? (isDark ? 'bg-white/5' : 'bg-gray-50') : ''
               ]"
               :style="getColumnStyle(col)"
               aria-label="Drag to reorder column"
@@ -897,7 +905,7 @@ defineExpose({
           <th
             :class="[
               'relative border px-1.5 py-1 text-center text-xs font-semibold uppercase tracking-wider',
-              isDark ? 'border-gray-600 text-gray-300' : 'border-gray-200 text-black'
+              isDark ? 'border-white/10 text-gray-300' : 'border-gray-200 text-black'
             ]"
             :style="{ width: tagsColumnWidth + 'px', minWidth: tagsColumnWidth + 'px' }"
           >
@@ -925,9 +933,9 @@ defineExpose({
               :key="col.id"
               :class="[
                 'relative border p-0 text-center',
-                isDark ? 'border-gray-600' : 'border-gray-200',
-                isCellInSelection(rowIdx, colIdx) ? (isDark ? 'bg-blue-900/40' : 'bg-blue-100/60') : '',
-                isActiveCell(rowIdx, colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400' : 'ring-1 ring-inset ring-blue-500') : '',
+                isDark ? 'border-white/10' : 'border-gray-200',
+                isCellInSelection(rowIdx, colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
+                isActiveCell(rowIdx, colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400 shadow-inner' : 'ring-1 ring-inset ring-blue-500') : '',
                 isSelectionTopEdge(rowIdx, colIdx) ? 'border-t-2 border-t-blue-500' : '',
                 isSelectionBottomEdge(rowIdx, colIdx) ? 'border-b-2 border-b-blue-500' : '',
                 isSelectionLeftEdge(rowIdx, colIdx) ? 'border-l-2 border-l-blue-500' : '',
@@ -943,7 +951,7 @@ defineExpose({
                 :field-key="col.fieldKey"
                 :category-class-value="col.categoryClassValue"
                 :default-role="col.fieldKey === 'role' ? (grid.defaultImportRole?.value ?? 'PIC') : undefined"
-                :suggestions="col.fieldKey === 'identification' ? identificationUsedOnPage : []"
+                :suggestions="col.fieldKey === 'identification' ? identificationUsedOnPage : (col.fieldKey === 'pilots' ? builderPilotSuggestions : [])"
                 :builder-row="rowIdx"
                 :builder-col="colIdx"
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
@@ -961,7 +969,7 @@ defineExpose({
             <td 
               :class="[
                 'w-4 border-b border-l-4',
-                isDark ? 'border-gray-500 bg-gray-700' : 'border-gray-400 bg-gray-200'
+                isDark ? 'border-white/10 bg-gray-900' : 'border-gray-400 bg-gray-200'
               ]"
               aria-hidden="true" 
             />
@@ -970,9 +978,9 @@ defineExpose({
               :key="col.id"
               :class="[
                 'relative border p-0 text-center',
-                isDark ? 'border-gray-600' : 'border-gray-200',
-                isCellInSelection(rowIdx, splitIndex + colIdx) ? (isDark ? 'bg-blue-900/40' : 'bg-blue-100/60') : '',
-                isActiveCell(rowIdx, splitIndex + colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400' : 'ring-1 ring-inset ring-blue-500') : '',
+                isDark ? 'border-white/10' : 'border-gray-200',
+                isCellInSelection(rowIdx, splitIndex + colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
+                isActiveCell(rowIdx, splitIndex + colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400 shadow-inner' : 'ring-1 ring-inset ring-blue-500') : '',
                 isSelectionTopEdge(rowIdx, splitIndex + colIdx) ? 'border-t-2 border-t-blue-500' : '',
                 isSelectionBottomEdge(rowIdx, splitIndex + colIdx) ? 'border-b-2 border-b-blue-500' : '',
                 isSelectionLeftEdge(rowIdx, splitIndex + colIdx) ? 'border-l-2 border-l-blue-500' : '',
@@ -988,7 +996,7 @@ defineExpose({
                 :field-key="col.fieldKey"
                 :category-class-value="col.categoryClassValue"
                 :default-role="col.fieldKey === 'role' ? (grid.defaultImportRole?.value ?? 'PIC') : undefined"
-                :suggestions="col.fieldKey === 'identification' ? identificationUsedOnPage : []"
+                :suggestions="col.fieldKey === 'identification' ? identificationUsedOnPage : (col.fieldKey === 'pilots' ? builderPilotSuggestions : [])"
                 :builder-row="rowIdx"
                 :builder-col="splitIndex + colIdx"
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
@@ -1010,9 +1018,9 @@ defineExpose({
               :key="col.id"
               :class="[
                 'relative border p-0 text-center',
-                isDark ? 'border-gray-600' : 'border-gray-200',
-                isCellInSelection(rowIdx, colIdx) ? (isDark ? 'bg-blue-900/40' : 'bg-blue-100/60') : '',
-                isActiveCell(rowIdx, colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400' : 'ring-1 ring-inset ring-blue-500') : '',
+                isDark ? 'border-white/10' : 'border-gray-200',
+                isCellInSelection(rowIdx, colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
+                isActiveCell(rowIdx, colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400 shadow-inner' : 'ring-1 ring-inset ring-blue-500') : '',
                 isSelectionTopEdge(rowIdx, colIdx) ? 'border-t-2 border-t-blue-500' : '',
                 isSelectionBottomEdge(rowIdx, colIdx) ? 'border-b-2 border-b-blue-500' : '',
                 isSelectionLeftEdge(rowIdx, colIdx) ? 'border-l-2 border-l-blue-500' : '',
@@ -1028,7 +1036,7 @@ defineExpose({
                 :field-key="col.fieldKey"
                 :category-class-value="col.categoryClassValue"
                 :default-role="col.fieldKey === 'role' ? (grid.defaultImportRole?.value ?? 'PIC') : undefined"
-                :suggestions="col.fieldKey === 'identification' ? identificationUsedOnPage : []"
+                :suggestions="col.fieldKey === 'identification' ? identificationUsedOnPage : (col.fieldKey === 'pilots' ? builderPilotSuggestions : [])"
                 :builder-row="rowIdx"
                 :builder-col="colIdx"
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
@@ -1047,7 +1055,7 @@ defineExpose({
           <td
             :class="[
               'border p-0.5 text-center',
-              isDark ? 'border-gray-600' : 'border-gray-200'
+              isDark ? 'border-white/10' : 'border-gray-200'
             ]"
             :style="{ width: tagsColumnWidth + 'px', minWidth: tagsColumnWidth + 'px' }"
             @focusin="setActiveRowIndex(rowIdx)"

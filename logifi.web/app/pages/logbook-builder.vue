@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, provide } from 'vue'
+import { ref, computed, provide, watchEffect } from 'vue'
 import LogbookBuilderGrid from '~/components/logbook-builder/LogbookBuilderGrid.vue'
 import LogbookBuilderToolbar from '~/components/logbook-builder/LogbookBuilderToolbar.vue'
 import LogbookBuilderValidateBar from '~/components/logbook-builder/LogbookBuilderValidateBar.vue'
 import { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { useLogbookBuilderKeyboard } from '~/composables/useLogbookBuilderKeyboard'
 import { useTheme } from '~/composables/useTheme'
+import { useAuth } from '~/composables/useAuth'
+import { supabase } from '~/lib/supabase'
 
 definePageMeta({ layout: 'default' })
 
@@ -13,6 +15,47 @@ const gridRef = ref<InstanceType<typeof LogbookBuilderGrid> | null>(null)
 const grid = useLogbookBuilderGrid()
 provide('logbookBuilderGrid', grid)
 const { visibleColumns, rows } = grid
+
+const builderPilots = ref<string[]>([])
+provide('builderPilots', builderPilots)
+
+const { user, isAuthenticated } = useAuth()
+
+watchEffect(async (onCleanup) => {
+  const currentUser = user.value
+
+  if (!isAuthenticated.value || !currentUser) {
+    builderPilots.value = []
+    return
+  }
+
+  let cancelled = false
+  onCleanup(() => {
+    cancelled = true
+  })
+
+  try {
+    const { data, error } = await (supabase as any)
+      .from('log_entries')
+      .select('training_elements')
+      .eq('user_id', currentUser.id)
+
+    if (error) {
+      console.error('Error loading builder pilots:', error)
+      return
+    }
+
+    if (!data || cancelled) return
+
+    const names = (data as { training_elements: string | null }[])
+      .map((row) => (row.training_elements || '').trim())
+      .filter((name) => !!name)
+
+    builderPilots.value = Array.from(new Set(names)).sort((a, b) => a.localeCompare(b))
+  } catch (err) {
+    console.error('Exception loading builder pilots:', err)
+  }
+})
 
 const { theme, isDark } = useTheme()
 
@@ -27,12 +70,12 @@ useLogbookBuilderKeyboard({
 <template>
   <div
     class="min-h-screen font-quicksand transition-colors duration-300 p-4 sm:p-6 lg:p-8"
-    :class="theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'"
+    :class="theme === 'dark' ? 'bg-gray-950' : 'bg-gray-50'"
   >
     <div class="mx-auto max-w-7xl space-y-4">
       <div
         class="flex items-center justify-between pb-4 border-b"
-        :class="theme === 'dark' ? 'border-gray-700/50' : 'border-gray-400/50'"
+        :class="theme === 'dark' ? 'border-white/10' : 'border-gray-400/50'"
       >
         <h1
           class="text-2xl font-bold font-quicksand"
@@ -45,7 +88,7 @@ useLogbookBuilderKeyboard({
           :class="[
             'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-colors border',
             theme === 'dark'
-              ? 'bg-gray-700 hover:bg-gray-600 text-white border-gray-600'
+              ? 'bg-white/5 hover:bg-white/10 border-white/10 text-white shadow-sm shadow-black/20'
               : 'bg-gray-200 hover:bg-gray-300 text-gray-900 border-gray-300'
           ]"
         >
@@ -58,7 +101,7 @@ useLogbookBuilderKeyboard({
       <section
         class="rounded-lg p-4 sm:p-6 font-quicksand border"
         :class="theme === 'dark'
-          ? 'border-gray-600 bg-gray-800'
+          ? 'border-white/10 bg-gray-900 shadow-md shadow-black/40'
           : 'border-gray-200 bg-white'"
       >
         <h2

@@ -43,7 +43,7 @@ export default defineComponent({
     
     const inputClass = computed(() => {
       const colors = isDark.value
-        ? 'text-gray-100 placeholder-gray-500 focus:bg-blue-900/20'
+        ? 'text-gray-100 placeholder-gray-500 focus:bg-white/5 focus:shadow-inner'
         : 'text-gray-900 placeholder-gray-400 focus:bg-blue-50'
       const base = `w-full min-w-0 border-0 bg-transparent px-1.5 py-0.5 text-center text-sm font-quicksand outline-none min-h-[1.75rem] focus:ring-1 focus:ring-inset focus:ring-blue-500 ${colors}`
       const mono = (isNumeric.value || isCategoryClassTimeColumn.value) ? 'font-mono' : ''
@@ -51,9 +51,17 @@ export default defineComponent({
     })
     const selectClass = computed(() => {
       const colors = isDark.value
-        ? 'text-gray-100 focus:bg-blue-900/20 bg-transparent'
+        ? 'text-gray-100 focus:bg-white/5 focus:shadow-inner bg-transparent'
         : 'text-gray-900 focus:bg-blue-50'
       return `w-full min-w-0 border-0 bg-transparent px-1.5 py-0.5 text-center text-sm font-quicksand outline-none min-h-[1.75rem] focus:ring-1 focus:ring-inset focus:ring-blue-500 ${colors}`
+    })
+
+    const listId = computed(() => {
+      if (!props.suggestions || !props.suggestions.length) return undefined
+      if (props.fieldKey === 'identification' || props.fieldKey === 'pilots') {
+        return `suggestions-${props.fieldKey}-${props.builderRow}-${props.builderCol}`
+      }
+      return undefined
     })
     function focus() {
       if (isRole.value) roleSelectRef.value?.focus()
@@ -100,6 +108,15 @@ export default defineComponent({
     }
     function onInputBlur() {
       overwriteOnNextKey.value = false
+
+      if (props.fieldKey === 'pilots') {
+        const normalized = (props.modelValue || '').trim()
+        if (normalized !== props.modelValue) {
+          emit('update:modelValue', normalized)
+          if (inputRef.value) inputRef.value.value = normalized
+        }
+      }
+
       emit('blur')
     }
     function onSelectChange(e: Event) {
@@ -111,6 +128,7 @@ export default defineComponent({
       roleSelectRef,
       inputClass,
       selectClass,
+      listId,
       isRole,
       isCategoryClass,
       isCategoryClassTimeColumn,
@@ -193,23 +211,23 @@ export default defineComponent({
   </select>
   <template v-else>
     <input
-    ref="inputRef"
-    :value="modelValue"
-    type="text"
-    :class="inputClass"
-    :disabled="disabled"
-    :data-builder-row="builderRow"
-    :data-builder-col="builderCol"
-    :list="(fieldKey === 'identification' && suggestions.length) ? `ident-list-${builderRow}-${builderCol}` : undefined"
-    :placeholder="fieldKey === 'date' ? 'MM/DD' : undefined"
-    @focus="onInputFocus"
-    @blur="onInputBlur"
-    @keydown="onInputKeydown"
-    @input="onInput($event)"
-  />
+      ref="inputRef"
+      :value="modelValue"
+      type="text"
+      :class="inputClass"
+      :disabled="disabled"
+      :data-builder-row="builderRow"
+      :data-builder-col="builderCol"
+      :list="listId"
+      :placeholder="fieldKey === 'date' ? 'MM/DD' : undefined"
+      @focus="onInputFocus"
+      @blur="onInputBlur"
+      @keydown="onInputKeydown"
+      @input="onInput($event)"
+    />
     <datalist
-      v-if="fieldKey === 'identification' && suggestions.length"
-      :id="`ident-list-${builderRow}-${builderCol}`"
+      v-if="listId"
+      :id="listId"
     >
       <option v-for="s in suggestions" :key="s" :value="s" />
     </datalist>
