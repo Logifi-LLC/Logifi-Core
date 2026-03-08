@@ -3,7 +3,7 @@
   ref="rootScrollContainerRef"
   :class="[
     'min-h-screen overflow-y-auto transition-colors duration-300 font-quicksand',
-    isDarkMode ? 'bg-gray-900' : 'bg-gray-300'
+    theme === 'dark' ? 'bg-gray-950' : 'bg-gray-50'
   ]"
 >
   <!-- Auth Modal -->
@@ -43,8 +43,8 @@
     :class="[
       'fixed top-20 left-1/2 transform -translate-x-1/2 z-50 rounded-lg border p-4 shadow-2xl max-w-md',
       isDarkMode 
-        ? 'bg-gray-800 border-gray-700' 
-        : 'bg-gray-100 border-gray-300'
+                  ? 'bg-gray-900 border-white/10 shadow-xl shadow-black/50' 
+                  : 'bg-white border-gray-200'
     ]"
   >
     <div class="flex items-center gap-3">
@@ -98,422 +98,17 @@
         <nav class="flex items-center gap-3">
           <button
             type="button"
-            @click="showPilotProfile = true"
+            @click="showSettingsModal = true"
             :class="[
-              'inline-flex items-center px-5 py-2 rounded-lg text-sm sm:text-base font-quicksand font-medium transition-all duration-200',
+              'h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all duration-200 shadow-sm border',
               isDarkMode 
-                ? 'bg-gray-700 hover:bg-gray-600 text-white' 
-                : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                ? 'bg-blue-600/20 text-blue-400 border-blue-500/30 hover:bg-blue-600/40' 
+                : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
             ]"
-            aria-label="Pilot profile"
+            aria-label="Profile & Settings"
           >
-            <Icon name="ri:user-star-line" size="18" class="mr-2" />
-            Pilot Profile
+            {{ pilotInitials }}
           </button>
-          <div class="relative settings-container">
-            <button
-              type="button"
-              @click="showHeaderSettings = !showHeaderSettings"
-            :class="[
-              'inline-flex items-center px-5 py-2 rounded-lg text-sm sm:text-base font-quicksand font-medium transition-all duration-200',
-              isDarkMode 
-                ? 'bg-gray-700 hover:bg-gray-600 text-white' 
-                : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
-            ]"
-              aria-label="Settings"
-            >
-              <Icon name="ri:settings-3-line" size="18" class="mr-2" />
-              Settings
-            </button>
-            <div
-              v-if="showHeaderSettings"
-              :class="[
-                'absolute right-0 top-full mt-2 w-64 rounded-xl border shadow-2xl z-40 flex flex-col',
-                isDarkMode 
-                  ? 'bg-gray-800 border-gray-700' 
-                  : 'bg-gray-100 border-gray-300'
-              ]"
-              style="max-height: calc(100vh - 120px);"
-            >
-              <div class="flex items-center justify-between p-4 border-b" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                <h3 :class="['font-semibold font-quicksand text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
-                  Settings
-                </h3>
-                <button
-                  @click="showHeaderSettings = false"
-                  :class="['hover:opacity-70 transition-opacity', isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700']"
-                  aria-label="Close settings"
-                >
-                  <Icon name="ri:close-line" size="20" />
-                </button>
-              </div>
-              <div class="overflow-y-auto p-4 space-y-4">
-                <div class="flex items-center justify-between">
-                  <label :class="['font-quicksand text-sm', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
-                    {{ isDarkMode ? 'Dark Mode' : 'Light Mode' }}
-                  </label>
-                  <button
-                    @click="toggleTheme"
-                    :class="[
-                      'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2',
-                      isDarkMode 
-                        ? 'bg-blue-600 focus:ring-blue-500' 
-                        : 'bg-gray-300 focus:ring-gray-400'
-                    ]"
-                    role="switch"
-                    :aria-checked="isDarkMode"
-                  >
-                    <span
-                      :class="[
-                        'inline-block h-4 w-4 transform rounded-full bg-white transition-transform shadow-sm',
-                        isDarkMode ? 'translate-x-6' : 'translate-x-1'
-                      ]"
-                    />
-                  </button>
-                </div>
-                <!-- Online/Sync Status Indicator -->
-                <div class="space-y-2 pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <div :class="['font-quicksand text-sm font-semibold mb-2', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                    Sync Status
-                  </div>
-                  <div class="flex flex-wrap items-center gap-2">
-                    <div
-                      :class="[
-                        'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-quicksand font-medium transition-all',
-                        isOnline
-                          ? (isSyncing
-                              ? (isDarkMode ? 'bg-yellow-600/20 text-yellow-400 border border-yellow-600/50' : 'bg-yellow-100 text-yellow-700 border border-yellow-300')
-                              : (isDarkMode ? 'bg-green-600/20 text-green-400 border border-green-600/50' : 'bg-green-100 text-green-700 border border-green-300'))
-                          : (isDarkMode ? 'bg-red-600/20 text-red-400 border border-red-600/50' : 'bg-red-100 text-red-700 border border-red-300')
-                      ]"
-                      :title="syncStatusTitle"
-                    >
-                      <Icon
-                        :name="syncStatusIcon"
-                        :class="[isSyncing ? 'animate-spin' : '', 'text-xs']"
-                        size="14"
-                      />
-                      <span>
-                        {{ syncStatusText }}
-                      </span>
-                    </div>
-                    <div
-                      v-if="queueLength > 0"
-                      :class="[
-                        'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-quicksand font-semibold',
-                        isDarkMode ? 'bg-orange-600/20 text-orange-400 border border-orange-600/50' : 'bg-orange-100 text-orange-700 border border-orange-300'
-                      ]"
-                      :title="`${queueLength} pending sync ${queueLength === 1 ? 'operation' : 'operations'}`"
-                    >
-                      <Icon name="ri:time-line" size="12" />
-                      <span>{{ queueLength }}</span>
-                    </div>
-                    <div
-                      v-if="syncError"
-                      :class="[
-                        'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-quicksand',
-                        isDarkMode ? 'bg-red-600/20 text-red-400 border border-red-600/50' : 'bg-red-100 text-red-700 border border-red-300'
-                      ]"
-                      :title="syncError"
-                    >
-                      <Icon name="ri:error-warning-line" size="12" />
-                      <span>Sync Error</span>
-                    </div>
-                    <button
-                      v-if="queueLength > 0 && isOnline"
-                      type="button"
-                      :disabled="isSyncing"
-                      class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-quicksand font-medium transition-colors disabled:opacity-50"
-                      :class="isDarkMode ? 'bg-blue-600/20 text-blue-400 border border-blue-600/50 hover:bg-blue-600/30' : 'bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200'"
-                      title="Retry syncing pending operations"
-                      @click="retryFailed()"
-                    >
-                      <Icon name="ri:refresh-line" size="12" :class="{ 'animate-spin': isSyncing }" />
-                      <span>Retry sync</span>
-                    </button>
-                  </div>
-                </div>
-                <div class="space-y-2 pt-2">
-                  <div :class="['font-quicksand text-sm', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Clock Format</div>
-                  <div class="flex gap-2">
-                    <button
-                      type="button"
-                      @click="setClockFormat('24')"
-                      :class="[
-                        'px-3 py-1 rounded-md text-sm font-quicksand',
-                        clockFormat === '24'
-                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white')
-                          : (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-300 text-gray-800')
-                      ]"
-                    >
-                      24h
-                    </button>
-                    <button
-                      type="button"
-                      @click="setClockFormat('12')"
-                      :class="[
-                        'px-3 py-1 rounded-md text-sm font-quicksand',
-                        clockFormat === '12'
-                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white')
-                          : (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-300 text-gray-800')
-                      ]"
-                    >
-                      12h
-                    </button>
-                  </div>
-                </div>
-                <div class="space-y-2">
-                  <div :class="['font-quicksand text-sm', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Clock Timezone</div>
-                  <div class="flex gap-2">
-                    <button
-                      type="button"
-                      @click="setClockZone('UTC')"
-                      :class="[
-                        'px-3 py-1 rounded-md text-sm font-quicksand',
-                        clockZone === 'UTC'
-                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white')
-                          : (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-300 text-gray-800')
-                      ]"
-                    >
-                      UTC
-                    </button>
-                    <button
-                      type="button"
-                      @click="setClockZone('Local')"
-                      :class="[
-                        'px-3 py-1 rounded-md text-sm font-quicksand',
-                        clockZone === 'Local'
-                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white')
-                          : (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-300 text-gray-800')
-                      ]"
-                    >
-                      Local
-                    </button>
-                  </div>
-                </div>
-                <div class="space-y-3 pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <div :class="['font-quicksand text-sm font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                    Customize Totals Overview
-                  </div>
-                  <div class="space-y-2 max-h-64 overflow-y-auto">
-                    <label
-                      v-for="metric in availableTotalsMetrics"
-                      :key="metric.key"
-                      class="flex items-center gap-2 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        :checked="selectedTotalsMetrics.includes(metric.key)"
-                        @change="toggleTotalsMetric(metric.key)"
-                        :disabled="metric.key === 'totalTime'"
-                        :class="[
-                          'rounded border-gray-300 text-blue-600 focus:ring-blue-500',
-                          isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-100'
-                        ]"
-                      />
-                      <span :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
-                        {{ metric.label }}
-                      </span>
-                    </label>
-                  </div>
-                </div>
-                <div class="pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <div class="flex items-center justify-between mb-2">
-                    <div :class="['font-quicksand text-sm font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                      Import Logbook
-                    </div>
-                    <button
-                      type="button"
-                      @click="showImportSection = !showImportSection"
-                      :class="[
-                        'p-1 rounded transition-colors',
-                        isDarkMode 
-                          ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-300' 
-                          : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
-                      ]"
-                      :aria-expanded="showImportSection"
-                    >
-                      <Icon
-                        name="ri:arrow-down-s-line"
-                        :size="16"
-                        :class="[
-                          'transition-transform',
-                          showImportSection ? 'rotate-180' : ''
-                        ]"
-                      />
-                    </button>
-                  </div>
-                  <div 
-                    v-show="showImportSection"
-                    class="space-y-3 transition-colors" 
-                    :class="[
-                      isDragOverImport ? (isDarkMode ? 'border-green-500 bg-green-900/20' : 'border-green-500 bg-green-50') : ''
-                    ]"
-                    @dragover.prevent="handleImportDragOver"
-                    @dragenter.prevent="handleImportDragEnter"
-                    @dragleave="handleImportDragLeave"
-                    @drop.prevent="handleImportDrop"
-                  >
-                    <div class="space-y-2">
-                      <button
-                        type="button"
-                        @click="() => csvFileInput?.click()"
-                        :class="[
-                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                          isDarkMode ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
-                        ]"
-                      >
-                        <Icon name="ri:file-excel-2-line" size="16" />
-                        Import from CSV
-                      </button>
-                      <button
-                        type="button"
-                        @click="() => jsonFileInput?.click()"
-                        :class="[
-                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                          isDarkMode ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
-                        ]"
-                      >
-                        <Icon name="ri:file-code-line" size="16" />
-                        Import from JSON
-                      </button>
-                    </div>
-                    <p :class="['text-xs mt-2', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
-                      {{ isDragOverImport ? 'Drop file here to import' : 'Drag & drop or click to import. Duplicates (same date + registration) will be skipped.' }}
-                    </p>
-                  </div>
-                </div>
-                <!-- Hidden file inputs -->
-                <input
-                  ref="csvFileInput"
-                  type="file"
-                  accept=".csv,.txt,text/csv,text/plain"
-                  style="display: none;"
-                  @change="handleCSVImport"
-                />
-                <input
-                  ref="jsonFileInput"
-                  type="file"
-                  accept=".json,application/json"
-                  style="display: none;"
-                  @change="handleJSONImport"
-                />
-                <div class="pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <div class="flex items-center justify-between mb-2">
-                    <div :class="['font-quicksand text-sm font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                      Export Logbook
-                    </div>
-                    <button
-                      type="button"
-                      @click="showExportSection = !showExportSection"
-                      :class="[
-                        'p-1 rounded transition-colors',
-                        isDarkMode 
-                          ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-300' 
-                          : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
-                      ]"
-                      :aria-expanded="showExportSection"
-                    >
-                      <Icon
-                        name="ri:arrow-down-s-line"
-                        :size="16"
-                        :class="[
-                          'transition-transform',
-                          showExportSection ? 'rotate-180' : ''
-                        ]"
-                      />
-                    </button>
-                  </div>
-                  <div v-show="showExportSection" class="space-y-3">
-                    <div class="space-y-2">
-                      <button
-                        type="button"
-                        @click="exportToCSV"
-                        :disabled="logEntries.length === 0"
-                        :class="[
-                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                          logEntries.length === 0
-                            ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
-                            : (isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white')
-                        ]"
-                      >
-                        <Icon name="ri:file-excel-2-line" size="16" />
-                        Export as CSV
-                      </button>
-                      <button
-                        type="button"
-                        @click="exportToJSON"
-                        :disabled="logEntries.length === 0"
-                        :class="[
-                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                          logEntries.length === 0
-                            ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
-                            : (isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white')
-                        ]"
-                      >
-                        <Icon name="ri:file-code-line" size="16" />
-                        Export as JSON
-                      </button>
-                      <button
-                        type="button"
-                        @click="showForm8710Modal = true"
-                        :disabled="logEntries.length === 0"
-                        :class="[
-                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                          logEntries.length === 0
-                            ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
-                            : (isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white')
-                        ]"
-                      >
-                        <Icon name="ri:file-pdf-line" size="16" />
-                        Generate 8710 Form
-                      </button>
-                    </div>
-                    <p :class="['text-xs mt-2', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
-                      {{ logEntries.length === 0 ? 'No entries to export' : `${logEntries.length} ${logEntries.length === 1 ? 'entry' : 'entries'} available` }}
-                    </p>
-                  </div>
-                </div>
-                <!-- Compliance Checklist (AC 120-78B & 14 CFR Part 61) -->
-                <div class="space-y-3 pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <ComplianceChecklist :is-dark-mode="isDarkMode" />
-                </div>
-                <!-- Developers Link -->
-                <div class="pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <NuxtLink
-                    to="/developers"
-                    :class="[
-                      'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                      isDarkMode 
-                        ? 'bg-gray-700 hover:bg-gray-600 text-white' 
-                        : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
-                    ]"
-                    @click="showHeaderSettings = false"
-                  >
-                    <Icon name="ri:code-s-slash-line" size="16" />
-                    Developers
-                  </NuxtLink>
-                </div>
-                <!-- Sign Out Button -->
-                <div class="pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <button
-                    type="button"
-                    @click="handleLogout"
-                    :class="[
-                      'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                      isDarkMode 
-                        ? 'bg-red-700 hover:bg-red-600 text-white' 
-                        : 'bg-red-200 hover:bg-red-300 text-red-900'
-                    ]"
-                    aria-label="Sign out"
-                  >
-                    <Icon name="ri:logout-box-line" size="16" />
-                    Sign Out
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
         </nav>
           </div>
         </div>
@@ -524,11 +119,11 @@
         <aside
           :class="[
             'flex-shrink-0 rounded-2xl border text-left font-quicksand transition-all duration-300 flex flex-col',
-            isDarkMode 
-              ? 'bg-gray-800 border-gray-700 text-gray-200' 
-              : 'bg-gray-200 border-gray-300 text-gray-800 shadow-sm',
-            isSidebarCollapsed 
-              ? 'lg:w-16 px-3 py-4' 
+            theme === 'dark'
+              ? 'bg-gray-900 border-white/10 text-gray-200 shadow-md shadow-black/40'
+              : 'bg-gray-100 border-gray-200 text-gray-800 shadow-sm',
+            isSidebarCollapsed
+              ? 'lg:w-16 px-3 py-4'
               : 'lg:w-72 xl:w-80 px-5 py-6'
           ]"
         >
@@ -571,9 +166,9 @@
               :key="section.key"
               :class="[
                 'rounded-xl border px-4 py-4 transition-colors duration-300',
-                isDarkMode 
-                  ? 'bg-gray-700/50 border-gray-600' 
-                  : 'bg-gray-200 border-gray-300'
+                theme === 'dark'
+                  ? 'bg-white/5 border-white/10 shadow-sm shadow-black/20'
+                  : 'bg-white border-gray-200 shadow-sm'
               ]"
             >
             <button 
@@ -719,7 +314,7 @@
             <div
               :class="[
                 'rounded-xl border px-4 py-4 transition-colors duration-300',
-                isDarkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-200 border-gray-300'
+                isDarkMode ? 'bg-white/5 border-white/10 shadow-sm shadow-black/20' : 'bg-white border-gray-200 shadow-sm'
               ]"
             >
               <div class="flex items-center justify-between mb-2">
@@ -762,7 +357,7 @@
             <div
               :class="[
                 'rounded-xl border px-4 py-4 transition-colors duration-300',
-                isDarkMode ? 'bg-gray-700/50 border-gray-600' : 'bg-gray-200 border-gray-300'
+                isDarkMode ? 'bg-white/5 border-white/10 shadow-sm shadow-black/20' : 'bg-white border-gray-200 shadow-sm'
               ]"
             >
               <div class="flex items-center justify-between mb-2">
@@ -881,8 +476,8 @@
               <div :class="[
                 'p-6 rounded-2xl border text-left transition-colors duration-300',
                 isDarkMode 
-                  ? 'bg-gray-800 border-gray-700' 
-                  : 'bg-gray-100 border-gray-300 shadow-sm'
+                  ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' 
+                  : 'bg-white border-gray-200 shadow-sm'
               ]">
                 <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div class="flex flex-wrap items-center gap-3">
@@ -971,7 +566,7 @@
                         v-model="totalsCustomStart"
                         :class="[
                           'px-2 py-1 rounded-md text-xs font-quicksand border',
-                          isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'
+                          isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900'
                         ]"
                       />
                       <span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-600']">to</span>
@@ -980,7 +575,7 @@
                         v-model="totalsCustomEnd"
                         :class="[
                           'px-2 py-1 rounded-md text-xs font-quicksand border',
-                          isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'
+                          isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900'
                         ]"
                       />
                     </div>
@@ -995,10 +590,10 @@
                       'rounded-xl border px-4 py-5 text-left transition-all duration-300 relative overflow-hidden group',
                       summaryField.key === 'totalTime'
                         ? (isDarkMode 
-                            ? 'bg-gray-800/80 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.15)]'
+                            ? 'bg-blue-500/20 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.15)]'
                             : 'bg-gray-100 border-blue-200 shadow-md shadow-blue-100')
                         : (isDarkMode 
-                            ? 'bg-gray-800/50 border-gray-700 hover:bg-gray-800' 
+                            ? 'bg-white/5 border-white/10 hover:bg-white/10 shadow-sm shadow-black/20' 
                             : 'bg-gray-100 border-gray-200 hover:bg-gray-200 shadow-sm')
                     ]"
                   >
@@ -1035,10 +630,10 @@
                       'rounded-xl border px-4 py-5 text-left transition-all duration-300 relative overflow-hidden group',
                       summaryField.key === 'totalTime'
                         ? (isDarkMode 
-                            ? 'bg-gray-800/80 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.15)]'
+                            ? 'bg-blue-500/20 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.15)]'
                             : 'bg-gray-100 border-blue-200 shadow-md shadow-blue-100')
                         : (isDarkMode 
-                            ? 'bg-gray-800/50 border-gray-700 hover:bg-gray-800' 
+                            ? 'bg-white/5 border-white/10 hover:bg-white/10 shadow-sm shadow-black/20' 
                             : 'bg-gray-100 border-gray-200 hover:bg-gray-200 shadow-sm')
                     ]"
                   >
@@ -1065,27 +660,109 @@
                   </div>
                 </div>
     </div>
-              <div :class="[
-                'p-6 rounded-2xl border text-left transition-colors duration-300',
-                isDarkMode 
-                  ? 'bg-gray-800 border-gray-700' 
-                  : 'bg-gray-100 border-gray-300 shadow-sm'
-              ]">
-                <h2 :class="['text-lg font-quicksand font-semibold mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
-                  Regulatory Snapshot
-                </h2>
-                <ul :class="['space-y-2 text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-600']">
-                  <li>
-                    • Track dates, aircraft identification, departure/destination, and total time to satisfy
-                    61.51(b) recordkeeping.
-                  </li>
-                  <li>
-                    • Capture conditions (night, instrument, simulated) and training specifics required for recent experience.
-                  </li>
-                  <li>
-                    • AC&nbsp;120-78B reminders: maintain data integrity, protect revision history, and record signer identity (signatures coming soon).
-                  </li>
-                </ul>
+              <Transition
+                enter-active-class="transition ease-out duration-300"
+                enter-from-class="opacity-0 -translate-y-2"
+                enter-to-class="opacity-100 translate-y-0"
+                leave-active-class="transition ease-in duration-200"
+                leave-from-class="opacity-100 translate-y-0"
+                leave-to-class="opacity-0 -translate-y-2"
+              >
+                <div
+                  v-if="showUpdatesBanner"
+                  :class="[
+                    'relative p-6 rounded-2xl border text-left transition-colors duration-300 mb-6',
+                    isDarkMode
+                      ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40'
+                      : 'bg-white border-gray-200 shadow-sm'
+                  ]"
+                >
+                  <button
+                    type="button"
+                    class="absolute right-4 top-4 rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/10 dark:hover:text-gray-200 transition-colors"
+                    aria-label="Dismiss"
+                    @click="dismissUpdates"
+                  >
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                  <h2 :class="['text-lg font-quicksand font-semibold mb-4 pr-10', isDarkMode ? 'text-white' : 'text-gray-900']">
+                    Updates!
+                  </h2>
+                  <ul :class="['space-y-2 text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-600']">
+                    <li>
+                      <strong>Add pages</strong> — Build multi-page logbook spreads with the new Logbook Builder. Add rows, choose columns, and use two-page layout for left/right printing.
+                    </li>
+                    <li>
+                      <strong>Upgraded UI</strong> — Refined dashboard and a cleaner experience across light and dark mode.
+                    </li>
+                  </ul>
+                </div>
+              </Transition>
+              <Transition
+                enter-active-class="transition ease-out duration-300"
+                enter-from-class="opacity-0 -translate-y-2"
+                enter-to-class="opacity-100 translate-y-0"
+                leave-active-class="transition ease-in duration-200"
+                leave-from-class="opacity-100 translate-y-0"
+                leave-to-class="opacity-0 -translate-y-2"
+              >
+                <div
+                  v-if="showRegulatorySnapshot"
+                  :class="[
+                    'relative p-6 rounded-2xl border text-left transition-colors duration-300',
+                    isDarkMode
+                      ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40'
+                      : 'bg-white border-gray-200 shadow-sm'
+                  ]"
+                >
+                  <button
+                    type="button"
+                    class="absolute right-4 top-4 rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/10 dark:hover:text-gray-200 transition-colors"
+                    aria-label="Dismiss"
+                    @click="dismissSnapshot"
+                  >
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                  <h2 :class="['text-lg font-quicksand font-semibold mb-4 pr-10', isDarkMode ? 'text-white' : 'text-gray-900']">
+                    Regulatory Snapshot
+                  </h2>
+                  <ul :class="['space-y-2 text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-600']">
+                    <li>
+                      • Track dates, aircraft identification, departure/destination, and total time to satisfy
+                      61.51(b) recordkeeping.
+                    </li>
+                    <li>
+                      • Capture conditions (night, instrument, simulated) and training specifics required for recent experience.
+                    </li>
+                    <li>
+                      • AC&nbsp;120-78B reminders: maintain data integrity, protect revision history, and record signer identity (signatures coming soon).
+                    </li>
+                  </ul>
+                </div>
+              </Transition>
+              <div
+                v-if="!showUpdatesBanner && !showRegulatorySnapshot"
+                class="flex items-center justify-center"
+              >
+                <button
+                  type="button"
+                  :class="[
+                    'inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-quicksand transition-colors',
+                    isDarkMode
+                      ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                      : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                  ]"
+                  @click="showAllUpdates"
+                >
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                  Show updates
+                </button>
               </div>
             </div>
           </section>
@@ -1123,7 +800,7 @@
                     :class="[
               'inline-flex items-center px-5 py-2 rounded-lg text-sm sm:text-base font-quicksand font-medium transition-all duration-200',
                       isDarkMode 
-                ? (isEntryFormOpen ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600 text-white')
+                ? (isEntryFormOpen ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20')
                 : (isEntryFormOpen ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900')
             ]"
           >
@@ -1148,7 +825,7 @@
                   :class="[
                     'p-1.5 rounded transition-colors',
                     isDarkMode 
-                      ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-300 bg-gray-800' 
+                      ? 'hover:bg-white/10 text-gray-400 hover:text-gray-300 bg-white/5 border border-white/10 shadow-sm shadow-black/20' 
                       : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700 bg-gray-100'
                   ]"
                   aria-label="Column settings"
@@ -1161,8 +838,8 @@
                   :class="[
                     'absolute right-0 top-full mt-2 w-80 rounded-xl border shadow-2xl p-4 z-50',
                     isDarkMode 
-                      ? 'bg-gray-800 border-gray-700' 
-                      : 'bg-gray-100 border-gray-300'
+                  ? 'bg-gray-900 border-white/10 shadow-xl shadow-black/50' 
+                  : 'bg-white border-gray-200'
                   ]"
                   @click.stop
                 >
@@ -1258,7 +935,7 @@
                       :class="[
                 'mt-6 rounded-2xl border border-dashed p-10 text-center font-quicksand transition-colors duration-300',
                       isDarkMode 
-                  ? 'bg-gray-800 border-gray-700 text-gray-400' 
+                  ? 'bg-gray-900 border-white/10 text-gray-400 shadow-md shadow-black/40' 
                   : 'bg-gray-100 border-gray-300 text-gray-500'
                     ]"
             >
@@ -1280,7 +957,7 @@
                 :class="[
                   'w-full divide-y text-left font-quicksand',
                   isDarkMode 
-                    ? 'divide-gray-700 bg-gray-800' 
+                    ? 'divide-white/10 bg-gray-900 border-white/10 shadow-md shadow-black/40' 
                       : 'divide-gray-200 bg-gray-100'
                 ]" 
                 style="table-layout: fixed; width: 100%;"
@@ -1290,7 +967,7 @@
                   :class="[
                     'uppercase text-xs font-semibold tracking-wider font-quicksand z-20',
                     isDarkMode 
-                      ? 'bg-gray-800 text-gray-400 border-b border-gray-700' 
+                      ? 'bg-gray-900 text-gray-400 border-b border-white/10 shadow-md shadow-black/40' 
                       : 'bg-gray-100 text-gray-500 border-b border-gray-200'
                   ]"
                 >
@@ -1332,7 +1009,7 @@
                           ? 'bg-amber-900/20 border-l-amber-500 hover:bg-amber-900/30' 
                           : 'bg-amber-50 border-l-amber-500 hover:bg-amber-100')
                         : (isDarkMode 
-                          ? 'hover:bg-gray-800 border-transparent hover:border-blue-500' 
+                          ? 'hover:bg-white/10 border-transparent hover:border-blue-500/50' 
                           : 'hover:bg-gray-200 border-transparent hover:border-blue-500')
                     ]"
                       class="cursor-pointer"
@@ -1388,7 +1065,7 @@
                             :class="[
                               'rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold border',
                               isDarkMode 
-                                ? 'bg-gray-800 border-gray-600 text-gray-300' 
+                                ? 'bg-gray-900 border-white/10 text-gray-300 shadow-md shadow-black/40' 
                                 : 'bg-gray-100 border-gray-200 text-gray-600'
                             ]"
                           >
@@ -1458,9 +1135,11 @@
                       <!-- Total Column -->
                       <template v-else-if="col.key === 'total'">
                         <span :class="[
-                          entry.isImported && entry.importSource !== 'localStorage'
-                            ? (isDarkMode ? 'text-red-400' : 'text-red-600')
-                            : (isDarkMode ? 'text-blue-400' : 'text-blue-600')
+                          entry.importSource === 'logbook_builder'
+                            ? (isDarkMode ? 'text-green-400' : 'text-green-600')
+                            : entry.isImported && entry.importSource !== 'localStorage'
+                              ? (isDarkMode ? 'text-red-400' : 'text-red-600')
+                              : (isDarkMode ? 'text-blue-400' : 'text-blue-600')
                         ]">
                           {{ formatNumber(entry.flightTime.total) }}
                         </span>
@@ -1492,7 +1171,7 @@
             <div
               v-if="showAuditTrailSidebar && expandedEntryId"
               class="fixed left-0 top-0 h-full w-[400px] z-[60] shadow-2xl"
-              :class="isDarkMode ? 'bg-gray-800 border-r border-gray-700' : 'bg-white border-r border-gray-300'"
+              :class="isDarkMode ? 'bg-gray-900 border-r border-white/10 shadow-md shadow-black/40' : 'bg-white border-r border-gray-200 shadow-sm'"
             >
               <div class="h-full flex flex-col">
                 <!-- Sidebar Header -->
@@ -1556,7 +1235,7 @@
                 'p-2 rounded-lg transition-colors',
                 showAuditTrailSidebar
                   ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
-                  : (isDarkMode ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-800' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200')
+                  : (isDarkMode ? 'text-gray-400 hover:text-gray-300 hover:bg-white/10' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200')
               ]"
               :title="showAuditTrailSidebar ? 'Hide Audit Trail' : 'Show Audit Trail'"
               aria-label="Toggle audit trail"
@@ -1584,7 +1263,7 @@
             :class="[
               'p-2 rounded-lg transition-colors text-xl leading-none',
               isDarkMode 
-                ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-800' 
+                ? 'text-gray-400 hover:text-gray-200 hover:bg-white/10' 
                 : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'
             ]"
             aria-label="Close panel"
@@ -1614,18 +1293,18 @@
                 </button>
               </div>
               <!-- Session block -->
-              <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white']">
+              <div :class="['rounded-lg border p-4', isDarkMode ? 'border-white/10 bg-gray-900/50 shadow-md shadow-black/40' : 'border-gray-200 bg-white']">
                 <div :class="['text-[10px] uppercase font-bold mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Session</div>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Date</label>
-                    <input v-model="inlineEditEntry.date" type="date" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                    <input v-model="inlineEditEntry.date" type="date" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                   </div>
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Type</label>
                     <select
                       :value="getSelectedSimType(inlineEditEntry)"
-                      :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                      :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
                       @change="setSimType(inlineEditEntry, ($event.target as HTMLSelectElement).value as '' | 'FFS' | 'FTD' | 'ATD')"
                     >
                       <option value="">—</option>
@@ -1640,7 +1319,7 @@
                       inputmode="decimal"
                       placeholder="0.0"
                       :disabled="!getSelectedSimType(inlineEditEntry)"
-                      :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300', !getSelectedSimType(inlineEditEntry) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                      :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200', !getSelectedSimType(inlineEditEntry) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
                       @input="(e) => {
                         if (!inlineEditEntry) return;
                         const sel = getSelectedSimType(inlineEditEntry);
@@ -1669,7 +1348,7 @@
                   </div>
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Role</label>
-                    <select v-model="inlineEditEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                    <select v-model="inlineEditEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']">
                       <option v-for="role in roleOptions" :key="role" :value="role">{{ roleDisplayLabel(role) }}</option>
                     </select>
                   </div>
@@ -1681,7 +1360,7 @@
                     type="text"
                     inputmode="decimal"
                     placeholder="0.0"
-                    :class="['w-full max-w-[120px] rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300', (inlineEditEntry?.flightTime.simulatedInstrument === null || inlineEditEntry?.flightTime.simulatedInstrument === 0 || inlineEditEntry?.flightTime.simulatedInstrument === undefined) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                    :class="['w-full max-w-[120px] rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200', (inlineEditEntry?.flightTime.simulatedInstrument === null || inlineEditEntry?.flightTime.simulatedInstrument === 0 || inlineEditEntry?.flightTime.simulatedInstrument === undefined) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
                     @input="(e) => {
                       if (!inlineEditEntry) return;
                       const input = e.target as HTMLInputElement;
@@ -1700,19 +1379,19 @@
                 </div>
               </div>
               <!-- Optional details -->
-              <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-800/30' : 'border-gray-200 bg-gray-50/50']">
+              <div :class="['rounded-lg border p-4', isDarkMode ? 'border-white/10 bg-gray-900/30 shadow-md shadow-black/40' : 'border-gray-200 bg-gray-50/50']">
                 <div :class="['text-[10px] uppercase font-bold mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Optional — Aircraft &amp; Route</div>
                 <div class="grid gap-4 md:grid-cols-2">
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Aircraft</label>
-                    <input v-model="inlineEditEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="OPTIONAL" />
+                    <input v-model="inlineEditEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="OPTIONAL" />
                   </div>
                   <div class="relative">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Ident</label>
                     <input
                       v-model="inlineEditEntry.registration"
                       type="text"
-                      :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                      :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
                       placeholder="OPTIONAL"
                       autocomplete="off"
                       @input="inlineEditEntry.registration = ($event.target as HTMLInputElement).value.toUpperCase()"
@@ -1720,7 +1399,7 @@
                       @keydown="(e) => handleDropdownKeydown(e, 'inlineIdent', filteredAircraftForInlineEdit, (item) => selectAircraftForInlineEdit(item))"
                       @blur="handleInlineIdentBlur"
                     />
-                    <div v-if="showInlineIdentDropdown && filteredAircraftForInlineEdit.length > 0" data-dropdown="inlineIdent" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']">
+                    <div v-if="showInlineIdentDropdown && filteredAircraftForInlineEdit.length > 0" data-dropdown="inlineIdent" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']">
                       <button v-for="(aircraft, index) in filteredAircraftForInlineEdit" :key="aircraft.registration" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedInlineIdentIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectAircraftForInlineEdit(aircraft)">{{ aircraft.registration }}</button>
                     </div>
                   </div>
@@ -1728,21 +1407,21 @@
                 <div class="grid gap-4 mt-3 grid-cols-1 md:grid-cols-[1fr_1fr_2fr]">
                   <div class="relative">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">From</label>
-                    <input v-model="inlineEditEntry.departure" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="OPTIONAL" autocomplete="off" @input="inlineEditEntry.departure = ($event.target as HTMLInputElement).value.toUpperCase()" @focus="showInlineFromDropdown = true; highlightedInlineFromIndex = filteredAirportsForInlineFrom.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'inlineFrom', filteredAirportsForInlineFrom, (item) => selectAirportForInlineFrom(item))" @blur="handleInlineFromBlur" />
-                    <div v-if="showInlineFromDropdown && filteredAirportsForInlineFrom.length > 0" data-dropdown="inlineFrom" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']">
+                    <input v-model="inlineEditEntry.departure" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="OPTIONAL" autocomplete="off" @input="inlineEditEntry.departure = ($event.target as HTMLInputElement).value.toUpperCase()" @focus="showInlineFromDropdown = true; highlightedInlineFromIndex = filteredAirportsForInlineFrom.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'inlineFrom', filteredAirportsForInlineFrom, (item) => selectAirportForInlineFrom(item))" @blur="handleInlineFromBlur" />
+                    <div v-if="showInlineFromDropdown && filteredAirportsForInlineFrom.length > 0" data-dropdown="inlineFrom" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']">
                       <button v-for="(airport, index) in filteredAirportsForInlineFrom" :key="airport" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedInlineFromIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectAirportForInlineFrom(airport)">{{ airport }}</button>
                     </div>
                   </div>
                   <div class="relative">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">To</label>
-                    <input v-model="inlineEditEntry.destination" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="OPTIONAL" autocomplete="off" @input="inlineEditEntry.destination = ($event.target as HTMLInputElement).value.toUpperCase()" @focus="showInlineToDropdown = true; highlightedInlineToIndex = filteredAirportsForInlineTo.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'inlineTo', filteredAirportsForInlineTo, (item) => selectAirportForInlineTo(item))" @blur="handleInlineToBlur" />
-                    <div v-if="showInlineToDropdown && filteredAirportsForInlineTo.length > 0" data-dropdown="inlineTo" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']">
+                    <input v-model="inlineEditEntry.destination" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="OPTIONAL" autocomplete="off" @input="inlineEditEntry.destination = ($event.target as HTMLInputElement).value.toUpperCase()" @focus="showInlineToDropdown = true; highlightedInlineToIndex = filteredAirportsForInlineTo.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'inlineTo', filteredAirportsForInlineTo, (item) => selectAirportForInlineTo(item))" @blur="handleInlineToBlur" />
+                    <div v-if="showInlineToDropdown && filteredAirportsForInlineTo.length > 0" data-dropdown="inlineTo" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']">
                       <button v-for="(airport, index) in filteredAirportsForInlineTo" :key="airport" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedInlineToIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectAirportForInlineTo(airport)">{{ airport }}</button>
                     </div>
                   </div>
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
-                    <input v-model="inlineEditEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="OPTIONAL" @blur="inlineEditEntry.route = (inlineEditEntry.route || '').trim().toUpperCase()" />
+                    <input v-model="inlineEditEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="OPTIONAL" @blur="inlineEditEntry.route = (inlineEditEntry.route || '').trim().toUpperCase()" />
                   </div>
                 </div>
               </div>
@@ -1752,26 +1431,26 @@
                 <div class="grid gap-4 grid-cols-2 md:grid-cols-4">
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day Ldg</label>
-                    <input v-model.number="inlineEditEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                    <input v-model.number="inlineEditEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                   </div>
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night Ldg</label>
-                    <input v-model.number="inlineEditEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                    <input v-model.number="inlineEditEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                   </div>
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Holds</label>
-                    <input v-model.number="inlineEditEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                    <input v-model.number="inlineEditEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                   </div>
                 </div>
                 <div class="mt-3">
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Approaches</label>
                   <div class="space-y-1.5">
                     <div v-for="(approach, aIdx) in (inlineEditEntry.performance.approaches || [])" :key="'sim-inline-' + aIdx" class="flex gap-2 items-center">
-                      <select v-model="approach.type" :class="['flex-1 max-w-[120px] rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                      <select v-model="approach.type" :class="['flex-1 max-w-[120px] rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']">
                         <option v-for="opt in approachTypeOptions" :key="opt" :value="opt">{{ opt }}</option>
                         <option value="Other">Other</option>
                       </select>
-                      <input v-model.number="approach.count" type="number" min="1" class="w-14 rounded border px-2 py-1 text-sm text-center font-mono" :class="isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'" />
+                      <input v-model.number="approach.count" type="number" min="1" class="w-14 rounded border px-2 py-1 text-sm text-center font-mono" :class="isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900'" />
                       <button type="button" aria-label="Remove approach" @click="inlineEditEntry.performance.approaches!.splice(aIdx, 1)" :class="['p-1 rounded', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-500 hover:bg-gray-200']"><Icon name="ri:close-line" size="16" /></button>
                     </div>
                     <button type="button" @click="(inlineEditEntry.performance.approaches ||= []).push({ type: 'ILS', count: 1 })" :class="['text-xs font-quicksand', isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700']">+ Add approach</button>
@@ -1799,21 +1478,21 @@
                   </template>
                   <template v-else>
                     <div class="inline-flex gap-1 items-center">
-                      <input v-model="customTagInputInline" type="text" placeholder="Custom tag" :class="['w-28 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" @keydown.enter.prevent="addCustomTag(inlineEditEntry, customTagInputInline); customTagInputInline = ''; showInlineCustomTagInput = false" />
+                      <input v-model="customTagInputInline" type="text" placeholder="Custom tag" :class="['w-28 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addCustomTag(inlineEditEntry, customTagInputInline); customTagInputInline = ''; showInlineCustomTagInput = false" />
                       <button type="button" @click="addCustomTag(inlineEditEntry, customTagInputInline); customTagInputInline = ''; showInlineCustomTagInput = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
                       <button type="button" @click="showInlineCustomTagInput = false; customTagInputInline = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
                     </div>
                   </template>
                 </div>
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Remarks / Applicable 61.51 Notes</label>
-                <textarea v-model="inlineEditEntry.remarks" rows="3" placeholder="Document training received, endorsements pending, or other relevant notes." :class="['w-full rounded border px-2 py-2 text-sm font-quicksand transition-colors duration-300', isDarkMode ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-400' : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400']"></textarea>
+                <textarea v-model="inlineEditEntry.remarks" rows="3" placeholder="Document training received, endorsements pending, or other relevant notes." :class="['w-full rounded border px-2 py-2 text-sm font-quicksand transition-colors duration-300', isDarkMode ? 'border-white/10 bg-black/20 text-white placeholder-gray-400 shadow-inner' : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400']"></textarea>
               </div>
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Pilot</label>
                 <div class="grid gap-4 md:grid-cols-3">
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Job</label>
-                    <select v-model="inlineEditEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                    <select v-model="inlineEditEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']">
                       <option value="">Select...</option>
                       <option value="Student">Student</option>
                       <option value="Instructor">Instructor</option>
@@ -1824,14 +1503,14 @@
                   </div>
                   <div class="relative">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Name</label>
-                    <input v-model="inlineEditEntry.trainingElements" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Pilot Name" autocomplete="off" @focus="showInlinePilotNameDropdown = true; highlightedInlinePilotIndex = filteredPilotsForInline.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'inlinePilot', filteredPilotsForInline, (item) => selectPilotNameForInline(item))" @blur="handleInlinePilotNameBlur" />
-                    <div v-if="showInlinePilotNameDropdown && filteredPilotsForInline.length > 0" data-dropdown="inlinePilot" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']">
+                    <input v-model="inlineEditEntry.trainingElements" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Pilot Name" autocomplete="off" @focus="showInlinePilotNameDropdown = true; highlightedInlinePilotIndex = filteredPilotsForInline.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'inlinePilot', filteredPilotsForInline, (item) => selectPilotNameForInline(item))" @blur="handleInlinePilotNameBlur" />
+                    <div v-if="showInlinePilotNameDropdown && filteredPilotsForInline.length > 0" data-dropdown="inlinePilot" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']">
                       <button v-for="(pilot, index) in filteredPilotsForInline" :key="pilot" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm transition-colors', highlightedInlinePilotIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectPilotNameForInline(pilot)">{{ pilot }}</button>
                     </div>
                   </div>
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
-                    <input v-model="inlineEditEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Certificate #" />
+                    <input v-model="inlineEditEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Certificate #" />
                   </div>
                 </div>
               </div>
@@ -1854,7 +1533,7 @@
               </button>
               <button
                 type="button"
-                @click="isInlineCommercialMode = !isInlineCommercialMode"
+                @click="toggleInlineOOOIMode"
                 :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors',
                   isInlineCommercialMode
                     ? (isDarkMode ? 'bg-blue-900/30 text-blue-300 border-blue-700' : 'bg-blue-100 text-blue-700 border-blue-200')
@@ -1892,7 +1571,7 @@
                     maxlength="4" 
                     placeholder="1430"
                     @input="(e) => { if (inlineEditEntry?.oooi && field !== 'isZulu') (inlineEditEntry.oooi as unknown as Record<string, string | null>)[field] = formatOOOIInput((e.target as HTMLInputElement).value) }"
-                    :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
+                    :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" 
                   />
                 </div>
                </div>
@@ -1901,24 +1580,24 @@
             <div class="grid gap-4 md:grid-cols-4">
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Date</label>
-                <input v-model="inlineEditEntry.date" type="date" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                <input v-model="inlineEditEntry.date" type="date" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
               </div>
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Role</label>
-                <select v-model="inlineEditEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                <select v-model="inlineEditEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']">
                   <option v-for="role in roleOptions" :key="role" :value="role">{{ roleDisplayLabel(role) }}</option>
                 </select>
               </div>
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Aircraft</label>
-                <input v-model="inlineEditEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                <input v-model="inlineEditEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
               </div>
               <div class="relative">
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Ident</label>
                 <input 
                   v-model="inlineEditEntry.registration" 
                   type="text" 
-                  :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                  :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
                   autocomplete="off"
                   @input="inlineEditEntry.registration = ($event.target as HTMLInputElement).value.toUpperCase()"
                   @focus="showInlineIdentDropdown = true; highlightedInlineIdentIndex = filteredAircraftForInlineEdit.length > 0 ? 0 : -1"
@@ -1929,7 +1608,7 @@
                 <div 
                   v-if="showInlineIdentDropdown && filteredAircraftForInlineEdit.length > 0"
                   data-dropdown="inlineIdent"
-                  :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
+                  :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']"
                 >
                   <button
                     v-for="(aircraft, index) in filteredAircraftForInlineEdit"
@@ -1955,7 +1634,7 @@
                 <input 
                   v-model="inlineEditEntry.flightNumber" 
                   type="text" 
-                  :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                  :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
                   autocomplete="off"
                   placeholder="OPTIONAL"
                 />
@@ -1964,7 +1643,7 @@
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Type</label>
                 <select
                   :value="getSelectedSimType(inlineEditEntry)"
-                  :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                  :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
                   @change="setSimType(inlineEditEntry, ($event.target as HTMLSelectElement).value as '' | 'FFS' | 'FTD' | 'ATD')"
                 >
                   <option value="">—</option>
@@ -1979,7 +1658,7 @@
                   inputmode="decimal"
                   placeholder="0.0"
                   :disabled="!getSelectedSimType(inlineEditEntry)"
-                  :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300', !getSelectedSimType(inlineEditEntry) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                  :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200', !getSelectedSimType(inlineEditEntry) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
                   @input="(e) => {
                     if (!inlineEditEntry) return;
                     const sel = getSelectedSimType(inlineEditEntry);
@@ -2021,7 +1700,7 @@
                 <input 
                   v-model="inlineEditEntry.departure" 
                   type="text" 
-                  :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                  :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
                   autocomplete="off"
                   @input="inlineEditEntry.departure = ($event.target as HTMLInputElement).value.toUpperCase()"
                   @focus="showInlineFromDropdown = true; highlightedInlineFromIndex = filteredAirportsForInlineFrom.length > 0 ? 0 : -1"
@@ -2032,7 +1711,7 @@
                 <div 
                   v-if="showInlineFromDropdown && filteredAirportsForInlineFrom.length > 0"
                   data-dropdown="inlineFrom"
-                  :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
+                  :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']"
                 >
                   <button
                     v-for="(airport, index) in filteredAirportsForInlineFrom"
@@ -2056,7 +1735,7 @@
                 <input 
                   v-model="inlineEditEntry.destination" 
                   type="text" 
-                  :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                  :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
                   autocomplete="off"
                   @input="inlineEditEntry.destination = ($event.target as HTMLInputElement).value.toUpperCase()"
                   @focus="showInlineToDropdown = true; highlightedInlineToIndex = filteredAirportsForInlineTo.length > 0 ? 0 : -1"
@@ -2067,7 +1746,7 @@
                 <div 
                   v-if="showInlineToDropdown && filteredAirportsForInlineTo.length > 0"
                   data-dropdown="inlineTo"
-                  :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
+                  :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']"
                 >
                   <button
                     v-for="(airport, index) in filteredAirportsForInlineTo"
@@ -2093,7 +1772,7 @@
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class</label>
                     <select
                       :value="categoryClassAircraftOptions.includes(inlineEditEntry.aircraftCategoryClass as any) ? inlineEditEntry.aircraftCategoryClass : ''"
-                      :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                      :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
                       @change="inlineEditEntry.aircraftCategoryClass = ($event.target as HTMLSelectElement).value"
                     >
                       <option value="">—</option>
@@ -2102,13 +1781,13 @@
                   </div>
                   <div class="flex-[1.4]">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
-                    <input v-model.number="inlineEditEntry.categoryClassTime" type="number" step="0.1" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="0.0" />
+                    <input v-model.number="inlineEditEntry.categoryClassTime" type="number" step="0.1" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="0.0" />
                   </div>
                 </div>
               </div>
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
-                <input v-model="inlineEditEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" @blur="inlineEditEntry.route = (inlineEditEntry.route || '').trim().toUpperCase()" />
+                <input v-model="inlineEditEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @blur="inlineEditEntry.route = (inlineEditEntry.route || '').trim().toUpperCase()" />
               </div>
             </div>
             
@@ -2128,7 +1807,7 @@
                     :class="[
                       'w-full rounded border px-2 py-1 text-sm text-center font-mono',
                       field.key !== 'total' ? 'cursor-pointer' : '',
-                      isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300',
+                      isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200',
                       (inlineEditEntry.flightTime[field.key] === null || inlineEditEntry.flightTime[field.key] === 0 || inlineEditEntry.flightTime[field.key] === undefined)
                         ? (isDarkMode ? 'text-gray-500' : 'text-gray-400')
                         : (isDarkMode ? 'text-white' : 'text-gray-900')
@@ -2161,15 +1840,15 @@
              <div class="grid gap-4 grid-cols-4">
                <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day Ldg</label>
-                  <input v-model.number="inlineEditEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                  <input v-model.number="inlineEditEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                </div>
                <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night Ldg</label>
-                  <input v-model.number="inlineEditEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                  <input v-model.number="inlineEditEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                </div>
                <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Holds</label>
-                  <input v-model.number="inlineEditEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                  <input v-model.number="inlineEditEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                </div>
                <div class="col-span-4">
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Approaches</label>
@@ -2181,12 +1860,12 @@
                     >
                       <select
                         v-model="approach.type"
-                        :class="['flex-1 max-w-[120px] rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                        :class="['flex-1 max-w-[120px] rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
                       >
                         <option v-for="opt in approachTypeOptions" :key="opt" :value="opt">{{ opt }}</option>
                         <option value="Other">Other</option>
                       </select>
-                      <input v-model.number="approach.count" type="number" min="1" class="w-14 rounded border px-2 py-1 text-sm text-center font-mono" :class="isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'" />
+                      <input v-model.number="approach.count" type="number" min="1" class="w-14 rounded border px-2 py-1 text-sm text-center font-mono" :class="isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900'" />
                       <button type="button" aria-label="Remove approach" @click="inlineEditEntry.performance.approaches!.splice(aIdx, 1)" :class="['p-1 rounded', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-500 hover:bg-gray-200']">
                         <Icon name="ri:close-line" size="16" />
                       </button>
@@ -2245,7 +1924,7 @@
                 </template>
                 <template v-else>
                   <div class="inline-flex gap-1 items-center">
-                    <input v-model="customTagInputInline" type="text" placeholder="Custom tag" :class="['w-28 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" @keydown.enter.prevent="addCustomTag(inlineEditEntry, customTagInputInline); customTagInputInline = ''; showInlineCustomTagInput = false" />
+                    <input v-model="customTagInputInline" type="text" placeholder="Custom tag" :class="['w-28 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addCustomTag(inlineEditEntry, customTagInputInline); customTagInputInline = ''; showInlineCustomTagInput = false" />
                     <button type="button" @click="addCustomTag(inlineEditEntry, customTagInputInline); customTagInputInline = ''; showInlineCustomTagInput = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
                     <button type="button" @click="showInlineCustomTagInput = false; customTagInputInline = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
                   </div>
@@ -2259,7 +1938,7 @@
                 :class="[
                   'w-full rounded border px-2 py-2 text-sm font-quicksand transition-colors duration-300',
                   isDarkMode 
-                    ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-400' 
+                    ? 'border-white/10 bg-black/20 text-white placeholder-gray-400 shadow-inner' 
                     : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400'
                 ]"
               ></textarea>
@@ -2271,7 +1950,7 @@
               <div class="grid gap-4 md:grid-cols-3">
                 <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Job</label>
-                  <select v-model="inlineEditEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                  <select v-model="inlineEditEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']">
                     <option value="">Select...</option>
                     <option value="Student">Student</option>
                     <option value="Instructor">Instructor</option>
@@ -2285,7 +1964,7 @@
                   <input 
                     v-model="inlineEditEntry.trainingElements" 
                     type="text" 
-                    :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
+                    :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" 
                     placeholder="Pilot Name"
                     autocomplete="off"
                     @focus="showInlinePilotNameDropdown = true; highlightedInlinePilotIndex = filteredPilotsForInline.length > 0 ? 0 : -1"
@@ -2296,7 +1975,7 @@
                   <div 
                     v-if="showInlinePilotNameDropdown && filteredPilotsForInline.length > 0"
                     data-dropdown="inlinePilot"
-                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
+                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']"
                   >
                     <button
                       v-for="(pilot, index) in filteredPilotsForInline"
@@ -2317,7 +1996,7 @@
                 </div>
                 <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
-                  <input v-model="inlineEditEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Certificate #" />
+                  <input v-model="inlineEditEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Certificate #" />
                 </div>
                </div>
              </div>
@@ -2359,7 +2038,7 @@
                 <button
                   type="button"
                   @click.stop="cancelInlineEdit"
-                  :class="['px-4 py-2 rounded-lg text-sm font-medium', isDarkMode ? 'text-gray-400 hover:bg-gray-800' : 'text-gray-600 hover:bg-gray-200']"
+                  :class="['px-4 py-2 rounded-lg text-sm font-medium', isDarkMode ? 'text-gray-400 hover:bg-white/10' : 'text-gray-600 hover:bg-gray-200']"
                 >
                   Cancel
                 </button>
@@ -2392,25 +2071,35 @@
       <div v-if="isEntryFormOpen" class="fixed right-0 top-0 h-full w-full md:w-[500px] lg:w-[600px] z-50" @keydown.escape="toggleEntryForm" tabindex="-1">
         <div class="h-full flex flex-col shadow-2xl" :class="isDarkMode ? 'bg-gray-900 border-l border-gray-700' : 'bg-gray-50 border-l border-gray-200'">
           <!-- Panel Header -->
-          <div class="flex items-center justify-between p-4 border-b" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-200']">
-            <div class="flex items-center gap-2">
-              <h2 class="text-lg font-semibold font-quicksand" :class="[isDarkMode ? 'text-gray-100' : 'text-gray-900']">
+          <div class="flex items-center justify-between gap-3 p-4 border-b" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-200']">
+            <div class="flex items-center gap-2 min-w-0">
+              <h2 class="text-lg font-semibold font-quicksand truncate" :class="[isDarkMode ? 'text-gray-100' : 'text-gray-900']">
                 {{ activeLogbook === 'simulator' ? (editingEntryId ? 'Edit Simulator Entry' : 'New Simulator Entry') : (editingEntryId ? 'Edit Log Entry' : 'New Log Entry') }}
               </h2>
               <span
                 v-if="activeLogbook === 'simulator'"
-                :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded', isDarkMode ? 'bg-blue-900/40 text-blue-300 border border-blue-700/50' : 'bg-blue-100 text-blue-700 border border-blue-200']"
+                :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded flex-shrink-0', isDarkMode ? 'bg-blue-900/40 text-blue-300 border border-blue-700/50' : 'bg-blue-100 text-blue-700 border border-blue-200']"
               >
                 Simulator
               </span>
             </div>
+            <NuxtLink
+              to="/logbook-builder"
+              :class="[
+                'flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-quicksand font-medium transition-colors',
+                isDarkMode ? 'border border-gray-600 hover:bg-gray-700 text-gray-200' : 'border border-gray-300 hover:bg-gray-200 text-gray-800'
+              ]"
+            >
+              <Icon name="ri:table-line" size="14" />
+              Add Pages
+            </NuxtLink>
             <button
               type="button"
               @click="toggleEntryForm"
               :class="[
                 'p-2 rounded-lg transition-colors text-xl leading-none',
                 isDarkMode 
-                  ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-800' 
+                  ? 'text-gray-400 hover:text-gray-200 hover:bg-white/10' 
                   : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'
               ]"
               aria-label="Close panel"
@@ -2427,18 +2116,18 @@
               <template v-if="activeLogbook === 'simulator'">
                 <div class="grid gap-6">
                   <!-- Session block: Date, Type, Time, Role -->
-                  <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-200 bg-white']">
+                  <div :class="['rounded-lg border p-4', isDarkMode ? 'border-white/10 bg-gray-900/50 shadow-md shadow-black/40' : 'border-gray-200 bg-white']">
                     <div :class="['text-[10px] uppercase font-bold mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Session</div>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Date</label>
-                        <input v-model="newEntry.date" type="date" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" required />
+                        <input v-model="newEntry.date" type="date" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" required />
                       </div>
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Type</label>
                         <select
                           :value="getSelectedSimType(newEntry)"
-                          :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                          :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
                           @change="setSimType(newEntry, ($event.target as HTMLSelectElement).value as '' | 'FFS' | 'FTD' | 'ATD')"
                         >
                           <option value="">—</option>
@@ -2453,7 +2142,7 @@
                           inputmode="decimal"
                           placeholder="0.0"
                           :disabled="!getSelectedSimType(newEntry)"
-                          :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300', !getSelectedSimType(newEntry) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                          :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200', !getSelectedSimType(newEntry) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
                           @input="(e) => {
                             const sel = getSelectedSimType(newEntry);
                             if (!sel) return;
@@ -2480,7 +2169,7 @@
                       </div>
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Role</label>
-                        <select v-model="newEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                        <select v-model="newEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']">
                           <option v-for="role in roleOptions" :key="role" :value="role">{{ roleDisplayLabel(role) }}</option>
                         </select>
                       </div>
@@ -2492,7 +2181,7 @@
                         type="text"
                         inputmode="decimal"
                         placeholder="0.0"
-                        :class="['w-full max-w-[120px] rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300', (newEntry.flightTime.simulatedInstrument === null || newEntry.flightTime.simulatedInstrument === 0 || newEntry.flightTime.simulatedInstrument === undefined) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                        :class="['w-full max-w-[120px] rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200', (newEntry.flightTime.simulatedInstrument === null || newEntry.flightTime.simulatedInstrument === 0 || newEntry.flightTime.simulatedInstrument === undefined) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
                         @input="(e) => {
                           const input = e.target as HTMLInputElement;
                           const val = input.value.trim();
@@ -2510,19 +2199,19 @@
                   </div>
 
                   <!-- Optional details (collapsible) -->
-                  <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-800/30' : 'border-gray-200 bg-gray-50/50']">
+                  <div :class="['rounded-lg border p-4', isDarkMode ? 'border-white/10 bg-gray-900/30 shadow-md shadow-black/40' : 'border-gray-200 bg-gray-50/50']">
                     <div :class="['text-[10px] uppercase font-bold mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Optional — Aircraft &amp; Route</div>
                     <div class="grid gap-4 md:grid-cols-2">
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Aircraft</label>
-                        <input v-model="newEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="OPTIONAL" />
+                        <input v-model="newEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="OPTIONAL" />
                       </div>
                       <div class="relative">
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Ident</label>
                         <input
                           v-model="newEntry.registration"
                           type="text"
-                          :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                          :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
                           placeholder="OPTIONAL"
                           autocomplete="off"
                           @input="newEntry.registration = ($event.target as HTMLInputElement).value.toUpperCase()"
@@ -2533,7 +2222,7 @@
                         <div
                           v-if="showIdentDropdown && filteredAircraftForNewEntry.length > 0"
                           data-dropdown="ident"
-                          :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
+                          :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']"
                         >
                           <button
                             v-for="(aircraft, index) in filteredAircraftForNewEntry"
@@ -2554,7 +2243,7 @@
                         <input
                           v-model="newEntry.departure"
                           type="text"
-                          :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                          :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
                           placeholder="OPTIONAL"
                           autocomplete="off"
                           @input="(e) => { newEntry.departure = (e.target as HTMLInputElement).value.toUpperCase(); nextTick(() => checkAndAutoLogCrossCountry()) }"
@@ -2562,7 +2251,7 @@
                           @keydown="(e) => handleDropdownKeydown(e, 'from', filteredAirportsForFrom, (item) => selectAirportForFrom(item))"
                           @blur="handleFromBlur"
                         />
-                        <div v-if="showFromDropdown && filteredAirportsForFrom.length > 0" data-dropdown="from" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']">
+                        <div v-if="showFromDropdown && filteredAirportsForFrom.length > 0" data-dropdown="from" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']">
                           <button v-for="(airport, index) in filteredAirportsForFrom" :key="airport" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedFromIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectAirportForFrom(airport)">{{ airport }}</button>
                         </div>
                       </div>
@@ -2571,7 +2260,7 @@
                         <input
                           v-model="newEntry.destination"
                           type="text"
-                          :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                          :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
                           placeholder="OPTIONAL"
                           autocomplete="off"
                           @input="(e) => { newEntry.destination = (e.target as HTMLInputElement).value.toUpperCase(); nextTick(() => checkAndAutoLogCrossCountry()) }"
@@ -2579,13 +2268,13 @@
                           @keydown="(e) => handleDropdownKeydown(e, 'to', filteredAirportsForTo, (item) => selectAirportForTo(item))"
                           @blur="handleToBlur"
                         />
-                        <div v-if="showToDropdown && filteredAirportsForTo.length > 0" data-dropdown="to" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']">
+                        <div v-if="showToDropdown && filteredAirportsForTo.length > 0" data-dropdown="to" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']">
                           <button v-for="(airport, index) in filteredAirportsForTo" :key="airport" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedToIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectAirportForTo(airport)">{{ airport }}</button>
                         </div>
                       </div>
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
-                        <input v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="OPTIONAL" @blur="newEntry.route = (newEntry.route || '').trim().toUpperCase()" />
+                        <input v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="OPTIONAL" @blur="newEntry.route = (newEntry.route || '').trim().toUpperCase()" />
                       </div>
                     </div>
                   </div>
@@ -2596,26 +2285,26 @@
                     <div class="grid gap-4 grid-cols-2 md:grid-cols-4">
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day Ldg</label>
-                        <input v-model.number="newEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                        <input v-model.number="newEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                       </div>
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night Ldg</label>
-                        <input v-model.number="newEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                        <input v-model.number="newEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                       </div>
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Holds</label>
-                        <input v-model.number="newEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                        <input v-model.number="newEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                       </div>
                     </div>
                     <div class="mt-3">
                       <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Approaches</label>
                       <div class="space-y-1.5">
                         <div v-for="(approach, aIdx) in (newEntry.performance.approaches || [])" :key="'sim-new-' + aIdx" class="flex gap-2 items-center">
-                          <select v-model="approach.type" :class="['flex-1 max-w-[120px] rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                          <select v-model="approach.type" :class="['flex-1 max-w-[120px] rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']">
                             <option v-for="opt in approachTypeOptions" :key="opt" :value="opt">{{ opt }}</option>
                             <option value="Other">Other</option>
                           </select>
-                          <input v-model.number="approach.count" type="number" min="1" class="w-14 rounded border px-2 py-1 text-sm text-center font-mono" :class="isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'" />
+                          <input v-model.number="approach.count" type="number" min="1" class="w-14 rounded border px-2 py-1 text-sm text-center font-mono" :class="isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900'" />
                           <button type="button" aria-label="Remove approach" @click="newEntry.performance.approaches!.splice(aIdx, 1)" :class="['p-1 rounded', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-500 hover:bg-gray-200']">
                             <Icon name="ri:close-line" size="16" />
                           </button>
@@ -2653,7 +2342,7 @@
                       </template>
                       <template v-else>
                         <div class="inline-flex gap-1 items-center">
-                          <input v-model="customTagInput" type="text" placeholder="Custom tag" :class="['w-28 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" @keydown.enter.prevent="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" />
+                          <input v-model="customTagInput" type="text" placeholder="Custom tag" :class="['w-28 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" />
                           <button type="button" @click="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
                           <button type="button" @click="showNewEntryCustomTagInput = false; customTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
                         </div>
@@ -2662,14 +2351,14 @@
                   </div>
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Remarks / Applicable 61.51 Notes</label>
-                    <textarea v-model="newEntry.remarks" rows="3" placeholder="Document training received, endorsements pending, or other relevant notes." :class="['w-full rounded border px-2 py-2 text-sm font-quicksand transition-colors duration-300', isDarkMode ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-400' : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400']"></textarea>
+                    <textarea v-model="newEntry.remarks" rows="3" placeholder="Document training received, endorsements pending, or other relevant notes." :class="['w-full rounded border px-2 py-2 text-sm font-quicksand transition-colors duration-300', isDarkMode ? 'border-white/10 bg-black/20 text-white placeholder-gray-400 shadow-inner' : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400']"></textarea>
                   </div>
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Pilot</label>
                     <div class="grid gap-4 md:grid-cols-3">
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Job</label>
-                        <select v-model="newEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                        <select v-model="newEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']">
                           <option value="">Select...</option>
                           <option value="Student">Student</option>
                           <option value="Instructor">Instructor</option>
@@ -2680,14 +2369,14 @@
                       </div>
                       <div class="relative">
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Name</label>
-                        <input v-model="newEntry.trainingElements" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Pilot Name" autocomplete="off" @focus="showPilotNameDropdown = true; highlightedPilotIndex = filteredPilots.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'pilot', filteredPilots, (item) => selectPilotName(item))" @blur="handlePilotNameBlur" />
-                        <div v-if="showPilotNameDropdown && filteredPilots.length > 0" data-dropdown="pilot" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']">
+                        <input v-model="newEntry.trainingElements" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Pilot Name" autocomplete="off" @focus="showPilotNameDropdown = true; highlightedPilotIndex = filteredPilots.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'pilot', filteredPilots, (item) => selectPilotName(item))" @blur="handlePilotNameBlur" />
+                        <div v-if="showPilotNameDropdown && filteredPilots.length > 0" data-dropdown="pilot" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']">
                           <button v-for="(pilot, index) in filteredPilots" :key="pilot" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm transition-colors', highlightedPilotIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectPilotName(pilot)">{{ pilot }}</button>
                         </div>
                       </div>
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
-                        <input v-model="newEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Certificate #" />
+                        <input v-model="newEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Certificate #" />
                       </div>
                     </div>
                   </div>
@@ -2699,7 +2388,7 @@
               <div class="flex items-center justify-between mb-2">
                 <button
                   type="button"
-                  @click="isCommercialMode = !isCommercialMode"
+                  @click="toggleCommercialMode"
                   :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors', 
                     isCommercialMode 
                       ? (isDarkMode ? 'bg-blue-900/30 text-blue-300 border-blue-700' : 'bg-blue-100 text-blue-700 border-blue-200')
@@ -2736,7 +2425,7 @@
                       maxlength="4" 
                       placeholder="1430" 
                       @input="(e) => { if (newEntry.oooi && field !== 'isZulu') (newEntry.oooi as unknown as Record<string, string | null>)[field] = formatOOOIInput((e.target as HTMLInputElement).value) }"
-                      :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
+                      :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" 
                     />
                   </div>
                  </div>
@@ -2745,24 +2434,24 @@
               <div class="grid gap-4 md:grid-cols-4">
                 <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Date</label>
-                  <input v-model="newEntry.date" type="date" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" required />
+                  <input v-model="newEntry.date" type="date" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" required />
                 </div>
                 <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Role</label>
-                  <select v-model="newEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                  <select v-model="newEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']">
                     <option v-for="role in roleOptions" :key="role" :value="role">{{ roleDisplayLabel(role) }}</option>
                   </select>
                 </div>
                 <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Aircraft</label>
-                  <input v-model="newEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" :required="!isLoggingSimTime(newEntry)" />
+                  <input v-model="newEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" :required="!isLoggingSimTime(newEntry)" />
                 </div>
                 <div class="relative">
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Ident</label>
                   <input 
                     v-model="newEntry.registration" 
                     type="text" 
-                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
+                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" 
                     :required="!isLoggingSimTime(newEntry)"
                     autocomplete="off"
                     @input="newEntry.registration = ($event.target as HTMLInputElement).value.toUpperCase()"
@@ -2774,7 +2463,7 @@
                   <div 
                     v-if="showIdentDropdown && filteredAircraftForNewEntry.length > 0"
                     data-dropdown="ident"
-                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
+                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']"
                   >
                     <button
                       v-for="(aircraft, index) in filteredAircraftForNewEntry"
@@ -2800,7 +2489,7 @@
                   <input 
                     v-model="newEntry.flightNumber" 
                     type="text" 
-                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
+                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" 
                     autocomplete="off"
                     placeholder="OPTIONAL"
                   />
@@ -2813,7 +2502,7 @@
                   <input 
                     v-model="newEntry.departure" 
                     type="text" 
-                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
+                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" 
                     required
                     autocomplete="off"
                     @input="(e) => { 
@@ -2829,7 +2518,7 @@
                   <div 
                     v-if="showFromDropdown && filteredAirportsForFrom.length > 0"
                     data-dropdown="from"
-                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
+                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']"
                   >
                     <button
                       v-for="(airport, index) in filteredAirportsForFrom"
@@ -2853,7 +2542,7 @@
                   <input 
                     v-model="newEntry.destination" 
                     type="text" 
-                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
+                    :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" 
                     required
                     autocomplete="off"
                     @input="(e) => { 
@@ -2869,7 +2558,7 @@
                   <div 
                     v-if="showToDropdown && filteredAirportsForTo.length > 0"
                     data-dropdown="to"
-                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
+                    :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']"
                   >
                     <button
                       v-for="(airport, index) in filteredAirportsForTo"
@@ -2895,7 +2584,7 @@
                       <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class</label>
                       <select
                         :value="categoryClassAircraftOptions.includes(newEntry.aircraftCategoryClass as any) ? newEntry.aircraftCategoryClass : ''"
-                        :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                        :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
                         @change="newEntry.aircraftCategoryClass = ($event.target as HTMLSelectElement).value"
                       >
                         <option value="">—</option>
@@ -2904,13 +2593,13 @@
                     </div>
                     <div class="flex-[1.4]">
                       <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
-                      <input v-model.number="newEntry.categoryClassTime" type="number" step="0.1" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="0.0" />
+                      <input v-model.number="newEntry.categoryClassTime" type="number" step="0.1" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="0.0" />
                     </div>
                   </div>
                 </div>
                 <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
-                  <input v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" @blur="newEntry.route = (newEntry.route || '').trim().toUpperCase()" />
+                  <input v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @blur="newEntry.route = (newEntry.route || '').trim().toUpperCase()" />
                 </div>
               </div>
               
@@ -2930,7 +2619,7 @@
                       :class="[
                         'w-full rounded border px-2 py-1 text-sm text-center font-mono',
                         field.key !== 'total' ? 'cursor-pointer' : '',
-                        isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300',
+                        isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200',
                         (newEntry.flightTime[field.key] === null || newEntry.flightTime[field.key] === 0 || newEntry.flightTime[field.key] === undefined)
                           ? (isDarkMode ? 'text-gray-500' : 'text-gray-400')
                           : (isDarkMode ? 'text-white' : 'text-gray-900')
@@ -2994,15 +2683,15 @@
                <div class="grid gap-4 grid-cols-4">
                  <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day Ldg</label>
-                    <input v-model.number="newEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                    <input v-model.number="newEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                  </div>
                  <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night Ldg</label>
-                    <input v-model.number="newEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                    <input v-model.number="newEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                  </div>
                  <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Holds</label>
-                    <input v-model.number="newEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" />
+                    <input v-model.number="newEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                  </div>
                  <div class="col-span-4">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Approaches</label>
@@ -3014,12 +2703,12 @@
                       >
                         <select
                           v-model="approach.type"
-                          :class="['flex-1 max-w-[120px] rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']"
+                          :class="['flex-1 max-w-[120px] rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
                         >
                           <option v-for="opt in approachTypeOptions" :key="opt" :value="opt">{{ opt }}</option>
                           <option value="Other">Other</option>
                         </select>
-                        <input v-model.number="approach.count" type="number" min="1" class="w-14 rounded border px-2 py-1 text-sm text-center font-mono" :class="isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900'" />
+                        <input v-model.number="approach.count" type="number" min="1" class="w-14 rounded border px-2 py-1 text-sm text-center font-mono" :class="isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900'" />
                         <button type="button" aria-label="Remove approach" @click="newEntry.performance.approaches!.splice(aIdx, 1)" :class="['p-1 rounded', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-500 hover:bg-gray-200']">
                           <Icon name="ri:close-line" size="16" />
                         </button>
@@ -3078,7 +2767,7 @@
                   </template>
                   <template v-else>
                     <div class="inline-flex gap-1 items-center">
-                      <input v-model="customTagInput" type="text" placeholder="Custom tag" :class="['w-28 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" @keydown.enter.prevent="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" />
+                      <input v-model="customTagInput" type="text" placeholder="Custom tag" :class="['w-28 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" />
                       <button type="button" @click="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
                       <button type="button" @click="showNewEntryCustomTagInput = false; customTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
                     </div>
@@ -3095,7 +2784,7 @@
                   :class="[
                     'w-full rounded border px-2 py-2 text-sm font-quicksand transition-colors duration-300',
                     isDarkMode 
-                      ? 'border-gray-600 bg-gray-800 text-white placeholder-gray-400' 
+                      ? 'border-white/10 bg-black/20 text-white placeholder-gray-400 shadow-inner' 
                       : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400'
                   ]"
                 ></textarea>
@@ -3107,7 +2796,7 @@
                 <div class="grid gap-4 md:grid-cols-3">
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Job</label>
-                    <select v-model="newEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']">
+                    <select v-model="newEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']">
                       <option value="">Select...</option>
                       <option value="Student">Student</option>
                       <option value="Instructor">Instructor</option>
@@ -3121,7 +2810,7 @@
                     <input 
                       v-model="newEntry.trainingElements" 
                       type="text" 
-                      :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" 
+                      :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" 
                       placeholder="Pilot Name"
                       autocomplete="off"
                       @focus="showPilotNameDropdown = true; highlightedPilotIndex = filteredPilots.length > 0 ? 0 : -1"
@@ -3132,7 +2821,7 @@
                     <div 
                       v-if="showPilotNameDropdown && filteredPilots.length > 0"
                       data-dropdown="pilot"
-                      :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-gray-100 border-gray-300']"
+                      :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']"
                     >
                       <button
                         v-for="(pilot, index) in filteredPilots"
@@ -3153,7 +2842,7 @@
                   </div>
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
-                    <input v-model="newEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-800 border-gray-600 text-white' : 'bg-gray-100 border-gray-300 text-gray-900']" placeholder="Certificate #" />
+                    <input v-model="newEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Certificate #" />
                   </div>
                 </div>
               </div>
@@ -3355,62 +3044,190 @@
       </div>
     </Transition>
 
-    <!-- Pilot Profile Overlay -->
+    <!-- Profile & Settings Modal -->
     <div
-      v-if="showPilotProfile"
-      class="fixed inset-0 z-40 flex items-start justify-center px-4 py-8"
+      v-if="showSettingsModal"
+      class="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6"
     >
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showPilotProfile = false"></div>
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showSettingsModal = false"></div>
+      
       <div
         :class="[
-          'relative w-full max-w-7xl overflow-y-auto rounded-3xl border shadow-2xl transition-colors duration-300 max-h-[90vh] p-6 sm:p-8 space-y-6',
+          'relative w-full max-w-6xl h-[90vh] flex flex-col sm:flex-row overflow-hidden rounded-3xl border shadow-2xl transition-colors duration-300',
           isDarkMode 
             ? 'bg-gray-900 border-gray-700 text-gray-100' 
-            : 'bg-gray-100 border-gray-200 text-gray-900'
+            : 'bg-white border-gray-200 text-gray-900'
         ]"
       >
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div class="flex items-start gap-4">
-            <div
+        <!-- Close Button (Mobile Absolute) -->
+        <button
+          @click="showSettingsModal = false"
+          :class="[
+            'absolute top-4 right-4 z-10 sm:hidden rounded-full p-2 transition-colors',
+            isDarkMode ? 'bg-black/50 text-gray-300 hover:text-white' : 'bg-gray-200/80 text-gray-600 hover:text-gray-900'
+          ]"
+        >
+          <Icon name="ri:close-line" size="24" />
+        </button>
+
+        <!-- Sidebar Navigation -->
+        <div
+          :class="[
+            'w-full sm:w-64 flex-shrink-0 flex flex-col border-b sm:border-b-0 sm:border-r',
+            isDarkMode ? 'bg-gray-900/50 border-gray-800' : 'bg-gray-50 border-gray-200'
+          ]"
+        >
+          <div class="p-6 pb-4 hidden sm:block">
+            <h2 class="text-xl font-bold font-quicksand">Settings</h2>
+          </div>
+          
+          <!-- Mobile Tab Select (shown only on small screens) -->
+          <div class="p-4 sm:hidden overflow-x-auto whitespace-nowrap flex gap-2 hide-scrollbar border-b" :class="isDarkMode ? 'border-gray-800' : 'border-gray-200'">
+            <button
+              v-for="tab in ['profile', 'preferences', 'data', 'compliance', 'advanced']"
+              :key="tab"
+              @click="activeSettingsTab = tab"
               :class="[
-                'h-16 w-16 rounded-2xl flex items-center justify-center text-2xl font-semibold',
-                isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700'
+                'px-4 py-2 rounded-full text-sm font-medium font-quicksand transition-colors capitalize',
+                activeSettingsTab === tab
+                  ? 'bg-blue-600 text-white'
+                  : (isDarkMode ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-600 border border-gray-200')
               ]"
             >
-              {{ pilotInitials }}
-            </div>
-            <div>
-              <p :class="['text-xs uppercase tracking-[0.2em] font-semibold', isDarkMode ? 'text-blue-300' : 'text-blue-600']">
-                Pilot Profile
-              </p>
-              <h2 class="text-2xl font-semibold font-quicksand mt-1">
-                {{ pilotProfile.name || 'Add your name' }}
-              </h2>
-              <p :class="['text-sm mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                {{ pilotProfile.callsign ? `Callsign ${pilotProfile.callsign}` : 'Add a callsign to personalize your profile' }}
-              </p>
-              <p v-if="pilotProfile.homeBase" :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                Home Base · {{ pilotProfile.homeBase.toUpperCase() }}
-              </p>
-            </div>
+              {{ tab === 'data' ? 'Data & Sync' : tab }}
+            </button>
           </div>
-          <button
-            @click="showPilotProfile = false"
-            :class="[
-              'self-start rounded-full p-2 transition-colors',
-              isDarkMode ? 'text-gray-400 hover:text-white hover:bg-gray-800' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
-            ]"
-            aria-label="Close pilot profile"
-          >
-            <Icon name="ri:close-line" size="22" />
-          </button>
+
+          <!-- Desktop Sidebar Tabs -->
+          <nav class="hidden sm:flex flex-col flex-1 p-4 gap-1 overflow-y-auto">
+            <button
+              @click="activeSettingsTab = 'profile'"
+              :class="[
+                'flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
+                activeSettingsTab === 'profile'
+                  ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700')
+                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')
+              ]"
+            >
+              <Icon name="ri:user-smile-line" size="20" />
+              Pilot Profile
+            </button>
+            <button
+              @click="activeSettingsTab = 'preferences'"
+              :class="[
+                'flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
+                activeSettingsTab === 'preferences'
+                  ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700')
+                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')
+              ]"
+            >
+              <Icon name="ri:settings-4-line" size="20" />
+              Preferences
+            </button>
+            <button
+              @click="activeSettingsTab = 'data'"
+              :class="[
+                'flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
+                activeSettingsTab === 'data'
+                  ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700')
+                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')
+              ]"
+            >
+              <Icon name="ri:database-2-line" size="20" />
+              Data & Sync
+            </button>
+            <button
+              @click="activeSettingsTab = 'compliance'"
+              :class="[
+                'flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
+                activeSettingsTab === 'compliance'
+                  ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700')
+                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')
+              ]"
+            >
+              <Icon name="ri:shield-check-line" size="20" />
+              Compliance
+            </button>
+            <button
+              @click="activeSettingsTab = 'advanced'"
+              :class="[
+                'flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
+                activeSettingsTab === 'advanced'
+                  ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700')
+                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')
+              ]"
+            >
+              <Icon name="ri:tools-line" size="20" />
+              Advanced
+            </button>
+
+            <div class="mt-auto pt-4 border-t" :class="isDarkMode ? 'border-gray-800' : 'border-gray-200'">
+              <button
+                @click="handleLogout"
+                :class="[
+                  'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
+                  isDarkMode ? 'text-red-400 hover:bg-red-900/20' : 'text-red-600 hover:bg-red-50'
+                ]"
+              >
+                <Icon name="ri:logout-box-line" size="20" />
+                Sign Out
+              </button>
+            </div>
+          </nav>
         </div>
 
-        <div class="grid gap-6 lg:grid-cols-3">
+        <!-- Main Content Area -->
+        <div class="flex-1 flex flex-col overflow-hidden relative">
+          <!-- Desktop Header -->
+          <div class="hidden sm:flex items-center justify-between p-6 border-b" :class="isDarkMode ? 'border-gray-800' : 'border-gray-200'">
+            <h3 class="text-2xl font-semibold font-quicksand capitalize">
+              {{ activeSettingsTab === 'data' ? 'Data & Sync' : activeSettingsTab }}
+            </h3>
+            <button
+              @click="showSettingsModal = false"
+              :class="[
+                'rounded-full p-2 transition-colors',
+                isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+              ]"
+              aria-label="Close"
+            >
+              <Icon name="ri:close-line" size="24" />
+            </button>
+          </div>
+
+          <!-- Scrollable Tab Content -->
+          <div class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar">
+            
+            <!-- PROFILE TAB -->
+            <div v-show="activeSettingsTab === 'profile'">
+              <div class="flex items-start gap-4 mb-8">
+                <div
+                  :class="[
+                    'h-16 w-16 rounded-2xl flex items-center justify-center text-2xl font-semibold',
+                    isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700'
+                  ]"
+                >
+                  {{ pilotInitials }}
+                </div>
+                <div>
+                  <h2 class="text-2xl font-semibold font-quicksand">
+                    {{ pilotProfile.name || 'Add your name' }}
+                  </h2>
+                  <p :class="['text-sm mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                    {{ pilotProfile.callsign ? `Callsign ${pilotProfile.callsign}` : 'Add a callsign to personalize your profile' }}
+                  </p>
+                  <p v-if="pilotProfile.homeBase" :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                    Home Base · {{ pilotProfile.homeBase.toUpperCase() }}
+                  </p>
+                </div>
+              </div>
+              
+              <!-- REPLACED INNER PROFILE CONTENT -->
+<div class="grid gap-6 lg:grid-cols-3">
           <div
             :class="[
               'space-y-4 rounded-2xl border p-4 sm:p-6',
-              isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-100 border-gray-200'
+              isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
             ]"
           >
             <div class="space-y-2">
@@ -3423,7 +3240,7 @@
                 placeholder="e.g. Jordan Reynolds"
                 :class="[
                   'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                  isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                  isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                 ]"
               />
             </div>
@@ -3438,7 +3255,7 @@
                   placeholder="e.g. MAVERICK"
                   :class="[
                     'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                    isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                    isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                   ]"
                 />
               </div>
@@ -3452,7 +3269,7 @@
                   placeholder="e.g. KAPA"
                   :class="[
                     'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                    isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                    isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                   ]"
                 />
               </div>
@@ -3467,7 +3284,7 @@
                 placeholder="Commercial ASEL · Instrument Airplane · Advanced Ground Instructor"
                 :class="[
                   'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                  isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                  isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                 ]"
               ></textarea>
             </div>
@@ -3481,7 +3298,7 @@
                 placeholder="Instrument currency, mountain flying checkout, CFI prep..."
                 :class="[
                   'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                  isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                  isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                 ]"
               ></textarea>
             </div>
@@ -3495,7 +3312,7 @@
                 placeholder="Preferred instructors, aircraft quirks, reminders..."
                 :class="[
                   'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                  isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                  isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                 ]"
               ></textarea>
             </div>
@@ -3519,7 +3336,7 @@
                       maxlength="10"
                       :class="[
                         'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                        isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                       ]"
                     />
                   </div>
@@ -3533,7 +3350,7 @@
                       placeholder="City, State or City, Country"
                       :class="[
                         'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                        isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                       ]"
                     />
                   </div>
@@ -3549,7 +3366,7 @@
                     placeholder="Street Address"
                     :class="[
                       'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200 mb-2',
-                      isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                      isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                     ]"
                   />
                   <div class="grid gap-2 sm:grid-cols-3">
@@ -3559,7 +3376,7 @@
                       placeholder="City"
                       :class="[
                         'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                        isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                       ]"
                     />
                     <input
@@ -3569,7 +3386,7 @@
                       maxlength="2"
                       :class="[
                         'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200 uppercase',
-                        isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                       ]"
                     />
                     <input
@@ -3579,7 +3396,7 @@
                       maxlength="10"
                       :class="[
                         'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                        isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                       ]"
                     />
                   </div>
@@ -3595,7 +3412,7 @@
                     placeholder="Street Address (optional)"
                     :class="[
                       'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200 mb-2',
-                      isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                      isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                     ]"
                   />
                   <div class="grid gap-2 sm:grid-cols-3">
@@ -3605,7 +3422,7 @@
                       placeholder="City"
                       :class="[
                         'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                        isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                       ]"
                     />
                     <input
@@ -3615,7 +3432,7 @@
                       maxlength="2"
                       :class="[
                         'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200 uppercase',
-                        isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                       ]"
                     />
                     <input
@@ -3625,7 +3442,7 @@
                       maxlength="10"
                       :class="[
                         'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                        isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                       ]"
                     />
                   </div>
@@ -3641,7 +3458,7 @@
                     placeholder="e.g. 12345678"
                     :class="[
                       'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                      isDarkMode ? 'bg-gray-800 border-gray-700 text-white focus:ring-blue-500' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                      isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
                     ]"
                   />
                 </div>
@@ -3656,7 +3473,7 @@
                 :key="card.key"
                 :class="[
                   'rounded-2xl border p-4',
-                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-100 border-gray-200'
+                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
                 ]"
               >
                 <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
@@ -3675,7 +3492,7 @@
               <div
                 :class="[
                   'rounded-2xl border p-4',
-                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-100 border-gray-200'
+                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
                 ]"
               >
                 <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
@@ -3691,7 +3508,7 @@
               <div
                 :class="[
                   'rounded-2xl border p-4',
-                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-100 border-gray-200'
+                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
                 ]"
               >
                 <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
@@ -3710,7 +3527,7 @@
               <div
                 :class="[
                   'rounded-2xl border p-4',
-                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-100 border-gray-200'
+                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
                 ]"
               >
                 <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
@@ -3723,7 +3540,7 @@
               <div
                 :class="[
                   'rounded-2xl border p-4',
-                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-100 border-gray-200'
+                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
                 ]"
               >
                 <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
@@ -3736,7 +3553,7 @@
               <div
                 :class="[
                   'rounded-2xl border p-4',
-                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-100 border-gray-200'
+                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
                 ]"
               >
                 <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
@@ -3751,7 +3568,7 @@
             <div
               :class="[
                 'rounded-2xl border p-4',
-                isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-100 border-gray-200'
+                isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
               ]"
             >
               <p :class="['text-xs font-semibold uppercase tracking-wide mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
@@ -3763,7 +3580,7 @@
                   :key="chip.label"
                   :class="[
                     'px-3 py-1 rounded-full text-sm font-medium',
-                    isDarkMode ? 'bg-gray-800 text-gray-200' : 'bg-gray-100 text-gray-700'
+                    isDarkMode ? 'bg-gray-900 text-gray-200' : 'bg-gray-100 text-gray-700'
                   ]"
                 >
                   {{ chip.label }} · {{ chip.count }}
@@ -3772,7 +3589,7 @@
                   v-if="pilotConditionChips.length === 0"
                   :class="[
                     'px-3 py-1 rounded-full text-sm font-medium',
-                    isDarkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-500'
+                    isDarkMode ? 'bg-gray-900 text-gray-400' : 'bg-gray-100 text-gray-500'
                   ]"
                 >
                   No condition data yet
@@ -3783,7 +3600,7 @@
             <div
               :class="[
                 'rounded-2xl border p-4',
-                isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-100 border-gray-200'
+                isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
               ]"
             >
               <div class="flex items-center justify-between mb-4">
@@ -3813,7 +3630,7 @@
                     'rounded-xl border p-3',
                     passengerCurrency?.isCurrent
                       ? (isDarkMode ? 'bg-green-900/20 border-green-700' : 'bg-green-50 border-green-200')
-                      : (isDarkMode ? 'bg-gray-800/50 border-gray-600' : 'bg-gray-100 border-gray-300')
+                      : (isDarkMode ? 'bg-gray-900/50 border-white/10' : 'bg-white border-gray-200')
                   ]"
                 >
                   <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
@@ -3831,7 +3648,7 @@
                     'rounded-xl border p-3',
                     nightCurrency?.isCurrent
                       ? (isDarkMode ? 'bg-green-900/20 border-green-700' : 'bg-green-50 border-green-200')
-                      : (isDarkMode ? 'bg-gray-800/50 border-gray-600' : 'bg-gray-100 border-gray-300')
+                      : (isDarkMode ? 'bg-gray-900/50 border-white/10' : 'bg-white border-gray-200')
                   ]"
                 >
                   <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
@@ -3849,7 +3666,7 @@
                     'rounded-xl border p-3',
                     instrumentCurrency?.isCurrent
                       ? (isDarkMode ? 'bg-green-900/20 border-green-700' : 'bg-green-50 border-green-200')
-                      : (isDarkMode ? 'bg-gray-800/50 border-gray-600' : 'bg-gray-100 border-gray-300')
+                      : (isDarkMode ? 'bg-gray-900/50 border-white/10' : 'bg-white border-gray-200')
                   ]"
                 >
                   <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
@@ -3868,7 +3685,7 @@
             <div
               :class="[
                 'rounded-2xl border p-4 space-y-4',
-                isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-100 border-gray-200'
+                isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
               ]"
             >
               <div class="flex items-center justify-between">
@@ -3933,6 +3750,329 @@
             </div>
           </div>
         </div>
+        
+            </div>
+
+            <!-- PREFERENCES TAB -->
+            <div v-show="activeSettingsTab === 'preferences'" class="space-y-8 max-w-3xl">
+              <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+                <h4 :class="['text-sm font-semibold uppercase tracking-wide mb-4', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Theme</h4>
+                <div
+                  class="inline-flex rounded-full border text-sm font-quicksand overflow-hidden"
+                  :class="isDarkMode ? 'border-white/10 bg-black/20 shadow-inner' : 'border-gray-200 bg-gray-50'"
+                  role="group"
+                  aria-label="Theme selection"
+                >
+                  <button
+                    type="button"
+                    class="px-6 py-2 transition-colors"
+                    :class="theme === 'dark'
+                      ? 'bg-blue-600 text-white'
+                      : isDarkMode
+                        ? 'text-gray-300 hover:bg-gray-700'
+                        : 'text-gray-700 hover:bg-gray-200'"
+                    @click="setTheme('dark')"
+                  >
+                    Dark
+                  </button>
+                  <button
+                    type="button"
+                    class="px-6 py-2 border-l transition-colors"
+                    :class="[
+                      theme === 'light'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : isDarkMode
+                          ? 'text-gray-300 hover:bg-gray-700 border-gray-600'
+                          : 'text-gray-700 hover:bg-gray-200 border-gray-300'
+                    ]"
+                    @click="setTheme('light')"
+                  >
+                    Light
+                  </button>
+                </div>
+              </div>
+
+              <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+                <h4 :class="['text-sm font-semibold uppercase tracking-wide mb-4', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Time Format</h4>
+                
+                <div class="space-y-4">
+                  <div>
+                    <div :class="['font-quicksand text-sm mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-600']">Clock Format</div>
+                    <div class="flex gap-2">
+                      <button
+                        type="button"
+                        @click="setClockFormat('24')"
+                        :class="[
+                          'px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
+                          clockFormat === '24'
+                            ? 'bg-blue-600 text-white'
+                            : (isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')
+                        ]"
+                      >
+                        24-Hour
+                      </button>
+                      <button
+                        type="button"
+                        @click="setClockFormat('12')"
+                        :class="[
+                          'px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
+                          clockFormat === '12'
+                            ? 'bg-blue-600 text-white'
+                            : (isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')
+                        ]"
+                      >
+                        12-Hour
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div :class="['font-quicksand text-sm mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-600']">Timezone</div>
+                    <div class="flex gap-2">
+                      <button
+                        type="button"
+                        @click="setClockZone('UTC')"
+                        :class="[
+                          'px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
+                          clockZone === 'UTC'
+                            ? 'bg-blue-600 text-white'
+                            : (isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')
+                        ]"
+                      >
+                        UTC
+                      </button>
+                      <button
+                        type="button"
+                        @click="setClockZone('Local')"
+                        :class="[
+                          'px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
+                          clockZone === 'Local'
+                            ? 'bg-blue-600 text-white'
+                            : (isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')
+                        ]"
+                      >
+                        Local Time
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+                <h4 :class="['text-sm font-semibold uppercase tracking-wide mb-4', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Customize Totals Overview</h4>
+                <p :class="['text-sm mb-4', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                  Select which metrics are displayed in the main totals overview bar.
+                </p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                  <label
+                    v-for="metric in availableTotalsMetrics"
+                    :key="metric.key"
+                    :class="[
+                      'flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors',
+                      isDarkMode ? 'border-gray-700 hover:bg-white/5' : 'border-gray-200 hover:bg-gray-50'
+                    ]"
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="selectedTotalsMetrics.includes(metric.key)"
+                      @change="toggleTotalsMetric(metric.key)"
+                      :disabled="metric.key === 'totalTime'"
+                      :class="[
+                        'rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-5 h-5',
+                        isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white'
+                      ]"
+                    />
+                    <span :class="['text-sm font-quicksand font-medium', isDarkMode ? 'text-gray-200' : 'text-gray-700']">
+                      {{ metric.label }}
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- DATA & SYNC TAB -->
+            <div v-show="activeSettingsTab === 'data'" class="space-y-8 max-w-3xl">
+              <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+                <h4 :class="['text-sm font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Sync Status</h4>
+                
+                <div class="flex flex-col gap-4">
+                  <div class="flex flex-wrap items-center gap-3">
+                    <div
+                      :class="[
+                        'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all',
+                        isOnline
+                          ? (isSyncing
+                              ? (isDarkMode ? 'bg-yellow-600/20 text-yellow-400 border border-yellow-600/50' : 'bg-yellow-100 text-yellow-700 border border-yellow-300')
+                              : (isDarkMode ? 'bg-green-600/20 text-green-400 border border-green-600/50' : 'bg-green-100 text-green-700 border border-green-300'))
+                          : (isDarkMode ? 'bg-red-600/20 text-red-400 border border-red-600/50' : 'bg-red-100 text-red-700 border border-red-300')
+                      ]"
+                    >
+                      <Icon
+                        :name="syncStatusIcon"
+                        :class="[isSyncing ? 'animate-spin' : '', 'text-base']"
+                      />
+                      <span>{{ syncStatusText }}</span>
+                    </div>
+
+                    <div
+                      v-if="queueLength > 0"
+                      :class="[
+                        'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-quicksand font-semibold',
+                        isDarkMode ? 'bg-orange-600/20 text-orange-400 border border-orange-600/50' : 'bg-orange-100 text-orange-700 border border-orange-300'
+                      ]"
+                    >
+                      <Icon name="ri:time-line" size="16" />
+                      <span>{{ queueLength }} pending operations</span>
+                    </div>
+
+                    <div
+                      v-if="syncError"
+                      :class="[
+                        'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-quicksand',
+                        isDarkMode ? 'bg-red-600/20 text-red-400 border border-red-600/50' : 'bg-red-100 text-red-700 border border-red-300'
+                      ]"
+                    >
+                      <Icon name="ri:error-warning-line" size="16" />
+                      <span>Sync Error</span>
+                    </div>
+                  </div>
+
+                  <button
+                    v-if="queueLength > 0 && isOnline"
+                    type="button"
+                    :disabled="isSyncing"
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-colors disabled:opacity-50 w-fit"
+                    :class="isDarkMode ? 'bg-blue-600/20 text-blue-400 border border-blue-600/50 hover:bg-blue-600/30' : 'bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200'"
+                    @click="retryFailed()"
+                  >
+                    <Icon name="ri:refresh-line" size="16" :class="{ 'animate-spin': isSyncing }" />
+                    <span>Retry sync</span>
+                  </button>
+                </div>
+              </div>
+
+              <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+                <h4 :class="['text-sm font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Import Data</h4>
+                <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                  Import logbook entries from CSV or JSON format. Duplicates (same date and registration) will be skipped.
+                </p>
+                <div 
+                  class="p-6 border-2 border-dashed rounded-xl transition-colors text-center" 
+                  :class="[
+                    isDragOverImport 
+                      ? (isDarkMode ? 'border-green-500 bg-green-900/20' : 'border-green-500 bg-green-50') 
+                      : (isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-300 bg-gray-50')
+                  ]"
+                  @dragover.prevent="handleImportDragOver"
+                  @dragenter.prevent="handleImportDragEnter"
+                  @dragleave="handleImportDragLeave"
+                  @drop.prevent="handleImportDrop"
+                >
+                  <Icon name="ri:upload-cloud-2-line" size="32" :class="['mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']" />
+                  <p :class="['text-sm font-medium mb-4', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+                    {{ isDragOverImport ? 'Drop file here' : 'Drag and drop your file here' }}
+                  </p>
+                  <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      @click="() => csvFileInput?.click()"
+                      :class="[
+                        'w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all',
+                        isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 shadow-sm'
+                      ]"
+                    >
+                      <Icon name="ri:file-excel-2-line" size="16" class="mr-2 inline" />
+                      Browse CSV
+                    </button>
+                    <button
+                      type="button"
+                      @click="() => jsonFileInput?.click()"
+                      :class="[
+                        'w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all',
+                        isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 shadow-sm'
+                      ]"
+                    >
+                      <Icon name="ri:file-code-line" size="16" class="mr-2 inline" />
+                      Browse JSON
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+                <h4 :class="['text-sm font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Export Data</h4>
+                <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                  Download a backup of your entire logbook or generate forms.
+                  <span class="block mt-1 font-medium">{{ logEntries.length }} total {{ logEntries.length === 1 ? 'entry' : 'entries' }}</span>
+                </p>
+                <div class="flex flex-col sm:flex-row items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    @click="openExportDialog"
+                    :disabled="logEntries.length === 0"
+                    :class="[
+                      'w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all',
+                      logEntries.length === 0
+                        ? (isDarkMode ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed')
+                        : (isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm')
+                    ]"
+                  >
+                    <Icon name="ri:download-cloud-2-line" size="16" class="mr-2 inline" />
+                    Export Logbook
+                  </button>
+                  <button
+                    type="button"
+                    @click="showForm8710Modal = true"
+                    :disabled="logEntries.length === 0"
+                    :class="[
+                      'w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all',
+                      logEntries.length === 0
+                        ? (isDarkMode ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed')
+                        : (isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 shadow-sm')
+                    ]"
+                  >
+                    <Icon name="ri:file-pdf-line" size="16" class="mr-2 inline" />
+                    Generate 8710 Form
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- COMPLIANCE TAB -->
+            <div v-show="activeSettingsTab === 'compliance'" class="max-w-4xl space-y-6">
+              <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                Track your electronic logbook compliance with AC 120-78B and 14 CFR Part 61.
+              </p>
+              <ComplianceChecklist :is-dark-mode="isDarkMode" />
+            </div>
+
+            <!-- ADVANCED TAB -->
+            <div v-show="activeSettingsTab === 'advanced'" class="space-y-8 max-w-3xl">
+              <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+                <h4 :class="['text-sm font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Developer Tools</h4>
+                <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                  Access advanced tools, system logs, and data management utilities.
+                </p>
+                <div class="pt-2">
+                  <NuxtLink
+                    to="/developers"
+                    @click="showSettingsModal = false"
+                    :class="[
+                      'inline-flex items-center px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all',
+                      isDarkMode 
+                        ? 'bg-gray-800 hover:bg-gray-700 text-white' 
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-900 shadow-sm'
+                    ]"
+                  >
+                    <Icon name="ri:code-s-slash-line" size="18" class="mr-2" />
+                    Open Developer Console
+                  </NuxtLink>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
       </div>
     </div>
 
@@ -3963,7 +4103,7 @@
             @click="showForm8710Modal = false"
             :class="[
               'rounded-full p-2 transition-colors',
-              isDarkMode ? 'text-gray-400 hover:text-white hover:bg-gray-800' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+              isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
             ]"
             aria-label="Close"
           >
@@ -4002,7 +4142,7 @@
         <div
           :class="[
             'rounded-2xl border p-6 space-y-4',
-            isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-gray-100 border-gray-200'
+            isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
           ]"
         >
           <h3 :class="['text-lg font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
@@ -4053,7 +4193,7 @@
                 :key="category.category"
                 :class="[
                   'rounded-lg border p-3',
-                  isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'
+                  isDarkMode ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' : 'bg-white border-gray-200'
                 ]"
               >
                 <div class="flex items-center justify-between">
@@ -4074,19 +4214,19 @@
               Entry Statistics
             </h4>
             <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <div :class="['rounded-lg border p-3', isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200']">
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' : 'bg-white border-gray-200']">
                 <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Total Entries</p>
                 <p :class="['text-lg font-semibold', isDarkMode ? 'text-white' : 'text-gray-900']">
                   {{ form8710PreviewData.complianceMetadata.totalEntries }}
                 </p>
               </div>
-              <div :class="['rounded-lg border p-3', isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200']">
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' : 'bg-white border-gray-200']">
                 <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Imported</p>
                 <p :class="['text-lg font-semibold', isDarkMode ? 'text-white' : 'text-gray-900']">
                   {{ form8710PreviewData.complianceMetadata.importedEntries }}
                 </p>
               </div>
-              <div :class="['rounded-lg border p-3', isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200']">
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' : 'bg-white border-gray-200']">
                 <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Manual</p>
                 <p :class="['text-lg font-semibold', isDarkMode ? 'text-white' : 'text-gray-900']">
                   {{ form8710PreviewData.complianceMetadata.manualEntries }}
@@ -4120,7 +4260,7 @@
             @click="showForm8710Modal = false"
             :class="[
               'px-4 py-2 rounded-lg font-quicksand transition-colors',
-              isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+              isDarkMode ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20' : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
             ]"
           >
             Cancel
@@ -4172,7 +4312,7 @@
                 @click="showForm8710View = false"
                 :class="[
                   'px-4 py-2 rounded-lg font-quicksand transition-colors',
-                  isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
+                  isDarkMode ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20' : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
                 ]"
               >
                 Close
@@ -4184,7 +4324,7 @@
           <div
             :class="[
               'rounded-2xl border p-6 sm:p-8 space-y-8 print:p-0 print:border-0 print:rounded-none print:shadow-none',
-              isDarkMode ? 'bg-gray-800 border-gray-700 print:bg-white print:text-black' : 'bg-white border-gray-300'
+              isDarkMode ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40 print:bg-white print:text-black print:shadow-none' : 'bg-white border-gray-300'
             ]"
             id="form8710-content"
           >
@@ -4331,7 +4471,7 @@
                       :key="category.category"
                       :class="isDarkMode ? 'hover:bg-gray-700/50 print:hover:bg-transparent' : 'hover:bg-gray-50'"
                     >
-                      <td :class="['px-2 py-2 border font-medium sticky left-0 z-10', isDarkMode ? 'border-gray-600 text-gray-300 bg-gray-800 print:text-black print:bg-white print:border-gray-400' : 'border-gray-300 text-gray-700 bg-white']">
+                      <td :class="['px-2 py-2 border font-medium sticky left-0 z-10', isDarkMode ? 'border-white/10 text-gray-300 bg-gray-900 shadow-md shadow-black/40 print:text-black print:bg-white print:border-gray-400' : 'border-gray-300 text-gray-700 bg-white']">
                         {{ getCategoryDisplayName(category.category) }}
                       </td>
                       <td :class="['px-2 py-2 border text-center font-mono', isDarkMode ? 'border-gray-600 text-gray-300 print:text-black print:border-gray-400' : 'border-gray-300 text-gray-700']">
@@ -4441,7 +4581,7 @@
                       <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
                         Source Type
                       </label>
-                      <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-800 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-white border-gray-300 text-gray-900']">
+                      <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner print:bg-white print:text-black print:border-gray-400' : 'bg-white border-gray-300 text-gray-900']">
                         {{ batch.sourceType.toUpperCase() }}
                       </div>
                     </div>
@@ -4450,7 +4590,7 @@
                       <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
                         Entry Count
                       </label>
-                      <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-800 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-white border-gray-300 text-gray-900']">
+                      <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner print:bg-white print:text-black print:border-gray-400' : 'bg-white border-gray-300 text-gray-900']">
                         {{ batch.entryCount }}
                       </div>
                     </div>
@@ -4459,7 +4599,7 @@
                       <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
                         Batch ID
                       </label>
-                      <div :class="['px-3 py-2 rounded border font-mono text-xs', isDarkMode ? 'bg-gray-800 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-white border-gray-300 text-gray-900']">
+                      <div :class="['px-3 py-2 rounded border font-mono text-xs', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner print:bg-white print:text-black print:border-gray-400' : 'bg-white border-gray-300 text-gray-900']">
                         {{ batch.batchId }}
                       </div>
                     </div>
@@ -4468,7 +4608,7 @@
                       <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
                         Import Date
                       </label>
-                      <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-800 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-white border-gray-300 text-gray-900']">
+                      <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner print:bg-white print:text-black print:border-gray-400' : 'bg-white border-gray-300 text-gray-900']">
                         {{ formatDisplayDate(batch.importedAt) }}
                       </div>
                     </div>
@@ -4477,7 +4617,7 @@
                       <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
                         Entry Date Range
                       </label>
-                      <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-800 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-white border-gray-300 text-gray-900']">
+                      <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner print:bg-white print:text-black print:border-gray-400' : 'bg-white border-gray-300 text-gray-900']">
                         {{ formatDisplayDate(batch.dateRange.start) }} - {{ formatDisplayDate(batch.dateRange.end) }}
                       </div>
                     </div>
@@ -4505,8 +4645,8 @@
         :class="[
           'relative w-full max-w-lg rounded-2xl border shadow-2xl transition-colors duration-300',
           isDarkMode 
-            ? 'bg-gray-800 border-gray-700' 
-            : 'bg-gray-200 border-gray-300'
+            ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' 
+            : 'bg-white border-gray-200 shadow-sm'
         ]"
         @click.stop
       >
@@ -4637,7 +4777,7 @@
                       </span>
                     </div>
                     <div class="inline-flex gap-1 items-center">
-                      <input v-model="aircraftModalNewTagInput" type="text" placeholder="Or type new tag" :class="['w-32 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addEntityTag('aircraft', currentAircraftInfo.registration, aircraftModalNewTagInput); aircraftModalNewTagInput = ''; aircraftModalShowAddTag = false" />
+                      <input v-model="aircraftModalNewTagInput" type="text" placeholder="Or type new tag" :class="['w-32 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addEntityTag('aircraft', currentAircraftInfo.registration, aircraftModalNewTagInput); aircraftModalNewTagInput = ''; aircraftModalShowAddTag = false" />
                       <button type="button" @click="addEntityTag('aircraft', currentAircraftInfo.registration, aircraftModalNewTagInput); aircraftModalNewTagInput = ''; aircraftModalShowAddTag = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
                       <button type="button" @click="aircraftModalShowAddTag = false; aircraftModalNewTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
                     </div>
@@ -4672,8 +4812,8 @@
         :class="[
           'relative w-full max-w-lg rounded-2xl border shadow-2xl transition-colors duration-300',
           isDarkMode 
-            ? 'bg-gray-800 border-gray-700' 
-            : 'bg-gray-200 border-gray-300'
+            ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' 
+            : 'bg-white border-gray-200 shadow-sm'
         ]"
         @click.stop
       >
@@ -4813,8 +4953,8 @@
         :class="[
           'relative w-full max-w-lg rounded-2xl border shadow-2xl transition-colors duration-300',
           isDarkMode 
-            ? 'bg-gray-800 border-gray-700' 
-            : 'bg-gray-200 border-gray-300'
+            ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' 
+            : 'bg-white border-gray-200 shadow-sm'
         ]"
         @click.stop
       >
@@ -4911,7 +5051,7 @@
                     </span>
                   </div>
                   <div class="inline-flex gap-1 items-center">
-                    <input v-model="crewModalNewTagInput" type="text" placeholder="Or type new tag" :class="['w-32 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addEntityTag('person', currentCrewName, crewModalNewTagInput); crewModalNewTagInput = ''; crewModalShowAddTag = false" />
+                    <input v-model="crewModalNewTagInput" type="text" placeholder="Or type new tag" :class="['w-32 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addEntityTag('person', currentCrewName, crewModalNewTagInput); crewModalNewTagInput = ''; crewModalShowAddTag = false" />
                     <button type="button" @click="addEntityTag('person', currentCrewName, crewModalNewTagInput); crewModalNewTagInput = ''; crewModalShowAddTag = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
                     <button type="button" @click="crewModalShowAddTag = false; crewModalNewTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
                   </div>
@@ -5011,7 +5151,7 @@
       <div
         :class="[
           'rounded-lg border shadow-lg py-1 min-w-[160px]',
-          isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-300'
+          isDarkMode ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' : 'bg-white border-gray-300'
         ]"
       >
         <button
@@ -5041,8 +5181,8 @@
         :class="[
           'relative w-full max-w-md rounded-2xl border shadow-2xl transition-colors duration-300',
           isDarkMode 
-            ? 'bg-gray-800 border-gray-700' 
-            : 'bg-gray-200 border-gray-300'
+            ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' 
+            : 'bg-white border-gray-200 shadow-sm'
         ]"
         @click.stop
       >
@@ -5141,7 +5281,7 @@
                     </span>
                   </div>
                   <div class="inline-flex gap-1 items-center">
-                    <input v-model="editFamilyNewTagInput" type="text" placeholder="Or type new tag" :class="['w-32 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addEntityTag('family', renameFamilyOldName, editFamilyNewTagInput); editFamilyNewTagInput = ''; editFamilyShowAddTag = false" />
+                    <input v-model="editFamilyNewTagInput" type="text" placeholder="Or type new tag" :class="['w-32 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addEntityTag('family', renameFamilyOldName, editFamilyNewTagInput); editFamilyNewTagInput = ''; editFamilyShowAddTag = false" />
                     <button type="button" @click="addEntityTag('family', renameFamilyOldName, editFamilyNewTagInput); editFamilyNewTagInput = ''; editFamilyShowAddTag = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
                     <button type="button" @click="editFamilyShowAddTag = false; editFamilyNewTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
                   </div>
@@ -5189,8 +5329,8 @@
         :class="[
           'relative w-full max-w-4xl max-h-[90vh] rounded-2xl border shadow-2xl transition-colors duration-300 flex flex-col',
           isDarkMode 
-            ? 'bg-gray-800 border-gray-700' 
-            : 'bg-gray-200 border-gray-300'
+            ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' 
+            : 'bg-white border-gray-200 shadow-sm'
         ]"
         @click.stop
       >
@@ -5482,7 +5622,7 @@
             :class="[
               'px-4 py-2 rounded-lg font-quicksand transition-colors',
               isDarkMode 
-                ? 'bg-gray-700 hover:bg-gray-600 text-white' 
+                ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20' 
                 : 'bg-gray-300 hover:bg-gray-400 text-gray-900'
             ]"
           >
@@ -5512,8 +5652,8 @@
       :class="[
         'relative w-full max-w-md rounded-2xl border shadow-2xl transition-colors duration-300',
         isDarkMode 
-          ? 'bg-gray-800 border-gray-700' 
-          : 'bg-gray-200 border-gray-300'
+          ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' 
+          : 'bg-white border-gray-200 shadow-sm'
       ]"
       @click.stop
     >
@@ -5570,7 +5710,7 @@
           :class="[
             'px-4 py-2 rounded-lg font-quicksand transition-colors',
             isDarkMode 
-              ? 'bg-gray-700 hover:bg-gray-600 text-white' 
+              ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20' 
               : 'bg-gray-300 hover:bg-gray-400 text-gray-900'
           ]"
         >
@@ -5599,8 +5739,8 @@
       :class="[
         'relative w-full max-w-md rounded-2xl border shadow-2xl transition-colors duration-300',
         isDarkMode 
-          ? 'bg-gray-800 border-gray-700' 
-          : 'bg-gray-200 border-gray-300'
+          ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' 
+          : 'bg-white border-gray-200 shadow-sm'
       ]"
       @click.stop
     >
@@ -5657,7 +5797,7 @@
           :class="[
             'px-4 py-2 rounded-lg font-quicksand transition-colors',
             isDarkMode 
-              ? 'bg-gray-700 hover:bg-gray-600 text-white' 
+              ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20' 
               : 'bg-gray-300 hover:bg-gray-400 text-gray-900'
           ]"
         >
@@ -5675,6 +5815,274 @@
       </div>
     </div>
   </div>
+
+  <!-- Export Dialog (trust-first: scope + preview) -->
+  <div
+    v-if="showExportDialog"
+    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    @click.self="closeExportDialog"
+  >
+    <div
+      :class="[
+        'relative w-full max-w-4xl max-h-[90vh] rounded-2xl border shadow-2xl transition-colors duration-300 flex flex-col',
+        isDarkMode 
+          ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' 
+          : 'bg-white border-gray-200 shadow-sm'
+      ]"
+      @click.stop
+    >
+      <div class="flex items-center justify-between p-6 border-b flex-shrink-0" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+        <div>
+          <h3 :class="['text-xl font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+            Export Logbook
+          </h3>
+          <p :class="['text-sm font-quicksand mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+            Choose what to export and review the entries before downloading.
+          </p>
+        </div>
+        <button
+          @click="closeExportDialog"
+          :class="[
+            'p-1 rounded-lg transition-colors',
+            isDarkMode 
+              ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-300'
+          ]"
+          aria-label="Close"
+        >
+          <Icon name="ri:close-line" size="24" />
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+        <!-- Scope -->
+        <div>
+          <h4 :class="['text-lg font-semibold font-quicksand mb-3', isDarkMode ? 'text-white' : 'text-gray-900']">
+            What to export
+          </h4>
+          <div class="flex flex-wrap gap-4">
+            <label :class="['flex items-center gap-2 cursor-pointer', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              <input type="radio" v-model="exportScope" value="all" class="rounded" />
+              <span class="font-quicksand">All entries</span>
+            </label>
+            <label :class="['flex items-center gap-2 cursor-pointer', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              <input type="radio" v-model="exportScope" value="month" class="rounded" />
+              <span class="font-quicksand">By month</span>
+            </label>
+            <label :class="['flex items-center gap-2 cursor-pointer', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              <input type="radio" v-model="exportScope" value="dateRange" class="rounded" />
+              <span class="font-quicksand">By date range</span>
+            </label>
+            <label :class="['flex items-center gap-2 cursor-pointer', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              <input type="radio" v-model="exportScope" value="aircraft" class="rounded" />
+              <span class="font-quicksand">By aircraft</span>
+            </label>
+          </div>
+          <div v-if="exportScope === 'month'" class="mt-3 flex flex-wrap items-center gap-3">
+            <select
+              v-model.number="exportMonth.month"
+              :class="['rounded border px-2 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
+            >
+              <option v-for="m in 12" :key="m" :value="m">{{ ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1] }}</option>
+            </select>
+            <input
+              v-model.number="exportMonth.year"
+              type="number"
+              min="1900"
+              max="2100"
+              :class="['w-24 rounded border px-2 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
+              placeholder="Year"
+            />
+          </div>
+          <div v-if="exportScope === 'dateRange'" class="mt-3 flex flex-wrap items-center gap-3">
+            <input
+              v-model="exportDateStart"
+              type="date"
+              :class="['rounded border px-2 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
+            />
+            <span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">to</span>
+            <input
+              v-model="exportDateEnd"
+              type="date"
+              :class="['rounded border px-2 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
+            />
+          </div>
+          <div v-if="exportScope === 'aircraft'" class="mt-3 max-h-40 overflow-y-auto rounded-lg border p-2" :class="[isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-gray-50']">
+            <div class="flex flex-wrap gap-2">
+              <label
+                v-for="a in uniqueAircraftForExport"
+                :key="a.registration"
+                :class="['inline-flex items-center gap-2 rounded border px-2 py-1 text-sm font-quicksand cursor-pointer', exportSelectedAircraft.includes(a.registration) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30' : 'border-blue-500 bg-blue-50') : (isDarkMode ? 'border-gray-600 text-gray-300' : 'border-gray-300 text-gray-700')]"
+              >
+                <input type="checkbox" :value="a.registration" v-model="exportSelectedAircraft" class="rounded" />
+                <span>{{ a.label }}</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preview -->
+        <div v-if="exportPreviewStatistics">
+          <h4 :class="['text-lg font-semibold font-quicksand mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
+            Summary
+          </h4>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+              <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Entries to export</div>
+              <div :class="['text-2xl font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ exportPreviewStatistics.totalEntries }}</div>
+            </div>
+            <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+              <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Total time</div>
+              <div :class="['text-2xl font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ exportPreviewStatistics.totalFlightTime.toFixed(1) }}h</div>
+            </div>
+            <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+              <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">PIC</div>
+              <div :class="['text-2xl font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ exportPreviewStatistics.picTime.toFixed(1) }}h</div>
+            </div>
+            <div :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+              <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Night</div>
+              <div :class="['text-2xl font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ exportPreviewStatistics.nightTime.toFixed(1) }}h</div>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+            <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+              <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">XC</div>
+              <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ exportPreviewStatistics.crossCountryTime.toFixed(1) }}h</div>
+            </div>
+            <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+              <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Instrument</div>
+              <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ (exportPreviewStatistics.actualInstrumentTime + exportPreviewStatistics.simulatedInstrumentTime).toFixed(1) }}h</div>
+            </div>
+            <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+              <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Landings</div>
+              <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ exportPreviewStatistics.totalLandings }}</div>
+            </div>
+            <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+              <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Approaches</div>
+              <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ exportPreviewStatistics.totalApproaches }}</div>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div>
+              <h4 :class="['text-sm font-semibold font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Date range</h4>
+              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <span :class="['text-sm font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  {{ exportPreviewStatistics.dateRange.earliest ? formatDisplayDate(exportPreviewStatistics.dateRange.earliest) : 'N/A' }}
+                  <span :class="[isDarkMode ? 'text-gray-500' : 'text-gray-400']"> → </span>
+                  {{ exportPreviewStatistics.dateRange.latest ? formatDisplayDate(exportPreviewStatistics.dateRange.latest) : 'N/A' }}
+                </span>
+              </div>
+            </div>
+            <div>
+              <h4 :class="['text-sm font-semibold font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Aircraft ({{ Object.keys(exportPreviewStatistics.aircraftBreakdown).length }})</h4>
+              <div :class="['rounded-lg border p-3 max-h-32 overflow-y-auto', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
+                <div v-for="(count, aircraft) in exportPreviewStatistics.aircraftBreakdown" :key="aircraft"
+                     :class="['text-xs font-quicksand py-1', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+                  {{ aircraft }}: {{ count }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4">
+            <h4 :class="['text-lg font-semibold font-quicksand mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
+              Entries to export ({{ exportFilteredEntries.length }})
+            </h4>
+            <div class="space-y-2 max-h-96 overflow-y-auto">
+              <div
+                v-for="entry in exportFilteredEntries"
+                :key="entry.id"
+                :class="[
+                  'rounded-lg border p-3 cursor-pointer transition-colors',
+                  isDarkMode 
+                    ? 'border-gray-700 bg-gray-900/30 hover:bg-gray-900/50' 
+                    : 'border-gray-300 bg-white hover:bg-gray-50'
+                ]"
+                @click="toggleExportPreviewEntry(entry.id)"
+              >
+                <div class="flex items-center justify-between">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-3">
+                      <div :class="['text-sm font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ formatDisplayDate(entry.date) }}</div>
+                      <div :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">{{ entry.registration }}</div>
+                      <div :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">{{ entry.aircraftMakeModel }}</div>
+                    </div>
+                    <div class="flex items-center gap-2 mt-1">
+                      <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">{{ entry.departure }} → {{ entry.destination }}</div>
+                      <div :class="['text-xs font-mono', isDarkMode ? 'text-blue-400' : 'text-blue-600']">{{ (entry.flightTime.total ?? 0).toFixed(1) }}h</div>
+                    </div>
+                  </div>
+                  <Icon 
+                    :name="expandedExportPreviewEntries.has(entry.id) ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'" 
+                    size="20" 
+                    :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+                  />
+                </div>
+                <div v-if="expandedExportPreviewEntries.has(entry.id)" class="mt-3 pt-3 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+                  <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Role:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ roleDisplayLabel(entry.role) }}</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">PIC:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.flightTime.pic ?? 0).toFixed(1) }}h</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Night:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.flightTime.night ?? 0).toFixed(1) }}h</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">XC:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.flightTime.crossCountry ?? 0).toFixed(1) }}h</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Landings:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.performance.dayLandings ?? 0) + (entry.performance.nightLandings ?? 0) }}</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Approaches:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ getTotalApproachCount(entry.performance) }}</span></div>
+                    <div v-if="(entry.tags || []).length" class="col-span-2 flex flex-wrap gap-1">
+                      <span v-for="t in (entry.tags || [])" :key="t" :class="['inline-block rounded px-1.5 py-0.5 text-xs', isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700']">{{ t }}</span>
+                    </div>
+                  </div>
+                  <div v-if="entry.remarks" class="mt-2 text-xs" :class="[isDarkMode ? 'text-gray-300' : 'text-gray-600']">{{ entry.remarks }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-else class="rounded-lg border p-6 text-center" :class="[isDarkMode ? 'border-gray-700 bg-gray-900/30 text-gray-400' : 'border-gray-300 bg-gray-50 text-gray-600']">
+          No entries match this scope. Adjust filters or choose "All entries".
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 p-6 border-t flex-shrink-0" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+        <button
+          @click="closeExportDialog"
+          :class="[
+            'px-4 py-2 rounded-lg font-quicksand transition-colors',
+            isDarkMode 
+              ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20' 
+              : 'bg-gray-300 hover:bg-gray-400 text-gray-900'
+          ]"
+        >
+          Cancel
+        </button>
+        <button
+          :disabled="!exportPreviewStatistics || exportFilteredEntries.length === 0"
+          @click="exportToCSV(exportFilteredEntries); closeExportDialog()"
+          :class="[
+            'px-4 py-2 rounded-lg font-quicksand transition-colors flex items-center gap-2',
+            !exportPreviewStatistics || exportFilteredEntries.length === 0
+              ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
+              : 'bg-blue-600 hover:bg-blue-700 text-white'
+          ]"
+        >
+          <Icon name="ri:file-excel-2-line" size="18" />
+          Export as CSV
+        </button>
+        <button
+          :disabled="!exportPreviewStatistics || exportFilteredEntries.length === 0"
+          @click="exportToJSON(exportFilteredEntries); closeExportDialog()"
+          :class="[
+            'px-4 py-2 rounded-lg font-quicksand transition-colors flex items-center gap-2',
+            !exportPreviewStatistics || exportFilteredEntries.length === 0
+              ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
+              : 'bg-blue-600 hover:bg-blue-700 text-white'
+          ]"
+        >
+          <Icon name="ri:file-code-line" size="18" />
+          Export as JSON
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- End Main Content -->
   
   <!-- Loading State -->
@@ -5843,6 +6251,18 @@ const syncStatusTitle = computed(() => {
 })
 
 const showAuthModal = ref(false)
+const showUpdatesBanner = ref(true)
+function dismissUpdates() {
+  showUpdatesBanner.value = false
+}
+const showRegulatorySnapshot = ref(true)
+function dismissSnapshot() {
+  showRegulatorySnapshot.value = false
+}
+function showAllUpdates() {
+  showUpdatesBanner.value = true
+  showRegulatorySnapshot.value = true
+}
 const isMigrating = ref(false)
 const migrationProgress = ref({ step: '', current: 0, total: 0 })
 
@@ -6803,6 +7223,14 @@ const isEntryFormOpen = ref(false)
 const lastSavedEntry = ref<LogEntry | null>(null)
 const isCommercialMode = ref(false)
 
+function toggleCommercialMode(): void {
+  const next = !isCommercialMode.value
+  if (next && !newEntry.oooi) {
+    newEntry.oooi = createEmptyOOOI()
+  }
+  isCommercialMode.value = next
+}
+
 // Sticky header refs
 const rootScrollContainerRef = ref<HTMLElement | null>(null)
 const tableHeaderRef = ref<HTMLElement | null>(null)
@@ -6836,23 +7264,40 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
     const copy = JSON.parse(JSON.stringify(entry))
     // Normalize the date for the input field
     copy.date = normalizeDateForInput(entry.date)
-    if (!copy.oooi) {
-      copy.oooi = createEmptyOOOI()
-    }
     if (!copy.performance.approaches?.length) {
       copy.performance.approaches = getApproachesFromPerformance(copy.performance)
     }
     if (!Array.isArray(copy.tags)) copy.tags = []
     inlineEditEntry.value = copy
-    // Auto-enable commercial mode if OOOI data exists
-    if (copy.oooi && Object.values(copy.oooi).some(v => v)) {
-      isInlineCommercialMode.value = true
-    } else {
-      isInlineCommercialMode.value = false
-    }
+    // Auto-enable commercial mode only when existing OOOI time fields are present
+    const hasOOOITimes =
+      !!copy.oooi &&
+      !!(
+        (copy.oooi.out && copy.oooi.out.trim()) ||
+        (copy.oooi.off && copy.oooi.off.trim()) ||
+        (copy.oooi.on && copy.oooi.on.trim()) ||
+        (copy.oooi.in && copy.oooi.in.trim())
+      )
+    isInlineCommercialMode.value = hasOOOITimes
     // Open Simulator section if entry has sim time
     showInlineSimSection.value = getSelectedSimType(copy) !== ''
   }
+}
+
+function ensureInlineOOOI(): void {
+  if (!inlineEditEntry.value) return
+  if (!inlineEditEntry.value.oooi) {
+    inlineEditEntry.value.oooi = createEmptyOOOI()
+  }
+}
+
+function toggleInlineOOOIMode(): void {
+  if (!inlineEditEntry.value) return
+  const next = !isInlineCommercialMode.value
+  if (next && !inlineEditEntry.value.oooi) {
+    inlineEditEntry.value.oooi = createEmptyOOOI()
+  }
+  isInlineCommercialMode.value = next
 }
 
 async function saveInlineEdit(): Promise<void> {
@@ -6900,11 +7345,14 @@ async function saveInlineEdit(): Promise<void> {
       performanceFields.forEach((field) => {
         (base as any)[field.key] = inlineEditEntry.value!.performance[field.key] ?? null
       })
-      const approaches = (inlineEditEntry.value!.performance.approaches && inlineEditEntry.value!.performance.approaches.length > 0)
-        ? inlineEditEntry.value!.performance.approaches.map((a) => ({ type: (a.type || '').trim() || 'Unknown', count: Math.max(0, a.count || 1) }))
-        : getApproachesFromPerformance(inlineEditEntry.value!.performance)
+      const formApproaches = inlineEditEntry.value!.performance.approaches
+      const approaches = Array.isArray(formApproaches) && formApproaches.length > 0
+        ? formApproaches.map((a) => ({ type: (a.type || '').trim() || 'Unknown', count: Math.max(0, a.count || 1) }))
+        : Array.isArray(formApproaches) && formApproaches.length === 0
+          ? []
+          : getApproachesFromPerformance(inlineEditEntry.value!.performance)
       base.approaches = approaches
-      base.approachCount = getTotalApproachCount(base) || null
+      base.approachCount = approaches.length > 0 ? getTotalApproachCount(base) || null : null
       base.approachType = approaches[0]?.type ?? null
       return base
     })(),
@@ -7096,7 +7544,7 @@ async function saveInlineEdit(): Promise<void> {
           : normalizeNumber(rawValue)
         ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
       })
-      normalizedPerformance.approaches = (entry.performance?.approaches?.length ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance))
+      normalizedPerformance.approaches = Array.isArray(entry.performance?.approaches) ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance)
       normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
       normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
       entry.performance = normalizedPerformance
@@ -7227,8 +7675,8 @@ const catalogOpenState = reactive<Record<CatalogKey, boolean>>({
   categoryClass: true
 })
 const isSidebarCollapsed = ref(false)
-const showHeaderSettings = ref(false)
-const showPilotProfile = ref(false)
+const showSettingsModal = ref(false)
+const activeSettingsTab = ref('profile')
 const showImportSection = ref(true)
 const showExportSection = ref(true)
 const showIdentDropdown = ref(false)
@@ -7261,7 +7709,8 @@ const highlightedToIndex = ref(-1)
 const highlightedInlineToIndex = ref(-1)
 const highlightedPilotIndex = ref(-1)
 const highlightedInlinePilotIndex = ref(-1)
-const isDarkMode = ref(true)
+const { theme, isDark, setTheme } = useTheme()
+const isDarkMode = isDark
 const pilotProfile = reactive<PilotProfilePrefs>({ ...pilotProfileDefaults })
 const pilotProfileLoaded = ref(false)
 const csvFileInput = ref<HTMLInputElement | null>(null)
@@ -7377,6 +7826,86 @@ interface ImportMetadata {
   importedAt: string
 }
 
+interface ExportStatistics {
+  totalEntries: number
+  totalFlightTime: number
+  picTime: number
+  sicTime: number
+  nightTime: number
+  crossCountryTime: number
+  actualInstrumentTime: number
+  simulatedInstrumentTime: number
+  dualReceivedTime: number
+  dualGivenTime: number
+  soloTime: number
+  totalLandings: number
+  dayLandings: number
+  nightLandings: number
+  totalApproaches: number
+  aircraftBreakdown: Record<string, number>
+  dateRange: { earliest: string | null; latest: string | null }
+}
+
+function calculateExportStatistics(entries: LogEntry[]): ExportStatistics {
+  const aircraftBreakdown: Record<string, number> = {}
+  let totalFlightTime = 0
+  let picTime = 0
+  let sicTime = 0
+  let nightTime = 0
+  let crossCountryTime = 0
+  let actualInstrumentTime = 0
+  let simulatedInstrumentTime = 0
+  let dualReceivedTime = 0
+  let dualGivenTime = 0
+  let soloTime = 0
+  let totalLandings = 0
+  let dayLandings = 0
+  let nightLandings = 0
+  let totalApproaches = 0
+  const dates: string[] = []
+  for (const entry of entries) {
+    dates.push(entry.date || '')
+    totalFlightTime += entry.flightTime.total ?? 0
+    picTime += entry.flightTime.pic ?? 0
+    sicTime += entry.flightTime.sic ?? 0
+    nightTime += entry.flightTime.night ?? 0
+    crossCountryTime += entry.flightTime.crossCountry ?? 0
+    actualInstrumentTime += entry.flightTime.actualInstrument ?? 0
+    simulatedInstrumentTime += entry.flightTime.simulatedInstrument ?? 0
+    dualReceivedTime += entry.flightTime.dual ?? 0
+    dualGivenTime += entry.flightTime.dualGiven ?? 0
+    soloTime += entry.flightTime.solo ?? 0
+    dayLandings += entry.performance.dayLandings ?? 0
+    nightLandings += entry.performance.nightLandings ?? 0
+    totalLandings += (entry.performance.dayLandings ?? 0) + (entry.performance.nightLandings ?? 0)
+    totalApproaches += getTotalApproachCount(entry.performance)
+    const aircraftKey = `${entry.aircraftMakeModel || 'Unknown'} (${entry.registration || ''})`
+    aircraftBreakdown[aircraftKey] = (aircraftBreakdown[aircraftKey] || 0) + 1
+  }
+  dates.sort()
+  const earliest = dates.length > 0 ? (dates[0] || null) : null
+  const latest = dates.length > 0 ? (dates[dates.length - 1] || null) : null
+  return {
+    totalEntries: entries.length,
+    totalFlightTime,
+    picTime,
+    sicTime,
+    nightTime,
+    crossCountryTime,
+    actualInstrumentTime,
+    simulatedInstrumentTime,
+    dualReceivedTime,
+    dualGivenTime,
+    soloTime,
+    totalLandings,
+    dayLandings,
+    nightLandings,
+    totalApproaches,
+    aircraftBreakdown,
+    dateRange: { earliest, latest }
+  }
+}
+
 const showImportPreview = ref(false)
 const importPreviewEntries = ref<LogEntry[]>([])
 const importPreviewStatistics = ref<ImportStatistics | null>(null)
@@ -7386,6 +7915,127 @@ const showDuplicateConfirmDialog = ref(false)
 const importWithDuplicates = ref(false)
 const importWithErrors = ref(false)
 const showDuplicateOverrideDialog = ref(false)
+
+// Export dialog state (trust-first export: scope + preview)
+const showExportDialog = ref(false)
+type ExportScopeType = 'all' | 'month' | 'dateRange' | 'aircraft'
+const exportScope = ref<ExportScopeType>('all')
+const exportNow = new Date()
+const exportMonth = ref({ year: exportNow.getFullYear(), month: exportNow.getMonth() + 1 })
+const exportDateStart = ref('')
+const exportDateEnd = ref('')
+const exportSelectedAircraft = ref<string[]>([])
+const expandedExportPreviewEntries = ref<Set<string>>(new Set())
+
+function applyExportScope(
+  entries: LogEntry[],
+  scope: ExportScopeType,
+  month: { year: number; month: number },
+  dateStart: string,
+  dateEnd: string,
+  selectedAircraft: string[]
+): LogEntry[] {
+  if (scope === 'all') return entries
+  if (scope === 'month') {
+    const [y, m] = [month.year, month.month]
+    return entries.filter((e) => {
+      const match = (e.date || '').trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
+      if (!match) return false
+      const ey = parseInt(match[1], 10)
+      const em = parseInt(match[2], 10)
+      return ey === y && em === m
+    })
+  }
+  if (scope === 'dateRange') {
+    const start = (dateStart || '').trim()
+    const end = (dateEnd || '').trim()
+    if (!start || !end) return []
+    return entries.filter((e) => {
+      const d = (e.date || '').trim()
+      return d >= start && d <= end
+    })
+  }
+  if (scope === 'aircraft') {
+    if (selectedAircraft.length === 0) return []
+    const set = new Set(selectedAircraft.map((r) => (r || '').trim().toUpperCase()))
+    return entries.filter((e) => set.has((e.registration || '').trim().toUpperCase()))
+  }
+  return entries
+}
+
+const uniqueAircraftForExport = computed(() => {
+  const seen = new Set<string>()
+  const list: { registration: string; label: string }[] = []
+  for (const e of logEntries.value) {
+    const reg = (e.registration || '').trim().toUpperCase()
+    if (!reg || seen.has(reg)) continue
+    seen.add(reg)
+    list.push({
+      registration: reg,
+      label: `${e.aircraftMakeModel || 'Unknown'} (${reg})`
+    })
+  }
+  list.sort((a, b) => a.label.localeCompare(b.label))
+  return list
+})
+
+const exportFilteredEntries = computed(() =>
+  applyExportScope(
+    logEntries.value,
+    exportScope.value,
+    exportMonth.value,
+    exportDateStart.value,
+    exportDateEnd.value,
+    exportSelectedAircraft.value
+  )
+)
+
+const exportPreviewStatistics = computed<ExportStatistics | null>(() => {
+  const entries = exportFilteredEntries.value
+  if (entries.length === 0) return null
+  return calculateExportStatistics(entries)
+})
+
+function toggleExportPreviewEntry(id: string) {
+  const set = new Set(expandedExportPreviewEntries.value)
+  if (set.has(id)) set.delete(id)
+  else set.add(id)
+  expandedExportPreviewEntries.value = set
+}
+
+function openExportDialog() {
+  exportScope.value = 'all'
+  const n = new Date()
+  exportMonth.value = { year: n.getFullYear(), month: n.getMonth() + 1 }
+  exportDateStart.value = ''
+  exportDateEnd.value = ''
+  exportSelectedAircraft.value = []
+  expandedExportPreviewEntries.value = new Set()
+  showExportDialog.value = true
+}
+
+function closeExportDialog() {
+  showExportDialog.value = false
+}
+
+function getExportFilenameSegment(): string {
+  const scope = exportScope.value
+  if (scope === 'all') return ''
+  if (scope === 'month') {
+    const { year, month } = exportMonth.value
+    return `-${year}-${String(month).padStart(2, '0')}`
+  }
+  if (scope === 'dateRange' && exportDateStart.value && exportDateEnd.value) {
+    return `-${exportDateStart.value}-to-${exportDateEnd.value}`
+  }
+  if (scope === 'aircraft' && exportSelectedAircraft.value.length > 0) {
+    const regs = exportSelectedAircraft.value
+    if (regs.length === 1) return `-${regs[0]}`
+    return '-filtered'
+  }
+  return ''
+}
+
 const pilotInitials = computed(() => {
   const name = pilotProfile.name.trim()
   if (!name) return 'PP'
@@ -7472,9 +8122,14 @@ function escapeCSVValue(value: string | null | undefined): string {
   return str
 }
 
-function exportToCSV(): void {
-  if (logEntries.value.length === 0) return
-  
+function exportToCSV(entries?: LogEntry[]): void {
+  const list = entries ?? logEntries.value
+  if (list.length === 0) return
+
+  const baseDate = new Date().toISOString().split('T')[0]
+  const segment = entries != null ? getExportFilenameSegment() : ''
+  const filename = `logifi-logbook-${baseDate}${segment}.csv`
+
   const headers = [
     'Date',
     'Role',
@@ -7572,7 +8227,7 @@ function exportToCSV(): void {
     }
   }
 
-  const rows = logEntries.value.map((entry) => {
+  const rows = list.map((entry) => {
     return [
       formatDisplayDate(entry.date),
       entry.role || '',
@@ -7631,7 +8286,7 @@ function exportToCSV(): void {
   const link = document.createElement('a')
   const url = URL.createObjectURL(blob)
   link.setAttribute('href', url)
-  link.setAttribute('download', `logifi-logbook-${new Date().toISOString().split('T')[0]}.csv`)
+  link.setAttribute('download', filename)
   link.style.visibility = 'hidden'
   document.body.appendChild(link)
   link.click()
@@ -7639,19 +8294,21 @@ function exportToCSV(): void {
   URL.revokeObjectURL(url)
 }
 
-async function exportToJSON(): Promise<void> {
-  if (logEntries.value.length === 0) return
-  
+async function exportToJSON(entries?: LogEntry[]): Promise<void> {
+  const list = entries ?? logEntries.value
+  if (list.length === 0) return
+
+  const baseDate = new Date().toISOString().split('T')[0]
+  const segment = entries != null ? getExportFilenameSegment() : ''
+  const filename = `logifi-logbook-${baseDate}${segment}.json`
+
   // Use the export composable to prepare entries with audit trail
   const { prepareEntriesForExport } = useExport()
-  
-  // Show a brief loading indicator if we have many entries (audit trail fetching may take time)
-  const isFetchingAuditTrail = logEntries.value.length > 10
-  
+
   try {
     // Prepare entries with audit trail
     const preparedEntries = await prepareEntriesForExport(
-      logEntries.value,
+      list,
       true // include audit trail
     )
     
@@ -7667,7 +8324,7 @@ async function exportToJSON(): Promise<void> {
     const link = document.createElement('a')
     const url = URL.createObjectURL(blob)
     link.setAttribute('href', url)
-    link.setAttribute('download', `logifi-logbook-${new Date().toISOString().split('T')[0]}.json`)
+    link.setAttribute('download', filename)
     link.style.visibility = 'hidden'
     document.body.appendChild(link)
     link.click()
@@ -7680,7 +8337,7 @@ async function exportToJSON(): Promise<void> {
       exportedAt: new Date().toISOString(),
       version: '1.1',
       pilotProfile: pilotProfileLoaded.value ? { ...pilotProfile } : null,
-      entries: logEntries.value.map((entry) => {
+      entries: list.map((entry) => {
         const baseEntry: any = {
           id: entry.id,
           date: entry.date,
@@ -7734,7 +8391,7 @@ async function exportToJSON(): Promise<void> {
     const link = document.createElement('a')
     const url = URL.createObjectURL(blob)
     link.setAttribute('href', url)
-    link.setAttribute('download', `logifi-logbook-${new Date().toISOString().split('T')[0]}.json`)
+    link.setAttribute('download', filename)
     link.style.visibility = 'hidden'
     document.body.appendChild(link)
     link.click()
@@ -9844,43 +10501,6 @@ function normalizeAndAutofillCategories(): void {
 }
 
 
-const toggleTheme = () => {
-  isDarkMode.value = !isDarkMode.value
-  saveThemePreference()
-  applyTheme()
-}
-
-const saveThemePreference = () => {
-  if (isBrowser) {
-    window.localStorage.setItem('logifi-theme', isDarkMode.value ? 'dark' : 'light')
-  }
-}
-
-const loadThemePreference = () => {
-  if (isBrowser) {
-    const saved = window.localStorage.getItem('logifi-theme')
-    if (saved === 'light') {
-      isDarkMode.value = false
-  } else {
-      isDarkMode.value = true
-    }
-    applyTheme()
-  }
-}
-
-const applyTheme = () => {
-  if (isBrowser) {
-    const root = document.documentElement
-    if (isDarkMode.value) {
-      root.classList.add('dark')
-      root.classList.remove('light')
-    } else {
-      root.classList.add('light')
-      root.classList.remove('dark')
-    }
-  }
-}
-
 function sanitizeFlightConditions(conditions: string[]): string[] {
   return (conditions || [])
     .filter(Boolean)
@@ -10217,18 +10837,18 @@ function toggleSidebar(): void {
 
 // Helpers to extract keys for filters
 function extractTailFromCatalogItem(item: string): string | null {
-  let text = (item || '').trim()
+  const text = (item || '').trim()
   const seps = ['·', '•', '-', '|', '–', '—']
   for (const s of seps) {
     if (text.includes(s)) {
-      const parts = text.split(s).map(p => p.trim())
-      const nPart = parts.find(p => /^N[A-Z0-9]+$/i.test(p) || p.toUpperCase().startsWith('N'))
-      if (nPart) {
-        text = nPart
-        break
+      const parts = text.split(s).map((p) => p.trim()).filter(Boolean)
+      // Catalog items are "Family · Registration" — use the part after the separator (any tail, not only N-numbers)
+      if (parts.length >= 2) {
+        return parts[parts.length - 1].toUpperCase()
       }
     }
   }
+  // No separator: fall back to N-number pattern for backwards compatibility
   const m = text.match(/N[A-Z0-9]+/i)
   return m ? m[0].toUpperCase() : null
 }
@@ -10665,11 +11285,14 @@ async function beginEditing(entry: LogEntry): Promise<void> {
   lastKnownXcTime.value = entry.flightTime.crossCountry ?? null
   if (entry.oooi) {
     newEntry.oooi = { ...entry.oooi }
-    if (Object.values(entry.oooi).some(v => v)) {
-      isCommercialMode.value = true
-    } else {
-      isCommercialMode.value = false
-    }
+    const hasOOOITimes =
+      !!(
+        (entry.oooi.out && entry.oooi.out.trim()) ||
+        (entry.oooi.off && entry.oooi.off.trim()) ||
+        (entry.oooi.on && entry.oooi.on.trim()) ||
+        (entry.oooi.in && entry.oooi.in.trim())
+      )
+    isCommercialMode.value = hasOOOITimes
   } else {
     newEntry.oooi = createEmptyOOOI()
     isCommercialMode.value = false
@@ -11916,7 +12539,15 @@ async function submitEntry(): Promise<void> {
       base.approachType = approaches[0]?.type ?? null
       return base
     })(),
-    oooi: newEntry.oooi && Object.values(newEntry.oooi).some(v => v) ? { ...newEntry.oooi } : undefined
+    oooi: (() => {
+      if (!newEntry.oooi) return undefined
+      const hasOOOITimes =
+        (newEntry.oooi.out && newEntry.oooi.out.trim()) ||
+        (newEntry.oooi.off && newEntry.oooi.off.trim()) ||
+        (newEntry.oooi.on && newEntry.oooi.on.trim()) ||
+        (newEntry.oooi.in && newEntry.oooi.in.trim())
+      return hasOOOITimes ? { ...newEntry.oooi } : undefined
+    })()
   }
 
   // Debug: Log the flightTime object being saved
@@ -12334,7 +12965,7 @@ async function loadEntries(): Promise<void> {
             : normalizeNumber(rawValue)
           ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
         })
-        normalizedPerformance.approaches = (entry.performance?.approaches?.length ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance))
+        normalizedPerformance.approaches = Array.isArray(entry.performance?.approaches) ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance)
         normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
         normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
         entry.performance = normalizedPerformance
@@ -12415,7 +13046,7 @@ async function loadEntries(): Promise<void> {
               : normalizeNumber(rawValue)
             ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
           })
-          normalizedPerformance.approaches = (entry.performance?.approaches?.length ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance))
+          normalizedPerformance.approaches = Array.isArray(entry.performance?.approaches) ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance)
           normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
           normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
           entry.performance = normalizedPerformance
@@ -12505,7 +13136,7 @@ function loadPersistedEntries(): void {
             : (rawValue ?? null)
           ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
         })
-        normalizedPerformance.approaches = (entry.performance?.approaches?.length ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance))
+        normalizedPerformance.approaches = Array.isArray(entry.performance?.approaches) ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance)
         normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
         normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
         
@@ -12711,7 +13342,6 @@ onMounted(async () => {
   
   // Wait for auth to initialize, then load entries (loadEntries will use IndexedDB)
   await loadEntries()
-  loadThemePreference()
   loadClockPrefs()
   loadSelectedTotalsMetrics()
   loadColumnConfig()
@@ -12736,9 +13366,7 @@ onMounted(async () => {
   // Close settings when clicking outside
   const handleClickOutside = (event: MouseEvent) => {
     const target = event.target as HTMLElement
-    if (showHeaderSettings.value && !target.closest('.settings-container')) {
-      showHeaderSettings.value = false
-    }
+
     if (showColumnSettings.value && !target.closest('.column-settings-container')) {
       showColumnSettings.value = false
     }
@@ -14015,28 +14643,28 @@ textarea:-webkit-autofill:active {
 }
 
 /* Dark mode autofill override - target inputs inside dark mode containers */
-.bg-gray-900 input:-webkit-autofill,
-.bg-gray-900 input:-webkit-autofill:hover,
-.bg-gray-900 input:-webkit-autofill:focus,
-.bg-gray-900 input:-webkit-autofill:active,
-.bg-gray-900 textarea:-webkit-autofill,
-.bg-gray-900 textarea:-webkit-autofill:hover,
-.bg-gray-900 textarea:-webkit-autofill:focus,
-.bg-gray-900 textarea:-webkit-autofill:active {
+.bg-gray-950 input:-webkit-autofill,
+.bg-gray-950 input:-webkit-autofill:hover,
+.bg-gray-950 input:-webkit-autofill:focus,
+.bg-gray-950 input:-webkit-autofill:active,
+.bg-gray-950 textarea:-webkit-autofill,
+.bg-gray-950 textarea:-webkit-autofill:hover,
+.bg-gray-950 textarea:-webkit-autofill:focus,
+.bg-gray-950 textarea:-webkit-autofill:active {
   -webkit-box-shadow: 0 0 0 1000px rgb(31 41 55) inset !important;
   -webkit-text-fill-color: rgb(255 255 255) !important;
   box-shadow: 0 0 0 1000px rgb(31 41 55) inset !important;
 }
 
 /* Also handle inputs with dark mode background classes directly */
-input.bg-gray-800:-webkit-autofill,
-input.bg-gray-800:-webkit-autofill:hover,
-input.bg-gray-800:-webkit-autofill:focus,
-input.bg-gray-800:-webkit-autofill:active,
-textarea.bg-gray-800:-webkit-autofill,
-textarea.bg-gray-800:-webkit-autofill:hover,
-textarea.bg-gray-800:-webkit-autofill:focus,
-textarea.bg-gray-800:-webkit-autofill:active {
+input.bg-black\/20:-webkit-autofill,
+input.bg-black\/20:-webkit-autofill:hover,
+input.bg-black\/20:-webkit-autofill:focus,
+input.bg-black\/20:-webkit-autofill:active,
+textarea.bg-black\/20:-webkit-autofill,
+textarea.bg-black\/20:-webkit-autofill:hover,
+textarea.bg-black\/20:-webkit-autofill:focus,
+textarea.bg-black\/20:-webkit-autofill:active {
   -webkit-box-shadow: 0 0 0 1000px rgb(31 41 55) inset !important;
   -webkit-text-fill-color: rgb(255 255 255) !important;
   box-shadow: 0 0 0 1000px rgb(31 41 55) inset !important;

@@ -228,6 +228,38 @@ export type Database = {
           tag?: string
         }
       }
+      logbook_builder_templates: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          layout: string
+          default_row_count: number
+          columns: Record<string, unknown>
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          layout?: string
+          default_row_count?: number
+          columns?: Record<string, unknown>
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          layout?: string
+          default_row_count?: number
+          columns?: Record<string, unknown>
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       // Views will be added here

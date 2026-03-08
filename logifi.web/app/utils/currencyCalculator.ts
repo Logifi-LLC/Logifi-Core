@@ -240,14 +240,15 @@ export function calculateInstrumentCurrency(
     holdingProcedures += entry.performance?.holdingProcedures ?? 0
   })
   
-  // Check for intercept/track tasks in remarks or training elements
-  const hasInterceptTrack = qualifyingEntries.some(entry => {
+  // Intercept/track is satisfied by 6+ approaches (it happens with every approach) or by explicit remarks/training
+  const hasInterceptTrackInRemarks = qualifyingEntries.some(entry => {
     const remarks = (entry.remarks || '').toLowerCase()
     const training = (entry.trainingElements || '').toLowerCase()
     return remarks.includes('intercept') || remarks.includes('track') ||
            training.includes('intercept') || training.includes('track')
   })
-  
+  const hasInterceptTrack = approaches >= 6 || hasInterceptTrackInRemarks
+
   // Currency requires: 6 approaches, holding procedures, and intercept/track
   const isCurrent = approaches >= 6 && holdingProcedures > 0 && hasInterceptTrack
   

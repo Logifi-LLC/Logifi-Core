@@ -113,12 +113,17 @@ export type EditableLogEntry = Omit<LogEntry, 'id'>
 
 export type CatalogKey = 'aircraft' | 'airports' | 'pilots' | 'categoryClass'
 
-export type LogbookColumnKey = 
+export type LogbookColumnKey =
   | 'date'
   | 'aircraft'
   | 'identification'
   | 'flightNumber'
   | 'fromTo'
+  | 'departure'
+  | 'destination'
+  | 'route'
+  | 'simulator'
+  | 'categoryClass'
   | 'conditions'
   | 'remarks'
   | 'pic'
@@ -133,7 +138,10 @@ export type LogbookColumnKey =
   | 'dayLandings'
   | 'nightLandings'
   | 'approach'
+  | 'approachType'
   | 'pilots'
+  | 'pilotRole'
+  | 'role'
   | 'total'
 
 export interface LogbookColumnConfig {
@@ -202,9 +210,10 @@ export function getApproachesFromPerformance(perf: PerformanceMetrics | null | u
   if (!perf) return []
   if (perf.approaches && perf.approaches.length > 0) return perf.approaches
   const count = perf.approachCount ?? 0
-  const type = (perf.approachType || '').trim() || 'Unknown'
-  if (count <= 0 && !type) return []
-  return [{ type, count: count || 1 }]
+  const type = (perf.approachType || '').trim()
+  const noMeaningfulType = !type || type === 'Unknown'
+  if ((count ?? 0) <= 0 && noMeaningfulType) return []
+  return [{ type: type || 'Unknown', count: Math.max(1, count ?? 0) }]
 }
 
 /** Total approach count from performance (for display/export). */

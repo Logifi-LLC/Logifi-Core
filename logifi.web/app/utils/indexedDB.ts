@@ -98,16 +98,18 @@ async function getDB(): Promise<IDBDatabase> {
   return dbInstance
 }
 
+/** Plain copy of entry so IndexedDB structured clone does not fail on Vue reactive arrays. */
+function plainEntryForIDB(entry: LogEntry, syncFields: { _synced: boolean; _syncTimestamp: number }): IDBLogEntry {
+  const plain = JSON.parse(JSON.stringify(entry)) as LogEntry
+  return { ...plain, ...syncFields }
+}
+
 /**
  * Save log entry to IndexedDB
  */
 export async function saveEntryToIndexedDB(entry: LogEntry): Promise<void> {
   const db = await getDB()
-  const entryWithSync: IDBLogEntry = {
-    ...entry,
-    _synced: false,
-    _syncTimestamp: Date.now()
-  }
+  const entryWithSync = plainEntryForIDB(entry, { _synced: false, _syncTimestamp: Date.now() })
 
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(['log_entries'], 'readwrite')
@@ -124,14 +126,11 @@ export async function saveEntryToIndexedDB(entry: LogEntry): Promise<void> {
  */
 export async function updateEntryInIndexedDB(entry: LogEntry): Promise<void> {
   const db = await getDB()
-  
-  // Get existing entry to preserve sync status
   const existing = await getEntryFromIndexedDB(entry.id)
-  const entryWithSync: IDBLogEntry = {
-    ...entry,
+  const entryWithSync = plainEntryForIDB(entry, {
     _synced: existing?._synced ?? false,
     _syncTimestamp: existing?._syncTimestamp ?? Date.now()
-  }
+  })
 
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(['log_entries'], 'readwrite')
@@ -251,11 +250,12 @@ export async function getUnsyncedEntries(): Promise<IDBLogEntry[]> {
  */
 export async function addToSyncQueue(operation: 'insert' | 'update' | 'delete', entryId: string, entryData?: any): Promise<string> {
   const db = await getDB()
+  const plainEntryData = entryData != null ? JSON.parse(JSON.stringify(entryData)) : null
   const queueEntry: SyncQueueEntry = {
     id: crypto.randomUUID(),
     operation,
     entryId,
-    entryData: entryData || null,
+    entryData: plainEntryData,
     timestamp: Date.now(),
     retryCount: 0
   }

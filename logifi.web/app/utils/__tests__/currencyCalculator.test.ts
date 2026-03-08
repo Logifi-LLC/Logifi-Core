@@ -275,7 +275,7 @@ describe('currencyCalculator', () => {
       expect(result.holdingProcedures).toBeGreaterThan(0)
     })
 
-    it('should require intercept/track tasks in remarks', () => {
+    it('should be current with 6+ approaches and holding even without intercept/track in remarks', () => {
       const entries: LogEntry[] = []
       const today = new Date('2024-03-15')
       const entryDate = new Date(today)
@@ -292,13 +292,14 @@ describe('currencyCalculator', () => {
           approachCount: 10,
           holdingProcedures: 5
         },
-        remarks: '' // No intercept/track mentioned
+        remarks: '' // No intercept/track in remarks; 6+ approaches satisfy it organically
       }))
       
       const result = calculateInstrumentCurrency(entries, today)
       
-      // Should not be current because intercept/track is missing
-      expect(result.isCurrent).toBe(false)
+      expect(result.isCurrent).toBe(true)
+      expect(result.approaches).toBeGreaterThanOrEqual(6)
+      expect(result.holdingProcedures).toBeGreaterThan(0)
     })
   })
 

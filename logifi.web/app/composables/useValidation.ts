@@ -43,6 +43,14 @@ export const useValidation = () => {
       isLoading.value = true
       error.value = null
 
+      // For simulator logbook entries, skip all validation rules.
+      // The simulator logbook has its own structure and the user does not
+      // want Part 61 / date / cross‑country rules applied there.
+      if (entry.logbookType === 'simulator') {
+        validationResults.value = []
+        return []
+      }
+
       // Run date validation (with allEntries for chronological checks)
       const dateResults = validateDate(entry, allEntries)
       

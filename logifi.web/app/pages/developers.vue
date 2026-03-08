@@ -1,5 +1,10 @@
 <template>
-  <div :class="['min-h-screen transition-colors duration-300 font-quicksand', isDarkMode ? 'bg-gray-900' : 'bg-gray-200']">
+  <div
+    :class="[
+      'min-h-screen transition-colors duration-300 font-quicksand',
+      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
+    ]"
+  >
     <!-- Header -->
 
 <header>
@@ -251,7 +256,7 @@
 </template>
 
 <script setup lang="ts">
-const isDarkMode = ref(true)
+const { theme, isDark: isDarkMode } = useTheme()
 
 // Clock State
 type ClockFormat = '12' | '24'
@@ -293,10 +298,6 @@ function loadClockPrefs(): void {
 }
 
 onMounted(() => {
-  // Theme
-  const savedTheme = localStorage.getItem('theme')
-  isDarkMode.value = savedTheme === 'dark' || (!savedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)
-
   // Clock
   loadClockPrefs()
   clockTimer = window.setInterval(() => {
