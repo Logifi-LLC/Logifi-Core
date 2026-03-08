@@ -98,445 +98,17 @@
         <nav class="flex items-center gap-3">
           <button
             type="button"
-            @click="showPilotProfile = true"
+            @click="showSettingsModal = true"
             :class="[
-              'inline-flex items-center px-5 py-2 rounded-lg text-sm sm:text-base font-quicksand font-medium transition-all duration-200',
+              'h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all duration-200 shadow-sm border',
               isDarkMode 
-                ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20' 
-                : 'bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 shadow-sm'
+                ? 'bg-blue-600/20 text-blue-400 border-blue-500/30 hover:bg-blue-600/40' 
+                : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
             ]"
-            aria-label="Pilot profile"
+            aria-label="Profile & Settings"
           >
-            <Icon name="ri:user-star-line" size="18" class="mr-2" />
-            Pilot Profile
+            {{ pilotInitials }}
           </button>
-          <div class="relative settings-container">
-            <button
-              type="button"
-              @click="showHeaderSettings = !showHeaderSettings"
-            :class="[
-              'inline-flex items-center px-5 py-2 rounded-lg text-sm sm:text-base font-quicksand font-medium transition-all duration-200',
-              isDarkMode 
-                ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20' 
-                : 'bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 shadow-sm'
-            ]"
-              aria-label="Settings"
-            >
-              <Icon name="ri:settings-3-line" size="18" class="mr-2" />
-              Settings
-            </button>
-            <div
-              v-if="showHeaderSettings"
-              :class="[
-                'absolute right-0 top-full mt-2 w-64 rounded-xl border shadow-lg z-40 flex flex-col',
-                isDarkMode 
-                  ? 'bg-gray-900 border-white/10 shadow-xl shadow-black/50' 
-                  : 'bg-white border-gray-200'
-              ]"
-              style="max-height: calc(100vh - 120px);"
-            >
-              <div class="flex items-center justify-between p-4 border-b" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                <h3 :class="['font-semibold font-quicksand text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
-                  Settings
-                </h3>
-                <button
-                  @click="showHeaderSettings = false"
-                  :class="['hover:opacity-70 transition-opacity', isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700']"
-                  aria-label="Close settings"
-                >
-                  <Icon name="ri:close-line" size="20" />
-                </button>
-              </div>
-              <div class="overflow-y-auto p-4 space-y-4">
-                <div class="flex items-center justify-between">
-                  <label :class="['font-quicksand text-sm', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
-                    Theme
-                  </label>
-                  <div
-                    class="inline-flex rounded-full border text-xs font-quicksand overflow-hidden"
-                    :class="isDarkMode ? 'border-white/10 bg-black/20 shadow-inner' : 'border-gray-200 bg-gray-50'"
-                    role="group"
-                    aria-label="Theme selection"
-                  >
-                    <button
-                      type="button"
-                      class="px-2.5 py-1 transition-colors"
-                      :class="theme === 'dark'
-                        ? 'bg-blue-600 text-white'
-                        : isDarkMode
-                          ? 'text-gray-300 hover:bg-gray-700'
-                          : 'text-gray-700 hover:bg-gray-200'"
-                      @click="setTheme('dark')"
-                    >
-                      Dark
-                    </button>
-                    <button
-                      type="button"
-                      class="px-2.5 py-1 border-l border-gray-500/40 transition-colors"
-                      :class="theme === 'light'
-                        ? 'bg-blue-600 text-white'
-                        : isDarkMode
-                          ? 'text-gray-300 hover:bg-gray-700'
-                          : 'text-gray-700 hover:bg-gray-200'"
-                      @click="setTheme('light')"
-                    >
-                      Light
-                    </button>
-                  </div>
-                </div>
-                <!-- Online/Sync Status Indicator -->
-                <div class="space-y-2 pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <div :class="['font-quicksand text-sm font-semibold mb-2', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                    Sync Status
-                  </div>
-                  <div class="flex flex-wrap items-center gap-2">
-                    <div
-                      :class="[
-                        'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-quicksand font-medium transition-all',
-                        isOnline
-                          ? (isSyncing
-                              ? (isDarkMode ? 'bg-yellow-600/20 text-yellow-400 border border-yellow-600/50' : 'bg-yellow-100 text-yellow-700 border border-yellow-300')
-                              : (isDarkMode ? 'bg-green-600/20 text-green-400 border border-green-600/50' : 'bg-green-100 text-green-700 border border-green-300'))
-                          : (isDarkMode ? 'bg-red-600/20 text-red-400 border border-red-600/50' : 'bg-red-100 text-red-700 border border-red-300')
-                      ]"
-                      :title="syncStatusTitle"
-                    >
-                      <Icon
-                        :name="syncStatusIcon"
-                        :class="[isSyncing ? 'animate-spin' : '', 'text-xs']"
-                        size="14"
-                      />
-                      <span>
-                        {{ syncStatusText }}
-                      </span>
-                    </div>
-                    <div
-                      v-if="queueLength > 0"
-                      :class="[
-                        'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-quicksand font-semibold',
-                        isDarkMode ? 'bg-orange-600/20 text-orange-400 border border-orange-600/50' : 'bg-orange-100 text-orange-700 border border-orange-300'
-                      ]"
-                      :title="`${queueLength} pending sync ${queueLength === 1 ? 'operation' : 'operations'}`"
-                    >
-                      <Icon name="ri:time-line" size="12" />
-                      <span>{{ queueLength }}</span>
-                    </div>
-                    <div
-                      v-if="syncError"
-                      :class="[
-                        'inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-quicksand',
-                        isDarkMode ? 'bg-red-600/20 text-red-400 border border-red-600/50' : 'bg-red-100 text-red-700 border border-red-300'
-                      ]"
-                      :title="syncError"
-                    >
-                      <Icon name="ri:error-warning-line" size="12" />
-                      <span>Sync Error</span>
-                    </div>
-                    <button
-                      v-if="queueLength > 0 && isOnline"
-                      type="button"
-                      :disabled="isSyncing"
-                      class="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-quicksand font-medium transition-colors disabled:opacity-50"
-                      :class="isDarkMode ? 'bg-blue-600/20 text-blue-400 border border-blue-600/50 hover:bg-blue-600/30' : 'bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200'"
-                      title="Retry syncing pending operations"
-                      @click="retryFailed()"
-                    >
-                      <Icon name="ri:refresh-line" size="12" :class="{ 'animate-spin': isSyncing }" />
-                      <span>Retry sync</span>
-                    </button>
-                  </div>
-                </div>
-                <div class="space-y-2 pt-2">
-                  <div :class="['font-quicksand text-sm', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Clock Format</div>
-                  <div class="flex gap-2">
-                    <button
-                      type="button"
-                      @click="setClockFormat('24')"
-                      :class="[
-                        'px-3 py-1 rounded-md text-sm font-quicksand',
-                        clockFormat === '24'
-                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white')
-                          : (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-300 text-gray-800')
-                      ]"
-                    >
-                      24h
-                    </button>
-                    <button
-                      type="button"
-                      @click="setClockFormat('12')"
-                      :class="[
-                        'px-3 py-1 rounded-md text-sm font-quicksand',
-                        clockFormat === '12'
-                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white')
-                          : (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-300 text-gray-800')
-                      ]"
-                    >
-                      12h
-                    </button>
-                  </div>
-                </div>
-                <div class="space-y-2">
-                  <div :class="['font-quicksand text-sm', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Clock Timezone</div>
-                  <div class="flex gap-2">
-                    <button
-                      type="button"
-                      @click="setClockZone('UTC')"
-                      :class="[
-                        'px-3 py-1 rounded-md text-sm font-quicksand',
-                        clockZone === 'UTC'
-                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white')
-                          : (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-300 text-gray-800')
-                      ]"
-                    >
-                      UTC
-                    </button>
-                    <button
-                      type="button"
-                      @click="setClockZone('Local')"
-                      :class="[
-                        'px-3 py-1 rounded-md text-sm font-quicksand',
-                        clockZone === 'Local'
-                          ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-600 text-white')
-                          : (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-300 text-gray-800')
-                      ]"
-                    >
-                      Local
-                    </button>
-                  </div>
-                </div>
-                <div class="space-y-3 pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <div :class="['font-quicksand text-sm font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                    Customize Totals Overview
-                  </div>
-                  <div class="space-y-2 max-h-64 overflow-y-auto">
-                    <label
-                      v-for="metric in availableTotalsMetrics"
-                      :key="metric.key"
-                      class="flex items-center gap-2 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        :checked="selectedTotalsMetrics.includes(metric.key)"
-                        @change="toggleTotalsMetric(metric.key)"
-                        :disabled="metric.key === 'totalTime'"
-                        :class="[
-                          'rounded border-gray-300 text-blue-600 focus:ring-blue-500',
-                          isDarkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-100'
-                        ]"
-                      />
-                      <span :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
-                        {{ metric.label }}
-                      </span>
-                    </label>
-                  </div>
-                </div>
-                <div class="pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <div class="flex items-center justify-between mb-2">
-                    <div :class="['font-quicksand text-sm font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                      Import Logbook
-                    </div>
-                    <button
-                      type="button"
-                      @click="showImportSection = !showImportSection"
-                      :class="[
-                        'p-1 rounded transition-colors',
-                        isDarkMode 
-                          ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-300' 
-                          : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
-                      ]"
-                      :aria-expanded="showImportSection"
-                    >
-                      <Icon
-                        name="ri:arrow-down-s-line"
-                        :size="16"
-                        :class="[
-                          'transition-transform',
-                          showImportSection ? 'rotate-180' : ''
-                        ]"
-                      />
-                    </button>
-                  </div>
-                  <div 
-                    v-show="showImportSection"
-                    class="space-y-3 transition-colors" 
-                    :class="[
-                      isDragOverImport ? (isDarkMode ? 'border-green-500 bg-green-900/20' : 'border-green-500 bg-green-50') : ''
-                    ]"
-                    @dragover.prevent="handleImportDragOver"
-                    @dragenter.prevent="handleImportDragEnter"
-                    @dragleave="handleImportDragLeave"
-                    @drop.prevent="handleImportDrop"
-                  >
-                    <div class="space-y-2">
-                      <button
-                        type="button"
-                        @click="() => csvFileInput?.click()"
-                        :class="[
-                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                          isDarkMode ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
-                        ]"
-                      >
-                        <Icon name="ri:file-excel-2-line" size="16" />
-                        Import from CSV
-                      </button>
-                      <button
-                        type="button"
-                        @click="() => jsonFileInput?.click()"
-                        :class="[
-                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                          isDarkMode ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-green-600 hover:bg-green-700 text-white'
-                        ]"
-                      >
-                        <Icon name="ri:file-code-line" size="16" />
-                        Import from JSON
-                      </button>
-                      <NuxtLink
-                        to="/logbook-builder"
-                        :class="[
-                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all border',
-                          isDarkMode ? 'border-gray-600 hover:bg-gray-700 text-gray-200' : 'border-gray-300 hover:bg-gray-100 text-gray-800'
-                        ]"
-                      >
-                        <Icon name="ri:table-line" size="16" />
-                        Add Pages
-                      </NuxtLink>
-                    </div>
-                    <p :class="['text-xs mt-2', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
-                      {{ isDragOverImport ? 'Drop file here to import' : 'Drag & drop or click to import. Duplicates (same date + registration) will be skipped.' }}
-                    </p>
-                  </div>
-                </div>
-                <!-- Hidden file inputs -->
-                <input
-                  ref="csvFileInput"
-                  type="file"
-                  accept=".csv,.txt,text/csv,text/plain"
-                  style="display: none;"
-                  @change="handleCSVImport"
-                />
-                <input
-                  ref="jsonFileInput"
-                  type="file"
-                  accept=".json,application/json"
-                  style="display: none;"
-                  @change="handleJSONImport"
-                />
-                <div class="pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <div class="flex items-center justify-between mb-2">
-                    <div :class="['font-quicksand text-sm font-semibold', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                      Export Logbook
-                    </div>
-                    <button
-                      type="button"
-                      @click="showExportSection = !showExportSection"
-                      :class="[
-                        'p-1 rounded transition-colors',
-                        isDarkMode 
-                          ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-300' 
-                          : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700'
-                      ]"
-                      :aria-expanded="showExportSection"
-                    >
-                      <Icon
-                        name="ri:arrow-down-s-line"
-                        :size="16"
-                        :class="[
-                          'transition-transform',
-                          showExportSection ? 'rotate-180' : ''
-                        ]"
-                      />
-                    </button>
-                  </div>
-                  <div v-show="showExportSection" class="space-y-3">
-                    <div class="space-y-2">
-                      <button
-                        type="button"
-                        @click="openExportDialog"
-                        :disabled="logEntries.length === 0"
-                        :class="[
-                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                          logEntries.length === 0
-                            ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
-                            : (isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white')
-                        ]"
-                      >
-                        <Icon name="ri:file-excel-2-line" size="16" />
-                        Export as CSV
-                      </button>
-                      <button
-                        type="button"
-                        @click="openExportDialog"
-                        :disabled="logEntries.length === 0"
-                        :class="[
-                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                          logEntries.length === 0
-                            ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
-                            : (isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white')
-                        ]"
-                      >
-                        <Icon name="ri:file-code-line" size="16" />
-                        Export as JSON
-                      </button>
-                      <button
-                        type="button"
-                        @click="showForm8710Modal = true"
-                        :disabled="logEntries.length === 0"
-                        :class="[
-                          'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                          logEntries.length === 0
-                            ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
-                            : (isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white')
-                        ]"
-                      >
-                        <Icon name="ri:file-pdf-line" size="16" />
-                        Generate 8710 Form
-                      </button>
-                    </div>
-                    <p :class="['text-xs mt-2', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
-                      {{ logEntries.length === 0 ? 'No entries to export' : `${logEntries.length} ${logEntries.length === 1 ? 'entry' : 'entries'} available` }}
-                    </p>
-                  </div>
-                </div>
-                <!-- Compliance Checklist (AC 120-78B & 14 CFR Part 61) -->
-                <div class="space-y-3 pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <ComplianceChecklist :is-dark-mode="isDarkMode" />
-                </div>
-                <!-- Developers Link -->
-                <div class="pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <NuxtLink
-                    to="/developers"
-                    :class="[
-                      'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                      isDarkMode 
-                        ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20' 
-                        : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
-                    ]"
-                    @click="showHeaderSettings = false"
-                  >
-                    <Icon name="ri:code-s-slash-line" size="16" />
-                    Developers
-                  </NuxtLink>
-                </div>
-                <!-- Sign Out Button -->
-                <div class="pt-2 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
-                  <button
-                    type="button"
-                    @click="handleLogout"
-                    :class="[
-                      'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-quicksand transition-all',
-                      isDarkMode 
-                        ? 'bg-red-700 hover:bg-red-600 text-white' 
-                        : 'bg-red-200 hover:bg-red-300 text-red-900'
-                    ]"
-                    aria-label="Sign out"
-                  >
-                    <Icon name="ri:logout-box-line" size="16" />
-                    Sign Out
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
         </nav>
           </div>
         </div>
@@ -1088,27 +660,109 @@
                   </div>
                 </div>
     </div>
-              <div :class="[
-                'p-6 rounded-2xl border text-left transition-colors duration-300',
-                isDarkMode 
-                  ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' 
-                  : 'bg-white border-gray-200 shadow-sm'
-              ]">
-                <h2 :class="['text-lg font-quicksand font-semibold mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
-                  Regulatory Snapshot
-                </h2>
-                <ul :class="['space-y-2 text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-600']">
-                  <li>
-                    • Track dates, aircraft identification, departure/destination, and total time to satisfy
-                    61.51(b) recordkeeping.
-                  </li>
-                  <li>
-                    • Capture conditions (night, instrument, simulated) and training specifics required for recent experience.
-                  </li>
-                  <li>
-                    • AC&nbsp;120-78B reminders: maintain data integrity, protect revision history, and record signer identity (signatures coming soon).
-                  </li>
-                </ul>
+              <Transition
+                enter-active-class="transition ease-out duration-300"
+                enter-from-class="opacity-0 -translate-y-2"
+                enter-to-class="opacity-100 translate-y-0"
+                leave-active-class="transition ease-in duration-200"
+                leave-from-class="opacity-100 translate-y-0"
+                leave-to-class="opacity-0 -translate-y-2"
+              >
+                <div
+                  v-if="showUpdatesBanner"
+                  :class="[
+                    'relative p-6 rounded-2xl border text-left transition-colors duration-300 mb-6',
+                    isDarkMode
+                      ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40'
+                      : 'bg-white border-gray-200 shadow-sm'
+                  ]"
+                >
+                  <button
+                    type="button"
+                    class="absolute right-4 top-4 rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/10 dark:hover:text-gray-200 transition-colors"
+                    aria-label="Dismiss"
+                    @click="dismissUpdates"
+                  >
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                  <h2 :class="['text-lg font-quicksand font-semibold mb-4 pr-10', isDarkMode ? 'text-white' : 'text-gray-900']">
+                    Updates!
+                  </h2>
+                  <ul :class="['space-y-2 text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-600']">
+                    <li>
+                      <strong>Add pages</strong> — Build multi-page logbook spreads with the new Logbook Builder. Add rows, choose columns, and use two-page layout for left/right printing.
+                    </li>
+                    <li>
+                      <strong>Upgraded UI</strong> — Refined dashboard and a cleaner experience across light and dark mode.
+                    </li>
+                  </ul>
+                </div>
+              </Transition>
+              <Transition
+                enter-active-class="transition ease-out duration-300"
+                enter-from-class="opacity-0 -translate-y-2"
+                enter-to-class="opacity-100 translate-y-0"
+                leave-active-class="transition ease-in duration-200"
+                leave-from-class="opacity-100 translate-y-0"
+                leave-to-class="opacity-0 -translate-y-2"
+              >
+                <div
+                  v-if="showRegulatorySnapshot"
+                  :class="[
+                    'relative p-6 rounded-2xl border text-left transition-colors duration-300',
+                    isDarkMode
+                      ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40'
+                      : 'bg-white border-gray-200 shadow-sm'
+                  ]"
+                >
+                  <button
+                    type="button"
+                    class="absolute right-4 top-4 rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/10 dark:hover:text-gray-200 transition-colors"
+                    aria-label="Dismiss"
+                    @click="dismissSnapshot"
+                  >
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                  <h2 :class="['text-lg font-quicksand font-semibold mb-4 pr-10', isDarkMode ? 'text-white' : 'text-gray-900']">
+                    Regulatory Snapshot
+                  </h2>
+                  <ul :class="['space-y-2 text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-600']">
+                    <li>
+                      • Track dates, aircraft identification, departure/destination, and total time to satisfy
+                      61.51(b) recordkeeping.
+                    </li>
+                    <li>
+                      • Capture conditions (night, instrument, simulated) and training specifics required for recent experience.
+                    </li>
+                    <li>
+                      • AC&nbsp;120-78B reminders: maintain data integrity, protect revision history, and record signer identity (signatures coming soon).
+                    </li>
+                  </ul>
+                </div>
+              </Transition>
+              <div
+                v-if="!showUpdatesBanner && !showRegulatorySnapshot"
+                class="flex items-center justify-center"
+              >
+                <button
+                  type="button"
+                  :class="[
+                    'inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-quicksand transition-colors',
+                    isDarkMode
+                      ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
+                      : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                  ]"
+                  @click="showAllUpdates"
+                >
+                  <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                  Show updates
+                </button>
               </div>
             </div>
           </section>
@@ -3390,58 +3044,186 @@
       </div>
     </Transition>
 
-    <!-- Pilot Profile Overlay -->
+    <!-- Profile & Settings Modal -->
     <div
-      v-if="showPilotProfile"
-      class="fixed inset-0 z-40 flex items-start justify-center px-4 py-8"
+      v-if="showSettingsModal"
+      class="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6"
     >
-      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showPilotProfile = false"></div>
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showSettingsModal = false"></div>
+      
       <div
         :class="[
-          'relative w-full max-w-7xl overflow-y-auto rounded-3xl border shadow-2xl transition-colors duration-300 max-h-[90vh] p-6 sm:p-8 space-y-6',
+          'relative w-full max-w-6xl h-[90vh] flex flex-col sm:flex-row overflow-hidden rounded-3xl border shadow-2xl transition-colors duration-300',
           isDarkMode 
             ? 'bg-gray-900 border-gray-700 text-gray-100' 
-            : 'bg-gray-100 border-gray-200 text-gray-900'
+            : 'bg-white border-gray-200 text-gray-900'
         ]"
       >
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div class="flex items-start gap-4">
-            <div
+        <!-- Close Button (Mobile Absolute) -->
+        <button
+          @click="showSettingsModal = false"
+          :class="[
+            'absolute top-4 right-4 z-10 sm:hidden rounded-full p-2 transition-colors',
+            isDarkMode ? 'bg-black/50 text-gray-300 hover:text-white' : 'bg-gray-200/80 text-gray-600 hover:text-gray-900'
+          ]"
+        >
+          <Icon name="ri:close-line" size="24" />
+        </button>
+
+        <!-- Sidebar Navigation -->
+        <div
+          :class="[
+            'w-full sm:w-64 flex-shrink-0 flex flex-col border-b sm:border-b-0 sm:border-r',
+            isDarkMode ? 'bg-gray-900/50 border-gray-800' : 'bg-gray-50 border-gray-200'
+          ]"
+        >
+          <div class="p-6 pb-4 hidden sm:block">
+            <h2 class="text-xl font-bold font-quicksand">Settings</h2>
+          </div>
+          
+          <!-- Mobile Tab Select (shown only on small screens) -->
+          <div class="p-4 sm:hidden overflow-x-auto whitespace-nowrap flex gap-2 hide-scrollbar border-b" :class="isDarkMode ? 'border-gray-800' : 'border-gray-200'">
+            <button
+              v-for="tab in ['profile', 'preferences', 'data', 'compliance', 'advanced']"
+              :key="tab"
+              @click="activeSettingsTab = tab"
               :class="[
-                'h-16 w-16 rounded-2xl flex items-center justify-center text-2xl font-semibold',
-                isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700'
+                'px-4 py-2 rounded-full text-sm font-medium font-quicksand transition-colors capitalize',
+                activeSettingsTab === tab
+                  ? 'bg-blue-600 text-white'
+                  : (isDarkMode ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-600 border border-gray-200')
               ]"
             >
-              {{ pilotInitials }}
-            </div>
-            <div>
-              <p :class="['text-xs uppercase tracking-[0.2em] font-semibold', isDarkMode ? 'text-blue-300' : 'text-blue-600']">
-                Pilot Profile
-              </p>
-              <h2 class="text-2xl font-semibold font-quicksand mt-1">
-                {{ pilotProfile.name || 'Add your name' }}
-              </h2>
-              <p :class="['text-sm mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                {{ pilotProfile.callsign ? `Callsign ${pilotProfile.callsign}` : 'Add a callsign to personalize your profile' }}
-              </p>
-              <p v-if="pilotProfile.homeBase" :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                Home Base · {{ pilotProfile.homeBase.toUpperCase() }}
-              </p>
-            </div>
+              {{ tab === 'data' ? 'Data & Sync' : tab }}
+            </button>
           </div>
-          <button
-            @click="showPilotProfile = false"
-            :class="[
-              'self-start rounded-full p-2 transition-colors',
-              isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
-            ]"
-            aria-label="Close pilot profile"
-          >
-            <Icon name="ri:close-line" size="22" />
-          </button>
+
+          <!-- Desktop Sidebar Tabs -->
+          <nav class="hidden sm:flex flex-col flex-1 p-4 gap-1 overflow-y-auto">
+            <button
+              @click="activeSettingsTab = 'profile'"
+              :class="[
+                'flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
+                activeSettingsTab === 'profile'
+                  ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700')
+                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')
+              ]"
+            >
+              <Icon name="ri:user-smile-line" size="20" />
+              Pilot Profile
+            </button>
+            <button
+              @click="activeSettingsTab = 'preferences'"
+              :class="[
+                'flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
+                activeSettingsTab === 'preferences'
+                  ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700')
+                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')
+              ]"
+            >
+              <Icon name="ri:settings-4-line" size="20" />
+              Preferences
+            </button>
+            <button
+              @click="activeSettingsTab = 'data'"
+              :class="[
+                'flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
+                activeSettingsTab === 'data'
+                  ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700')
+                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')
+              ]"
+            >
+              <Icon name="ri:database-2-line" size="20" />
+              Data & Sync
+            </button>
+            <button
+              @click="activeSettingsTab = 'compliance'"
+              :class="[
+                'flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
+                activeSettingsTab === 'compliance'
+                  ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700')
+                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')
+              ]"
+            >
+              <Icon name="ri:shield-check-line" size="20" />
+              Compliance
+            </button>
+            <button
+              @click="activeSettingsTab = 'advanced'"
+              :class="[
+                'flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
+                activeSettingsTab === 'advanced'
+                  ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700')
+                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')
+              ]"
+            >
+              <Icon name="ri:tools-line" size="20" />
+              Advanced
+            </button>
+
+            <div class="mt-auto pt-4 border-t" :class="isDarkMode ? 'border-gray-800' : 'border-gray-200'">
+              <button
+                @click="handleLogout"
+                :class="[
+                  'w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
+                  isDarkMode ? 'text-red-400 hover:bg-red-900/20' : 'text-red-600 hover:bg-red-50'
+                ]"
+              >
+                <Icon name="ri:logout-box-line" size="20" />
+                Sign Out
+              </button>
+            </div>
+          </nav>
         </div>
 
-        <div class="grid gap-6 lg:grid-cols-3">
+        <!-- Main Content Area -->
+        <div class="flex-1 flex flex-col overflow-hidden relative">
+          <!-- Desktop Header -->
+          <div class="hidden sm:flex items-center justify-between p-6 border-b" :class="isDarkMode ? 'border-gray-800' : 'border-gray-200'">
+            <h3 class="text-2xl font-semibold font-quicksand capitalize">
+              {{ activeSettingsTab === 'data' ? 'Data & Sync' : activeSettingsTab }}
+            </h3>
+            <button
+              @click="showSettingsModal = false"
+              :class="[
+                'rounded-full p-2 transition-colors',
+                isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+              ]"
+              aria-label="Close"
+            >
+              <Icon name="ri:close-line" size="24" />
+            </button>
+          </div>
+
+          <!-- Scrollable Tab Content -->
+          <div class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar">
+            
+            <!-- PROFILE TAB -->
+            <div v-show="activeSettingsTab === 'profile'">
+              <div class="flex items-start gap-4 mb-8">
+                <div
+                  :class="[
+                    'h-16 w-16 rounded-2xl flex items-center justify-center text-2xl font-semibold',
+                    isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700'
+                  ]"
+                >
+                  {{ pilotInitials }}
+                </div>
+                <div>
+                  <h2 class="text-2xl font-semibold font-quicksand">
+                    {{ pilotProfile.name || 'Add your name' }}
+                  </h2>
+                  <p :class="['text-sm mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                    {{ pilotProfile.callsign ? `Callsign ${pilotProfile.callsign}` : 'Add a callsign to personalize your profile' }}
+                  </p>
+                  <p v-if="pilotProfile.homeBase" :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                    Home Base · {{ pilotProfile.homeBase.toUpperCase() }}
+                  </p>
+                </div>
+              </div>
+              
+              <!-- REPLACED INNER PROFILE CONTENT -->
+<div class="grid gap-6 lg:grid-cols-3">
           <div
             :class="[
               'space-y-4 rounded-2xl border p-4 sm:p-6',
@@ -3966,6 +3748,329 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+        
+            </div>
+
+            <!-- PREFERENCES TAB -->
+            <div v-show="activeSettingsTab === 'preferences'" class="space-y-8 max-w-3xl">
+              <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+                <h4 :class="['text-sm font-semibold uppercase tracking-wide mb-4', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Theme</h4>
+                <div
+                  class="inline-flex rounded-full border text-sm font-quicksand overflow-hidden"
+                  :class="isDarkMode ? 'border-white/10 bg-black/20 shadow-inner' : 'border-gray-200 bg-gray-50'"
+                  role="group"
+                  aria-label="Theme selection"
+                >
+                  <button
+                    type="button"
+                    class="px-6 py-2 transition-colors"
+                    :class="theme === 'dark'
+                      ? 'bg-blue-600 text-white'
+                      : isDarkMode
+                        ? 'text-gray-300 hover:bg-gray-700'
+                        : 'text-gray-700 hover:bg-gray-200'"
+                    @click="setTheme('dark')"
+                  >
+                    Dark
+                  </button>
+                  <button
+                    type="button"
+                    class="px-6 py-2 border-l transition-colors"
+                    :class="[
+                      theme === 'light'
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : isDarkMode
+                          ? 'text-gray-300 hover:bg-gray-700 border-gray-600'
+                          : 'text-gray-700 hover:bg-gray-200 border-gray-300'
+                    ]"
+                    @click="setTheme('light')"
+                  >
+                    Light
+                  </button>
+                </div>
+              </div>
+
+              <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+                <h4 :class="['text-sm font-semibold uppercase tracking-wide mb-4', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Time Format</h4>
+                
+                <div class="space-y-4">
+                  <div>
+                    <div :class="['font-quicksand text-sm mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-600']">Clock Format</div>
+                    <div class="flex gap-2">
+                      <button
+                        type="button"
+                        @click="setClockFormat('24')"
+                        :class="[
+                          'px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
+                          clockFormat === '24'
+                            ? 'bg-blue-600 text-white'
+                            : (isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')
+                        ]"
+                      >
+                        24-Hour
+                      </button>
+                      <button
+                        type="button"
+                        @click="setClockFormat('12')"
+                        :class="[
+                          'px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
+                          clockFormat === '12'
+                            ? 'bg-blue-600 text-white'
+                            : (isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')
+                        ]"
+                      >
+                        12-Hour
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div :class="['font-quicksand text-sm mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-600']">Timezone</div>
+                    <div class="flex gap-2">
+                      <button
+                        type="button"
+                        @click="setClockZone('UTC')"
+                        :class="[
+                          'px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
+                          clockZone === 'UTC'
+                            ? 'bg-blue-600 text-white'
+                            : (isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')
+                        ]"
+                      >
+                        UTC
+                      </button>
+                      <button
+                        type="button"
+                        @click="setClockZone('Local')"
+                        :class="[
+                          'px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
+                          clockZone === 'Local'
+                            ? 'bg-blue-600 text-white'
+                            : (isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200')
+                        ]"
+                      >
+                        Local Time
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+                <h4 :class="['text-sm font-semibold uppercase tracking-wide mb-4', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Customize Totals Overview</h4>
+                <p :class="['text-sm mb-4', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                  Select which metrics are displayed in the main totals overview bar.
+                </p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                  <label
+                    v-for="metric in availableTotalsMetrics"
+                    :key="metric.key"
+                    :class="[
+                      'flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-colors',
+                      isDarkMode ? 'border-gray-700 hover:bg-white/5' : 'border-gray-200 hover:bg-gray-50'
+                    ]"
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="selectedTotalsMetrics.includes(metric.key)"
+                      @change="toggleTotalsMetric(metric.key)"
+                      :disabled="metric.key === 'totalTime'"
+                      :class="[
+                        'rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-5 h-5',
+                        isDarkMode ? 'bg-gray-800 border-gray-600' : 'bg-white'
+                      ]"
+                    />
+                    <span :class="['text-sm font-quicksand font-medium', isDarkMode ? 'text-gray-200' : 'text-gray-700']">
+                      {{ metric.label }}
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- DATA & SYNC TAB -->
+            <div v-show="activeSettingsTab === 'data'" class="space-y-8 max-w-3xl">
+              <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+                <h4 :class="['text-sm font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Sync Status</h4>
+                
+                <div class="flex flex-col gap-4">
+                  <div class="flex flex-wrap items-center gap-3">
+                    <div
+                      :class="[
+                        'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all',
+                        isOnline
+                          ? (isSyncing
+                              ? (isDarkMode ? 'bg-yellow-600/20 text-yellow-400 border border-yellow-600/50' : 'bg-yellow-100 text-yellow-700 border border-yellow-300')
+                              : (isDarkMode ? 'bg-green-600/20 text-green-400 border border-green-600/50' : 'bg-green-100 text-green-700 border border-green-300'))
+                          : (isDarkMode ? 'bg-red-600/20 text-red-400 border border-red-600/50' : 'bg-red-100 text-red-700 border border-red-300')
+                      ]"
+                    >
+                      <Icon
+                        :name="syncStatusIcon"
+                        :class="[isSyncing ? 'animate-spin' : '', 'text-base']"
+                      />
+                      <span>{{ syncStatusText }}</span>
+                    </div>
+
+                    <div
+                      v-if="queueLength > 0"
+                      :class="[
+                        'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-quicksand font-semibold',
+                        isDarkMode ? 'bg-orange-600/20 text-orange-400 border border-orange-600/50' : 'bg-orange-100 text-orange-700 border border-orange-300'
+                      ]"
+                    >
+                      <Icon name="ri:time-line" size="16" />
+                      <span>{{ queueLength }} pending operations</span>
+                    </div>
+
+                    <div
+                      v-if="syncError"
+                      :class="[
+                        'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-quicksand',
+                        isDarkMode ? 'bg-red-600/20 text-red-400 border border-red-600/50' : 'bg-red-100 text-red-700 border border-red-300'
+                      ]"
+                    >
+                      <Icon name="ri:error-warning-line" size="16" />
+                      <span>Sync Error</span>
+                    </div>
+                  </div>
+
+                  <button
+                    v-if="queueLength > 0 && isOnline"
+                    type="button"
+                    :disabled="isSyncing"
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-colors disabled:opacity-50 w-fit"
+                    :class="isDarkMode ? 'bg-blue-600/20 text-blue-400 border border-blue-600/50 hover:bg-blue-600/30' : 'bg-blue-100 text-blue-700 border border-blue-300 hover:bg-blue-200'"
+                    @click="retryFailed()"
+                  >
+                    <Icon name="ri:refresh-line" size="16" :class="{ 'animate-spin': isSyncing }" />
+                    <span>Retry sync</span>
+                  </button>
+                </div>
+              </div>
+
+              <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+                <h4 :class="['text-sm font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Import Data</h4>
+                <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                  Import logbook entries from CSV or JSON format. Duplicates (same date and registration) will be skipped.
+                </p>
+                <div 
+                  class="p-6 border-2 border-dashed rounded-xl transition-colors text-center" 
+                  :class="[
+                    isDragOverImport 
+                      ? (isDarkMode ? 'border-green-500 bg-green-900/20' : 'border-green-500 bg-green-50') 
+                      : (isDarkMode ? 'border-gray-700 bg-gray-800/50' : 'border-gray-300 bg-gray-50')
+                  ]"
+                  @dragover.prevent="handleImportDragOver"
+                  @dragenter.prevent="handleImportDragEnter"
+                  @dragleave="handleImportDragLeave"
+                  @drop.prevent="handleImportDrop"
+                >
+                  <Icon name="ri:upload-cloud-2-line" size="32" :class="['mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']" />
+                  <p :class="['text-sm font-medium mb-4', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+                    {{ isDragOverImport ? 'Drop file here' : 'Drag and drop your file here' }}
+                  </p>
+                  <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      @click="() => csvFileInput?.click()"
+                      :class="[
+                        'w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all',
+                        isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 shadow-sm'
+                      ]"
+                    >
+                      <Icon name="ri:file-excel-2-line" size="16" class="mr-2 inline" />
+                      Browse CSV
+                    </button>
+                    <button
+                      type="button"
+                      @click="() => jsonFileInput?.click()"
+                      :class="[
+                        'w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all',
+                        isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 shadow-sm'
+                      ]"
+                    >
+                      <Icon name="ri:file-code-line" size="16" class="mr-2 inline" />
+                      Browse JSON
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+                <h4 :class="['text-sm font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Export Data</h4>
+                <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                  Download a backup of your entire logbook or generate forms.
+                  <span class="block mt-1 font-medium">{{ logEntries.length }} total {{ logEntries.length === 1 ? 'entry' : 'entries' }}</span>
+                </p>
+                <div class="flex flex-col sm:flex-row items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    @click="openExportDialog"
+                    :disabled="logEntries.length === 0"
+                    :class="[
+                      'w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all',
+                      logEntries.length === 0
+                        ? (isDarkMode ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed')
+                        : (isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm')
+                    ]"
+                  >
+                    <Icon name="ri:download-cloud-2-line" size="16" class="mr-2 inline" />
+                    Export Logbook
+                  </button>
+                  <button
+                    type="button"
+                    @click="showForm8710Modal = true"
+                    :disabled="logEntries.length === 0"
+                    :class="[
+                      'w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all',
+                      logEntries.length === 0
+                        ? (isDarkMode ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-gray-100 text-gray-400 cursor-not-allowed')
+                        : (isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 shadow-sm')
+                    ]"
+                  >
+                    <Icon name="ri:file-pdf-line" size="16" class="mr-2 inline" />
+                    Generate 8710 Form
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- COMPLIANCE TAB -->
+            <div v-show="activeSettingsTab === 'compliance'" class="max-w-4xl space-y-6">
+              <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                Track your electronic logbook compliance with AC 120-78B and 14 CFR Part 61.
+              </p>
+              <ComplianceChecklist :is-dark-mode="isDarkMode" />
+            </div>
+
+            <!-- ADVANCED TAB -->
+            <div v-show="activeSettingsTab === 'advanced'" class="space-y-8 max-w-3xl">
+              <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+                <h4 :class="['text-sm font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Developer Tools</h4>
+                <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                  Access advanced tools, system logs, and data management utilities.
+                </p>
+                <div class="pt-2">
+                  <NuxtLink
+                    to="/developers"
+                    @click="showSettingsModal = false"
+                    :class="[
+                      'inline-flex items-center px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all',
+                      isDarkMode 
+                        ? 'bg-gray-800 hover:bg-gray-700 text-white' 
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-900 shadow-sm'
+                    ]"
+                  >
+                    <Icon name="ri:code-s-slash-line" size="18" class="mr-2" />
+                    Open Developer Console
+                  </NuxtLink>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -6146,6 +6251,18 @@ const syncStatusTitle = computed(() => {
 })
 
 const showAuthModal = ref(false)
+const showUpdatesBanner = ref(true)
+function dismissUpdates() {
+  showUpdatesBanner.value = false
+}
+const showRegulatorySnapshot = ref(true)
+function dismissSnapshot() {
+  showRegulatorySnapshot.value = false
+}
+function showAllUpdates() {
+  showUpdatesBanner.value = true
+  showRegulatorySnapshot.value = true
+}
 const isMigrating = ref(false)
 const migrationProgress = ref({ step: '', current: 0, total: 0 })
 
@@ -7558,8 +7675,8 @@ const catalogOpenState = reactive<Record<CatalogKey, boolean>>({
   categoryClass: true
 })
 const isSidebarCollapsed = ref(false)
-const showHeaderSettings = ref(false)
-const showPilotProfile = ref(false)
+const showSettingsModal = ref(false)
+const activeSettingsTab = ref('profile')
 const showImportSection = ref(true)
 const showExportSection = ref(true)
 const showIdentDropdown = ref(false)
@@ -13249,9 +13366,7 @@ onMounted(async () => {
   // Close settings when clicking outside
   const handleClickOutside = (event: MouseEvent) => {
     const target = event.target as HTMLElement
-    if (showHeaderSettings.value && !target.closest('.settings-container')) {
-      showHeaderSettings.value = false
-    }
+
     if (showColumnSettings.value && !target.closest('.column-settings-container')) {
       showColumnSettings.value = false
     }
