@@ -23,7 +23,7 @@
           </button>
           <button 
             @click="openAuth('signup')"
-            class="px-5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-full hover:bg-blue-700 transition-all shadow-sm hover:shadow-md dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
+            class="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20 active:scale-[0.98] dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
           >
             Get Started
           </button>
@@ -62,13 +62,13 @@
           <div class="flex flex-col sm:flex-row items-center justify-center gap-4 animate-slide-up delay-200">
             <button 
               @click="openAuth('signup')"
-              class="w-full sm:w-auto px-8 py-4 bg-blue-600 text-white text-lg font-semibold rounded-full hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
+              class="w-full sm:w-auto px-8 py-4 bg-blue-600 text-white text-lg font-bold rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20 active:scale-[0.98] dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
             >
               Get Started
             </button>
             <button 
               @click="openAuth('signin')"
-              class="w-full sm:w-auto px-8 py-4 bg-white text-gray-900 text-lg font-semibold rounded-full border border-gray-200 hover:border-blue-200 hover:bg-blue-50/50 transition-all dark:bg-white dark:text-gray-900 dark:border-gray-200 dark:hover:border-blue-200 dark:hover:bg-blue-50/50"
+              class="w-full sm:w-auto px-8 py-4 bg-white text-gray-900 text-lg font-bold rounded-xl border border-gray-200 hover:border-blue-200 hover:bg-blue-50/50 transition-all active:scale-[0.98] dark:bg-white dark:text-gray-900 dark:border-gray-200 dark:hover:border-blue-200 dark:hover:bg-blue-50/50"
             >
               Sign In
             </button>
@@ -88,7 +88,7 @@
           <div class="mb-20">
             <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center dark:text-gray-900">Features</h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
-              <div v-for="(feature, i) in features" :key="i" class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 dark:bg-white dark:border-gray-100">
+              <div v-for="(feature, i) in features" :key="i" class="bg-white p-8 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-gray-100 dark:bg-white dark:border-gray-100">
                 <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-6 dark:bg-blue-50 dark:text-blue-600">
                   <Icon :name="feature.icon" size="24" />
                 </div>
@@ -102,7 +102,7 @@
           <div>
             <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center dark:text-gray-900">Features to Come</h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
-              <div v-for="(feature, i) in featuresToCome" :key="i" class="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 dark:bg-white dark:border-gray-100">
+              <div v-for="(feature, i) in featuresToCome" :key="i" class="bg-white p-8 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-gray-100 dark:bg-white dark:border-gray-100">
                 <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-6 dark:bg-blue-50 dark:text-blue-600">
                   <Icon :name="feature.icon" size="24" />
                 </div>

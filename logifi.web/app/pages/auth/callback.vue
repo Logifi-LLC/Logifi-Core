@@ -1,14 +1,14 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gray-100 font-quicksand">
+  <div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 font-quicksand">
     <div class="w-full max-w-md p-8">
-      <div class="bg-white rounded-3xl shadow-lg p-8 text-center">
+      <div class="bg-white dark:bg-gray-900 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-gray-100 dark:border-gray-800 p-8 text-center">
         <!-- Loading State -->
         <div v-if="isProcessing" class="space-y-4">
           <div class="flex justify-center">
             <Icon name="ri:loader-4-line" size="48" class="animate-spin text-blue-600" />
           </div>
-          <h2 class="text-2xl font-bold text-gray-900">Completing sign in...</h2>
-          <p class="text-sm text-gray-500">Please wait while we verify your account</p>
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Completing sign in...</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Please wait while we verify your account</p>
         </div>
 
         <!-- Success State -->
@@ -16,8 +16,8 @@
           <div class="flex justify-center">
             <Icon name="ri:checkbox-circle-fill" size="48" class="text-green-500" />
           </div>
-          <h2 class="text-2xl font-bold text-gray-900">Sign in successful!</h2>
-          <p class="text-sm text-gray-500">Redirecting to your dashboard...</p>
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Sign in successful!</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Redirecting to your dashboard...</p>
         </div>
 
         <!-- Error State -->
@@ -25,18 +25,18 @@
           <div class="flex justify-center">
             <Icon name="ri:error-warning-fill" size="48" class="text-red-500" />
           </div>
-          <h2 class="text-2xl font-bold text-gray-900">Sign in failed</h2>
-          <p class="text-sm text-red-600 mb-4">{{ error }}</p>
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Sign in failed</h2>
+          <p class="text-sm text-red-600 dark:text-red-400 mb-4">{{ error }}</p>
           <div class="space-y-2">
             <NuxtLink
               to="/"
-              class="block w-full px-4 py-2 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors"
+              class="block w-full px-4 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all active:scale-[0.98] shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20"
             >
               Return to Home
             </NuxtLink>
             <button
               @click="retry"
-              class="block w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
+              class="block w-full px-4 py-4 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-all active:scale-[0.98]"
             >
               Try Again
             </button>
@@ -56,13 +56,21 @@ const { initAuth, isAuthenticated, user } = useAuth()
 const isProcessing = ref(true)
 const isSuccess = ref(false)
 const error = ref<string | null>(null)
+const isRecovery = ref(false)
 
 const processCallback = async () => {
   try {
     isProcessing.value = true
     error.value = null
 
-    // Initialize auth to detect the session after OAuth redirect
+    // Detect if this is a password recovery (reset) callback
+    if (typeof window !== 'undefined' && window.location.hash) {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1))
+      const type = hashParams.get('type')
+      isRecovery.value = type === 'recovery'
+    }
+
+    // Initialize auth to detect the session after OAuth or recovery redirect
     await initAuth()
 
     // Give Supabase a brief moment to update the session
@@ -76,16 +84,22 @@ const processCallback = async () => {
         navigateTo('/dashboard')
       }, 1500)
     } else {
-      const urlParams = new URLSearchParams(window.location.search)
-      const errorDescription = urlParams.get('error_description')
-      const errorCode = urlParams.get('error')
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search)
+        const errorDescription = urlParams.get('error_description')
+        const errorCode = urlParams.get('error')
 
-      if (errorDescription) {
-        error.value = decodeURIComponent(errorDescription)
-      } else if (errorCode) {
-        error.value = `Authentication error: ${errorCode}`
+        if (errorDescription) {
+          error.value = decodeURIComponent(errorDescription)
+        } else if (errorCode) {
+          error.value = `Authentication error: ${errorCode}`
+        } else if (isRecovery.value) {
+          error.value = 'Failed to complete password reset. The link may have expired or already been used.'
+        } else {
+          error.value = 'Failed to complete sign in. Please try again.'
+        }
       } else {
-        error.value = 'Failed to complete sign in. Please try again.'
+        error.value = 'Failed to complete authentication. Please try again.'
       }
 
       isProcessing.value = false

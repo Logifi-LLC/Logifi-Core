@@ -86,7 +86,7 @@ useLogbookBuilderKeyboard({
         <NuxtLink
           to="/"
           :class="[
-            'inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-colors border',
+            'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-quicksand font-bold transition-colors border',
             theme === 'dark'
               ? 'bg-white/5 hover:bg-white/10 border-white/10 text-white shadow-sm shadow-black/20'
               : 'bg-gray-200 hover:bg-gray-300 text-gray-900 border-gray-300'
@@ -99,9 +99,9 @@ useLogbookBuilderKeyboard({
       <LogbookBuilderGrid ref="gridRef" />
       <LogbookBuilderValidateBar />
       <section
-        class="rounded-lg p-4 sm:p-6 font-quicksand border"
+        class="rounded-3xl p-4 sm:p-6 font-quicksand border shadow-[0_20px_50px_rgba(0,0,0,0.15)]"
         :class="theme === 'dark'
-          ? 'border-white/10 bg-gray-900 shadow-md shadow-black/40'
+          ? 'border-white/10 bg-gray-900'
           : 'border-gray-200 bg-white'"
       >
         <h2

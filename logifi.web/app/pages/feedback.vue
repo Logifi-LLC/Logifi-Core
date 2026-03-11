@@ -41,7 +41,7 @@
               target="_blank"
               rel="noopener noreferrer"
               :class="[
-                'inline-flex items-center px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all duration-200',
+                'inline-flex items-center px-4 py-2 rounded-xl text-sm font-quicksand font-bold transition-all duration-200',
                 'bg-[#5865F2] hover:bg-[#4752C4] text-white'
               ]"
             >
@@ -52,7 +52,7 @@
               type="button"
               @click="goBack"
               :class="[
-                'inline-flex items-center px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all duration-200',
+                'inline-flex items-center px-4 py-2 rounded-xl text-sm font-quicksand font-bold transition-all duration-200',
                 isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
               ]"
             >
@@ -65,7 +65,7 @@
     </header>
 
     <main class="pt-24 pb-16 px-4 sm:px-6 lg:px-8">
-      <div class="max-w-2xl mx-auto">
+      <div :class="['max-w-2xl mx-auto rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] p-8 sm:p-12 border transition-all duration-500', isDarkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100']">
         <div class="text-center mb-10">
           <div :class="['inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-6 shadow-lg', isDarkMode ? 'bg-blue-900/50' : 'bg-blue-600 shadow-blue-900/20']">
             <Icon name="ri:feedback-line" size="32" class="text-white" />
@@ -141,10 +141,10 @@
               maxlength="200"
               placeholder="Short summary"
               :class="[
-                'w-full px-4 py-3 rounded-xl border font-quicksand placeholder-gray-400',
+                'w-full px-4 py-3 rounded-xl border font-quicksand placeholder-gray-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all',
                 isDarkMode
-                  ? 'bg-gray-800 border-gray-600 text-white focus:ring-blue-500 focus:border-blue-500'
-                  : 'bg-white border-gray-300 text-gray-900 focus:ring-blue-500 focus:border-blue-500'
+                  ? 'bg-gray-800 border-gray-600 text-white'
+                  : 'bg-white border-gray-300 text-gray-900'
               ]"
             />
           </div>
@@ -158,10 +158,10 @@
               maxlength="2000"
               placeholder="Describe your bug report or feature idea..."
               :class="[
-                'w-full px-4 py-3 rounded-xl border font-quicksand placeholder-gray-400 resize-y',
+                'w-full px-4 py-3 rounded-xl border font-quicksand placeholder-gray-400 resize-y focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all',
                 isDarkMode
-                  ? 'bg-gray-800 border-gray-600 text-white focus:ring-blue-500 focus:border-blue-500'
-                  : 'bg-white border-gray-300 text-gray-900 focus:ring-blue-500 focus:border-blue-500'
+                  ? 'bg-gray-800 border-gray-600 text-white'
+                  : 'bg-white border-gray-300 text-gray-900'
               ]"
             />
           </div>
@@ -174,10 +174,10 @@
               maxlength="320"
               placeholder="For follow-up"
               :class="[
-                'w-full px-4 py-3 rounded-xl border font-quicksand placeholder-gray-400',
+                'w-full px-4 py-3 rounded-xl border font-quicksand placeholder-gray-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all',
                 isDarkMode
-                  ? 'bg-gray-800 border-gray-600 text-white focus:ring-blue-500 focus:border-blue-500'
-                  : 'bg-white border-gray-300 text-gray-900 focus:ring-blue-500 focus:border-blue-500'
+                  ? 'bg-gray-800 border-gray-600 text-white'
+                  : 'bg-white border-gray-300 text-gray-900'
               ]"
             />
           </div>
@@ -191,7 +191,7 @@
             type="submit"
             :disabled="isSubmitting"
             :class="[
-              'w-full sm:w-auto px-8 py-3 rounded-xl font-quicksand font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed',
+              'w-full sm:w-auto px-8 py-4 rounded-xl font-quicksand font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20',
               isDarkMode
                 ? 'bg-blue-600 hover:bg-blue-500 text-white'
                 : 'bg-blue-600 hover:bg-blue-700 text-white'

@@ -74,7 +74,7 @@
         ]"
       >
         <div class="mr-auto px-6 sm:px-8 py-4 flex items-center justify-between relative">
-        <a class="left" href="/">
+        <a class="left" href="/dashboard">
             <img
               src="/images/logifi-logo.png"
               alt="logifi"
@@ -95,7 +95,23 @@
             {{ displayClock }}
           </span>
         </div>
-        <nav class="flex items-center gap-3">
+        <nav class="flex items-center gap-2">
+          <NuxtLink
+            to="/feedback"
+            class="hidden sm:inline-block text-xs sm:text-sm font-medium font-quicksand transition-colors mr-2"
+            :class="[
+              isDarkMode
+                ? 'text-gray-300 hover:text-blue-400'
+                : 'text-gray-600 hover:text-blue-600'
+            ]"
+            aria-label="Send feedback about Logifi"
+          >
+            Feedback
+          </NuxtLink>
+          <div
+            class="h-4 w-px bg-gray-200"
+            :class="isDarkMode ? 'bg-gray-700' : 'bg-gray-200'"
+          ></div>
           <button
             type="button"
             @click="showSettingsModal = true"

@@ -200,6 +200,36 @@ export const useAuth = () => {
     }
   }
 
+  // Send password reset email
+  const resetPassword = async (email: string) => {
+    try {
+      isLoading.value = true
+      error.value = null
+
+      const redirectTo =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}/auth/callback`
+          : undefined
+
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo,
+      })
+
+      if (resetError) {
+        throw resetError
+      }
+
+      return { success: true }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to send password reset email'
+      error.value = errorMessage
+      console.error('Reset password error:', err)
+      return { success: false, error: errorMessage }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   // Refresh session
   const refreshSession = async () => {
     try {
@@ -231,6 +261,7 @@ export const useAuth = () => {
     signIn,
     signOut,
     signInWithGoogle,
+    resetPassword,
     refreshSession,
     initAuth,
   }

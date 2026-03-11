@@ -28,7 +28,7 @@
         <section class="mb-10">
           <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">1. Who We Are</h2>
           <p class="text-gray-700 leading-relaxed">
-            Logifi is operated by [Your Entity Name]. For privacy questions, contact us at
+            Logifi is operated by Logifi LLC. For privacy questions, contact us at
             <a href="mailto:info@logifi.io" class="text-blue-600 hover:underline">info@logifi.io</a>.
           </p>
         </section>

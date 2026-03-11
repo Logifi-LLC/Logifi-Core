@@ -48,7 +48,7 @@
               target="_blank"
               rel="noopener noreferrer"
               :class="[
-                'inline-flex items-center px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all duration-200',
+                'inline-flex items-center px-4 py-2 rounded-xl text-sm font-quicksand font-bold transition-all duration-200',
                 isDarkMode 
                   ? 'bg-[#5865F2] hover:bg-[#4752C4] text-white' 
                   : 'bg-[#5865F2] hover:bg-[#4752C4] text-white'
@@ -63,7 +63,7 @@
               type="button"
               @click="goBack"
               :class="[
-                'inline-flex items-center px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all duration-200',
+                'inline-flex items-center px-4 py-2 rounded-xl text-sm font-quicksand font-bold transition-all duration-200',
                 isDarkMode 
                   ? 'bg-gray-700 hover:bg-gray-600 text-white' 
                   : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
@@ -101,7 +101,7 @@
             target="_blank"
             rel="noopener noreferrer"
             :class="[
-              'flex items-start gap-4 p-6 rounded-2xl border transition-all duration-200 hover:scale-[1.02] shadow-sm',
+              'flex items-start gap-4 p-6 rounded-3xl border transition-all duration-200 hover:scale-[1.02] shadow-[0_20px_50px_rgba(0,0,0,0.15)]',
               isDarkMode 
                 ? 'bg-gray-800 border-gray-700 hover:border-gray-600 text-gray-200' 
                 : 'bg-gray-100 border-gray-300 hover:border-gray-400 text-gray-800'
@@ -127,7 +127,7 @@
             target="_blank"
             rel="noopener noreferrer"
             :class="[
-              'flex items-start gap-4 p-6 rounded-2xl border transition-all duration-200 hover:scale-[1.02] shadow-sm',
+              'flex items-start gap-4 p-6 rounded-3xl border transition-all duration-200 hover:scale-[1.02] shadow-[0_20px_50px_rgba(0,0,0,0.15)]',
               isDarkMode 
                 ? 'bg-gray-800 border-gray-700 hover:border-gray-600 text-gray-200' 
                 : 'bg-gray-100 border-gray-300 hover:border-gray-400 text-gray-800'
@@ -153,7 +153,7 @@
             target="_blank"
             rel="noopener noreferrer"
             :class="[
-              'flex items-start gap-4 p-6 rounded-2xl border transition-all duration-200 hover:scale-[1.02] shadow-sm',
+              'flex items-start gap-4 p-6 rounded-3xl border transition-all duration-200 hover:scale-[1.02] shadow-[0_20px_50px_rgba(0,0,0,0.15)]',
               isDarkMode 
                 ? 'bg-gray-800 border-gray-700 hover:border-gray-600 text-gray-200' 
                 : 'bg-gray-100 border-gray-300 hover:border-gray-400 text-gray-800'
@@ -179,7 +179,7 @@
             target="_blank"
             rel="noopener noreferrer"
             :class="[
-              'flex items-start gap-4 p-6 rounded-2xl border transition-all duration-200 hover:scale-[1.02] shadow-sm',
+              'flex items-start gap-4 p-6 rounded-3xl border transition-all duration-200 hover:scale-[1.02] shadow-[0_20px_50px_rgba(0,0,0,0.15)]',
               isDarkMode 
                 ? 'bg-gray-800 border-gray-700 hover:border-gray-600 text-gray-200' 
                 : 'bg-gray-100 border-gray-300 hover:border-gray-400 text-gray-800'
@@ -205,7 +205,7 @@
             target="_blank"
             rel="noopener noreferrer"
             :class="[
-              'flex items-start gap-4 p-6 rounded-2xl border transition-all duration-200 hover:scale-[1.02] shadow-sm',
+              'flex items-start gap-4 p-6 rounded-3xl border transition-all duration-200 hover:scale-[1.02] shadow-[0_20px_50px_rgba(0,0,0,0.15)]',
               isDarkMode 
                 ? 'bg-gray-800 border-gray-700 hover:border-gray-600 text-gray-200' 
                 : 'bg-gray-100 border-gray-300 hover:border-gray-400 text-gray-800'

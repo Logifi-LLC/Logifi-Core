@@ -180,6 +180,7 @@
               v-if="activeTab === 'signin'"
               type="button"
               class="text-xs font-bold text-blue-600 hover:text-blue-700 font-quicksand"
+              @click="handleForgotPassword"
             >
               Forgot password?
             </button>
@@ -259,7 +260,7 @@ const emit = defineEmits<{
   success: []
 }>()
 
-const { signUp, signIn, signInWithGoogle, isLoading: authLoading, error: authErrorState } = useAuth()
+const { signUp, signIn, signInWithGoogle, resetPassword, isLoading: authLoading, error: authErrorState } = useAuth()
 
 const activeTab = ref<'signin' | 'signup'>('signin')
 const email = ref('')
@@ -318,6 +319,30 @@ const handleSubmit = async () => {
     }
   } catch (error) {
     authError.value = error instanceof Error ? error.message : 'An unexpected error occurred'
+  }
+}
+
+// Handle forgot password
+const handleForgotPassword = async () => {
+  if (isLoading.value) return
+
+  const emailValue = email.value.trim()
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)
+
+  if (!emailValid) {
+    authError.value = 'Please enter a valid email address to reset your password.'
+    successMessage.value = null
+    return
+  }
+
+  authError.value = null
+  successMessage.value = null
+
+  const result = await resetPassword(emailValue)
+  if (result.success) {
+    successMessage.value = 'Password reset link sent. Please check your email.'
+  } else if (result.error) {
+    authError.value = result.error
   }
 }
 
