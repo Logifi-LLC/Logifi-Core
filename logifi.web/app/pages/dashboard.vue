@@ -10046,6 +10046,102 @@ function savePilotProfilePrefs(): void {
   window.localStorage.setItem(PILOT_PROFILE_STORAGE_KEY, JSON.stringify(payload))
 }
 
+/** Load pilot profile from Supabase user_profiles and merge into pilotProfile (Supabase wins when present). */
+async function loadPilotProfileFromSupabase(): Promise<void> {
+  if (!user.value?.id || !isBrowser) return
+  try {
+    const { data, error } = await (supabase
+      .from('user_profiles') as any)
+      .select('full_name, certificate_number, date_of_birth, place_of_birth, residential_address, mailing_address, preferences')
+      .eq('id', user.value.id)
+      .maybeSingle()
+    if (error) {
+      console.warn('[LoadPilotProfile] Supabase error:', error)
+      return
+    }
+    if (!data) return
+    const prefs: Partial<PilotProfilePrefs> = {}
+    if (data.full_name != null) prefs.name = data.full_name
+    if (data.certificate_number != null) prefs.certificateNumber = data.certificate_number
+    if (data.date_of_birth != null) prefs.dateOfBirth = data.date_of_birth
+    if (data.place_of_birth != null) prefs.placeOfBirth = data.place_of_birth
+    const res = data.residential_address as { street?: string; city?: string; state?: string; zip?: string } | null
+    if (res) {
+      prefs.residentialAddress = res.street ?? ''
+      prefs.residentialCity = res.city ?? ''
+      prefs.residentialState = res.state ?? ''
+      prefs.residentialZip = res.zip ?? ''
+    }
+    const mail = data.mailing_address as { street?: string; city?: string; state?: string; zip?: string } | null
+    if (mail) {
+      prefs.mailingAddress = mail.street ?? ''
+      prefs.mailingCity = mail.city ?? ''
+      prefs.mailingState = mail.state ?? ''
+      prefs.mailingZip = mail.zip ?? ''
+    }
+    const pref = data.preferences as Record<string, string> | null
+    if (pref) {
+      prefs.callsign = pref.callsign ?? ''
+      prefs.homeBase = pref.homeBase ?? ''
+      prefs.certificates = pref.certificates ?? ''
+      prefs.flightGoals = pref.flightGoals ?? ''
+      prefs.notes = pref.notes ?? ''
+    }
+    Object.assign(pilotProfile, pilotProfileDefaults, prefs)
+    savePilotProfilePrefs() // persist merged result to localStorage
+  } catch (err) {
+    console.warn('[LoadPilotProfile] Error loading from Supabase:', err)
+  }
+}
+
+let pilotProfileSupabaseSaveTimeout: ReturnType<typeof setTimeout> | null = null
+/** Save pilot profile to Supabase user_profiles (debounced). */
+function savePilotProfileToSupabase(): void {
+  const userId = user.value?.id
+  if (!userId || !isAuthenticated.value || !isBrowser) return
+  if (pilotProfileSupabaseSaveTimeout) clearTimeout(pilotProfileSupabaseSaveTimeout)
+  pilotProfileSupabaseSaveTimeout = setTimeout(async () => {
+    pilotProfileSupabaseSaveTimeout = null
+    try {
+      const updateData: Record<string, unknown> = {
+        full_name: pilotProfile.name || null,
+        certificate_number: pilotProfile.certificateNumber || null,
+        date_of_birth: pilotProfile.dateOfBirth || null,
+        place_of_birth: pilotProfile.placeOfBirth || null,
+        updated_at: new Date().toISOString()
+      }
+      if (pilotProfile.residentialAddress || pilotProfile.residentialCity || pilotProfile.residentialState || pilotProfile.residentialZip) {
+        updateData.residential_address = {
+          street: pilotProfile.residentialAddress || '',
+          city: pilotProfile.residentialCity || '',
+          state: pilotProfile.residentialState || '',
+          zip: pilotProfile.residentialZip || ''
+        }
+      }
+      if (pilotProfile.mailingAddress || pilotProfile.mailingCity || pilotProfile.mailingState || pilotProfile.mailingZip) {
+        updateData.mailing_address = {
+          street: pilotProfile.mailingAddress || '',
+          city: pilotProfile.mailingCity || '',
+          state: pilotProfile.mailingState || '',
+          zip: pilotProfile.mailingZip || ''
+        }
+      }
+      const preferences: Record<string, string> = {}
+      if (pilotProfile.callsign) preferences.callsign = pilotProfile.callsign
+      if (pilotProfile.homeBase) preferences.homeBase = pilotProfile.homeBase
+      if (pilotProfile.certificates) preferences.certificates = pilotProfile.certificates
+      if (pilotProfile.flightGoals) preferences.flightGoals = pilotProfile.flightGoals
+      if (pilotProfile.notes) preferences.notes = pilotProfile.notes
+      if (Object.keys(preferences).length > 0) updateData.preferences = preferences
+      const { error } = await (supabase.from('user_profiles') as any)
+        .upsert({ id: userId, ...updateData }, { onConflict: 'id' })
+      if (error) console.warn('[SavePilotProfile] Supabase error:', error)
+    } catch (err) {
+      console.warn('[SavePilotProfile] Error saving to Supabase:', err)
+    }
+  }, 800)
+}
+
 // Aircraft lookup
 const { lookupAircraft } = useAircraftLookup()
 const showAircraftModal = ref(false)
@@ -13368,6 +13464,9 @@ onMounted(async () => {
   loadColumnConfig()
   loadActiveLogbook()
   loadPilotProfilePrefs()
+  if (isAuthenticated.value && user.value) {
+    await loadPilotProfileFromSupabase()
+  }
   await loadCrewProfiles()
   // Normalize and autofill aircraft category/class labels on load
   normalizeAndAutofillCategories()
@@ -13448,6 +13547,7 @@ watch(
   pilotProfile,
   () => {
     savePilotProfilePrefs()
+    savePilotProfileToSupabase()
   },
   { deep: true }
 )

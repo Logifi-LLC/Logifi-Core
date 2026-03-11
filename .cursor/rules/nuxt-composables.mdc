@@ -1,0 +1,12 @@
+---
+description: Nuxt composables layout — no barrel in composables/ to avoid duplicate-import warnings
+globs: logifi.web/app/composables/**/*.ts, logifi.web/nuxt.config.ts, logifi.web/app/index.ts
+alwaysApply: false
+---
+
+# Nuxt composables: no barrel in composables/
+
+- **Do not add** an `index.ts` (or any barrel file) inside `logifi.web/app/composables/` that re-exports composables.
+- Nuxt auto-imports every composable it finds in `composables/`. A barrel there would export the same names as the individual files, causing "Duplicated imports" warnings at dev/build.
+- Package re-exports live in **`logifi.web/app/composables-barrel.ts`** (outside `composables/`). When adding a new composable that should be part of the package API, add its export there and in no other barrel.
+- Import composables by path in app code, e.g. `~/composables/useAuth`, not from a barrel.
