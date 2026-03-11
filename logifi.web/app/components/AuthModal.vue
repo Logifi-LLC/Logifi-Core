@@ -259,7 +259,7 @@ const emit = defineEmits<{
   success: []
 }>()
 
-const { signUp, signIn, isLoading: authLoading, error: authErrorState } = useAuth()
+const { signUp, signIn, signInWithGoogle, isLoading: authLoading, error: authErrorState } = useAuth()
 
 const activeTab = ref<'signin' | 'signup'>('signin')
 const email = ref('')
@@ -318,6 +318,19 @@ const handleSubmit = async () => {
     }
   } catch (error) {
     authError.value = error instanceof Error ? error.message : 'An unexpected error occurred'
+  }
+}
+
+// Handle Google sign in
+const handleGoogleSignIn = async () => {
+  if (isLoading.value) return
+
+  authError.value = null
+  successMessage.value = null
+
+  const result = await signInWithGoogle()
+  if (!result.success && result.error) {
+    authError.value = result.error
   }
 }
 

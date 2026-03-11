@@ -164,6 +164,42 @@ export const useAuth = () => {
     }
   }
 
+  // Sign in with Google (OAuth)
+  const signInWithGoogle = async () => {
+    try {
+      isLoading.value = true
+      error.value = null
+
+      // Build redirect URL to the auth callback route
+      const redirectTo =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}/auth/callback`
+          : undefined
+
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+        },
+      })
+
+      if (oauthError) {
+        throw oauthError
+      }
+
+      // On success, Supabase will redirect using the configured Site URL / redirect URL.
+      // The /auth/callback route handles the post-login flow.
+      return { success: true }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to sign in with Google'
+      error.value = errorMessage
+      console.error('Google sign-in error:', err)
+      return { success: false, error: errorMessage }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   // Refresh session
   const refreshSession = async () => {
     try {
@@ -194,6 +230,7 @@ export const useAuth = () => {
     signUp,
     signIn,
     signOut,
+    signInWithGoogle,
     refreshSession,
     initAuth,
   }
