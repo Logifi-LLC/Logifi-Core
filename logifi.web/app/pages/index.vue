@@ -38,14 +38,12 @@
 
     <!-- Hero Section -->
     <main>
-      <section class="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden">
-        <!-- Background Accents -->
-        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full pointer-events-none -z-10">
-          <div class="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-50 rounded-full blur-[120px] opacity-60"></div>
-          <div class="absolute bottom-[10%] left-[-10%] w-[30%] h-[30%] bg-indigo-50 rounded-full blur-[100px] opacity-50"></div>
-        </div>
+      <section class="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden bg-[url('/images/hero-bg.png')] bg-cover bg-center bg-no-repeat">
+        <!-- Overlay to ensure text readability -->
+        <div class="absolute inset-0 bg-white/40 backdrop-blur-[1px] z-0"></div>
+        <div class="absolute inset-0 bg-gradient-to-b from-white/60 via-transparent to-gray-100 z-0"></div>
 
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <div class="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-semibold mb-8 animate-fade-in dark:bg-blue-50 dark:border-blue-100 dark:text-blue-700">
             <span class="mr-2">✨</span> NOW IN BETA
           </div>
