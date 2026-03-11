@@ -1,0 +1,34 @@
+{
+  "name": "logifi-core",
+  "version": "1.0.0",
+  "description": "Logifi engine: composables, validation, utils for logbook apps",
+  "type": "module",
+  "private": true,
+  "main": "./logifi.web/app/index.ts",
+  "types": "./logifi.web/app/index.ts",
+  "exports": {
+    ".": {
+      "types": "./logifi.web/app/index.ts",
+      "import": "./logifi.web/app/index.ts",
+      "default": "./logifi.web/app/index.ts"
+    },
+    "./composables": {
+      "types": "./logifi.web/app/composables/index.ts",
+      "import": "./logifi.web/app/composables/index.ts",
+      "default": "./logifi.web/app/composables/index.ts"
+    },
+    "./utils": {
+      "types": "./logifi.web/app/utils/index.ts",
+      "import": "./logifi.web/app/utils/index.ts",
+      "default": "./logifi.web/app/utils/index.ts"
+    },
+    "./types": {
+      "types": "./logifi.web/app/types/index.ts",
+      "import": "./logifi.web/app/types/index.ts",
+      "default": "./logifi.web/app/types/index.ts"
+    }
+  },
+  "files": [
+    "logifi.web/app"
+  ]
+}

@@ -394,6 +394,35 @@
 
 **Phase 1 is COMPLETE!** 🎉
 
+### Deployment & Testing Phase
+
+**Goal:** Set up deployment infrastructure and testing workflows for sharing preview versions before public release.
+
+#### Tasks:
+- [x] Create deployment documentation (`DEPLOYMENT.md`)
+  - [x] Vercel setup and preview deployments (recommended)
+  - [x] Netlify setup and deployment options
+  - [x] Local tunnel options (ngrok, localtunnel) for quick testing
+  - [x] Environment variable configuration for each platform
+  - [x] Security considerations and best practices
+  - [x] Troubleshooting guide
+- [ ] Set up preview deployment infrastructure (optional - when ready to test)
+  - [ ] Configure Vercel/Netlify project
+  - [ ] Set up environment variables
+  - [ ] Test preview deployment
+- [ ] Share preview URLs with testers (when ready)
+- [x] Fix Supabase security findings
+  - [x] Create migration for digest wrapper functions security
+  - [x] Add explicit search_path to all digest functions
+
+**Deliverable:** ✅ Complete deployment documentation and security fixes
+
+**Status:** ✅ **DOCUMENTATION COMPLETE** (deployment setup pending - ready when needed)
+
+**Reference:** See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
+
+---
+
 Phase 2 planning coming soon:
 - Electronic signatures
 - Student/instructor update workflow
