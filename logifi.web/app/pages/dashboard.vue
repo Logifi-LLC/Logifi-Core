@@ -4772,18 +4772,18 @@
                 <span v-for="tag in getEntityTags('family', currentAircraftFamilyName)" :key="'fam-' + tag" class="inline-flex items-center rounded-full px-2.5 py-1 text-sm mr-1" :class="[isDarkMode ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700']">{{ tag }}</span>
               </div>
               <div class="flex flex-wrap gap-2 items-center">
-                <span v-for="tag in getEntityTags('aircraft', currentAircraftInfo.registration)" :key="tag" class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm" :class="[isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-300 text-gray-800']">
+                <span v-for="tag in getEntityTags('aircraft', currentAircraftInfo?.registration || '')" :key="tag" class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm" :class="[isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-300 text-gray-800']">
                   {{ tag }}
-                  <button type="button" aria-label="Remove tag" @click="removeEntityTag('aircraft', currentAircraftInfo.registration, tag); aircraftModalNewTagInput = ''" :class="['rounded p-0.5', isDarkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-400']"><Icon name="ri:close-line" size="14" /></button>
+                  <button type="button" aria-label="Remove tag" @click="removeEntityTag('aircraft', currentAircraftInfo?.registration || '', tag); aircraftModalNewTagInput = ''" :class="['rounded p-0.5', isDarkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-400']"><Icon name="ri:close-line" size="14" /></button>
                 </span>
                 <template v-if="!aircraftModalShowAddTag">
                   <button type="button" @click="aircraftModalShowAddTag = true" :class="['inline-flex items-center justify-center rounded-lg border px-2.5 py-1 text-sm font-quicksand', isDarkMode ? 'border-gray-600 text-gray-400 hover:bg-gray-700' : 'border-gray-400 text-gray-600 hover:bg-gray-200']">+ Add tag</button>
                 </template>
                 <template v-else>
                   <div class="flex flex-col gap-2">
-                    <div v-if="[...fixedTagOptions, ...presetsInUse].filter(t => !getEntityTags('aircraft', currentAircraftInfo.registration).includes(t)).length" class="flex flex-wrap gap-1">
+                    <div v-if="[...fixedTagOptions, ...presetsInUse].filter(t => !getEntityTags('aircraft', currentAircraftInfo?.registration || '').includes(t)).length" class="flex flex-wrap gap-1">
                       <span :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">Presets: </span>
-                      <button v-for="tag in [...fixedTagOptions, ...presetsInUse].filter(t => !getEntityTags('aircraft', currentAircraftInfo.registration).includes(t))" :key="'preset-' + tag" type="button" @click="addEntityTag('aircraft', currentAircraftInfo.registration, tag); aircraftModalShowAddTag = false" :class="['rounded-full px-2 py-0.5 text-xs font-quicksand', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']">{{ tag }}</button>
+                      <button v-for="tag in [...fixedTagOptions, ...presetsInUse].filter(t => !getEntityTags('aircraft', currentAircraftInfo?.registration || '').includes(t))" :key="'preset-' + tag" type="button" @click="addEntityTag('aircraft', currentAircraftInfo?.registration || '', tag); aircraftModalShowAddTag = false" :class="['rounded-full px-2 py-0.5 text-xs font-quicksand', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']">{{ tag }}</button>
                     </div>
                     <div v-if="presetsUnused.length" class="flex flex-wrap gap-1 items-center">
                       <span :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">Unused (remove): </span>
@@ -4793,8 +4793,8 @@
                       </span>
                     </div>
                     <div class="inline-flex gap-1 items-center">
-                      <input v-model="aircraftModalNewTagInput" type="text" placeholder="Or type new tag" :class="['w-32 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addEntityTag('aircraft', currentAircraftInfo.registration, aircraftModalNewTagInput); aircraftModalNewTagInput = ''; aircraftModalShowAddTag = false" />
-                      <button type="button" @click="addEntityTag('aircraft', currentAircraftInfo.registration, aircraftModalNewTagInput); aircraftModalNewTagInput = ''; aircraftModalShowAddTag = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
+                      <input v-model="aircraftModalNewTagInput" type="text" placeholder="Or type new tag" :class="['w-32 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addEntityTag('aircraft', currentAircraftInfo?.registration || '', aircraftModalNewTagInput); aircraftModalNewTagInput = ''; aircraftModalShowAddTag = false" />
+                      <button type="button" @click="addEntityTag('aircraft', currentAircraftInfo?.registration || '', aircraftModalNewTagInput); aircraftModalNewTagInput = ''; aircraftModalShowAddTag = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
                       <button type="button" @click="aircraftModalShowAddTag = false; aircraftModalNewTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
                     </div>
                   </div>
@@ -7960,8 +7960,8 @@ function applyExportScope(
     return entries.filter((e) => {
       const match = (e.date || '').trim().match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
       if (!match) return false
-      const ey = parseInt(match[1], 10)
-      const em = parseInt(match[2], 10)
+      const ey = parseInt(match[1]!, 10)
+      const em = parseInt(match[2]!, 10)
       return ey === y && em === m
     })
   }
@@ -10863,7 +10863,8 @@ function extractTailFromCatalogItem(item: string): string | null {
       const parts = text.split(s).map((p) => p.trim()).filter(Boolean)
       // Catalog items are "Family · Registration" — use the part after the separator (any tail, not only N-numbers)
       if (parts.length >= 2) {
-        return parts[parts.length - 1].toUpperCase()
+        const tail = parts[parts.length - 1]
+        return tail ? tail.toUpperCase() : null
       }
     }
   }
@@ -11103,12 +11104,13 @@ async function renameAircraftFamily(oldFamilyName: string, newFamilyName: string
         .eq('entity_id', newId)
       if (rows && rows.length > 1) {
         const byTag: Record<string, string[]> = {}
-        for (const r of rows) {
+        for (const r of rows as { id: string; tag: string }[]) {
+          if (!r.tag) continue
           if (!byTag[r.tag]) byTag[r.tag] = []
-          byTag[r.tag].push(r.id)
+          byTag[r.tag]!.push(r.id)
         }
         for (const tag of Object.keys(byTag)) {
-          const ids = byTag[tag]
+          const ids = byTag[tag]!
           if (ids.length > 1) {
             const [, ...toRemove] = ids
             for (const id of toRemove) {
@@ -13753,8 +13755,9 @@ const catalogs = computed<CatalogsValue>(() => {
   // Display name per family = most common makeModel so rename is visible
   const familyDisplayName: Record<string, string> = {}
   for (const fam of Object.keys(familyMakeModelCounts)) {
-    const counts = familyMakeModelCounts[fam]
-    const mode = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? fam
+    const counts = familyMakeModelCounts[fam] ?? {}
+    const entries = Object.entries(counts as Record<string, number>)
+    const mode = entries.length ? entries.sort((a, b) => b[1] - a[1])[0]![0] : fam
     familyDisplayName[fam] = mode
   }
 
@@ -13767,7 +13770,8 @@ const catalogs = computed<CatalogsValue>(() => {
       if (fam) {
         const displayName = familyDisplayName[fam] ?? fam
         const item = tail ? `${displayName} · ${tail}` : displayName
-        familyToItemsMap[fam].add(item)
+        familyToItemsMap[fam] = familyToItemsMap[fam] || new Set<string>()
+        familyToItemsMap[fam]!.add(item)
       }
     }
   })
