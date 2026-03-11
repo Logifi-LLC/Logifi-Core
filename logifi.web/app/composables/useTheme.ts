@@ -17,17 +17,13 @@ function readStoredTheme(): Theme | null {
 
 function getInitialTheme(): Theme {
   if (typeof window === 'undefined') {
-    return 'dark'
+    return 'light'
   }
 
   const stored = readStoredTheme()
   if (stored) return stored
 
-  // Preserve existing behavior: default to OS dark if preferred, otherwise light.
-  if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
-    return 'dark'
-  }
-
+  // Default to light for landing and first-time visitors; user can switch to dark in app.
   return 'light'
 }
 

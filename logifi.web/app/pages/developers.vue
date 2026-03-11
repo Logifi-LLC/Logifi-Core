@@ -59,8 +59,9 @@
             </a>
 
             <!-- Back Button -->
-            <NuxtLink
-              to="/"
+            <button
+              type="button"
+              @click="goBack"
               :class="[
                 'inline-flex items-center px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all duration-200',
                 isDarkMode 
@@ -70,7 +71,7 @@
             >
               <Icon name="ri:arrow-left-line" size="18" class="mr-2" />
               Back to Logbook
-            </NuxtLink>
+            </button>
           </nav>
         </div>
       </div>
@@ -256,6 +257,27 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useRoute, useRouter } from '#imports'
+
+const route = useRoute()
+const router = useRouter()
+
+const backTarget = computed(() => {
+  const from = route.query.from
+  if (from === 'landing') return '/'
+  if (from === 'dashboard' || from === 'app') return '/dashboard'
+  return '/dashboard' // default
+})
+
+const goBack = () => {
+  if (window.history.length > 1) {
+    router.back()
+  } else {
+    router.push(backTarget.value)
+  }
+}
+
 const { theme, isDark: isDarkMode } = useTheme()
 
 // Clock State
