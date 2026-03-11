@@ -13104,6 +13104,7 @@ async function loadEntries(): Promise<void> {
         .from('log_entries') as any)
         .select('*')
         .order('date', { ascending: false })
+        .limit(100000)
       
       if (error) {
         console.error('[LoadEntries] Error loading entries from Supabase:', error)
