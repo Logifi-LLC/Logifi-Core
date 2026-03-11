@@ -1,49 +1,54 @@
 <template>
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm"
     @click.self="$emit('close')"
   >
     <div
       :class="[
-        'relative w-full max-w-md rounded-2xl border shadow-2xl transition-colors duration-300',
+        'relative w-full max-w-md rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] transition-all duration-500 overflow-hidden',
         isDarkMode 
-          ? 'bg-gray-800 border-gray-700' 
-          : 'bg-gray-200 border-gray-300'
+          ? 'bg-gray-900 border border-gray-800' 
+          : 'bg-white border border-gray-100'
       ]"
       @click.stop
     >
-      <!-- Header -->
-      <div class="flex items-center justify-between p-6 border-b" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
-        <h3 :class="['text-xl font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
-          {{ activeTab === 'signin' ? 'Sign In' : 'Sign Up' }}
+      <!-- Top Branding Section -->
+      <div class="pt-10 pb-6 flex flex-col items-center border-b" :class="[isDarkMode ? 'border-gray-800 bg-gray-900/50' : 'border-gray-50 bg-gray-50/50']">
+        <img src="/images/logifi-logo.png" alt="Logifi" class="h-12 w-auto mb-4" />
+        <h3 :class="['text-2xl font-bold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+          {{ activeTab === 'signin' ? 'Welcome Back' : 'Create Account' }}
         </h3>
+        <p :class="['text-sm font-quicksand mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+          {{ activeTab === 'signin' ? 'Log in to access your flight logs' : 'Join 500+ pilots digitizing their history' }}
+        </p>
+        
         <button
           @click="$emit('close')"
           :class="[
-            'p-1 rounded-lg transition-colors',
+            'absolute top-4 right-4 p-2 rounded-full transition-all',
             isDarkMode 
-              ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-300'
+              ? 'text-gray-500 hover:text-white hover:bg-gray-800' 
+              : 'text-gray-400 hover:text-gray-900 hover:bg-gray-100'
           ]"
           aria-label="Close"
         >
-          <Icon name="ri:close-line" size="24" />
+          <Icon name="ri:close-line" size="20" />
         </button>
       </div>
 
-      <!-- Tabs -->
-      <div class="flex border-b" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+      <!-- Tabs Navigation -->
+      <div class="flex p-1 mx-6 mt-6 rounded-xl bg-gray-100/50" :class="[isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100/50']">
         <button
           @click="activeTab = 'signin'"
           :class="[
-            'flex-1 px-4 py-3 text-sm font-semibold font-quicksand transition-colors',
+            'flex-1 py-2 text-sm font-bold font-quicksand rounded-lg transition-all duration-200',
             activeTab === 'signin'
               ? (isDarkMode 
-                  ? 'text-blue-400 border-b-2 border-blue-400' 
-                  : 'text-blue-600 border-b-2 border-blue-600')
+                  ? 'bg-gray-700 text-blue-400 shadow-sm' 
+                  : 'bg-white text-blue-600 shadow-sm')
               : (isDarkMode 
-                  ? 'text-gray-400 hover:text-gray-300' 
-                  : 'text-gray-600 hover:text-gray-900')
+                  ? 'text-gray-500 hover:text-gray-300' 
+                  : 'text-gray-500 hover:text-gray-700')
           ]"
         >
           Sign In
@@ -51,121 +56,164 @@
         <button
           @click="activeTab = 'signup'"
           :class="[
-            'flex-1 px-4 py-3 text-sm font-semibold font-quicksand transition-colors',
+            'flex-1 py-2 text-sm font-bold font-quicksand rounded-lg transition-all duration-200',
             activeTab === 'signup'
               ? (isDarkMode 
-                  ? 'text-blue-400 border-b-2 border-blue-400' 
-                  : 'text-blue-600 border-b-2 border-blue-600')
+                  ? 'bg-gray-700 text-blue-400 shadow-sm' 
+                  : 'bg-white text-blue-600 shadow-sm')
               : (isDarkMode 
-                  ? 'text-gray-400 hover:text-gray-300' 
-                  : 'text-gray-600 hover:text-gray-900')
+                  ? 'text-gray-500 hover:text-gray-300' 
+                  : 'text-gray-500 hover:text-gray-700')
           ]"
         >
           Sign Up
         </button>
       </div>
 
-      <!-- Form -->
-      <div class="p-6 space-y-4">
-        <!-- Error Message -->
-        <div
-          v-if="authError"
-          :class="[
-            'rounded-lg border p-3 flex items-start gap-2',
-            isDarkMode 
-              ? 'bg-red-900/20 border-red-700 text-red-300' 
-              : 'bg-red-50 border-red-200 text-red-700'
-          ]"
-        >
-          <Icon name="ri:alert-line" size="20" class="flex-shrink-0 mt-0.5" />
-          <div class="flex-1 text-sm font-quicksand">
-            {{ authError }}
-          </div>
+      <!-- Main Form Content -->
+      <div class="p-8 space-y-6">
+        <!-- Social Login -->
+        <div class="space-y-3">
           <button
-            @click="authError = null"
+            @click="handleGoogleSignIn"
+            :disabled="isLoading"
+            class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl border transition-all font-bold text-sm font-quicksand"
             :class="[
-              'flex-shrink-0 p-0.5 rounded hover:opacity-70',
-              isDarkMode ? 'text-red-300' : 'text-red-700'
+              isDarkMode 
+                ? 'border-gray-700 text-white hover:bg-gray-800' 
+                : 'border-gray-200 text-gray-700 hover:bg-gray-50',
+              isLoading ? 'opacity-50 cursor-not-allowed' : ''
             ]"
-            aria-label="Dismiss error"
           >
-            <Icon name="ri:close-line" size="16" />
+            <Icon 
+              v-if="!isLoading" 
+              name="logos:google-icon" 
+              size="18" 
+            />
+            <Icon 
+              v-else 
+              name="ri:loader-4-line" 
+              size="18" 
+              class="animate-spin" 
+            />
+            {{ isLoading ? 'Connecting...' : 'Continue with Google' }}
           </button>
         </div>
 
-        <!-- Success Message -->
-        <div
-          v-if="successMessage"
-          :class="[
-            'rounded-lg border p-3 flex items-start gap-2',
-            isDarkMode 
-              ? 'bg-green-900/20 border-green-700 text-green-300' 
-              : 'bg-green-50 border-green-200 text-green-700'
-          ]"
-        >
-          <Icon name="ri:check-line" size="20" class="flex-shrink-0 mt-0.5" />
-          <div class="flex-1 text-sm font-quicksand">
-            {{ successMessage }}
+        <div class="relative flex items-center justify-center">
+          <div class="w-full border-t border-gray-100" :class="[isDarkMode ? 'border-gray-800' : 'border-gray-100']"></div>
+          <span class="absolute px-4 text-xs font-bold text-gray-400 bg-white" :class="[isDarkMode ? 'bg-gray-900' : 'bg-white']">OR</span>
+        </div>
+
+        <!-- Feedback Messages -->
+        <div v-if="authError || successMessage" class="animate-fade-in">
+          <div
+            v-if="authError"
+            :class="[
+              'rounded-xl border p-4 flex items-start gap-3',
+              isDarkMode 
+                ? 'bg-red-900/20 border-red-800 text-red-300' 
+                : 'bg-red-50 border-red-100 text-red-700'
+            ]"
+          >
+            <Icon name="ri:error-warning-fill" size="20" class="flex-shrink-0" />
+            <p class="text-sm font-medium font-quicksand">{{ authError }}</p>
+          </div>
+
+          <div
+            v-if="successMessage"
+            :class="[
+              'rounded-xl border p-4 flex items-start gap-3',
+              isDarkMode 
+                ? 'bg-green-900/20 border-green-800 text-green-300' 
+                : 'bg-green-50 border-green-100 text-green-700'
+            ]"
+          >
+            <Icon name="ri:checkbox-circle-fill" size="20" class="flex-shrink-0" />
+            <p class="text-sm font-medium font-quicksand">{{ successMessage }}</p>
           </div>
         </div>
 
-        <!-- Email Input -->
-        <div>
+        <!-- Email Field -->
+        <div class="space-y-2">
           <label 
-            :class="['block text-sm font-semibold font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+            class="text-xs font-bold font-quicksand uppercase tracking-wider" 
+            :class="[isDarkMode ? 'text-gray-500' : 'text-gray-400']"
             for="email"
           >
-            Email
+            Email Address
           </label>
-          <input
-            id="email"
-            v-model="email"
-            type="email"
-            autocomplete="email"
-            :disabled="isLoading"
-            :class="[
-              'w-full rounded-lg border px-3 py-2 text-base font-quicksand transition-colors',
-              isDarkMode 
-                ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500' 
-                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
-              isLoading ? 'opacity-50 cursor-not-allowed' : ''
-            ]"
-            placeholder="your.email@example.com"
-            @keyup.enter="handleSubmit"
-            @keyup.escape="$emit('close')"
-          />
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
+              <Icon name="ri:mail-line" size="18" />
+            </span>
+            <input
+              id="email"
+              v-model="email"
+              type="email"
+              autocomplete="email"
+              :disabled="isLoading"
+              :class="[
+                'w-full pl-11 pr-4 py-3 rounded-xl border text-sm font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
+                isDarkMode 
+                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' 
+                  : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400',
+                isLoading ? 'opacity-50 cursor-not-allowed' : ''
+              ]"
+              placeholder="pilot@logifi.io"
+              @keyup.enter="handleSubmit"
+            />
+          </div>
         </div>
 
-        <!-- Password Input -->
-        <div>
-          <label 
-            :class="['block text-sm font-semibold font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
-            for="password"
-          >
-            Password
-          </label>
-          <input
-            id="password"
-            v-model="password"
-            type="password"
-            autocomplete="new-password"
-            :disabled="isLoading"
-            :class="[
-              'w-full rounded-lg border px-3 py-2 text-base font-quicksand transition-colors',
-              isDarkMode 
-                ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500' 
-                : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500',
-              isLoading ? 'opacity-50 cursor-not-allowed' : ''
-            ]"
-            placeholder="••••••••"
-            @keyup.enter="handleSubmit"
-            @keyup.escape="$emit('close')"
-          />
+        <!-- Password Field -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label 
+              class="text-xs font-bold font-quicksand uppercase tracking-wider" 
+              :class="[isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+              for="password"
+            >
+              Password
+            </label>
+            <button 
+              v-if="activeTab === 'signin'"
+              type="button"
+              class="text-xs font-bold text-blue-600 hover:text-blue-700 font-quicksand"
+            >
+              Forgot password?
+            </button>
+          </div>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
+              <Icon name="ri:lock-password-line" size="18" />
+            </span>
+            <input
+              id="password"
+              v-model="password"
+              type="password"
+              autocomplete="current-password"
+              :disabled="isLoading"
+              :class="[
+                'w-full pl-11 pr-4 py-3 rounded-xl border text-sm font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
+                isDarkMode 
+                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' 
+                  : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400',
+                isLoading ? 'opacity-50 cursor-not-allowed' : ''
+              ]"
+              placeholder="••••••••"
+              @keyup.enter="handleSubmit"
+            />
+          </div>
           <p 
             v-if="activeTab === 'signup'"
-            :class="['text-xs mt-1 font-quicksand', isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+            class="text-[10px] font-medium font-quicksand leading-tight mt-2"
+            :class="[isDarkMode ? 'text-gray-500' : 'text-gray-400']"
           >
-            Password must be at least 6 characters
+            By signing up, you agree to our
+            <NuxtLink to="/terms" class="text-blue-500 hover:text-blue-600 hover:underline">Terms of Service</NuxtLink>
+            and
+            <NuxtLink to="/privacy" class="text-blue-500 hover:text-blue-600 hover:underline">Privacy Policy</NuxtLink>.
           </p>
         </div>
 
@@ -174,20 +222,25 @@
           @click="handleSubmit"
           :disabled="!isFormValid || isLoading"
           :class="[
-            'w-full px-4 py-2 rounded-lg font-semibold font-quicksand transition-colors',
+            'w-full py-4 rounded-xl font-bold font-quicksand text-sm transition-all shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20 active:scale-[0.98]',
             (!isFormValid || isLoading)
-              ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-500 cursor-not-allowed')
-              : (isDarkMode ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-blue-600 text-white hover:bg-blue-700')
+              ? (isDarkMode ? 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200')
+              : 'bg-blue-600 text-white hover:bg-blue-700'
           ]"
         >
           <span v-if="isLoading" class="flex items-center justify-center gap-2">
             <Icon name="ri:loader-4-line" size="20" class="animate-spin" />
-            {{ activeTab === 'signin' ? 'Signing In...' : 'Signing Up...' }}
+            Processing...
           </span>
           <span v-else>
-            {{ activeTab === 'signin' ? 'Sign In' : 'Sign Up' }}
+            {{ activeTab === 'signin' ? 'Sign In to Logifi' : 'Create My Account' }}
           </span>
         </button>
+
+        <!-- Footer Help -->
+        <p class="text-center text-xs font-medium font-quicksand text-gray-400 mt-6">
+          Need help? <a href="mailto:info@logifi.io" class="text-blue-600 hover:underline">Contact Support</a>
+        </p>
       </div>
     </div>
   </div>
