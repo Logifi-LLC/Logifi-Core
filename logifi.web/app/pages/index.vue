@@ -1,9 +1,9 @@
 <template>
   <!-- Force light theme on landing: dark: overrides so links/header stay light even when app uses dark mode -->
-  <div class="min-h-screen bg-gray-100 font-quicksand text-gray-900 overflow-x-hidden dark:bg-gray-100 dark:text-gray-900">
+  <div class="min-h-screen bg-[#e4e8e7] font-quicksand text-gray-900 overflow-x-hidden dark:bg-[#e4e8e7] dark:text-gray-900">
     <!-- Sticky Header -->
     <header 
-      class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b bg-white/80 backdrop-blur-md border-gray-100 dark:bg-white/80 dark:border-gray-100"
+      class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b bg-white/80 backdrop-blur-md border-[#e4e8e7] dark:bg-white/80 dark:border-[#e4e8e7]"
     >
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         <div class="flex items-center">
@@ -41,7 +41,7 @@
       <section class="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden bg-[url('/images/hero-bg.png')] bg-cover bg-center bg-no-repeat">
         <!-- Overlay to ensure text readability -->
         <div class="absolute inset-0 bg-white/40 backdrop-blur-[1px] z-0"></div>
-        <div class="absolute inset-0 bg-gradient-to-b from-white/60 via-transparent to-gray-100 z-0"></div>
+        <div class="absolute inset-0 bg-gradient-to-b from-white/60 via-transparent to-[#e4e8e7] z-0"></div>
 
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <div class="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-semibold mb-8 animate-fade-in dark:bg-blue-50 dark:border-blue-100 dark:text-blue-700">
@@ -66,7 +66,7 @@
             </button>
             <button 
               @click="openAuth('signin')"
-              class="w-full sm:w-auto px-8 py-4 bg-white text-gray-900 text-lg font-bold rounded-xl border border-gray-200 hover:border-blue-200 hover:bg-blue-50/50 transition-all active:scale-[0.98] dark:bg-white dark:text-gray-900 dark:border-gray-200 dark:hover:border-blue-200 dark:hover:bg-blue-50/50"
+              class="w-full sm:w-auto px-8 py-4 bg-white text-gray-900 text-lg font-bold rounded-xl border border-[#d1d8d6] hover:border-blue-200 hover:bg-blue-50/50 transition-all active:scale-[0.98] dark:bg-white dark:text-gray-900 dark:border-[#d1d8d6] dark:hover:border-blue-200 dark:hover:bg-blue-50/50"
             >
               Sign In
             </button>
@@ -75,7 +75,7 @@
       </section>
 
       <!-- Features Section -->
-      <section id="features" class="py-24 bg-gray-200 border-y border-gray-100 dark:bg-gray-200 dark:border-gray-100">
+      <section id="features" class="py-24 bg-[#e4e8e7] dark:bg-[#e4e8e7]">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="text-center mb-16">
             <h2 class="text-3xl font-bold text-gray-900 sm:text-4xl dark:text-gray-900">Everything you need</h2>
@@ -86,7 +86,7 @@
           <div class="mb-20">
             <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center dark:text-gray-900">Features</h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
-              <div v-for="(feature, i) in features" :key="i" class="bg-white p-8 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-gray-100 dark:bg-white dark:border-gray-100">
+              <div v-for="(feature, i) in features" :key="i" class="bg-white p-8 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-[#e4e8e7] dark:bg-white dark:border-[#e4e8e7]">
                 <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-6 dark:bg-blue-50 dark:text-blue-600">
                   <Icon :name="feature.icon" size="24" />
                 </div>
@@ -100,7 +100,7 @@
           <div>
             <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center dark:text-gray-900">Features to Come</h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
-              <div v-for="(feature, i) in featuresToCome" :key="i" class="bg-white p-8 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-gray-100 dark:bg-white dark:border-gray-100">
+              <div v-for="(feature, i) in featuresToCome" :key="i" class="bg-white p-8 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-[#e4e8e7] dark:bg-white dark:border-[#e4e8e7]">
                 <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-6 dark:bg-blue-50 dark:text-blue-600">
                   <Icon :name="feature.icon" size="24" />
                 </div>
@@ -113,7 +113,7 @@
       </section>
 
       <!-- Footer -->
-      <footer class="border-t border-gray-200 mt-16 py-8 text-center dark:border-gray-200">
+      <footer class="mt-16 py-8 text-center">
         <p class="text-sm text-gray-500 dark:text-gray-500">
           <NuxtLink to="/terms?from=landing" class="text-gray-600 hover:text-blue-600 hover:underline dark:text-gray-600 dark:hover:text-blue-600">Terms of Service</NuxtLink>
           <span class="mx-2">·</span>

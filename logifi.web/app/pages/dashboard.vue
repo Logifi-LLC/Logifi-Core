@@ -3072,7 +3072,7 @@
           'relative w-full max-w-6xl h-[90vh] flex flex-col sm:flex-row overflow-hidden rounded-3xl border shadow-2xl transition-colors duration-300',
           isDarkMode 
             ? 'bg-gray-900 border-gray-700 text-gray-100' 
-            : 'bg-white border-gray-200 text-gray-900'
+            : 'bg-[#e4e8e7] border-[#d1d8d6] text-gray-900'
         ]"
       >
         <!-- Close Button (Mobile Absolute) -->
@@ -3080,7 +3080,7 @@
           @click="showSettingsModal = false"
           :class="[
             'absolute top-4 right-4 z-10 sm:hidden rounded-full p-2 transition-colors',
-            isDarkMode ? 'bg-black/50 text-gray-300 hover:text-white' : 'bg-gray-200/80 text-gray-600 hover:text-gray-900'
+            isDarkMode ? 'bg-black/50 text-gray-300 hover:text-white' : 'bg-[#d1d8d6]/80 text-gray-600 hover:text-gray-900'
           ]"
         >
           <Icon name="ri:close-line" size="24" />
@@ -3090,7 +3090,7 @@
         <div
           :class="[
             'w-full sm:w-64 flex-shrink-0 flex flex-col border-b sm:border-b-0 sm:border-r',
-            isDarkMode ? 'bg-gray-900/50 border-gray-800' : 'bg-gray-50 border-gray-200'
+            isDarkMode ? 'bg-gray-900/50 border-gray-800' : 'bg-[#e4e8e7] border-[#d1d8d6]'
           ]"
         >
           <div class="p-6 pb-4 hidden sm:block">
@@ -3098,7 +3098,7 @@
           </div>
           
           <!-- Mobile Tab Select (shown only on small screens) -->
-          <div class="p-4 sm:hidden overflow-x-auto whitespace-nowrap flex gap-2 hide-scrollbar border-b" :class="isDarkMode ? 'border-gray-800' : 'border-gray-200'">
+          <div class="p-4 sm:hidden overflow-x-auto whitespace-nowrap flex gap-2 hide-scrollbar border-b" :class="isDarkMode ? 'border-gray-800' : 'border-[#d1d8d6]'">
             <button
               v-for="tab in ['profile', 'preferences', 'data', 'compliance', 'advanced']"
               :key="tab"
@@ -3107,7 +3107,7 @@
                 'px-4 py-2 rounded-full text-sm font-medium font-quicksand transition-colors capitalize',
                 activeSettingsTab === tab
                   ? 'bg-blue-600 text-white'
-                  : (isDarkMode ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-600 border border-gray-200')
+                  : (isDarkMode ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-600 border border-[#d1d8d6]')
               ]"
             >
               {{ tab === 'data' ? 'Data & Sync' : tab }}
@@ -3122,7 +3122,7 @@
                 'flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
                 activeSettingsTab === 'profile'
                   ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700')
-                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')
+                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-[#d1d8d6]/50 hover:text-gray-900')
               ]"
             >
               <Icon name="ri:user-smile-line" size="20" />
@@ -3134,7 +3134,7 @@
                 'flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
                 activeSettingsTab === 'preferences'
                   ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700')
-                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')
+                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-[#d1d8d6]/50 hover:text-gray-900')
               ]"
             >
               <Icon name="ri:settings-4-line" size="20" />
@@ -3146,7 +3146,7 @@
                 'flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
                 activeSettingsTab === 'data'
                   ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700')
-                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')
+                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-[#d1d8d6]/50 hover:text-gray-900')
               ]"
             >
               <Icon name="ri:database-2-line" size="20" />
@@ -3158,7 +3158,7 @@
                 'flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
                 activeSettingsTab === 'compliance'
                   ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700')
-                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')
+                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-[#d1d8d6]/50 hover:text-gray-900')
               ]"
             >
               <Icon name="ri:shield-check-line" size="20" />
@@ -3170,14 +3170,14 @@
                 'flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
                 activeSettingsTab === 'advanced'
                   ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700')
-                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900')
+                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-[#d1d8d6]/50 hover:text-gray-900')
               ]"
             >
               <Icon name="ri:tools-line" size="20" />
               Advanced
             </button>
 
-            <div class="mt-auto pt-4 border-t" :class="isDarkMode ? 'border-gray-800' : 'border-gray-200'">
+            <div class="mt-auto pt-4 border-t" :class="isDarkMode ? 'border-gray-800' : 'border-[#d1d8d6]'">
               <button
                 @click="handleLogout"
                 :class="[
@@ -3195,7 +3195,7 @@
         <!-- Main Content Area -->
         <div class="flex-1 flex flex-col overflow-hidden relative">
           <!-- Desktop Header -->
-          <div class="hidden sm:flex items-center justify-between p-6 border-b" :class="isDarkMode ? 'border-gray-800' : 'border-gray-200'">
+          <div class="hidden sm:flex items-center justify-between p-6 border-b" :class="isDarkMode ? 'border-gray-800' : 'border-[#d1d8d6]'">
             <h3 class="text-2xl font-semibold font-quicksand capitalize">
               {{ activeSettingsTab === 'data' ? 'Data & Sync' : activeSettingsTab }}
             </h3>
@@ -3203,7 +3203,7 @@
               @click="showSettingsModal = false"
               :class="[
                 'rounded-full p-2 transition-colors',
-                isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+                isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-700 hover:bg-[#d1d8d6]'
               ]"
               aria-label="Close"
             >
@@ -3243,7 +3243,7 @@
           <div
             :class="[
               'space-y-4 rounded-2xl border p-4 sm:p-6',
-              isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+              isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-[#d1d8d6] shadow-sm'
             ]"
           >
             <div class="space-y-2">
@@ -3256,7 +3256,7 @@
                 placeholder="e.g. Jordan Reynolds"
                 :class="[
                   'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                  isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                  isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                 ]"
               />
             </div>
@@ -3271,7 +3271,7 @@
                   placeholder="e.g. MAVERICK"
                   :class="[
                     'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                    isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                    isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                   ]"
                 />
               </div>
@@ -3285,7 +3285,7 @@
                   placeholder="e.g. KAPA"
                   :class="[
                     'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                    isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                    isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                   ]"
                 />
               </div>
@@ -3300,7 +3300,7 @@
                 placeholder="Commercial ASEL · Instrument Airplane · Advanced Ground Instructor"
                 :class="[
                   'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                  isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                  isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                 ]"
               ></textarea>
             </div>
@@ -3314,7 +3314,7 @@
                 placeholder="Instrument currency, mountain flying checkout, CFI prep..."
                 :class="[
                   'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                  isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                  isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                 ]"
               ></textarea>
             </div>
@@ -3328,13 +3328,13 @@
                 placeholder="Preferred instructors, aircraft quirks, reminders..."
                 :class="[
                   'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                  isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                  isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                 ]"
               ></textarea>
             </div>
 
             <!-- 8710 Form Fields -->
-            <div class="pt-4 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-gray-300'">
+            <div class="pt-4 border-t" :class="isDarkMode ? 'border-gray-700' : 'border-[#d1d8d6]'">
               <h3 :class="['text-sm font-semibold uppercase tracking-wide mb-4', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
                 FAA Form 8710 Information
               </h3>
@@ -3352,7 +3352,7 @@
                       maxlength="10"
                       :class="[
                         'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                       ]"
                     />
                   </div>
@@ -3366,7 +3366,7 @@
                       placeholder="City, State or City, Country"
                       :class="[
                         'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                       ]"
                     />
                   </div>
@@ -3382,7 +3382,7 @@
                     placeholder="Street Address"
                     :class="[
                       'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200 mb-2',
-                      isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                      isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                     ]"
                   />
                   <div class="grid gap-2 sm:grid-cols-3">
@@ -3392,7 +3392,7 @@
                       placeholder="City"
                       :class="[
                         'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                       ]"
                     />
                     <input
@@ -3402,7 +3402,7 @@
                       maxlength="2"
                       :class="[
                         'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200 uppercase',
-                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                       ]"
                     />
                     <input
@@ -3412,7 +3412,7 @@
                       maxlength="10"
                       :class="[
                         'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                       ]"
                     />
                   </div>
@@ -3428,7 +3428,7 @@
                     placeholder="Street Address (optional)"
                     :class="[
                       'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200 mb-2',
-                      isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                      isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                     ]"
                   />
                   <div class="grid gap-2 sm:grid-cols-3">
@@ -3438,7 +3438,7 @@
                       placeholder="City"
                       :class="[
                         'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                       ]"
                     />
                     <input
@@ -3448,7 +3448,7 @@
                       maxlength="2"
                       :class="[
                         'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200 uppercase',
-                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                       ]"
                     />
                     <input
@@ -3458,7 +3458,7 @@
                       maxlength="10"
                       :class="[
                         'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                        isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                       ]"
                     />
                   </div>
@@ -3474,7 +3474,7 @@
                     placeholder="e.g. 12345678"
                     :class="[
                       'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
-                      isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-gray-100 border-gray-300 text-gray-900 focus:ring-blue-500'
+                      isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                     ]"
                   />
                 </div>
@@ -3489,7 +3489,7 @@
                 :key="card.key"
                 :class="[
                   'rounded-2xl border p-4',
-                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-[#d1d8d6] shadow-sm'
                 ]"
               >
                 <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
@@ -3508,7 +3508,7 @@
               <div
                 :class="[
                   'rounded-2xl border p-4',
-                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-[#d1d8d6] shadow-sm'
                 ]"
               >
                 <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
@@ -3524,7 +3524,7 @@
               <div
                 :class="[
                   'rounded-2xl border p-4',
-                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-[#d1d8d6] shadow-sm'
                 ]"
               >
                 <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
@@ -3543,7 +3543,7 @@
               <div
                 :class="[
                   'rounded-2xl border p-4',
-                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-[#d1d8d6] shadow-sm'
                 ]"
               >
                 <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
@@ -3556,7 +3556,7 @@
               <div
                 :class="[
                   'rounded-2xl border p-4',
-                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-[#d1d8d6] shadow-sm'
                 ]"
               >
                 <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
@@ -3569,7 +3569,7 @@
               <div
                 :class="[
                   'rounded-2xl border p-4',
-                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-[#d1d8d6] shadow-sm'
                 ]"
               >
                 <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
@@ -3584,7 +3584,7 @@
             <div
               :class="[
                 'rounded-2xl border p-4',
-                isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-[#d1d8d6] shadow-sm'
               ]"
             >
               <p :class="['text-xs font-semibold uppercase tracking-wide mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
@@ -3616,7 +3616,7 @@
             <div
               :class="[
                 'rounded-2xl border p-4',
-                isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-[#d1d8d6] shadow-sm'
               ]"
             >
               <div class="flex items-center justify-between mb-4">
@@ -4077,7 +4077,7 @@
                       'inline-flex items-center px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all',
                       isDarkMode 
                         ? 'bg-gray-800 hover:bg-gray-700 text-white' 
-                        : 'bg-gray-100 hover:bg-gray-200 text-gray-900 shadow-sm'
+                        : 'bg-[#d1d8d6]/50 hover:bg-[#d1d8d6] text-gray-900 shadow-sm'
                     ]"
                   >
                     <Icon name="ri:code-s-slash-line" size="18" class="mr-2" />
