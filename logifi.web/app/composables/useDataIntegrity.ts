@@ -160,22 +160,33 @@ export const useDataIntegrity = () => {
       isValidationInProgress.value = true
       error.value = null
 
-      // Get all entry IDs for the current user
-      const { data: entries, error: entriesError } = await supabase
-        .from('log_entries')
-        .select('id')
-        .order('date', { ascending: false })
-
-      if (entriesError) {
-        throw entriesError
+      // Get all entry IDs for the current user (paginate to avoid 1000-row cap)
+      const BATCH_SIZE = 1000
+      const allEntries: { id: string }[] = []
+      let from = 0
+      let hasMore = true
+      while (hasMore) {
+        const to = from + BATCH_SIZE - 1
+        const { data: batch, error: entriesError } = await supabase
+          .from('log_entries')
+          .select('id')
+          .order('date', { ascending: false })
+          .range(from, to)
+        if (entriesError) {
+          throw entriesError
+        }
+        if (!batch || batch.length === 0) break
+        allEntries.push(...batch)
+        hasMore = batch.length >= BATCH_SIZE
+        from += BATCH_SIZE
       }
 
-      if (!entries || entries.length === 0) {
+      if (allEntries.length === 0) {
         return []
       }
 
       // Validate each entry
-      const validationPromises = entries.map(entry => validateEntry(entry.id))
+      const validationPromises = allEntries.map(entry => validateEntry(entry.id))
       const results = await Promise.all(validationPromises)
 
       return results

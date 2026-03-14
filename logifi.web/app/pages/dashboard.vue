@@ -13100,18 +13100,29 @@ async function loadEntries(): Promise<void> {
   // If authenticated and online, sync with Supabase (merge using last-write-wins)
   if (isAuthenticated.value && user.value && isOnline.value) {
     try {
-      const { data, error } = await (supabase
-        .from('log_entries') as any)
-        .select('*')
-        .order('date', { ascending: false })
-        .limit(100000)
-      
-      if (error) {
-        console.error('[LoadEntries] Error loading entries from Supabase:', error)
-        // Continue with IndexedDB entries
-        return
+      // Paginate in batches of 1000 (Supabase default max per request)
+      const BATCH_SIZE = 1000
+      let allData: any[] = []
+      let from = 0
+      let hasMore = true
+      while (hasMore) {
+        const to = from + BATCH_SIZE - 1
+        const { data: batch, error } = await (supabase
+          .from('log_entries') as any)
+          .select('*')
+          .order('date', { ascending: false })
+          .range(from, to)
+        if (error) {
+          console.error('[LoadEntries] Error loading entries from Supabase:', error)
+          return
+        }
+        if (!batch || batch.length === 0) break
+        allData = allData.concat(batch)
+        hasMore = batch.length >= BATCH_SIZE
+        from += BATCH_SIZE
       }
-      
+      const data = allData
+
       if (data && data.length > 0) {
         // Convert database format to LogEntry format
         const supabaseEntries: LogEntry[] = data.map((dbEntry: any) => {
