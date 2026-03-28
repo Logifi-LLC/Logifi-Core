@@ -96,7 +96,14 @@ export const useAuth = () => {
         session.value = data.session
       }
 
-      return { success: true, user: data.user, session: data.session }
+      const requiresEmailConfirmation = !!data.user && !data.session
+
+      return {
+        success: true,
+        user: data.user,
+        session: data.session,
+        requiresEmailConfirmation,
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to sign up'
       error.value = errorMessage

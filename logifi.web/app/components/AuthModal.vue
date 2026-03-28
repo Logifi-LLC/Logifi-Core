@@ -295,12 +295,19 @@ const handleSubmit = async () => {
     if (activeTab.value === 'signup') {
       const result = await signUp(email.value, password.value)
       if (result.success) {
-        successMessage.value = 'Account created successfully! You are now signed in.'
-        // Wait a moment to show success message, then close
-        setTimeout(() => {
-          emit('success')
-          emit('close')
-        }, 1500)
+        if (result.requiresEmailConfirmation) {
+          successMessage.value = `Account created. Please check ${email.value.trim()} and click the verification link to activate your account.`
+          // Keep the modal open so users can read guidance and switch to sign in later.
+          activeTab.value = 'signin'
+          password.value = ''
+        } else {
+          successMessage.value = 'Account created successfully! You are now signed in.'
+          // Wait a moment to show success message, then close
+          setTimeout(() => {
+            emit('success')
+            emit('close')
+          }, 1500)
+        }
       } else if (result.error) {
         authError.value = result.error
       }

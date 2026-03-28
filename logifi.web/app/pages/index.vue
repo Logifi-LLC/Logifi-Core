@@ -82,30 +82,36 @@
             <p class="mt-4 text-lg text-gray-600 dark:text-gray-600">Built by pilots, for pilots.</p>
           </div>
           
-          <!-- Current Features -->
-          <div class="mb-20">
-            <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center dark:text-gray-900">Features</h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
-              <div v-for="(feature, i) in features" :key="i" class="bg-white p-8 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-[#e4e8e7] dark:bg-white dark:border-[#e4e8e7]">
-                <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-6 dark:bg-blue-50 dark:text-blue-600">
-                  <Icon :name="feature.icon" size="24" />
+          <div class="relative overflow-hidden rounded-[28px] border border-[#d8dedb] bg-[#fcfcf8] shadow-[0_18px_45px_rgba(0,0,0,0.06)] p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8">
+            <div
+              class="absolute inset-0 pointer-events-none opacity-35 bg-[linear-gradient(to_bottom,rgba(148,163,184,0.14)_1px,transparent_1px)] bg-[size:100%_38px]"
+              aria-hidden="true"
+            ></div>
+            <!-- Current Features -->
+            <div class="mb-14 relative z-10">
+              <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center dark:text-gray-900">Features</h3>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
+                <div v-for="(feature, i) in features" :key="i" class="bg-[#fcfcfb] p-8 rounded-3xl shadow-[0_10px_26px_rgba(15,23,42,0.06)] border border-[#dbe3ec] dark:bg-[#fcfcfb] dark:border-[#dbe3ec]">
+                  <div class="w-12 h-12 bg-blue-50/70 rounded-xl flex items-center justify-center text-blue-600 mb-6 dark:bg-blue-50/70 dark:text-blue-600">
+                    <Icon :name="feature.icon" size="24" />
+                  </div>
+                  <h3 class="text-xl font-bold mb-3 dark:text-gray-900">{{ feature.title }}</h3>
+                  <p class="text-gray-600 leading-relaxed dark:text-gray-600">{{ feature.description }}</p>
                 </div>
-                <h3 class="text-xl font-bold mb-3 dark:text-gray-900">{{ feature.title }}</h3>
-                <p class="text-gray-600 leading-relaxed dark:text-gray-600">{{ feature.description }}</p>
               </div>
             </div>
-          </div>
 
-          <!-- Features to Come -->
-          <div>
-            <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center dark:text-gray-900">Features to Come</h3>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
-              <div v-for="(feature, i) in featuresToCome" :key="i" class="bg-white p-8 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-[#e4e8e7] dark:bg-white dark:border-[#e4e8e7]">
-                <div class="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 mb-6 dark:bg-blue-50 dark:text-blue-600">
-                  <Icon :name="feature.icon" size="24" />
+            <!-- Features to Come -->
+            <div class="relative z-10">
+              <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center dark:text-gray-900">Features to Come</h3>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
+                <div v-for="(feature, i) in featuresToCome" :key="i" class="bg-[#fcfcfb] p-8 rounded-3xl shadow-[0_10px_26px_rgba(15,23,42,0.06)] border border-[#dbe3ec] dark:bg-[#fcfcfb] dark:border-[#dbe3ec]">
+                  <div class="w-12 h-12 bg-blue-50/70 rounded-xl flex items-center justify-center text-blue-600 mb-6 dark:bg-blue-50/70 dark:text-blue-600">
+                    <Icon :name="feature.icon" size="24" />
+                  </div>
+                  <h3 class="text-xl font-bold mb-3 dark:text-gray-900">{{ feature.title }}</h3>
+                  <p class="text-gray-600 leading-relaxed dark:text-gray-600">{{ feature.description }}</p>
                 </div>
-                <h3 class="text-xl font-bold mb-3 dark:text-gray-900">{{ feature.title }}</h3>
-                <p class="text-gray-600 leading-relaxed dark:text-gray-600">{{ feature.description }}</p>
               </div>
             </div>
           </div>
@@ -113,7 +119,7 @@
       </section>
 
       <!-- Footer -->
-      <footer class="mt-16 py-8 text-center">
+      <footer class="mt-10 py-5 text-center">
         <p class="text-sm text-gray-500 dark:text-gray-500">
           <NuxtLink to="/terms?from=landing" class="text-gray-600 hover:text-blue-600 hover:underline dark:text-gray-600 dark:hover:text-blue-600">Terms of Service</NuxtLink>
           <span class="mx-2">·</span>
@@ -186,6 +192,7 @@ const featuresToCome = [
     icon: 'ri:community-line'
   }
 ] as const
+
 </script>
 
 <style>

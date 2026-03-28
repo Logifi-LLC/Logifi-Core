@@ -38,6 +38,7 @@ export type Database = {
           import_batch_id: string | null
           original_entry_date: string | null
           import_metadata: Record<string, any> | null
+          fcv_flight_id: string | null
         }
         Insert: {
           id?: string
@@ -71,6 +72,7 @@ export type Database = {
           import_batch_id?: string | null
           original_entry_date?: string | null
           import_metadata?: Record<string, any> | null
+          fcv_flight_id?: string | null
         }
         Update: {
           id?: string
@@ -104,6 +106,36 @@ export type Database = {
           import_batch_id?: string | null
           original_entry_date?: string | null
           import_metadata?: Record<string, any> | null
+          fcv_flight_id?: string | null
+        }
+      }
+      fcv_integrations: {
+        Row: {
+          id: string
+          user_id: string
+          access_token: string
+          refresh_token: string
+          expires_at: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          access_token: string
+          refresh_token: string
+          expires_at: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          access_token?: string
+          refresh_token?: string
+          expires_at?: string
+          created_at?: string
+          updated_at?: string
         }
       }
       audit_logs: {

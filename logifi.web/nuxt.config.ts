@@ -18,7 +18,15 @@ export default defineNuxtConfig({
     public: {
       supabaseUrl: process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
       supabaseAnonKey: process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY,
-    }
+    },
+    // FC View OAuth (server-only; never expose to client)
+    fcvClientId: process.env.FCV_CLIENT_ID || '',
+    fcvClientSecret: process.env.FCV_CLIENT_SECRET || '',
+    fcvRedirectUri: process.env.FCV_REDIRECT_URI || '',
+    fcvTokenUrl: process.env.FCV_TOKEN_URL || '',
+    fcvAuthorizeUrl: process.env.FCV_AUTHORIZE_URL || '',
+    fcvApiBaseUrl: process.env.FCV_API_BASE_URL || '',
+    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
   },
   // Client-side only app (uses localStorage for data persistence)
   ssr: false,

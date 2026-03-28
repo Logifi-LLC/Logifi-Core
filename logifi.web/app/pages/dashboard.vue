@@ -3100,7 +3100,7 @@
           <!-- Mobile Tab Select (shown only on small screens) -->
           <div class="p-4 sm:hidden overflow-x-auto whitespace-nowrap flex gap-2 hide-scrollbar border-b" :class="isDarkMode ? 'border-gray-800' : 'border-[#d1d8d6]'">
             <button
-              v-for="tab in ['profile', 'preferences', 'data', 'compliance', 'advanced']"
+              v-for="tab in ['profile', 'account', 'preferences', 'data', 'compliance', 'advanced']"
               :key="tab"
               @click="activeSettingsTab = tab"
               :class="[
@@ -3110,7 +3110,7 @@
                   : (isDarkMode ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-600 border border-[#d1d8d6]')
               ]"
             >
-              {{ tab === 'data' ? 'Data & Sync' : tab }}
+              {{ tab === 'data' ? 'Data & Sync' : tab === 'account' ? 'Account' : tab }}
             </button>
           </div>
 
@@ -3127,6 +3127,18 @@
             >
               <Icon name="ri:user-smile-line" size="20" />
               Pilot Profile
+            </button>
+            <button
+              @click="activeSettingsTab = 'account'"
+              :class="[
+                'flex items-center gap-3 px-4 py-3 rounded-xl text-left font-medium transition-all font-quicksand',
+                activeSettingsTab === 'account'
+                  ? (isDarkMode ? 'bg-white/10 text-white' : 'bg-blue-50 text-blue-700')
+                  : (isDarkMode ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200' : 'text-gray-600 hover:bg-[#d1d8d6]/50 hover:text-gray-900')
+              ]"
+            >
+              <Icon name="ri:shield-user-line" size="20" />
+              Account
             </button>
             <button
               @click="activeSettingsTab = 'preferences'"
@@ -3197,7 +3209,7 @@
           <!-- Desktop Header -->
           <div class="hidden sm:flex items-center justify-between p-6 border-b" :class="isDarkMode ? 'border-gray-800' : 'border-[#d1d8d6]'">
             <h3 class="text-2xl font-semibold font-quicksand capitalize">
-              {{ activeSettingsTab === 'data' ? 'Data & Sync' : activeSettingsTab }}
+              {{ settingsTabTitle }}
             </h3>
             <button
               @click="showSettingsModal = false"
@@ -3769,6 +3781,245 @@
         
             </div>
 
+            <!-- ACCOUNT TAB -->
+            <div
+              v-show="activeSettingsTab === 'account'"
+              class="space-y-8 max-w-3xl"
+            >
+              <div
+                :class="[
+                  'space-y-4 rounded-2xl border p-4 sm:p-6',
+                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                ]"
+              >
+                <h4
+                  :class="[
+                    'text-sm font-semibold uppercase tracking-wide mb-2',
+                    isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                  ]"
+                >
+                  Account Email
+                </h4>
+                <p
+                  :class="[
+                    'text-sm mb-4',
+                    isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                  ]"
+                >
+                  This is the email used to sign in to Logifi.
+                </p>
+
+                <div class="space-y-2">
+                  <label
+                    :class="[
+                      'text-xs font-semibold uppercase tracking-wide',
+                      isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                    ]"
+                  >
+                    Current email
+                  </label>
+                  <div
+                    :class="[
+                      'w-full rounded-xl border px-4 py-2.5 text-sm font-quicksand',
+                      isDarkMode
+                        ? 'bg-black/30 border-white/10 text-gray-100'
+                        : 'bg-gray-50 border-gray-200 text-gray-900'
+                    ]"
+                  >
+                    {{ user?.email || 'Not available' }}
+                  </div>
+                </div>
+
+                <form class="mt-6 space-y-4" @submit.prevent="handleUpdateEmail">
+                  <div class="space-y-2">
+                    <label
+                      :class="[
+                        'text-xs font-semibold uppercase tracking-wide',
+                        isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                      ]"
+                    >
+                      New email
+                    </label>
+                    <input
+                      v-model="accountEmail"
+                      type="email"
+                      autocomplete="email"
+                      placeholder="you@example.com"
+                      :class="[
+                        'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
+                        isDarkMode
+                          ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50'
+                          : 'bg-white border-gray-200 text-gray-900 focus:ring-blue-500'
+                      ]"
+                    />
+                  </div>
+
+                  <div class="flex items-center gap-3">
+                    <button
+                      type="submit"
+                      :disabled="isUpdatingEmail"
+                      :class="[
+                        'inline-flex items-center justify-center rounded-xl px-5 py-2 text-sm font-semibold font-quicksand transition-colors',
+                        isDarkMode
+                          ? 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-600/70'
+                          : 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-600/70',
+                        isUpdatingEmail ? 'cursor-not-allowed' : ''
+                      ]"
+                    >
+                      <span v-if="!isUpdatingEmail">Update email</span>
+                      <span v-else>Updating…</span>
+                    </button>
+                    <p
+                      v-if="emailSuccessMessage"
+                      :class="[
+                        'text-xs',
+                        isDarkMode ? 'text-emerald-400' : 'text-emerald-600'
+                      ]"
+                    >
+                      {{ emailSuccessMessage }}
+                    </p>
+                    <p
+                      v-else-if="emailErrorMessage"
+                      :class="[
+                        'text-xs',
+                        isDarkMode ? 'text-red-400' : 'text-red-600'
+                      ]"
+                    >
+                      {{ emailErrorMessage }}
+                    </p>
+                  </div>
+                </form>
+              </div>
+
+              <div
+                :class="[
+                  'space-y-4 rounded-2xl border p-4 sm:p-6',
+                  isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
+                ]"
+              >
+                <h4
+                  :class="[
+                    'text-sm font-semibold uppercase tracking-wide mb-2',
+                    isDarkMode ? 'text-gray-300' : 'text-gray-700'
+                  ]"
+                >
+                  Change Password
+                </h4>
+                <p
+                  :class="[
+                    'text-sm mb-4',
+                    isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                  ]"
+                >
+                  Use a strong password with at least 8 characters.
+                </p>
+
+                <form class="space-y-4" @submit.prevent="handleUpdatePassword">
+                  <div class="space-y-2">
+                    <label
+                      :class="[
+                        'text-xs font-semibold uppercase tracking-wide',
+                        isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                      ]"
+                    >
+                      Current password
+                    </label>
+                    <input
+                      v-model="currentPassword"
+                      type="password"
+                      autocomplete="current-password"
+                      :class="[
+                        'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
+                        isDarkMode
+                          ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50'
+                          : 'bg-white border-gray-200 text-gray-900 focus:ring-blue-500'
+                      ]"
+                    />
+                  </div>
+
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <div class="space-y-2">
+                      <label
+                        :class="[
+                          'text-xs font-semibold uppercase tracking-wide',
+                          isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                        ]"
+                      >
+                        New password
+                      </label>
+                      <input
+                        v-model="newPassword"
+                        type="password"
+                        autocomplete="new-password"
+                        :class="[
+                          'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
+                          isDarkMode
+                            ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50'
+                            : 'bg-white border-gray-200 text-gray-900 focus:ring-blue-500'
+                        ]"
+                      />
+                    </div>
+                    <div class="space-y-2">
+                      <label
+                        :class="[
+                          'text-xs font-semibold uppercase tracking-wide',
+                          isDarkMode ? 'text-gray-400' : 'text-gray-500'
+                        ]"
+                      >
+                        Confirm new password
+                      </label>
+                      <input
+                        v-model="confirmNewPassword"
+                        type="password"
+                        autocomplete="new-password"
+                        :class="[
+                          'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
+                          isDarkMode
+                            ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50'
+                            : 'bg-white border-gray-200 text-gray-900 focus:ring-blue-500'
+                        ]"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="flex items-center gap-3">
+                    <button
+                      type="submit"
+                      :disabled="isUpdatingPassword"
+                      :class="[
+                        'inline-flex items-center justify-center rounded-xl px-5 py-2 text-sm font-semibold font-quicksand transition-colors',
+                        isDarkMode
+                          ? 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-600/70'
+                          : 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-600/70',
+                        isUpdatingPassword ? 'cursor-not-allowed' : ''
+                      ]"
+                    >
+                      <span v-if="!isUpdatingPassword">Update password</span>
+                      <span v-else>Updating…</span>
+                    </button>
+                    <p
+                      v-if="passwordSuccessMessage"
+                      :class="[
+                        'text-xs',
+                        isDarkMode ? 'text-emerald-400' : 'text-emerald-600'
+                      ]"
+                    >
+                      {{ passwordSuccessMessage }}
+                    </p>
+                    <p
+                      v-else-if="passwordErrorMessage"
+                      :class="[
+                        'text-xs',
+                        isDarkMode ? 'text-red-400' : 'text-red-600'
+                      ]"
+                    >
+                      {{ passwordErrorMessage }}
+                    </p>
+                  </div>
+                </form>
+              </div>
+            </div>
+
             <!-- PREFERENCES TAB -->
             <div v-show="activeSettingsTab === 'preferences'" class="space-y-8 max-w-3xl">
               <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
@@ -4013,6 +4264,10 @@
                     </button>
                   </div>
                 </div>
+              </div>
+
+              <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+                <FcvSync :is-dark-mode="isDarkMode" />
               </div>
 
               <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
@@ -6229,6 +6484,172 @@ const isBrowser = typeof window !== 'undefined'
 
 // Authentication setup
 const { user, isAuthenticated, isLoading: authLoading, signOut: authSignOut } = useAuth()
+
+// Account settings state
+const accountEmail = ref(user.value?.email ?? '')
+const isUpdatingEmail = ref(false)
+const emailErrorMessage = ref<string | null>(null)
+const emailSuccessMessage = ref<string | null>(null)
+
+const currentPassword = ref('')
+const newPassword = ref('')
+const confirmNewPassword = ref('')
+const isUpdatingPassword = ref(false)
+const passwordErrorMessage = ref<string | null>(null)
+const passwordSuccessMessage = ref<string | null>(null)
+
+const validateEmailFormat = (email: string) => {
+  return /\S+@\S+\.\S+/.test(email)
+}
+
+const handleUpdateEmail = async () => {
+  emailErrorMessage.value = null
+  emailSuccessMessage.value = null
+
+  const trimmed = accountEmail.value.trim()
+
+  if (!trimmed) {
+    emailErrorMessage.value = 'Please enter an email address.'
+    return
+  }
+
+  if (!validateEmailFormat(trimmed)) {
+    emailErrorMessage.value = 'Please enter a valid email address.'
+    return
+  }
+
+  if (user.value?.email && user.value.email === trimmed) {
+    emailErrorMessage.value = 'That is already your current email.'
+    return
+  }
+
+  isUpdatingEmail.value = true
+
+  try {
+    const { data, error } = await supabase.auth.updateUser({ email: trimmed })
+
+    if (error) {
+      const message = error.message || 'Unable to update email.'
+      const lower = message.toLowerCase()
+
+      if (lower.includes('reauth') || lower.includes('re-auth') || lower.includes('session')) {
+        emailErrorMessage.value = 'Your session has expired. Please sign out and sign back in, then try again.'
+      } else if (lower.includes('invalid email')) {
+        emailErrorMessage.value = 'Please enter a valid email address.'
+      } else if (lower.includes('error sending email change email')) {
+        emailErrorMessage.value =
+          'We could not send the email change confirmation. Please try again in a moment or contact support if this continues.'
+      } else {
+        emailErrorMessage.value = message
+      }
+
+      return
+    }
+
+    if (data?.user) {
+      user.value = data.user
+    }
+
+    emailSuccessMessage.value =
+      'Email updated. If required by your provider, a verification email has been sent.'
+  } catch (err: any) {
+    const message = err?.message || 'Unable to update email. Please try again.'
+    emailErrorMessage.value = message
+  } finally {
+    isUpdatingEmail.value = false
+  }
+}
+
+const handleUpdatePassword = async () => {
+  passwordErrorMessage.value = null
+  passwordSuccessMessage.value = null
+
+  if (!currentPassword.value) {
+    passwordErrorMessage.value = 'Please enter your current password.'
+    return
+  }
+
+  if (!newPassword.value) {
+    passwordErrorMessage.value = 'Please enter a new password.'
+    return
+  }
+
+  if (newPassword.value.length < MIN_PASSWORD_LENGTH) {
+    passwordErrorMessage.value = `New password must be at least ${MIN_PASSWORD_LENGTH} characters.`
+    return
+  }
+
+  if (newPassword.value !== confirmNewPassword.value) {
+    passwordErrorMessage.value = 'New password and confirmation do not match.'
+    return
+  }
+
+  if (!user.value?.email) {
+    passwordErrorMessage.value = 'You must be signed in to change your password.'
+    return
+  }
+
+  isUpdatingPassword.value = true
+
+  try {
+    // Re-authenticate with current password to confirm identity
+    const { error: reauthError } = await supabase.auth.signInWithPassword({
+      email: user.value.email,
+      password: currentPassword.value
+    })
+
+    if (reauthError) {
+      const message = reauthError.message || 'Unable to verify current password.'
+      const lower = message.toLowerCase()
+
+      if (lower.includes('invalid login credentials')) {
+        passwordErrorMessage.value = 'Current password is incorrect.'
+      } else if (lower.includes('session') || lower.includes('reauth')) {
+        passwordErrorMessage.value =
+          'Your session has expired. Please sign out and sign back in, then try again.'
+      } else {
+        passwordErrorMessage.value = message
+      }
+
+      return
+    }
+
+    const { data, error } = await supabase.auth.updateUser({
+      password: newPassword.value
+    })
+
+    if (error) {
+      const message = error.message || 'Unable to update password.'
+      const lower = message.toLowerCase()
+
+      if (lower.includes('weak password') || lower.includes('password should')) {
+        passwordErrorMessage.value =
+          'Please choose a stronger password (at least 8 characters and hard to guess).'
+      } else if (lower.includes('session') || lower.includes('reauth')) {
+        passwordErrorMessage.value =
+          'Your session has expired. Please sign out and sign back in, then try again.'
+      } else {
+        passwordErrorMessage.value = message
+      }
+
+      return
+    }
+
+    if (data?.user) {
+      user.value = data.user
+    }
+
+    passwordSuccessMessage.value = 'Password updated successfully.'
+    currentPassword.value = ''
+    newPassword.value = ''
+    confirmNewPassword.value = ''
+  } catch (err: any) {
+    const message = err?.message || 'Unable to update password. Please try again.'
+    passwordErrorMessage.value = message
+  } finally {
+    isUpdatingPassword.value = false
+  }
+}
 const { validateEntry: validateEntryIntegrity } = useDataIntegrity()
 const { validateEntry: validateFlightTimeEntry, validationErrors, validationWarnings, hasErrors, hasWarnings, clearValidation } = useValidation()
 
@@ -7695,7 +8116,27 @@ const catalogOpenState = reactive<Record<CatalogKey, boolean>>({
 })
 const isSidebarCollapsed = ref(false)
 const showSettingsModal = ref(false)
-const activeSettingsTab = ref('profile')
+const activeSettingsTab = ref<'profile' | 'account' | 'preferences' | 'data' | 'compliance' | 'advanced'>('profile')
+const settingsTabTitle = computed(() => {
+  switch (activeSettingsTab.value) {
+    case 'profile':
+      return 'Profile'
+    case 'account':
+      return 'Account'
+    case 'preferences':
+      return 'Preferences'
+    case 'data':
+      return 'Data & Sync'
+    case 'compliance':
+      return 'Compliance'
+    case 'advanced':
+      return 'Advanced'
+    default:
+      return activeSettingsTab.value
+  }
+})
+
+const MIN_PASSWORD_LENGTH = 8
 const showImportSection = ref(true)
 const showExportSection = ref(true)
 const showIdentDropdown = ref(false)
