@@ -9,12 +9,12 @@ export default defineNuxtRouteMiddleware(async (to, from) => {
   // Initialize auth state if not already done
   // The useAuth composable will handle this, but we ensure it's called
   // This middleware runs before page components mount
-  const { initAuth } = useAuth()
-  
-  // Wait for auth to initialize
+  const { initAuth, isPasswordRecoverySession } = useAuth()
+
   await initAuth()
-  
-  // Note: We don't redirect here because we're using a modal approach
-  // The page component will check isAuthenticated and show AuthModal if needed
+
+  if (isPasswordRecoverySession.value && to.path !== '/reset-password') {
+    return navigateTo('/reset-password')
+  }
 })
 
