@@ -1,51 +1,30 @@
 import type { LogEntry } from './logbookTypes'
 import { supabase } from '~/lib/supabase'
+import {
+  entriesDuplicateMatch,
+  type DuplicateEntryMatchShape,
+} from '../../shared/duplicateEntryMatch'
+
+function logEntryToDuplicateShape(entry: LogEntry): DuplicateEntryMatchShape {
+  return {
+    date: entry.date,
+    registration: entry.registration,
+    departure: entry.departure,
+    destination: entry.destination,
+    oooiOut: entry.oooi?.out,
+    flightTimeTotal: entry.flightTime?.total ?? null,
+  }
+}
 
 /**
  * Check if two entries are duplicates based on date, registration, airports, and times
  */
 export function isDuplicateEntry(entry: LogEntry, existingEntry: LogEntry): boolean {
-  // Must match date and registration
-  if (existingEntry.date !== entry.date || 
-      existingEntry.registration.toUpperCase() !== entry.registration.toUpperCase()) {
-    return false
-  }
-  
-  // Check departure and destination airports (normalize UNKNOWN and empty strings)
-  const existingDep = (existingEntry.departure || 'UNKNOWN').trim().toUpperCase()
-  const entryDep = (entry.departure || 'UNKNOWN').trim().toUpperCase()
-  const existingDest = (existingEntry.destination || 'UNKNOWN').trim().toUpperCase()
-  const entryDest = (entry.destination || 'UNKNOWN').trim().toUpperCase()
-  
-  // If departure or destination differs (and not both UNKNOWN), they're different flights
-  if (existingDep !== entryDep || existingDest !== entryDest) {
-    // Exception: if both are UNKNOWN, we'll fall through to check times
-    if (!(existingDep === 'UNKNOWN' && entryDep === 'UNKNOWN' && 
-          existingDest === 'UNKNOWN' && entryDest === 'UNKNOWN')) {
-      return false
-    }
-  }
-  
-  // If we have OOOI times for both, compare OUT time as tiebreaker
-  const existingOut = existingEntry.oooi?.out
-  const entryOut = entry.oooi?.out
-  if (existingOut && entryOut) {
-    // If OUT times differ, they're different flights (e.g., morning vs afternoon)
-    return existingOut === entryOut
-  }
-  
-  // If OOOI not available, compare total flight time as tiebreaker
-  const existingTotal = existingEntry.flightTime.total
-  const entryTotal = entry.flightTime.total
-  if (existingTotal !== null && existingTotal !== undefined &&
-      entryTotal !== null && entryTotal !== undefined) {
-    // Only consider duplicates if total times match exactly (conservative approach)
-    return existingTotal === entryTotal
-  }
-  
-  // If we don't have OOOI or total times, and airports matched (or both UNKNOWN),
-  // consider them duplicates (conservative approach - matches original behavior for edge cases)
-  return true
+  return entriesDuplicateMatch(
+    logEntryToDuplicateShape(entry),
+    logEntryToDuplicateShape(existingEntry),
+    'standard'
+  )
 }
 
 /**

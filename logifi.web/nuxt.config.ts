@@ -1,9 +1,46 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
-import tailwindcss from "@tailwindcss/vite";
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import tailwindcss from '@tailwindcss/vite'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+/**
+ * Paths only — listhen resolves HTTPS via `s.startsWith("--")` (inline PEM) or `readFile(path)`.
+ * Passing Buffers breaks with `s.startsWith is not a function`.
+ */
+function resolveDevHttpsPaths():
+  | { key: string; cert: string }
+  | undefined {
+  const keyPath = process.env.NUXT_DEV_HTTPS_KEY?.trim()
+  const certPath = process.env.NUXT_DEV_HTTPS_CERT?.trim()
+  if (!keyPath || !certPath) return undefined
+  const key = path.resolve(__dirname, keyPath)
+  const cert = path.resolve(__dirname, certPath)
+  try {
+    if (!fs.existsSync(key) || !fs.existsSync(cert)) {
+      console.warn(
+        '[nuxt] NUXT_DEV_HTTPS_KEY / NUXT_DEV_HTTPS_CERT paths not found; using HTTP for dev.'
+      )
+      return undefined
+    }
+    return { key, cert }
+  } catch {
+    console.warn(
+      '[nuxt] NUXT_DEV_HTTPS_KEY / NUXT_DEV_HTTPS_CERT could not be resolved; using HTTP for dev.'
+    )
+    return undefined
+  }
+}
+
+const devHttps = resolveDevHttpsPaths()
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: false },
+  /** FC View OAuth requires https:// redirect URIs; use mkcert + NUXT_DEV_HTTPS_* (see env.example). */
+  devServer: devHttps ? { https: devHttps } : undefined,
   modules: ['@nuxt/icon'],
   vite: {
     plugins: [

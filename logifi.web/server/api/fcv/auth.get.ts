@@ -33,8 +33,6 @@ export default defineEventHandler(async (event) => {
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
-    response_type: 'code',
-    scope: 'flights', // adjust per FC View docs
     state,
   })
 

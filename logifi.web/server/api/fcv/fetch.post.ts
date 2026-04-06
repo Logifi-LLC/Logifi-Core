@@ -63,12 +63,14 @@ export default defineEventHandler(async (event) => {
   const dateTo = (body?.dateTo ?? new Date().toISOString().slice(0, 10)) as string
   const includeDeadheads = body?.includeDeadheads ?? false
 
+  // FC View /flights/ expects start_datetime_local & end_datetime_local as YYYY-MM-DD HH:MM:SS.
+  const startLocal = `${dateFrom} 00:00:00`
+  const endLocal = `${dateTo} 23:59:59`
   const params = new URLSearchParams({
-    start_date: dateFrom,
-    end_date: dateTo,
-    include_deadheads: String(includeDeadheads),
+    start_datetime_local: startLocal,
+    end_datetime_local: endLocal,
   })
-  const url = `${apiBase}/flights?${params.toString()}`
+  const url = `${apiBase}/flights/?${params.toString()}`
 
   const res = await fetch(url, {
     headers: {
@@ -87,7 +89,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const data = (await res.json()) as { flights?: FcvFlight[] } | FcvFlight[]
-  const flights: FcvFlight[] = Array.isArray(data) ? data : (data?.flights ?? [])
+  let flights: FcvFlight[] = Array.isArray(data) ? data : (data?.flights ?? [])
+  if (!includeDeadheads) {
+    flights = flights.filter((f) => f.is_deadhead !== 1)
+  }
   const mapped: FcvMappedEntry[] = flights.map(mapFcvFlightToEntry)
 
   return {

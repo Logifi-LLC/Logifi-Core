@@ -23,6 +23,8 @@ interface FcvMappedEntry {
 
 const { session, isAuthenticated } = useAuth()
 
+const isDev = import.meta.dev
+
 const connected = ref<boolean>(false)
 const loadingStatus = ref(false)
 const loadingFetch = ref(false)
@@ -35,6 +37,9 @@ const includeDeadheads = ref(false)
 
 const previewFlights = ref<FcvMappedEntry[]>([])
 const showPreviewModal = ref(false)
+/** Row indices that match existing logbook entries (from POST /api/fcv/check-duplicates). */
+const duplicateIndices = ref<Set<number>>(new Set())
+const includeDuplicatesInImport = ref(false)
 
 function authHeaders(): Record<string, string> {
   const token = session.value?.access_token
@@ -96,6 +101,25 @@ async function fetchFlights() {
     )
     if (data?.success && Array.isArray(data.flights)) {
       previewFlights.value = data.flights
+      includeDuplicatesInImport.value = false
+      duplicateIndices.value = new Set()
+      try {
+        const dup = await $fetch<{
+          duplicateFcvFlightIds: string[]
+          duplicateIndices: number[]
+        }>('/api/fcv/check-duplicates', {
+          method: 'POST',
+          headers: {
+            ...authHeaders(),
+            'Content-Type': 'application/json',
+          },
+          body: { flights: data.flights },
+        })
+        duplicateIndices.value = new Set(dup.duplicateIndices ?? [])
+      } catch {
+        error.value =
+          'Fetched flights but could not check for duplicates. Review carefully before importing.'
+      }
       showPreviewModal.value = true
     }
   } catch (e) {
@@ -106,7 +130,8 @@ async function fetchFlights() {
 }
 
 async function confirmImport() {
-  if (previewFlights.value.length === 0) return
+  const flights = flightsToImport.value
+  if (flights.length === 0) return
   loadingImport.value = true
   error.value = null
   try {
@@ -116,10 +141,12 @@ async function confirmImport() {
         ...authHeaders(),
         'Content-Type': 'application/json',
       },
-      body: { flights: previewFlights.value },
+      body: { flights },
     })
     showPreviewModal.value = false
     previewFlights.value = []
+    duplicateIndices.value = new Set()
+    includeDuplicatesInImport.value = false
     await checkStatus()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to import flights'
@@ -130,16 +157,58 @@ async function confirmImport() {
 
 function closePreview() {
   showPreviewModal.value = false
+  includeDuplicatesInImport.value = false
 }
+
+function isDuplicateRow(index: number) {
+  return duplicateIndices.value.has(index)
+}
+
+const duplicateCount = computed(() => duplicateIndices.value.size)
+
+const flightsToImport = computed(() => {
+  if (includeDuplicatesInImport.value) return previewFlights.value
+  return previewFlights.value.filter((_, i) => !duplicateIndices.value.has(i))
+})
+
+const importCount = computed(() => flightsToImport.value.length)
 
 const totalTime = computed(() => {
   let t = 0
-  for (const f of previewFlights.value) {
+  for (const f of flightsToImport.value) {
     const ft = f.flight_time as { total?: number }
     if (typeof ft?.total === 'number') t += ft.total
   }
   return t
 })
+
+function formatBlockHours(f: FcvMappedEntry): string {
+  const ft = f.flight_time as { total?: number }
+  if (typeof ft?.total !== 'number' || !Number.isFinite(ft.total)) return ''
+  const n = Math.round(ft.total * 100) / 100
+  return `${n}h`
+}
+
+/** OOOI stored as HHMM; show as HH:MM for preview. */
+function formatOooiPreview(f: FcvMappedEntry): string {
+  const o = f.oooi as
+    | { out?: unknown; off?: unknown; on?: unknown; in?: unknown }
+    | null
+    | undefined
+  if (!o) return ''
+  const toDisp = (t: unknown) => {
+    if (typeof t !== 'string' || !t.trim()) return ''
+    const d = t.replace(/\D/g, '').padStart(4, '0').slice(0, 4)
+    if (d.length !== 4) return ''
+    return `${d.slice(0, 2)}:${d.slice(2, 4)}`
+  }
+  const out = toDisp(o.out)
+  const off = toDisp(o.off)
+  const on = toDisp(o.on)
+  const inn = toDisp(o.in)
+  const parts = [out, off, on, inn].filter(Boolean)
+  return parts.length ? `OOOI ${parts.join(' · ')}` : ''
+}
 
 onMounted(() => {
   if (isAuthenticated.value) checkStatus()
@@ -239,6 +308,17 @@ const inputClass = computed(() =>
           Connect FC View
         </button>
       </div>
+      <p
+        v-if="isDev"
+        :class="[
+          'text-xs mt-2 max-w-xl leading-relaxed',
+          isDarkMode ? 'text-gray-500' : 'text-gray-500',
+        ]"
+      >
+        Leave <code class="px-1 rounded bg-black/15 dark:bg-white/10">npm run dev</code> running until you land back here — if nothing is listening on port 3000, the callback shows “connection refused.” Use the same URL you registered (e.g.
+        <code class="px-1 rounded bg-black/15 dark:bg-white/10">https://localhost:3000</code>
+        with mkcert) for both the app and <code class="px-1 rounded bg-black/15 dark:bg-white/10">FCV_REDIRECT_URI</code>.
+      </p>
     </template>
     <template v-else>
       <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
@@ -333,36 +413,100 @@ const inputClass = computed(() =>
         </div>
         <div class="flex-1 overflow-y-auto p-4 space-y-2">
           <div
-            v-for="f in previewFlights"
-            :key="f.fcv_flight_id"
+            v-for="(f, idx) in previewFlights"
+            :key="`${f.fcv_flight_id || 'row'}-${idx}`"
             :class="[
-              'flex items-center justify-between py-2 border-b last:border-0 text-sm',
+              'flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2 border-b last:border-0 text-sm rounded-lg px-2 -mx-2',
               isDarkMode
                 ? 'border-gray-700 text-gray-200'
                 : 'border-gray-200 text-gray-800',
+              isDuplicateRow(idx)
+                ? isDarkMode
+                  ? 'bg-amber-950/35 border-amber-900/50 ring-1 ring-amber-700/40'
+                  : 'bg-amber-50 border-amber-200/80 ring-1 ring-amber-200/90'
+                : '',
             ]"
           >
-            <span class="font-medium">{{ f.date }}</span>
+            <div class="flex items-center gap-2 min-w-0">
+              <Icon
+                v-if="isDuplicateRow(idx)"
+                name="ri:alert-line"
+                size="18"
+                :class="['shrink-0', isDarkMode ? 'text-amber-400' : 'text-amber-600']"
+                aria-hidden="true"
+              />
+              <span class="font-medium">{{ f.date }}</span>
+            </div>
             <span>{{ f.departure }} → {{ f.destination }}</span>
             <span :class="isDarkMode ? 'text-gray-400' : 'text-gray-500'">
               {{ f.aircraft_make_model }} ({{ f.registration }})
             </span>
-            <span v-if="(f.flight_time as { total?: number })?.total != null">
-              {{ (f.flight_time as { total: number }).total }}h
+            <span
+              v-if="formatBlockHours(f)"
+              :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'"
+            >
+              {{ formatBlockHours(f) }}
+            </span>
+            <span
+              v-if="formatOooiPreview(f)"
+              :class="isDarkMode ? 'text-gray-400' : 'text-gray-600'"
+            >
+              {{ formatOooiPreview(f) }}
+            </span>
+            <span
+              v-if="isDuplicateRow(idx)"
+              :class="[
+                'w-full text-xs font-medium sm:w-auto sm:ml-auto',
+                isDarkMode ? 'text-amber-300' : 'text-amber-800',
+              ]"
+            >
+              May already be in logbook
             </span>
           </div>
         </div>
         <div
           :class="[
-            'p-4 border-t flex items-center justify-between gap-4',
+            'p-4 border-t flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between',
             isDarkMode ? 'border-gray-700' : 'border-gray-200',
           ]"
         >
-          <span :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-            Total: {{ previewFlights.length }} flight(s)
-            <span v-if="totalTime > 0">, {{ totalTime.toFixed(1) }}h</span>
-          </span>
-          <div class="flex gap-2">
+          <div :class="['text-sm space-y-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+            <p>
+              Importing:
+              <span class="font-medium" :class="isDarkMode ? 'text-gray-200' : 'text-gray-800'">
+                {{ importCount }} of {{ previewFlights.length }} flight(s)
+              </span>
+              <span v-if="totalTime > 0">, {{ totalTime.toFixed(1) }}h</span>
+            </p>
+            <p
+              v-if="duplicateCount > 0"
+              :class="isDarkMode ? 'text-amber-300' : 'text-amber-800'"
+            >
+              {{ duplicateCount }} flight(s) may match existing entries.
+            </p>
+            <p
+              v-if="duplicateCount > 0"
+              :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']"
+            >
+              Compared by calendar date, tail number, and route (IATA/ICAO normalized). Two flights same day with
+              different out-times can still be told apart when both entries have OOOI out logged.
+            </p>
+            <label
+              v-if="duplicateCount > 0"
+              :class="[
+                'flex items-center gap-2 cursor-pointer select-none',
+                isDarkMode ? 'text-gray-300' : 'text-gray-700',
+              ]"
+            >
+              <input
+                v-model="includeDuplicatesInImport"
+                type="checkbox"
+                :class="['rounded shrink-0', isDarkMode ? 'border-gray-600' : 'border-gray-300']"
+              />
+              <span>Include flights that match existing entries</span>
+            </label>
+          </div>
+          <div class="flex gap-2 shrink-0">
             <button
               type="button"
               :class="btnOutlineClass"
@@ -373,10 +517,10 @@ const inputClass = computed(() =>
             <button
               type="button"
               class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 shadow-sm"
-              :disabled="loadingImport"
+              :disabled="loadingImport || importCount === 0"
               @click="confirmImport"
             >
-              {{ loadingImport ? 'Importing…' : `Import ${previewFlights.length} flight(s)` }}
+              {{ loadingImport ? 'Importing…' : `Import ${importCount} flight(s)` }}
             </button>
           </div>
         </div>

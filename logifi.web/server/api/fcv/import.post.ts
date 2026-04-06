@@ -2,6 +2,7 @@ import { defineEventHandler, readBody, createError } from 'h3'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import type { FcvMappedEntry } from '../../utils/fcvMap'
 import type { Database } from '../../../app/types/database'
+import { alignMappedFcvEntry, buildAlignmentIndex } from '../../utils/fcvAlignment'
 
 interface ImportBody {
   flights: FcvMappedEntry[]
@@ -39,6 +40,21 @@ export default defineEventHandler(async (event) => {
   }
 
   const supabase = getSupabaseClient(event)
+  const { data: existingRows, error: existingRowsError } = await supabase
+    .from('log_entries')
+    .select('registration, aircraft_make_model, aircraft_category_class, training_elements')
+    .eq('user_id', userId)
+    .limit(5000)
+
+  if (existingRowsError) {
+    console.error('failed loading existing log_entries for FCV alignment:', existingRowsError)
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'Failed to load existing logbook entries',
+    })
+  }
+
+  const alignmentIndex = buildAlignmentIndex(existingRows ?? [])
 
   const { data: batch, error: batchError } = await supabase
     .from('import_batches')
@@ -67,6 +83,7 @@ export default defineEventHandler(async (event) => {
   let skipped = 0
 
   for (const f of flights) {
+    const aligned = alignMappedFcvEntry(f, alignmentIndex)
     const fcvId = f.fcv_flight_id
     if (!fcvId) {
       skipped++
@@ -87,24 +104,32 @@ export default defineEventHandler(async (event) => {
 
     const entry: Database['public']['Tables']['log_entries']['Insert'] = {
       user_id: userId,
-      date: f.date,
-      role: f.role,
-      aircraft_category_class: f.aircraft_category_class,
-      category_class_time: f.category_class_time,
-      aircraft_make_model: f.aircraft_make_model,
-      registration: f.registration,
-      flight_number: f.flight_number,
-      departure: f.departure,
-      destination: f.destination,
-      route: f.route,
-      flight_time: f.flight_time,
-      performance: f.performance,
-      oooi: f.ooi,
+      date: aligned.date,
+      role: aligned.role,
+      aircraft_category_class: aligned.aircraft_category_class,
+      category_class_time: aligned.category_class_time,
+      aircraft_make_model: aligned.aircraft_make_model,
+      registration: aligned.registration,
+      flight_number: aligned.flight_number,
+      departure: aligned.departure,
+      destination: aligned.destination,
+      route: aligned.route,
+      training_elements: aligned.training_elements ?? null,
+      training_instructor: aligned.training_instructor ?? null,
+      flight_time: aligned.flight_time,
+      performance: aligned.performance,
+      oooi: aligned.oooi,
+      remarks: aligned.remarks ?? null,
+      flight_conditions:
+        Array.isArray(aligned.flight_conditions) && aligned.flight_conditions.length > 0
+          ? aligned.flight_conditions
+          : ['ifr'],
+      tags: Array.isArray(aligned.tags) && aligned.tags.length > 0 ? aligned.tags : undefined,
       is_imported: true,
       import_source: 'fc_view',
       import_batch_id: batchId,
-      original_entry_date: f.original_entry_date,
-      import_metadata: f.import_metadata,
+      original_entry_date: aligned.original_entry_date,
+      import_metadata: aligned.import_metadata,
       fcv_flight_id: fcvId,
     }
 

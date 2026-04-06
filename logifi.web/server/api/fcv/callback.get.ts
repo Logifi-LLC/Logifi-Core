@@ -1,9 +1,60 @@
-import { defineEventHandler, getQuery, sendRedirect, getRequestURL } from 'h3'
+import { type H3Event, defineEventHandler, getQuery, getRequestURL, setResponseHeader } from 'h3'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '../../../app/types/database'
 import { verifyFcvState } from '../../utils/fcvState'
 
 const clean = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
+
+function escapeHtmlAttr(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+}
+
+/**
+ * OAuth callbacks are sometimes loaded in a popup or iframe. A bare 302 can leave the wrong
+ * window stuck on an error page while the provider script tries to navigate it, which triggers
+ * Chrome's "Unsafe attempt to load URL … from frame with URL chrome-error://chromewebdata/".
+ * This response runs in the callback context and moves the opener or top window when possible.
+ */
+function sendHtmlAutoRedirect(event: H3Event, targetUrl: string) {
+  setResponseHeader(event, 'content-type', 'text/html; charset=utf-8')
+  const href = escapeHtmlAttr(targetUrl)
+  const asJson = JSON.stringify(targetUrl)
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="0;url=${href}">
+  <title>Redirecting…</title>
+</head>
+<body>
+  <p style="font-family:system-ui,sans-serif;padding:1.5rem">Redirecting…</p>
+  <p style="font-family:system-ui,sans-serif;padding:0 1.5rem"><a href="${href}">Continue to Logifi</a></p>
+  <script>
+(function () {
+  var target = ${asJson};
+  try {
+    if (window.opener && !window.opener.closed) {
+      window.opener.location.replace(target);
+      window.close();
+      return;
+    }
+  } catch (e) {}
+  try {
+    if (window.top !== window.self) {
+      window.top.location.replace(target);
+      return;
+    }
+  } catch (e2) {}
+  window.location.replace(target);
+})();
+  </script>
+</body>
+</html>`
+}
 
 const redirectWithFcvError = (event: any, reason: string) => {
   const appOrigin = getRequestURL(event).origin
@@ -12,7 +63,7 @@ const redirectWithFcvError = (event: any, reason: string) => {
     fcv: 'error',
     reason,
   })
-  return sendRedirect(event, `${appOrigin}${returnPath}?${params.toString()}`, 302)
+  return sendHtmlAutoRedirect(event, `${appOrigin}${returnPath}?${params.toString()}`)
 }
 
 /**
@@ -113,5 +164,5 @@ export default defineEventHandler(async (event) => {
   const appOrigin = getRequestURL(event).origin
   const returnPath = '/dashboard'
   const redirectTo = `${appOrigin}${returnPath}?fcv=connected`
-  return sendRedirect(event, redirectTo, 302)
+  return sendHtmlAutoRedirect(event, redirectTo)
 })

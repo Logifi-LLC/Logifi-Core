@@ -1151,7 +1151,9 @@
                       <!-- Total Column -->
                       <template v-else-if="col.key === 'total'">
                         <span :class="[
-                          entry.importSource === 'logbook_builder'
+                          entry.importSource === 'fc_view'
+                            ? (isDarkMode ? 'text-amber-400' : 'text-amber-600')
+                            : entry.importSource === 'logbook_builder'
                             ? (isDarkMode ? 'text-green-400' : 'text-green-600')
                             : entry.isImported && entry.importSource !== 'localStorage'
                               ? (isDarkMode ? 'text-red-400' : 'text-red-600')
@@ -1644,7 +1646,7 @@
                 </div>
               </div>
             </div>
-            <div class="grid gap-4 md:grid-cols-4 mb-2 items-end">
+            <div class="grid gap-4 md:grid-cols-4 mb-2">
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Flight Number</label>
                 <input 
@@ -1654,59 +1656,6 @@
                   autocomplete="off"
                   placeholder="OPTIONAL"
                 />
-              </div>
-              <div v-if="showInlineSimSection && inlineEditEntry">
-                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Type</label>
-                <select
-                  :value="getSelectedSimType(inlineEditEntry)"
-                  :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
-                  @change="setSimType(inlineEditEntry, ($event.target as HTMLSelectElement).value as '' | 'FFS' | 'FTD' | 'ATD')"
-                >
-                  <option value="">—</option>
-                  <option v-for="opt in categoryClassSimOptions" :key="opt" :value="opt">{{ opt }}</option>
-                </select>
-              </div>
-              <div v-if="showInlineSimSection && inlineEditEntry">
-                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
-                <input
-                  :value="getSimTimeDisplayValue(inlineEditEntry)"
-                  type="text"
-                  inputmode="decimal"
-                  placeholder="0.0"
-                  :disabled="!getSelectedSimType(inlineEditEntry)"
-                  :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200', !getSelectedSimType(inlineEditEntry) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
-                  @input="(e) => {
-                    if (!inlineEditEntry) return;
-                    const sel = getSelectedSimType(inlineEditEntry);
-                    if (!sel) return;
-                    const input = e.target as HTMLInputElement;
-                    const val = input.value.trim();
-                    if (val === '' || val === '-') { inlineEditEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = null; return; }
-                    const num = parseFloat(val.replace(/[^\d.-]/g, ''));
-                    inlineEditEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = !isNaN(num) && isFinite(num) ? num : null;
-                  }"
-                  @blur="(e) => {
-                    if (!inlineEditEntry) return;
-                    const sel = getSelectedSimType(inlineEditEntry);
-                    if (!sel) return;
-                    const input = e.target as HTMLInputElement;
-                    const val = inlineEditEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'];
-                    if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
-                  }"
-                />
-              </div>
-              <div class="md:col-start-4">
-                <button
-                  type="button"
-                  @click="showInlineSimSection = !showInlineSimSection"
-                  :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors w-full',
-                    showInlineSimSection
-                      ? (isDarkMode ? 'bg-blue-900/30 text-blue-300 border-blue-700' : 'bg-blue-100 text-blue-700 border-blue-200')
-                      : (isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200')
-                  ]"
-                >
-                  {{ showInlineSimSection ? 'Simulator active' : '+ Simulator' }}
-                </button>
               </div>
             </div>
 
@@ -7719,8 +7668,6 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
         (copy.oooi.in && copy.oooi.in.trim())
       )
     isInlineCommercialMode.value = hasOOOITimes
-    // Open Simulator section if entry has sim time
-    showInlineSimSection.value = getSelectedSimType(copy) !== ''
   }
 }
 
@@ -8155,7 +8102,6 @@ const tagsDropdownOpen = ref(false)
 const showInlineTagsDropdown = ref(false)
 const customTagInput = ref('')
 const showSimSection = ref(false)
-const showInlineSimSection = ref(false)
 const customTagInputInline = ref('')
 const showInlineCustomTagInput = ref(false)
 const showNewEntryCustomTagInput = ref(false)
