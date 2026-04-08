@@ -1,12 +1,13 @@
 import type { FcvMappedEntry } from './fcvMap'
 
-type CrewMatchStrategy =
+export type CrewMatchStrategy =
   | 'exact'
   | 'normalized'
   | 'fuzzy'
   | 'ambiguous'
   | 'unresolved'
   | 'empty'
+  | 'manual_override'
 
 export interface AlignmentIndexSourceRow {
   registration: string | null
@@ -18,6 +19,10 @@ export interface AlignmentIndexSourceRow {
 interface TailIdentity {
   aircraft_make_model: string | null
   aircraft_category_class: string | null
+}
+
+export interface AlignmentIndexBuildOptions {
+  catalogPersonNames?: string[]
 }
 
 export interface AlignmentIndex {
@@ -35,6 +40,15 @@ export interface CrewAlignmentResult {
   threshold?: number
   margin?: number
   candidatesConsidered: number
+  topCandidates?: string[]
+}
+
+export interface ResolveCrewNameOptions {
+  manualOverrideName?: string | null
+}
+
+export interface AlignMappedFcvEntryOptions {
+  crewManualOverrideName?: string | null
 }
 
 const FUZZY_SCORE_THRESHOLD = 0.82
@@ -95,7 +109,7 @@ export function normalizeCrewNameForMatching(value: unknown): string {
   if (typeof value !== 'string') return ''
   const upper = value
     .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .toUpperCase()
     .replace(/[^A-Z,\s]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -152,9 +166,34 @@ function fuzzyScoreNamePair(a: { first: string; last: string }, b: { first: stri
   return (firstScore + lastScore) / 2
 }
 
-export function buildAlignmentIndex(rows: AlignmentIndexSourceRow[]): AlignmentIndex {
+function addCanonicalCrewName(
+  crewByNormalizedKey: Map<string, string>,
+  crewCanonicalNames: Set<string>,
+  candidate: unknown
+) {
+  const name = typeof candidate === 'string' ? candidate.trim() : ''
+  if (!name) return
+  const key = normalizeCrewNameForMatching(name)
+  if (!key) return
+  if (!crewByNormalizedKey.has(key)) {
+    crewByNormalizedKey.set(key, name)
+  }
+  crewCanonicalNames.add(name)
+}
+
+export function buildAlignmentIndex(
+  rows: AlignmentIndexSourceRow[],
+  options: AlignmentIndexBuildOptions = {}
+): AlignmentIndex {
   const tails = new Map<string, TailIdentity>()
   const crewByNormalizedKey = new Map<string, string>()
+  const crewCanonicalNames = new Set<string>()
+
+  // Catalog names first: these are our canonical source of truth.
+  for (const catalogName of options.catalogPersonNames ?? []) {
+    addCanonicalCrewName(crewByNormalizedKey, crewCanonicalNames, catalogName)
+  }
+
   for (const row of rows) {
     const tailKey = normalizeRegistrationKey(row.registration ?? '')
     if (tailKey && !tails.has(tailKey)) {
@@ -163,21 +202,35 @@ export function buildAlignmentIndex(rows: AlignmentIndexSourceRow[]): AlignmentI
         aircraft_category_class: row.aircraft_category_class,
       })
     }
-    const name = typeof row.training_elements === 'string' ? row.training_elements.trim() : ''
-    if (!name) continue
-    const key = normalizeCrewNameForMatching(name)
-    if (!key || crewByNormalizedKey.has(key)) continue
-    crewByNormalizedKey.set(key, name)
+    addCanonicalCrewName(crewByNormalizedKey, crewCanonicalNames, row.training_elements)
   }
+
   return {
     tails,
     crewByNormalizedKey,
-    crewCanonicalNames: [...new Set([...crewByNormalizedKey.values()])],
+    crewCanonicalNames: [...crewCanonicalNames],
   }
 }
 
-export function resolveCrewName(rawName: unknown, index: AlignmentIndex): CrewAlignmentResult {
+export function resolveCrewName(
+  rawName: unknown,
+  index: AlignmentIndex,
+  options: ResolveCrewNameOptions = {}
+): CrewAlignmentResult {
   const source = typeof rawName === 'string' ? rawName.trim() : ''
+  const manualOverrideName =
+    typeof options.manualOverrideName === 'string' ? options.manualOverrideName.trim() : ''
+
+  if (manualOverrideName) {
+    return {
+      resolvedName: manualOverrideName,
+      strategy: 'manual_override',
+      rawName: source || null,
+      normalizedImportedKey: normalizeCrewNameForMatching(source),
+      candidatesConsidered: index.crewCanonicalNames.length,
+    }
+  }
+
   if (!source) {
     return {
       resolvedName: null,
@@ -231,6 +284,7 @@ export function resolveCrewName(rawName: unknown, index: AlignmentIndex): CrewAl
       threshold: FUZZY_SCORE_THRESHOLD,
       margin,
       candidatesConsidered: index.crewCanonicalNames.length,
+      topCandidates: scored.slice(0, 3).map((c) => c.name),
     }
   }
   return {
@@ -242,12 +296,14 @@ export function resolveCrewName(rawName: unknown, index: AlignmentIndex): CrewAl
     threshold: FUZZY_SCORE_THRESHOLD,
     margin,
     candidatesConsidered: index.crewCanonicalNames.length,
+    topCandidates: scored.slice(0, 5).map((c) => c.name),
   }
 }
 
 export function alignMappedFcvEntry(
   entry: FcvMappedEntry,
-  index: AlignmentIndex
+  index: AlignmentIndex,
+  options: AlignMappedFcvEntryOptions = {}
 ): FcvMappedEntry {
   const tailKey = normalizeRegistrationKey(entry.registration)
   const tailIdentity = tailKey ? index.tails.get(tailKey) : undefined
@@ -257,7 +313,9 @@ export function alignMappedFcvEntry(
   const resolvedCategory =
     tailIdentity?.aircraft_category_class?.trim() ||
     mapAircraftCategoryClass(entry.aircraft_category_class)
-  const crewResult = resolveCrewName(entry.training_elements, index)
+  const crewResult = resolveCrewName(entry.training_elements, index, {
+    manualOverrideName: options.crewManualOverrideName ?? null,
+  })
   const import_metadata = {
     ...(entry.import_metadata ?? {}),
     alignment: {
@@ -272,6 +330,7 @@ export function alignMappedFcvEntry(
         threshold: crewResult.threshold,
         margin: crewResult.margin,
         candidates_considered: crewResult.candidatesConsidered,
+        top_candidates: crewResult.topCandidates ?? [],
       },
     },
   }

@@ -55,6 +55,8 @@ describe('mapFcvFlightToEntry', () => {
       crossCountry: total,
     })
     expect(e.flight_conditions).toEqual(['ifr', 'crossCountry'])
+    expect(e.route).toBeNull()
+    expect(e.remarks).toBeNull()
   })
 
   it('maps PIC flights with other crew as First Officer', () => {
@@ -177,7 +179,7 @@ describe('mapFcvFlightToEntry', () => {
     expect(e.training_instructor).toBeNull()
   })
 
-  it('stores fcv_raw and remarks/trip/deadhead tag', () => {
+  it('stores fcv_raw and deadhead tag without route/remarks', () => {
     const e = mapFcvFlightToEntry({
       fcv_flight_id: '4',
       scheduled_out_local: '2026-06-01 12:00:00',
@@ -188,7 +190,8 @@ describe('mapFcvFlightToEntry', () => {
       dep_airport: 'SEA',
       arr_airport: 'PDX',
     })
-    expect(e.remarks).toBe('Ship 42\nTrip: T-99')
+    expect(e.route).toBeNull()
+    expect(e.remarks).toBeNull()
     expect(e.tags).toEqual(['Deadhead'])
     expect(e.flight_conditions).toEqual(['ifr'])
     expect(e.import_metadata?.fcv_raw).toMatchObject({

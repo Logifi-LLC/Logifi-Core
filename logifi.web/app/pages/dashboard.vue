@@ -108,6 +108,19 @@
           >
             Feedback
           </NuxtLink>
+          <button
+            type="button"
+            class="hidden sm:inline-flex items-center text-xs sm:text-sm font-medium font-quicksand transition-colors mr-2"
+            :class="[
+              isDarkMode
+                ? 'text-gray-300 hover:text-blue-400'
+                : 'text-gray-600 hover:text-blue-600'
+            ]"
+            aria-label="Open FC View fetch section"
+            @click="openFcvFetchSection"
+          >
+            FC View Fetch
+          </button>
           <div
             class="h-4 w-px bg-gray-200"
             :class="isDarkMode ? 'bg-gray-700' : 'bg-gray-200'"
@@ -131,6 +144,49 @@
       </header>
 
     <main :class="['min-h-screen flex flex-col pt-40 pb-20 px-4 sm:px-6 lg:px-8 transition-colors duration-300 overflow-x-auto', isDarkMode ? '' : '']">
+      <section
+        v-show="showFcvFetchPanel"
+        ref="fcvFetchSectionRef"
+        :class="[
+          'mr-auto mb-8 w-full rounded-2xl border p-4 sm:p-6 space-y-4',
+          isDarkMode ? 'bg-gray-900 border-white/10 text-gray-200 shadow-md shadow-black/40' : 'bg-white border-gray-200 text-gray-900 shadow-sm'
+        ]"
+      >
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <h3 :class="['text-base sm:text-lg font-semibold font-quicksand', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
+              FC View Fetch
+            </h3>
+            <p :class="['text-sm mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+              Fetch and import FC View flights from your dashboard.
+            </p>
+          </div>
+          <button
+            type="button"
+            :class="[
+              'inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-quicksand font-medium transition-colors',
+              isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            ]"
+            @click="showFcvFetchPanel = false"
+          >
+            Close
+          </button>
+        </div>
+
+        <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+          <FcvSync
+            mode="fetch"
+            :is-dark-mode="isDarkMode"
+            @imported="handleFcvImported"
+          />
+          <p
+            v-if="fcvImportMessage"
+            :class="['text-xs mt-2', isDarkMode ? 'text-emerald-400' : 'text-emerald-600']"
+          >
+            {{ fcvImportMessage }}
+          </p>
+        </div>
+      </section>
       <div class="mr-auto w-full max-w-full flex flex-col gap-10 lg:flex-row">
         <aside
           :class="[
@@ -1076,7 +1132,7 @@
                       <template v-else-if="col.key === 'conditions'">
                         <div class="flex flex-wrap gap-1">
                           <span
-                            v-for="condition in sortConditionsInFixedOrder(entry.flightConditions || [])"
+                            v-for="condition in getDisplayConditions(entry)"
                             :key="`${entry.id}-${condition}`"
                             :class="[
                               'rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold border',
@@ -1087,7 +1143,10 @@
                           >
                             {{ condition }}
                           </span>
-                          <span :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']" v-if="!entry.flightConditions || entry.flightConditions.length === 0">
+                          <span
+                            :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+                            v-if="getDisplayConditions(entry).length === 0"
+                          >
                             —
                           </span>
                         </div>
@@ -4216,7 +4275,7 @@
               </div>
 
               <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
-                <FcvSync :is-dark-mode="isDarkMode" />
+                <FcvSync mode="connect" :is-dark-mode="isDarkMode" />
               </div>
 
               <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
@@ -6446,6 +6505,7 @@ const confirmNewPassword = ref('')
 const isUpdatingPassword = ref(false)
 const passwordErrorMessage = ref<string | null>(null)
 const passwordSuccessMessage = ref<string | null>(null)
+const fcvImportMessage = ref<string | null>(null)
 
 const validateEmailFormat = (email: string) => {
   return /\S+@\S+\.\S+/.test(email)
@@ -7622,10 +7682,12 @@ function toggleCommercialMode(): void {
 
 // Sticky header refs
 const rootScrollContainerRef = ref<HTMLElement | null>(null)
+const fcvFetchSectionRef = ref<HTMLElement | null>(null)
 const tableHeaderRef = ref<HTMLElement | null>(null)
 const tableContainerRef = ref<HTMLElement | null>(null)
 const tableRef = ref<HTMLTableElement | null>(null)
 const showScrollToTop = ref(false)
+const showFcvFetchPanel = ref(false)
 const handleScroll = (): void => {
   if (!isBrowser) return
   const scrollTop = window.scrollY || document.documentElement.scrollTop
@@ -7634,6 +7696,12 @@ const handleScroll = (): void => {
 const scrollToTop = (): void => {
   if (!isBrowser) return
   window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+const openFcvFetchSection = async (): Promise<void> => {
+  showFcvFetchPanel.value = true
+  await nextTick()
+  fcvFetchSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 const isInlineCommercialMode = ref(false)
 const editingEntryId = ref<string | null>(null)
@@ -11299,11 +11367,11 @@ function autoCheckFlightConditions(
 ): string[] {
   const conditionSet = new Set(conditions)
   
-  // Auto-check Night if night time > 0
+  // Auto-check Night if night time > 0.
+  // Do not auto-uncheck: users may intentionally mark a leg as night
+  // even when night time is not captured yet.
   if (nightTime && nightTime > 0) {
     conditionSet.add('nightVfr')
-  } else {
-    conditionSet.delete('nightVfr')
   }
   
   // Auto-check IFR AND Actual Instrument if actual instrument time > 0
@@ -13613,6 +13681,85 @@ async function loadEntries(): Promise<void> {
   if (isAuthenticated.value && user.value) {
     startBackgroundSync()
   }
+
+  // FC View rows may arrive without persisted night values; derive from OOOI for display consistency.
+  void enrichFcvNightDataForDisplay()
+}
+
+async function handleFcvImported(payload: {
+  imported: number
+  skipped: number
+  importBatchId?: string
+}): Promise<void> {
+  // Auto-close the dashboard fetch panel once FC View import completes.
+  showFcvFetchPanel.value = false
+  await loadEntries()
+  const importedLabel = payload.imported === 1 ? 'entry' : 'entries'
+  const skippedLabel = payload.skipped === 1 ? 'entry' : 'entries'
+  fcvImportMessage.value =
+    payload.skipped > 0
+      ? `FC View import complete: ${payload.imported} ${importedLabel} added, ${payload.skipped} ${skippedLabel} skipped.`
+      : `FC View import complete: ${payload.imported} ${importedLabel} added.`
+}
+
+async function enrichFcvNightDataForDisplay(): Promise<void> {
+  const candidates = logEntries.value.filter((entry) => {
+    if (entry.importSource !== 'fc_view') return false
+    if (!entry.date || !entry.departure) return false
+    if (!entry.oooi?.out || !entry.oooi?.in) return false
+    const currentNight = normalizeNumber(entry.flightTime?.night) ?? 0
+    return currentNight <= 0
+  })
+
+  if (candidates.length === 0) return
+
+  const computed = await Promise.all(
+    candidates.map(async (entry) => {
+      const night = await autoCalculateNightTime(
+        entry.date,
+        entry.departure,
+        entry.destination || '',
+        entry.oooi?.out ?? null,
+        entry.oooi?.in ?? null,
+        entry.oooi?.isZulu ?? true
+      )
+      if (night === null) return null
+
+      const existingConditions = sanitizeFlightConditions(entry.flightConditions || [])
+      const nextConditions =
+        night > 0 && !existingConditions.includes('nightVfr')
+          ? [...existingConditions, 'nightVfr']
+          : existingConditions
+
+      return {
+        id: entry.id,
+        night,
+        flightConditions: nextConditions,
+      }
+    })
+  )
+
+  const updates = new Map(
+    computed
+      .filter((v): v is { id: string; night: number; flightConditions: string[] } => !!v)
+      .map((v) => [v.id, v])
+  )
+  if (updates.size === 0) return
+
+  logEntries.value = sortEntriesByDateAndOOOI(
+    logEntries.value.map((entry) => {
+      const update = updates.get(entry.id)
+      if (!update) return entry
+      return {
+        ...entry,
+        flightTime: {
+          ...entry.flightTime,
+          night: update.night,
+        },
+        flightConditions: update.flightConditions,
+      }
+    })
+  )
 }
 
 function loadPersistedEntries(): void {
@@ -15103,6 +15250,17 @@ function sortConditionsInFixedOrder(conditions: string[]): string[] {
       return option ? option.label : cond
     })
     .filter((label): label is string => Boolean(label))
+}
+
+function getDisplayConditions(entry: LogEntry): string[] {
+  const merged = autoCheckFlightConditions(
+    sanitizeFlightConditions(entry.flightConditions || []),
+    normalizeNumber(entry.flightTime?.night),
+    normalizeNumber(entry.flightTime?.actualInstrument),
+    normalizeNumber(entry.flightTime?.simulatedInstrument),
+    normalizeNumber(entry.flightTime?.crossCountry)
+  )
+  return sortConditionsInFixedOrder(merged)
 }
 </script>
 

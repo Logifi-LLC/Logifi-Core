@@ -4,8 +4,17 @@ import { useAuth } from '~/composables/useAuth'
 import { useRoute } from 'vue-router'
 
 /** Must match dashboard theme; avoid `dark:` here so OS dark mode does not fight white settings cards. */
-const props = defineProps<{
-  isDarkMode: boolean
+const props = withDefaults(
+  defineProps<{
+    isDarkMode: boolean
+    mode?: 'connect' | 'fetch' | 'full'
+  }>(),
+  {
+    mode: 'full',
+  }
+)
+const emit = defineEmits<{
+  imported: [{ imported: number; skipped: number; importBatchId?: string }]
 }>()
 
 interface FcvMappedEntry {
@@ -21,6 +30,29 @@ interface FcvMappedEntry {
   [key: string]: unknown
 }
 
+interface EnrichmentApproach {
+  type: string
+  count: number | null
+}
+
+interface FlightEnrichment {
+  userFlewLeg: boolean
+  actualInstrument: number | null
+  simulatedInstrument: number | null
+  holdingProcedures: number | null
+  approaches: EnrichmentApproach[]
+  remarks: string
+}
+
+interface CrewReviewCandidate {
+  fcv_flight_id: string
+  raw_name: string
+  normalized_key: string
+  suggested_name: string | null
+  candidates: string[]
+  strategy: 'ambiguous' | 'unresolved'
+}
+
 const { session, isAuthenticated } = useAuth()
 
 const isDev = import.meta.dev
@@ -28,18 +60,124 @@ const isDev = import.meta.dev
 const connected = ref<boolean>(false)
 const loadingStatus = ref(false)
 const loadingFetch = ref(false)
+const loadingSinceLast = ref(false)
 const loadingImport = ref(false)
 const error = ref<string | null>(null)
 
 const dateFrom = ref('')
 const dateTo = ref('')
 const includeDeadheads = ref(false)
+const includeScheduled = ref(false)
 
 const previewFlights = ref<FcvMappedEntry[]>([])
 const showPreviewModal = ref(false)
 /** Row indices that match existing logbook entries (from POST /api/fcv/check-duplicates). */
 const duplicateIndices = ref<Set<number>>(new Set())
 const includeDuplicatesInImport = ref(false)
+const expandedEnrichmentRows = ref<Set<number>>(new Set())
+const perFlightEnrichment = ref<Record<number, FlightEnrichment>>({})
+const crewReviewCandidates = ref<CrewReviewCandidate[]>([])
+const crewNameOverrides = ref<Record<string, string>>({})
+const approachTypeOptions = ['ILS', 'LOC', 'RNAV', 'VOR', 'NDB', 'LDA', 'SDF', 'VISUAL']
+
+function toNullableNumber(v: unknown): number | null {
+  if (v === null || v === undefined) return null
+  const raw = typeof v === 'string' ? v.trim() : String(v)
+  if (!raw) return null
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n < 0) return null
+  return n
+}
+
+function toNullableInt(v: unknown): number | null {
+  const n = toNullableNumber(v)
+  if (n === null) return null
+  return Math.round(n)
+}
+
+function defaultEnrichment(): FlightEnrichment {
+  return {
+    userFlewLeg: false,
+    actualInstrument: null,
+    simulatedInstrument: null,
+    holdingProcedures: null,
+    approaches: [],
+    remarks: '',
+  }
+}
+
+function getOrCreateEnrichment(index: number): FlightEnrichment {
+  if (!perFlightEnrichment.value[index]) {
+    perFlightEnrichment.value[index] = defaultEnrichment()
+  }
+  return perFlightEnrichment.value[index]
+}
+
+function toggleEnrichmentRow(index: number) {
+  const next = new Set(expandedEnrichmentRows.value)
+  if (next.has(index)) next.delete(index)
+  else {
+    next.add(index)
+    getOrCreateEnrichment(index)
+  }
+  expandedEnrichmentRows.value = next
+}
+
+function isEnrichmentExpanded(index: number): boolean {
+  return expandedEnrichmentRows.value.has(index)
+}
+
+function addApproach(index: number) {
+  const e = getOrCreateEnrichment(index)
+  e.approaches.push({ type: 'ILS', count: 1 })
+}
+
+function hasNightTime(f: FcvMappedEntry): boolean {
+  const ft = (f.flight_time ?? {}) as { night?: unknown }
+  return typeof ft.night === 'number' && Number.isFinite(ft.night) && ft.night > 0
+}
+
+function buildApproachesForPayload(
+  approaches: EnrichmentApproach[]
+): Array<{ type: string; count: number }> {
+  return approaches
+    .map((a) => ({
+      type: typeof a.type === 'string' ? a.type.trim().toUpperCase() : '',
+      count: toNullableInt(a.count) ?? 0,
+    }))
+    .filter((a) => a.type && a.count > 0)
+}
+
+function buildFlightForImport(f: FcvMappedEntry, idx: number): FcvMappedEntry {
+  const enrichment = perFlightEnrichment.value[idx]
+  if (!enrichment) return f
+
+  const nextFlightTime = { ...((f.flight_time ?? {}) as Record<string, unknown>) }
+  const nextPerformance = { ...((f.performance ?? {}) as Record<string, unknown>) }
+
+  const actual = toNullableNumber(enrichment.actualInstrument)
+  const sim = toNullableNumber(enrichment.simulatedInstrument)
+  if (actual !== null) nextFlightTime.actualInstrument = actual
+  if (sim !== null) nextFlightTime.simulatedInstrument = sim
+
+  const holds = toNullableInt(enrichment.holdingProcedures)
+  if (holds !== null) nextPerformance.holdingProcedures = holds
+
+  const approaches = buildApproachesForPayload(enrichment.approaches)
+  if (approaches.length > 0) nextPerformance.approaches = approaches
+
+  if (enrichment.userFlewLeg) {
+    if (hasNightTime(f)) nextPerformance.nightLandings = 1
+    else nextPerformance.dayLandings = 1
+  }
+
+  return {
+    ...f,
+    flight_time: nextFlightTime,
+    performance: nextPerformance,
+    remarks: enrichment.remarks.trim() ? enrichment.remarks.trim() : (f.remarks as string | null),
+  }
+}
 
 function authHeaders(): Record<string, string> {
   const token = session.value?.access_token
@@ -96,6 +234,7 @@ async function fetchFlights() {
           dateFrom: dateFrom.value || new Date().toISOString().slice(0, 10),
           dateTo: dateTo.value || new Date().toISOString().slice(0, 10),
           includeDeadheads: includeDeadheads.value,
+          includeScheduled: includeScheduled.value,
         },
       }
     )
@@ -103,6 +242,10 @@ async function fetchFlights() {
       previewFlights.value = data.flights
       includeDuplicatesInImport.value = false
       duplicateIndices.value = new Set()
+      perFlightEnrichment.value = {}
+      expandedEnrichmentRows.value = new Set()
+      crewReviewCandidates.value = []
+      crewNameOverrides.value = {}
       try {
         const dup = await $fetch<{
           duplicateFcvFlightIds: string[]
@@ -129,24 +272,72 @@ async function fetchFlights() {
   }
 }
 
+async function fetchSinceLastEntry() {
+  if (!isAuthenticated.value || loadingFetch.value || loadingSinceLast.value) return
+  loadingSinceLast.value = true
+  error.value = null
+  try {
+    const latest = await $fetch<{ date: string | null }>('/api/fcv/last-entry-date', {
+      headers: authHeaders(),
+    })
+    const today = new Date().toISOString().slice(0, 10)
+    const from = typeof latest?.date === 'string' && latest.date.trim() ? latest.date : today
+    dateFrom.value = from
+    dateTo.value = today
+    await fetchFlights()
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to fetch since last entry'
+  } finally {
+    loadingSinceLast.value = false
+  }
+}
+
 async function confirmImport() {
-  const flights = flightsToImport.value
+  const flights = flightsToImportWithIndex.value.map(({ flight, index }) =>
+    buildFlightForImport(flight, index)
+  )
   if (flights.length === 0) return
   loadingImport.value = true
   error.value = null
   try {
-    await $fetch('/api/fcv/import', {
+    const result = await $fetch<{
+      success: boolean
+      import_batch_id?: string
+      imported: number
+      skipped: number
+      requires_crew_review?: boolean
+      review_candidates?: CrewReviewCandidate[]
+    }>('/api/fcv/import', {
       method: 'POST',
       headers: {
         ...authHeaders(),
         'Content-Type': 'application/json',
       },
-      body: { flights },
+      body: { flights, crewNameOverrides: crewNameOverrides.value },
+    })
+    if (!result?.success && result?.requires_crew_review) {
+      crewReviewCandidates.value = Array.isArray(result.review_candidates)
+        ? result.review_candidates
+        : []
+      error.value =
+        crewReviewCandidates.value.length > 0
+          ? 'Review crew name matches below before importing.'
+          : 'Crew review is required before importing.'
+      return
+    }
+    emit('imported', {
+      imported: typeof result?.imported === 'number' ? result.imported : flights.length,
+      skipped: typeof result?.skipped === 'number' ? result.skipped : 0,
+      importBatchId: result?.import_batch_id,
     })
     showPreviewModal.value = false
     previewFlights.value = []
     duplicateIndices.value = new Set()
     includeDuplicatesInImport.value = false
+    perFlightEnrichment.value = {}
+    expandedEnrichmentRows.value = new Set()
+    crewReviewCandidates.value = []
+    crewNameOverrides.value = {}
     await checkStatus()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to import flights'
@@ -158,17 +349,54 @@ async function confirmImport() {
 function closePreview() {
   showPreviewModal.value = false
   includeDuplicatesInImport.value = false
+  expandedEnrichmentRows.value = new Set()
+  perFlightEnrichment.value = {}
+  crewReviewCandidates.value = []
+  crewNameOverrides.value = {}
 }
 
 function isDuplicateRow(index: number) {
   return duplicateIndices.value.has(index)
 }
 
+function crewCandidateByFlightId(fcvFlightId: string): CrewReviewCandidate | null {
+  return crewReviewCandidates.value.find((c) => c.fcv_flight_id === fcvFlightId) ?? null
+}
+
+function setCrewOverride(fcvFlightId: string, value: string) {
+  const next = value.trim()
+  if (!next) {
+    delete crewNameOverrides.value[fcvFlightId]
+    return
+  }
+  crewNameOverrides.value[fcvFlightId] = next
+}
+
 const duplicateCount = computed(() => duplicateIndices.value.size)
+const crewReviewCount = computed(() => crewReviewCandidates.value.length)
+const unresolvedCrewReviewCount = computed(() =>
+  crewReviewCandidates.value.filter((c) => {
+    const v = crewNameOverrides.value[c.fcv_flight_id]
+    return typeof v !== 'string' || !v.trim()
+  }).length
+)
+const isConnectOnly = computed(() => props.mode === 'connect')
+const isFetchOnly = computed(() => props.mode === 'fetch')
+const showConnectCta = computed(() => !isFetchOnly.value && !connected.value)
+const showFetchControls = computed(() => !isConnectOnly.value && connected.value)
+const showFetchNeedsConnection = computed(
+  () => isFetchOnly.value && !loadingStatus.value && !connected.value
+)
 
 const flightsToImport = computed(() => {
   if (includeDuplicatesInImport.value) return previewFlights.value
   return previewFlights.value.filter((_, i) => !duplicateIndices.value.has(i))
+})
+
+const flightsToImportWithIndex = computed(() => {
+  return previewFlights.value
+    .map((flight, index) => ({ flight, index }))
+    .filter(({ index }) => includeDuplicatesInImport.value || !duplicateIndices.value.has(index))
 })
 
 const importCount = computed(() => flightsToImport.value.length)
@@ -293,7 +521,7 @@ const inputClass = computed(() =>
         Checking connection…
       </p>
     </template>
-    <template v-else-if="!connected">
+    <template v-else-if="showConnectCta">
       <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
         Connect your FC View account to import flights into your logbook.
       </p>
@@ -320,7 +548,7 @@ const inputClass = computed(() =>
         with mkcert) for both the app and <code class="px-1 rounded bg-black/15 dark:bg-white/10">FCV_REDIRECT_URI</code>.
       </p>
     </template>
-    <template v-else>
+    <template v-else-if="showFetchControls">
       <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
         Choose a date range and fetch flights to preview before importing.
       </p>
@@ -358,18 +586,45 @@ const inputClass = computed(() =>
           />
           Include deadheads
         </label>
+        <label
+          :class="[
+            'flex items-center gap-2 text-sm cursor-pointer',
+            isDarkMode ? 'text-gray-300' : 'text-gray-700',
+          ]"
+        >
+          <input
+            v-model="includeScheduled"
+            type="checkbox"
+            :class="['rounded', isDarkMode ? 'border-gray-600' : 'border-gray-300']"
+          />
+          Include scheduled (not yet departed) flights
+        </label>
         <div class="flex flex-wrap items-center gap-3">
           <button
             type="button"
             :class="btnOutlineClass"
-            :disabled="loadingFetch"
+            :disabled="loadingFetch || loadingSinceLast"
             @click="fetchFlights"
           >
             <Icon name="ri:download-cloud-2-line" size="16" />
             {{ loadingFetch ? 'Fetching…' : 'Fetch flights' }}
           </button>
+          <button
+            type="button"
+            :class="btnOutlineClass"
+            :disabled="loadingFetch || loadingSinceLast"
+            @click="fetchSinceLastEntry"
+          >
+            <Icon name="ri:history-line" size="16" />
+            {{ loadingSinceLast ? 'Loading…' : 'Since last entry' }}
+          </button>
         </div>
       </div>
+    </template>
+    <template v-else-if="showFetchNeedsConnection">
+      <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+        Connect FC View in Settings under Data & Sync before fetching flights.
+      </p>
     </template>
 
     <!-- Preview modal -->
@@ -411,7 +666,7 @@ const inputClass = computed(() =>
             <Icon name="ri:close-line" size="22" />
           </button>
         </div>
-        <div class="flex-1 overflow-y-auto p-4 space-y-2">
+        <div class="flex-1 overflow-y-auto p-4 space-y-3">
           <div
             v-for="(f, idx) in previewFlights"
             :key="`${f.fcv_flight_id || 'row'}-${idx}`"
@@ -462,6 +717,130 @@ const inputClass = computed(() =>
             >
               May already be in logbook
             </span>
+            <div
+              v-if="crewCandidateByFlightId(f.fcv_flight_id)"
+              :class="[
+                'w-full mt-1 rounded-lg border p-2 text-xs',
+                isDarkMode ? 'border-orange-700/70 bg-orange-900/20 text-orange-200' : 'border-orange-300 bg-orange-50 text-orange-900',
+              ]"
+            >
+              <p class="font-semibold">
+                Crew name review needed: "{{ crewCandidateByFlightId(f.fcv_flight_id)?.raw_name }}"
+              </p>
+              <label class="mt-2 block">
+                <span :class="isDarkMode ? 'text-orange-100' : 'text-orange-800'">Select canonical person</span>
+                <select
+                  :value="crewNameOverrides[f.fcv_flight_id] || ''"
+                  :class="[inputClass, 'w-full mt-1']"
+                  @change="setCrewOverride(f.fcv_flight_id, ($event.target as HTMLSelectElement).value)"
+                >
+                  <option value="">Choose person...</option>
+                  <option
+                    v-for="candidate in crewCandidateByFlightId(f.fcv_flight_id)?.candidates || []"
+                    :key="`${f.fcv_flight_id}-${candidate}`"
+                    :value="candidate"
+                  >
+                    {{ candidate }}
+                  </option>
+                </select>
+              </label>
+              <p
+                v-if="crewCandidateByFlightId(f.fcv_flight_id)?.strategy === 'unresolved'"
+                :class="['mt-1 text-[11px]', isDarkMode ? 'text-orange-100/90' : 'text-orange-800']"
+              >
+                New pilot? Pick the FC View name option to create a new canonical entry you can rename later.
+              </p>
+            </div>
+            <div class="w-full flex justify-end">
+              <button
+                type="button"
+                :class="[
+                  'text-xs underline-offset-2 hover:underline',
+                  isDarkMode ? 'text-blue-300' : 'text-blue-700',
+                ]"
+                @click="toggleEnrichmentRow(idx)"
+              >
+                {{ isEnrichmentExpanded(idx) ? 'Hide optional details' : 'Add optional details' }}
+              </button>
+            </div>
+            <div
+              v-if="isEnrichmentExpanded(idx)"
+              :class="[
+                'w-full mt-3 rounded-xl border p-4 grid grid-cols-1 sm:grid-cols-2 gap-4',
+                isDarkMode ? 'border-gray-700 bg-gray-800/40' : 'border-gray-200 bg-gray-50'
+              ]"
+            >
+              <label
+                :class="[
+                  'flex items-center gap-2 text-sm sm:col-span-2 font-medium',
+                  isDarkMode ? 'text-gray-300' : 'text-gray-700',
+                ]"
+              >
+                <input
+                  v-model="getOrCreateEnrichment(idx).userFlewLeg"
+                  type="checkbox"
+                  :class="['rounded w-4 h-4', isDarkMode ? 'border-gray-600 bg-gray-700' : 'border-gray-300']"
+                />
+                I flew this leg (auto-credit one landing)
+              </label>
+              
+              <div class="grid grid-cols-2 gap-4 sm:col-span-2">
+                <label class="space-y-1.5">
+                  <span :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Actual instrument (h)</span>
+                  <input v-model="getOrCreateEnrichment(idx).actualInstrument" type="number" min="0" step="0.1" :class="[inputClass, 'w-full']" />
+                </label>
+                <label class="space-y-1.5">
+                  <span :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Hood / sim inst (h)</span>
+                  <input v-model="getOrCreateEnrichment(idx).simulatedInstrument" type="number" min="0" step="0.1" :class="[inputClass, 'w-full']" />
+                </label>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4 sm:col-span-2">
+                <label class="space-y-1.5">
+                  <span :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Holds</span>
+                  <input v-model="getOrCreateEnrichment(idx).holdingProcedures" type="number" min="0" step="1" :class="[inputClass, 'w-full']" />
+                </label>
+                <div class="space-y-1.5">
+                  <span :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Approaches</span>
+                  <div
+                    v-for="(ap, apIdx) in getOrCreateEnrichment(idx).approaches"
+                    :key="`${idx}-${apIdx}`"
+                    class="flex gap-2 items-center mb-2"
+                  >
+                    <select v-model="ap.type" :class="[inputClass, 'flex-1 min-w-0']">
+                      <option v-for="t in approachTypeOptions" :key="t" :value="t">{{ t }}</option>
+                    </select>
+                    <input v-model="ap.count" type="number" min="0" step="1" :class="[inputClass, 'w-16 text-center']" />
+                    <button
+                      type="button"
+                      :class="['p-1.5 rounded-lg transition-colors shrink-0', isDarkMode ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-200 text-gray-500']"
+                      @click="getOrCreateEnrichment(idx).approaches.splice(apIdx, 1)"
+                    >
+                      <Icon name="ri:close-line" size="18" />
+                    </button>
+                  </div>
+                  <button 
+                    type="button" 
+                    :class="['text-xs font-semibold transition-colors', isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700']" 
+                    @click="addApproach(idx)"
+                  >
+                    + Add approach
+                  </button>
+                </div>
+              </div>
+
+              <label class="space-y-1.5 sm:col-span-2">
+                <span :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Remarks</span>
+                <textarea
+                  v-model="getOrCreateEnrichment(idx).remarks"
+                  rows="2"
+                  :class="[
+                    'w-full rounded-xl border px-3 py-2 text-sm font-quicksand resize-y',
+                    isDarkMode ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900',
+                  ]"
+                />
+              </label>
+            </div>
           </div>
         </div>
         <div
@@ -491,6 +870,12 @@ const inputClass = computed(() =>
               Compared by calendar date, tail number, and route (IATA/ICAO normalized). Two flights same day with
               different out-times can still be told apart when both entries have OOOI out logged.
             </p>
+            <p
+              v-if="crewReviewCount > 0"
+              :class="isDarkMode ? 'text-orange-300' : 'text-orange-800'"
+            >
+              {{ unresolvedCrewReviewCount }} of {{ crewReviewCount }} crew name match(es) still need review.
+            </p>
             <label
               v-if="duplicateCount > 0"
               :class="[
@@ -517,7 +902,7 @@ const inputClass = computed(() =>
             <button
               type="button"
               class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 shadow-sm"
-              :disabled="loadingImport || importCount === 0"
+              :disabled="loadingImport || importCount === 0 || unresolvedCrewReviewCount > 0"
               @click="confirmImport"
             >
               {{ loadingImport ? 'Importing…' : `Import ${importCount} flight(s)` }}

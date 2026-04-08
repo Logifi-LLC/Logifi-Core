@@ -144,15 +144,6 @@ function cloneFlightForMetadata(flight: FcvFlight): Record<string, unknown> {
   }
 }
 
-function buildRemarks(flight: FcvFlight): string | null {
-  const lines: string[] = []
-  const tail = String(flight.tail_info ?? '').trim()
-  if (tail) lines.push(tail)
-  const trip = String(flight.trip_number ?? '').trim()
-  if (trip) lines.push(`Trip: ${trip}`)
-  return lines.length ? lines.join('\n') : null
-}
-
 function buildTags(flight: FcvFlight): string[] {
   const d = flight.is_deadhead
   if (d === 1 || d === true) return ['Deadhead']
@@ -369,7 +360,6 @@ export function mapFcvFlightToEntry(flight: FcvFlight): FcvMappedEntry {
   }
 
   const oooi = buildOooiFromFlight(flight)
-  const remarks = buildRemarks(flight)
   const tags = buildTags(flight)
   const ownRole = getOwnFcvRole(flight)
   const otherCrew = extractOtherCrew(flight, ownRole)
@@ -390,13 +380,13 @@ export function mapFcvFlightToEntry(flight: FcvFlight): FcvMappedEntry {
     flight_number: fn,
     departure: dep,
     destination: arr,
-    route: dep && arr ? `${dep}-${arr}` : null,
+    route: null,
     training_elements: otherCrew?.name ?? null,
     training_instructor: otherCrew?.label ?? null,
     flight_time,
     performance: {},
     oooi,
-    remarks,
+    remarks: null,
     tags,
     flight_conditions,
     is_imported: true,
