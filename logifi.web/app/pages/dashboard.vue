@@ -13726,10 +13726,13 @@ async function enrichFcvNightDataForDisplay(): Promise<void> {
       if (night === null) return null
 
       const existingConditions = sanitizeFlightConditions(entry.flightConditions || [])
-      const nextConditions =
-        night > 0 && !existingConditions.includes('nightVfr')
-          ? [...existingConditions, 'nightVfr']
-          : existingConditions
+      const nextConditions = autoCheckFlightConditions(
+        existingConditions,
+        night,
+        normalizeNumber(entry.flightTime?.actualInstrument),
+        normalizeNumber(entry.flightTime?.simulatedInstrument),
+        normalizeNumber(entry.flightTime?.crossCountry)
+      )
 
       return {
         id: entry.id,
