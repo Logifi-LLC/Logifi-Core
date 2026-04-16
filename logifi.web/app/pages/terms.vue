@@ -114,7 +114,27 @@
         </section>
 
         <section class="mb-10">
-          <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">12. Contact</h2>
+          <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">12. Third-party logbook import (Flight Crew View)</h2>
+          <p class="text-gray-700 leading-relaxed mb-3">
+            Logifi may offer an optional connection to Flight Crew View to import your flight history
+            into your logbook. The following notices are required by the Flight Crew View Logbook API
+            Access Policy and are reproduced verbatim:
+          </p>
+          <div class="not-prose rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-800 space-y-2 mb-4">
+            <p class="font-semibold">
+              Uses the Flight Crew View Logbook API. Not affiliated with Flight Crew View.
+            </p>
+            <p>For logbook purposes only. Not for flight planning or operational use.</p>
+            <p>Requires an active Flight Crew View subscription (sold separately).</p>
+          </div>
+          <p class="text-gray-700 leading-relaxed">
+            Additional detail:
+            <NuxtLink to="/data-sources" class="text-blue-600 hover:underline">Data sources &amp; third-party APIs</NuxtLink>.
+          </p>
+        </section>
+
+        <section class="mb-10">
+          <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">13. Contact</h2>
           <p class="text-gray-700 leading-relaxed">
             Questions about these Terms? Contact us at
             <a href="mailto:info@logifi.io" class="text-blue-600 hover:underline">info@logifi.io</a>.

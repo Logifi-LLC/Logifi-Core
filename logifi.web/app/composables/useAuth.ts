@@ -16,8 +16,14 @@ export const useAuth = () => {
   const isLoading = globalIsLoading
   const error = globalError
 
-  // Check if user is authenticated
-  const isAuthenticated = computed(() => !!user.value && !!session.value)
+  const getAccessToken = () => {
+    const token = session.value?.access_token
+    return typeof token === 'string' ? token.trim() : ''
+  }
+
+  // Check if user is authenticated and has a usable bearer token.
+  const hasUsableSession = computed(() => !!user.value && !!session.value && !!getAccessToken())
+  const isAuthenticated = hasUsableSession
 
   // Initialize auth state (only once globally)
   const initAuth = async () => {
@@ -264,6 +270,8 @@ export const useAuth = () => {
     isLoading,
     error,
     isAuthenticated,
+    hasUsableSession,
+    getAccessToken,
     signUp,
     signIn,
     signOut,

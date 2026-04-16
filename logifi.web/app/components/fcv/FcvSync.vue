@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useAuth } from '~/composables/useAuth'
 import { useRoute } from 'vue-router'
+import FcvApiDisclaimers from '~/components/fcv/FcvApiDisclaimers.vue'
 
 /** Must match dashboard theme; avoid `dark:` here so OS dark mode does not fight white settings cards. */
 const props = withDefaults(
@@ -54,8 +55,6 @@ interface CrewReviewCandidate {
 }
 
 const { session, isAuthenticated } = useAuth()
-
-const isDev = import.meta.dev
 
 const connected = ref<boolean>(false)
 const loadingStatus = ref(false)
@@ -522,6 +521,7 @@ const inputClass = computed(() =>
       </p>
     </template>
     <template v-else-if="showConnectCta">
+      <FcvApiDisclaimers class="mb-3" :is-dark-mode="isDarkMode" tone="dashboard" />
       <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
         Connect your FC View account to import flights into your logbook.
       </p>
@@ -536,17 +536,6 @@ const inputClass = computed(() =>
           Connect FC View
         </button>
       </div>
-      <p
-        v-if="isDev"
-        :class="[
-          'text-xs mt-2 max-w-xl leading-relaxed',
-          isDarkMode ? 'text-gray-500' : 'text-gray-500',
-        ]"
-      >
-        Leave <code class="px-1 rounded bg-black/15 dark:bg-white/10">npm run dev</code> running until you land back here — if nothing is listening on port 3000, the callback shows “connection refused.” Use the same URL you registered (e.g.
-        <code class="px-1 rounded bg-black/15 dark:bg-white/10">https://localhost:3000</code>
-        with mkcert) for both the app and <code class="px-1 rounded bg-black/15 dark:bg-white/10">FCV_REDIRECT_URI</code>.
-      </p>
     </template>
     <template v-else-if="showFetchControls">
       <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">

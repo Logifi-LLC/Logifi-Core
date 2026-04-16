@@ -71,21 +71,41 @@
         </section>
 
         <section class="mb-10">
-          <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">6. Retention</h2>
+          <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">6. Optional Flight Crew View connection</h2>
+          <p class="text-gray-700 leading-relaxed mb-3">
+            If you connect Flight Crew View, OAuth completes on FC View’s systems. Our servers exchange
+            the authorization code for access and refresh tokens and store them in our database for
+            your Logifi account. Tokens are used only to retrieve your flight history for logbook
+            import. We do not send FC View tokens or authorization codes to third-party AI providers.
+          </p>
+          <p class="text-gray-700 leading-relaxed mb-3">
+            We do not collect your FC View password or passkey. To request removal of stored FC View
+            tokens or help disconnecting, contact
+            <a href="mailto:info@logifi.io" class="text-blue-600 hover:underline">info@logifi.io</a>
+            if a self-serve disconnect is not available in the app.
+          </p>
+          <p class="text-gray-700 leading-relaxed">
+            See also
+            <NuxtLink to="/data-sources" class="text-blue-600 hover:underline">Data sources &amp; third-party APIs</NuxtLink>.
+          </p>
+        </section>
+
+        <section class="mb-10">
+          <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">7. Retention</h2>
           <p class="text-gray-700 leading-relaxed">
             We retain your account and logbook data for as long as your account is active and as needed to provide the Service and comply with legal obligations. If you delete your account, we will delete or anonymize your personal data in accordance with our internal policies. Aggregated, de-identified data may be retained for longer periods.
           </p>
         </section>
 
         <section class="mb-10">
-          <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">7. Security</h2>
+          <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">8. Security</h2>
           <p class="text-gray-700 leading-relaxed">
             We use reasonable technical and organizational measures to protect your data against unauthorized access, loss, or alteration. No method of transmission or storage is 100% secure; we cannot guarantee absolute security.
           </p>
         </section>
 
         <section class="mb-10">
-          <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">8. Your Rights</h2>
+          <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">9. Your Rights</h2>
           <p class="text-gray-700 leading-relaxed mb-3">
             Depending on where you live, you may have the right to access, correct, delete, or export your personal data, or to object to or restrict certain processing. You can often manage your account and data through the Service; for other requests, contact us at
             <a href="mailto:info@logifi.io" class="text-blue-600 hover:underline">info@logifi.io</a>.
@@ -96,14 +116,14 @@
         </section>
 
         <section class="mb-10">
-          <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">9. Cookies and Similar Technologies</h2>
+          <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">10. Cookies and Similar Technologies</h2>
           <p class="text-gray-700 leading-relaxed mb-3">
             We use essential and session-related cookies and similar technologies necessary to operate the Service (e.g., authentication). We also use Vercel Analytics to collect usage data (e.g., page views, Web Vitals) to understand how the Service is used and to improve performance. Vercel Analytics is designed to be privacy-friendly and may use first-party cookies or similar technologies; you can learn more at Vercel's privacy documentation. If we add additional analytics or non-essential technologies in the future, we will update this policy and, where required by law, obtain your consent.
           </p>
         </section>
 
         <section class="mb-10">
-          <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">10. Changes</h2>
+          <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">11. Changes</h2>
           <p class="text-gray-700 leading-relaxed mb-3">
             We may update this Privacy Policy from time to time. We will post the updated policy on this page and update the "Last updated" date. Your continued use of the Service after changes constitutes acceptance of the revised policy.
           </p>
@@ -113,7 +133,7 @@
         </section>
 
         <section class="mb-10">
-          <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">11. Contact</h2>
+          <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">12. Contact</h2>
           <p class="text-gray-700 leading-relaxed">
             Questions about privacy or this policy? Contact us at
             <a href="mailto:info@logifi.io" class="text-blue-600 hover:underline">info@logifi.io</a>.

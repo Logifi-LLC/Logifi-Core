@@ -12,6 +12,8 @@
         
         <nav class="hidden md:flex items-center space-x-8">
           <a href="#features" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Features</a>
+          <NuxtLink to="/integrations" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Integrations</NuxtLink>
+          <NuxtLink to="/pricing" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Pricing</NuxtLink>
           <NuxtLink to="/developers?from=landing" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Developers</NuxtLink>
           <NuxtLink to="/feedback?from=landing" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Feedback</NuxtLink>
           <div class="h-4 w-px bg-gray-200 dark:bg-gray-200"></div>
@@ -121,6 +123,12 @@
       <!-- Footer -->
       <footer class="mt-10 py-5 text-center">
         <p class="text-sm text-gray-500 dark:text-gray-500">
+          <NuxtLink to="/integrations" class="text-gray-600 hover:text-blue-600 hover:underline dark:text-gray-600 dark:hover:text-blue-600">Integrations</NuxtLink>
+          <span class="mx-2">·</span>
+          <NuxtLink to="/pricing" class="text-gray-600 hover:text-blue-600 hover:underline dark:text-gray-600 dark:hover:text-blue-600">Pricing</NuxtLink>
+          <span class="mx-2">·</span>
+          <NuxtLink to="/data-sources?from=landing" class="text-gray-600 hover:text-blue-600 hover:underline dark:text-gray-600 dark:hover:text-blue-600">Data sources</NuxtLink>
+          <span class="mx-2">·</span>
           <NuxtLink to="/terms?from=landing" class="text-gray-600 hover:text-blue-600 hover:underline dark:text-gray-600 dark:hover:text-blue-600">Terms of Service</NuxtLink>
           <span class="mx-2">·</span>
           <NuxtLink to="/privacy?from=landing" class="text-gray-600 hover:text-blue-600 hover:underline dark:text-gray-600 dark:hover:text-blue-600">Privacy Policy</NuxtLink>

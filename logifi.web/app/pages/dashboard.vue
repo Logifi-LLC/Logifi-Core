@@ -174,6 +174,15 @@
         </div>
 
         <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+          <FcvApiDisclaimers :is-dark-mode="isDarkMode" tone="dashboard" />
+          <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+            <NuxtLink
+              to="/data-sources?from=dashboard"
+              :class="isDarkMode ? 'text-blue-400 hover:underline' : 'text-blue-700 hover:underline'"
+            >
+              Data sources &amp; third-party APIs
+            </NuxtLink>
+          </p>
           <FcvSync
             mode="fetch"
             :is-dark-mode="isDarkMode"
@@ -4275,6 +4284,14 @@
               </div>
 
               <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
+                <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                  <NuxtLink
+                    to="/data-sources?from=dashboard"
+                    :class="isDarkMode ? 'text-blue-400 hover:underline' : 'text-blue-700 hover:underline'"
+                  >
+                    Data sources &amp; third-party APIs
+                  </NuxtLink>
+                </p>
                 <FcvSync mode="connect" :is-dark-mode="isDarkMode" />
               </div>
 
@@ -6476,6 +6493,7 @@ import AuditTrail from '../components/AuditTrail.vue'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
 import ComplianceChecklist from '../components/ComplianceChecklist.vue'
 import CurrencyDashboard from '../components/CurrencyDashboard.vue'
+import FcvApiDisclaimers from '../components/fcv/FcvApiDisclaimers.vue'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '../utils/migrateLocalStorage'
 import { findDuplicateEntries, checkDuplicatesInDatabase } from '../utils/duplicateDetection'
 import {
