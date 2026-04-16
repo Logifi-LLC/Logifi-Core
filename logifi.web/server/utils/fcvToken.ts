@@ -1,5 +1,6 @@
 import type { H3Event } from 'h3'
 import { getSupabaseClient, getUserIdFromEvent } from './supabase'
+import { fetchFcvWithRetry } from './fcvRetryFetch'
 
 const EXPIRY_BUFFER_MS = 60 * 1000 // refresh if expires within 60 seconds
 
@@ -32,7 +33,8 @@ export async function getValidFcvAccessToken(event: H3Event): Promise<string | n
     return integration.access_token
   }
 
-  const refreshRes = await fetch(tokenUrl, {
+  const refreshRes = await fetchFcvWithRetry(tokenUrl, {
+    logLabel: 'FC View token refresh',
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',

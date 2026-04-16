@@ -20,7 +20,7 @@
     <!-- Main Content -->
     <main class="pt-24 pb-16 px-4 sm:px-6 lg:px-8">
       <div class="max-w-4xl mx-auto prose prose-gray">
-        <p class="text-sm text-gray-500 mb-8">Effective: [Date] · Last updated: [Date]</p>
+        <p class="text-sm text-gray-500 mb-8">Effective: April 16, 2026 · Last updated: April 16, 2026</p>
 
         <h1 class="text-3xl font-bold font-quicksand text-gray-900 mb-2">Privacy Policy</h1>
         <p class="text-gray-600 mb-10">This policy describes how Logifi collects, uses, and protects your information.</p>
@@ -80,9 +80,7 @@
           </p>
           <p class="text-gray-700 leading-relaxed mb-3">
             We do not collect your FC View password or passkey. To request removal of stored FC View
-            tokens or help disconnecting, contact
-            <a href="mailto:info@logifi.io" class="text-blue-600 hover:underline">info@logifi.io</a>
-            if a self-serve disconnect is not available in the app.
+            tokens, you can disconnect your account directly within the Logifi app (see Data sources).
           </p>
           <p class="text-gray-700 leading-relaxed">
             See also

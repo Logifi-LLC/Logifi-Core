@@ -2,6 +2,7 @@ import { type H3Event, defineEventHandler, getQuery, getRequestURL, setResponseH
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '../../../app/types/database'
 import { verifyFcvState } from '../../utils/fcvState'
+import { fetchFcvWithRetry } from '../../utils/fcvRetryFetch'
 
 const clean = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
 
@@ -100,7 +101,8 @@ export default defineEventHandler(async (event) => {
     return redirectWithFcvError(event, 'Invalid FC View callback state. Please try connecting again.')
   }
 
-  const tokenRes = await fetch(tokenUrl, {
+  const tokenRes = await fetchFcvWithRetry(tokenUrl, {
+    logLabel: 'FC View token exchange',
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',

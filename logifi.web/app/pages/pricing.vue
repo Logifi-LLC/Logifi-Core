@@ -17,8 +17,7 @@
     <main class="pt-28 pb-16 px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
       <h1 class="text-3xl font-bold text-gray-900 mb-2">Pricing</h1>
       <p class="text-gray-600 mb-6">
-        Clear pricing for Logifi. Third-party integrations (including disclosures) are on
-        <NuxtLink to="/integrations" class="text-blue-600 hover:underline">Integrations</NuxtLink>.
+        Clear pricing for Logifi. (FC View requires its own subscription from Flight Crew View.)
       </p>
 
       <div class="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 shadow-sm space-y-6">
@@ -47,10 +46,19 @@
             taking payment. During the free beta, there are no payments to refund.
           </li>
         </ul>
-        <p class="text-sm text-gray-600">
-          Third-party import (Flight Crew View) is described on
-          <NuxtLink to="/integrations" class="text-blue-600 hover:underline">Integrations</NuxtLink>.
-        </p>
+
+        <div class="mt-8 rounded-xl bg-gray-50/80 border border-gray-200 p-5 text-sm text-gray-700 shadow-sm">
+          <div class="flex items-start gap-3">
+            <Icon name="ri:information-line" size="20" class="shrink-0 mt-0.5 text-blue-600" />
+            <div class="space-y-1.5 leading-relaxed">
+              <p class="font-medium text-gray-900">
+                Uses the Flight Crew View Logbook API. Not affiliated with Flight Crew View.
+              </p>
+              <p>For logbook purposes only. Not for flight planning or operational use.</p>
+              <p>Requires an active Flight Crew View subscription (sold separately).</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <footer class="mt-12 pt-8 border-t border-gray-200 text-center text-sm text-gray-500">

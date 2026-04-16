@@ -2,6 +2,7 @@ import { defineEventHandler, readBody, createError } from 'h3'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import { getValidFcvAccessToken } from '../../utils/fcvToken'
 import { mapFcvFlightToEntry, type FcvFlight, type FcvMappedEntry } from '../../utils/fcvMap'
+import { fetchFcvWithRetry } from '../../utils/fcvRetryFetch'
 
 interface FetchBody {
   dateFrom: string
@@ -78,7 +79,8 @@ export default defineEventHandler(async (event) => {
   })
   const url = `${apiBase}/flights/?${params.toString()}`
 
-  const res = await fetch(url, {
+  const res = await fetchFcvWithRetry(url, {
+    logLabel: 'FC View /flights',
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json',

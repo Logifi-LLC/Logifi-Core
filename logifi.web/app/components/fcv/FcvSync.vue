@@ -521,31 +521,31 @@ const inputClass = computed(() =>
       </p>
     </template>
     <template v-else-if="showConnectCta">
-      <FcvApiDisclaimers class="mb-3" :is-dark-mode="isDarkMode" tone="dashboard" />
-      <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+      <FcvApiDisclaimers class="mb-4" :is-dark-mode="isDarkMode" tone="dashboard" />
+      <p :class="['text-sm mb-4', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
         Connect your FC View account to import flights into your logbook.
       </p>
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <button
           type="button"
           :class="btnConnectFcvClass"
           :disabled="!isAuthenticated"
           @click="connectFcv"
         >
-          <Icon name="ri:external-link-line" size="16" class="shrink-0" />
+          <Icon name="ri:external-link-line" size="18" class="shrink-0" />
           Connect FC View
         </button>
       </div>
     </template>
     <template v-else-if="showFetchControls">
-      <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+      <p :class="['text-sm mb-4', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
         Choose a date range and fetch flights to preview before importing.
       </p>
-      <div class="space-y-3 pt-2">
-        <div class="flex flex-wrap items-center gap-3">
+      <div class="space-y-4">
+        <div class="flex flex-wrap items-center gap-4">
           <label
             :class="[
-              'flex items-center gap-2 text-sm',
+              'flex items-center gap-2 text-sm font-medium',
               isDarkMode ? 'text-gray-300' : 'text-gray-700',
             ]"
           >
@@ -554,7 +554,7 @@ const inputClass = computed(() =>
           </label>
           <label
             :class="[
-              'flex items-center gap-2 text-sm',
+              'flex items-center gap-2 text-sm font-medium',
               isDarkMode ? 'text-gray-300' : 'text-gray-700',
             ]"
           >
@@ -562,49 +562,51 @@ const inputClass = computed(() =>
             <input v-model="dateTo" type="date" :class="inputClass" />
           </label>
         </div>
-        <label
-          :class="[
-            'flex items-center gap-2 text-sm cursor-pointer',
-            isDarkMode ? 'text-gray-300' : 'text-gray-700',
-          ]"
-        >
-          <input
-            v-model="includeDeadheads"
-            type="checkbox"
-            :class="['rounded', isDarkMode ? 'border-gray-600' : 'border-gray-300']"
-          />
-          Include deadheads
-        </label>
-        <label
-          :class="[
-            'flex items-center gap-2 text-sm cursor-pointer',
-            isDarkMode ? 'text-gray-300' : 'text-gray-700',
-          ]"
-        >
-          <input
-            v-model="includeScheduled"
-            type="checkbox"
-            :class="['rounded', isDarkMode ? 'border-gray-600' : 'border-gray-300']"
-          />
-          Include scheduled (not yet departed) flights
-        </label>
-        <div class="flex flex-wrap items-center gap-3">
+        <div class="space-y-2.5">
+          <label
+            :class="[
+              'flex items-center gap-2.5 text-sm cursor-pointer hover:opacity-80 transition-opacity',
+              isDarkMode ? 'text-gray-300' : 'text-gray-700',
+            ]"
+          >
+            <input
+              v-model="includeDeadheads"
+              type="checkbox"
+              :class="['rounded text-blue-600 focus:ring-blue-500', isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300']"
+            />
+            <span>Include deadheads</span>
+          </label>
+          <label
+            :class="[
+              'flex items-center gap-2.5 text-sm cursor-pointer hover:opacity-80 transition-opacity',
+              isDarkMode ? 'text-gray-300' : 'text-gray-700',
+            ]"
+          >
+            <input
+              v-model="includeScheduled"
+              type="checkbox"
+              :class="['rounded text-blue-600 focus:ring-blue-500', isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300']"
+            />
+            <span>Include scheduled (not yet departed) flights</span>
+          </label>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 pt-2">
           <button
             type="button"
             :class="btnOutlineClass"
             :disabled="loadingFetch || loadingSinceLast"
             @click="fetchFlights"
           >
-            <Icon name="ri:download-cloud-2-line" size="16" />
+            <Icon name="ri:download-cloud-2-line" size="18" />
             {{ loadingFetch ? 'Fetching…' : 'Fetch flights' }}
           </button>
           <button
             type="button"
-            :class="btnOutlineClass"
+            :class="btnConnectFcvClass"
             :disabled="loadingFetch || loadingSinceLast"
             @click="fetchSinceLastEntry"
           >
-            <Icon name="ri:history-line" size="16" />
+            <Icon name="ri:history-line" size="18" />
             {{ loadingSinceLast ? 'Loading…' : 'Since last entry' }}
           </button>
         </div>

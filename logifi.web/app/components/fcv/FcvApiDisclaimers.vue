@@ -18,24 +18,38 @@ withDefaults(
 <template>
   <div
     :class="[
-      'rounded-xl border p-3 sm:p-4 text-xs sm:text-sm space-y-2',
+      'rounded-xl border p-4 text-sm space-y-2 transition-colors',
       tone === 'marketing'
-        ? 'border-gray-200 bg-gray-50 text-gray-800'
+        ? 'border-gray-200 bg-white shadow-sm text-gray-700'
         : isDarkMode
-          ? 'border-gray-600 bg-gray-800/50 text-gray-200'
-          : 'border-gray-200 bg-amber-50/90 text-gray-900',
+          ? 'border-gray-700 bg-gray-800/40 text-gray-300'
+          : 'border-gray-200 bg-gray-50/80 text-gray-700',
     ]"
     role="note"
     aria-label="Flight Crew View Logbook API notices"
   >
-    <p class="font-semibold leading-snug">
-      Uses the Flight Crew View Logbook API. Not affiliated with Flight Crew View.
-    </p>
-    <p class="leading-snug">
-      For logbook purposes only. Not for flight planning or operational use.
-    </p>
-    <p class="leading-snug">
-      Requires an active Flight Crew View subscription (sold separately).
-    </p>
+    <div class="flex items-start gap-3">
+      <Icon
+        name="ri:information-line"
+        size="20"
+        :class="[
+          'shrink-0 mt-0.5',
+          tone === 'marketing'
+            ? 'text-blue-500'
+            : isDarkMode ? 'text-blue-400' : 'text-blue-600'
+        ]"
+      />
+      <div class="space-y-1.5 leading-relaxed">
+        <p :class="['font-medium', tone === 'marketing' || !isDarkMode ? 'text-gray-900' : 'text-gray-100']">
+          Uses the Flight Crew View Logbook API. Not affiliated with Flight Crew View.
+        </p>
+        <p>
+          For logbook purposes only. Not for flight planning or operational use.
+        </p>
+        <p>
+          Requires an active Flight Crew View subscription (sold separately).
+        </p>
+      </div>
+    </div>
   </div>
 </template>

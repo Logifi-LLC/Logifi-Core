@@ -16,30 +16,32 @@
 
     <main class="pt-28 pb-16 px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
       <h1 class="text-3xl font-bold text-gray-900 mb-2">Flight Crew View import</h1>
-      <p class="text-gray-600 mb-6">
+      <p class="text-gray-600 mb-6 text-lg">
         Logifi can connect to Flight Crew View so you can preview and import your FC View flight
         history into your logbook (when the integration is enabled for your account).
       </p>
 
-      <FcvApiDisclaimers class="mb-8" tone="marketing" />
+      <FcvApiDisclaimers class="mb-10" tone="marketing" />
 
-      <section class="prose prose-gray max-w-none text-gray-700 space-y-4">
-        <h2 class="text-xl font-bold text-gray-900 font-quicksand">What this integration does</h2>
-        <p>
-          After you authorize Logifi with Flight Crew View, our servers fetch flights you choose by
-          date range. You review a preview (including optional duplicate warnings) before import.
-          Imports are intended to be idempotent using stable flight identifiers from FC View.
-        </p>
-        <p>
-          This is for
-          <strong>logbook record-keeping only</strong>. Logifi does not use FC View data for flight
-          planning, dispatch, weather or NOTAM briefing, or any operational decision-making.
-        </p>
-        <p>
-          More detail on data handling:
-          <NuxtLink to="/data-sources" class="text-blue-600 hover:underline">Data sources &amp; third-party APIs</NuxtLink>.
-        </p>
-      </section>
+      <div class="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 shadow-sm space-y-6">
+        <section class="prose prose-gray max-w-none text-gray-700 space-y-4">
+          <h2 class="text-xl font-bold text-gray-900 font-quicksand mt-0">What this integration does</h2>
+          <p>
+            After you authorize Logifi with Flight Crew View, our servers fetch flights you choose by
+            date range. You review a preview (including optional duplicate warnings) before import.
+            Imports are intended to be idempotent using stable flight identifiers from FC View.
+          </p>
+          <p>
+            This is for
+            <strong>logbook record-keeping only</strong>. Logifi does not use FC View data for flight
+            planning, dispatch, weather or NOTAM briefing, or any operational decision-making.
+          </p>
+          <p>
+            More detail on data handling:
+            <NuxtLink to="/data-sources" class="text-blue-600 font-medium hover:underline">Data sources &amp; third-party APIs</NuxtLink>.
+          </p>
+        </section>
+      </div>
 
       <footer class="mt-12 pt-8 border-t border-gray-200 text-center text-sm text-gray-500">
         <NuxtLink to="/terms" class="text-blue-600 hover:underline">Terms</NuxtLink>

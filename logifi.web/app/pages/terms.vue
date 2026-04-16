@@ -99,7 +99,7 @@
         <section class="mb-10">
           <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3">10. Governing Law and Disputes</h2>
           <p class="text-gray-700 leading-relaxed">
-            These Terms are governed by the laws of the United States and the State of [Your State], without regard to conflict of law principles. Any dispute arising from these Terms or the Service shall be resolved in the courts located in [Your State].
+            These Terms are governed by the laws of the United States and the State of Delaware, without regard to conflict of law principles. Any dispute arising from these Terms or the Service shall be resolved in the courts located in Delaware.
           </p>
         </section>
 

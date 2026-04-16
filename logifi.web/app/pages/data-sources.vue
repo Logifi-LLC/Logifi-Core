@@ -38,12 +38,34 @@
             We do not collect or store your FC View password or passkey. We do not send FC View
             tokens or authorization codes to AI or LLM providers.
           </p>
-          <p class="text-gray-700 leading-relaxed">
+          <p class="text-gray-700 leading-relaxed mb-4">
             To remove imported flights, use Logifi’s logbook tools. To revoke the FC View connection
-            or delete stored tokens, contact
-            <a href="mailto:info@logifi.io" class="text-blue-600 hover:underline">info@logifi.io</a>
-            if a self-serve disconnect control is not yet shown in the app.
+            and delete stored tokens, you can disconnect your account below.
           </p>
+
+          <div v-if="isAuthenticated" class="not-prose bg-white border border-gray-200 rounded-xl p-4 sm:p-6 shadow-sm">
+            <h3 class="text-base font-semibold text-gray-900 mb-1">Manage Connection</h3>
+            <p class="text-sm text-gray-600 mb-4">
+              Disconnecting will immediately delete your FC View access and refresh tokens from our servers. You will need to reconnect to import future flights.
+            </p>
+            <div class="flex items-center gap-3">
+              <button
+                type="button"
+                @click="disconnectFcv"
+                :disabled="isDisconnecting"
+                class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Icon name="ri:plug-disconnect-line" size="16" />
+                {{ isDisconnecting ? 'Disconnecting...' : 'Disconnect FC View' }}
+              </button>
+              <span v-if="disconnectMessage" :class="['text-sm', disconnectError ? 'text-red-600' : 'text-green-600']">
+                {{ disconnectMessage }}
+              </span>
+            </div>
+          </div>
+          <div v-else class="not-prose bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-600">
+            Sign in to manage your Flight Crew View connection.
+          </div>
         </section>
 
         <section class="mb-10">
@@ -69,12 +91,41 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute, useRouter } from '#imports'
+import { useAuth } from '~/composables/useAuth'
 import FcvApiDisclaimers from '~/components/fcv/FcvApiDisclaimers.vue'
 
 const route = useRoute()
 const router = useRouter()
+const { isAuthenticated, session } = useAuth()
+
+const isDisconnecting = ref(false)
+const disconnectMessage = ref('')
+const disconnectError = ref(false)
+
+const disconnectFcv = async () => {
+  if (!isAuthenticated.value) return
+  
+  isDisconnecting.value = true
+  disconnectMessage.value = ''
+  disconnectError.value = false
+  
+  try {
+    await $fetch('/api/fcv/disconnect', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.value?.access_token}`
+      }
+    })
+    disconnectMessage.value = 'Successfully disconnected.'
+  } catch (err) {
+    disconnectError.value = true
+    disconnectMessage.value = 'Failed to disconnect. Please try again or contact support.'
+  } finally {
+    isDisconnecting.value = false
+  }
+}
 
 const backLabel = computed(() =>
   route.query.from === 'landing' ? 'Back to Home' : 'Back to Logbook'
