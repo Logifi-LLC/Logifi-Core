@@ -6,7 +6,8 @@
 </template>
 
 <script setup>
-// No confetti functionality - keeping it simple
+// Keep `html.dark` / `html.light` in sync with stored app theme for `dark:` utilities site-wide.
+useTheme()
 </script>
 
 <style>

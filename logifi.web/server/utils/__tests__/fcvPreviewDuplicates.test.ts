@@ -1,0 +1,133 @@
+import { describe, expect, it } from 'vitest'
+import type { FcvMappedEntry } from '../fcvMap'
+import {
+  fcvMappedToMatchShape,
+  logEntryRowToMatchShape,
+  partitionFcvPreviewDuplicates,
+} from '../fcvPreviewDuplicates'
+
+function flight(
+  overrides: Partial<FcvMappedEntry> & Pick<FcvMappedEntry, 'fcv_flight_id' | 'date'>
+): FcvMappedEntry {
+  return {
+    fcv_flight_id: overrides.fcv_flight_id,
+    date: overrides.date,
+    role: 'PIC',
+    aircraft_category_class: 'AMEL',
+    aircraft_make_model: 'B737',
+    registration: 'N12345',
+    departure: 'KSEA',
+    destination: 'KPDX',
+    flight_time: { total: 1.0 },
+    oooi: { out: '1000', off: '1010', on: '1100', in: '1110' },
+    ...overrides,
+  }
+}
+
+describe('partitionFcvPreviewDuplicates', () => {
+  it('returns empty partition when nothing matches', () => {
+    const flights = [flight({ fcv_flight_id: 'new-1', date: '2026-04-17' })]
+    const existingShapes = [
+      logEntryRowToMatchShape({
+        date: '2026-04-16',
+        registration: 'N99999',
+        departure: 'KSEA',
+        destination: 'KPDX',
+        flight_time: { total: 1 },
+        oooi: { out: '1000' },
+      }),
+    ]
+    const part = partitionFcvPreviewDuplicates(flights, existingShapes, new Set())
+    expect(part.alreadyImportedIndices).toEqual([])
+    expect(part.heuristicDuplicateIndices).toEqual([])
+    expect(part.duplicateIndices).toEqual([])
+  })
+
+  it('classifies exact fcv_flight_id hits as already imported, not heuristic', () => {
+    const flights = [
+      flight({
+        fcv_flight_id: 'fcv-existing',
+        date: '2026-04-16',
+        registration: 'N12345',
+        departure: 'KSEA',
+        destination: 'KPDX',
+      }),
+    ]
+    const existingShapes = [
+      logEntryRowToMatchShape({
+        date: '2026-04-16',
+        registration: 'N12345',
+        departure: 'KSEA',
+        destination: 'KPDX',
+        flight_time: { total: 1 },
+        oooi: { out: '1000' },
+      }),
+    ]
+    const part = partitionFcvPreviewDuplicates(
+      flights,
+      existingShapes,
+      new Set(['fcv-existing'])
+    )
+    expect(part.alreadyImportedIndices).toEqual([0])
+    expect(part.heuristicDuplicateIndices).toEqual([])
+    expect(part.alreadyImportedFcvFlightIds).toEqual(['fcv-existing'])
+    expect(part.duplicateFcvFlightIds).toEqual([])
+  })
+
+  it('uses heuristic when shape matches but fcv id is not already stored', () => {
+    const flights = [
+      flight({
+        fcv_flight_id: 'fcv-brand-new',
+        date: '2026-04-16',
+        registration: 'N12345',
+        departure: 'KSEA',
+        destination: 'KPDX',
+        oooi: { out: '1000' },
+      }),
+    ]
+    const existingShapes = [
+      logEntryRowToMatchShape({
+        date: '2026-04-16',
+        registration: 'N12345',
+        departure: 'KSEA',
+        destination: 'KPDX',
+        flight_time: { total: 1 },
+        oooi: { out: '1000' },
+      }),
+    ]
+    const part = partitionFcvPreviewDuplicates(flights, existingShapes, new Set())
+    expect(part.alreadyImportedIndices).toEqual([])
+    expect(part.heuristicDuplicateIndices).toEqual([0])
+    expect(part.duplicateFcvFlightIds).toEqual(['fcv-brand-new'])
+  })
+
+  it('handles mixed new, already-imported, and heuristic rows', () => {
+    const flights = [
+      flight({ fcv_flight_id: 'a', date: '2026-04-17', departure: 'KSEA', destination: 'KLAX' }),
+      flight({ fcv_flight_id: 'b', date: '2026-04-16', departure: 'KSEA', destination: 'KPDX' }),
+      flight({ fcv_flight_id: 'c', date: '2026-04-16', departure: 'KSEA', destination: 'KPDX' }),
+    ]
+    const existingShapes = [
+      logEntryRowToMatchShape({
+        date: '2026-04-16',
+        registration: 'N12345',
+        departure: 'KSEA',
+        destination: 'KPDX',
+        flight_time: { total: 1 },
+        oooi: { out: '1000' },
+      }),
+    ]
+    const part = partitionFcvPreviewDuplicates(flights, existingShapes, new Set(['b']))
+    expect(part.alreadyImportedIndices).toEqual([1])
+    expect(part.heuristicDuplicateIndices).toEqual([2])
+    expect(part.duplicateIndices).toEqual([1, 2])
+  })
+})
+
+describe('fcvMappedToMatchShape', () => {
+  it('maps oooi out and total from preview flight', () => {
+    const f = flight({ fcv_flight_id: 'x', date: '2026-01-01' })
+    expect(fcvMappedToMatchShape(f).oooiOut).toBe('1000')
+    expect(fcvMappedToMatchShape(f).flightTimeTotal).toBe(1)
+  })
+})

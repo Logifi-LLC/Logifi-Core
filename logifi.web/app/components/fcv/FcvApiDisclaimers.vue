@@ -20,7 +20,7 @@ withDefaults(
     :class="[
       'rounded-xl border p-4 text-sm space-y-2 transition-colors',
       tone === 'marketing'
-        ? 'border-gray-200 bg-white shadow-sm text-gray-700'
+        ? 'border-gray-200 bg-white shadow-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-300 dark:shadow-lg dark:shadow-black/25'
         : isDarkMode
           ? 'border-gray-700 bg-gray-800/40 text-gray-300'
           : 'border-gray-200 bg-gray-50/80 text-gray-700',
@@ -35,12 +35,21 @@ withDefaults(
         :class="[
           'shrink-0 mt-0.5',
           tone === 'marketing'
-            ? 'text-blue-500'
+            ? 'text-blue-500 dark:text-blue-400'
             : isDarkMode ? 'text-blue-400' : 'text-blue-600'
         ]"
       />
       <div class="space-y-1.5 leading-relaxed">
-        <p :class="['font-medium', tone === 'marketing' || !isDarkMode ? 'text-gray-900' : 'text-gray-100']">
+        <p
+          :class="[
+            'font-medium',
+            tone === 'marketing'
+              ? 'text-gray-900 dark:text-gray-100'
+              : isDarkMode
+                ? 'text-gray-100'
+                : 'text-gray-900',
+          ]"
+        >
           Uses the Flight Crew View Logbook API. Not affiliated with Flight Crew View.
         </p>
         <p>

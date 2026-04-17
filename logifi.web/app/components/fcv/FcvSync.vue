@@ -54,6 +54,8 @@ interface CrewReviewCandidate {
   strategy: 'ambiguous' | 'unresolved'
 }
 
+type CrewOverrideMode = 'pick' | 'rename' | 'asis'
+
 const { session, isAuthenticated } = useAuth()
 
 const connected = ref<boolean>(false)
@@ -70,14 +72,46 @@ const includeScheduled = ref(false)
 
 const previewFlights = ref<FcvMappedEntry[]>([])
 const showPreviewModal = ref(false)
-/** Row indices that match existing logbook entries (from POST /api/fcv/check-duplicates). */
-const duplicateIndices = ref<Set<number>>(new Set())
+/** Heuristic match (date/tail/route/OOOI) — not already stored by FC View flight id. */
+const heuristicDuplicateIndices = ref<Set<number>>(new Set())
+/** Exact `fcv_flight_id` already present in logbook (import would skip). */
+const alreadyImportedIndices = ref<Set<number>>(new Set())
 const includeDuplicatesInImport = ref(false)
+const includeAlreadyImportedInImport = ref(false)
+/** When "Since last entry" hid rows that are already in the logbook (FC View id). */
+const sinceLastEntryOmittedAlreadyImported = ref(0)
 const expandedEnrichmentRows = ref<Set<number>>(new Set())
 const perFlightEnrichment = ref<Record<number, FlightEnrichment>>({})
 const crewReviewCandidates = ref<CrewReviewCandidate[]>([])
-const crewNameOverrides = ref<Record<string, string>>({})
+/** Crew review state keyed by exact FC View `raw_name` so rows with the same string stay in sync. */
+const crewResolutionMode = ref<Record<string, CrewOverrideMode>>({})
+const crewPickSelection = ref<Record<string, string>>({})
+const crewRenameText = ref<Record<string, string>>({})
 const approachTypeOptions = ['ILS', 'LOC', 'RNAV', 'VOR', 'NDB', 'LDA', 'SDF', 'VISUAL']
+
+function syncCrewReviewUiState(candidates: CrewReviewCandidate[]) {
+  const rawNames = new Set<string>()
+  for (const c of candidates) {
+    const r = typeof c.raw_name === 'string' ? c.raw_name : ''
+    if (r) rawNames.add(r)
+  }
+  for (const k of Object.keys(crewResolutionMode.value)) {
+    if (!rawNames.has(k)) delete crewResolutionMode.value[k]
+  }
+  for (const k of Object.keys(crewPickSelection.value)) {
+    if (!rawNames.has(k)) delete crewPickSelection.value[k]
+  }
+  for (const k of Object.keys(crewRenameText.value)) {
+    if (!rawNames.has(k)) delete crewRenameText.value[k]
+  }
+  for (const r of rawNames) {
+    if (!(r in crewResolutionMode.value)) crewResolutionMode.value[r] = 'pick'
+    if (!(r in crewPickSelection.value)) crewPickSelection.value[r] = ''
+    if (!(r in crewRenameText.value)) crewRenameText.value[r] = ''
+  }
+}
+
+watch(crewReviewCandidates, (list) => syncCrewReviewUiState(list), { deep: true })
 
 function toNullableNumber(v: unknown): number | null {
   if (v === null || v === undefined) return null
@@ -215,11 +249,53 @@ async function connectFcv() {
   }
 }
 
-async function fetchFlights() {
+type FcvDupCheckResponse = {
+  duplicateFcvFlightIds: string[]
+  duplicateIndices: number[]
+  alreadyImportedIndices?: number[]
+  heuristicDuplicateIndices?: number[]
+  alreadyImportedFcvFlightIds?: string[]
+}
+
+const emptyDupResponse: FcvDupCheckResponse = {
+  duplicateFcvFlightIds: [],
+  duplicateIndices: [],
+  alreadyImportedIndices: [],
+  heuristicDuplicateIndices: [],
+  alreadyImportedFcvFlightIds: [],
+}
+
+async function requestCheckDuplicates(flights: FcvMappedEntry[]): Promise<FcvDupCheckResponse> {
+  return await $fetch<FcvDupCheckResponse>('/api/fcv/check-duplicates', {
+    method: 'POST',
+    headers: {
+      ...authHeaders(),
+      'Content-Type': 'application/json',
+    },
+    body: { flights },
+  })
+}
+
+function applyDupCheckToState(dup: FcvDupCheckResponse) {
+  const already = new Set(dup.alreadyImportedIndices ?? [])
+  alreadyImportedIndices.value = already
+  if (Array.isArray(dup.heuristicDuplicateIndices)) {
+    heuristicDuplicateIndices.value = new Set(dup.heuristicDuplicateIndices)
+  } else {
+    const union = new Set(dup.duplicateIndices ?? [])
+    heuristicDuplicateIndices.value =
+      already.size > 0
+        ? new Set([...union].filter((i) => !already.has(i)))
+        : union
+  }
+}
+
+async function fetchFlights(opts?: { hideAlreadyImportedFromFcView?: boolean }) {
   if (!isAuthenticated.value) return
   loadingFetch.value = true
   error.value = null
   previewFlights.value = []
+  sinceLastEntryOmittedAlreadyImported.value = 0
   try {
     const data = await $fetch<{ success: boolean; flights: FcvMappedEntry[]; count: number }>(
       '/api/fcv/fetch',
@@ -238,29 +314,55 @@ async function fetchFlights() {
       }
     )
     if (data?.success && Array.isArray(data.flights)) {
-      previewFlights.value = data.flights
       includeDuplicatesInImport.value = false
-      duplicateIndices.value = new Set()
+      includeAlreadyImportedInImport.value = false
+      heuristicDuplicateIndices.value = new Set()
+      alreadyImportedIndices.value = new Set()
       perFlightEnrichment.value = {}
       expandedEnrichmentRows.value = new Set()
       crewReviewCandidates.value = []
-      crewNameOverrides.value = {}
+      crewResolutionMode.value = {}
+      crewPickSelection.value = {}
+      crewRenameText.value = {}
+
+      let flightsForPreview = data.flights
+      let dup: FcvDupCheckResponse
+
       try {
-        const dup = await $fetch<{
-          duplicateFcvFlightIds: string[]
-          duplicateIndices: number[]
-        }>('/api/fcv/check-duplicates', {
-          method: 'POST',
-          headers: {
-            ...authHeaders(),
-            'Content-Type': 'application/json',
-          },
-          body: { flights: data.flights },
-        })
-        duplicateIndices.value = new Set(dup.duplicateIndices ?? [])
+        dup = await requestCheckDuplicates(flightsForPreview)
+
+        if (opts?.hideAlreadyImportedFromFcView) {
+          const dropIds = new Set(
+            (dup.alreadyImportedFcvFlightIds ?? [])
+              .map((id) => String(id).trim())
+              .filter((s) => s.length > 0)
+          )
+          const dropIdx = new Set(dup.alreadyImportedIndices ?? [])
+          let filtered = flightsForPreview
+          if (dropIds.size > 0) {
+            filtered = flightsForPreview.filter(
+              (f) => !dropIds.has(String(f.fcv_flight_id ?? '').trim())
+            )
+          } else if (dropIdx.size > 0) {
+            filtered = flightsForPreview.filter((_, i) => !dropIdx.has(i))
+          }
+          if (filtered.length < flightsForPreview.length) {
+            sinceLastEntryOmittedAlreadyImported.value =
+              flightsForPreview.length - filtered.length
+            flightsForPreview = filtered
+            dup =
+              flightsForPreview.length > 0
+                ? await requestCheckDuplicates(flightsForPreview)
+                : { ...emptyDupResponse }
+          }
+        }
+
+        previewFlights.value = flightsForPreview
+        applyDupCheckToState(dup)
       } catch {
         error.value =
           'Fetched flights but could not check for duplicates. Review carefully before importing.'
+        previewFlights.value = flightsForPreview
       }
       showPreviewModal.value = true
     }
@@ -283,7 +385,7 @@ async function fetchSinceLastEntry() {
     const from = typeof latest?.date === 'string' && latest.date.trim() ? latest.date : today
     dateFrom.value = from
     dateTo.value = today
-    await fetchFlights()
+    await fetchFlights({ hideAlreadyImportedFromFcView: true })
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to fetch since last entry'
   } finally {
@@ -299,6 +401,33 @@ async function confirmImport() {
   loadingImport.value = true
   error.value = null
   try {
+    const review = crewReviewCandidates.value
+    const crewNameOverridesPayload: Record<string, string> = {}
+    const crewOverrideModesPayload: Record<string, CrewOverrideMode> = {}
+    for (const c of review) {
+      const id = c.fcv_flight_id
+      const rawKey = c.raw_name
+      const mode = crewResolutionMode.value[rawKey] ?? 'pick'
+      crewOverrideModesPayload[id] = mode
+      if (mode === 'pick') {
+        crewNameOverridesPayload[id] = (crewPickSelection.value[rawKey] ?? '').trim()
+      } else if (mode === 'rename') {
+        crewNameOverridesPayload[id] = (crewRenameText.value[rawKey] ?? '').trim()
+      } else {
+        crewNameOverridesPayload[id] = c.raw_name
+      }
+    }
+
+    const importBody: {
+      flights: FcvMappedEntry[]
+      crewNameOverrides?: Record<string, string>
+      crewOverrideModes?: Record<string, CrewOverrideMode>
+    } = { flights }
+    if (review.length > 0) {
+      importBody.crewNameOverrides = crewNameOverridesPayload
+      importBody.crewOverrideModes = crewOverrideModesPayload
+    }
+
     const result = await $fetch<{
       success: boolean
       import_batch_id?: string
@@ -312,12 +441,13 @@ async function confirmImport() {
         ...authHeaders(),
         'Content-Type': 'application/json',
       },
-      body: { flights, crewNameOverrides: crewNameOverrides.value },
+      body: importBody,
     })
     if (!result?.success && result?.requires_crew_review) {
       crewReviewCandidates.value = Array.isArray(result.review_candidates)
         ? result.review_candidates
         : []
+      syncCrewReviewUiState(crewReviewCandidates.value)
       error.value =
         crewReviewCandidates.value.length > 0
           ? 'Review crew name matches below before importing.'
@@ -331,12 +461,17 @@ async function confirmImport() {
     })
     showPreviewModal.value = false
     previewFlights.value = []
-    duplicateIndices.value = new Set()
+    sinceLastEntryOmittedAlreadyImported.value = 0
+    heuristicDuplicateIndices.value = new Set()
+    alreadyImportedIndices.value = new Set()
     includeDuplicatesInImport.value = false
+    includeAlreadyImportedInImport.value = false
     perFlightEnrichment.value = {}
     expandedEnrichmentRows.value = new Set()
     crewReviewCandidates.value = []
-    crewNameOverrides.value = {}
+    crewResolutionMode.value = {}
+    crewPickSelection.value = {}
+    crewRenameText.value = {}
     await checkStatus()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to import flights'
@@ -347,37 +482,86 @@ async function confirmImport() {
 
 function closePreview() {
   showPreviewModal.value = false
+  sinceLastEntryOmittedAlreadyImported.value = 0
   includeDuplicatesInImport.value = false
+  includeAlreadyImportedInImport.value = false
   expandedEnrichmentRows.value = new Set()
   perFlightEnrichment.value = {}
   crewReviewCandidates.value = []
-  crewNameOverrides.value = {}
+  crewResolutionMode.value = {}
+  crewPickSelection.value = {}
+  crewRenameText.value = {}
 }
 
-function isDuplicateRow(index: number) {
-  return duplicateIndices.value.has(index)
+function isHeuristicDuplicateRow(index: number) {
+  return heuristicDuplicateIndices.value.has(index)
+}
+
+function isAlreadyImportedRow(index: number) {
+  return alreadyImportedIndices.value.has(index)
+}
+
+function isExcludedFromDefaultImport(index: number) {
+  const heur = heuristicDuplicateIndices.value.has(index) && !includeDuplicatesInImport.value
+  const imp = alreadyImportedIndices.value.has(index) && !includeAlreadyImportedInImport.value
+  return heur || imp
 }
 
 function crewCandidateByFlightId(fcvFlightId: string): CrewReviewCandidate | null {
   return crewReviewCandidates.value.find((c) => c.fcv_flight_id === fcvFlightId) ?? null
 }
 
-function setCrewOverride(fcvFlightId: string, value: string) {
-  const next = value.trim()
-  if (!next) {
-    delete crewNameOverrides.value[fcvFlightId]
-    return
-  }
-  crewNameOverrides.value[fcvFlightId] = next
+/** Map UI state by server `raw_name`; requires candidate row to exist. */
+function crewRawKey(fcvFlightId: string): string {
+  return crewCandidateByFlightId(fcvFlightId)?.raw_name ?? ''
 }
 
-const duplicateCount = computed(() => duplicateIndices.value.size)
+function setCrewResolutionMode(rawName: string, mode: CrewOverrideMode) {
+  crewResolutionMode.value[rawName] = mode
+}
+
+function crewModeFor(rawName: string): CrewOverrideMode {
+  return crewResolutionMode.value[rawName] ?? 'pick'
+}
+
+function previewResolvedCrewName(c: CrewReviewCandidate | null): string {
+  if (!c) return '…'
+  const rawName = c.raw_name
+  const mode = crewResolutionMode.value[rawName] ?? 'pick'
+  if (mode === 'asis') return c.raw_name
+  if (mode === 'rename') {
+    const t = (crewRenameText.value[rawName] ?? '').trim()
+    return t || 'Enter a canonical name…'
+  }
+  const sel = (crewPickSelection.value[rawName] ?? '').trim()
+  return sel || 'Choose a match…'
+}
+
+function crewRawNameHasMultipleFlights(rawName: string): boolean {
+  if (!rawName) return false
+  let n = 0
+  for (const c of crewReviewCandidates.value) {
+    if (c.raw_name === rawName) n++
+    if (n > 1) return true
+  }
+  return false
+}
+
+function isCrewReviewRowResolved(c: CrewReviewCandidate): boolean {
+  const rawName = c.raw_name
+  const mode = crewResolutionMode.value[rawName] ?? 'pick'
+  if (mode === 'asis') return true
+  if (mode === 'rename') return !!(crewRenameText.value[rawName] ?? '').trim()
+  const sel = (crewPickSelection.value[rawName] ?? '').trim()
+  if (!sel) return false
+  return c.candidates.includes(sel)
+}
+
+const heuristicDuplicateCount = computed(() => heuristicDuplicateIndices.value.size)
+const alreadyImportedCount = computed(() => alreadyImportedIndices.value.size)
 const crewReviewCount = computed(() => crewReviewCandidates.value.length)
-const unresolvedCrewReviewCount = computed(() =>
-  crewReviewCandidates.value.filter((c) => {
-    const v = crewNameOverrides.value[c.fcv_flight_id]
-    return typeof v !== 'string' || !v.trim()
-  }).length
+const unresolvedCrewReviewCount = computed(
+  () => crewReviewCandidates.value.filter((c) => !isCrewReviewRowResolved(c)).length
 )
 const isConnectOnly = computed(() => props.mode === 'connect')
 const isFetchOnly = computed(() => props.mode === 'fetch')
@@ -388,14 +572,13 @@ const showFetchNeedsConnection = computed(
 )
 
 const flightsToImport = computed(() => {
-  if (includeDuplicatesInImport.value) return previewFlights.value
-  return previewFlights.value.filter((_, i) => !duplicateIndices.value.has(i))
+  return previewFlights.value.filter((_, i) => !isExcludedFromDefaultImport(i))
 })
 
 const flightsToImportWithIndex = computed(() => {
   return previewFlights.value
     .map((flight, index) => ({ flight, index }))
-    .filter(({ index }) => includeDuplicatesInImport.value || !duplicateIndices.value.has(index))
+    .filter(({ index }) => !isExcludedFromDefaultImport(index))
 })
 
 const importCount = computed(() => flightsToImport.value.length)
@@ -435,6 +618,20 @@ function formatOooiPreview(f: FcvMappedEntry): string {
   const inn = toDisp(o.in)
   const parts = [out, off, on, inn].filter(Boolean)
   return parts.length ? `OOOI ${parts.join(' · ')}` : ''
+}
+
+/** Other pilot from FC View (`training_*`); your leg role for quick scan of similar legs. */
+function formatCrewPreviewLine(f: FcvMappedEntry): string {
+  const nameRaw = f.training_elements
+  const name = typeof nameRaw === 'string' ? nameRaw.trim() : ''
+  const labelRaw = f.training_instructor
+  const label = typeof labelRaw === 'string' ? labelRaw.trim() : ''
+  const role = typeof f.role === 'string' ? f.role.trim().toUpperCase() : ''
+
+  const bits: string[] = []
+  if (role) bits.push(`You: ${role}`)
+  if (name) bits.push(label ? `${label}: ${name}` : `Crew: ${name}`)
+  return bits.join(' · ')
 }
 
 onMounted(() => {
@@ -639,11 +836,20 @@ const inputClass = computed(() =>
             isDarkMode ? 'border-gray-700' : 'border-gray-200',
           ]"
         >
-          <h4
-            :class="['text-lg font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900']"
-          >
-            Preview — {{ previewFlights.length }} flight(s)
-          </h4>
+          <div class="min-w-0 flex-1 pr-2">
+            <h4
+              :class="['text-lg font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900']"
+            >
+              Preview — {{ previewFlights.length }} flight(s)
+            </h4>
+            <p
+              v-if="sinceLastEntryOmittedAlreadyImported > 0"
+              :class="['text-xs mt-1', isDarkMode ? 'text-slate-400' : 'text-slate-600']"
+            >
+              {{ sinceLastEntryOmittedAlreadyImported }} flight(s) already in your logbook were not
+              shown (Since last entry only lists new FC View flights).
+            </p>
+          </div>
           <button
             type="button"
             :class="[
@@ -666,16 +872,27 @@ const inputClass = computed(() =>
               isDarkMode
                 ? 'border-gray-700 text-gray-200'
                 : 'border-gray-200 text-gray-800',
-              isDuplicateRow(idx)
+              isAlreadyImportedRow(idx)
                 ? isDarkMode
-                  ? 'bg-amber-950/35 border-amber-900/50 ring-1 ring-amber-700/40'
-                  : 'bg-amber-50 border-amber-200/80 ring-1 ring-amber-200/90'
-                : '',
+                  ? 'bg-slate-800/50 border-slate-600/60 ring-1 ring-slate-600/35'
+                  : 'bg-slate-50 border-slate-200/90 ring-1 ring-slate-200/80'
+                : isHeuristicDuplicateRow(idx)
+                  ? isDarkMode
+                    ? 'bg-amber-950/35 border-amber-900/50 ring-1 ring-amber-700/40'
+                    : 'bg-amber-50 border-amber-200/80 ring-1 ring-amber-200/90'
+                  : '',
             ]"
           >
             <div class="flex items-center gap-2 min-w-0">
               <Icon
-                v-if="isDuplicateRow(idx)"
+                v-if="isAlreadyImportedRow(idx)"
+                name="ri:checkbox-circle-line"
+                size="18"
+                :class="['shrink-0', isDarkMode ? 'text-slate-400' : 'text-slate-500']"
+                aria-hidden="true"
+              />
+              <Icon
+                v-else-if="isHeuristicDuplicateRow(idx)"
                 name="ri:alert-line"
                 size="18"
                 :class="['shrink-0', isDarkMode ? 'text-amber-400' : 'text-amber-600']"
@@ -700,32 +917,103 @@ const inputClass = computed(() =>
               {{ formatOooiPreview(f) }}
             </span>
             <span
-              v-if="isDuplicateRow(idx)"
+              v-if="formatCrewPreviewLine(f)"
+              class="w-full basis-full mt-0.5 text-xs"
+              :class="isDarkMode ? 'text-gray-400' : 'text-gray-600'"
+            >
+              {{ formatCrewPreviewLine(f) }}
+            </span>
+            <span
+              v-if="isAlreadyImportedRow(idx)"
+              :class="[
+                'w-full text-xs font-medium sm:w-auto sm:ml-auto',
+                isDarkMode ? 'text-slate-400' : 'text-slate-600',
+              ]"
+            >
+              Already in logbook from FC View
+            </span>
+            <span
+              v-else-if="isHeuristicDuplicateRow(idx)"
               :class="[
                 'w-full text-xs font-medium sm:w-auto sm:ml-auto',
                 isDarkMode ? 'text-amber-300' : 'text-amber-800',
               ]"
             >
-              May already be in logbook
+              May match an existing entry
             </span>
             <div
               v-if="crewCandidateByFlightId(f.fcv_flight_id)"
               :class="[
-                'w-full mt-1 rounded-lg border p-2 text-xs',
+                'w-full mt-1 rounded-lg border p-3 text-xs space-y-2.5',
                 isDarkMode ? 'border-orange-700/70 bg-orange-900/20 text-orange-200' : 'border-orange-300 bg-orange-50 text-orange-900',
               ]"
             >
               <p class="font-semibold">
                 Crew name review needed: "{{ crewCandidateByFlightId(f.fcv_flight_id)?.raw_name }}"
               </p>
-              <label class="mt-2 block">
-                <span :class="isDarkMode ? 'text-orange-100' : 'text-orange-800'">Select canonical person</span>
+              <p
+                v-if="crewRawNameHasMultipleFlights(crewRawKey(f.fcv_flight_id))"
+                :class="['text-[11px] leading-snug', isDarkMode ? 'text-orange-100/80' : 'text-orange-800']"
+              >
+                Flights with this same FC View name share one choice below.
+              </p>
+              <fieldset class="space-y-2">
+                <legend class="sr-only">How to save this crew name</legend>
+                <div class="flex flex-col gap-2">
+                  <label
+                    :class="[
+                      'inline-flex items-center gap-2 cursor-pointer select-none',
+                      isDarkMode ? 'text-orange-100' : 'text-orange-900',
+                    ]"
+                  >
+                    <input
+                      type="radio"
+                      class="shrink-0 rounded-full border-orange-400 text-orange-600 focus:ring-orange-500"
+                      :name="`fcv-crew-mode-${f.fcv_flight_id}`"
+                      :checked="crewModeFor(crewRawKey(f.fcv_flight_id)) === 'pick'"
+                      @change="setCrewResolutionMode(crewRawKey(f.fcv_flight_id), 'pick')"
+                    />
+                    <span>Pick from catalog</span>
+                  </label>
+                  <label
+                    :class="[
+                      'inline-flex items-center gap-2 cursor-pointer select-none',
+                      isDarkMode ? 'text-orange-100' : 'text-orange-900',
+                    ]"
+                  >
+                    <input
+                      type="radio"
+                      class="shrink-0 rounded-full border-orange-400 text-orange-600 focus:ring-orange-500"
+                      :name="`fcv-crew-mode-${f.fcv_flight_id}`"
+                      :checked="crewModeFor(crewRawKey(f.fcv_flight_id)) === 'rename'"
+                      @change="setCrewResolutionMode(crewRawKey(f.fcv_flight_id), 'rename')"
+                    />
+                    <span>Rename</span>
+                  </label>
+                  <label
+                    :class="[
+                      'inline-flex items-center gap-2 cursor-pointer select-none',
+                      isDarkMode ? 'text-orange-100' : 'text-orange-900',
+                    ]"
+                  >
+                    <input
+                      type="radio"
+                      class="shrink-0 rounded-full border-orange-400 text-orange-600 focus:ring-orange-500"
+                      :name="`fcv-crew-mode-${f.fcv_flight_id}`"
+                      :checked="crewModeFor(crewRawKey(f.fcv_flight_id)) === 'asis'"
+                      @change="setCrewResolutionMode(crewRawKey(f.fcv_flight_id), 'asis')"
+                    />
+                    <span>As is</span>
+                  </label>
+                </div>
+              </fieldset>
+              <div v-if="crewModeFor(crewRawKey(f.fcv_flight_id)) === 'pick'" class="space-y-1">
+                <span :class="isDarkMode ? 'text-orange-100' : 'text-orange-800'">Match to a suggested name</span>
                 <select
-                  :value="crewNameOverrides[f.fcv_flight_id] || ''"
-                  :class="[inputClass, 'w-full mt-1']"
-                  @change="setCrewOverride(f.fcv_flight_id, ($event.target as HTMLSelectElement).value)"
+                  v-model="crewPickSelection[crewRawKey(f.fcv_flight_id)]"
+                  :class="[inputClass, 'w-full mt-0.5']"
                 >
-                  <option value="">Choose person...</option>
+                  <option value="">Choose person…</option>
                   <option
                     v-for="candidate in crewCandidateByFlightId(f.fcv_flight_id)?.candidates || []"
                     :key="`${f.fcv_flight_id}-${candidate}`"
@@ -734,12 +1022,51 @@ const inputClass = computed(() =>
                     {{ candidate }}
                   </option>
                 </select>
-              </label>
+              </div>
+              <div v-else-if="crewModeFor(crewRawKey(f.fcv_flight_id)) === 'rename'" class="space-y-1">
+                <label class="block">
+                  <span :class="isDarkMode ? 'text-orange-100' : 'text-orange-800'">Canonical name</span>
+                  <input
+                    v-model="crewRenameText[crewRawKey(f.fcv_flight_id)]"
+                    type="text"
+                    autocomplete="name"
+                    placeholder="e.g. Last, First"
+                    :class="[inputClass, 'w-full mt-0.5']"
+                  />
+                </label>
+                <p :class="['text-[11px] leading-snug', isDarkMode ? 'text-orange-100/85' : 'text-orange-800']">
+                  Adds this person to your catalog for future FC View imports.
+                </p>
+              </div>
+              <div v-else class="space-y-1">
+                <span :class="isDarkMode ? 'text-orange-100' : 'text-orange-800'">Will import as</span>
+                <p
+                  :class="[
+                    'mt-0.5 rounded-md border px-2 py-1.5 font-medium',
+                    isDarkMode ? 'border-orange-800/60 bg-orange-950/40 text-orange-50' : 'border-orange-200 bg-white text-orange-950',
+                  ]"
+                >
+                  {{ crewCandidateByFlightId(f.fcv_flight_id)?.raw_name }}
+                </p>
+                <p :class="['text-[11px] leading-snug', isDarkMode ? 'text-orange-100/85' : 'text-orange-800']">
+                  Uses the FC View spelling exactly. Does not add a catalog person.
+                </p>
+              </div>
               <p
-                v-if="crewCandidateByFlightId(f.fcv_flight_id)?.strategy === 'unresolved'"
-                :class="['mt-1 text-[11px]', isDarkMode ? 'text-orange-100/90' : 'text-orange-800']"
+                :class="[
+                  'mt-1 rounded-md border px-2 py-1.5 text-[11px] leading-snug',
+                  isDarkMode
+                    ? 'border-orange-800/50 bg-orange-950/30 text-orange-50'
+                    : 'border-orange-200 bg-white text-orange-950',
+                ]"
               >
-                New pilot? Pick the FC View name option to create a new canonical entry you can rename later.
+                <span :class="['font-semibold', isDarkMode ? 'text-orange-100' : 'text-orange-900']">
+                  Will save in logbook as:
+                </span>
+                {{ ' ' }}
+                <span class="font-medium">{{
+                  previewResolvedCrewName(crewCandidateByFlightId(f.fcv_flight_id))
+                }}</span>
               </p>
             </div>
             <div class="w-full flex justify-end">
@@ -849,13 +1176,19 @@ const inputClass = computed(() =>
               <span v-if="totalTime > 0">, {{ totalTime.toFixed(1) }}h</span>
             </p>
             <p
-              v-if="duplicateCount > 0"
-              :class="isDarkMode ? 'text-amber-300' : 'text-amber-800'"
+              v-if="alreadyImportedCount > 0"
+              :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'"
             >
-              {{ duplicateCount }} flight(s) may match existing entries.
+              {{ alreadyImportedCount }} flight(s) already imported from FC View (import would skip these).
             </p>
             <p
-              v-if="duplicateCount > 0"
+              v-if="heuristicDuplicateCount > 0"
+              :class="isDarkMode ? 'text-amber-300' : 'text-amber-800'"
+            >
+              {{ heuristicDuplicateCount }} flight(s) may match an existing logbook entry.
+            </p>
+            <p
+              v-if="heuristicDuplicateCount > 0"
               :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']"
             >
               Compared by calendar date, tail number, and route (IATA/ICAO normalized). Two flights same day with
@@ -868,7 +1201,7 @@ const inputClass = computed(() =>
               {{ unresolvedCrewReviewCount }} of {{ crewReviewCount }} crew name match(es) still need review.
             </p>
             <label
-              v-if="duplicateCount > 0"
+              v-if="heuristicDuplicateCount > 0"
               :class="[
                 'flex items-center gap-2 cursor-pointer select-none',
                 isDarkMode ? 'text-gray-300' : 'text-gray-700',
@@ -879,7 +1212,21 @@ const inputClass = computed(() =>
                 type="checkbox"
                 :class="['rounded shrink-0', isDarkMode ? 'border-gray-600' : 'border-gray-300']"
               />
-              <span>Include flights that match existing entries</span>
+              <span>Include flights that may match an existing entry</span>
+            </label>
+            <label
+              v-if="alreadyImportedCount > 0"
+              :class="[
+                'flex items-center gap-2 cursor-pointer select-none',
+                isDarkMode ? 'text-gray-300' : 'text-gray-700',
+              ]"
+            >
+              <input
+                v-model="includeAlreadyImportedInImport"
+                type="checkbox"
+                :class="['rounded shrink-0', isDarkMode ? 'border-gray-600' : 'border-gray-300']"
+              />
+              <span>Include flights already imported from FC View</span>
             </label>
           </div>
           <div class="flex gap-2 shrink-0">

@@ -1,4 +1,5 @@
 import { defineEventHandler, readBody, createError } from 'h3'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import type { FcvMappedEntry } from '../../utils/fcvMap'
 import type { Database } from '../../../app/types/database'
@@ -13,9 +14,55 @@ import {
   normalizeAircraftFamily,
 } from '../../utils/aircraftFamily'
 
+type CrewOverrideMode = 'pick' | 'rename' | 'asis'
+
 interface ImportBody {
   flights: FcvMappedEntry[]
   crewNameOverrides?: Record<string, string>
+  /** Set for flights that went through crew review; drives person catalog bootstrap on `rename`. */
+  crewOverrideModes?: Record<string, CrewOverrideMode>
+}
+
+function normalizePersonEntityIdForCatalog(displayName: string): string {
+  return displayName.trim().toLowerCase()
+}
+
+/**
+ * Ensure a person catalog row exists so future FCV imports can align to this name.
+ * Matches dashboard `addEntityTag` person `entity_id` normalization (lowercase).
+ */
+async function bootstrapPersonCatalogFromRename(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  displayName: string
+) {
+  const trimmed = displayName.trim()
+  if (!trimmed) return
+
+  const entityId = normalizePersonEntityIdForCatalog(trimmed)
+  if (!entityId) return
+
+  let tag = trimmed
+  const tryInsert = async (t: string) => {
+    const { error } = await supabase.from('catalog_entity_tags').insert({
+      user_id: userId,
+      entity_type: 'person',
+      entity_id: entityId,
+      tag: t,
+    })
+    return error
+  }
+
+  let err = await tryInsert(tag)
+  if (err?.code === '23505') return
+  if (!err) return
+
+  tag = 'crew'
+  err = await tryInsert(tag)
+  if (err?.code === '23505') return
+  if (err) {
+    console.error('FCV import: person catalog bootstrap failed', err)
+  }
 }
 
 interface CrewReviewCandidate {
@@ -59,6 +106,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const crewNameOverrides = body?.crewNameOverrides ?? {}
+  const crewOverrideModes = body?.crewOverrideModes ?? {}
   const supabase = getSupabaseClient(event)
   const { data: existingRows, error: existingRowsError } = await supabase
     .from('log_entries')
@@ -256,6 +304,15 @@ export default defineEventHandler(async (event) => {
       continue
     }
     inserted++
+
+    const mode = crewOverrideModes[fcvId]
+    if (mode === 'rename') {
+      const resolved =
+        typeof crewNameOverrides[fcvId] === 'string' ? crewNameOverrides[fcvId].trim() : ''
+      if (resolved) {
+        await bootstrapPersonCatalogFromRename(supabase, userId, resolved)
+      }
+    }
   }
 
   await supabase

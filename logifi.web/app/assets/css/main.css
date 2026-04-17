@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Logifi theme is `html.dark` / `html.light` from `useTheme()`, not OS media alone. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 .font-quicksand {
   font-family: 'Quicksand', sans-serif;
 }
