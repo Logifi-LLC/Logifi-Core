@@ -108,23 +108,25 @@
           >
             Feedback
           </NuxtLink>
-          <button
-            type="button"
-            class="hidden sm:inline-flex items-center text-xs sm:text-sm font-medium font-quicksand transition-colors mr-2"
-            :class="[
-              isDarkMode
-                ? 'text-gray-300 hover:text-blue-400'
-                : 'text-gray-600 hover:text-blue-600'
-            ]"
-            aria-label="Open FC View fetch section"
-            @click="openFcvFetchSection"
-          >
-            FC View Fetch
-          </button>
-          <div
-            class="h-4 w-px bg-gray-200"
-            :class="isDarkMode ? 'bg-gray-700' : 'bg-gray-200'"
-          ></div>
+          <template v-if="dashboardFcvConnected">
+            <button
+              type="button"
+              class="hidden sm:inline-flex items-center text-xs sm:text-sm font-medium font-quicksand transition-colors mr-2"
+              :class="[
+                isDarkMode
+                  ? 'text-gray-300 hover:text-blue-400'
+                  : 'text-gray-600 hover:text-blue-600'
+              ]"
+              aria-label="Open FC View fetch section"
+              @click="openFcvFetchSection"
+            >
+              FC View Fetch
+            </button>
+            <div
+              class="h-4 w-px bg-gray-200"
+              :class="isDarkMode ? 'bg-gray-700' : 'bg-gray-200'"
+            ></div>
+          </template>
           <button
             type="button"
             @click="showSettingsModal = true"
@@ -145,7 +147,7 @@
 
     <main :class="['min-h-screen flex flex-col pt-40 pb-20 px-4 sm:px-6 lg:px-8 transition-colors duration-300 overflow-x-auto', isDarkMode ? '' : '']">
       <section
-        v-show="showFcvFetchPanel"
+        v-show="showFcvFetchPanel && dashboardFcvConnected"
         ref="fcvFetchSectionRef"
         :class="[
           'mr-auto mb-8 w-full rounded-2xl border p-4 sm:p-6 space-y-4',
@@ -6509,7 +6511,7 @@ import {
 const isBrowser = typeof window !== 'undefined'
 
 // Authentication setup
-const { user, isAuthenticated, isLoading: authLoading, signOut: authSignOut } = useAuth()
+const { user, isAuthenticated, isLoading: authLoading, signOut: authSignOut, session } = useAuth()
 
 // Account settings state
 const accountEmail = ref(user.value?.email ?? '')
@@ -6735,11 +6737,39 @@ const logEntries = ref<LogEntry[]>([])
 
 // Logout function
 const router = useRouter()
+const route = useRoute()
+
+/** Header “FC View Fetch” only when FC View OAuth is connected (see `/api/fcv/status`). */
+const dashboardFcvConnected = ref(false)
+const showFcvFetchPanel = ref(false)
+
+async function refreshDashboardFcvStatus(): Promise<void> {
+  if (!isAuthenticated.value) {
+    dashboardFcvConnected.value = false
+    return
+  }
+  const token = session.value?.access_token
+  if (!token) {
+    dashboardFcvConnected.value = false
+    return
+  }
+  try {
+    const data = await $fetch<{ connected: boolean }>('/api/fcv/status', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    dashboardFcvConnected.value = Boolean(data?.connected)
+  } catch {
+    dashboardFcvConnected.value = false
+  }
+}
+
 const handleLogout = async () => {
   await authSignOut()
   logEntries.value = []
   showSettingsModal.value = false
   showAuthModal.value = false
+  dashboardFcvConnected.value = false
+  showFcvFetchPanel.value = false
   router.push('/?from=app')
 }
 
@@ -6780,8 +6810,34 @@ watch(isAuthenticated, async (authenticated) => {
   } else if (!authenticated) {
     // Show auth modal when not authenticated
     showAuthModal.value = true
+    dashboardFcvConnected.value = false
+    showFcvFetchPanel.value = false
   }
 }, { immediate: true })
+
+watch(
+  [isAuthenticated, () => session.value?.access_token],
+  ([authed, token]) => {
+    if (authed && token) {
+      void refreshDashboardFcvStatus()
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => route.query.fcv,
+  (val) => {
+    if (val === 'connected' && isAuthenticated.value) {
+      void refreshDashboardFcvStatus()
+    }
+  },
+  { immediate: true }
+)
+
+watch(dashboardFcvConnected, (c) => {
+  if (!c) showFcvFetchPanel.value = false
+})
 
 // Show auth modal if not authenticated after loading
 watch(authLoading, (loading) => {
@@ -7705,7 +7761,6 @@ const tableHeaderRef = ref<HTMLElement | null>(null)
 const tableContainerRef = ref<HTMLElement | null>(null)
 const tableRef = ref<HTMLTableElement | null>(null)
 const showScrollToTop = ref(false)
-const showFcvFetchPanel = ref(false)
 const handleScroll = (): void => {
   if (!isBrowser) return
   const scrollTop = window.scrollY || document.documentElement.scrollTop
