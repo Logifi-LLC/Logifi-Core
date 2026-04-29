@@ -282,8 +282,22 @@
               </div>
             </button>
               <div v-show="catalogOpenState[section.key]" class="mt-3 space-y-3">
+                <label class="block">
+                  <span class="sr-only">Search {{ section.label }}</span>
+                  <input
+                    v-model="catalogSearchTerms[section.key]"
+                    type="text"
+                    :placeholder="`Search ${section.label.toLowerCase()}...`"
+                    :class="[
+                      'w-full rounded-lg border px-2.5 py-1.5 text-xs font-quicksand',
+                      isDarkMode
+                        ? 'bg-black/20 border-white/10 text-white placeholder-gray-500 shadow-inner'
+                        : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500',
+                    ]"
+                  />
+                </label>
                 <div
-                    v-if="(section.key !== 'aircraft' && catalogs[section.key].length === 0) || (section.key === 'aircraft' && (!catalogs.families || catalogs.families.length === 0))"
+                    v-if="(section.key !== 'aircraft' && getFilteredCatalogItemsForSection(section.key).length === 0) || (section.key === 'aircraft' && getFilteredAircraftFamilies().length === 0)"
                   :class="['text-xs italic font-quicksand', isDarkMode ? 'text-gray-500' : 'text-gray-400']"
                 >
                   No records yet.
@@ -292,7 +306,7 @@
                   <!-- Aircraft: family tree -->
                   <template v-if="section.key === 'aircraft'">
                     <ul :class="['space-y-2 text-sm max-h-56 overflow-y-auto pr-1 font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
-                      <li v-for="fam in catalogs.families || []" :key="'fam-' + fam" class="space-y-1">
+                      <li v-for="fam in getFilteredAircraftFamilies()" :key="'fam-' + fam" class="space-y-1">
                         <div class="flex items-center justify-between">
                           <div class="flex items-center gap-2">
                             <input
@@ -320,7 +334,7 @@
                         </div>
                         <ul v-show="familyOpenState[fam]" class="ml-7 space-y-1">
                           <li
-                            v-for="item in catalogs.familyToItems?.[fam] || []"
+                            v-for="item in getFilteredAircraftItems(fam)"
                             :key="'fam-item-' + fam + '-' + item"
                             class="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
                             @click="showAircraftInfo(item)"
@@ -352,7 +366,7 @@
                   ]"
                 >
                   <li
-                    v-for="item in catalogs[section.key]"
+                    v-for="item in getFilteredCatalogItemsForSection(section.key)"
                     :key="`${section.key}-${item}`"
                     :class="[
                       'flex items-center gap-2',
@@ -8601,6 +8615,12 @@ const selectedFilters = reactive({
   flagged: false, // filter for flagged entries
   tags: {} as Record<string, boolean> // key: tag label (e.g., 'Checkride', 'IPC')
 })
+const catalogSearchTerms = reactive<Record<CatalogKey, string>>({
+  aircraft: '',
+  airports: '',
+  pilots: '',
+  categoryClass: '',
+})
 // Aircraft family section open/closed state
 const familyOpenState = reactive<Record<string, boolean>>({})
 // Totals time filter
@@ -11357,6 +11377,43 @@ function toggleCatalogSection(key: CatalogKey): void {
   catalogOpenState[key] = !catalogOpenState[key]
 }
 
+function normalizedCatalogSearch(key: CatalogKey): string {
+  return (catalogSearchTerms[key] || '').trim().toLowerCase()
+}
+
+function getFilteredCatalogItems(key: Exclude<CatalogKey, 'aircraft'>): string[] {
+  const items = catalogs.value[key] || []
+  const query = normalizedCatalogSearch(key)
+  if (!query) return items
+  return items.filter((item) => item.toLowerCase().includes(query))
+}
+
+function getFilteredCatalogItemsForSection(key: CatalogKey): string[] {
+  if (key === 'aircraft') return []
+  return getFilteredCatalogItems(key)
+}
+
+function getFilteredAircraftFamilies(): string[] {
+  const families = catalogs.value.families || []
+  const query = normalizedCatalogSearch('aircraft')
+  if (!query) return families
+  return families.filter((fam) => {
+    const display = (catalogs.value.familyDisplayName?.[fam] ?? fam).toLowerCase()
+    if (display.includes(query) || fam.toLowerCase().includes(query)) return true
+    const items = catalogs.value.familyToItems?.[fam] || []
+    return items.some((item) => item.toLowerCase().includes(query))
+  })
+}
+
+function getFilteredAircraftItems(fam: string): string[] {
+  const items = catalogs.value.familyToItems?.[fam] || []
+  const query = normalizedCatalogSearch('aircraft')
+  if (!query) return items
+  const display = (catalogs.value.familyDisplayName?.[fam] ?? fam).toLowerCase()
+  if (display.includes(query) || fam.toLowerCase().includes(query)) return items
+  return items.filter((item) => item.toLowerCase().includes(query))
+}
+
 function formatOOOIInput(value: string): string {
   // Remove non-digits and limit to 4 characters
   return value.replace(/\D/g, '').slice(0, 4)
@@ -11510,6 +11567,10 @@ function clearAllFilters(): void {
   selectedFilters.categoryClass = {}
   selectedFilters.flagged = false
   selectedFilters.tags = {}
+  catalogSearchTerms.aircraft = ''
+  catalogSearchTerms.airports = ''
+  catalogSearchTerms.pilots = ''
+  catalogSearchTerms.categoryClass = ''
 }
 
 // Aircraft family normalization (maps model variants to a base family)
@@ -14444,8 +14505,11 @@ const catalogs = computed<CatalogsValue>(() => {
   const familiesSet = new Set<string>()
   const familyMakeModelCounts: Record<string, Record<string, number>> = {}
   const familyToItemsMap: Record<string, Set<string>> = {}
+  const entriesForActiveCatalog = logEntries.value.filter(
+    (entry) => getEntryLogbookType(entry) === activeLogbook.value
+  )
 
-  logEntries.value.forEach((entry) => {
+  entriesForActiveCatalog.forEach((entry) => {
     const makeModel = entry.aircraftMakeModel.trim()
     const tail = entry.registration.trim().toUpperCase()
     if (makeModel || tail) {
@@ -14484,7 +14548,7 @@ const catalogs = computed<CatalogsValue>(() => {
   }
 
   // Build items using display name so parent and children match and renames show up
-  logEntries.value.forEach((entry) => {
+  entriesForActiveCatalog.forEach((entry) => {
     const makeModel = entry.aircraftMakeModel.trim()
     const tail = entry.registration.trim().toUpperCase()
     if (makeModel) {

@@ -120,13 +120,7 @@
             into your logbook. The following notices are required by the Flight Crew View Logbook API
             Access Policy and are reproduced verbatim:
           </p>
-          <div class="not-prose rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-800 space-y-2 mb-4">
-            <p class="font-semibold">
-              Uses the Flight Crew View Logbook API. Not affiliated with Flight Crew View.
-            </p>
-            <p>For logbook purposes only. Not for flight planning or operational use.</p>
-            <p>Requires an active Flight Crew View subscription (sold separately).</p>
-          </div>
+          <FcvApiDisclaimers class="not-prose mb-4" tone="marketing" />
           <p class="text-gray-700 leading-relaxed">
             Additional detail:
             <NuxtLink to="/data-sources" class="text-blue-600 hover:underline">Data sources &amp; third-party APIs</NuxtLink>.
@@ -155,6 +149,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from '#imports'
+import FcvApiDisclaimers from '~/components/fcv/FcvApiDisclaimers.vue'
 
 const route = useRoute()
 const router = useRouter()

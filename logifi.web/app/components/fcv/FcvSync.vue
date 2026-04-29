@@ -60,6 +60,7 @@ const { session, isAuthenticated } = useAuth()
 
 const connected = ref<boolean>(false)
 const loadingStatus = ref(false)
+const disconnecting = ref(false)
 const loadingFetch = ref(false)
 const loadingSinceLast = ref(false)
 const loadingImport = ref(false)
@@ -246,6 +247,36 @@ async function connectFcv() {
     }
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to start FC View connection'
+  }
+}
+
+async function disconnectFcv() {
+  if (!isAuthenticated.value || disconnecting.value) return
+  disconnecting.value = true
+  error.value = null
+  try {
+    await $fetch<{ success: boolean }>('/api/fcv/disconnect', {
+      method: 'POST',
+      headers: authHeaders(),
+    })
+    connected.value = false
+    showPreviewModal.value = false
+    previewFlights.value = []
+    sinceLastEntryOmittedAlreadyImported.value = 0
+    includeDuplicatesInImport.value = false
+    includeAlreadyImportedInImport.value = false
+    heuristicDuplicateIndices.value = new Set()
+    alreadyImportedIndices.value = new Set()
+    perFlightEnrichment.value = {}
+    expandedEnrichmentRows.value = new Set()
+    crewReviewCandidates.value = []
+    crewResolutionMode.value = {}
+    crewPickSelection.value = {}
+    crewRenameText.value = {}
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to disconnect FC View'
+  } finally {
+    disconnecting.value = false
   }
 }
 
@@ -567,6 +598,7 @@ const isConnectOnly = computed(() => props.mode === 'connect')
 const isFetchOnly = computed(() => props.mode === 'fetch')
 const showConnectCta = computed(() => !isFetchOnly.value && !connected.value)
 const showFetchControls = computed(() => !isConnectOnly.value && connected.value)
+const showConnectManage = computed(() => isConnectOnly.value && connected.value)
 const showFetchNeedsConnection = computed(
   () => isFetchOnly.value && !loadingStatus.value && !connected.value
 )
@@ -807,6 +839,27 @@ const inputClass = computed(() =>
             {{ loadingSinceLast ? 'Loading…' : 'Since last entry' }}
           </button>
         </div>
+      </div>
+    </template>
+    <template v-else-if="showConnectManage">
+      <p :class="['text-sm mb-4', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+        FC View is connected. You can disconnect at any time.
+      </p>
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <button
+          type="button"
+          :disabled="disconnecting"
+          :class="[
+            'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-colors border disabled:opacity-50 disabled:cursor-not-allowed',
+            isDarkMode
+              ? 'border-red-800/70 text-red-400 hover:bg-red-950/40'
+              : 'border-red-200 text-red-600 hover:bg-red-50',
+          ]"
+          @click="disconnectFcv"
+        >
+          <Icon name="ri:plug-disconnect-line" size="18" class="shrink-0" />
+          {{ disconnecting ? 'Disconnecting…' : 'Disconnect FC View' }}
+        </button>
       </div>
     </template>
     <template v-else-if="showFetchNeedsConnection">

@@ -47,18 +47,7 @@
           </li>
         </ul>
 
-        <div class="mt-8 rounded-xl bg-gray-50/80 border border-gray-200 p-5 text-sm text-gray-700 shadow-sm">
-          <div class="flex items-start gap-3">
-            <Icon name="ri:information-line" size="20" class="shrink-0 mt-0.5 text-blue-600" />
-            <div class="space-y-1.5 leading-relaxed">
-              <p class="font-medium text-gray-900">
-                Uses the Flight Crew View Logbook API. Not affiliated with Flight Crew View.
-              </p>
-              <p>For logbook purposes only. Not for flight planning or operational use.</p>
-              <p>Requires an active Flight Crew View subscription (sold separately).</p>
-            </div>
-          </div>
-        </div>
+        <FcvApiDisclaimers class="mt-8" tone="marketing" />
       </div>
 
       <footer class="mt-12 pt-8 border-t border-gray-200 text-center text-sm text-gray-500">
@@ -71,6 +60,8 @@
 </template>
 
 <script setup lang="ts">
+import FcvApiDisclaimers from '~/components/fcv/FcvApiDisclaimers.vue'
+
 useHead({
   title: 'Pricing | Logifi',
   meta: [
