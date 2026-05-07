@@ -22,10 +22,22 @@ export default defineEventHandler(async (event) => {
   const authorizeUrl = clean(config.fcvAuthorizeUrl)
   const secret = clean(config.fcvClientSecret)
 
-  if (!clientId || !redirectUri || !authorizeUrl || !secret) {
+  const missingKeys = [
+    !clientId && 'FCV_CLIENT_ID',
+    !secret && 'FCV_CLIENT_SECRET',
+    !redirectUri && 'FCV_REDIRECT_URI',
+    !authorizeUrl && 'FCV_AUTHORIZE_URL',
+  ].filter((x): x is string => Boolean(x))
+
+  if (missingKeys.length > 0) {
     throw createError({
       statusCode: 503,
       statusMessage: 'FC View integration is not configured',
+      data: {
+        code: 'FCV_NOT_CONFIGURED',
+        missingKeys,
+        hint: 'Set these in Vercel Environment Variables (or .env locally), then redeploy.',
+      },
     })
   }
 

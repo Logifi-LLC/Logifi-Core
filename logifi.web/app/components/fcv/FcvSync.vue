@@ -245,7 +245,19 @@ async function connectFcv() {
     if (data?.redirectUrl) {
       window.location.href = data.redirectUrl
     }
-  } catch (e) {
+  } catch (e: unknown) {
+    const status =
+      e &&
+      typeof e === 'object' &&
+      'statusCode' in e &&
+      typeof (e as { statusCode: unknown }).statusCode === 'number'
+        ? (e as { statusCode: number }).statusCode
+        : undefined
+    if (status === 503) {
+      error.value =
+        'FC View connection isn’t available on this app right now. Please try again later.'
+      return
+    }
     error.value = e instanceof Error ? e.message : 'Failed to start FC View connection'
   }
 }
