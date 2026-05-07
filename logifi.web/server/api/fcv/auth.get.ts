@@ -1,13 +1,13 @@
 import { defineEventHandler, createError } from 'h3'
 import { getUserIdFromEvent } from '../../utils/supabase'
 import { createFcvState } from '../../utils/fcvState'
+import { getFcvIntegrationEnv } from '../../utils/fcvEnv'
 
 /**
  * Start FC View OAuth: validate user, return redirect URL to FC View authorize endpoint.
  * Client must call with Authorization: Bearer <supabase_access_token>, then redirect the user to the returned redirectUrl.
  */
 export default defineEventHandler(async (event) => {
-  const clean = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
   const userId = await getUserIdFromEvent(event)
   if (!userId) {
     throw createError({
@@ -16,11 +16,11 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const config = useRuntimeConfig()
-  const clientId = clean(config.fcvClientId)
-  const redirectUri = clean(config.fcvRedirectUri)
-  const authorizeUrl = clean(config.fcvAuthorizeUrl)
-  const secret = clean(config.fcvClientSecret)
+  const fcv = getFcvIntegrationEnv()
+  const clientId = fcv.clientId
+  const redirectUri = fcv.redirectUri
+  const authorizeUrl = fcv.authorizeUrl
+  const secret = fcv.clientSecret
 
   const missingKeys = [
     !clientId && 'FCV_CLIENT_ID',

@@ -1,6 +1,7 @@
 import type { H3Event } from 'h3'
 import { getSupabaseClient, getUserIdFromEvent } from './supabase'
 import { fetchFcvWithRetry } from './fcvRetryFetch'
+import { getFcvIntegrationEnv } from './fcvEnv'
 
 const EXPIRY_BUFFER_MS = 60 * 1000 // refresh if expires within 60 seconds
 
@@ -12,10 +13,7 @@ export async function getValidFcvAccessToken(event: H3Event): Promise<string | n
   const userId = await getUserIdFromEvent(event)
   if (!userId) return null
 
-  const config = useRuntimeConfig()
-  const tokenUrl = config.fcvTokenUrl as string
-  const clientId = config.fcvClientId as string
-  const clientSecret = config.fcvClientSecret as string
+  const { tokenUrl, clientId, clientSecret } = getFcvIntegrationEnv()
 
   if (!tokenUrl || !clientId || !clientSecret) return null
 

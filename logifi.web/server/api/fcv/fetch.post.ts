@@ -3,6 +3,7 @@ import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import { getValidFcvAccessToken } from '../../utils/fcvToken'
 import { mapFcvFlightToEntry, type FcvFlight, type FcvMappedEntry } from '../../utils/fcvMap'
 import { fetchFcvWithRetry } from '../../utils/fcvRetryFetch'
+import { getFcvIntegrationEnv } from '../../utils/fcvEnv'
 
 interface FetchBody {
   dateFrom: string
@@ -50,8 +51,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const config = useRuntimeConfig()
-  const apiBase = (config.fcvApiBaseUrl as string).replace(/\/$/, '')
+  const apiBase = getFcvIntegrationEnv().apiBaseUrl.replace(/\/$/, '')
   if (!apiBase) {
     throw createError({
       statusCode: 503,

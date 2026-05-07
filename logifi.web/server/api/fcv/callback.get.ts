@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import type { Database } from '../../../app/types/database'
 import { verifyFcvState } from '../../utils/fcvState'
 import { fetchFcvWithRetry } from '../../utils/fcvRetryFetch'
+import { getFcvIntegrationEnv } from '../../utils/fcvEnv'
 
 const clean = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
 
@@ -84,11 +85,12 @@ export default defineEventHandler(async (event) => {
   }
 
   const config = useRuntimeConfig()
-  const secret = clean(config.fcvClientSecret)
-  const clientId = clean(config.fcvClientId)
-  const clientSecret = clean(config.fcvClientSecret)
-  const redirectUri = clean(config.fcvRedirectUri)
-  const tokenUrl = clean(config.fcvTokenUrl)
+  const fcv = getFcvIntegrationEnv()
+  const secret = fcv.clientSecret
+  const clientId = fcv.clientId
+  const clientSecret = fcv.clientSecret
+  const redirectUri = fcv.redirectUri
+  const tokenUrl = fcv.tokenUrl
   const supabaseUrl = clean(config.public.supabaseUrl)
   const serviceRoleKey = clean(config.supabaseServiceRoleKey)
 
