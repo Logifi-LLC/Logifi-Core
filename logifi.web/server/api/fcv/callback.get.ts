@@ -85,14 +85,16 @@ export default defineEventHandler(async (event) => {
   }
 
   const config = useRuntimeConfig()
-  const fcv = getFcvIntegrationEnv()
+  const fcv = getFcvIntegrationEnv(event)
   const secret = fcv.clientSecret
   const clientId = fcv.clientId
   const clientSecret = fcv.clientSecret
   const redirectUri = fcv.redirectUri
   const tokenUrl = fcv.tokenUrl
   const supabaseUrl = clean(config.public.supabaseUrl)
-  const serviceRoleKey = clean(config.supabaseServiceRoleKey)
+  const serviceRoleKey = clean(
+    process.env.SUPABASE_SERVICE_ROLE_KEY || config.supabaseServiceRoleKey
+  )
 
   if (!code || !state) {
     console.error('[fcv/callback] Missing OAuth query params', {

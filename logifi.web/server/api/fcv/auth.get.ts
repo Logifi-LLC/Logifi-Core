@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const fcv = getFcvIntegrationEnv()
+  const fcv = getFcvIntegrationEnv(event)
   const clientId = fcv.clientId
   const redirectUri = fcv.redirectUri
   const authorizeUrl = fcv.authorizeUrl

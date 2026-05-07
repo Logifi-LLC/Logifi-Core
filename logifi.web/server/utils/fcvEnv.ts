@@ -1,11 +1,18 @@
+import type { H3Event } from 'h3'
+import { getRequestURL } from 'h3'
+
 /**
  * FC View OAuth/API URL resolution.
  *
  * Prefer live `process.env` (Vercel injects secrets when the serverless function runs).
  * Fall back to `runtimeConfig` (often filled from env at **build** time).
  * Also accept `NUXT_FCV_*` — Nuxt’s documented override shape for `runtimeConfig.fcv*`.
+ *
+ * When `event` is passed (OAuth routes only), if `FCV_REDIRECT_URI` is unset we use
+ * `{requestOrigin}/api/fcv/callback` so Preview deployments work without a per-branch env var.
+ * That exact URL must still be registered in the FC View OAuth client.
  */
-export function getFcvIntegrationEnv() {
+export function getFcvIntegrationEnv(event?: H3Event) {
   const config = useRuntimeConfig()
   const clean = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
   const pick = (...candidates: unknown[]) => {
@@ -14,6 +21,15 @@ export function getFcvIntegrationEnv() {
       if (s) return s
     }
     return ''
+  }
+
+  let redirectFromRequest = ''
+  if (event) {
+    try {
+      redirectFromRequest = `${getRequestURL(event).origin}/api/fcv/callback`
+    } catch {
+      redirectFromRequest = ''
+    }
   }
 
   return {
@@ -30,7 +46,8 @@ export function getFcvIntegrationEnv() {
     redirectUri: pick(
       process.env.FCV_REDIRECT_URI,
       process.env.NUXT_FCV_REDIRECT_URI,
-      config.fcvRedirectUri
+      config.fcvRedirectUri,
+      redirectFromRequest
     ),
     authorizeUrl: pick(
       process.env.FCV_AUTHORIZE_URL,
