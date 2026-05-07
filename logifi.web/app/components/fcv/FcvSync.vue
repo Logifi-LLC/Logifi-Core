@@ -684,20 +684,21 @@ onMounted(() => {
 
 const route = useRoute()
 watch(
-  () => route.query.fcv,
-  (val) => {
-    if (val === 'connected' && isAuthenticated.value) {
-      error.value = null
-      checkStatus()
-      return
-    }
-
+  [() => route.query.fcv, isAuthenticated, () => session.value?.access_token],
+  ([val, authed, token]) => {
     if (val === 'error') {
       const reason = route.query.reason
       error.value =
         typeof reason === 'string' && reason.trim()
           ? reason
           : 'FC View connection failed. Please verify your FC View client setup and try again.'
+      return
+    }
+
+    // OAuth redirect can arrive before session/token is ready; status fetch needs Bearer token.
+    if (val === 'connected' && authed && token) {
+      error.value = null
+      checkStatus()
     }
   },
   { immediate: true }

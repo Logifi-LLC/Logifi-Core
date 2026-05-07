@@ -94,8 +94,28 @@ export default defineEventHandler(async (event) => {
   const supabaseUrl = clean(config.public.supabaseUrl)
   const serviceRoleKey = clean(config.supabaseServiceRoleKey)
 
-  if (!code || !state || !secret || !clientId || !clientSecret || !redirectUri || !tokenUrl) {
-    return redirectWithFcvError(event, 'FC View callback is missing required parameters or configuration.')
+  if (!code || !state) {
+    console.error('[fcv/callback] Missing OAuth query params', {
+      hasCode: Boolean(code),
+      hasState: Boolean(state),
+    })
+    return redirectWithFcvError(
+      event,
+      'Authorization response was incomplete. Please try Connect FC View again.'
+    )
+  }
+
+  if (!secret || !clientId || !clientSecret || !redirectUri || !tokenUrl) {
+    console.error('[fcv/callback] FC View env incomplete at callback', {
+      hasClientId: Boolean(clientId),
+      hasClientSecret: Boolean(clientSecret),
+      hasRedirectUri: Boolean(redirectUri),
+      hasTokenUrl: Boolean(tokenUrl),
+    })
+    return redirectWithFcvError(
+      event,
+      'This deployment is missing FC View integration settings (including token endpoint). Check environment variables for Preview deployments and redeploy.'
+    )
   }
 
   const userId = verifyFcvState(state, secret)

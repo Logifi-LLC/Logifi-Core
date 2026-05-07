@@ -20,6 +20,7 @@ export default defineEventHandler(async (event) => {
   const clientId = fcv.clientId
   const redirectUri = fcv.redirectUri
   const authorizeUrl = fcv.authorizeUrl
+  const tokenUrl = fcv.tokenUrl
   const secret = fcv.clientSecret
 
   const missingKeys = [
@@ -27,6 +28,7 @@ export default defineEventHandler(async (event) => {
     !secret && 'FCV_CLIENT_SECRET',
     !redirectUri && 'FCV_REDIRECT_URI',
     !authorizeUrl && 'FCV_AUTHORIZE_URL',
+    !tokenUrl && 'FCV_TOKEN_URL',
   ].filter((x): x is string => Boolean(x))
 
   if (missingKeys.length > 0) {

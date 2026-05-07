@@ -6840,9 +6840,10 @@ watch(
 )
 
 watch(
-  () => route.query.fcv,
-  (val) => {
-    if (val === 'connected' && isAuthenticated.value) {
+  [() => route.query.fcv, isAuthenticated],
+  ([val, authed]) => {
+    // OAuth returns before client session may be hydrated; re-run when auth becomes ready.
+    if (val === 'connected' && authed) {
       void refreshDashboardFcvStatus()
     }
   },
