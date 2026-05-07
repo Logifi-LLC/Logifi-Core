@@ -1,4 +1,9 @@
-import { airports } from '@nwpr/airport-codes'
+/** Import JSON directly — package `index.esm.js` uses `require()`, which breaks in the browser. */
+import airportsJson from '@nwpr/airport-codes/dist/airports.json' with { type: 'json' }
+
+type AirportRow = { icao?: string; iata?: string }
+
+const airports = airportsJson as readonly AirportRow[]
 
 const icaoSet = new Set<string>()
 const iataToIcao = new Map<string, string>()

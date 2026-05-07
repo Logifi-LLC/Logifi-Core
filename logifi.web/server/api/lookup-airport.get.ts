@@ -6,7 +6,8 @@
  * Coordinate overrides fix known wrong data from the package (e.g. KMCX resolving to MCX Russia)
  */
 
-import { airports } from '@nwpr/airport-codes'
+/** Import JSON directly — package entry uses `require()`, which breaks client bundles if pulled in transitively. */
+import airportsJson from '@nwpr/airport-codes/dist/airports.json' with { type: 'json' }
 
 /** Coordinate overrides for airports where @nwpr/airport-codes has wrong or ambiguous data (e.g. KMCX → MCX Russia). */
 const COORDINATE_OVERRIDES: Record<string, { latitude: number; longitude: number; name?: string; city?: string; state?: string; country?: string }> = {
@@ -22,10 +23,13 @@ interface Airport {
   state?: string
   country?: string
   elevation?: number
+  altitude?: number
   latitude?: number
   longitude?: number
-  timezone?: string
+  timezone?: string | number
 }
+
+const airports = airportsJson as Airport[]
 
 export default defineEventHandler(async (event): Promise<{ success: boolean; data?: any; error?: string }> => {
   const query = getQuery(event)
@@ -92,7 +96,12 @@ export default defineEventHandler(async (event): Promise<{ success: boolean; dat
           city: airport.city || undefined,
           state: airport.state || undefined,
           country: airport.country || undefined,
-          elevation: airport.elevation ? `${airport.elevation} ft` : undefined,
+          elevation:
+            airport.elevation != null
+              ? `${airport.elevation} ft`
+              : airport.altitude != null
+                ? `${airport.altitude} ft`
+                : undefined,
           latitude: airport.latitude ? Number(airport.latitude) : undefined,
           longitude: airport.longitude ? Number(airport.longitude) : undefined,
           timezone: airport.timezone || undefined,
