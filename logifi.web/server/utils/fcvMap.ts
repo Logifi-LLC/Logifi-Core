@@ -99,6 +99,56 @@ export function parseFcvBlockToHours(block: unknown): number | null {
   return h + m / 60
 }
 
+function pickOutLocalDatetimeForGateDuration(f: FcvFlight): string | undefined {
+  const a = f.actual_out_local
+  const s = f.scheduled_out_local
+  if (typeof a === 'string' && a.trim().length >= 10) return a.trim()
+  if (typeof s === 'string' && s.trim().length >= 10) return s.trim()
+  return undefined
+}
+
+function pickInLocalDatetimeForGateDuration(f: FcvFlight): string | undefined {
+  const a = f.actual_in_local
+  const s = f.scheduled_in_local
+  if (typeof a === 'string' && a.trim().length >= 10) return a.trim()
+  if (typeof s === 'string' && s.trim().length >= 10) return s.trim()
+  return undefined
+}
+
+function parseFcvLocalDatetimeToUnixMs(dt: string): number | null {
+  const t = dt.trim()
+  const normalized = t.includes('T') ? t : t.replace(' ', 'T')
+  const ms = Date.parse(normalized)
+  return Number.isFinite(ms) ? ms : null
+}
+
+/**
+ * Gate-to-gate hours from FC View local OUT/IN datetimes (actual preferred, then scheduled),
+ * rounded to one decimal to match commercial OOOI duration in the dashboard.
+ */
+export function gateDurationHoursFromFcvLocalPair(flight: FcvFlight): number | null {
+  const outStr = pickOutLocalDatetimeForGateDuration(flight)
+  const inStr = pickInLocalDatetimeForGateDuration(flight)
+  if (!outStr || !inStr) return null
+  const outMs = parseFcvLocalDatetimeToUnixMs(outStr)
+  const inMs = parseFcvLocalDatetimeToUnixMs(inStr)
+  if (outMs === null || inMs === null) return null
+  let diffMin = (inMs - outMs) / 60000
+  if (diffMin < 0) diffMin += 24 * 60
+  if (diffMin <= 0 || diffMin > 24 * 60) return null
+  return Math.round((diffMin / 60) * 10) / 10
+}
+
+/**
+ * Block hours for flight_time / category_class_time: prefer gate OUT→IN from API datetimes
+ * when both ends exist so Total and XC match stored OOOI; otherwise FC View `block` HHMM.
+ */
+export function resolveFcvBlockHours(flight: FcvFlight): number | null {
+  const fromGate = gateDurationHoursFromFcvLocalPair(flight)
+  if (fromGate !== null && fromGate > 0 && fromGate <= 24) return fromGate
+  return parseFcvBlockToHours(flight.block)
+}
+
 /**
  * Parse FC View local datetime strings (e.g. "YYYY-MM-DD HH:MM:SS" or ISO-like)
  * into Logifi OOOI storage: four-digit "HHMM".
@@ -338,7 +388,7 @@ export function mapFcvFlightToEntry(flight: FcvFlight): FcvMappedEntry {
   const fcvId = String(flight.fcv_flight_id ?? '').trim()
   const depLocal = primaryDepartureLocal(flight)
   const date = localCalendarDateFromFcv(depLocal)
-  const blockHours = parseFcvBlockToHours(flight.block)
+  const blockHours = resolveFcvBlockHours(flight)
 
   const registration = normalizeRegistrationDisplay(flight.fcv_tail_number)
   const aircraftType = normalizeFcvAircraftType(flight.fcv_aircraft_type)

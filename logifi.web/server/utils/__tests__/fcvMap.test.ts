@@ -3,6 +3,8 @@ import {
   mapFcvFlightToEntry,
   parseFcvLocalDatetimeToHHMM,
   parseFcvBlockToHours,
+  gateDurationHoursFromFcvLocalPair,
+  resolveFcvBlockHours,
 } from '../fcvMap'
 
 describe('parseFcvLocalDatetimeToHHMM', () => {
@@ -48,7 +50,8 @@ describe('mapFcvFlightToEntry', () => {
       in: '1045',
       isZulu: false,
     })
-    const total = 1 + 35 / 60
+    // Gate OUT→IN (08:00–10:45) wins over `block` HHMM so Total/XC match OOOI
+    const total = 2.8
     expect(e.flight_time).toMatchObject({
       total,
       pic: total,
@@ -203,6 +206,22 @@ describe('mapFcvFlightToEntry', () => {
 
   it('parseFcvBlockToHours unchanged', () => {
     expect(parseFcvBlockToHours('0135')).toBeCloseTo(1 + 35 / 60)
+  })
+
+  it('gateDurationHoursFromFcvLocalPair matches commercial OOOI rounding', () => {
+    expect(
+      gateDurationHoursFromFcvLocalPair({
+        actual_out_local: '2026-04-17 08:21:00',
+        actual_in_local: '2026-04-17 09:59:00',
+      })
+    ).toBe(1.6)
+  })
+
+  it('resolveFcvBlockHours falls back to block HHMM when gate ends missing', () => {
+    expect(resolveFcvBlockHours({ block: '0154' })).toBeCloseTo(1 + 54 / 60)
+    expect(resolveFcvBlockHours({ scheduled_out_local: '2026-04-01 08:00:00', block: '0135' })).toBeCloseTo(
+      1 + 35 / 60
+    )
   })
 
   it('normalizes E75S to canonical ERJ-175 model', () => {

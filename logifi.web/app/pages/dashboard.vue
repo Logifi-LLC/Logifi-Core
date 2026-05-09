@@ -12896,6 +12896,7 @@ watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.in, 
           inlineEditEntry.value.flightTime.solo = block
           inlineEditEntry.value.flightTime.pic = block
        }
+       syncCrossCountryWithCommercialOooiTotal(inlineEditEntry.value, block)
      }
   } else if (inlineEditEntry.value.oooi.off && inlineEditEntry.value.oooi.on) {
      // Calculate from OFF to ON (air time)
@@ -12931,6 +12932,7 @@ watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.in, 
           inlineEditEntry.value.flightTime.solo = block
           inlineEditEntry.value.flightTime.pic = block
        }
+       syncCrossCountryWithCommercialOooiTotal(inlineEditEntry.value, block)
      }
   }
 }, { deep: true })
@@ -12954,6 +12956,45 @@ function getAirportCoordsFromCache(code: string): { lat: number; lon: number } |
   }
   
   return null
+}
+
+/** Align XC with OOOI-derived block when inline commercial edit recalculates total (parity with add-entry flow). */
+function syncCrossCountryWithCommercialOooiTotal(entry: LogEntry, blockHours: number): void {
+  if (!entry.departure?.trim() || !entry.destination?.trim()) return
+  if (entry.departure === 'UNKNOWN' || entry.destination === 'UNKNOWN') return
+  const dep = entry.departure.trim().toUpperCase()
+  const arr = entry.destination.trim().toUpperCase()
+  if (dep === arr) return
+
+  const xcValue = Math.round(blockHours * 10) / 10
+  const hasCcCondition = (entry.flightConditions || []).includes('crossCountry')
+  const MIN_CROSS_COUNTRY_DISTANCE_NM = 50
+  const depCoords = getAirportCoordsFromCache(entry.departure)
+  const destCoords = getAirportCoordsFromCache(entry.destination)
+
+  if (depCoords && destCoords) {
+    const distanceNm = calculateDistanceNM(
+      { latitude: depCoords.lat, longitude: depCoords.lon },
+      { latitude: destCoords.lat, longitude: destCoords.lon }
+    )
+    if (distanceNm >= MIN_CROSS_COUNTRY_DISTANCE_NM) {
+      entry.flightTime.crossCountry = xcValue
+      const indexCrossCountryLabel = entry.flightConditions.indexOf('Cross-Country')
+      if (indexCrossCountryLabel > -1) {
+        entry.flightConditions.splice(indexCrossCountryLabel, 1)
+      }
+      if (!entry.flightConditions.includes('crossCountry')) {
+        entry.flightConditions.push('crossCountry')
+      }
+    } else {
+      clearCrossCountryFromEntry(entry)
+    }
+    return
+  }
+
+  if (hasCcCondition) {
+    entry.flightTime.crossCountry = xcValue
+  }
 }
 
 // Auto-calculate night time based on OOOI and airport location
