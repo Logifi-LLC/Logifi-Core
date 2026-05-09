@@ -51,6 +51,11 @@ See [SETUP_INSTRUCTIONS.md](SETUP_INSTRUCTIONS.md) for detailed setup instructio
 - **[RELEASE_NOTES.md](RELEASE_NOTES.md)** - Phase 1 release notes
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history
 - **[PHASE1_ROADMAP.md](PHASE1_ROADMAP.md)** - Development roadmap and future plans
+- **[docs/oss-ui-and-architecture-guardrails.md](docs/oss-ui-and-architecture-guardrails.md)** - UI and code-structure contribution guardrails
+- **[docs/fcv-gate-b-pilot-request.md](docs/fcv-gate-b-pilot-request.md)** - FCV Gate B pilot request narrative and email template
+- **[docs/fcv-gate-b-artifact-pack.md](docs/fcv-gate-b-artifact-pack.md)** - FCV submission artifact and evidence checklist
+- **[docs/fcv-gate-b-submission-checklist.md](docs/fcv-gate-b-submission-checklist.md)** - FCV submission and follow-up tracker template
+- **[docs/fcv-pilot-operations-runbook.md](docs/fcv-pilot-operations-runbook.md)** - Pilot onboarding/offboarding and incident runbook
 
 ## Testing
 
