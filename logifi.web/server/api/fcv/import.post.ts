@@ -6,6 +6,7 @@ import type { Database } from '../../../app/types/database'
 import {
   alignMappedFcvEntry,
   buildAlignmentIndex,
+  buildCatalogPersonAlignmentSeeds,
   normalizeCrewNameForMatching,
   resolveCrewName,
 } from '../../utils/fcvAlignment'
@@ -124,7 +125,7 @@ export default defineEventHandler(async (event) => {
 
   const { data: personRows, error: personRowsError } = await supabase
     .from('catalog_entity_tags')
-    .select('entity_id')
+    .select('entity_id, tag')
     .eq('user_id', userId)
     .eq('entity_type', 'person')
 
@@ -136,16 +137,10 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const catalogPersonNames = [
-    ...new Set(
-      (personRows ?? [])
-        .map((r) => (typeof r.entity_id === 'string' ? r.entity_id.trim() : ''))
-        .filter((v) => v.length > 0)
-    ),
-  ]
+  const catalogPersons = buildCatalogPersonAlignmentSeeds(personRows ?? [])
 
   const alignmentIndex = buildAlignmentIndex(existingRows ?? [], {
-    catalogPersonNames,
+    catalogPersons,
   })
 
   const reviewCandidates: CrewReviewCandidate[] = []

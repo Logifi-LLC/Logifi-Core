@@ -21,7 +21,24 @@ interface TailIdentity {
   aircraft_category_class: string | null
 }
 
+/** One person in catalog_entity_tags after grouping by entity_id. */
+export interface CatalogPersonDisplay {
+  entityId: string
+  displayName: string
+}
+
+export interface CatalogPersonCatalogRow {
+  entity_id?: unknown
+  tag?: unknown
+}
+
 export interface AlignmentIndexBuildOptions {
+  /**
+   * Person catalog from DB (`entity_id` + `tag`). Processed first so FC View crew
+   * resolves to catalog display names (tags), not lowercase entity_id alone.
+   */
+  catalogPersons?: CatalogPersonDisplay[]
+  /** @deprecated Prefer catalogPersons; kept for tests — seeds displayName as given with entity key lowercased. */
   catalogPersonNames?: string[]
 }
 
@@ -181,6 +198,55 @@ function addCanonicalCrewName(
   crewCanonicalNames.add(name)
 }
 
+function pickBestPersonCatalogDisplayTag(entityId: string, tags: string[]): string {
+  if (!tags.length) return entityId
+  const keyEid = normalizeCrewNameForMatching(entityId)
+  const matching = tags.filter((t) => normalizeCrewNameForMatching(t) === keyEid)
+  const pool = matching.length > 0 ? matching : tags
+  return pool.reduce((best, t) => (t.length > best.length ? t : best), pool[0]!)
+}
+
+function seedCatalogPersonDisplay(
+  crewByNormalizedKey: Map<string, string>,
+  crewCanonicalNames: Set<string>,
+  entityId: string,
+  displayName: string
+): void {
+  const eid = entityId.trim().toLowerCase()
+  const display = displayName.trim()
+  if (!eid) return
+  const key = normalizeCrewNameForMatching(eid)
+  if (!key) return
+  const canonical = display || eid
+  if (!crewByNormalizedKey.has(key)) {
+    crewByNormalizedKey.set(key, canonical)
+  }
+  crewCanonicalNames.add(canonical)
+}
+
+/** Build FC View alignment seeds from `catalog_entity_tags` person rows (grouped by entity_id). */
+export function buildCatalogPersonAlignmentSeeds(
+  rows: CatalogPersonCatalogRow[]
+): CatalogPersonDisplay[] {
+  const byEntity = new Map<string, string[]>()
+  for (const r of rows) {
+    const eid = typeof r.entity_id === 'string' ? r.entity_id.trim().toLowerCase() : ''
+    if (!eid) continue
+    const tag = typeof r.tag === 'string' ? r.tag.trim() : ''
+    const arr = byEntity.get(eid) ?? []
+    if (tag) arr.push(tag)
+    byEntity.set(eid, arr)
+  }
+  const out: CatalogPersonDisplay[] = []
+  for (const [entityId, tags] of byEntity) {
+    out.push({
+      entityId,
+      displayName: pickBestPersonCatalogDisplayTag(entityId, tags),
+    })
+  }
+  return out
+}
+
 export function buildAlignmentIndex(
   rows: AlignmentIndexSourceRow[],
   options: AlignmentIndexBuildOptions = {}
@@ -189,9 +255,15 @@ export function buildAlignmentIndex(
   const crewByNormalizedKey = new Map<string, string>()
   const crewCanonicalNames = new Set<string>()
 
-  // Catalog names first: these are our canonical source of truth.
+  // Person catalog first (display tags), then legacy string list, then logbook rows.
+  for (const p of options.catalogPersons ?? []) {
+    if (!p.entityId?.trim()) continue
+    seedCatalogPersonDisplay(crewByNormalizedKey, crewCanonicalNames, p.entityId, p.displayName)
+  }
   for (const catalogName of options.catalogPersonNames ?? []) {
-    addCanonicalCrewName(crewByNormalizedKey, crewCanonicalNames, catalogName)
+    const n = typeof catalogName === 'string' ? catalogName.trim() : ''
+    if (!n) continue
+    seedCatalogPersonDisplay(crewByNormalizedKey, crewCanonicalNames, n.toLowerCase(), n)
   }
 
   for (const row of rows) {

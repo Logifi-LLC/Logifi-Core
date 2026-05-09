@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   alignMappedFcvEntry,
   buildAlignmentIndex,
+  buildCatalogPersonAlignmentSeeds,
   normalizeCrewNameForMatching,
   resolveCrewName,
 } from '../fcvAlignment'
@@ -9,6 +10,24 @@ import {
 describe('normalizeCrewNameForMatching', () => {
   it('normalizes LAST, FIRST formatting into FIRST LAST key', () => {
     expect(normalizeCrewNameForMatching('PEWTHERS, MAKAYLAJANE')).toBe('MAKAYLAJANE PEWTHERS')
+  })
+})
+
+describe('buildCatalogPersonAlignmentSeeds', () => {
+  it('chooses tag whose normalized form matches entity_id over unrelated tags', () => {
+    const seeds = buildCatalogPersonAlignmentSeeds([
+      { entity_id: 'jose infante', tag: 'Captain' },
+      { entity_id: 'jose infante', tag: 'Jose Infante' },
+    ])
+    expect(seeds).toEqual([{ entityId: 'jose infante', displayName: 'Jose Infante' }])
+  })
+
+  it('falls back to longest tag when none match normalized entity_id', () => {
+    const seeds = buildCatalogPersonAlignmentSeeds([
+      { entity_id: 'jose infante', tag: 'JI' },
+      { entity_id: 'jose infante', tag: 'Foo Bar' },
+    ])
+    expect(seeds[0]?.displayName).toBe('Foo Bar')
   })
 })
 
@@ -20,6 +39,15 @@ describe('resolveCrewName', () => {
     const result = resolveCrewName('PEWTHERS, MAKAYLA', index)
     expect(result.strategy).toBe('normalized')
     expect(result.resolvedName).toBe('Makayla Pewthers')
+  })
+
+  it('uses catalog display tag when catalog seeds use lowercase entity_id', () => {
+    const index = buildAlignmentIndex([], {
+      catalogPersons: [{ entityId: 'jose infante', displayName: 'Jose Infante' }],
+    })
+    const result = resolveCrewName('jose infante', index)
+    expect(result.strategy).toBe('normalized')
+    expect(result.resolvedName).toBe('Jose Infante')
   })
 
   it('returns ambiguous for weak fuzzy collisions', () => {
