@@ -3270,8 +3270,8 @@
                 >
                   {{ pilotInitials }}
                 </div>
-                <div>
-                  <h2 class="text-2xl font-semibold font-quicksand">
+                <div class="min-w-0 flex-1">
+                  <h2 class="text-2xl font-semibold font-quicksand break-words">
                     {{ pilotProfile.name || 'Add your name' }}
                   </h2>
                   <p :class="['text-sm mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
@@ -3282,9 +3282,57 @@
                   </p>
                 </div>
               </div>
-              
-              <!-- REPLACED INNER PROFILE CONTENT -->
-<div class="grid gap-6 lg:grid-cols-3">
+
+              <div
+                class="flex flex-wrap gap-2 mb-6"
+                role="tablist"
+                aria-label="Pilot profile sections"
+              >
+                <button
+                  id="pilot-profile-tab-form"
+                  type="button"
+                  role="tab"
+                  :aria-selected="pilotProfileSubTab === 'profile'"
+                  aria-controls="pilot-profile-panel-profile"
+                  :class="[
+                    'px-4 py-2 rounded-full text-sm font-medium font-quicksand transition-colors',
+                    pilotProfileSubTab === 'profile'
+                      ? 'bg-blue-600 text-white'
+                      : isDarkMode
+                        ? 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                        : 'bg-white text-gray-600 border border-[#d1d8d6] hover:bg-gray-50'
+                  ]"
+                  @click="pilotProfileSubTab = 'profile'"
+                >
+                  Profile &amp; 8710
+                </button>
+                <button
+                  id="pilot-profile-tab-stats"
+                  type="button"
+                  role="tab"
+                  :aria-selected="pilotProfileSubTab === 'stats'"
+                  aria-controls="pilot-profile-panel-stats"
+                  :class="[
+                    'px-4 py-2 rounded-full text-sm font-medium font-quicksand transition-colors',
+                    pilotProfileSubTab === 'stats'
+                      ? 'bg-blue-600 text-white'
+                      : isDarkMode
+                        ? 'bg-gray-800 text-gray-400 hover:text-gray-200'
+                        : 'bg-white text-gray-600 border border-[#d1d8d6] hover:bg-gray-50'
+                  ]"
+                  @click="pilotProfileSubTab = 'stats'"
+                >
+                  Stats &amp; currency
+                </button>
+              </div>
+
+              <div class="space-y-6">
+                <div
+                  v-show="pilotProfileSubTab === 'profile'"
+                  id="pilot-profile-panel-profile"
+                  role="tabpanel"
+                  aria-labelledby="pilot-profile-tab-form"
+                >
           <div
             :class="[
               'space-y-4 rounded-2xl border p-4 sm:p-6',
@@ -3341,10 +3389,10 @@
               </label>
               <textarea
                 v-model="pilotProfile.certificates"
-                rows="3"
+                rows="5"
                 placeholder="Commercial ASEL · Instrument Airplane · Advanced Ground Instructor"
                 :class="[
-                  'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
+                  'w-full min-h-[6.5rem] resize-y rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
                   isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                 ]"
               ></textarea>
@@ -3355,10 +3403,10 @@
               </label>
               <textarea
                 v-model="pilotProfile.flightGoals"
-                rows="3"
+                rows="5"
                 placeholder="Instrument currency, mountain flying checkout, CFI prep..."
                 :class="[
-                  'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
+                  'w-full min-h-[6.5rem] resize-y rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
                   isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                 ]"
               ></textarea>
@@ -3369,10 +3417,10 @@
               </label>
               <textarea
                 v-model="pilotProfile.notes"
-                rows="3"
+                rows="5"
                 placeholder="Preferred instructors, aircraft quirks, reminders..."
                 :class="[
-                  'w-full rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
+                  'w-full min-h-[6.5rem] resize-y rounded-xl border px-4 py-2.5 font-quicksand focus:outline-none focus:ring-2 transition-colors duration-200',
                   isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                 ]"
               ></textarea>
@@ -3430,7 +3478,7 @@
                       isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                     ]"
                   />
-                  <div class="grid gap-2 sm:grid-cols-3">
+                  <div class="grid gap-2 grid-cols-1 sm:grid-cols-3">
                     <input
                       v-model="pilotProfile.residentialCity"
                       type="text"
@@ -3476,7 +3524,7 @@
                       isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner focus:ring-blue-500/50' : 'bg-white border-[#d1d8d6] text-gray-900 focus:ring-blue-500'
                     ]"
                   />
-                  <div class="grid gap-2 sm:grid-cols-3">
+                  <div class="grid gap-2 grid-cols-1 sm:grid-cols-3">
                     <input
                       v-model="pilotProfile.mailingCity"
                       type="text"
@@ -3526,8 +3574,15 @@
               </div>
             </div>
           </div>
+                </div>
 
-          <div class="lg:col-span-2 space-y-6">
+                <div
+                  v-show="pilotProfileSubTab === 'stats'"
+                  id="pilot-profile-panel-stats"
+                  role="tabpanel"
+                  aria-labelledby="pilot-profile-tab-stats"
+                  class="space-y-6"
+                >
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <div
                 v-for="card in pilotStatCards"
@@ -3559,7 +3614,7 @@
                 <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
                   Favorite Aircraft
                 </p>
-                <p class="text-lg font-semibold mt-1">
+                <p class="text-lg font-semibold mt-1 break-words">
                   {{ pilotProfileStats.favoriteAircraft || '—' }}
                 </p>
                 <p :class="['text-xs mt-1', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
@@ -3575,7 +3630,7 @@
                 <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
                   Favorite Route
                 </p>
-                <p class="text-lg font-semibold mt-1">
+                <p class="text-lg font-semibold mt-1 break-words">
                   {{ pilotProfileStats.favoriteRoute || '—' }}
                 </p>
                 <p :class="['text-xs mt-1', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
@@ -3758,7 +3813,7 @@
                     Latest three entries across your logbook
                   </p>
                 </div>
-                <div v-if="pilotProfileStats.longestLeg" :class="['text-right text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
+                <div v-if="pilotProfileStats.longestLeg" :class="['text-right text-xs min-w-0 break-words sm:max-w-[55%]', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
                   <p class="font-semibold uppercase tracking-wide">Longest Leg</p>
                   <p>{{ pilotProfileStats.longestLeg.route }}</p>
                   <p>{{ pilotProfileStats.longestLeg.duration.toFixed(1) }} hrs · {{ formatDisplayDate(pilotProfileStats.longestLeg.date) }}</p>
@@ -3769,11 +3824,11 @@
                   v-for="flight in pilotRecentFlights"
                   :key="flight.id"
                   :class="[
-                    'rounded-2xl border px-4 py-3 flex items-center justify-between gap-4',
+                    'rounded-2xl border px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4',
                     isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-200 bg-gray-100'
                   ]"
                 >
-                  <div>
+                  <div class="min-w-0 sm:flex-1 break-words">
                     <p class="text-sm font-semibold">
                       {{ formatDisplayDate(flight.date) }}
                     </p>
@@ -3784,7 +3839,7 @@
                       {{ flight.trainingInstructor || '—' }}
                     </p>
                   </div>
-                  <div class="text-right">
+                  <div class="min-w-0 text-left sm:text-right sm:shrink-0 break-words">
                     <p class="font-semibold">
                       {{ flight.aircraftMakeModel || '—' }}
                     </p>
@@ -3809,8 +3864,8 @@
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+                </div>
+              </div>
         
             </div>
 
@@ -8220,6 +8275,11 @@ const catalogOpenState = reactive<Record<CatalogKey, boolean>>({
 const isSidebarCollapsed = ref(false)
 const showSettingsModal = ref(false)
 const activeSettingsTab = ref<'profile' | 'account' | 'preferences' | 'data' | 'compliance' | 'advanced'>('profile')
+/** Sub-panes inside Settings → Pilot Profile (full-width each). */
+const pilotProfileSubTab = ref<'profile' | 'stats'>('profile')
+watch(activeSettingsTab, (tab) => {
+  if (tab === 'profile') pilotProfileSubTab.value = 'profile'
+})
 const settingsTabTitle = computed(() => {
   switch (activeSettingsTab.value) {
     case 'profile':
