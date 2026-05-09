@@ -40,6 +40,12 @@
 
         <section class="mb-10">
           <h2 class="text-xl font-bold font-quicksand text-gray-900 mb-3 dark:text-white">Flight Crew View</h2>
+          <p
+            v-if="showPill"
+            class="not-prose text-sm text-gray-600 mb-3 dark:text-gray-400"
+          >
+            {{ subcopy }}
+          </p>
           <p class="text-gray-700 leading-relaxed mb-3 dark:text-gray-300">
             If you choose to connect Flight Crew View, you complete OAuth on FC View’s side. Our
             <strong>server</strong> exchanges the authorization code for access and refresh tokens and
@@ -125,11 +131,13 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from '#imports'
 import { useAuth } from '~/composables/useAuth'
+import { useFcvUiLabel } from '~/composables/useFcvUiLabel'
 import FcvApiDisclaimers from '~/components/fcv/FcvApiDisclaimers.vue'
 
 const route = useRoute()
 const router = useRouter()
 const { isAuthenticated, session } = useAuth()
+const { showPill, subcopy } = useFcvUiLabel()
 
 const isDisconnecting = ref(false)
 const disconnectMessage = ref('')

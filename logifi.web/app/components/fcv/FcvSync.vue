@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { useAuth } from '~/composables/useAuth'
+import { useFcvUiLabel } from '~/composables/useFcvUiLabel'
 import { useRoute } from 'vue-router'
 import FcvApiDisclaimers from '~/components/fcv/FcvApiDisclaimers.vue'
 
@@ -57,6 +58,13 @@ interface CrewReviewCandidate {
 type CrewOverrideMode = 'pick' | 'rename' | 'asis'
 
 const { session, isAuthenticated } = useAuth()
+const { showPill, pillText, subcopy } = useFcvUiLabel()
+
+const fcvUiPillClass = computed(() =>
+  props.isDarkMode
+    ? 'shrink-0 rounded-md border border-amber-700/50 bg-amber-950/40 px-2 py-0.5 text-xs font-semibold text-amber-100'
+    : 'shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900'
+)
 
 const connected = ref<boolean>(false)
 const loadingStatus = ref(false)
@@ -741,14 +749,25 @@ const inputClass = computed(() =>
 
 <template>
   <div class="space-y-4 font-quicksand" :class="$attrs.class">
-    <h4
-      :class="[
-        'text-sm font-semibold uppercase tracking-wide',
-        isDarkMode ? 'text-gray-300' : 'text-gray-700',
-      ]"
-    >
-      Pull from FC View
-    </h4>
+    <div class="space-y-1.5">
+      <div class="flex flex-wrap items-center gap-2">
+        <h4
+          :class="[
+            'text-sm font-semibold uppercase tracking-wide',
+            isDarkMode ? 'text-gray-300' : 'text-gray-700',
+          ]"
+        >
+          Pull from FC View
+        </h4>
+        <span v-if="showPill" :class="fcvUiPillClass">{{ pillText }}</span>
+      </div>
+      <p
+        v-if="subcopy"
+        :class="['text-xs leading-relaxed', isDarkMode ? 'text-gray-500' : 'text-gray-600']"
+      >
+        {{ subcopy }}
+      </p>
+    </div>
 
     <p
       v-if="error"

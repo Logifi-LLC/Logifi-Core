@@ -156,9 +156,18 @@
       >
         <div class="flex items-start justify-between gap-4">
           <div>
-            <h3 :class="['text-base sm:text-lg font-semibold font-quicksand', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
-              FC View Fetch
-            </h3>
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 :class="['text-base sm:text-lg font-semibold font-quicksand', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
+                FC View Fetch
+              </h3>
+              <span v-if="fcvUiShowPill" :class="fcvUiPillClass">{{ fcvUiPillText }}</span>
+            </div>
+            <p
+              v-if="fcvUiSubcopy"
+              :class="['text-xs mt-1.5 leading-relaxed', isDarkMode ? 'text-gray-500' : 'text-gray-600']"
+            >
+              {{ fcvUiSubcopy }}
+            </p>
             <p :class="['text-sm mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
               Fetch and import FC View flights from your dashboard.
             </p>
@@ -6498,6 +6507,7 @@ import type { Form8710Data, AircraftCategory8710, ComplianceMetadata } from '../
 import { mapCategoryTo8710, isTrainingDevice } from '../utils/form8710Types'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
+import { useFcvUiLabel } from '../composables/useFcvUiLabel'
 import { useDataIntegrity } from '../composables/useDataIntegrity'
 import { useValidation } from '../composables/useValidation'
 import { useOffline } from '../composables/useOffline'
@@ -8273,6 +8283,12 @@ const highlightedPilotIndex = ref(-1)
 const highlightedInlinePilotIndex = ref(-1)
 const { theme, isDark, setTheme } = useTheme()
 const isDarkMode = isDark
+const { showPill: fcvUiShowPill, pillText: fcvUiPillText, subcopy: fcvUiSubcopy } = useFcvUiLabel()
+const fcvUiPillClass = computed(() =>
+  isDarkMode.value
+    ? 'shrink-0 rounded-md border border-amber-700/50 bg-amber-950/40 px-2 py-0.5 text-xs font-semibold text-amber-100'
+    : 'shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900'
+)
 const pilotProfile = reactive<PilotProfilePrefs>({ ...pilotProfileDefaults })
 const pilotProfileLoaded = ref(false)
 const csvFileInput = ref<HTMLInputElement | null>(null)
