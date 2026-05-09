@@ -7,8 +7,8 @@
           <div class="flex justify-center">
             <Icon name="ri:loader-4-line" size="48" class="animate-spin text-blue-600" />
           </div>
-          <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Completing sign in...</h2>
-          <p class="text-sm text-gray-500 dark:text-gray-400">Please wait while we verify your account</p>
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white">{{ loadingTitle }}</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">{{ loadingSubtitle }}</p>
         </div>
 
         <!-- Success State -->
@@ -16,8 +16,8 @@
           <div class="flex justify-center">
             <Icon name="ri:checkbox-circle-fill" size="48" class="text-green-500" />
           </div>
-          <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Sign in successful!</h2>
-          <p class="text-sm text-gray-500 dark:text-gray-400">Redirecting to your dashboard...</p>
+          <h2 class="text-2xl font-bold text-gray-900 dark:text-white">{{ successTitle }}</h2>
+          <p class="text-sm text-gray-500 dark:text-gray-400">{{ successSubtitle }}</p>
         </div>
 
         <!-- Error State -->
@@ -48,41 +48,106 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useAuth } from '~/composables/useAuth'
 
-const { initAuth, isAuthenticated, user } = useAuth()
+type CallbackKind = 'signup' | 'recovery' | 'signin'
+
+const { initAuth, isAuthenticated, user, isPasswordRecoverySession } = useAuth()
 
 const isProcessing = ref(true)
 const isSuccess = ref(false)
 const error = ref<string | null>(null)
-const isRecovery = ref(false)
+const callbackKind = ref<CallbackKind>('signin')
+
+function parseSupabaseAuthType(): string | null {
+  if (typeof window === 'undefined') return null
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  const fromHash = hashParams.get('type')
+  if (fromHash) return fromHash
+  const searchParams = new URLSearchParams(window.location.search)
+  return searchParams.get('type')
+}
+
+function resolveCallbackKind(type: string | null): CallbackKind {
+  if (type === 'signup') return 'signup'
+  if (type === 'recovery') return 'recovery'
+  return 'signin'
+}
+
+const loadingTitle = computed(() => {
+  switch (callbackKind.value) {
+    case 'signup':
+      return 'Verifying your email...'
+    case 'recovery':
+      return 'Completing password reset...'
+    default:
+      return 'Completing sign in...'
+  }
+})
+
+const loadingSubtitle = computed(() => {
+  switch (callbackKind.value) {
+    case 'signup':
+      return 'Hang on while we confirm your account.'
+    case 'recovery':
+      return 'Please wait while we sign you in.'
+    default:
+      return 'Please wait while we verify your account'
+  }
+})
+
+const successTitle = computed(() => {
+  switch (callbackKind.value) {
+    case 'signup':
+      return 'Verification successful!'
+    case 'recovery':
+      return 'Password reset complete'
+    default:
+      return 'Sign in successful!'
+  }
+})
+
+const successSubtitle = computed(() => {
+  switch (callbackKind.value) {
+    case 'signup':
+      return "You're signed in. Redirecting to your dashboard..."
+    case 'recovery':
+      return 'Redirecting to your dashboard...'
+    default:
+      return 'Redirecting to your dashboard...'
+  }
+})
+
+const REDIRECT_MS = 2000
 
 const processCallback = async () => {
   try {
     isProcessing.value = true
     error.value = null
 
-    // Detect if this is a password recovery (reset) callback
-    if (typeof window !== 'undefined' && window.location.hash) {
-      const hashParams = new URLSearchParams(window.location.hash.substring(1))
-      const type = hashParams.get('type')
-      isRecovery.value = type === 'recovery'
+    const type = parseSupabaseAuthType()
+    callbackKind.value = resolveCallbackKind(type)
+    const isRecovery = type === 'recovery'
+
+    await initAuth()
+    await nextTick()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    if (isPasswordRecoverySession.value) {
+      await navigateTo('/reset-password')
+      return
     }
 
-    // Initialize auth to detect the session after OAuth or recovery redirect
-    await initAuth()
-
-    // Give Supabase a brief moment to update the session
     await new Promise((resolve) => setTimeout(resolve, 500))
 
     if (isAuthenticated.value && user.value) {
+      isProcessing.value = false
       isSuccess.value = true
 
-      // Redirect to dashboard after a short delay
       setTimeout(() => {
         navigateTo('/dashboard')
-      }, 1500)
+      }, REDIRECT_MS)
     } else {
       if (typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search)
@@ -93,7 +158,7 @@ const processCallback = async () => {
           error.value = decodeURIComponent(errorDescription)
         } else if (errorCode) {
           error.value = `Authentication error: ${errorCode}`
-        } else if (isRecovery.value) {
+        } else if (isRecovery) {
           error.value = 'Failed to complete password reset. The link may have expired or already been used.'
         } else {
           error.value = 'Failed to complete sign in. Please try again.'
@@ -137,4 +202,3 @@ onMounted(() => {
   animation: spin 1s linear infinite;
 }
 </style>
-

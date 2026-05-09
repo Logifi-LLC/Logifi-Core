@@ -149,8 +149,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import AuthModal from '~/components/AuthModal.vue'
+
+/** Email links that still use Site URL (/) land here with tokens in the URL; forward to /auth/callback. */
+onMounted(() => {
+  if (typeof window === 'undefined') return
+  const searchParams = new URLSearchParams(window.location.search)
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+  const hasAuthQuery =
+    searchParams.has('code') || searchParams.has('error') || searchParams.has('error_description')
+  const hasAuthHash =
+    hashParams.has('access_token') || hashParams.has('error') || hashParams.has('error_description')
+  if (hasAuthQuery || hasAuthHash) {
+    const next = `/auth/callback${window.location.search}${window.location.hash}`
+    window.location.replace(next)
+  }
+})
 
 const showAuth = ref(false)
 const authTab = ref<'signin' | 'signup'>('signin')

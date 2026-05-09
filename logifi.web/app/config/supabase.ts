@@ -1,6 +1,10 @@
 // Supabase configuration
 // Uses Nuxt's runtimeConfig to read from .env file
 // With ssr: false, runtimeConfig is the proper way to access env vars
+//
+// Redirect URLs: In the Supabase dashboard (Authentication → URL Configuration), allow each
+// app origin’s `/auth/callback` (e.g. http://localhost:3000/auth/callback and production URL)
+// so email verification, OAuth, and password-reset links can return to the app.
 
 // Get config from runtimeConfig (Nuxt's way - reads from .env automatically)
 // This must be called lazily (not at module load time) to work with Nuxt's context

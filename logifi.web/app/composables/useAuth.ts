@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import type { User, Session, AuthError } from '@supabase/supabase-js'
+import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '~/lib/supabase'
 
 // Shared state across all instances of useAuth
@@ -7,6 +7,7 @@ const globalUser = ref<User | null>(null)
 const globalSession = ref<Session | null>(null)
 const globalIsLoading = ref(true)
 const globalError = ref<string | null>(null)
+const isPasswordRecoverySession = ref(false)
 let authInitialized = false
 let authStateSubscription: { unsubscribe: () => void } | null = null
 
@@ -36,40 +37,45 @@ export const useAuth = () => {
       isLoading.value = true
       error.value = null
 
-      // Get current session
+      // Subscribe before getSession() so PASSWORD_RECOVERY (fired after URL parse) is never missed.
+      if (!authStateSubscription) {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          async (event, newSession) => {
+            console.log('Auth state changed:', event, newSession?.user?.email)
+
+            if (event === 'PASSWORD_RECOVERY') {
+              isPasswordRecoverySession.value = true
+            }
+            if (event === 'USER_UPDATED') {
+              isPasswordRecoverySession.value = false
+            }
+            if (event === 'SIGNED_OUT') {
+              console.log('User signed out')
+              isPasswordRecoverySession.value = false
+              user.value = null
+              session.value = null
+              return
+            }
+
+            session.value = newSession
+            user.value = newSession?.user ?? null
+
+            if (event === 'TOKEN_REFRESHED') {
+              console.log('Token refreshed successfully')
+            }
+          }
+        )
+        authStateSubscription = subscription
+      }
+
       const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession()
-      
+
       if (sessionError) {
         throw sessionError
       }
 
       session.value = currentSession
       user.value = currentSession?.user ?? null
-
-      // Listen to auth state changes (only set up once)
-      if (!authStateSubscription) {
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          async (event, newSession) => {
-            console.log('Auth state changed:', event, newSession?.user?.email)
-            
-            session.value = newSession
-            user.value = newSession?.user ?? null
-
-            // Handle token refresh
-            if (event === 'TOKEN_REFRESHED') {
-              console.log('Token refreshed successfully')
-            }
-
-            // Handle sign out
-            if (event === 'SIGNED_OUT') {
-              console.log('User signed out')
-              user.value = null
-              session.value = null
-            }
-          }
-        )
-        authStateSubscription = subscription
-      }
 
       authInitialized = true
     } catch (err) {
@@ -88,9 +94,17 @@ export const useAuth = () => {
       isLoading.value = true
       error.value = null
 
+      // Confirmation emails must redirect here so detectSessionInUrl can persist the session.
+      // Add this URL (and localhost) under Supabase → Authentication → URL Configuration → Redirect URLs.
+      const emailRedirectTo =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}/auth/callback`
+          : undefined
+
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
+        ...(emailRedirectTo ? { options: { emailRedirectTo } } : {}),
       })
 
       if (signUpError) {
@@ -221,7 +235,7 @@ export const useAuth = () => {
 
       const redirectTo =
         typeof window !== 'undefined'
-          ? `${window.location.origin}/auth/callback`
+          ? `${window.location.origin}/reset-password`
           : undefined
 
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
@@ -238,6 +252,34 @@ export const useAuth = () => {
       error.value = errorMessage
       console.error('Reset password error:', err)
       return { success: false, error: errorMessage }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const completePasswordReset = async (password: string) => {
+    try {
+      isLoading.value = true
+      error.value = null
+
+      const { data, error: updateError } = await supabase.auth.updateUser({ password })
+
+      if (updateError) {
+        throw updateError
+      }
+
+      isPasswordRecoverySession.value = false
+      if (data.user) {
+        user.value = data.user
+      }
+
+      return { success: true as const, user: data.user }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to update password'
+      error.value = errorMessage
+      console.error('Complete password reset error:', err)
+      return { success: false as const, error: errorMessage }
     } finally {
       isLoading.value = false
     }
@@ -272,11 +314,13 @@ export const useAuth = () => {
     isAuthenticated,
     hasUsableSession,
     getAccessToken,
+    isPasswordRecoverySession,
     signUp,
     signIn,
     signOut,
     signInWithGoogle,
     resetPassword,
+    completePasswordReset,
     refreshSession,
     initAuth,
   }
