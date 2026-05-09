@@ -10,9 +10,12 @@ const props = withDefaults(
   defineProps<{
     isDarkMode: boolean
     mode?: 'connect' | 'fetch' | 'full'
+    /** When true and `NUXT_PUBLIC_FCV_UI_LABEL` is set, show Beta / Coming soon (Settings → Data & Sync only). */
+    showRolloutLabel?: boolean
   }>(),
   {
     mode: 'full',
+    showRolloutLabel: false,
   }
 )
 const emit = defineEmits<{
@@ -58,7 +61,9 @@ interface CrewReviewCandidate {
 type CrewOverrideMode = 'pick' | 'rename' | 'asis'
 
 const { session, isAuthenticated } = useAuth()
-const { showPill, pillText, subcopy } = useFcvUiLabel()
+const { showPill, pillText } = useFcvUiLabel()
+
+const showFcvRolloutBlock = computed(() => props.showRolloutLabel && showPill.value)
 
 const fcvUiPillClass = computed(() =>
   props.isDarkMode
@@ -759,14 +764,8 @@ const inputClass = computed(() =>
         >
           Pull from FC View
         </h4>
-        <span v-if="showPill" :class="fcvUiPillClass">{{ pillText }}</span>
+        <span v-if="showFcvRolloutBlock" :class="fcvUiPillClass">{{ pillText }}</span>
       </div>
-      <p
-        v-if="subcopy"
-        :class="['text-xs leading-relaxed', isDarkMode ? 'text-gray-500' : 'text-gray-600']"
-      >
-        {{ subcopy }}
-      </p>
     </div>
 
     <p

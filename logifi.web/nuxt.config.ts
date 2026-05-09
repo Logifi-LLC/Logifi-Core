@@ -55,7 +55,7 @@ export default defineNuxtConfig({
     public: {
       supabaseUrl: process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
       supabaseAnonKey: process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY,
-      /** `off` | `beta` | `coming_soon` — uniform FC View section badge (see useFcvUiLabel). */
+      /** `off` | `beta` | `coming_soon` — see useFcvUiLabel (integrations page + Settings connect UI only). */
       fcvUiLabel: process.env.NUXT_PUBLIC_FCV_UI_LABEL || 'off',
     },
     // FC View OAuth (server-only; never expose to client)

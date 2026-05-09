@@ -17,37 +17,25 @@
     <main class="pt-28 pb-16 px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
       <h1 class="text-3xl font-bold text-gray-900 mb-2">Pricing</h1>
       <p class="text-gray-600 mb-6">
-        Clear pricing for Logifi. (FC View requires its own subscription from Flight Crew View.)
+        Logifi is free while we’re in beta. FC View integration requires a separate Flight Crew View
+        subscription—see
+        <NuxtLink to="/integrations" class="text-blue-600 hover:underline">Integrations</NuxtLink>
+        for details.
       </p>
 
       <div class="rounded-2xl border border-gray-200 bg-white p-6 sm:p-8 shadow-sm space-y-6">
         <div>
           <p class="text-sm font-semibold uppercase tracking-wide text-gray-500">Logifi</p>
           <p class="mt-2 text-4xl font-bold text-gray-900">$0</p>
-          <p class="text-gray-600 mt-1">During public beta there is no charge to use the core logbook.</p>
+          <p class="text-gray-600 mt-1">No charge for the core logbook during public beta.</p>
         </div>
-        <ul class="text-sm text-gray-700 space-y-2 list-disc pl-5">
-          <li><strong>Billing interval:</strong> Not applicable while the Service is free.</li>
-          <li>
-            <strong>Auto-renew:</strong> If paid plans are introduced later, subscription terms will be
-            shown at checkout; you will not be charged without agreeing to those terms.
-          </li>
-          <li>
-            <strong>Trials:</strong> Not applicable while the Service is free. Any future trial will
-            state its length and what happens when it ends.
-          </li>
-          <li>
-            <strong>Cancellation:</strong> You may stop using the Service at any time. If we offer
-            paid subscriptions, cancellation will be available in-account without requiring a phone
-            call.
-          </li>
-          <li>
-            <strong>Refunds:</strong> If we sell a paid product, we will publish a refund policy before
-            taking payment. During the free beta, there are no payments to refund.
-          </li>
-        </ul>
+        <p class="text-sm text-gray-700 leading-relaxed">
+          If we add paid plans later, we’ll show price, billing, renewals, trials, how to cancel, and
+          refunds before you pay—same idea as in our
+          <NuxtLink to="/terms" class="text-blue-600 hover:underline">Terms</NuxtLink>.
+        </p>
 
-        <FcvApiDisclaimers class="mt-8" tone="marketing" />
+        <FcvApiDisclaimers class="mt-2" tone="marketing" />
       </div>
 
       <footer class="mt-12 pt-8 border-t border-gray-200 text-center text-sm text-gray-500">
@@ -67,7 +55,7 @@ useHead({
   meta: [
     {
       name: 'description',
-      content: 'Logifi pricing and billing transparency. Free during beta.',
+      content: 'Logifi is free during beta. FC View sold separately.',
     },
   ],
 })

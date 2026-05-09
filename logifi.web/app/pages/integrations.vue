@@ -15,7 +15,15 @@
     </header>
 
     <main class="pt-28 pb-16 px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
-      <h1 class="text-3xl font-bold text-gray-900 mb-2">Flight Crew View import</h1>
+      <div class="flex flex-wrap items-center gap-3 mb-2">
+        <h1 class="text-3xl font-bold text-gray-900 m-0">Flight Crew View Import</h1>
+        <span
+          v-if="fcvUiShowPill"
+          class="shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900"
+        >
+          {{ fcvUiPillText }}
+        </span>
+      </div>
       <p class="text-gray-600 mb-6 text-lg">
         Logifi can connect to Flight Crew View so you can preview and import your FC View flight
         history into your logbook (when the integration is enabled for your account).
@@ -56,6 +64,9 @@
 
 <script setup lang="ts">
 import FcvApiDisclaimers from '~/components/fcv/FcvApiDisclaimers.vue'
+import { useFcvUiLabel } from '~/composables/useFcvUiLabel'
+
+const { showPill: fcvUiShowPill, pillText: fcvUiPillText } = useFcvUiLabel()
 
 useHead({
   title: 'Flight Crew View integration | Logifi',
