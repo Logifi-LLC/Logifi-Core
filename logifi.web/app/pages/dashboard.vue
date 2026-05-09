@@ -97,7 +97,7 @@
         </div>
         <nav class="flex items-center gap-2">
           <NuxtLink
-            to="/feedback"
+            to="/feedback?from=dashboard"
             class="hidden sm:inline-block text-xs sm:text-sm font-medium font-quicksand transition-colors mr-2"
             :class="[
               isDarkMode
@@ -4422,7 +4422,7 @@
                 </p>
                 <div class="pt-2">
                   <NuxtLink
-                    to="/developers"
+                    to="/developers?from=dashboard"
                     @click="showSettingsModal = false"
                     :class="[
                       'inline-flex items-center px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all',

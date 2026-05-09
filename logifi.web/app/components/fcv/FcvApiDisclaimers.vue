@@ -5,7 +5,7 @@
 withDefaults(
   defineProps<{
     isDarkMode?: boolean
-    /** Landing/legal pages: light neutral card. Dashboard: follows isDarkMode. */
+    /** Marketing/legal: always light card (even when `html.dark`). Dashboard: follows isDarkMode. */
     tone?: 'marketing' | 'dashboard'
   }>(),
   {
@@ -20,7 +20,7 @@ withDefaults(
     :class="[
       'rounded-xl border p-4 text-sm space-y-2 transition-colors',
       tone === 'marketing'
-        ? 'border-gray-200 bg-white shadow-sm text-gray-700 dark:border-gray-700 dark:bg-gray-800/70 dark:text-gray-300 dark:shadow-lg dark:shadow-black/25'
+        ? 'border-gray-200 bg-white shadow-sm text-gray-700 dark:border-gray-200 dark:bg-white dark:text-gray-700 dark:shadow-sm dark:shadow-black/25'
         : isDarkMode
           ? 'border-gray-700 bg-gray-800/40 text-gray-300'
           : 'border-gray-200 bg-gray-50/80 text-gray-700',
@@ -35,7 +35,7 @@ withDefaults(
         :class="[
           'shrink-0 mt-0.5',
           tone === 'marketing'
-            ? 'text-blue-500 dark:text-blue-400'
+            ? 'text-blue-500 dark:text-blue-500'
             : isDarkMode ? 'text-blue-400' : 'text-blue-600'
         ]"
       />
@@ -44,7 +44,7 @@ withDefaults(
           :class="[
             'font-medium',
             tone === 'marketing'
-              ? 'text-gray-900 dark:text-gray-100'
+              ? 'text-gray-900 dark:text-gray-900'
               : isDarkMode
                 ? 'text-gray-100'
                 : 'text-gray-900',

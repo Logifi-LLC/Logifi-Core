@@ -27,13 +27,13 @@ function getInitialTheme(): Theme {
   return 'light'
 }
 
-function applyDocumentTheme(theme: Theme) {
+function applyDocumentTheme(next: Theme) {
   if (typeof document === 'undefined') return
   const root = document.documentElement
   root.classList.remove('dark', 'light')
-  if (theme === 'dark') {
+  if (next === 'dark') {
     root.classList.add('dark')
-  } else if (theme === 'light') {
+  } else if (next === 'light') {
     root.classList.add('light')
   }
 }
@@ -76,6 +76,7 @@ export function useTheme() {
     theme,
     isDark,
     setTheme,
+    applyDocumentTheme,
   }
 }
 

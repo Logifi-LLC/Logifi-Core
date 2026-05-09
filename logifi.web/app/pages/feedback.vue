@@ -2,15 +2,31 @@
   <div
     :class="[
       'min-h-screen transition-colors duration-300 font-quicksand',
-      theme === 'dark' ? 'bg-gray-900' : 'bg-gray-200'
+      isFromLanding
+        ? 'bg-[#e4e8e7] text-gray-900'
+        : theme === 'dark'
+          ? 'bg-gray-950'
+          : 'bg-gray-50'
     ]"
   >
-    <header>
+    <header v-if="isFromLanding">
       <div
-        :class="[
-          'fixed top-0 left-0 right-0 z-10 transition-colors duration-300 bg-transparent'
-        ]"
+        class="fixed top-0 left-0 right-0 z-50 border-b bg-white/80 backdrop-blur-md border-[#e4e8e7]"
       >
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+          <NuxtLink to="/" class="flex items-center">
+            <img src="/images/logifi-logo.png" alt="Logifi" class="h-32 w-auto brightness-0" />
+          </NuxtLink>
+          <nav class="flex items-center gap-4 text-sm font-medium text-gray-600">
+            <NuxtLink to="/pricing" class="hover:text-blue-600">Pricing</NuxtLink>
+            <NuxtLink to="/" class="hover:text-blue-600">Home</NuxtLink>
+          </nav>
+        </div>
+      </div>
+    </header>
+
+    <header v-else>
+      <div class="fixed top-0 left-0 right-0 z-10 transition-colors duration-300 bg-transparent">
         <div class="mr-auto px-6 sm:px-8 py-4 flex items-center justify-between relative">
           <a class="left" href="/">
             <img
@@ -18,7 +34,7 @@
               alt="logifi"
               :class="[
                 'h-20 sm:h-24 lg:h-28 w-auto transition-all duration-300',
-                isDarkMode ? '' : 'brightness-[0.2]'
+                effectiveDark ? '' : 'brightness-[0.2]'
               ]"
             />
           </a>
@@ -27,7 +43,7 @@
             <span
               :class="[
                 'px-3 py-1 rounded-md text-xl font-quicksand font-semibold select-none',
-                isDarkMode ? 'text-gray-200' : 'text-gray-800'
+                effectiveDark ? 'text-gray-200' : 'text-gray-800'
               ]"
               aria-live="polite"
             >
@@ -40,21 +56,20 @@
               href="https://discord.gg/hBaDkNt2ev"
               target="_blank"
               rel="noopener noreferrer"
-              :class="[
-                'inline-flex items-center px-4 py-2 rounded-xl text-sm font-quicksand font-bold transition-all duration-200',
-                'bg-[#5865F2] hover:bg-[#4752C4] text-white'
-              ]"
+              class="inline-flex items-center px-4 py-2 rounded-xl text-sm font-quicksand font-bold transition-all duration-200 bg-[#5865F2] hover:bg-[#4752C4] text-white"
             >
               <Icon name="ri:discord-fill" size="18" class="mr-2" />
               Join Community
             </a>
             <button
               type="button"
+              class="inline-flex items-center px-4 py-2 rounded-xl text-sm font-quicksand font-bold transition-all duration-200"
+              :class="
+                effectiveDark
+                  ? 'bg-gray-700 hover:bg-gray-600 text-white'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
+              "
               @click="goBack"
-              :class="[
-                'inline-flex items-center px-4 py-2 rounded-xl text-sm font-quicksand font-bold transition-all duration-200',
-                isDarkMode ? 'bg-gray-700 hover:bg-gray-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900'
-              ]"
             >
               <Icon name="ri:arrow-left-line" size="18" class="mr-2" />
               {{ backButtonText }}
@@ -64,16 +79,41 @@
       </div>
     </header>
 
-    <main class="pt-24 pb-16 px-4 sm:px-6 lg:px-8">
-      <div :class="['max-w-2xl mx-auto rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] p-8 sm:p-12 border transition-all duration-500', isDarkMode ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100']">
+    <main
+      :class="[
+        'pb-16 px-4 sm:px-6 lg:px-8',
+        isFromLanding ? 'pt-28' : 'pt-24'
+      ]"
+    >
+      <div
+        :class="[
+          'max-w-2xl mx-auto rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] p-8 sm:p-12 border transition-all duration-500',
+          effectiveDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'
+        ]"
+      >
         <div class="text-center mb-10">
-          <div :class="['inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-6 shadow-lg', isDarkMode ? 'bg-blue-900/50' : 'bg-blue-600 shadow-blue-900/20']">
+          <div
+            :class="[
+              'inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-6 shadow-lg',
+              effectiveDark ? 'bg-blue-900/50' : 'bg-blue-600 shadow-blue-900/20'
+            ]"
+          >
             <Icon name="ri:feedback-line" size="32" class="text-white" />
           </div>
-          <h1 :class="['text-4xl font-bold font-quicksand mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
+          <h1
+            :class="[
+              'font-bold font-quicksand mb-4',
+              isFromLanding ? 'text-3xl text-gray-900' : ['text-4xl', effectiveDark ? 'text-white' : 'text-gray-900']
+            ]"
+          >
             Feedback
           </h1>
-          <p :class="['text-lg max-w-xl mx-auto', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+          <p
+            :class="[
+              'max-w-xl mx-auto',
+              isFromLanding ? 'text-lg text-gray-600' : ['text-lg', effectiveDark ? 'text-gray-400' : 'text-gray-600']
+            ]"
+          >
             Report a bug, suggest a feature, or share general feedback. We read everything.
           </p>
         </div>
@@ -82,7 +122,7 @@
           v-if="submitStatus === 'success'"
           :class="[
             'mb-6 p-4 rounded-xl border',
-            isDarkMode ? 'bg-green-900/20 border-green-700 text-green-200' : 'bg-green-50 border-green-200 text-green-800'
+            effectiveDark ? 'bg-green-900/20 border-green-700 text-green-200' : 'bg-green-50 border-green-200 text-green-800'
           ]"
         >
           <p class="font-quicksand font-medium">Thanks! Your feedback has been sent.</p>
@@ -91,11 +131,11 @@
           v-else-if="submitStatus === 'not-configured'"
           :class="[
             'mb-6 p-4 rounded-xl border',
-            isDarkMode ? 'bg-amber-900/20 border-amber-700 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-800'
+            effectiveDark ? 'bg-amber-900/20 border-amber-700 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-800'
           ]"
         >
           <p class="font-quicksand font-medium">Feedback is not set up on this instance.</p>
-          <p :class="['text-sm mt-2', isDarkMode ? 'text-amber-300/90' : 'text-amber-700']">
+          <p :class="['text-sm mt-2', effectiveDark ? 'text-amber-300/90' : 'text-amber-700']">
             You can open an issue on <a href="https://github.com/Logifi-LLC/Logifi-Core" target="_blank" rel="noopener noreferrer" class="underline">GitHub</a> or join our <a href="https://discord.gg/hBaDkNt2ev" target="_blank" rel="noopener noreferrer" class="underline">Discord</a> to share your thoughts.
           </p>
         </div>
@@ -103,7 +143,7 @@
           v-else-if="submitStatus === 'error'"
           :class="[
             'mb-6 p-4 rounded-xl border',
-            isDarkMode ? 'bg-red-900/20 border-red-700 text-red-200' : 'bg-red-50 border-red-200 text-red-800'
+            effectiveDark ? 'bg-red-900/20 border-red-700 text-red-200' : 'bg-red-50 border-red-200 text-red-800'
           ]"
         >
           <p class="font-quicksand font-medium">{{ submitError }}</p>
@@ -115,17 +155,17 @@
           @submit.prevent="onSubmit"
         >
           <div>
-            <label :class="['block text-sm font-quicksand font-medium mb-2', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Type</label>
+            <label :class="['block text-sm font-quicksand font-medium mb-2', effectiveDark ? 'text-gray-300' : 'text-gray-700']">Type</label>
             <div class="flex flex-wrap gap-4">
-              <label :class="['inline-flex items-center gap-2 cursor-pointer', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              <label :class="['inline-flex items-center gap-2 cursor-pointer', effectiveDark ? 'text-gray-300' : 'text-gray-700']">
                 <input v-model="form.type" type="radio" value="bug" class="rounded border-gray-400" />
                 <span>Bug</span>
               </label>
-              <label :class="['inline-flex items-center gap-2 cursor-pointer', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              <label :class="['inline-flex items-center gap-2 cursor-pointer', effectiveDark ? 'text-gray-300' : 'text-gray-700']">
                 <input v-model="form.type" type="radio" value="feature" class="rounded border-gray-400" />
                 <span>Feature request</span>
               </label>
-              <label :class="['inline-flex items-center gap-2 cursor-pointer', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              <label :class="['inline-flex items-center gap-2 cursor-pointer', effectiveDark ? 'text-gray-300' : 'text-gray-700']">
                 <input v-model="form.type" type="radio" value="other" class="rounded border-gray-400" />
                 <span>Other</span>
               </label>
@@ -133,7 +173,7 @@
           </div>
 
           <div>
-            <label :class="['block text-sm font-quicksand font-medium mb-2', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Subject</label>
+            <label :class="['block text-sm font-quicksand font-medium mb-2', effectiveDark ? 'text-gray-300' : 'text-gray-700']">Subject</label>
             <input
               v-model="form.subject"
               type="text"
@@ -142,7 +182,7 @@
               placeholder="Short summary"
               :class="[
                 'w-full px-4 py-3 rounded-xl border font-quicksand placeholder-gray-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all',
-                isDarkMode
+                effectiveDark
                   ? 'bg-gray-800 border-gray-600 text-white'
                   : 'bg-white border-gray-300 text-gray-900'
               ]"
@@ -150,7 +190,7 @@
           </div>
 
           <div>
-            <label :class="['block text-sm font-quicksand font-medium mb-2', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Message</label>
+            <label :class="['block text-sm font-quicksand font-medium mb-2', effectiveDark ? 'text-gray-300' : 'text-gray-700']">Message</label>
             <textarea
               v-model="form.message"
               required
@@ -159,7 +199,7 @@
               placeholder="Describe your bug report or feature idea..."
               :class="[
                 'w-full px-4 py-3 rounded-xl border font-quicksand placeholder-gray-400 resize-y focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all',
-                isDarkMode
+                effectiveDark
                   ? 'bg-gray-800 border-gray-600 text-white'
                   : 'bg-white border-gray-300 text-gray-900'
               ]"
@@ -167,7 +207,7 @@
           </div>
 
           <div>
-            <label :class="['block text-sm font-quicksand font-medium mb-2', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Email (optional)</label>
+            <label :class="['block text-sm font-quicksand font-medium mb-2', effectiveDark ? 'text-gray-300' : 'text-gray-700']">Email (optional)</label>
             <input
               v-model="form.email"
               type="email"
@@ -175,7 +215,7 @@
               placeholder="For follow-up"
               :class="[
                 'w-full px-4 py-3 rounded-xl border font-quicksand placeholder-gray-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all',
-                isDarkMode
+                effectiveDark
                   ? 'bg-gray-800 border-gray-600 text-white'
                   : 'bg-white border-gray-300 text-gray-900'
               ]"
@@ -192,7 +232,7 @@
             :disabled="isSubmitting"
             :class="[
               'w-full sm:w-auto px-8 py-4 rounded-xl font-quicksand font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20',
-              isDarkMode
+              effectiveDark
                 ? 'bg-blue-600 hover:bg-blue-500 text-white'
                 : 'bg-blue-600 hover:bg-blue-700 text-white'
             ]"
@@ -230,7 +270,9 @@ const goBack = () => {
 
 const backButtonText = computed(() => (route.query.from === 'landing' ? 'Back to Home' : 'Back to Logbook'))
 
-const { theme, isDark: isDarkMode } = useTheme()
+const { theme, isDark } = useTheme()
+const isFromLanding = computed(() => route.query.from === 'landing')
+const effectiveDark = computed(() => isDark.value && !isFromLanding.value)
 
 const form = ref({
   type: 'bug' as 'bug' | 'feature' | 'other',
@@ -317,6 +359,7 @@ async function onSubmit() {
 }
 
 onMounted(() => {
+  if (route.query.from === 'landing') return
   loadClockPrefs()
   clockTimer = window.setInterval(() => { now.value = new Date() }, 1000)
 })

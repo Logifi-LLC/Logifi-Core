@@ -149,8 +149,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import AuthModal from '~/components/AuthModal.vue'
+
+const { theme, applyDocumentTheme } = useTheme()
+
+/** Landing stays visually light and drops `html.dark` so `dark:` utilities do not apply (e.g. Auth modal). Restore saved theme when leaving. */
+if (import.meta.client) {
+  applyDocumentTheme('light')
+  onBeforeUnmount(() => {
+    applyDocumentTheme(theme.value)
+  })
+  watch(theme, () => {
+    applyDocumentTheme('light')
+  })
+}
 
 /** Email links that still use Site URL (/) land here with tokens in the URL; forward to /auth/callback. */
 onMounted(() => {
