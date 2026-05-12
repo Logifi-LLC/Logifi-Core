@@ -9,19 +9,39 @@
           : 'bg-gray-50'
     ]"
   >
-    <header v-if="isFromLanding">
-      <div
-        class="fixed top-0 left-0 right-0 z-50 border-b bg-white/80 backdrop-blur-md border-[#e4e8e7]"
-      >
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+    <header v-if="isFromLanding" class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b border-white/10 bg-white/5 backdrop-blur-md">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+        <div class="flex items-center">
           <NuxtLink to="/" class="flex items-center">
             <img src="/images/logifi-logo.png" alt="Logifi" class="h-32 w-auto brightness-0" />
           </NuxtLink>
-          <nav class="flex items-center gap-4 text-sm font-medium text-gray-600">
-            <NuxtLink to="/pricing" class="hover:text-blue-600">Pricing</NuxtLink>
-            <NuxtLink to="/" class="hover:text-blue-600">Home</NuxtLink>
-          </nav>
         </div>
+        
+        <nav class="hidden md:flex items-center space-x-8">
+          <NuxtLink to="/#features" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Features</NuxtLink>
+          <NuxtLink to="/integrations" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Integrations</NuxtLink>
+          <NuxtLink to="/pricing" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Pricing</NuxtLink>
+          <NuxtLink to="/developers?from=landing" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Developers</NuxtLink>
+          <NuxtLink to="/feedback?from=landing" class="text-sm font-medium text-blue-600 transition-colors dark:text-blue-600">Feedback</NuxtLink>
+          <div class="h-4 w-px bg-gray-200 dark:bg-gray-200"></div>
+          <button 
+            @click="openAuth('signin')"
+            class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600"
+          >
+            Sign In
+          </button>
+          <button 
+            @click="openAuth('signup')"
+            class="btn-cta-primary px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-all ring-1 ring-blue-400/60 shadow-[0_0_16px_-3px_rgba(37,99,235,0.48),0_0_32px_-12px_rgba(59,130,246,0.22)] hover:shadow-[0_0_24px_-2px_rgba(37,99,235,0.55),0_0_40px_-10px_rgba(59,130,246,0.28)] active:scale-[0.98] dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
+          >
+            <span class="relative z-10">Get Started</span>
+          </button>
+        </nav>
+
+        <!-- Mobile Menu Button -->
+        <button class="md:hidden p-2 text-gray-600 dark:text-gray-600">
+          <Icon name="ri:menu-line" size="24" />
+        </button>
       </div>
     </header>
 
@@ -81,21 +101,23 @@
 
     <main
       :class="[
-        'pb-16 px-4 sm:px-6 lg:px-8',
-        isFromLanding ? 'pt-28' : 'pt-24'
+        'pb-16 px-4 sm:px-6 lg:px-8 relative z-10',
+        isFromLanding ? 'pt-32' : 'pt-24'
       ]"
     >
       <div
         :class="[
-          'max-w-2xl mx-auto rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] p-8 sm:p-12 border transition-all duration-500',
-          effectiveDark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'
+          'max-w-2xl mx-auto rounded-3xl p-8 sm:p-12 border transition-all duration-500',
+          isFromLanding 
+            ? 'relative overflow-hidden border-white/15 bg-white/10 backdrop-blur-md shadow-[0_0_42px_-12px_rgba(59,130,246,0.24),0_0_56px_-18px_rgba(37,99,235,0.14)]' 
+            : (effectiveDark ? 'bg-gray-900 border-gray-800 shadow-[0_20px_50px_rgba(0,0,0,0.15)]' : 'bg-white border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.15)]')
         ]"
       >
         <div class="text-center mb-10">
           <div
             :class="[
               'inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-6 shadow-lg',
-              effectiveDark ? 'bg-blue-900/50' : 'bg-blue-600 shadow-blue-900/20'
+              isFromLanding ? 'bg-blue-600 shadow-blue-900/20' : (effectiveDark ? 'bg-blue-900/50' : 'bg-blue-600 shadow-blue-900/20')
             ]"
           >
             <Icon name="ri:feedback-line" size="32" class="text-white" />
@@ -103,7 +125,7 @@
           <h1
             :class="[
               'font-bold font-quicksand mb-4',
-              isFromLanding ? 'text-3xl text-gray-900' : ['text-4xl', effectiveDark ? 'text-white' : 'text-gray-900']
+              isFromLanding ? 'text-4xl text-gray-950 dark:text-gray-900 drop-shadow-sm' : ['text-4xl', effectiveDark ? 'text-white' : 'text-gray-900']
             ]"
           >
             Feedback
@@ -111,7 +133,7 @@
           <p
             :class="[
               'max-w-xl mx-auto',
-              isFromLanding ? 'text-lg text-gray-600' : ['text-lg', effectiveDark ? 'text-gray-400' : 'text-gray-600']
+              isFromLanding ? 'text-lg text-gray-800 dark:text-gray-700 font-medium' : ['text-lg', effectiveDark ? 'text-gray-400' : 'text-gray-600']
             ]"
           >
             Report a bug, suggest a feature, or share general feedback. We read everything.
@@ -122,7 +144,7 @@
           v-if="submitStatus === 'success'"
           :class="[
             'mb-6 p-4 rounded-xl border',
-            effectiveDark ? 'bg-green-900/20 border-green-700 text-green-200' : 'bg-green-50 border-green-200 text-green-800'
+            isFromLanding ? 'bg-green-100/50 border-green-200 text-green-800 dark:bg-green-100/50 dark:border-green-200 dark:text-green-800' : (effectiveDark ? 'bg-green-900/20 border-green-700 text-green-200' : 'bg-green-50 border-green-200 text-green-800')
           ]"
         >
           <p class="font-quicksand font-medium">Thanks! Your feedback has been sent.</p>
@@ -131,11 +153,11 @@
           v-else-if="submitStatus === 'not-configured'"
           :class="[
             'mb-6 p-4 rounded-xl border',
-            effectiveDark ? 'bg-amber-900/20 border-amber-700 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-800'
+            isFromLanding ? 'bg-amber-100/50 border-amber-200 text-amber-800 dark:bg-amber-100/50 dark:border-amber-200 dark:text-amber-800' : (effectiveDark ? 'bg-amber-900/20 border-amber-700 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-800')
           ]"
         >
           <p class="font-quicksand font-medium">Feedback is not set up on this instance.</p>
-          <p :class="['text-sm mt-2', effectiveDark ? 'text-amber-300/90' : 'text-amber-700']">
+          <p :class="['text-sm mt-2', isFromLanding ? 'text-amber-800 dark:text-amber-800' : (effectiveDark ? 'text-amber-300/90' : 'text-amber-700')]">
             You can open an issue on <a href="https://github.com/Logifi-LLC/Logifi-Core" target="_blank" rel="noopener noreferrer" class="underline">GitHub</a> or join our <a href="https://discord.gg/hBaDkNt2ev" target="_blank" rel="noopener noreferrer" class="underline">Discord</a> to share your thoughts.
           </p>
         </div>
@@ -143,7 +165,7 @@
           v-else-if="submitStatus === 'error'"
           :class="[
             'mb-6 p-4 rounded-xl border',
-            effectiveDark ? 'bg-red-900/20 border-red-700 text-red-200' : 'bg-red-50 border-red-200 text-red-800'
+            isFromLanding ? 'bg-red-100/50 border-red-200 text-red-800 dark:bg-red-100/50 dark:border-red-200 dark:text-red-800' : (effectiveDark ? 'bg-red-900/20 border-red-700 text-red-200' : 'bg-red-50 border-red-200 text-red-800')
           ]"
         >
           <p class="font-quicksand font-medium">{{ submitError }}</p>
@@ -155,25 +177,25 @@
           @submit.prevent="onSubmit"
         >
           <div>
-            <label :class="['block text-sm font-quicksand font-medium mb-2', effectiveDark ? 'text-gray-300' : 'text-gray-700']">Type</label>
+            <label :class="['block text-sm font-quicksand font-medium mb-2', isFromLanding ? 'text-gray-950 dark:text-gray-900' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">Type</label>
             <div class="flex flex-wrap gap-4">
-              <label :class="['inline-flex items-center gap-2 cursor-pointer', effectiveDark ? 'text-gray-300' : 'text-gray-700']">
-                <input v-model="form.type" type="radio" value="bug" class="rounded border-gray-400" />
+              <label :class="['inline-flex items-center gap-2 cursor-pointer', isFromLanding ? 'text-gray-950 dark:text-gray-900 font-medium' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">
+                <input v-model="form.type" type="radio" value="bug" :class="['rounded border-gray-400', isFromLanding ? 'bg-white/40 dark:bg-white/40' : '']" />
                 <span>Bug</span>
               </label>
-              <label :class="['inline-flex items-center gap-2 cursor-pointer', effectiveDark ? 'text-gray-300' : 'text-gray-700']">
-                <input v-model="form.type" type="radio" value="feature" class="rounded border-gray-400" />
+              <label :class="['inline-flex items-center gap-2 cursor-pointer', isFromLanding ? 'text-gray-950 dark:text-gray-900 font-medium' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">
+                <input v-model="form.type" type="radio" value="feature" :class="['rounded border-gray-400', isFromLanding ? 'bg-white/40 dark:bg-white/40' : '']" />
                 <span>Feature request</span>
               </label>
-              <label :class="['inline-flex items-center gap-2 cursor-pointer', effectiveDark ? 'text-gray-300' : 'text-gray-700']">
-                <input v-model="form.type" type="radio" value="other" class="rounded border-gray-400" />
+              <label :class="['inline-flex items-center gap-2 cursor-pointer', isFromLanding ? 'text-gray-950 dark:text-gray-900 font-medium' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">
+                <input v-model="form.type" type="radio" value="other" :class="['rounded border-gray-400', isFromLanding ? 'bg-white/40 dark:bg-white/40' : '']" />
                 <span>Other</span>
               </label>
             </div>
           </div>
 
           <div>
-            <label :class="['block text-sm font-quicksand font-medium mb-2', effectiveDark ? 'text-gray-300' : 'text-gray-700']">Subject</label>
+            <label :class="['block text-sm font-quicksand font-medium mb-2', isFromLanding ? 'text-gray-950 dark:text-gray-900' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">Subject</label>
             <input
               v-model="form.subject"
               type="text"
@@ -182,15 +204,17 @@
               placeholder="Short summary"
               :class="[
                 'w-full px-4 py-3 rounded-xl border font-quicksand placeholder-gray-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all',
-                effectiveDark
-                  ? 'bg-gray-800 border-gray-600 text-white'
-                  : 'bg-white border-gray-300 text-gray-900'
+                isFromLanding
+                  ? 'bg-white/40 border-white/20 text-gray-900 dark:bg-white/40 dark:border-white/20 dark:text-gray-900'
+                  : (effectiveDark
+                    ? 'bg-gray-800 border-gray-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-900')
               ]"
             />
           </div>
 
           <div>
-            <label :class="['block text-sm font-quicksand font-medium mb-2', effectiveDark ? 'text-gray-300' : 'text-gray-700']">Message</label>
+            <label :class="['block text-sm font-quicksand font-medium mb-2', isFromLanding ? 'text-gray-950 dark:text-gray-900' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">Message</label>
             <textarea
               v-model="form.message"
               required
@@ -199,15 +223,17 @@
               placeholder="Describe your bug report or feature idea..."
               :class="[
                 'w-full px-4 py-3 rounded-xl border font-quicksand placeholder-gray-400 resize-y focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all',
-                effectiveDark
-                  ? 'bg-gray-800 border-gray-600 text-white'
-                  : 'bg-white border-gray-300 text-gray-900'
+                isFromLanding
+                  ? 'bg-white/40 border-white/20 text-gray-900 dark:bg-white/40 dark:border-white/20 dark:text-gray-900'
+                  : (effectiveDark
+                    ? 'bg-gray-800 border-gray-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-900')
               ]"
             />
           </div>
 
           <div>
-            <label :class="['block text-sm font-quicksand font-medium mb-2', effectiveDark ? 'text-gray-300' : 'text-gray-700']">Email (optional)</label>
+            <label :class="['block text-sm font-quicksand font-medium mb-2', isFromLanding ? 'text-gray-950 dark:text-gray-900' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">Email (optional)</label>
             <input
               v-model="form.email"
               type="email"
@@ -215,9 +241,11 @@
               placeholder="For follow-up"
               :class="[
                 'w-full px-4 py-3 rounded-xl border font-quicksand placeholder-gray-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all',
-                effectiveDark
-                  ? 'bg-gray-800 border-gray-600 text-white'
-                  : 'bg-white border-gray-300 text-gray-900'
+                isFromLanding
+                  ? 'bg-white/40 border-white/20 text-gray-900 dark:bg-white/40 dark:border-white/20 dark:text-gray-900'
+                  : (effectiveDark
+                    ? 'bg-gray-800 border-gray-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-900')
               ]"
             />
           </div>
@@ -243,15 +271,55 @@
 
       </div>
     </main>
+
+    <!-- Marketing Footer -->
+    <footer v-if="isFromLanding" class="relative z-10 border-t border-white/10 bg-white/5 backdrop-blur-md pb-6 pt-2 mt-12 transition-colors duration-300">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 text-center">
+        <p class="text-sm font-medium text-gray-600 dark:text-gray-600">
+          <NuxtLink to="/integrations" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Integrations</NuxtLink>
+          <span class="mx-2 text-gray-400 dark:text-gray-400">·</span>
+          <NuxtLink to="/pricing" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Pricing</NuxtLink>
+          <span class="mx-2 text-gray-400 dark:text-gray-400">·</span>
+          <NuxtLink to="/data-sources?from=landing" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Data sources</NuxtLink>
+          <span class="mx-2 text-gray-400 dark:text-gray-400">·</span>
+          <NuxtLink to="/terms?from=landing" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Terms of Service</NuxtLink>
+          <span class="mx-2 text-gray-400 dark:text-gray-400">·</span>
+          <NuxtLink to="/privacy?from=landing" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Privacy Policy</NuxtLink>
+        </p>
+      </div>
+    </footer>
+
+    <!-- Auth Modal -->
+    <ClientOnly>
+      <AuthModal 
+        v-if="showAuth" 
+        :initial-tab="authTab"
+        @close="showAuth = false" 
+        @success="handleAuthSuccess"
+      />
+    </ClientOnly>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from '#imports'
+import AuthModal from '~/components/AuthModal.vue'
 
 const route = useRoute()
 const router = useRouter()
+
+const showAuth = ref(false)
+const authTab = ref<'signin' | 'signup'>('signin')
+
+const openAuth = (tab: 'signin' | 'signup') => {
+  authTab.value = tab
+  showAuth.value = true
+}
+
+const handleAuthSuccess = () => {
+  window.location.href = '/dashboard'
+}
 
 const backTarget = computed(() => {
   const from = route.query.from
@@ -368,3 +436,42 @@ onUnmounted(() => {
   if (clockTimer) clearInterval(clockTimer)
 })
 </script>
+
+<style>
+@keyframes cta-shimmer {
+  0%,
+  100% {
+    transform: translateX(-140%) skewX(-14deg);
+  }
+  50% {
+    transform: translateX(140%) skewX(-14deg);
+  }
+}
+
+.btn-cta-primary {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-cta-primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.12) 50%,
+    transparent 62%
+  );
+  animation: cta-shimmer 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-cta-primary::after {
+    animation: none;
+    opacity: 0;
+  }
+}
+</style>

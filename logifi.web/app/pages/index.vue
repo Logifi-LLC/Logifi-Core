@@ -11,15 +11,15 @@
         </div>
         
         <nav class="hidden md:flex items-center space-x-8">
-          <a href="#features" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Features</a>
-          <NuxtLink to="/integrations" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Integrations</NuxtLink>
-          <NuxtLink to="/pricing" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Pricing</NuxtLink>
-          <NuxtLink to="/developers?from=landing" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Developers</NuxtLink>
-          <NuxtLink to="/feedback?from=landing" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Feedback</NuxtLink>
+          <a href="#features" class="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors dark:text-gray-700 dark:hover:text-blue-600">Features</a>
+          <NuxtLink to="/integrations" class="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors dark:text-gray-700 dark:hover:text-blue-600">Integrations</NuxtLink>
+          <NuxtLink to="/pricing" class="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors dark:text-gray-700 dark:hover:text-blue-600">Pricing</NuxtLink>
+          <NuxtLink to="/developers?from=landing" class="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors dark:text-gray-700 dark:hover:text-blue-600">Developers</NuxtLink>
+          <NuxtLink to="/feedback?from=landing" class="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors dark:text-gray-700 dark:hover:text-blue-600">Feedback</NuxtLink>
           <div class="h-4 w-px bg-gray-200 dark:bg-gray-200"></div>
           <button 
             @click="openAuth('signin')"
-            class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600"
+            class="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors dark:text-gray-700 dark:hover:text-blue-600"
           >
             Sign In
           </button>
@@ -32,7 +32,7 @@
         </nav>
 
         <!-- Mobile Menu Button -->
-        <button class="md:hidden p-2 text-gray-600 dark:text-gray-600">
+        <button class="md:hidden p-2 text-gray-700 dark:text-gray-700">
           <Icon name="ri:menu-line" size="24" />
         </button>
       </div>
@@ -57,7 +57,7 @@
             <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-600 dark:to-indigo-600">Pilot Logbooks</span>
           </h1>
           
-          <p class="max-w-2xl mx-auto text-xl text-gray-600 mb-12 animate-slide-up delay-100 dark:text-gray-600">
+          <p class="max-w-2xl mx-auto text-xl text-gray-700 mb-12 animate-slide-up delay-100 dark:text-gray-700">
             Logifi is constantly innovating with new technology to keep your records secure, organized, and FAA-compliant.
           </p>
           
@@ -122,7 +122,7 @@
                     <Icon :name="feature.icon" size="24" />
                   </div>
                   <h3 class="text-xl font-bold mb-3 dark:text-gray-900">{{ feature.title }}</h3>
-                  <p class="text-gray-600 leading-relaxed dark:text-gray-600 md:grow">{{ feature.description }}</p>
+                  <p class="text-gray-700 leading-relaxed dark:text-gray-700 md:grow">{{ feature.description }}</p>
                 </div>
               </div>
             </div>
@@ -145,7 +145,7 @@
                     <Icon :name="feature.icon" size="24" />
                   </div>
                   <h3 class="text-xl font-bold mb-3 dark:text-gray-900">{{ feature.title }}</h3>
-                  <p class="text-gray-600 leading-relaxed dark:text-gray-600 md:grow">{{ feature.description }}</p>
+                  <p class="text-gray-700 leading-relaxed dark:text-gray-700 md:grow">{{ feature.description }}</p>
                 </div>
               </div>
             </div>
@@ -156,7 +156,7 @@
       <!-- Footer: same glass bar language as the sticky header -->
       <footer class="relative z-10 border-t border-white/10 bg-white/5 backdrop-blur-md pb-6 pt-2 transition-colors duration-300">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 text-center">
-          <p class="text-sm font-medium text-gray-600 dark:text-gray-600">
+          <p class="text-sm font-medium text-gray-700 dark:text-gray-700">
             <NuxtLink to="/integrations" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Integrations</NuxtLink>
             <span class="mx-2 text-gray-400 dark:text-gray-400">·</span>
             <NuxtLink to="/pricing" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Pricing</NuxtLink>
