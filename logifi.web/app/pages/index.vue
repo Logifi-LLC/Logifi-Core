@@ -2,8 +2,8 @@
   <!-- Force light theme on landing: dark: overrides so links/header stay light even when app uses dark mode -->
   <div class="min-h-screen bg-[#e4e8e7] font-quicksand text-gray-900 overflow-x-hidden dark:bg-[#e4e8e7] dark:text-gray-900">
     <!-- Sticky Header -->
-    <header 
-      class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b bg-white/80 backdrop-blur-md border-[#e4e8e7] dark:bg-white/80 dark:border-[#e4e8e7]"
+    <header
+      class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b border-white/10 bg-white/5 backdrop-blur-md"
     >
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         <div class="flex items-center">
@@ -25,9 +25,9 @@
           </button>
           <button 
             @click="openAuth('signup')"
-            class="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20 active:scale-[0.98] dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
+            class="btn-cta-primary px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-all ring-1 ring-blue-400/60 shadow-[0_0_16px_-3px_rgba(37,99,235,0.48),0_0_32px_-12px_rgba(59,130,246,0.22)] hover:shadow-[0_0_24px_-2px_rgba(37,99,235,0.55),0_0_40px_-10px_rgba(59,130,246,0.28)] active:scale-[0.98] dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
           >
-            Get Started
+            <span class="relative z-10">Get Started</span>
           </button>
         </nav>
 
@@ -40,13 +40,20 @@
 
     <!-- Hero Section -->
     <main>
-      <section class="relative pt-32 pb-20 lg:pt-48 lg:pb-32 overflow-hidden bg-[url('/images/hero-bg.png')] bg-cover bg-center bg-no-repeat">
+      <section class="relative pt-32 pb-24 lg:pt-48 lg:pb-36 overflow-hidden bg-[url('/images/hero-bg.png')] bg-cover bg-center bg-no-repeat">
         <!-- Overlay to ensure text readability -->
         <div class="absolute inset-0 bg-white/40 backdrop-blur-[1px] z-0"></div>
-        <div class="absolute inset-0 bg-gradient-to-b from-white/60 via-transparent to-[#e4e8e7] z-0"></div>
+        <div
+          class="absolute inset-0 z-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.46)_0%,rgba(255,255,255,0.12)_24%,transparent_48%,rgba(228,232,231,0.06)_68%,rgba(228,232,231,0.28)_88%,rgba(228,232,231,0.55)_100%)]"
+        ></div>
+        <!-- Single soft bottom fade (avoid stacking two heavy mint ramps = muddy band) -->
+        <div
+          class="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-[min(38vh,360px)] bg-[linear-gradient(0deg,#e4e8e7_0%,rgba(228,232,231,0.82)_22%,rgba(228,232,231,0.35)_55%,transparent_100%)]"
+          aria-hidden="true"
+        ></div>
 
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-          <div class="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-semibold mb-8 animate-fade-in dark:bg-blue-50 dark:border-blue-100 dark:text-blue-700">
+          <div class="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-semibold mb-8 shadow-[0_0_22px_-6px_rgba(59,130,246,0.38),0_0_36px_-12px_rgba(37,99,235,0.18)] animate-fade-in dark:bg-blue-50 dark:border-blue-100 dark:text-blue-700">
             <span class="mr-2">✨</span> NOW IN BETA
           </div>
           
@@ -62,13 +69,13 @@
           <div class="flex flex-col sm:flex-row items-center justify-center gap-4 animate-slide-up delay-200">
             <button 
               @click="openAuth('signup')"
-              class="w-full sm:w-auto px-8 py-4 bg-blue-600 text-white text-lg font-bold rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20 active:scale-[0.98] dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
+              class="btn-cta-primary w-full sm:w-auto px-8 py-4 bg-blue-600 text-white text-lg font-bold rounded-xl hover:bg-blue-700 transition-all ring-1 ring-blue-400/60 shadow-[0_0_18px_-3px_rgba(37,99,235,0.48),0_0_36px_-12px_rgba(59,130,246,0.22)] hover:shadow-[0_0_28px_-2px_rgba(37,99,235,0.55),0_0_48px_-10px_rgba(59,130,246,0.28)] active:scale-[0.98] dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
             >
-              Get Started
+              <span class="relative z-10">Get Started</span>
             </button>
             <button 
               @click="openAuth('signin')"
-              class="w-full sm:w-auto px-8 py-4 bg-white text-gray-900 text-lg font-bold rounded-xl border border-[#d1d8d6] hover:border-blue-200 hover:bg-blue-50/50 transition-all active:scale-[0.98] dark:bg-white dark:text-gray-900 dark:border-[#d1d8d6] dark:hover:border-blue-200 dark:hover:bg-blue-50/50"
+              class="w-full sm:w-auto px-8 py-4 bg-white text-gray-900 text-lg font-bold rounded-xl border border-[#d1d8d6] shadow-[0_0_18px_-8px_rgba(59,130,246,0.14)] hover:border-blue-200 hover:bg-blue-50/50 hover:shadow-[0_0_28px_-6px_rgba(59,130,246,0.24),0_0_40px_-10px_rgba(37,99,235,0.14)] transition-all active:scale-[0.98] dark:bg-white dark:text-gray-900 dark:border-[#d1d8d6] dark:hover:border-blue-200 dark:hover:bg-blue-50/50"
             >
               Sign In
             </button>
@@ -77,28 +84,48 @@
       </section>
 
       <!-- Features Section -->
-      <section id="features" class="py-24 bg-[#e4e8e7] dark:bg-[#e4e8e7]">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section id="features" class="relative overflow-hidden bg-[#e4e8e7] py-24 dark:bg-[#e4e8e7]">
+        <!-- Tall, light top feather: mint → clear so photo doesn’t “crash” under hero -->
+        <div
+          class="pointer-events-none absolute inset-x-0 top-0 z-[2] h-44 sm:h-52 md:h-60 bg-[linear-gradient(180deg,#e4e8e7_0%,rgba(228,232,231,0.72)_18%,rgba(228,232,231,0.28)_52%,transparent_100%)]"
+          aria-hidden="true"
+        ></div>
+        <div
+          class="pointer-events-none absolute inset-0 z-0 bg-[url('/images/features-bg.png')] bg-cover bg-[position:center_28%] contrast-[1.04] saturate-[1.08]"
+          aria-hidden="true"
+        ></div>
+        <div
+          class="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(180deg,rgba(255,255,255,0.22)_0%,rgba(228,232,231,0.14)_12%,rgba(228,232,231,0.34)_38%,rgba(228,232,231,0.58)_68%,rgba(228,232,231,0.78)_100%)]"
+          aria-hidden="true"
+        ></div>
+        <div class="pointer-events-none absolute inset-0 z-[1] bg-white/6" aria-hidden="true"></div>
+
+        <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="text-center mb-16">
-            <h2 class="text-3xl font-bold text-gray-900 sm:text-4xl dark:text-gray-900">Everything you need</h2>
-            <p class="mt-4 text-lg text-gray-600 dark:text-gray-600">Built by pilots, for pilots.</p>
+            <h2 class="text-3xl font-bold text-gray-950 sm:text-4xl drop-shadow-sm dark:text-gray-900">Everything you need</h2>
+            <p class="mt-4 text-lg font-medium text-gray-800 dark:text-gray-700">Built by pilots, for pilots.</p>
           </div>
-          
-          <div class="relative overflow-hidden rounded-[28px] border border-[#d8dedb] bg-[#fcfcf8] shadow-[0_18px_45px_rgba(0,0,0,0.06)] p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8">
-            <div
-              class="absolute inset-0 pointer-events-none opacity-35 bg-[linear-gradient(to_bottom,rgba(148,163,184,0.14)_1px,transparent_1px)] bg-[size:100%_38px]"
-              aria-hidden="true"
-            ></div>
+
+          <div class="relative overflow-hidden rounded-[28px] border border-white/15 bg-white/10 backdrop-blur-md shadow-[0_0_42px_-12px_rgba(59,130,246,0.24),0_0_56px_-18px_rgba(37,99,235,0.14)] p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8">
             <!-- Current Features -->
             <div class="mb-14 relative z-10">
               <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center dark:text-gray-900">Features</h3>
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
-                <div v-for="(feature, i) in features" :key="i" class="bg-[#fcfcfb] p-8 rounded-3xl shadow-[0_10px_26px_rgba(15,23,42,0.06)] border border-[#dbe3ec] dark:bg-[#fcfcfb] dark:border-[#dbe3ec]">
+              <div class="grid grid-cols-1 md:grid-cols-6 gap-5 md:gap-6 md:auto-rows-min">
+                <div
+                  v-for="(feature, i) in features"
+                  :key="i"
+                  :class="[
+                    'bg-white/10 backdrop-blur-md p-8 rounded-3xl border border-white/15 flex flex-col md:h-full shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)]',
+                    i === 0 ? 'md:col-span-4' : '',
+                    i === 1 ? 'md:col-span-2' : '',
+                    i === 2 ? 'md:col-span-6' : '',
+                  ]"
+                >
                   <div class="w-12 h-12 bg-blue-50/70 rounded-xl flex items-center justify-center text-blue-600 mb-6 dark:bg-blue-50/70 dark:text-blue-600">
                     <Icon :name="feature.icon" size="24" />
                   </div>
                   <h3 class="text-xl font-bold mb-3 dark:text-gray-900">{{ feature.title }}</h3>
-                  <p class="text-gray-600 leading-relaxed dark:text-gray-600">{{ feature.description }}</p>
+                  <p class="text-gray-600 leading-relaxed dark:text-gray-600 md:grow">{{ feature.description }}</p>
                 </div>
               </div>
             </div>
@@ -106,13 +133,22 @@
             <!-- Features to Come -->
             <div class="relative z-10">
               <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center dark:text-gray-900">Features to Come</h3>
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
-                <div v-for="(feature, i) in featuresToCome" :key="i" class="bg-[#fcfcfb] p-8 rounded-3xl shadow-[0_10px_26px_rgba(15,23,42,0.06)] border border-[#dbe3ec] dark:bg-[#fcfcfb] dark:border-[#dbe3ec]">
+              <div class="grid grid-cols-1 md:grid-cols-6 gap-5 md:gap-6 md:auto-rows-min">
+                <div
+                  v-for="(feature, i) in featuresToCome"
+                  :key="i"
+                  :class="[
+                    'bg-white/10 backdrop-blur-md p-8 rounded-3xl border border-white/15 flex flex-col md:h-full shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)]',
+                    i === 0 ? 'md:col-span-6' : '',
+                    i === 1 ? 'md:col-span-3' : '',
+                    i === 2 ? 'md:col-span-3' : '',
+                  ]"
+                >
                   <div class="w-12 h-12 bg-blue-50/70 rounded-xl flex items-center justify-center text-blue-600 mb-6 dark:bg-blue-50/70 dark:text-blue-600">
                     <Icon :name="feature.icon" size="24" />
                   </div>
                   <h3 class="text-xl font-bold mb-3 dark:text-gray-900">{{ feature.title }}</h3>
-                  <p class="text-gray-600 leading-relaxed dark:text-gray-600">{{ feature.description }}</p>
+                  <p class="text-gray-600 leading-relaxed dark:text-gray-600 md:grow">{{ feature.description }}</p>
                 </div>
               </div>
             </div>
@@ -253,4 +289,41 @@ const featuresToCome = [
 
 .delay-100 { animation-delay: 0.1s; }
 .delay-200 { animation-delay: 0.2s; }
+
+@keyframes cta-shimmer {
+  0%,
+  100% {
+    transform: translateX(-140%) skewX(-14deg);
+  }
+  50% {
+    transform: translateX(140%) skewX(-14deg);
+  }
+}
+
+.btn-cta-primary {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-cta-primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.12) 50%,
+    transparent 62%
+  );
+  animation: cta-shimmer 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-cta-primary::after {
+    animation: none;
+    opacity: 0;
+  }
+}
 </style>
