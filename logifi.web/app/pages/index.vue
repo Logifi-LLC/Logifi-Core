@@ -40,16 +40,11 @@
 
     <!-- Hero Section -->
     <main>
-      <section class="relative pt-32 pb-24 lg:pt-48 lg:pb-36 overflow-hidden bg-[url('/images/hero-bg.png')] bg-cover bg-center bg-no-repeat">
+      <section class="relative pt-32 pb-48 lg:pt-48 lg:pb-64 overflow-hidden bg-[url('/images/hero-bg.png')] bg-cover bg-center bg-no-repeat">
         <!-- Overlay to ensure text readability -->
         <div class="absolute inset-0 bg-white/40 backdrop-blur-[1px] z-0"></div>
         <div
           class="absolute inset-0 z-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.46)_0%,rgba(255,255,255,0.12)_24%,transparent_48%,rgba(228,232,231,0.06)_68%,rgba(228,232,231,0.28)_88%,rgba(228,232,231,0.55)_100%)]"
-        ></div>
-        <!-- Single soft bottom fade (avoid stacking two heavy mint ramps = muddy band) -->
-        <div
-          class="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-[min(38vh,360px)] bg-[linear-gradient(0deg,#e4e8e7_0%,rgba(228,232,231,0.82)_22%,rgba(228,232,231,0.35)_55%,transparent_100%)]"
-          aria-hidden="true"
         ></div>
 
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
@@ -83,24 +78,26 @@
         </div>
       </section>
 
-      <!-- Features Section -->
-      <section id="features" class="relative overflow-hidden bg-[#e4e8e7] py-24 dark:bg-[#e4e8e7]">
-        <!-- Tall, light top feather: mint → clear so photo doesn’t “crash” under hero -->
-        <div
-          class="pointer-events-none absolute inset-x-0 top-0 z-[2] h-44 sm:h-52 md:h-60 bg-[linear-gradient(180deg,#e4e8e7_0%,rgba(228,232,231,0.72)_18%,rgba(228,232,231,0.28)_52%,transparent_100%)]"
-          aria-hidden="true"
-        ></div>
-        <div
-          class="pointer-events-none absolute inset-0 z-0 bg-[url('/images/features-bg.png')] bg-cover bg-[position:center_28%] contrast-[1.04] saturate-[1.08]"
-          aria-hidden="true"
-        ></div>
-        <div
-          class="pointer-events-none absolute inset-0 z-[1] bg-[linear-gradient(180deg,rgba(255,255,255,0.22)_0%,rgba(228,232,231,0.14)_12%,rgba(228,232,231,0.34)_38%,rgba(228,232,231,0.58)_68%,rgba(228,232,231,0.78)_100%)]"
-          aria-hidden="true"
-        ></div>
-        <div class="pointer-events-none absolute inset-0 z-[1] bg-white/6" aria-hidden="true"></div>
+      <!-- Features + footer share one photo stack so the glass footer sits over the same sky -->
+      <div class="relative overflow-hidden -mt-48 lg:-mt-64 z-10">
+        <!-- Background layers with crossfade mask -->
+        <div 
+          class="pointer-events-none absolute inset-0 z-0"
+          style="-webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 12rem); mask-image: linear-gradient(to bottom, transparent 0%, black 12rem);"
+        >
+          <div
+            class="absolute inset-0 bg-[url('/images/features-bg.png')] bg-cover bg-[position:center_32%] contrast-[1.04] saturate-[1.08]"
+            aria-hidden="true"
+          ></div>
+          <div
+            class="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.22)_0%,rgba(228,232,231,0.14)_12%,rgba(228,232,231,0.34)_38%,rgba(228,232,231,0.52)_72%,rgba(228,232,231,0.62)_100%)]"
+            aria-hidden="true"
+          ></div>
+          <div class="absolute inset-0 bg-white/6" aria-hidden="true"></div>
+        </div>
 
-        <div class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <section id="features" class="relative z-10 scroll-mt-28 pt-24 pb-14 lg:pb-16">
+        <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="text-center mb-16">
             <h2 class="text-3xl font-bold text-gray-950 sm:text-4xl drop-shadow-sm dark:text-gray-900">Everything you need</h2>
             <p class="mt-4 text-lg font-medium text-gray-800 dark:text-gray-700">Built by pilots, for pilots.</p>
@@ -154,22 +151,25 @@
             </div>
           </div>
         </div>
-      </section>
+        </section>
 
-      <!-- Footer -->
-      <footer class="mt-10 py-5 text-center">
-        <p class="text-sm text-gray-500 dark:text-gray-500">
-          <NuxtLink to="/integrations" class="text-gray-600 hover:text-blue-600 hover:underline dark:text-gray-600 dark:hover:text-blue-600">Integrations</NuxtLink>
-          <span class="mx-2">·</span>
-          <NuxtLink to="/pricing" class="text-gray-600 hover:text-blue-600 hover:underline dark:text-gray-600 dark:hover:text-blue-600">Pricing</NuxtLink>
-          <span class="mx-2">·</span>
-          <NuxtLink to="/data-sources?from=landing" class="text-gray-600 hover:text-blue-600 hover:underline dark:text-gray-600 dark:hover:text-blue-600">Data sources</NuxtLink>
-          <span class="mx-2">·</span>
-          <NuxtLink to="/terms?from=landing" class="text-gray-600 hover:text-blue-600 hover:underline dark:text-gray-600 dark:hover:text-blue-600">Terms of Service</NuxtLink>
-          <span class="mx-2">·</span>
-          <NuxtLink to="/privacy?from=landing" class="text-gray-600 hover:text-blue-600 hover:underline dark:text-gray-600 dark:hover:text-blue-600">Privacy Policy</NuxtLink>
-        </p>
+      <!-- Footer: same glass bar language as the sticky header -->
+      <footer class="relative z-10 border-t border-white/10 bg-white/5 backdrop-blur-md pb-6 pt-2 transition-colors duration-300">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 text-center">
+          <p class="text-sm font-medium text-gray-600 dark:text-gray-600">
+            <NuxtLink to="/integrations" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Integrations</NuxtLink>
+            <span class="mx-2 text-gray-400 dark:text-gray-400">·</span>
+            <NuxtLink to="/pricing" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Pricing</NuxtLink>
+            <span class="mx-2 text-gray-400 dark:text-gray-400">·</span>
+            <NuxtLink to="/data-sources?from=landing" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Data sources</NuxtLink>
+            <span class="mx-2 text-gray-400 dark:text-gray-400">·</span>
+            <NuxtLink to="/terms?from=landing" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Terms of Service</NuxtLink>
+            <span class="mx-2 text-gray-400 dark:text-gray-400">·</span>
+            <NuxtLink to="/privacy?from=landing" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Privacy Policy</NuxtLink>
+          </p>
+        </div>
       </footer>
+      </div>
     </main>
 
     <!-- Auth Modal -->
