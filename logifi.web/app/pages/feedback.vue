@@ -3,12 +3,14 @@
     :class="[
       'min-h-screen transition-colors duration-300 font-quicksand',
       isFromLanding
-        ? 'bg-[#e4e8e7] text-gray-900'
+        ? 'relative overflow-x-hidden bg-[#e4e8e7] text-gray-900'
         : theme === 'dark'
           ? 'bg-gray-950'
           : 'bg-gray-50'
     ]"
   >
+    <TechnicalTopographyBg v-if="isFromLanding" />
+    <div :class="isFromLanding ? 'relative z-10' : 'contents'">
     <header v-if="isFromLanding" class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b border-white/10 bg-white/5 backdrop-blur-md">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         <div class="flex items-center">
@@ -16,7 +18,7 @@
             <img src="/images/logifi-logo.png" alt="Logifi" class="h-32 w-auto brightness-0" />
           </NuxtLink>
         </div>
-        
+
         <nav class="hidden md:flex items-center space-x-8">
           <NuxtLink to="/#features" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Features</NuxtLink>
           <NuxtLink to="/integrations" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Integrations</NuxtLink>
@@ -24,22 +26,23 @@
           <NuxtLink to="/developers?from=landing" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Developers</NuxtLink>
           <NuxtLink to="/feedback?from=landing" class="text-sm font-medium text-blue-600 transition-colors dark:text-blue-600">Feedback</NuxtLink>
           <div class="h-4 w-px bg-gray-200 dark:bg-gray-200"></div>
-          <button 
-            @click="openAuth('signin')"
+          <button
+            type="button"
             class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600"
+            @click="openAuth('signin')"
           >
             Sign In
           </button>
-          <button 
-            @click="openAuth('signup')"
+          <button
+            type="button"
             class="btn-cta-primary px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-all ring-1 ring-blue-400/60 shadow-[0_0_16px_-3px_rgba(37,99,235,0.48),0_0_32px_-12px_rgba(59,130,246,0.22)] hover:shadow-[0_0_24px_-2px_rgba(37,99,235,0.55),0_0_40px_-10px_rgba(59,130,246,0.28)] active:scale-[0.98] dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
+            @click="openAuth('signup')"
           >
             <span class="relative z-10">Get Started</span>
           </button>
         </nav>
 
-        <!-- Mobile Menu Button -->
-        <button class="md:hidden p-2 text-gray-600 dark:text-gray-600">
+        <button type="button" class="md:hidden p-2 text-gray-600 dark:text-gray-600" aria-label="Open menu">
           <Icon name="ri:menu-line" size="24" />
         </button>
       </div>
@@ -117,7 +120,7 @@
           <div
             :class="[
               'inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-6 shadow-lg',
-              isFromLanding ? 'bg-blue-600 shadow-blue-900/20' : (effectiveDark ? 'bg-blue-900/50' : 'bg-blue-600 shadow-blue-900/20')
+              isFromLanding ? 'bg-blue-600 shadow-[0_0_24px_-2px_rgba(37,99,235,0.55)]' : (effectiveDark ? 'bg-blue-900/50' : 'bg-blue-600 shadow-blue-900/20')
             ]"
           >
             <Icon name="ri:feedback-line" size="32" class="text-white" />
@@ -298,13 +301,15 @@
         @success="handleAuthSuccess"
       />
     </ClientOnly>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from '#imports'
 import AuthModal from '~/components/AuthModal.vue'
+import TechnicalTopographyBg from '~/components/TechnicalTopographyBg.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -338,9 +343,23 @@ const goBack = () => {
 
 const backButtonText = computed(() => (route.query.from === 'landing' ? 'Back to Home' : 'Back to Logbook'))
 
-const { theme, isDark } = useTheme()
+const { theme, isDark, applyDocumentTheme } = useTheme()
 const isFromLanding = computed(() => route.query.from === 'landing')
 const effectiveDark = computed(() => isDark.value && !isFromLanding.value)
+
+if (import.meta.client) {
+  watch(isFromLanding, (val) => {
+    if (val) applyDocumentTheme('light')
+    else applyDocumentTheme(theme.value)
+  }, { immediate: true })
+  onBeforeUnmount(() => {
+    applyDocumentTheme(theme.value)
+  })
+  watch(theme, (t) => {
+    if (isFromLanding.value) applyDocumentTheme('light')
+    else applyDocumentTheme(t)
+  })
+}
 
 const form = ref({
   type: 'bug' as 'bug' | 'feature' | 'other',

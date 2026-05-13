@@ -3,10 +3,12 @@
     :class="[
       'min-h-screen transition-colors duration-300 font-quicksand',
       isFromLanding
-        ? 'bg-[#e4e8e7] text-gray-900'
+        ? 'relative overflow-x-hidden bg-[#e4e8e7] text-gray-900'
         : 'bg-gray-100 text-gray-900 dark:bg-gray-950 dark:text-gray-100'
     ]"
   >
+    <TechnicalTopographyBg v-if="isFromLanding" />
+    <div :class="isFromLanding ? 'relative z-10' : 'contents'">
     <!-- Marketing header (?from=landing) -->
     <header v-if="isFromLanding" class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b border-white/10 bg-white/5 backdrop-blur-md">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
@@ -15,7 +17,7 @@
             <img src="/images/logifi-logo.png" alt="Logifi" class="h-32 w-auto brightness-0" />
           </NuxtLink>
         </div>
-        
+
         <nav class="hidden md:flex items-center space-x-8">
           <NuxtLink to="/#features" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Features</NuxtLink>
           <NuxtLink to="/integrations" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Integrations</NuxtLink>
@@ -23,22 +25,23 @@
           <NuxtLink to="/developers?from=landing" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Developers</NuxtLink>
           <NuxtLink to="/feedback?from=landing" class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600">Feedback</NuxtLink>
           <div class="h-4 w-px bg-gray-200 dark:bg-gray-200"></div>
-          <button 
-            @click="openAuth('signin')"
+          <button
+            type="button"
             class="text-sm font-medium text-gray-600 hover:text-blue-600 transition-colors dark:text-gray-600 dark:hover:text-blue-600"
+            @click="openAuth('signin')"
           >
             Sign In
           </button>
-          <button 
-            @click="openAuth('signup')"
+          <button
+            type="button"
             class="btn-cta-primary px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-all ring-1 ring-blue-400/60 shadow-[0_0_16px_-3px_rgba(37,99,235,0.48),0_0_32px_-12px_rgba(59,130,246,0.22)] hover:shadow-[0_0_24px_-2px_rgba(37,99,235,0.55),0_0_40px_-10px_rgba(59,130,246,0.28)] active:scale-[0.98] dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
+            @click="openAuth('signup')"
           >
             <span class="relative z-10">Get Started</span>
           </button>
         </nav>
 
-        <!-- Mobile Menu Button -->
-        <button class="md:hidden p-2 text-gray-600 dark:text-gray-600">
+        <button type="button" class="md:hidden p-2 text-gray-600 dark:text-gray-600" aria-label="Open menu">
           <Icon name="ri:menu-line" size="24" />
         </button>
       </div>
@@ -63,11 +66,18 @@
 
     <!-- Main Content -->
     <main :class="['pb-16 px-4 sm:px-6 lg:px-8', isFromLanding ? 'pt-32' : 'pt-24']">
-      <div :class="['max-w-4xl mx-auto prose prose-gray', isFromLanding ? 'relative overflow-hidden rounded-[28px] border border-white/15 bg-white/10 backdrop-blur-md shadow-[0_0_42px_-12px_rgba(59,130,246,0.24),0_0_56px_-18px_rgba(37,99,235,0.14)] p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8' : '']">
+      <div
+        :class="[
+          'max-w-4xl mx-auto prose prose-gray',
+          isFromLanding
+            ? 'relative overflow-hidden rounded-[28px] border border-white/15 bg-white/10 backdrop-blur-md shadow-[0_0_42px_-12px_rgba(59,130,246,0.24),0_0_56px_-18px_rgba(37,99,235,0.14)] p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8'
+            : '',
+        ]"
+      >
         <p :class="['text-sm mb-8', isFromLanding ? 'text-gray-600 dark:text-gray-600' : 'text-gray-500 dark:text-gray-400']">Effective: February 21, 2025 · Last updated: February 21, 2025</p>
 
         <h1 :class="['text-3xl font-bold font-quicksand mb-2', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">Terms of Service</h1>
-        <p :class="['mb-10', isFromLanding ? 'text-gray-800 dark:text-gray-700' : 'text-gray-600 dark:text-gray-400']">Please read these terms carefully before using Logifi.</p>
+        <p :class="['mb-10', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-600 dark:text-gray-400']">Please read these terms carefully before using Logifi.</p>
 
         <section class="mb-10">
           <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">1. Acceptance</h2>
@@ -214,6 +224,7 @@
         @success="handleAuthSuccess"
       />
     </ClientOnly>
+    </div>
   </div>
 </template>
 
@@ -222,6 +233,7 @@ import { ref, computed, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from '#imports'
 import FcvApiDisclaimers from '~/components/fcv/FcvApiDisclaimers.vue'
 import AuthModal from '~/components/AuthModal.vue'
+import TechnicalTopographyBg from '~/components/TechnicalTopographyBg.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -229,7 +241,7 @@ const { theme, applyDocumentTheme } = useTheme()
 
 const isFromLanding = computed(() => route.query.from === 'landing')
 
-/** Landing pages stay visually light and drop `html.dark` so `dark:` utilities do not apply. Restore saved theme when leaving. */
+/** Marketing shell stays light (matches home); restore saved theme when leaving. */
 if (import.meta.client) {
   watch(isFromLanding, (val) => {
     if (val) applyDocumentTheme('light')
