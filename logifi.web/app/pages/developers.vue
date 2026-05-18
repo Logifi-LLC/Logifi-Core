@@ -53,7 +53,7 @@
     <header v-else>
       <div
         :class="[
-          'fixed top-0 left-0 right-0 z-10 transition-colors duration-300',
+          'fixed top-0 left-0 right-0 z-50 transition-colors duration-300',
           effectiveDark ? 'border-gray-700/50' : 'border-gray-400/50'
         ]"
       >
@@ -113,8 +113,8 @@
     <!-- Main Content -->
     <main
       :class="[
-        'pb-16 px-4 sm:px-6 lg:px-8 relative z-10',
-        isFromLanding ? 'pt-32' : 'pt-24'
+        'pb-16 px-4 sm:px-6 lg:px-8',
+        isFromLanding ? 'relative z-10 pt-32' : 'pt-24'
       ]"
     >
       <div :class="['max-w-4xl mx-auto', isFromLanding ? 'relative overflow-hidden rounded-[28px] border border-white/15 bg-white/10 backdrop-blur-md shadow-[0_0_42px_-12px_rgba(59,130,246,0.24),0_0_56px_-18px_rgba(37,99,235,0.14)] p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8' : '']">
@@ -470,7 +470,16 @@ const backTarget = computed(() => {
 })
 
 const goBack = () => {
-  if (window.history.length > 1) {
+  const from = route.query.from
+  if (from === 'landing') {
+    router.push('/')
+    return
+  }
+  if (from === 'dashboard' || from === 'app') {
+    router.push('/dashboard')
+    return
+  }
+  if (typeof window !== 'undefined' && window.history.length > 1) {
     router.back()
   } else {
     router.push(backTarget.value)

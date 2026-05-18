@@ -888,7 +888,7 @@ const inputClass = computed(() =>
           ]"
           @click="disconnectFcv"
         >
-          <Icon name="ri:plug-disconnect-line" size="18" class="shrink-0" />
+          <Icon name="ri:link-unlink" size="18" class="shrink-0" />
           {{ disconnecting ? 'Disconnecting…' : 'Disconnect FC View' }}
         </button>
       </div>

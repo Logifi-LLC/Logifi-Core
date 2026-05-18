@@ -49,7 +49,7 @@
     </header>
 
     <header v-else>
-      <div class="fixed top-0 left-0 right-0 z-10 transition-colors duration-300 bg-transparent">
+      <div class="fixed top-0 left-0 right-0 z-50 transition-colors duration-300 bg-transparent">
         <div class="mr-auto px-6 sm:px-8 py-4 flex items-center justify-between relative">
           <a class="left" href="/">
             <img
@@ -104,7 +104,7 @@
 
     <main
       :class="[
-        'pb-16 px-4 sm:px-6 lg:px-8 relative z-10',
+        'pb-16 px-4 sm:px-6 lg:px-8',
         isFromLanding ? 'pt-32' : 'pt-24'
       ]"
     >
@@ -334,6 +334,15 @@ const backTarget = computed(() => {
 })
 
 const goBack = () => {
+  const from = route.query.from
+  if (from === 'landing') {
+    router.push('/')
+    return
+  }
+  if (from === 'dashboard' || from === 'app') {
+    router.push('/dashboard')
+    return
+  }
   if (typeof window !== 'undefined' && window.history.length > 1) {
     router.back()
   } else {
