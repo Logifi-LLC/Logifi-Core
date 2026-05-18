@@ -1,3 +1,5 @@
+import { DateTime } from 'luxon'
+import { getAirportIanaTimezone } from '../../shared/airportTimezone'
 import {
   mapAircraftCategoryClass,
   normalizeCrewNameForMatching,
@@ -122,21 +124,82 @@ function parseFcvLocalDatetimeToUnixMs(dt: string): number | null {
   return Number.isFinite(ms) ? ms : null
 }
 
-/**
- * Gate-to-gate hours from FC View local OUT/IN datetimes (actual preferred, then scheduled),
- * rounded to one decimal to match commercial OOOI duration in the dashboard.
- */
-export function gateDurationHoursFromFcvLocalPair(flight: FcvFlight): number | null {
-  const outStr = pickOutLocalDatetimeForGateDuration(flight)
-  const inStr = pickInLocalDatetimeForGateDuration(flight)
-  if (!outStr || !inStr) return null
+const FCV_LOCAL_DATETIME_RE =
+  /^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$/
+
+function parseFcvLocalDatetimeInZone(dt: string, zone: string): DateTime | null {
+  const m = dt.trim().match(FCV_LOCAL_DATETIME_RE)
+  if (!m) return null
+  const year = parseInt(m[1], 10)
+  const month = parseInt(m[2], 10)
+  const day = parseInt(m[3], 10)
+  const hour = parseInt(m[4], 10)
+  const minute = parseInt(m[5], 10)
+  const second = m[6] ? parseInt(m[6], 10) : 0
+  const dtObj = DateTime.fromObject(
+    { year, month, day, hour, minute, second },
+    { zone }
+  )
+  return dtObj.isValid ? dtObj : null
+}
+
+function gateDurationMinutesNaive(outStr: string, inStr: string): number | null {
   const outMs = parseFcvLocalDatetimeToUnixMs(outStr)
   const inMs = parseFcvLocalDatetimeToUnixMs(inStr)
   if (outMs === null || inMs === null) return null
   let diffMin = (inMs - outMs) / 60000
   if (diffMin < 0) diffMin += 24 * 60
   if (diffMin <= 0 || diffMin > 24 * 60) return null
+  return diffMin
+}
+
+function gateDurationMinutesTimezoneAware(
+  outStr: string,
+  inStr: string,
+  depTz: string,
+  arrTz: string
+): number | null {
+  const outDT = parseFcvLocalDatetimeInZone(outStr, depTz)
+  const inDT = parseFcvLocalDatetimeInZone(inStr, arrTz)
+  if (!outDT || !inDT) return null
+  let diffMin = inDT.toUTC().diff(outDT.toUTC(), 'minutes').minutes
+  if (diffMin < 0) {
+    if (diffMin < -12 * 60) diffMin += 24 * 60
+    else diffMin += 24 * 60
+  }
+  if (diffMin <= 0 || diffMin > 24 * 60) return null
+  return diffMin
+}
+
+function roundBlockHoursFromMinutes(diffMin: number): number {
   return Math.round((diffMin / 60) * 10) / 10
+}
+
+/**
+ * Gate-to-gate hours from FC View local OUT/IN datetimes (actual preferred, then scheduled),
+ * rounded to one decimal to match commercial OOOI duration in the dashboard.
+ * When departure and arrival airports are in different IANA zones, each timestamp is
+ * interpreted in its airport's local zone before computing elapsed time.
+ */
+export function gateDurationHoursFromFcvLocalPair(flight: FcvFlight): number | null {
+  const outStr = pickOutLocalDatetimeForGateDuration(flight)
+  const inStr = pickInLocalDatetimeForGateDuration(flight)
+  if (!outStr || !inStr) return null
+
+  const dep = String(flight.dep_airport_icao ?? flight.dep_airport ?? '').trim()
+  const arr = String(flight.arr_airport_icao ?? flight.arr_airport ?? '').trim()
+  const depTz = getAirportIanaTimezone(dep)
+  const arrTz = getAirportIanaTimezone(arr)
+
+  let diffMin: number | null = null
+  if (depTz && arrTz && depTz !== arrTz) {
+    diffMin = gateDurationMinutesTimezoneAware(outStr, inStr, depTz, arrTz)
+  } else {
+    diffMin = gateDurationMinutesNaive(outStr, inStr)
+  }
+
+  if (diffMin === null) return null
+  return roundBlockHoursFromMinutes(diffMin)
 }
 
 /**
@@ -219,6 +282,31 @@ function buildFcvFlightConditions(xcHours: number | null): string[] {
     out.push('crossCountry')
   }
   return out
+}
+
+/** Recompute block-related fields from raw FC View flight (for repair/backfill). */
+export function recomputeFcvBlockFields(
+  flight: FcvFlight,
+  role: 'PIC' | 'SIC',
+  dep: string,
+  arr: string
+): {
+  blockHours: number | null
+  flight_time: Record<string, unknown>
+  flight_conditions: string[]
+  category_class_time: number | null
+} {
+  const blockHours = resolveFcvBlockHours(flight)
+  const flight_time = buildFlightTimeForFcv(blockHours, dep, arr, role)
+  const xcRaw = flight_time.crossCountry
+  const xcHours =
+    typeof xcRaw === 'number' && Number.isFinite(xcRaw) && xcRaw > 0 ? xcRaw : null
+  return {
+    blockHours,
+    flight_time,
+    flight_conditions: buildFcvFlightConditions(xcHours),
+    category_class_time: blockHours,
+  }
 }
 
 function buildFlightTimeForFcv(

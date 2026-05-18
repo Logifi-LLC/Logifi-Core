@@ -77,6 +77,8 @@ const disconnecting = ref(false)
 const loadingFetch = ref(false)
 const loadingSinceLast = ref(false)
 const loadingImport = ref(false)
+const loadingRepair = ref(false)
+const repairResult = ref<string | null>(null)
 const error = ref<string | null>(null)
 
 const dateFrom = ref('')
@@ -272,6 +274,36 @@ async function connectFcv() {
       return
     }
     error.value = e instanceof Error ? e.message : 'Failed to start FC View connection'
+  }
+}
+
+async function repairImportedBlockTimes() {
+  if (!isAuthenticated.value || loadingRepair.value) return
+  loadingRepair.value = true
+  error.value = null
+  repairResult.value = null
+  try {
+    const data = await $fetch<{
+      scanned: number
+      repaired: number
+      unchanged: number
+      skipped: number
+    }>('/api/fcv/repair-block-times', {
+      method: 'POST',
+      headers: authHeaders(),
+    })
+    if (data.repaired === 0) {
+      repairResult.value =
+        data.scanned === 0
+          ? 'No FC View imports found to repair.'
+          : `Checked ${data.scanned} import(s); all block times were already correct.`
+    } else {
+      repairResult.value = `Updated block time on ${data.repaired} of ${data.scanned} FC View import(s).`
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to repair imported block times'
+  } finally {
+    loadingRepair.value = false
   }
 }
 
@@ -869,14 +901,42 @@ const inputClass = computed(() =>
             <Icon name="ri:history-line" size="18" />
             {{ loadingSinceLast ? 'Loading…' : 'Since last entry' }}
           </button>
+          <button
+            type="button"
+            :class="btnOutlineClass"
+            :disabled="loadingRepair"
+            @click="repairImportedBlockTimes"
+          >
+            <Icon name="ri:tools-line" size="18" />
+            {{ loadingRepair ? 'Repairing…' : 'Repair imported block times' }}
+          </button>
         </div>
+        <p
+          v-if="repairResult"
+          :class="['text-sm mt-3', isDarkMode ? 'text-green-400' : 'text-green-700']"
+        >
+          {{ repairResult }}
+        </p>
       </div>
     </template>
     <template v-else-if="showConnectManage">
       <p :class="['text-sm mb-4', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
         FC View is connected. You can disconnect at any time.
       </p>
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+      <p :class="['text-sm mb-4', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+        Cross-timezone legs imported before this fix may show short block times. Use repair once
+        to recalculate from stored FC View data.
+      </p>
+      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap">
+        <button
+          type="button"
+          :class="btnOutlineClass"
+          :disabled="loadingRepair"
+          @click="repairImportedBlockTimes"
+        >
+          <Icon name="ri:tools-line" size="18" class="shrink-0" />
+          {{ loadingRepair ? 'Repairing…' : 'Repair imported block times' }}
+        </button>
         <button
           type="button"
           :disabled="disconnecting"
@@ -892,6 +952,12 @@ const inputClass = computed(() =>
           {{ disconnecting ? 'Disconnecting…' : 'Disconnect FC View' }}
         </button>
       </div>
+      <p
+        v-if="repairResult"
+        :class="['text-sm mt-3', isDarkMode ? 'text-green-400' : 'text-green-700']"
+      >
+        {{ repairResult }}
+      </p>
     </template>
     <template v-else-if="showFetchNeedsConnection">
       <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">

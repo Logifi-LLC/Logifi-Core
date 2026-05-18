@@ -217,6 +217,45 @@ describe('mapFcvFlightToEntry', () => {
     ).toBe(1.6)
   })
 
+  it('gateDurationHoursFromFcvLocalPair accounts for cross-timezone OUT/IN', () => {
+    expect(
+      gateDurationHoursFromFcvLocalPair({
+        actual_out_local: '2026-05-12 20:46:00',
+        actual_in_local: '2026-05-12 21:34:00',
+        dep_airport_icao: 'KDCA',
+        arr_airport_icao: 'KBNA',
+      })
+    ).toBe(1.8)
+  })
+
+  it('mapFcvFlightToEntry sets 1.8h total for KDCA→KBNA cross-timezone leg', () => {
+    const e = mapFcvFlightToEntry({
+      fcv_flight_id: 'dca-bna',
+      actual_out_local: '2026-05-12 20:46:00',
+      actual_in_local: '2026-05-12 21:34:00',
+      dep_airport_icao: 'KDCA',
+      arr_airport_icao: 'KBNA',
+      block: '0048',
+      role: 'PIC',
+    })
+    expect(e.flight_time).toMatchObject({
+      total: 1.8,
+      pic: 1.8,
+      crossCountry: 1.8,
+    })
+  })
+
+  it('same-timezone gate duration unchanged when airports share zone', () => {
+    expect(
+      gateDurationHoursFromFcvLocalPair({
+        actual_out_local: '2026-04-01 08:00:00',
+        actual_in_local: '2026-04-01 10:45:00',
+        dep_airport_icao: 'KSEA',
+        arr_airport_icao: 'KPDX',
+      })
+    ).toBe(2.8)
+  })
+
   it('resolveFcvBlockHours falls back to block HHMM when gate ends missing', () => {
     expect(resolveFcvBlockHours({ block: '0154' })).toBeCloseTo(1 + 54 / 60)
     expect(resolveFcvBlockHours({ scheduled_out_local: '2026-04-01 08:00:00', block: '0135' })).toBeCloseTo(

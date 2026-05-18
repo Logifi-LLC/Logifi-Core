@@ -6548,6 +6548,7 @@ import type { AirportInfo } from '../composables/useAirportLookup'
 import { validateCrossCountry, calculateDistanceNM } from '../utils/validation'
 import { calculateNightTime } from '../utils/nightTimeCalculator'
 import { DateTime } from 'luxon'
+import { getAirportIanaTimezone, normalizeTimezoneToIANA } from '../../shared/airportTimezone'
 import { calculateSectionII, calculateSectionIII } from '../utils/form8710Calculator'
 import type { Form8710Data, AircraftCategory8710, ComplianceMetadata } from '../utils/form8710Types'
 import { mapCategoryTo8710, isTrainingDevice } from '../utils/form8710Types'
@@ -12305,98 +12306,6 @@ function parseTimeToMinutes(time: string | null): number | null {
 const airportTimezoneCache = new Map<string, string | null>()
 
 /**
- * Convert airport timezone string to IANA timezone format
- * Airport timezones are often in formats like "America/Chicago" or "UTC-6" or just "-6"
- * This function normalizes them to IANA format
- */
-function normalizeTimezoneToIANA(timezone: string | undefined | null): string | null {
-  if (timezone == null) return null
-  const tz = typeof timezone === 'string' ? timezone : String(timezone)
-  if (!tz) return null
-  
-  // If already in IANA format (contains '/'), return as-is
-  if (tz.includes('/')) {
-    return tz
-  }
-  
-  // Handle UTC offset strings like "-6", "-5", "UTC-6", "+5", etc.
-  // Try patterns: "-6", "+5", "UTC-6", "UTC+5", "-06:00", etc.
-  const offsetMatch1 = tz.match(/^([+-]?)(\d{1,2})(?::\d{2})?$/)
-  const offsetMatch2 = tz.match(/^UTC([+-])(\d{1,2})$/i)
-  
-  let offset: number | null = null
-  
-  if (offsetMatch1 && offsetMatch1[2]) {
-    const sign = offsetMatch1[1] || '-'
-    const hours = offsetMatch1[2]
-    offset = parseInt(sign + hours)
-  } else if (offsetMatch2) {
-    const sign = offsetMatch2[1]
-    const hours = offsetMatch2[2]
-    if (sign && hours) {
-      offset = parseInt(sign + hours)
-    }
-  }
-  
-  if (offset !== null) {
-    // Map common US UTC offsets to IANA timezones
-    // Note: These are approximations - actual timezones depend on DST
-    // For US airports, we map to the most common timezone for that offset
-    const offsetToTimezone: Record<string, string> = {
-      '-10': 'Pacific/Honolulu',  // HST
-      '-9': 'America/Anchorage',  // AKST/AKDT
-      '-8': 'America/Los_Angeles', // PST/PDT
-      '-7': 'America/Denver',     // MST/MDT (or PDT during DST)
-      '-6': 'America/Chicago',     // CST/CDT
-      '-5': 'America/New_York',   // EST/EDT (or CDT during DST)
-      '-4': 'America/New_York',   // EDT (during DST)
-    }
-    
-    const offsetStr = offset.toString()
-    const timezone = offsetToTimezone[offsetStr]
-    if (timezone) {
-      return timezone
-    }
-  }
-  
-  // Common timezone mappings for US airports
-  const timezoneMap: Record<string, string> = {
-    'America/New_York': 'America/New_York',
-    'America/Chicago': 'America/Chicago',
-    'America/Denver': 'America/Denver',
-    'America/Los_Angeles': 'America/Los_Angeles',
-    'America/Phoenix': 'America/Phoenix',
-    'America/Anchorage': 'America/Anchorage',
-    'Pacific/Honolulu': 'Pacific/Honolulu',
-    'EST': 'America/New_York',
-    'EDT': 'America/New_York',
-    'CST': 'America/Chicago',
-    'CDT': 'America/Chicago',
-    'MST': 'America/Denver',
-    'MDT': 'America/Denver',
-    'PST': 'America/Los_Angeles',
-    'PDT': 'America/Los_Angeles',
-    'AKST': 'America/Anchorage',
-    'AKDT': 'America/Anchorage',
-    'HST': 'Pacific/Honolulu'
-  }
-  
-  // Check if it's a known abbreviation
-  if (timezoneMap[timezone]) {
-    return timezoneMap[timezone]
-  }
-  
-  // Try to use as-is (might already be valid IANA)
-  try {
-    // Validate by trying to create a DateTime with this timezone
-    DateTime.now().setZone(timezone)
-    return timezone
-  } catch {
-    return null
-  }
-}
-
-/**
  * Get IANA timezone for an airport code
  * Uses cached airport lookup data and converts to IANA format
  */
@@ -12410,6 +12319,12 @@ async function getAirportTimezone(airportCode: string | null | undefined): Promi
     const cached = airportTimezoneCache.get(normalizedCode)
     console.log(`[Timezone] Cache hit for ${normalizedCode}:`, cached)
     return cached || null
+  }
+
+  const staticTz = getAirportIanaTimezone(normalizedCode)
+  if (staticTz) {
+    airportTimezoneCache.set(normalizedCode, staticTz)
+    return staticTz
   }
   
   try {
