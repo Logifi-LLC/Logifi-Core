@@ -84,7 +84,7 @@ useLogbookBuilderKeyboard({
           Add Pages
         </h1>
         <NuxtLink
-          to="/"
+          to="/dashboard"
           :class="[
             'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-quicksand font-bold transition-colors border',
             theme === 'dark'
