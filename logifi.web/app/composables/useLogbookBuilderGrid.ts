@@ -11,7 +11,6 @@ import {
   createEmptyBuilderRow,
 } from '~/utils/logbookBuilderTypes'
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
-import type { DigifiPageSide, DigifiScanRow } from '~/utils/digifiTypes'
 
 const FIELD_LABELS: Record<LogbookColumnKey, string> = {
   date: 'Date',
@@ -85,10 +84,6 @@ export function useLogbookBuilderGrid() {
 
   /** Index of the row that currently has focus in the grid (for highlighting). */
   const activeRowIndex: Ref<number | null> = ref(null)
-
-  /** After a left-page scan in single layout, right page rows start at this index. */
-  const singleLayoutRightStartRow: Ref<number> = ref(0)
-  const leftPageScanned: Ref<boolean> = ref(false)
 
   function setActiveRowIndex(index: number | null) {
     activeRowIndex.value = index
@@ -195,98 +190,11 @@ export function useLogbookBuilderGrid() {
     }
     const ids = cols.map((c) => c.id)
     rows.value = Array.from({ length: n }, () => createEmptyBuilderRow(ids))
-    resetDigifiPageState()
   }
 
   function clearGrid() {
     const ids = columnIds.value
     rows.value = Array.from({ length: rowCount.value }, () => createEmptyBuilderRow(ids))
-    singleLayoutRightStartRow.value = 0
-    leftPageScanned.value = false
-  }
-
-  function columnIdsForPageSide(pageSide: DigifiPageSide): string[] {
-    const cols = visibleColumns.value
-    if (layout.value !== 'two-page') {
-      return cols.map((c) => c.id)
-    }
-    const split = effectiveSplitIndex.value
-    if (pageSide === 'left') {
-      return cols.slice(0, split).map((c) => c.id)
-    }
-    return cols.slice(split).map((c) => c.id)
-  }
-
-  function rowHasAnyCell(rowIdx: number, colIds?: string[]): boolean {
-    const row = rows.value[rowIdx]
-    if (!row?.cells) return false
-    const ids = colIds ?? columnIds.value
-    return ids.some((id) => (row.cells[id] ?? '').trim() !== '')
-  }
-
-  function findFirstEmptyRow(colIds: string[]): number {
-    for (let i = 0; i < rows.value.length; i++) {
-      if (!rowHasAnyCell(i, colIds)) return i
-    }
-    return rows.value.length
-  }
-
-  /**
-   * Apply Digifi scan rows into the grid.
-   * Two-page layout: left/right photos fill column halves on the same row indices.
-   * Single layout: left photo fills from row 0; right photo fills from the next empty row block.
-   */
-  function applyScanResults(pageSide: DigifiPageSide, scanRows: DigifiScanRow[]): number {
-    const allowedColIds = new Set(columnIdsForPageSide(pageSide))
-    let filled = 0
-
-    let baseRow = 0
-    if (layout.value === 'single' && pageSide === 'right') {
-      baseRow = singleLayoutRightStartRow.value > 0
-        ? singleLayoutRightStartRow.value
-        : findFirstEmptyRow([...allowedColIds])
-    }
-
-    for (const scanRow of scanRows) {
-      const gridRowIdx = baseRow + scanRow.rowIndex
-      if (gridRowIdx < 0 || gridRowIdx >= rows.value.length) continue
-
-      for (const [colId, value] of Object.entries(scanRow.cells)) {
-        if (!allowedColIds.has(colId)) continue
-        const v = (value ?? '').trim()
-        if (!v) continue
-        setCell(gridRowIdx, colId, v)
-        filled++
-      }
-
-      if (scanRow.tags?.length) {
-        const existing = rows.value[gridRowIdx].tags ?? []
-        const merged = Array.from(new Set([...existing, ...scanRow.tags.map((t) => t.trim()).filter(Boolean)]))
-        setRowTags(gridRowIdx, merged)
-      }
-    }
-
-    if (layout.value === 'single' && pageSide === 'left') {
-      leftPageScanned.value = true
-      let maxUsed = -1
-      for (const scanRow of scanRows) {
-        const idx = scanRow.rowIndex
-        const hasData = Object.values(scanRow.cells).some((v) => (v ?? '').trim() !== '')
-        if (hasData) maxUsed = Math.max(maxUsed, idx)
-      }
-      singleLayoutRightStartRow.value = maxUsed >= 0 ? maxUsed + 1 : findFirstEmptyRow([...allowedColIds])
-    }
-
-    if (pageSide === 'left') {
-      leftPageScanned.value = true
-    }
-
-    return filled
-  }
-
-  function resetDigifiPageState() {
-    singleLayoutRightStartRow.value = 0
-    leftPageScanned.value = false
   }
 
   /** Delete a saved template by id. Only removes the template record; does not touch logbook entries. */
@@ -329,8 +237,5 @@ export function useLogbookBuilderGrid() {
     clearGrid,
     deleteTemplate,
     setActiveRowIndex,
-    applyScanResults,
-    leftPageScanned,
-    resetDigifiPageState,
   }
 }

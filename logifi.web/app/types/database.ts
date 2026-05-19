@@ -260,44 +260,6 @@ export type Database = {
           tag?: string
         }
       }
-      digifi_scan_sessions: {
-        Row: {
-          id: string
-          user_id: string
-          storage_path: string
-          page_side: string
-          template_name: string | null
-          layout: string
-          row_count: number
-          model_used: string | null
-          created_at: string
-          expires_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          storage_path: string
-          page_side: string
-          template_name?: string | null
-          layout?: string
-          row_count?: number
-          model_used?: string | null
-          created_at?: string
-          expires_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          storage_path?: string
-          page_side?: string
-          template_name?: string | null
-          layout?: string
-          row_count?: number
-          model_used?: string | null
-          created_at?: string
-          expires_at?: string
-        }
-      }
       logbook_builder_templates: {
         Row: {
           id: string

@@ -143,16 +143,6 @@
         </section>
 
         <section class="mb-10">
-          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">6a. Digifi (paper logbook scanning)</h2>
-          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
-            If you use Digifi on Add Pages, you upload photos of your paper logbook. Our servers send those images to
-            <strong :class="isFromLanding ? 'text-gray-950 dark:text-gray-900' : ''">Google Gemini</strong> to transcribe entries into the builder grid.
-            You review and edit before importing. Scan images are retained for up to 24 hours in private storage, then deleted.
-            FC View tokens and credentials are not sent to AI providers.
-          </p>
-        </section>
-
-        <section class="mb-10">
           <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">7. Retention</h2>
           <p :class="['leading-relaxed', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
             We retain your account and logbook data for as long as your account is active and as needed to provide the Service and comply with legal obligations. If you delete your account, we will delete or anonymize your personal data in accordance with our internal policies. Aggregated, de-identified data may be retained for longer periods.
