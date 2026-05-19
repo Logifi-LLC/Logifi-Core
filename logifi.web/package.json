@@ -29,6 +29,7 @@
     "suncalc": "^1.9.0",
     "tailwindcss": "^4.1.18",
     "unzipper": "^0.12.3",
+    "zod": "^3.24.2",
     "vue": "^3.5.26",
     "vue-router": "^4.6.4"
   },

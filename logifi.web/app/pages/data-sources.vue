@@ -145,6 +145,21 @@
         </section>
 
         <section class="mb-10">
+          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">Digifi (paper logbook scanning)</h2>
+          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
+            If you use <strong :class="isFromLanding ? 'text-gray-950 dark:text-gray-900' : ''">Digifi</strong> on Add Pages
+            (<NuxtLink to="/logbook-builder" class="text-blue-600 hover:underline dark:text-blue-400">/logbook-builder</NuxtLink>),
+            you upload photos of your paper logbook. Our server sends those images and extracted text to
+            <strong :class="isFromLanding ? 'text-gray-950 dark:text-gray-900' : ''">Google Gemini</strong> to transcribe entries into the builder grid.
+            You review and edit before importing into your digital logbook.
+          </p>
+          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
+            Scan images are stored in our private storage bucket for up to <strong :class="isFromLanding ? 'text-gray-950 dark:text-gray-900' : ''">24 hours</strong>
+            (for re-scan and support), then deleted. We do not send FC View tokens, authorization codes, or passkeys to Gemini or any other AI provider.
+          </p>
+        </section>
+
+        <section class="mb-10">
           <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">Other services</h2>
           <p :class="['leading-relaxed', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
             Authentication and primary database storage use Supabase. Hosting and analytics may use
