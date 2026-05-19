@@ -57,6 +57,13 @@ export default defineNuxtConfig({
       supabaseAnonKey: process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY,
       /** `off` | `beta` | `coming_soon` — see useFcvUiLabel (integrations page + Settings connect UI only). */
       fcvUiLabel: process.env.NUXT_PUBLIC_FCV_UI_LABEL || 'off',
+      /** Lightning / LNURL-pay / Lightning address shown on /developers (Open Source donation). */
+      lightningDonationAddress: process.env.NUXT_PUBLIC_LIGHTNING_DONATION_ADDRESS || '',
+      /** Public URL or site-relative path to a QR PNG/SVG. Leave env unset for `/images/lightning-donation-qr.png`; set to empty string to hide the QR. */
+      lightningDonationQrPath:
+        process.env.NUXT_PUBLIC_LIGHTNING_DONATION_QR_PATH !== undefined
+          ? process.env.NUXT_PUBLIC_LIGHTNING_DONATION_QR_PATH
+          : '/images/lightning-donation-qr.png',
     },
     // FC View OAuth (server-only; never expose to client)
     fcvClientId: process.env.FCV_CLIENT_ID || '',
