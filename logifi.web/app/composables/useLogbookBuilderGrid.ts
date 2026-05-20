@@ -331,6 +331,7 @@ export function useLogbookBuilderGrid() {
     setActiveRowIndex,
     applyScanResults,
     leftPageScanned,
+    singleLayoutRightStartRow,
     resetDigifiPageState,
   }
 }

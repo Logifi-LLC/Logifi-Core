@@ -6,6 +6,7 @@ import { digifiScanMetaSchema } from '../../utils/digifiSchema'
 import { getDigifiEnv } from '../../utils/digifiEnv'
 import { scanLogbookImageWithGemini } from '../../utils/digifiGemini'
 import { normalizeScanRows } from '../../utils/digifiNormalize'
+import { analyzeDigifiScanRows } from '../../../app/utils/digifiScanDiagnostics'
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
@@ -175,11 +176,16 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  const rowDiagnostics = analyzeDigifiScanRows(normalizedRows, meta.rowCount)
+
   return {
     ok: true as const,
     scanId,
     rows: normalizedRows,
     filledCellCount,
     modelUsed: geminiResult.modelUsed,
+    rowsReturned: rowDiagnostics.rowsReturned,
+    missingRowIndices: rowDiagnostics.missingRowIndices,
+    hasGaps: rowDiagnostics.hasGaps,
   }
 })

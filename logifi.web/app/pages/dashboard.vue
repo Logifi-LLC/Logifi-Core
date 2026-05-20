@@ -578,9 +578,17 @@
               ]">
                 <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div class="flex flex-wrap items-center gap-3">
-                    <h2 :class="['text-lg font-quicksand font-semibold', isDarkMode ? 'text-white' : 'text-gray-900']">
-                      Totals Overview
-                    </h2>
+                    <div>
+                      <h2 :class="['text-lg font-quicksand font-semibold', isDarkMode ? 'text-white' : 'text-gray-900']">
+                        Totals Overview
+                      </h2>
+                      <p
+                        v-if="dateRangeFilterSummary"
+                        :class="['text-xs font-quicksand mt-0.5', isDarkMode ? 'text-blue-300/80' : 'text-blue-700']"
+                      >
+                        Filtering logbook to {{ dateRangeFilterSummary }} ({{ filteredEntries.length }} {{ filteredEntries.length === 1 ? 'entry' : 'entries' }})
+                      </p>
+                    </div>
                     <div class="flex rounded-lg border p-0.5" :class="isDarkMode ? 'border-gray-600 bg-gray-700' : 'border-gray-300 bg-gray-200'">
                       <button
                         type="button"
@@ -909,8 +917,13 @@
 
             <div class="flex items-center justify-between gap-4">
             <div :class="['mt-4 text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-              Sorted by most recent entry date.
-              </div>
+              <span v-if="dateRangeFilterSummary">
+                Showing {{ filteredEntries.length }} {{ filteredEntries.length === 1 ? 'entry' : 'entries' }} for {{ dateRangeFilterSummary }}.
+              </span>
+              <span v-else>
+                Sorted by most recent entry date.
+              </span>
+            </div>
               <!-- Floating Settings Button Above DATE Column -->
               <div 
                 v-if="filteredEntries.length > 0 && visibleColumns.find(c => c.key === 'date')"
@@ -1036,7 +1049,15 @@
                   : 'bg-gray-100 border-gray-300 text-gray-500'
                     ]"
             >
-              No entries recorded yet. Add your first flight above to begin building your digital logbook.
+              <template v-if="entriesHiddenOnlyByDateRange">
+                No entries in {{ dateRangeFilterSummary }}. Adjust the date range in Totals Overview above, or choose <strong>All time</strong> to see every entry.
+              </template>
+              <template v-else-if="!hasAnyEntriesForActiveLogbook">
+                No entries recorded yet. Add your first flight above to begin building your digital logbook.
+              </template>
+              <template v-else>
+                No entries match your current filters. Clear sidebar filters or search to see more entries.
+              </template>
           </div>
 
             <div
@@ -7381,6 +7402,61 @@ const totalsTimeMode = ref<TotalsTimeMode>('all')
 const totalsCustomStart = ref<string>('')
 const totalsCustomEnd = ref<string>('')
 
+type TotalsDateRange = { start: Date | null; end: Date | null }
+
+/** Date window from Totals Overview controls; null means no date filter (all time). */
+function getTotalsDateRange(): TotalsDateRange | null {
+  const mode = totalsTimeMode.value
+  const nowDate = new Date()
+  if (mode === '30') {
+    return {
+      start: new Date(nowDate.getTime() - 30 * 24 * 60 * 60 * 1000),
+      end: nowDate,
+    }
+  }
+  if (mode === '60') {
+    return {
+      start: new Date(nowDate.getTime() - 60 * 24 * 60 * 60 * 1000),
+      end: nowDate,
+    }
+  }
+  if (mode === 'custom') {
+    let start: Date | null = null
+    let end: Date | null = null
+    if (totalsCustomStart.value) {
+      start = new Date(totalsCustomStart.value)
+    }
+    if (totalsCustomEnd.value) {
+      end = new Date(totalsCustomEnd.value)
+      end.setHours(23, 59, 59, 999)
+    }
+    if (!start && !end) return null
+    return { start, end }
+  }
+  return null
+}
+
+function entryMatchesTotalsDateRange(entry: LogEntry, range: TotalsDateRange): boolean {
+  const d = new Date(entry.date)
+  if (Number.isNaN(d.getTime())) return false
+  if (range.start && d < range.start) return false
+  if (range.end && d > range.end) return false
+  return true
+}
+
+const dateRangeFilterSummary = computed(() => {
+  const mode = totalsTimeMode.value
+  if (mode === '30') return 'Last 30 days'
+  if (mode === '60') return 'Last 60 days'
+  if (mode !== 'custom') return null
+  const start = totalsCustomStart.value
+  const end = totalsCustomEnd.value
+  if (!start && !end) return null
+  if (start && end) return `${formatDisplayDate(start)} – ${formatDisplayDate(end)}`
+  if (start) return `From ${formatDisplayDate(start)}`
+  return `Through ${formatDisplayDate(end)}`
+})
+
 // Clock
 type ClockFormat = '12' | '24'
 type ClockZone = 'UTC' | 'Local'
@@ -12982,7 +13058,7 @@ function getEntryLogbookType(entry: LogEntry): 'flight' | 'simulator' {
   return simTime > 0 && airplaneTotal === 0 ? 'simulator' : 'flight'
 }
 
-const filteredEntries = computed(() => {
+function passesCatalogAndSearchFilters(entry: LogEntry): boolean {
   const term = searchTerm.value.trim().toLowerCase()
   const activeAircraft = new Set(getActiveFilterKeys(selectedFilters.aircraft).map(k => k.toUpperCase()))
   const activeAirports = new Set(getActiveFilterKeys(selectedFilters.airports).map(k => k.toUpperCase()))
@@ -12991,134 +13067,91 @@ const filteredEntries = computed(() => {
   const activeFamilies = new Set(getActiveFilterKeys(selectedFilters.families))
   const activeCategoryClass = new Set(getActiveFilterKeys(selectedFilters.categoryClass).map(k => k.toUpperCase()))
 
+  if (getEntryLogbookType(entry) !== activeLogbook.value) return false
+
+  const matchesTerm =
+    term.length === 0 ||
+    [
+      entry.aircraftMakeModel,
+      entry.registration,
+      entry.departure,
+      entry.destination,
+      entry.route,
+      entry.remarks,
+      entry.trainingElements,
+    ]
+      .join(' ')
+      .toLowerCase()
+      .includes(term)
+
+  if (!matchesTerm) return false
+
+  if (activeAircraft.size > 0) {
+    const reg = (entry.registration || '').toUpperCase()
+    if (!activeAircraft.has(reg)) return false
+  }
+
+  if (activeAirports.size > 0) {
+    const dep = (entry.departure || '').toUpperCase()
+    const dst = (entry.destination || '').toUpperCase()
+    if (!activeAirports.has(dep) && !activeAirports.has(dst)) return false
+  }
+
+  if (activePilots.size > 0) {
+    const pilotName = entry.trainingElements || ''
+    if (!activePilots.has(pilotName)) return false
+  }
+
+  if (activeConditions.size > 0) {
+    const entryConds = new Set((entry.flightConditions || []) as string[])
+    for (const cond of activeConditions) {
+      if (!entryConds.has(cond)) return false
+    }
+  }
+
+  if (activeFamilies.size > 0) {
+    const fam = normalizeAircraftFamily(entry.aircraftMakeModel || '')
+    if (!fam || !activeFamilies.has(fam)) return false
+  }
+
+  if (activeCategoryClass.size > 0) {
+    const catClass = (entry.aircraftCategoryClass || '').trim().toUpperCase()
+    if (!activeCategoryClass.has(catClass)) return false
+  }
+
+  if (selectedFilters.flagged && !entry.flagged) return false
+
+  const activeTags = getActiveFilterKeys(selectedFilters.tags)
+  if (activeTags.length > 0) {
+    const entryTagSet = new Set(entry.tags || [])
+    if (!activeTags.every((tag) => entryTagSet.has(tag))) return false
+  }
+
+  return true
+}
+
+const filteredEntries = computed(() => {
+  const dateRange = getTotalsDateRange()
   const result = logEntries.value.filter((entry) => {
-    if (getEntryLogbookType(entry) !== activeLogbook.value) return false
-
-    // text search
-    const matchesTerm =
-      term.length === 0 ||
-      [
-        entry.aircraftMakeModel,
-        entry.registration,
-        entry.departure,
-        entry.destination,
-        entry.route,
-        entry.remarks,
-        entry.trainingElements
-      ]
-        .join(' ')
-        .toLowerCase()
-        .includes(term)
-
-    if (!matchesTerm) return false
-
-    // aircraft filter (registration match)
-    if (activeAircraft.size > 0) {
-      const reg = (entry.registration || '').toUpperCase()
-      if (!activeAircraft.has(reg)) {
-        return false
-      }
-    }
-
-    // airports filter (either departure or destination must match any active airport)
-    if (activeAirports.size > 0) {
-      const dep = (entry.departure || '').toUpperCase()
-      const dst = (entry.destination || '').toUpperCase()
-      if (!activeAirports.has(dep) && !activeAirports.has(dst)) {
-        return false
-      }
-    }
-
-    // pilots filter (name match)
-    if (activePilots.size > 0) {
-      const pilotName = entry.trainingElements || ''
-      if (!activePilots.has(pilotName)) {
-        return false
-      }
-    }
-
-    // conditions filter (require all selected conditions to be present)
-    if (activeConditions.size > 0) {
-      const entryConds = new Set((entry.flightConditions || []) as string[])
-      for (const cond of activeConditions) {
-        if (!entryConds.has(cond)) {
-          return false
-        }
-      }
-    }
-
-    // aircraft family filter (match normalized family)
-    if (activeFamilies.size > 0) {
-      const fam = normalizeAircraftFamily(entry.aircraftMakeModel || '')
-      if (!fam || !activeFamilies.has(fam)) {
-        return false
-      }
-    }
-
-    // category/class filter
-    if (activeCategoryClass.size > 0) {
-      const catClass = (entry.aircraftCategoryClass || '').trim().toUpperCase()
-      if (!activeCategoryClass.has(catClass)) {
-        return false
-      }
-    }
-
-    // flagged filter
-    if (selectedFilters.flagged) {
-      if (!entry.flagged) {
-        return false
-      }
-    }
-
-    // tags filter (entry must have all selected tags)
-    const activeTags = getActiveFilterKeys(selectedFilters.tags)
-    if (activeTags.length > 0) {
-      const entryTagSet = new Set(entry.tags || [])
-      if (!activeTags.every((tag) => entryTagSet.has(tag))) {
-        return false
-      }
-    }
-
+    if (!passesCatalogAndSearchFilters(entry)) return false
+    if (dateRange && !entryMatchesTotalsDateRange(entry, dateRange)) return false
     return true
   })
-
-  // Sort by date (most recent first), then by OOOI out time for same-day entries
   return sortEntriesByDateAndOOOI(result)
 })
 
-const entriesForTotals = computed(() => {
-  // further narrow filteredEntries by time window
-  const mode = totalsTimeMode.value
-  const nowDate = new Date()
-  let start: Date | null = null
-  let end: Date | null = null
-  if (mode === '30') {
-    start = new Date(nowDate.getTime() - 30 * 24 * 60 * 60 * 1000)
-    end = nowDate
-  } else if (mode === '60') {
-    start = new Date(nowDate.getTime() - 60 * 24 * 60 * 60 * 1000)
-    end = nowDate
-  } else if (mode === 'custom') {
-    if (totalsCustomStart.value) {
-      start = new Date(totalsCustomStart.value)
-    }
-    if (totalsCustomEnd.value) {
-      end = new Date(totalsCustomEnd.value)
-      // include end day fully by setting to end of day
-      end.setHours(23, 59, 59, 999)
-    }
-  }
-  if (!start && !end) {
-    return filteredEntries.value
-  }
-  return filteredEntries.value.filter((entry) => {
-    const d = new Date(entry.date)
-    if (Number.isNaN(d.getTime())) return false
-    if (start && d < start) return false
-    if (end && d > end) return false
-    return true
-  })
+const entriesHiddenOnlyByDateRange = computed(() => {
+  const dateRange = getTotalsDateRange()
+  if (!dateRange || filteredEntries.value.length > 0) return false
+  return logEntries.value.some(passesCatalogAndSearchFilters)
 })
+
+const hasAnyEntriesForActiveLogbook = computed(() =>
+  logEntries.value.some((entry) => getEntryLogbookType(entry) === activeLogbook.value)
+)
+
+/** Totals and logbook list share the same filtered entry set. */
+const entriesForTotals = computed(() => filteredEntries.value)
 
 const totals = computed(() => {
   const timeAccumulator = flightTimeFields.reduce<Record<FlightTimeKey, number>>((acc, field) => {

@@ -521,6 +521,12 @@ function handleKeyDown(e: KeyboardEvent) {
 
   const cell = clampRowCol(row, col)
 
+  if (keyRaw === 'F2' && !isMeta && !e.altKey) {
+    e.preventDefault()
+    enterEditModeByIndex(cell.rowIndex, cell.colIndex)
+    return
+  }
+
   const isArrowKey =
     key === 'arrowup' ||
     key === 'arrowdown' ||
@@ -744,7 +750,8 @@ function startDividerDrag() {
 }
 
 const gridContainerRef = ref<HTMLElement | null>(null)
-const cellRefs = ref<Map<string, { focus: () => void }>>(new Map())
+type CellRefHandle = { focus: () => void; enterEditMode?: () => void }
+const cellRefs = ref<Map<string, CellRefHandle>>(new Map())
 
 function cellKey(rowIdx: number, colId: string) {
   return `${rowIdx}-${colId}`
@@ -760,15 +767,34 @@ function onCellInput(rowIdx: number, colId: string, value: string) {
   setCell(rowIdx, colId, value)
 }
 
-function setCellRef(rowIdx: number, colId: string, el: { focus: () => void } | null) {
-  if (el && typeof (el as { focus?: () => void }).focus === 'function') {
-    cellRefs.value.set(cellKey(rowIdx, colId), el as { focus: () => void })
+function setCellRef(rowIdx: number, colId: string, el: CellRefHandle | null) {
+  if (el && typeof el.focus === 'function') {
+    cellRefs.value.set(cellKey(rowIdx, colId), el)
   }
 }
 
 function focusCell(rowIdx: number, colId: string) {
   const el = cellRefs.value.get(cellKey(rowIdx, colId))
   el?.focus?.()
+}
+
+function enterEditModeByIndex(rowIdx: number, colIdx: number) {
+  const col = visibleColumns.value[colIdx]
+  if (!col) return
+  const el = cellRefs.value.get(cellKey(rowIdx, col.id))
+  if (el?.enterEditMode) {
+    el.enterEditMode()
+  } else {
+    focusCell(rowIdx, col.id)
+  }
+}
+
+function onCellDoubleClick(event: MouseEvent) {
+  event.preventDefault()
+  const cell = getCellFromEvent(event)
+  if (!cell) return
+  onCellFocus(cell.rowIndex, cell.colIndex)
+  enterEditModeByIndex(cell.rowIndex, cell.colIndex)
 }
 
 function focusCellByIndex(rowIdx: number, colIdx: number) {
@@ -944,9 +970,10 @@ defineExpose({
               :style="getColumnStyle(col)"
               :data-builder-row="rowIdx"
               :data-builder-col="colIdx"
+              @dblclick="onCellDoubleClick"
             >
               <LogbookBuilderCell
-                :ref="(el) => setCellRef(rowIdx, col.id, el as { focus: () => void } | null)"
+                :ref="(el) => setCellRef(rowIdx, col.id, el as CellRefHandle | null)"
                 :model-value="getCellValue(rowIdx, col.id)"
                 :field-key="col.fieldKey"
                 :category-class-value="col.categoryClassValue"
@@ -989,9 +1016,10 @@ defineExpose({
               :style="getColumnStyle(col)"
               :data-builder-row="rowIdx"
               :data-builder-col="splitIndex + colIdx"
+              @dblclick="onCellDoubleClick"
             >
               <LogbookBuilderCell
-                :ref="(el) => setCellRef(rowIdx, col.id, el as { focus: () => void } | null)"
+                :ref="(el) => setCellRef(rowIdx, col.id, el as CellRefHandle | null)"
                 :model-value="getCellValue(rowIdx, col.id)"
                 :field-key="col.fieldKey"
                 :category-class-value="col.categoryClassValue"
@@ -1029,9 +1057,10 @@ defineExpose({
               :style="getColumnStyle(col)"
               :data-builder-row="rowIdx"
               :data-builder-col="colIdx"
+              @dblclick="onCellDoubleClick"
             >
               <LogbookBuilderCell
-                :ref="(el) => setCellRef(rowIdx, col.id, el as { focus: () => void } | null)"
+                :ref="(el) => setCellRef(rowIdx, col.id, el as CellRefHandle | null)"
                 :model-value="getCellValue(rowIdx, col.id)"
                 :field-key="col.fieldKey"
                 :category-class-value="col.categoryClassValue"

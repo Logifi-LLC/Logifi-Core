@@ -70,6 +70,24 @@ export default defineComponent({
       else if (isPilotRole.value) selectRef.value?.focus()
       else inputRef.value?.focus()
     }
+    /** Excel-style in-place edit: double-click or F2 — type without clearing on first key. */
+    function enterEditMode() {
+      if (
+        isRole.value ||
+        (isCategoryClass.value && !isCategoryClassTimeColumn.value) ||
+        isApproachType.value ||
+        isPilotRole.value
+      ) {
+        focus()
+        return
+      }
+      const input = inputRef.value
+      if (!input) return
+      overwriteOnNextKey.value = false
+      input.focus()
+      const len = input.value.length
+      input.setSelectionRange(0, len)
+    }
     function onInput(e: Event) {
       emit('update:modelValue', (e.target as HTMLInputElement).value)
     }
@@ -140,6 +158,7 @@ export default defineComponent({
       approachTypeOptions: APPROACH_TYPE_OPTIONS,
       pilotRoleOptions: PILOT_ROLE_OPTIONS,
       focus,
+      enterEditMode,
       onInput,
       onSelectChange,
       onInputKeydown,

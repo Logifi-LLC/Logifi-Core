@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { ref, computed, provide, watchEffect } from 'vue'
+import { ref, computed, provide, watchEffect, onMounted, onUnmounted } from 'vue'
 import LogbookBuilderGrid from '~/components/logbook-builder/LogbookBuilderGrid.vue'
 import LogbookBuilderToolbar from '~/components/logbook-builder/LogbookBuilderToolbar.vue'
 import LogbookBuilderValidateBar from '~/components/logbook-builder/LogbookBuilderValidateBar.vue'
 import LogbookBuilderDigifiPanel from '~/components/logbook-builder/LogbookBuilderDigifiPanel.vue'
 import { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { useLogbookBuilderKeyboard } from '~/composables/useLogbookBuilderKeyboard'
+import {
+  getStoredDraft,
+  restoreDraftToGrid,
+  resumeDraftAutosave,
+  setupBuilderDraftAutosave,
+  storedDraftHasContent,
+  suspendDraftAutosave,
+} from '~/composables/useLogbookBuilderDraft'
+import { loadLastTemplateIfAny } from '~/composables/useLogbookBuilderLastTemplate'
 import { useTheme } from '~/composables/useTheme'
 import { useAuth } from '~/composables/useAuth'
 import { supabase } from '~/lib/supabase'
@@ -16,11 +25,58 @@ const gridRef = ref<InstanceType<typeof LogbookBuilderGrid> | null>(null)
 const grid = useLogbookBuilderGrid()
 provide('logbookBuilderGrid', grid)
 const { visibleColumns, rows } = grid
+const { user, isAuthenticated } = useAuth()
+
+let stopAutosave: (() => void) | null = null
+let pageInitDone = false
+
+async function finishPageInit() {
+  if (pageInitDone) return
+
+  suspendDraftAutosave()
+
+  if (storedDraftHasContent()) {
+    const draft = getStoredDraft()
+    if (draft) {
+      restoreDraftToGrid(grid, draft)
+      pageInitDone = true
+      resumeDraftAutosave()
+      stopAutosave?.()
+      stopAutosave = setupBuilderDraftAutosave(grid)
+      return
+    }
+  }
+
+  if (!isAuthenticated.value || !user.value) {
+    resumeDraftAutosave()
+    stopAutosave?.()
+    stopAutosave = setupBuilderDraftAutosave(grid)
+    return
+  }
+
+  await loadLastTemplateIfAny(grid, user.value.id)
+  pageInitDone = true
+  resumeDraftAutosave()
+  stopAutosave?.()
+  stopAutosave = setupBuilderDraftAutosave(grid)
+}
+
+onMounted(() => {
+  finishPageInit()
+})
+
+watchEffect(() => {
+  if (!pageInitDone && isAuthenticated.value && user.value) {
+    finishPageInit()
+  }
+})
+
+onUnmounted(() => {
+  stopAutosave?.()
+})
 
 const builderPilots = ref<string[]>([])
 provide('builderPilots', builderPilots)
-
-const { user, isAuthenticated } = useAuth()
 
 watchEffect(async (onCleanup) => {
   const currentUser = user.value
@@ -119,7 +175,7 @@ useLogbookBuilderKeyboard({
           <li>Use this grid to <strong>transcribe entries from a paper logbook</strong>, or use <strong>Digifi</strong> above to scan paper pages with AI, then review and edit before import.</li>
           <li><strong>Digifi:</strong> Configure columns (or load a template), set row count, then scan the left and right paper pages. AI pre-fills the grid; always verify before importing.</li>
           <li><strong>Toolbar:</strong> Set the number of rows; choose single-page or two-page layout (and “Columns on left” for two-page); add or remove columns; sign in to save or load templates.</li>
-          <li><strong>Grid:</strong> Click a cell to edit; drag a column header to reorder columns; drag the right edge of a column header to resize; use the Tags column for each row. Use Tab or Enter to move between cells.</li>
+          <li><strong>Grid:</strong> Click a cell to edit (first key replaces the cell); double-click or press F2 to edit in place. Drag column headers to reorder; drag the right edge to resize. Use Tab or Enter to move between cells. Your work is kept locally when you leave this page and comes back automatically until you import.</li>
           <li><strong>Approaches:</strong> Use the <strong>Approach</strong> column for counts, and the <strong>Approach Type</strong> dropdown (ILS, RNAV, Visual, etc.) when you want the type tracked. If the type is only written in remarks, you can leave the dropdown blank and the system will still count the approaches.</li>
           <li>Click <strong>Validate</strong> to check your data and see a summary with column totals. Then click <strong>Import</strong> on the confirmation step to add the entries to your logbook.</li>
         </ul>

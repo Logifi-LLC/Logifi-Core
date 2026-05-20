@@ -12,6 +12,7 @@ const {
   error,
   lastThumbnailUrl,
   lastFilledCount,
+  scanRowWarning,
   useProModel,
   canScan,
   scanPage,
@@ -171,6 +172,15 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
     >
       AI may misread handwriting. You are responsible for verifying all entries before importing.
       Photos are sent to Google Gemini and stored temporarily (up to 24 hours). FC View credentials are never sent to AI.
+    </p>
+
+    <p
+      v-if="scanRowWarning"
+      class="text-sm mb-4 rounded-lg px-3 py-2 border"
+      :class="isDark ? 'border-orange-500/40 bg-orange-500/10 text-orange-200' : 'border-orange-300 bg-orange-50 text-orange-900'"
+      role="alert"
+    >
+      {{ scanRowWarning }}
     </p>
 
     <ul

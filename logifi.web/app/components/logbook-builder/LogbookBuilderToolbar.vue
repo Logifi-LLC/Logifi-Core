@@ -6,6 +6,7 @@ import { supabase } from '~/lib/supabase'
 import type { BuilderTemplateColumn } from '~/utils/logbookBuilderTypes'
 import { ROLE_OPTIONS } from '~/utils/logbookBuilderTypes'
 import { useTheme } from '~/composables/useTheme'
+import { persistLastTemplateId } from '~/composables/useLogbookBuilderLastTemplate'
 
 const DEFAULT_ROLE_STORAGE_KEY = 'logifi-logbook-builder-default-role'
 
@@ -123,6 +124,7 @@ function selectTemplate(t: (typeof savedTemplates.value)[0]) {
     default_import_role: t.default_import_role,
     two_page_split_index: t.two_page_split_index,
   })
+  persistLastTemplateId(t.id)
   showLoadModal.value = false
 }
 

@@ -7,6 +7,10 @@ import type {
   DigifiScanResponse,
   DigifiTemplateColumn,
 } from '~/utils/digifiTypes'
+import {
+  analyzeDigifiScanRows,
+  formatDigifiScanWarning,
+} from '~/utils/digifiScanDiagnostics'
 
 const MAX_EDGE_PX = 2000
 const JPEG_QUALITY = 0.85
@@ -70,6 +74,7 @@ export function useLogbookBuilderDigifi() {
   const error = ref<string | null>(null)
   const lastThumbnailUrl = ref<string | null>(null)
   const lastFilledCount = ref(0)
+  const scanRowWarning = ref<string | null>(null)
   const useProModel = ref(false)
 
   const canScan = computed(() => isAuthenticated.value && visibleColumns.value.length > 0)
@@ -113,6 +118,7 @@ export function useLogbookBuilderDigifi() {
 
     scanning.value = true
     error.value = null
+    scanRowWarning.value = null
     lastFilledCount.value = 0
 
     try {
@@ -133,6 +139,17 @@ export function useLogbookBuilderDigifi() {
 
       const filled = applyScanResults(pageSide, result.rows)
       lastFilledCount.value = filled
+
+      const diagnostics =
+        result.missingRowIndices != null
+          ? {
+              rowsReturned: result.rowsReturned ?? analyzeDigifiScanRows(result.rows, rowCount.value).rowsReturned,
+              distinctRowIndices: [...new Set(result.rows.map((r) => r.rowIndex))].sort((a, b) => a - b),
+              missingRowIndices: result.missingRowIndices,
+              hasGaps: result.hasGaps ?? false,
+            }
+          : analyzeDigifiScanRows(result.rows, rowCount.value)
+      scanRowWarning.value = formatDigifiScanWarning(diagnostics, rowCount.value)
 
       if (lastThumbnailUrl.value) {
         URL.revokeObjectURL(lastThumbnailUrl.value)
@@ -164,6 +181,7 @@ export function useLogbookBuilderDigifi() {
     error,
     lastThumbnailUrl,
     lastFilledCount,
+    scanRowWarning,
     useProModel,
     canScan,
     scanPage,

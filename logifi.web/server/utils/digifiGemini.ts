@@ -71,10 +71,12 @@ function buildPrompt(meta: DigifiScanMetaInput, targetColumns: DigifiTemplateCol
 
 ${pageDesc}
 
-Extract up to ${meta.rowCount} flight log rows visible on this page. For each row, output rowIndex (0-based, top to bottom) and cells array with columnId and value strings.
+Extract exactly ${meta.rowCount} physical row lines on this page (rowIndex 0 through ${meta.rowCount - 1}, top to bottom). Return one row object for every line position — do not skip rows even if handwriting is faint.
 
 Rules:
+- rowIndex must be contiguous from 0 upward with no gaps.
 - Use empty string "" only if a cell is blank or completely illegible; otherwise make your best guess.
+- Do not stop early: include all ${meta.rowCount} rows.
 - Match handwriting to the column labels listed below.
 - Flight times as decimal hours (e.g. 1.5 not 1:30).
 - Dates as written on the paper.

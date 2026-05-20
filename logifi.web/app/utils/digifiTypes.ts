@@ -37,4 +37,7 @@ export interface DigifiScanResponse {
   rows: DigifiScanRow[]
   filledCellCount: number
   modelUsed: string
+  rowsReturned: number
+  missingRowIndices: number[]
+  hasGaps: boolean
 }

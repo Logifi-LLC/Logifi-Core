@@ -16,6 +16,7 @@ import {
   saveEntryToIndexedDB,
   initIndexedDB,
 } from '~/utils/indexedDB'
+import { clearBuilderDraft } from '~/composables/useLogbookBuilderDraft'
 
 /** Mirror of sanitizeFlightConditions from index.vue for builder import. */
 function sanitizeFlightConditions(conditions: string[]): string[] {
@@ -615,6 +616,7 @@ export async function runValidateAndImport(
 
   if (result.imported > 0) {
     grid.clearGrid()
+    clearBuilderDraft()
   }
   return result
 }
