@@ -2,6 +2,7 @@ import { ref, computed, inject } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { useAuth } from '~/composables/useAuth'
 import type {
+  DigifiScanChunkMeta,
   DigifiPageSide,
   DigifiScanMeta,
   DigifiScanResponse,
@@ -12,11 +13,55 @@ import {
   formatDigifiScanWarning,
 } from '~/utils/digifiScanDiagnostics'
 
-const MAX_EDGE_PX = 2000
-const JPEG_QUALITY = 0.85
+const MAX_EDGE_PX = 2800
+const JPEG_QUALITY = 0.92
+const MAX_PRIMARY_IMAGE_BYTES = 7_500_000
+const ROW_BAND_SIZE = 4
+const ROW_BAND_OVERLAP = 1
+const PAGE_HORIZONTAL_MARGIN_RATIO = 0.03
+const PAGE_VERTICAL_MARGIN_RATIO = 0.06
 
-async function resizeImageFile(file: File): Promise<{ blob: Blob; mimeType: string }> {
-  const mimeType =
+interface PreparedChunkImage {
+  partName: string
+  rowStart: number
+  rowEnd: number
+  file: File
+}
+
+interface PreparedScanAssets {
+  imageFile: File
+  previewBlob: Blob
+  mimeType: string
+  chunkMeta: DigifiScanChunkMeta[]
+  chunkFiles: PreparedChunkImage[]
+}
+
+async function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality?: number): Promise<Blob> {
+  return await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error('Could not compress image'))),
+      mimeType,
+      quality
+    )
+  })
+}
+
+function buildChunkRanges(rowCount: number): Array<{ rowStart: number; rowEnd: number }> {
+  if (rowCount <= 0) return []
+  const ranges: Array<{ rowStart: number; rowEnd: number }> = []
+  const step = Math.max(1, ROW_BAND_SIZE - ROW_BAND_OVERLAP)
+  for (let rowStart = 0; rowStart < rowCount; rowStart += step) {
+    const rowEnd = Math.min(rowCount - 1, rowStart + ROW_BAND_SIZE - 1)
+    if (!ranges.some((range) => range.rowStart === rowStart && range.rowEnd === rowEnd)) {
+      ranges.push({ rowStart, rowEnd })
+    }
+    if (rowEnd === rowCount - 1) break
+  }
+  return ranges
+}
+
+async function prepareScanAssets(file: File, rowCount: number): Promise<PreparedScanAssets> {
+  const preferredMimeType =
     file.type === 'image/png'
       ? 'image/png'
       : file.type === 'image/webp'
@@ -39,17 +84,65 @@ async function resizeImageFile(file: File): Promise<{ blob: Blob; mimeType: stri
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Could not process image')
   ctx.drawImage(bitmap, 0, 0, w, h)
+
+  let overviewMimeType = preferredMimeType
+  let previewBlob =
+    file.size <= MAX_PRIMARY_IMAGE_BYTES &&
+    preferredMimeType === file.type &&
+    maxEdge <= MAX_EDGE_PX
+      ? file
+      : await canvasToBlob(canvas, preferredMimeType, JPEG_QUALITY)
+
+  if (previewBlob.size > MAX_PRIMARY_IMAGE_BYTES) {
+    overviewMimeType = 'image/jpeg'
+    previewBlob = await canvasToBlob(canvas, overviewMimeType, 0.88)
+  }
+
+  const imageExt = overviewMimeType === 'image/png' ? 'png' : overviewMimeType === 'image/webp' ? 'webp' : 'jpg'
+  const imageFile = new File([previewBlob], `scan.${imageExt}`, { type: overviewMimeType })
+
+  const insetX = Math.max(0, Math.round(w * PAGE_HORIZONTAL_MARGIN_RATIO))
+  const insetY = Math.max(0, Math.round(h * PAGE_VERTICAL_MARGIN_RATIO))
+  const cropX = Math.min(insetX, Math.max(0, w - 1))
+  const cropY = Math.min(insetY, Math.max(0, h - 1))
+  const cropWidth = Math.max(1, w - cropX * 2)
+  const usableHeight = Math.max(1, h - cropY * 2)
+  const rowHeight = usableHeight / Math.max(1, rowCount)
+
+  const chunkMeta: DigifiScanChunkMeta[] = []
+  const chunkFiles: PreparedChunkImage[] = []
+  const extraContextPx = Math.max(12, Math.round(rowHeight * 0.35))
+
+  for (const range of buildChunkRanges(rowCount)) {
+    const startY = Math.max(0, Math.floor(cropY + range.rowStart * rowHeight - extraContextPx))
+    const endY = Math.min(h, Math.ceil(cropY + (range.rowEnd + 1) * rowHeight + extraContextPx))
+    const chunkHeight = Math.max(1, endY - startY)
+    const chunkCanvas = document.createElement('canvas')
+    chunkCanvas.width = cropWidth
+    chunkCanvas.height = chunkHeight
+    const chunkCtx = chunkCanvas.getContext('2d')
+    if (!chunkCtx) continue
+    chunkCtx.drawImage(canvas, cropX, startY, cropWidth, chunkHeight, 0, 0, cropWidth, chunkHeight)
+    const chunkBlob = await canvasToBlob(chunkCanvas, 'image/jpeg', 0.9)
+    const partName = `chunk-${range.rowStart}-${range.rowEnd}`
+    chunkMeta.push({ partName, rowStart: range.rowStart, rowEnd: range.rowEnd })
+    chunkFiles.push({
+      partName,
+      rowStart: range.rowStart,
+      rowEnd: range.rowEnd,
+      file: new File([chunkBlob], `${partName}.jpg`, { type: 'image/jpeg' }),
+    })
+  }
+
   bitmap.close()
 
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error('Could not compress image'))),
-      mimeType,
-      JPEG_QUALITY
-    )
-  })
-
-  return { blob, mimeType }
+  return {
+    imageFile,
+    previewBlob,
+    mimeType: overviewMimeType,
+    chunkMeta,
+    chunkFiles,
+  }
 }
 
 export function useLogbookBuilderDigifi() {
@@ -66,6 +159,7 @@ export function useLogbookBuilderDigifi() {
     effectiveSplitIndex,
     defaultYear,
     applyScanResults,
+    recordDigifiScanStatus,
     leftPageScanned,
     resetDigifiPageState,
   } = grid
@@ -76,10 +170,18 @@ export function useLogbookBuilderDigifi() {
   const lastFilledCount = ref(0)
   const scanRowWarning = ref<string | null>(null)
   const useProModel = ref(false)
+  const lastScanSummary = ref<{
+    pageSide: DigifiPageSide
+    expectedRowCount: number
+    rowsReturned: number
+    strategyUsed: DigifiScanResponse['strategyUsed']
+    chunkCount: number
+    rescueRecoveredCount: number
+  } | null>(null)
 
   const canScan = computed(() => isAuthenticated.value && visibleColumns.value.length > 0)
 
-  function buildMeta(pageSide: DigifiPageSide, templateName?: string): DigifiScanMeta {
+  function buildMeta(pageSide: DigifiPageSide, chunkMeta: DigifiScanChunkMeta[], templateName?: string): DigifiScanMeta {
     const columns: DigifiTemplateColumn[] = visibleColumns.value.map((c) => ({
       id: c.id,
       label: c.label,
@@ -96,6 +198,14 @@ export function useLogbookBuilderDigifi() {
       templateName,
       columns,
       useProModel: useProModel.value,
+      chunkedScan: chunkMeta.length > 0
+        ? {
+            strategy: 'page-overview+row-bands',
+            chunkSize: ROW_BAND_SIZE,
+            overlapRows: ROW_BAND_OVERLAP,
+            chunks: chunkMeta,
+          }
+        : undefined,
     }
   }
 
@@ -120,16 +230,17 @@ export function useLogbookBuilderDigifi() {
     error.value = null
     scanRowWarning.value = null
     lastFilledCount.value = 0
+    lastScanSummary.value = null
 
     try {
-      const { blob, mimeType } = await resizeImageFile(file)
-      const ext =
-        mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg'
-      const imageFile = new File([blob], `scan.${ext}`, { type: mimeType })
+      const prepared = await prepareScanAssets(file, rowCount.value)
 
       const form = new FormData()
-      form.append('image', imageFile)
-      form.append('meta', JSON.stringify(buildMeta(pageSide, templateName)))
+      form.append('image', prepared.imageFile)
+      for (const chunk of prepared.chunkFiles) {
+        form.append(chunk.partName, chunk.file)
+      }
+      form.append('meta', JSON.stringify(buildMeta(pageSide, prepared.chunkMeta, templateName)))
 
       const result = await $fetch<DigifiScanResponse>('/api/digifi/scan', {
         method: 'POST',
@@ -137,8 +248,8 @@ export function useLogbookBuilderDigifi() {
         body: form,
       })
 
-      const filled = applyScanResults(pageSide, result.rows)
-      lastFilledCount.value = filled
+      const applied = applyScanResults(pageSide, result.rows)
+      lastFilledCount.value = applied.filled
 
       const diagnostics =
         result.missingRowIndices != null
@@ -146,15 +257,41 @@ export function useLogbookBuilderDigifi() {
               rowsReturned: result.rowsReturned ?? analyzeDigifiScanRows(result.rows, rowCount.value).rowsReturned,
               distinctRowIndices: [...new Set(result.rows.map((r) => r.rowIndex))].sort((a, b) => a - b),
               missingRowIndices: result.missingRowIndices,
+              duplicateRowIndices: result.duplicateRowIndices ?? [],
+              emptyRowIndices: result.emptyRowIndices ?? [],
               hasGaps: result.hasGaps ?? false,
             }
           : analyzeDigifiScanRows(result.rows, rowCount.value)
       scanRowWarning.value = formatDigifiScanWarning(diagnostics, rowCount.value)
+      recordDigifiScanStatus({
+        pageSide,
+        expectedRowCount: rowCount.value,
+        baseRow: applied.baseRow,
+        allowedColumnIds: applied.allowedColumnIds,
+        rowsReturned: diagnostics.rowsReturned,
+        distinctRowIndices: diagnostics.distinctRowIndices,
+        missingRowIndices: diagnostics.missingRowIndices,
+        duplicateRowIndices: diagnostics.duplicateRowIndices,
+        emptyRowIndices: diagnostics.emptyRowIndices,
+        hasGaps: diagnostics.hasGaps,
+        strategyUsed: result.strategyUsed,
+        chunkCount: result.chunkCount,
+        rescueAttempted: result.rescueAttempted,
+        rescueRecoveredCount: result.rescueRecoveredCount,
+      })
+      lastScanSummary.value = {
+        pageSide,
+        expectedRowCount: rowCount.value,
+        rowsReturned: diagnostics.rowsReturned,
+        strategyUsed: result.strategyUsed,
+        chunkCount: result.chunkCount,
+        rescueRecoveredCount: result.rescueRecoveredCount,
+      }
 
       if (lastThumbnailUrl.value) {
         URL.revokeObjectURL(lastThumbnailUrl.value)
       }
-      lastThumbnailUrl.value = URL.createObjectURL(blob)
+      lastThumbnailUrl.value = URL.createObjectURL(prepared.previewBlob)
     } catch (e: unknown) {
       let msg = 'Scan failed. Try again with a clearer photo.'
       if (e && typeof e === 'object') {
@@ -181,6 +318,7 @@ export function useLogbookBuilderDigifi() {
     error,
     lastThumbnailUrl,
     lastFilledCount,
+    lastScanSummary,
     scanRowWarning,
     useProModel,
     canScan,

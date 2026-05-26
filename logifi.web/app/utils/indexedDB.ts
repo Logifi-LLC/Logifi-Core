@@ -104,12 +104,12 @@ function plainEntryForIDB(entry: LogEntry, syncFields: { _synced: boolean; _sync
   return { ...plain, ...syncFields }
 }
 
-/**
- * Save log entry to IndexedDB
- */
-export async function saveEntryToIndexedDB(entry: LogEntry): Promise<void> {
+async function putEntryInIndexedDB(
+  entry: LogEntry,
+  syncFields: { _synced: boolean; _syncTimestamp: number }
+): Promise<void> {
   const db = await getDB()
-  const entryWithSync = plainEntryForIDB(entry, { _synced: false, _syncTimestamp: Date.now() })
+  const entryWithSync = plainEntryForIDB(entry, syncFields)
 
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(['log_entries'], 'readwrite')
@@ -122,23 +122,30 @@ export async function saveEntryToIndexedDB(entry: LogEntry): Promise<void> {
 }
 
 /**
+ * Save log entry to IndexedDB
+ */
+export async function saveEntryToIndexedDB(entry: LogEntry): Promise<void> {
+  return putEntryInIndexedDB(entry, { _synced: false, _syncTimestamp: Date.now() })
+}
+
+/**
  * Update log entry in IndexedDB
  */
-export async function updateEntryInIndexedDB(entry: LogEntry): Promise<void> {
-  const db = await getDB()
+export async function saveSyncedEntryToIndexedDB(entry: LogEntry): Promise<void> {
+  return putEntryInIndexedDB(entry, { _synced: true, _syncTimestamp: Date.now() })
+}
+
+/**
+ * Update log entry in IndexedDB
+ */
+export async function updateEntryInIndexedDB(
+  entry: LogEntry,
+  options?: { synced?: boolean; syncTimestamp?: number }
+): Promise<void> {
   const existing = await getEntryFromIndexedDB(entry.id)
-  const entryWithSync = plainEntryForIDB(entry, {
-    _synced: existing?._synced ?? false,
-    _syncTimestamp: existing?._syncTimestamp ?? Date.now()
-  })
-
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(['log_entries'], 'readwrite')
-    const store = transaction.objectStore('log_entries')
-    const request = store.put(entryWithSync)
-
-    request.onsuccess = () => resolve()
-    request.onerror = () => reject(new Error(`Failed to update entry: ${request.error?.message}`))
+  return putEntryInIndexedDB(entry, {
+    _synced: options?.synced ?? existing?._synced ?? false,
+    _syncTimestamp: options?.syncTimestamp ?? existing?._syncTimestamp ?? Date.now()
   })
 }
 
@@ -287,6 +294,16 @@ export async function getSyncQueue(): Promise<SyncQueueEntry[]> {
     }
     request.onerror = () => reject(new Error(`Failed to get sync queue: ${request.error?.message}`))
   })
+}
+
+/**
+ * Remove all queued operations for a specific entry id.
+ */
+export async function removeQueuedOperationsForEntry(entryId: string): Promise<number> {
+  const queue = await getSyncQueue()
+  const matches = queue.filter((item) => item.entryId === entryId)
+  await Promise.all(matches.map((item) => removeFromSyncQueue(item.id)))
+  return matches.length
 }
 
 /**

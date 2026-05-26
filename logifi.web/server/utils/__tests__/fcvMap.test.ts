@@ -152,6 +152,17 @@ describe('mapFcvFlightToEntry', () => {
     expect(e.oooi).toBeNull()
   })
 
+  it('preserves the trimmed flight number when present', () => {
+    const e = mapFcvFlightToEntry({
+      fcv_flight_id: 'flight-number',
+      flight_number: '  4321  ',
+      scheduled_out_local: '2026-05-10 06:15:00',
+      dep_airport: 'SEA',
+      arr_airport: 'PDX',
+    })
+    expect(e.flight_number).toBe('4321')
+  })
+
   it('sets IFR only when no XC leg (same airport)', () => {
     const e = mapFcvFlightToEntry({
       fcv_flight_id: '5',

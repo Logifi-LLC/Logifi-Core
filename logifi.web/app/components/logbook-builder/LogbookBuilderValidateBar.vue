@@ -53,7 +53,7 @@ async function handleImport() {
       showConfirm.value = false
       confirmResult.value = null
     } else if (result.imported > 0) {
-      await navigateTo('/')
+      await navigateTo('/dashboard')
     }
   } catch (e: any) {
     errorMessage.value = e?.message ?? 'Import failed'

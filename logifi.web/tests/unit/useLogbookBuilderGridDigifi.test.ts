@@ -16,12 +16,13 @@ describe('useLogbookBuilderGrid applyScanResults', () => {
     const rightCol = grid.visibleColumns.value[1]?.id
     if (!rightCol) return
 
-    const filled = grid.applyScanResults('left', [
+    const result = grid.applyScanResults('left', [
       { rowIndex: 0, cells: { [leftCol]: 'KORD', [rightCol]: 'SHOULD_NOT' } },
     ])
     expect(grid.rows.value[0].cells[leftCol]).toBe('KORD')
     expect(grid.rows.value[0].cells[rightCol]).toBe('')
-    expect(filled).toBe(1)
+    expect(result.filled).toBe(1)
+    expect(result.allowedColumnIds).toEqual([leftCol])
   })
 
   it('appends right page rows in single layout', () => {
@@ -33,5 +34,32 @@ describe('useLogbookBuilderGrid applyScanResults', () => {
 
     expect(grid.rows.value[0].cells[col]).toBe('A')
     expect(grid.rows.value[1].cells[col]).toBe('B')
+  })
+
+  it('blocks import when Digifi-missing rows are still empty', () => {
+    const col = grid.visibleColumns.value[0].id
+
+    const leftResult = grid.applyScanResults('left', [{ rowIndex: 0, cells: { [col]: 'A' } }])
+    grid.recordDigifiScanStatus({
+      pageSide: 'left',
+      expectedRowCount: 3,
+      baseRow: leftResult.baseRow,
+      allowedColumnIds: leftResult.allowedColumnIds,
+      rowsReturned: 1,
+      distinctRowIndices: [0],
+      missingRowIndices: [1, 2],
+      duplicateRowIndices: [],
+      emptyRowIndices: [],
+      hasGaps: false,
+      strategyUsed: 'page-overview',
+      chunkCount: 0,
+      rescueAttempted: false,
+      rescueRecoveredCount: 0,
+    })
+
+    expect(grid.getDigifiImportBlockers()).toHaveLength(1)
+    grid.setCell(1, col, 'B')
+    grid.setCell(2, col, 'C')
+    expect(grid.getDigifiImportBlockers()).toEqual([])
   })
 })

@@ -10,8 +10,34 @@ import {
   PILOT_ROLE_OPTIONS,
   ROLE_OPTIONS,
 } from '../../app/utils/logbookBuilderTypes'
-import type { DigifiTemplateColumn } from '../../app/utils/digifiTypes'
+import { analyzeDigifiScanRows } from '../../app/utils/digifiScanDiagnostics'
+import type { DigifiScanStrategy, DigifiTemplateColumn } from '../../app/utils/digifiTypes'
 import type { LogbookColumnKey } from '../../app/utils/logbookTypes'
+
+interface DigifiImagePart {
+  label: string
+  imageBase64: string
+  mimeType: string
+}
+
+interface DigifiScanRowResult {
+  rowIndex: number
+  cells: Record<string, string>
+  tags?: string[]
+}
+
+interface ScanLogbookImageWithGeminiOptions {
+  imageBase64: string
+  mimeType: string
+  meta: DigifiScanMetaInput
+  chunkImages?: Array<{
+    partName: string
+    rowStart: number
+    rowEnd: number
+    imageBase64: string
+    mimeType: string
+  }>
+}
 
 function columnTypeHint(fieldKey: LogbookColumnKey | null): string {
   if (!fieldKey) return 'text'
@@ -50,11 +76,18 @@ function buildColumnList(columns: DigifiTemplateColumn[], pageSide: 'left' | 'ri
   return sorted.slice(splitIndex)
 }
 
-function buildPrompt(meta: DigifiScanMetaInput, targetColumns: DigifiTemplateColumn[]): string {
+function buildPrompt(
+  meta: DigifiScanMetaInput,
+  targetColumns: DigifiTemplateColumn[],
+  options: {
+    chunkImages: Array<{ rowStart: number; rowEnd: number }>
+    focusRows?: number[]
+  }
+): string {
   const colLines = targetColumns
     .map(
       (c) =>
-        `- columnId "${c.id}": label "${c.label}" → field ${c.fieldKey ?? 'unmapped'} (${columnTypeHint(c.fieldKey)})`
+        `- columnId "${c.id}": label "${c.label}" -> field ${c.fieldKey ?? 'unmapped'} (${columnTypeHint(c.fieldKey)})`
     )
     .join('\n')
 
@@ -67,14 +100,51 @@ function buildPrompt(meta: DigifiScanMetaInput, targetColumns: DigifiTemplateCol
         ? 'LEFT paper page; extract rows starting at row index 0.'
         : 'RIGHT paper page; extract rows starting at row index 0 (these map to the next rows in the grid after the left page was scanned).'
 
+  const chunkLines = options.chunkImages.length > 0
+    ? options.chunkImages
+        .map((chunk) => `- Attached zoomed row-band image covers rowIndex ${chunk.rowStart} through ${chunk.rowEnd}.`)
+        .join('\n')
+    : '- No zoomed row-band images were attached; rely on the overview page image only.'
+
+  if (options.focusRows?.length) {
+    const focusList = options.focusRows.join(', ')
+    return `You are transcribing specific missing pilot logbook rows into structured data.
+
+${pageDesc}
+
+The first attached image is the full-page overview. Additional images are zoomed row-band crops.
+${chunkLines}
+
+Only return these rowIndex values: ${focusList}.
+Return exactly one row object for each requested rowIndex. Do not return any other rowIndex values.
+
+Rules:
+- Use the zoomed row-band images as the primary source for handwriting.
+- Use empty string "" only if a cell is blank or completely illegible; otherwise make your best guess.
+- Match handwriting to the column labels listed below.
+- Flight times as decimal hours (e.g. 1.5 not 1:30).
+- Dates as written on the paper.
+- Return ONLY valid JSON matching the schema.
+
+Columns to extract on this page:
+${colLines}
+`
+  }
+
   return `You are transcribing a pilot paper logbook page into structured data.
 
 ${pageDesc}
 
-Extract exactly ${meta.rowCount} physical row lines on this page (rowIndex 0 through ${meta.rowCount - 1}, top to bottom). Return one row object for every line position — do not skip rows even if handwriting is faint.
+The first attached image is the full-page overview. Additional images are zoomed row-band crops.
+${chunkLines}
+
+Extract exactly ${meta.rowCount} physical row lines on this page (rowIndex 0 through ${meta.rowCount - 1}, top to bottom).
+Return one row object for every line position - do not skip rows even if handwriting is faint.
 
 Rules:
+- Use the zoomed row-band images as the primary source for handwriting and the overview image for context.
 - rowIndex must be contiguous from 0 upward with no gaps.
+- If the same row appears in multiple row-band images, merge the best reading into a single row object.
 - Use empty string "" only if a cell is blank or completely illegible; otherwise make your best guess.
 - Do not stop early: include all ${meta.rowCount} rows.
 - Match handwriting to the column labels listed below.
@@ -87,42 +157,139 @@ ${colLines}
 `
 }
 
-export async function scanLogbookImageWithGemini(
-  imageBase64: string,
-  mimeType: string,
-  meta: DigifiScanMetaInput
-): Promise<{ rows: Array<{ rowIndex: number; cells: Record<string, string>; tags?: string[] }>; modelUsed: string }> {
-  const env = getDigifiEnv()
-  if (!env.geminiApiKey) {
-    throw new Error('DIGIFI_NOT_CONFIGURED')
+function mapValidatedRows(
+  validatedRows: Array<{ rowIndex: number; cells: Array<{ columnId: string; value: string }>; tags?: string[] }>,
+  allowedColumnIds: Set<string>,
+  maxRowCount: number,
+  focusRows?: Set<number>
+): DigifiScanRowResult[] {
+  return validatedRows
+    .filter((row) => row.rowIndex >= 0 && row.rowIndex < maxRowCount)
+    .filter((row) => !focusRows || focusRows.has(row.rowIndex))
+    .map((row) => {
+      const cells: Record<string, string> = {}
+      for (const cell of row.cells) {
+        if (allowedColumnIds.has(cell.columnId)) {
+          cells[cell.columnId] = cell.value ?? ''
+        }
+      }
+      return {
+        rowIndex: row.rowIndex,
+        cells,
+        tags: row.tags,
+      }
+    })
+}
+
+function mergeRowsByIndex(rows: DigifiScanRowResult[]): { rows: DigifiScanRowResult[]; duplicateRowIndices: number[] } {
+  const rowMap = new Map<number, DigifiScanRowResult>()
+  const duplicateRowIndices = new Set<number>()
+
+  for (const row of rows) {
+    const existing = rowMap.get(row.rowIndex)
+    if (!existing) {
+      rowMap.set(row.rowIndex, {
+        rowIndex: row.rowIndex,
+        cells: { ...row.cells },
+        tags: row.tags?.map((tag) => tag.trim()).filter(Boolean),
+      })
+      continue
+    }
+
+    duplicateRowIndices.add(row.rowIndex)
+    for (const [columnId, value] of Object.entries(row.cells)) {
+      const nextValue = (value ?? '').trim()
+      if (!nextValue) continue
+      if (!(existing.cells[columnId] ?? '').trim()) {
+        existing.cells[columnId] = nextValue
+      }
+    }
+    if (row.tags?.length) {
+      existing.tags = Array.from(
+        new Set([...(existing.tags ?? []), ...row.tags.map((tag) => tag.trim()).filter(Boolean)])
+      )
+    }
   }
 
-  const splitIndex = Math.min(
-    Math.max(1, meta.twoPageSplitIndex),
-    Math.max(1, meta.columns.length - 1)
+  return {
+    rows: [...rowMap.values()].sort((a, b) => a.rowIndex - b.rowIndex),
+    duplicateRowIndices: [...duplicateRowIndices].sort((a, b) => a - b),
+  }
+}
+
+function mergePrimaryAndRescueRows(
+  primaryRows: DigifiScanRowResult[],
+  rescueRows: DigifiScanRowResult[]
+): DigifiScanRowResult[] {
+  const rowMap = new Map<number, DigifiScanRowResult>(
+    primaryRows.map((row) => [
+      row.rowIndex,
+      {
+        rowIndex: row.rowIndex,
+        cells: { ...row.cells },
+        tags: row.tags ? [...row.tags] : [],
+      },
+    ])
   )
-  const targetColumns = buildColumnList(meta.columns, meta.pageSide, meta.layout, splitIndex)
-  const allowedColumnIds = new Set(targetColumns.map((c) => c.id))
 
-  const model = meta.useProModel ? env.proModel : env.model
-  const prompt = buildPrompt(meta, targetColumns)
+  for (const rescueRow of rescueRows) {
+    const existing = rowMap.get(rescueRow.rowIndex)
+    if (!existing) {
+      rowMap.set(rescueRow.rowIndex, {
+        rowIndex: rescueRow.rowIndex,
+        cells: { ...rescueRow.cells },
+        tags: rescueRow.tags ? [...rescueRow.tags] : [],
+      })
+      continue
+    }
+    for (const [columnId, value] of Object.entries(rescueRow.cells)) {
+      const nextValue = (value ?? '').trim()
+      if (!nextValue) continue
+      if (!(existing.cells[columnId] ?? '').trim()) {
+        existing.cells[columnId] = nextValue
+      }
+    }
+    if (rescueRow.tags?.length) {
+      existing.tags = Array.from(
+        new Set([...(existing.tags ?? []), ...rescueRow.tags.map((tag) => tag.trim()).filter(Boolean)])
+      )
+    }
+  }
 
+  return [...rowMap.values()].sort((a, b) => a.rowIndex - b.rowIndex)
+}
+
+async function callGeminiRows(
+  model: string,
+  prompt: string,
+  overviewImage: DigifiImagePart,
+  chunkImages: DigifiImagePart[]
+): Promise<unknown> {
+  const env = getDigifiEnv()
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.geminiApiKey)}`
+  const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
+    { text: prompt },
+    { text: 'Full-page overview image:' },
+    {
+      inline_data: {
+        mime_type: overviewImage.mimeType,
+        data: overviewImage.imageBase64,
+      },
+    },
+  ]
+
+  for (const chunk of chunkImages) {
+    parts.push({ text: chunk.label })
+    parts.push({
+      inline_data: {
+        mime_type: chunk.mimeType,
+        data: chunk.imageBase64,
+      },
+    })
+  }
 
   const body = {
-    contents: [
-      {
-        parts: [
-          { text: prompt },
-          {
-            inline_data: {
-              mime_type: mimeType,
-              data: imageBase64,
-            },
-          },
-        ],
-      },
-    ],
+    contents: [{ parts }],
     generationConfig: {
       temperature: 0.1,
       responseMimeType: 'application/json',
@@ -138,14 +305,14 @@ export async function scanLogbookImageWithGemini(
       body: JSON.stringify(body),
     })
     if (res.status === 429 && attempt < 2) {
-      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
+      await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)))
       continue
     }
     if (!res.ok) {
       const errText = await res.text().catch(() => '')
       lastError = new Error(`Gemini API ${res.status}: ${errText.slice(0, 200)}`)
       if (res.status >= 500 && attempt < 2) {
-        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)))
+        await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)))
         continue
       }
       throw lastError
@@ -165,32 +332,105 @@ export async function scanLogbookImageWithGemini(
       console.info('[digifi] scan tokens:', tokenCount, 'model:', model)
     }
 
-    let parsed: unknown
     try {
-      parsed = JSON.parse(text)
+      return JSON.parse(text)
     } catch {
       throw new Error('Gemini returned invalid JSON')
     }
-
-    const validated = geminiScanResponseSchema.parse(parsed)
-    const rows = validated.rows
-      .filter((r) => r.rowIndex >= 0 && r.rowIndex < meta.rowCount)
-      .map((r) => {
-        const cells: Record<string, string> = {}
-        for (const cell of r.cells) {
-          if (allowedColumnIds.has(cell.columnId)) {
-            cells[cell.columnId] = cell.value ?? ''
-          }
-        }
-        return {
-          rowIndex: r.rowIndex,
-          cells,
-          tags: r.tags,
-        }
-      })
-
-    return { rows, modelUsed: model }
   }
 
   throw lastError ?? new Error('Gemini request failed')
+}
+
+export async function scanLogbookImageWithGemini(
+  options: ScanLogbookImageWithGeminiOptions
+): Promise<{
+  rows: DigifiScanRowResult[]
+  modelUsed: string
+  strategyUsed: DigifiScanStrategy
+  chunkCount: number
+  rescueAttempted: boolean
+  rescueRecoveredCount: number
+  duplicateRowIndices: number[]
+}> {
+  const env = getDigifiEnv()
+  if (!env.geminiApiKey) {
+    throw new Error('DIGIFI_NOT_CONFIGURED')
+  }
+
+  const { imageBase64, mimeType, meta, chunkImages = [] } = options
+  const splitIndex = Math.min(
+    Math.max(1, meta.twoPageSplitIndex),
+    Math.max(1, meta.columns.length - 1)
+  )
+  const targetColumns = buildColumnList(meta.columns, meta.pageSide, meta.layout, splitIndex)
+  const allowedColumnIds = new Set(targetColumns.map((column) => column.id))
+  const model = meta.useProModel ? env.proModel : env.model
+  const strategyUsed: DigifiScanStrategy = chunkImages.length > 0 ? 'page-overview+row-bands' : 'page-overview'
+  const overviewImage: DigifiImagePart = {
+    label: 'Full-page overview image',
+    imageBase64,
+    mimeType,
+  }
+  const labeledChunks = chunkImages.map((chunk) => ({
+    label: `Zoomed row-band image for rowIndex ${chunk.rowStart} through ${chunk.rowEnd}:`,
+    imageBase64: chunk.imageBase64,
+    mimeType: chunk.mimeType,
+    rowStart: chunk.rowStart,
+    rowEnd: chunk.rowEnd,
+  }))
+
+  const primaryPrompt = buildPrompt(meta, targetColumns, {
+    chunkImages: labeledChunks,
+  })
+  const primaryParsed = await callGeminiRows(model, primaryPrompt, overviewImage, labeledChunks)
+  const primaryValidated = geminiScanResponseSchema.parse(primaryParsed)
+  const primaryMappedRows = mapValidatedRows(primaryValidated.rows, allowedColumnIds, meta.rowCount)
+  const primaryMerged = mergeRowsByIndex(primaryMappedRows)
+  let finalRows = primaryMerged.rows
+  let duplicateRowIndices = new Set(primaryMerged.duplicateRowIndices)
+  let rescueAttempted = false
+  let rescueRecoveredCount = 0
+
+  const primaryDiagnostics = analyzeDigifiScanRows(finalRows, meta.rowCount)
+  if (labeledChunks.length > 0 && primaryDiagnostics.missingRowIndices.length > 0) {
+    rescueAttempted = true
+    const focusRows = primaryDiagnostics.missingRowIndices
+    const rescueChunks = labeledChunks.filter((chunk) =>
+      focusRows.some((rowIndex) => rowIndex >= chunk.rowStart && rowIndex <= chunk.rowEnd)
+    )
+    if (rescueChunks.length > 0) {
+      const rescuePrompt = buildPrompt(meta, targetColumns, {
+        chunkImages: rescueChunks,
+        focusRows,
+      })
+      const rescueParsed = await callGeminiRows(model, rescuePrompt, overviewImage, rescueChunks)
+      const rescueValidated = geminiScanResponseSchema.parse(rescueParsed)
+      const rescueMappedRows = mapValidatedRows(
+        rescueValidated.rows,
+        allowedColumnIds,
+        meta.rowCount,
+        new Set(focusRows)
+      )
+      const rescueMerged = mergeRowsByIndex(rescueMappedRows)
+      finalRows = mergePrimaryAndRescueRows(finalRows, rescueMerged.rows)
+      for (const rowIndex of rescueMerged.duplicateRowIndices) {
+        duplicateRowIndices.add(rowIndex)
+      }
+      const finalDiagnostics = analyzeDigifiScanRows(finalRows, meta.rowCount)
+      rescueRecoveredCount = focusRows.filter(
+        (rowIndex) => !finalDiagnostics.missingRowIndices.includes(rowIndex)
+      ).length
+    }
+  }
+
+  return {
+    rows: finalRows,
+    modelUsed: model,
+    strategyUsed,
+    chunkCount: labeledChunks.length,
+    rescueAttempted,
+    rescueRecoveredCount,
+    duplicateRowIndices: [...duplicateRowIndices].sort((a, b) => a - b),
+  }
 }

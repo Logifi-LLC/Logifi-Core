@@ -5308,6 +5308,7 @@ import {
   updateEntryInIndexedDB,
   deleteEntryFromIndexedDB,
   getAllEntriesFromIndexedDB,
+  removeQueuedOperationsForEntry,
   type IDBLogEntry
 } from '../utils/indexedDB'
 
@@ -12246,6 +12247,12 @@ function isValidUUID(id: string): boolean {
 }
 
 async function removeEntry(id: string): Promise<void> {
+  const clearQueuedOps = async (...entryIds: string[]): Promise<void> => {
+    for (const entryId of new Set(entryIds.filter(Boolean))) {
+      await removeQueuedOperationsForEntry(entryId)
+    }
+  }
+
   // Delete from Supabase if authenticated
   if (isAuthenticated.value && user.value) {
     try {
@@ -12285,6 +12292,7 @@ async function removeEntry(id: string): Promise<void> {
           } else {
             // Entry doesn't exist in Supabase (hasn't synced yet), just delete from IndexedDB
             console.log('[RemoveEntry] Entry not found in Supabase, deleting from IndexedDB only')
+            await clearQueuedOps(id, supabaseId)
             await deleteEntryFromIndexedDB(id)
             logEntries.value = logEntries.value.filter((entry) => entry.id !== id)
             return
@@ -12318,6 +12326,7 @@ async function removeEntry(id: string): Promise<void> {
         // the entry probably doesn't exist in Supabase yet
         if (error.message?.includes('invalid input syntax for type uuid') && !isValidUUID(id)) {
           console.log('[RemoveEntry] Entry not in Supabase (invalid UUID), deleting from IndexedDB only')
+          await clearQueuedOps(id, supabaseId)
           await deleteEntryFromIndexedDB(id)
           logEntries.value = logEntries.value.filter((entry) => entry.id !== id)
           return
@@ -12349,6 +12358,7 @@ async function removeEntry(id: string): Promise<void> {
       }
       
       // Also delete from IndexedDB
+      await clearQueuedOps(id, supabaseId)
       await deleteEntryFromIndexedDB(id)
     } catch (error) {
       console.error('Error deleting entry:', error)
@@ -12357,6 +12367,7 @@ async function removeEntry(id: string): Promise<void> {
     }
   } else {
     // Not authenticated, just delete from IndexedDB
+    await clearQueuedOps(id)
     await deleteEntryFromIndexedDB(id)
   }
   
@@ -12570,7 +12581,10 @@ async function loadEntries(): Promise<void> {
             // Supabase entry is newer or doesn't exist locally
             entryMap.set(supabaseEntry.id, supabaseEntry)
             // Update IndexedDB with synced entry
-            updateEntryInIndexedDB(supabaseEntry).catch(err => {
+            updateEntryInIndexedDB(supabaseEntry, {
+              synced: true,
+              syncTimestamp: Date.now()
+            }).catch(err => {
               console.warn('[LoadEntries] Failed to update IndexedDB with synced entry:', err)
             })
           } else {

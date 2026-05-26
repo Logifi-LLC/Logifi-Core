@@ -12,6 +12,7 @@ const {
   error,
   lastThumbnailUrl,
   lastFilledCount,
+  lastScanSummary,
   scanRowWarning,
   useProModel,
   canScan,
@@ -68,7 +69,13 @@ async function processFile(file: File | undefined, pageSide: DigifiPageSide) {
   }
 
   if (!error.value && lastFilledCount.value > 0) {
-    successMessage.value = `Filled ${lastFilledCount.value} cells — please review before importing.`
+    const rowsMatched = lastScanSummary.value?.rowsReturned ?? 0
+    const expectedRows = lastScanSummary.value?.expectedRowCount ?? 0
+    const rescueNote =
+      (lastScanSummary.value?.rescueRecoveredCount ?? 0) > 0
+        ? ` Rescue recovered ${lastScanSummary.value?.rescueRecoveredCount} row(s).`
+        : ''
+    successMessage.value = `Captured ${rowsMatched}/${expectedRows} row(s) and filled ${lastFilledCount.value} cells.${rescueNote} Please review before importing.`
   } else if (!error.value) {
     successMessage.value = 'Scan complete. Review the grid and edit any misread cells.'
   }
@@ -189,10 +196,13 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
     >
       <li v-if="!isAuthenticated">Sign in to use Digifi.</li>
       <li v-else-if="!canScan">Add at least one column before scanning.</li>
-      <li v-else-if="layout === 'two-page'">
+      <template v-else>
+        <li>Set `Rows` to the number of physical paper lines you expect to scan on this page.</li>
+        <li v-if="layout === 'two-page'">
         Two-page layout: left photo fills left columns; right photo fills right columns (same rows).
-      </li>
-      <li v-else>Single layout: left page fills from the top; right page continues on the next rows.</li>
+        </li>
+        <li v-else>Single layout: left page fills from the top; right page continues on the next rows.</li>
+      </template>
     </ul>
 
     <input

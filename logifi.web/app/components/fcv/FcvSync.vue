@@ -29,6 +29,7 @@ interface FcvMappedEntry {
   aircraft_category_class: string
   aircraft_make_model: string
   registration: string
+  flight_number: string | null
   departure: string
   destination: string
   flight_time: Record<string, unknown>
@@ -688,6 +689,11 @@ function formatBlockHours(f: FcvMappedEntry): string {
   return `${n}h`
 }
 
+function formatFlightNumberPreview(f: FcvMappedEntry): string {
+  const raw = typeof f.flight_number === 'string' ? f.flight_number.trim() : ''
+  return raw ? `Flight ${raw}` : ''
+}
+
 /** OOOI stored as HHMM; show as HH:MM for preview. */
 function formatOooiPreview(f: FcvMappedEntry): string {
   const o = f.oooi as
@@ -1049,6 +1055,15 @@ const inputClass = computed(() =>
                 aria-hidden="true"
               />
               <span class="font-medium">{{ f.date }}</span>
+              <span
+                v-if="formatFlightNumberPreview(f)"
+                :class="[
+                  'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium',
+                  isDarkMode ? 'bg-gray-800 text-blue-200' : 'bg-blue-50 text-blue-700',
+                ]"
+              >
+                {{ formatFlightNumberPreview(f) }}
+              </span>
             </div>
             <span>{{ f.departure }} → {{ f.destination }}</span>
             <span :class="isDarkMode ? 'text-gray-400' : 'text-gray-500'">

@@ -13,7 +13,7 @@ import { useValidation } from '~/composables/useValidation'
 import { useAuth } from '~/composables/useAuth'
 import { supabase } from '~/lib/supabase'
 import {
-  saveEntryToIndexedDB,
+  saveSyncedEntryToIndexedDB,
   initIndexedDB,
 } from '~/utils/indexedDB'
 import { clearBuilderDraft } from '~/composables/useLogbookBuilderDraft'
@@ -415,6 +415,12 @@ export async function validateOnly(
     return result
   }
 
+  const digifiBlockers = grid.getDigifiImportBlockers?.() ?? []
+  if (digifiBlockers.length > 0) {
+    result.errors = digifiBlockers.map((message) => ({ rowIndex: -1, message }))
+    return result
+  }
+
   const validationErrors: { rowIndex: number; message: string }[] = []
   for (let i = 0; i < entries.length; i++) {
     const results = await validateEntry(entries[i])
@@ -500,6 +506,12 @@ export async function runValidateAndImport(
     return result
   }
 
+  const digifiBlockers = grid.getDigifiImportBlockers?.() ?? []
+  if (digifiBlockers.length > 0) {
+    result.errors = digifiBlockers.map((message) => ({ rowIndex: -1, message }))
+    return result
+  }
+
   const validationErrors: { rowIndex: number; message: string }[] = []
   for (let i = 0; i < entries.length; i++) {
     const results = await validateEntry(entries[i])
@@ -542,6 +554,7 @@ export async function runValidateAndImport(
   }
 
   for (const entry of entries) {
+    const importedAt = new Date().toISOString()
     const dbEntry = {
       id: entry.id,
       user_id: user.value?.id,
@@ -570,12 +583,19 @@ export async function runValidateAndImport(
       import_source: 'logbook_builder',
       import_batch_id: importBatchId,
       original_entry_date: entry.date ? new Date(entry.date).toISOString() : null,
-      import_metadata: { importedAt: new Date().toISOString() },
+      import_metadata: { importedAt },
     }
+    let insertedRow: any = null
 
     if (isAuthenticated.value && user.value) {
       try {
-        await (supabase as any).from('log_entries').insert(dbEntry).select().single()
+        const { data, error: insertError } = await (supabase as any)
+          .from('log_entries')
+          .insert(dbEntry)
+          .select()
+          .single()
+        if (insertError) throw insertError
+        insertedRow = data
       } catch (e: any) {
         result.errors.push({
           rowIndex: -1,
@@ -591,10 +611,14 @@ export async function runValidateAndImport(
       importSource: 'logbook_builder',
       importBatchId: importBatchId ?? undefined,
       originalEntryDate: entry.date,
-      importMetadata: { importedAt: new Date().toISOString() },
+      importMetadata: { importedAt },
+      version: insertedRow?.version ?? entry.version,
+      dataHash: insertedRow?.data_hash ?? entry.dataHash,
+      createdAt: insertedRow?.created_at ?? entry.createdAt,
+      updatedAt: insertedRow?.updated_at ?? entry.updatedAt,
     }
     try {
-      await saveEntryToIndexedDB(entryToStore)
+      await saveSyncedEntryToIndexedDB(entryToStore)
     } catch (_) {
       // non-fatal
     }

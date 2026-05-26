@@ -35,4 +35,18 @@ describe('digifiScanDiagnostics', () => {
     expect(msg).toContain('Expected 13')
     expect(msg).toContain('1')
   })
+
+  it('tracks duplicate and empty rows', () => {
+    const d = analyzeDigifiScanRows(
+      [
+        { rowIndex: 0, cells: { a: '1' } },
+        { rowIndex: 0, cells: { a: '' } },
+        { rowIndex: 1, cells: { a: '' } },
+      ],
+      2
+    )
+    expect(d.duplicateRowIndices).toEqual([0])
+    expect(d.emptyRowIndices).toEqual([1])
+    expect(formatDigifiScanWarning(d, 2)).toContain('read more than once')
+  })
 })

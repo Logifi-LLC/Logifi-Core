@@ -11,7 +11,7 @@ import {
   createEmptyBuilderRow,
 } from '~/utils/logbookBuilderTypes'
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
-import type { DigifiPageSide, DigifiScanRow } from '~/utils/digifiTypes'
+import type { DigifiPageSide, DigifiScanRow, DigifiScanStrategy } from '~/utils/digifiTypes'
 
 const FIELD_LABELS: Record<LogbookColumnKey, string> = {
   date: 'Date',
@@ -43,6 +43,29 @@ const FIELD_LABELS: Record<LogbookColumnKey, string> = {
   pilotRole: 'Pilot Role',
   role: 'Role',
   total: 'Total',
+}
+
+export interface ApplyScanResultsResult {
+  filled: number
+  baseRow: number
+  allowedColumnIds: string[]
+}
+
+export interface DigifiAppliedScanStatus {
+  pageSide: DigifiPageSide
+  expectedRowCount: number
+  baseRow: number
+  allowedColumnIds: string[]
+  rowsReturned: number
+  distinctRowIndices: number[]
+  missingRowIndices: number[]
+  duplicateRowIndices: number[]
+  emptyRowIndices: number[]
+  hasGaps: boolean
+  strategyUsed: DigifiScanStrategy
+  chunkCount: number
+  rescueAttempted: boolean
+  rescueRecoveredCount: number
 }
 
 export function useLogbookBuilderGrid() {
@@ -89,6 +112,7 @@ export function useLogbookBuilderGrid() {
   /** After a left-page scan in single layout, right page rows start at this index. */
   const singleLayoutRightStartRow: Ref<number> = ref(0)
   const leftPageScanned: Ref<boolean> = ref(false)
+  const digifiScanStatusByPage: Ref<Partial<Record<DigifiPageSide, DigifiAppliedScanStatus>>> = ref({})
 
   function setActiveRowIndex(index: number | null) {
     activeRowIndex.value = index
@@ -203,6 +227,7 @@ export function useLogbookBuilderGrid() {
     rows.value = Array.from({ length: rowCount.value }, () => createEmptyBuilderRow(ids))
     singleLayoutRightStartRow.value = 0
     leftPageScanned.value = false
+    digifiScanStatusByPage.value = {}
   }
 
   function columnIdsForPageSide(pageSide: DigifiPageSide): string[] {
@@ -236,7 +261,7 @@ export function useLogbookBuilderGrid() {
    * Two-page layout: left/right photos fill column halves on the same row indices.
    * Single layout: left photo fills from row 0; right photo fills from the next empty row block.
    */
-  function applyScanResults(pageSide: DigifiPageSide, scanRows: DigifiScanRow[]): number {
+  function applyScanResults(pageSide: DigifiPageSide, scanRows: DigifiScanRow[]): ApplyScanResultsResult {
     const allowedColIds = new Set(columnIdsForPageSide(pageSide))
     let filled = 0
 
@@ -281,12 +306,60 @@ export function useLogbookBuilderGrid() {
       leftPageScanned.value = true
     }
 
-    return filled
+    return {
+      filled,
+      baseRow,
+      allowedColumnIds: [...allowedColIds],
+    }
+  }
+
+  function recordDigifiScanStatus(status: DigifiAppliedScanStatus) {
+    digifiScanStatusByPage.value = {
+      ...digifiScanStatusByPage.value,
+      [status.pageSide]: status,
+    }
+  }
+
+  function clearDigifiScanStatus(pageSide?: DigifiPageSide) {
+    if (!pageSide) {
+      digifiScanStatusByPage.value = {}
+      return
+    }
+    const next = { ...digifiScanStatusByPage.value }
+    delete next[pageSide]
+    digifiScanStatusByPage.value = next
+  }
+
+  function getDigifiImportBlockers(): string[] {
+    const issues: string[] = []
+    for (const status of Object.values(digifiScanStatusByPage.value)) {
+      if (!status) continue
+      const unresolved = new Set<number>()
+      for (const rowIndex of status.missingRowIndices) {
+        const gridRowIdx = status.baseRow + rowIndex
+        if (gridRowIdx < 0 || gridRowIdx >= rows.value.length) continue
+        if (!rowHasAnyCell(gridRowIdx, status.allowedColumnIds)) {
+          unresolved.add(gridRowIdx)
+        }
+      }
+      if (unresolved.size === 0) continue
+      const preview = [...unresolved]
+        .sort((a, b) => a - b)
+        .slice(0, 5)
+        .map((i) => i + 1)
+        .join(', ')
+      const suffix = unresolved.size > 5 ? '…' : ''
+      issues.push(
+        `${status.pageSide === 'left' ? 'Left' : 'Right'} page still has unresolved Digifi rows at grid line(s) ${preview}${suffix}. Fill those rows manually or rescan before importing.`
+      )
+    }
+    return issues
   }
 
   function resetDigifiPageState() {
     singleLayoutRightStartRow.value = 0
     leftPageScanned.value = false
+    digifiScanStatusByPage.value = {}
   }
 
   /** Delete a saved template by id. Only removes the template record; does not touch logbook entries. */
@@ -332,6 +405,10 @@ export function useLogbookBuilderGrid() {
     applyScanResults,
     leftPageScanned,
     singleLayoutRightStartRow,
+    digifiScanStatusByPage,
+    recordDigifiScanStatus,
+    clearDigifiScanStatus,
+    getDigifiImportBlockers,
     resetDigifiPageState,
   }
 }
