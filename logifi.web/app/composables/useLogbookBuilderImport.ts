@@ -6,6 +6,11 @@ import {
   createEmptyOOOI,
   getApproachesFromPerformance,
 } from '~/utils/logbookTypes'
+import {
+  buildDigifiFeedbackContextFromRow,
+  buildDigifiFeedbackContextKey,
+  normalizeDigifiFeedbackValue,
+} from '~/utils/digifiFeedback'
 import type { BuilderRow, BuilderColumn } from '~/utils/logbookBuilderTypes'
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
@@ -482,6 +487,117 @@ export interface ValidateAndImportResult {
   errors: { rowIndex: number; message: string }[]
 }
 
+interface PendingDigifiCorrectionFeedback {
+  fieldKey: LogbookColumnKey
+  rawValue: string
+  rawValueKey: string
+  correctedValue: string
+  correctedValueKey: string
+  contextKey: string
+  context: Record<string, unknown>
+  scanResolvedValue: string
+  scanStrategy: string
+}
+
+function collectDigifiCorrectionFeedback(
+  grid: ReturnType<typeof useLogbookBuilderGrid>
+): PendingDigifiCorrectionFeedback[] {
+  const sortedColumns = [...grid.columns.value].sort((a, b) => a.order - b.order)
+  const feedbackItems = new Map<string, PendingDigifiCorrectionFeedback>()
+
+  for (const row of grid.rows.value) {
+    const context = buildDigifiFeedbackContextFromRow(row, sortedColumns)
+    for (const column of sortedColumns) {
+      const meta = row.digifiCellMeta?.[column.id]
+      const fieldKey = meta?.fieldKey ?? column.fieldKey
+      if (!meta || !fieldKey) continue
+
+      const rawValue = (meta.rawValue ?? '').trim()
+      const scanResolvedValue = (meta.resolvedValue ?? '').trim()
+      const correctedValue = (row.cells?.[column.id] ?? '').trim()
+      if (!rawValue || !correctedValue || correctedValue === scanResolvedValue) continue
+
+      const rawValueKey = normalizeDigifiFeedbackValue(fieldKey, rawValue)
+      const correctedValueKey = normalizeDigifiFeedbackValue(fieldKey, correctedValue)
+      if (!rawValueKey || !correctedValueKey || rawValueKey === correctedValueKey) continue
+
+      const contextKey = buildDigifiFeedbackContextKey(fieldKey, context)
+      const dedupeKey = [fieldKey, rawValueKey, correctedValueKey, contextKey].join('|')
+      feedbackItems.set(dedupeKey, {
+        fieldKey,
+        rawValue,
+        rawValueKey,
+        correctedValue,
+        correctedValueKey,
+        contextKey,
+        context: {
+          ...context,
+          scanResolvedValue,
+        },
+        scanResolvedValue,
+        scanStrategy: meta.strategy,
+      })
+    }
+  }
+
+  return [...feedbackItems.values()]
+}
+
+async function persistDigifiCorrectionFeedback(
+  grid: ReturnType<typeof useLogbookBuilderGrid>,
+  userId: string
+): Promise<void> {
+  const feedbackItems = collectDigifiCorrectionFeedback(grid)
+  if (feedbackItems.length === 0) return
+
+  for (const item of feedbackItems) {
+    const { data: existing, error: selectError } = await (supabase as any)
+      .from('digifi_correction_feedback')
+      .select('id, sample_count')
+      .eq('user_id', userId)
+      .eq('field_key', item.fieldKey)
+      .eq('raw_value_key', item.rawValueKey)
+      .eq('corrected_value_key', item.correctedValueKey)
+      .eq('context_key', item.contextKey)
+      .maybeSingle()
+
+    if (selectError) throw selectError
+
+    if (existing?.id) {
+      const { error: updateError } = await (supabase as any)
+        .from('digifi_correction_feedback')
+        .update({
+          raw_value: item.rawValue,
+          corrected_value: item.correctedValue,
+          context: item.context,
+          sample_count: (existing.sample_count ?? 0) + 1,
+          last_corrected_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+      if (updateError) throw updateError
+      continue
+    }
+
+    const { error: insertError } = await (supabase as any)
+      .from('digifi_correction_feedback')
+      .insert({
+        user_id: userId,
+        field_key: item.fieldKey,
+        raw_value: item.rawValue,
+        raw_value_key: item.rawValueKey,
+        corrected_value: item.correctedValue,
+        corrected_value_key: item.correctedValueKey,
+        context_key: item.contextKey,
+        context: {
+          ...item.context,
+          scanStrategy: item.scanStrategy,
+        },
+        sample_count: 1,
+      })
+    if (insertError) throw insertError
+  }
+}
+
 export async function runValidateAndImport(
   grid: ReturnType<typeof useLogbookBuilderGrid>
 ): Promise<ValidateAndImportResult> {
@@ -636,6 +752,14 @@ export async function runValidateAndImport(
         })
         .eq('id', importBatchId)
     } catch (_) {}
+  }
+
+  if (result.imported > 0 && isAuthenticated.value && user.value) {
+    try {
+      await persistDigifiCorrectionFeedback(grid, user.value.id)
+    } catch (error) {
+      console.warn('[digifi] failed to persist correction feedback', error)
+    }
   }
 
   if (result.imported > 0) {

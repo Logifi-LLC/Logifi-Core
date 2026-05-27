@@ -62,4 +62,33 @@ describe('useLogbookBuilderGrid applyScanResults', () => {
     grid.setCell(2, col, 'C')
     expect(grid.getDigifiImportBlockers()).toEqual([])
   })
+
+  it('stores Digifi cell metadata and clears review state after manual edit', () => {
+    const col = grid.visibleColumns.value[0].id
+
+    grid.applyScanResults('left', [{
+      rowIndex: 0,
+      cells: { [col]: 'N5724S' },
+      cellMeta: {
+        [col]: {
+          fieldKey: 'identification',
+          rawValue: 'N5724S',
+          resolvedValue: 'N5724S',
+          strategy: 'ambiguous',
+          confidence: 'low',
+          autoApplied: false,
+          needsReview: true,
+          candidates: [{ value: 'N5724J', score: 0.9, distance: 1, source: 'history' }],
+        },
+      },
+    }])
+
+    expect(grid.rows.value[0].digifiCellMeta?.[col]?.needsReview).toBe(true)
+
+    grid.setCell(0, col, 'N5724J')
+    grid.noteDigifiCellManualEdit(0, col, 'N5724J')
+
+    expect(grid.rows.value[0].digifiCellMeta?.[col]?.userConfirmed).toBe(true)
+    expect(grid.rows.value[0].digifiCellMeta?.[col]?.needsReview).toBe(false)
+  })
 })

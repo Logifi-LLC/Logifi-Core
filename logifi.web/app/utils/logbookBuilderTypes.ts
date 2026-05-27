@@ -1,3 +1,4 @@
+import type { DigifiScanCellMeta } from './digifiTypes'
 import type { LogbookColumnKey } from './logbookTypes'
 
 /** Single column definition in the builder grid (user can map to a logbook field). */
@@ -16,6 +17,7 @@ export interface BuilderColumn {
 export interface BuilderRow {
   cells: Record<string, string>
   tags?: string[]
+  digifiCellMeta?: Record<string, DigifiScanCellMeta>
 }
 
 /** Layout mode for the builder (single page or two-page spread). */
@@ -124,5 +126,5 @@ export function createEmptyBuilderRow(columnIds: string[]): BuilderRow {
   for (const id of columnIds) {
     cells[id] = ''
   }
-  return { cells, tags: [] }
+  return { cells, tags: [], digifiCellMeta: {} }
 }

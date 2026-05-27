@@ -6,6 +6,7 @@ import { digifiScanMetaSchema } from '../../utils/digifiSchema'
 import { getDigifiEnv } from '../../utils/digifiEnv'
 import { scanLogbookImageWithGemini } from '../../utils/digifiGemini'
 import { normalizeScanRows } from '../../utils/digifiNormalize'
+import { personalizeDigifiScanRows } from '../../utils/digifiPersonalization'
 import { analyzeDigifiScanRows } from '../../../app/utils/digifiScanDiagnostics'
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
@@ -185,6 +186,23 @@ export default defineEventHandler(async (event) => {
   }
 
   const normalizedRows = normalizeScanRows(geminiResult.rows, meta.columns, meta.defaultYear)
+  let personalizedRows = normalizedRows
+  let reviewMessages: string[] = []
+  let reviewRequiredCount = 0
+  try {
+    const personalized = await personalizeDigifiScanRows({
+      userId,
+      supabase,
+      rows: geminiResult.rows,
+      normalizedRows,
+      columns: meta.columns,
+    })
+    personalizedRows = personalized.rows
+    reviewMessages = personalized.reviewMessages
+    reviewRequiredCount = personalized.reviewRequiredCount
+  } catch (error) {
+    console.error('[digifi] personalization failed:', error)
+  }
 
   const { error: insertError } = await supabase.from('digifi_scan_sessions').insert({
     id: scanId,
@@ -203,18 +221,18 @@ export default defineEventHandler(async (event) => {
   }
 
   let filledCellCount = 0
-  for (const row of normalizedRows) {
+  for (const row of personalizedRows) {
     for (const v of Object.values(row.cells)) {
       if (v.trim()) filledCellCount++
     }
   }
 
-  const rowDiagnostics = analyzeDigifiScanRows(normalizedRows, meta.rowCount)
+  const rowDiagnostics = analyzeDigifiScanRows(personalizedRows, meta.rowCount)
 
   return {
     ok: true as const,
     scanId,
-    rows: normalizedRows,
+    rows: personalizedRows,
     filledCellCount,
     modelUsed: geminiResult.modelUsed,
     strategyUsed: geminiResult.strategyUsed,
@@ -229,5 +247,7 @@ export default defineEventHandler(async (event) => {
       : rowDiagnostics.duplicateRowIndices,
     emptyRowIndices: rowDiagnostics.emptyRowIndices,
     hasGaps: rowDiagnostics.hasGaps,
+    reviewMessages,
+    reviewRequiredCount,
   }
 })

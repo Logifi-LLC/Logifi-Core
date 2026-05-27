@@ -10,7 +10,7 @@ import { useTheme } from '~/composables/useTheme'
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
 if (!grid) throw new Error('LogbookBuilderGrid must be used inside a page that provides logbookBuilderGrid')
-const { visibleColumns, rows, setCell, setRowTags, updateColumn, reorderColumns, layout, effectiveSplitIndex, setTwoPageSplitIndex, tagsColumnWidth, setColumnWidth, setTagsColumnWidth, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH, activeRowIndex, setActiveRowIndex } = grid
+const { visibleColumns, rows, setCell, setRowTags, updateColumn, reorderColumns, layout, effectiveSplitIndex, setTwoPageSplitIndex, tagsColumnWidth, setColumnWidth, setTagsColumnWidth, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH, activeRowIndex, setActiveRowIndex, noteDigifiCellManualEdit } = grid
 
 const builderPilots = inject<Ref<string[]> | null>('builderPilots', null)
 
@@ -763,8 +763,42 @@ function getCellValue(rowIdx: number, colId: string): string {
   return row.cells[colId] ?? ''
 }
 
+function getDigifiCellMeta(rowIdx: number, colId: string) {
+  return rows.value[rowIdx]?.digifiCellMeta?.[colId] ?? null
+}
+
+function getDigifiSuggestions(rowIdx: number, colId: string, fieldKey: string | null) {
+  if (fieldKey === 'pilots') return builderPilotSuggestions.value
+  if (fieldKey !== 'identification') return []
+  const fromMeta = getDigifiCellMeta(rowIdx, colId)?.candidates?.map((candidate) => candidate.value) ?? []
+  return Array.from(new Set([...fromMeta, ...identificationUsedOnPage.value]))
+}
+
+function getDigifiCellTitle(rowIdx: number, colId: string): string | undefined {
+  const meta = getDigifiCellMeta(rowIdx, colId)
+  if (!meta) return undefined
+  if (meta.needsReview && (meta.candidates?.length ?? 0) > 0) {
+    const preview = meta.candidates?.slice(0, 3).map((candidate) => candidate.value).join(', ')
+    return `${meta.message ?? 'Review this AI match.'}${preview ? ` Top matches: ${preview}.` : ''}`
+  }
+  if (meta.autoApplied && meta.rawValue.trim() && meta.rawValue.trim() !== meta.resolvedValue.trim()) {
+    return meta.message ?? `AI changed "${meta.rawValue}" to "${meta.resolvedValue}".`
+  }
+  return meta.message
+}
+
+function digifiCellState(rowIdx: number, colId: string): 'review' | 'auto' | 'confirmed' | null {
+  const meta = getDigifiCellMeta(rowIdx, colId)
+  if (!meta) return null
+  if (meta.needsReview) return 'review'
+  if (meta.userConfirmed) return 'confirmed'
+  if (meta.autoApplied) return 'auto'
+  return null
+}
+
 function onCellInput(rowIdx: number, colId: string, value: string) {
   setCell(rowIdx, colId, value)
+  noteDigifiCellManualEdit(rowIdx, colId, value)
 }
 
 function setCellRef(rowIdx: number, colId: string, el: CellRefHandle | null) {
@@ -960,6 +994,9 @@ defineExpose({
               :class="[
                 'relative border p-0 text-center',
                 isDark ? 'border-white/10' : 'border-gray-200',
+                digifiCellState(rowIdx, col.id) === 'review' ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50/70') : '',
+                digifiCellState(rowIdx, col.id) === 'auto' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50/70') : '',
+                digifiCellState(rowIdx, col.id) === 'confirmed' ? (isDark ? 'bg-sky-500/10' : 'bg-sky-50/70') : '',
                 isCellInSelection(rowIdx, colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
                 isActiveCell(rowIdx, colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400 shadow-inner' : 'ring-1 ring-inset ring-blue-500') : '',
                 isSelectionTopEdge(rowIdx, colIdx) ? 'border-t-2 border-t-blue-500' : '',
@@ -968,6 +1005,7 @@ defineExpose({
                 isSelectionRightEdge(rowIdx, colIdx) ? 'border-r-2 border-r-blue-500' : '',
               ]"
               :style="getColumnStyle(col)"
+              :title="getDigifiCellTitle(rowIdx, col.id)"
               :data-builder-row="rowIdx"
               :data-builder-col="colIdx"
               @dblclick="onCellDoubleClick"
@@ -978,13 +1016,26 @@ defineExpose({
                 :field-key="col.fieldKey"
                 :category-class-value="col.categoryClassValue"
                 :default-role="col.fieldKey === 'role' ? (grid.defaultImportRole?.value ?? 'PIC') : undefined"
-                :suggestions="col.fieldKey === 'identification' ? identificationUsedOnPage : (col.fieldKey === 'pilots' ? builderPilotSuggestions : [])"
+                :suggestions="getDigifiSuggestions(rowIdx, col.id, col.fieldKey)"
                 :builder-row="rowIdx"
                 :builder-col="colIdx"
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
                 @focus="onCellFocus(rowIdx, colIdx)"
                 @blur="onCellBlur"
               />
+              <span
+                v-if="digifiCellState(rowIdx, col.id)"
+                :class="[
+                  'pointer-events-none absolute left-1 top-1 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                  digifiCellState(rowIdx, col.id) === 'review'
+                    ? (isDark ? 'bg-amber-500/20 text-amber-200' : 'bg-amber-100 text-amber-800')
+                    : digifiCellState(rowIdx, col.id) === 'auto'
+                      ? (isDark ? 'bg-emerald-500/20 text-emerald-200' : 'bg-emerald-100 text-emerald-800')
+                      : (isDark ? 'bg-sky-500/20 text-sky-200' : 'bg-sky-100 text-sky-800'),
+                ]"
+              >
+                {{ digifiCellState(rowIdx, col.id) === 'review' ? '?' : 'AI' }}
+              </span>
               <button
                 v-if="isHandleCell(rowIdx, colIdx)"
                 type="button"
@@ -1006,6 +1057,9 @@ defineExpose({
               :class="[
                 'relative border p-0 text-center',
                 isDark ? 'border-white/10' : 'border-gray-200',
+                digifiCellState(rowIdx, col.id) === 'review' ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50/70') : '',
+                digifiCellState(rowIdx, col.id) === 'auto' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50/70') : '',
+                digifiCellState(rowIdx, col.id) === 'confirmed' ? (isDark ? 'bg-sky-500/10' : 'bg-sky-50/70') : '',
                 isCellInSelection(rowIdx, splitIndex + colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
                 isActiveCell(rowIdx, splitIndex + colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400 shadow-inner' : 'ring-1 ring-inset ring-blue-500') : '',
                 isSelectionTopEdge(rowIdx, splitIndex + colIdx) ? 'border-t-2 border-t-blue-500' : '',
@@ -1014,6 +1068,7 @@ defineExpose({
                 isSelectionRightEdge(rowIdx, splitIndex + colIdx) ? 'border-r-2 border-r-blue-500' : '',
               ]"
               :style="getColumnStyle(col)"
+              :title="getDigifiCellTitle(rowIdx, col.id)"
               :data-builder-row="rowIdx"
               :data-builder-col="splitIndex + colIdx"
               @dblclick="onCellDoubleClick"
@@ -1024,13 +1079,26 @@ defineExpose({
                 :field-key="col.fieldKey"
                 :category-class-value="col.categoryClassValue"
                 :default-role="col.fieldKey === 'role' ? (grid.defaultImportRole?.value ?? 'PIC') : undefined"
-                :suggestions="col.fieldKey === 'identification' ? identificationUsedOnPage : (col.fieldKey === 'pilots' ? builderPilotSuggestions : [])"
+                :suggestions="getDigifiSuggestions(rowIdx, col.id, col.fieldKey)"
                 :builder-row="rowIdx"
                 :builder-col="splitIndex + colIdx"
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
                 @focus="onCellFocus(rowIdx, splitIndex + colIdx)"
                 @blur="onCellBlur"
               />
+              <span
+                v-if="digifiCellState(rowIdx, col.id)"
+                :class="[
+                  'pointer-events-none absolute left-1 top-1 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                  digifiCellState(rowIdx, col.id) === 'review'
+                    ? (isDark ? 'bg-amber-500/20 text-amber-200' : 'bg-amber-100 text-amber-800')
+                    : digifiCellState(rowIdx, col.id) === 'auto'
+                      ? (isDark ? 'bg-emerald-500/20 text-emerald-200' : 'bg-emerald-100 text-emerald-800')
+                      : (isDark ? 'bg-sky-500/20 text-sky-200' : 'bg-sky-100 text-sky-800'),
+                ]"
+              >
+                {{ digifiCellState(rowIdx, col.id) === 'review' ? '?' : 'AI' }}
+              </span>
               <button
                 v-if="isHandleCell(rowIdx, splitIndex + colIdx)"
                 type="button"
@@ -1047,6 +1115,9 @@ defineExpose({
               :class="[
                 'relative border p-0 text-center',
                 isDark ? 'border-white/10' : 'border-gray-200',
+                digifiCellState(rowIdx, col.id) === 'review' ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50/70') : '',
+                digifiCellState(rowIdx, col.id) === 'auto' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50/70') : '',
+                digifiCellState(rowIdx, col.id) === 'confirmed' ? (isDark ? 'bg-sky-500/10' : 'bg-sky-50/70') : '',
                 isCellInSelection(rowIdx, colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
                 isActiveCell(rowIdx, colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400 shadow-inner' : 'ring-1 ring-inset ring-blue-500') : '',
                 isSelectionTopEdge(rowIdx, colIdx) ? 'border-t-2 border-t-blue-500' : '',
@@ -1055,6 +1126,7 @@ defineExpose({
                 isSelectionRightEdge(rowIdx, colIdx) ? 'border-r-2 border-r-blue-500' : '',
               ]"
               :style="getColumnStyle(col)"
+              :title="getDigifiCellTitle(rowIdx, col.id)"
               :data-builder-row="rowIdx"
               :data-builder-col="colIdx"
               @dblclick="onCellDoubleClick"
@@ -1065,13 +1137,26 @@ defineExpose({
                 :field-key="col.fieldKey"
                 :category-class-value="col.categoryClassValue"
                 :default-role="col.fieldKey === 'role' ? (grid.defaultImportRole?.value ?? 'PIC') : undefined"
-                :suggestions="col.fieldKey === 'identification' ? identificationUsedOnPage : (col.fieldKey === 'pilots' ? builderPilotSuggestions : [])"
+                :suggestions="getDigifiSuggestions(rowIdx, col.id, col.fieldKey)"
                 :builder-row="rowIdx"
                 :builder-col="colIdx"
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
                 @focus="onCellFocus(rowIdx, colIdx)"
                 @blur="onCellBlur"
               />
+              <span
+                v-if="digifiCellState(rowIdx, col.id)"
+                :class="[
+                  'pointer-events-none absolute left-1 top-1 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+                  digifiCellState(rowIdx, col.id) === 'review'
+                    ? (isDark ? 'bg-amber-500/20 text-amber-200' : 'bg-amber-100 text-amber-800')
+                    : digifiCellState(rowIdx, col.id) === 'auto'
+                      ? (isDark ? 'bg-emerald-500/20 text-emerald-200' : 'bg-emerald-100 text-emerald-800')
+                      : (isDark ? 'bg-sky-500/20 text-sky-200' : 'bg-sky-100 text-sky-800'),
+                ]"
+              >
+                {{ digifiCellState(rowIdx, col.id) === 'review' ? '?' : 'AI' }}
+              </span>
               <button
                 v-if="isHandleCell(rowIdx, colIdx)"
                 type="button"

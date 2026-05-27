@@ -262,7 +262,12 @@ export function useLogbookBuilderDigifi() {
               hasGaps: result.hasGaps ?? false,
             }
           : analyzeDigifiScanRows(result.rows, rowCount.value)
-      scanRowWarning.value = formatDigifiScanWarning(diagnostics, rowCount.value)
+      const rowWarning = formatDigifiScanWarning(diagnostics, rowCount.value)
+      const reviewWarning =
+        (result.reviewMessages?.length ?? 0) > 0
+          ? `${result.reviewRequiredCount ?? result.reviewMessages?.length ?? 0} identification value(s) need review.`
+          : null
+      scanRowWarning.value = [rowWarning, reviewWarning].filter(Boolean).join(' ')
       recordDigifiScanStatus({
         pageSide,
         expectedRowCount: rowCount.value,

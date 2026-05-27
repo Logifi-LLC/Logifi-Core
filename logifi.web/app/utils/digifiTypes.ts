@@ -3,6 +3,14 @@ import type { LogbookColumnKey } from './logbookTypes'
 
 export type DigifiPageSide = 'left' | 'right'
 export type DigifiScanStrategy = 'page-overview' | 'page-overview+row-bands'
+export type DigifiPersonalizationStrategy =
+  | 'raw'
+  | 'known_exact'
+  | 'feedback_exact'
+  | 'history_clear_winner'
+  | 'feedback_clear_winner'
+  | 'ambiguous'
+export type DigifiPersonalizationConfidence = 'low' | 'medium' | 'high'
 
 /** Column snapshot sent to the scan API (matches builder grid). */
 export interface DigifiTemplateColumn {
@@ -37,11 +45,36 @@ export interface DigifiScanMeta {
   }
 }
 
+export interface DigifiScanCellCandidate {
+  value: string
+  score: number
+  distance?: number
+  source: 'history' | 'catalog' | 'feedback'
+  aircraftMakeModel?: string | null
+  aircraftCategoryClass?: string | null
+  sampleCount?: number
+}
+
+export interface DigifiScanCellMeta {
+  fieldKey: LogbookColumnKey | null
+  rawValue: string
+  resolvedValue: string
+  strategy: DigifiPersonalizationStrategy
+  confidence: DigifiPersonalizationConfidence
+  autoApplied: boolean
+  needsReview: boolean
+  userConfirmed?: boolean
+  message?: string
+  contextKey?: string
+  candidates?: DigifiScanCellCandidate[]
+}
+
 /** One extracted row from the vision model. */
 export interface DigifiScanRow {
   rowIndex: number
   cells: Record<string, string>
   tags?: string[]
+  cellMeta?: Record<string, DigifiScanCellMeta>
 }
 
 export interface DigifiScanResponse {
@@ -60,4 +93,6 @@ export interface DigifiScanResponse {
   duplicateRowIndices: number[]
   emptyRowIndices: number[]
   hasGaps: boolean
+  reviewMessages?: string[]
+  reviewRequiredCount?: number
 }

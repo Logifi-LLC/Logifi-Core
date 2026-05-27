@@ -11,7 +11,7 @@ import {
   createEmptyBuilderRow,
 } from '~/utils/logbookBuilderTypes'
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
-import type { DigifiPageSide, DigifiScanRow, DigifiScanStrategy } from '~/utils/digifiTypes'
+import type { DigifiPageSide, DigifiScanCellMeta, DigifiScanRow, DigifiScanStrategy } from '~/utils/digifiTypes'
 
 const FIELD_LABELS: Record<LogbookColumnKey, string> = {
   date: 'Date',
@@ -123,6 +123,39 @@ export function useLogbookBuilderGrid() {
     const row = rows.value[rowIdx]
     if (!row.cells) row.cells = {}
     row.cells[colId] = value
+  }
+
+  function setDigifiCellMeta(rowIdx: number, colId: string, meta: DigifiScanCellMeta | null) {
+    if (rowIdx < 0 || rowIdx >= rows.value.length) return
+    const row = rows.value[rowIdx]
+    if (!row.digifiCellMeta) row.digifiCellMeta = {}
+    if (!meta) {
+      delete row.digifiCellMeta[colId]
+      return
+    }
+    row.digifiCellMeta[colId] = meta
+  }
+
+  function noteDigifiCellManualEdit(rowIdx: number, colId: string, value: string) {
+    if (rowIdx < 0 || rowIdx >= rows.value.length) return
+    const row = rows.value[rowIdx]
+    const currentMeta = row.digifiCellMeta?.[colId]
+    if (!currentMeta) return
+    const nextValue = (value ?? '').trim()
+    const resolvedValue = (currentMeta.resolvedValue ?? '').trim()
+    if (!nextValue || nextValue === resolvedValue) return
+    row.digifiCellMeta = {
+      ...(row.digifiCellMeta ?? {}),
+      [colId]: {
+        ...currentMeta,
+        userConfirmed: true,
+        needsReview: false,
+      },
+    }
+    const stillNeedsReview = Object.values(row.digifiCellMeta ?? {}).some((meta) => meta?.needsReview)
+    if (!stillNeedsReview && row.tags?.includes('Digifi Review')) {
+      row.tags = row.tags.filter((tag) => tag !== 'Digifi Review')
+    }
   }
 
   function setRowTags(rowIdx: number, tags: string[]) {
@@ -281,6 +314,7 @@ export function useLogbookBuilderGrid() {
         const v = (value ?? '').trim()
         if (!v) continue
         setCell(gridRowIdx, colId, v)
+        setDigifiCellMeta(gridRowIdx, colId, scanRow.cellMeta?.[colId] ?? null)
         filled++
       }
 
@@ -392,6 +426,8 @@ export function useLogbookBuilderGrid() {
     columnIds,
     setCell,
     setRowTags,
+    setDigifiCellMeta,
+    noteDigifiCellManualEdit,
     setRowCount,
     addRow,
     addColumn,

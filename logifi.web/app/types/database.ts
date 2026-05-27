@@ -298,6 +298,50 @@ export type Database = {
           expires_at?: string
         }
       }
+      digifi_correction_feedback: {
+        Row: {
+          id: string
+          user_id: string
+          field_key: string
+          raw_value: string
+          raw_value_key: string
+          corrected_value: string
+          corrected_value_key: string
+          context_key: string
+          context: Record<string, any>
+          sample_count: number
+          created_at: string
+          last_corrected_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          field_key: string
+          raw_value: string
+          raw_value_key: string
+          corrected_value: string
+          corrected_value_key: string
+          context_key?: string
+          context?: Record<string, any>
+          sample_count?: number
+          created_at?: string
+          last_corrected_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          field_key?: string
+          raw_value?: string
+          raw_value_key?: string
+          corrected_value?: string
+          corrected_value_key?: string
+          context_key?: string
+          context?: Record<string, any>
+          sample_count?: number
+          created_at?: string
+          last_corrected_at?: string
+        }
+      }
       logbook_builder_templates: {
         Row: {
           id: string

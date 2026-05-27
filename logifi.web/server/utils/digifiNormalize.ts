@@ -1,4 +1,5 @@
 import type { DigifiTemplateColumn } from '../../app/utils/digifiTypes'
+import { normalizeDigifiRegistrationKey } from '../../app/utils/digifiFeedback'
 import type { LogbookColumnKey } from '../../app/utils/logbookTypes'
 
 const NUMERIC_KEYS: Set<LogbookColumnKey> = new Set([
@@ -81,6 +82,7 @@ export function normalizeCellValue(
   if (!v) return ''
   if (!fieldKey) return v
   if (fieldKey === 'date') return normalizeDate(v, defaultYear)
+  if (fieldKey === 'identification') return normalizeDigifiRegistrationKey(v)
   if (AIRPORT_KEYS.has(fieldKey)) return normalizeAirport(v)
   if (NUMERIC_KEYS.has(fieldKey) || (fieldKey === 'categoryClass' && categoryClassValue)) {
     return normalizeNumeric(v)

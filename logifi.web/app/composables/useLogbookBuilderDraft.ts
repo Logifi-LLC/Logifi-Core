@@ -27,6 +27,11 @@ export function buildDraftFromGrid(grid: Grid): LogbookBuilderDraft {
     rows: grid.rows.value.map((r) => ({
       cells: { ...r.cells },
       tags: r.tags ? [...r.tags] : undefined,
+      digifiCellMeta: r.digifiCellMeta
+        ? Object.fromEntries(
+            Object.entries(r.digifiCellMeta).map(([colId, meta]) => [colId, { ...meta }])
+          )
+        : undefined,
     })),
     leftPageScanned: grid.leftPageScanned.value,
     singleLayoutRightStartRow: grid.singleLayoutRightStartRow.value,
@@ -51,6 +56,11 @@ export function restoreDraftToGrid(grid: Grid, draft: LogbookBuilderDraft): void
       row.cells[id] = r.cells?.[id] ?? ''
     }
     if (r.tags?.length) row.tags = [...r.tags]
+    if (r.digifiCellMeta) {
+      row.digifiCellMeta = Object.fromEntries(
+        Object.entries(r.digifiCellMeta).map(([colId, meta]) => [colId, { ...meta }])
+      )
+    }
     return row
   })
   grid.leftPageScanned.value = draft.leftPageScanned
