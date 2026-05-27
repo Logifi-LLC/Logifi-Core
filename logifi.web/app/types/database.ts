@@ -298,6 +298,73 @@ export type Database = {
           expires_at?: string
         }
       }
+      digifi_capture_sessions: {
+        Row: {
+          id: string
+          user_id: string
+          token: string
+          status: string
+          max_photos: number
+          created_at: string
+          expires_at: string
+          closed_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          token: string
+          status?: string
+          max_photos?: number
+          created_at?: string
+          expires_at?: string
+          closed_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          token?: string
+          status?: string
+          max_photos?: number
+          created_at?: string
+          expires_at?: string
+          closed_at?: string | null
+        }
+      }
+      digifi_capture_photos: {
+        Row: {
+          id: string
+          session_id: string
+          user_id: string
+          storage_path: string
+          mime_type: string
+          byte_size: number
+          capture_source: string
+          metadata: Record<string, any>
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          user_id: string
+          storage_path: string
+          mime_type: string
+          byte_size: number
+          capture_source?: string
+          metadata?: Record<string, any>
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          user_id?: string
+          storage_path?: string
+          mime_type?: string
+          byte_size?: number
+          capture_source?: string
+          metadata?: Record<string, any>
+          created_at?: string
+        }
+      }
       digifi_correction_feedback: {
         Row: {
           id: string

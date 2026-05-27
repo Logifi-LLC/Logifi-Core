@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useLogbookBuilderDigifi } from '~/composables/useLogbookBuilderDigifi'
+import { useDigifiCompanionCapture } from '~/composables/useDigifiCompanionCapture'
 import { useAuth } from '~/composables/useAuth'
 import { useTheme } from '~/composables/useTheme'
 import type { DigifiPageSide } from '~/utils/digifiTypes'
@@ -27,8 +28,26 @@ const { theme } = useTheme()
 const leftInputRef = ref<HTMLInputElement | null>(null)
 const rightInputRef = ref<HTMLInputElement | null>(null)
 const successMessage = ref<string | null>(null)
+const companionMessage = ref<string | null>(null)
 const dragOverSide = ref<DigifiPageSide | null>(null)
 const scanningSide = ref<DigifiPageSide | null>(null)
+const applyingCapturedPhoto = ref(false)
+
+const {
+  creatingSession,
+  sessionError,
+  qrDataUrl,
+  mobileUrl,
+  photos,
+  selectedPhotoId,
+  selectedPhoto,
+  loadingPhotos,
+  isSessionActive,
+  createSession,
+  loadPhotos,
+  refreshSessionStatus,
+  getSelectedPhotoFile,
+} = useDigifiCompanionCapture()
 
 const isDark = computed(() => theme.value === 'dark')
 
@@ -119,6 +138,36 @@ async function onDrop(pageSide: DigifiPageSide, e: DragEvent) {
   dragOverSide.value = null
   const file = e.dataTransfer?.files?.[0]
   await processFile(file, pageSide)
+}
+
+async function createPhoneSession() {
+  companionMessage.value = null
+  await createSession()
+}
+
+async function copyMobileLink() {
+  if (!mobileUrl.value || !import.meta.client) return
+  await navigator.clipboard.writeText(mobileUrl.value)
+  companionMessage.value = 'Mobile link copied.'
+}
+
+async function useSelectedCapture(pageSide: DigifiPageSide) {
+  if (!selectedPhoto.value) return
+  applyingCapturedPhoto.value = true
+  companionMessage.value = null
+  try {
+    const file = await getSelectedPhotoFile()
+    if (!file) {
+      companionMessage.value = 'Select a captured photo first.'
+      return
+    }
+    await processFile(file, pageSide)
+    if (!error.value) companionMessage.value = `Applied captured photo to ${pageSide} page.`
+  } catch (err: unknown) {
+    companionMessage.value = (err as Error).message || 'Could not use selected capture photo.'
+  } finally {
+    applyingCapturedPhoto.value = false
+  }
 }
 
 function dropZoneClasses(pageSide: DigifiPageSide): string[] {
@@ -325,6 +374,120 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
 
     <p v-if="error" class="mt-3 text-sm text-red-500 dark:text-red-400">{{ error }}</p>
     <p v-else-if="successMessage" class="mt-3 text-sm text-green-600 dark:text-green-400">{{ successMessage }}</p>
+
+    <div
+      class="mt-6 rounded-2xl border p-4 sm:p-5"
+      :class="isDark ? 'border-white/10 bg-white/[0.03]' : 'border-gray-200 bg-gray-50/60'"
+    >
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 class="text-sm font-semibold" :class="isDark ? 'text-white' : 'text-gray-900'">
+            Phone companion capture
+          </h3>
+          <p class="text-xs mt-1" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
+            Open camera on phone, upload there, then apply that photo to left/right scan.
+          </p>
+        </div>
+        <button
+          type="button"
+          class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
+          :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
+          :disabled="creatingSession || !isAuthenticated"
+          @click="createPhoneSession"
+        >
+          {{ creatingSession ? 'Creating…' : 'Connect phone' }}
+        </button>
+      </div>
+
+      <p v-if="sessionError" class="mt-2 text-xs text-red-500 dark:text-red-400">{{ sessionError }}</p>
+      <p v-else-if="companionMessage" class="mt-2 text-xs text-green-600 dark:text-green-400">{{ companionMessage }}</p>
+
+      <div v-if="qrDataUrl" class="mt-4 grid gap-4 sm:grid-cols-[220px_1fr]">
+        <div class="rounded-xl p-2 border inline-flex items-center justify-center" :class="isDark ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white'">
+          <img :src="qrDataUrl" alt="Phone capture QR code" class="h-[200px] w-[200px] rounded-lg">
+        </div>
+        <div class="space-y-2">
+          <p class="text-xs break-all" :class="isDark ? 'text-gray-400' : 'text-gray-600'">{{ mobileUrl }}</p>
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
+              :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
+              @click="copyMobileLink"
+            >
+              Copy link
+            </button>
+            <button
+              type="button"
+              class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
+              :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
+              @click="refreshSessionStatus"
+            >
+              Refresh status
+            </button>
+            <button
+              type="button"
+              class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
+              :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
+              @click="loadPhotos"
+            >
+              Refresh photos
+            </button>
+          </div>
+          <p class="text-xs" :class="isSessionActive ? 'text-green-500' : 'text-amber-500'">
+            {{ isSessionActive ? 'Session active' : 'Session expired or closed' }}
+          </p>
+        </div>
+      </div>
+
+      <div v-if="photos.length > 0" class="mt-4 space-y-3">
+        <div class="grid gap-2 sm:grid-cols-2">
+          <label class="text-xs" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+            Captured photo
+            <select
+              v-model="selectedPhotoId"
+              class="mt-1 w-full rounded-lg border px-2 py-2 text-xs"
+              :class="isDark ? 'bg-gray-900 border-white/20 text-white' : 'bg-white border-gray-300 text-gray-900'"
+            >
+              <option
+                v-for="photo in photos"
+                :key="photo.id"
+                :value="photo.id"
+              >
+                {{ new Date(photo.createdAt).toLocaleTimeString() }} • {{ Math.round(photo.byteSize / 1024) }} KB
+              </option>
+            </select>
+          </label>
+          <div class="flex items-end gap-2">
+            <button
+              type="button"
+              class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
+              :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
+              :disabled="applyingCapturedPhoto || scanning || loadingPhotos"
+              @click="useSelectedCapture('left')"
+            >
+              Use for left
+            </button>
+            <button
+              type="button"
+              class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
+              :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
+              :disabled="applyingCapturedPhoto || scanning || loadingPhotos || !canScanRight"
+              @click="useSelectedCapture('right')"
+            >
+              Use for right
+            </button>
+          </div>
+        </div>
+        <img
+          v-if="selectedPhoto?.signedUrl"
+          :src="selectedPhoto.signedUrl"
+          alt="Selected captured photo"
+          class="h-28 w-auto max-w-[240px] rounded-lg border object-cover"
+          :class="isDark ? 'border-white/10' : 'border-gray-200'"
+        >
+      </div>
+    </div>
 
     <div v-if="lastThumbnailUrl" class="mt-4 flex items-center gap-3">
       <img

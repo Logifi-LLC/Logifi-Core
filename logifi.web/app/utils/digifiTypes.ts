@@ -96,3 +96,18 @@ export interface DigifiScanResponse {
   reviewMessages?: string[]
   reviewRequiredCount?: number
 }
+
+export interface DigifiCaptureSessionResponse {
+  ok: true
+  sessionId: string
+  token: string
+  expiresAt: string
+}
+
+export interface DigifiCapturePhoto {
+  id: string
+  mimeType: string
+  byteSize: number
+  createdAt: string
+  signedUrl: string | null
+}
