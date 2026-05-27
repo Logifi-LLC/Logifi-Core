@@ -102,6 +102,8 @@ export interface DigifiCaptureSessionResponse {
   sessionId: string
   token: string
   expiresAt: string
+  /** Phone-reachable URL (LAN IP when dev server is bound to 0.0.0.0). */
+  mobileUrl: string
 }
 
 export interface DigifiCapturePhoto {
@@ -110,4 +112,5 @@ export interface DigifiCapturePhoto {
   byteSize: number
   createdAt: string
   signedUrl: string | null
+  pageSide: DigifiPageSide | null
 }

@@ -64,6 +64,9 @@ export default defineNuxtConfig({
         process.env.NUXT_PUBLIC_LIGHTNING_DONATION_QR_PATH !== undefined
           ? process.env.NUXT_PUBLIC_LIGHTNING_DONATION_QR_PATH
           : '/images/lightning-donation-qr.png',
+      /** Base URL for Digifi phone capture QR/links. Override if your LAN IP changes. */
+      companionCaptureOrigin:
+        process.env.NUXT_PUBLIC_COMPANION_CAPTURE_ORIGIN || 'https://172.20.10.4:3000',
     },
     // FC View OAuth (server-only; never expose to client)
     fcvClientId: process.env.FCV_CLIENT_ID || '',

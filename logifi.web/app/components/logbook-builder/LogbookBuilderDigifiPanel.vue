@@ -4,7 +4,7 @@ import { useLogbookBuilderDigifi } from '~/composables/useLogbookBuilderDigifi'
 import { useDigifiCompanionCapture } from '~/composables/useDigifiCompanionCapture'
 import { useAuth } from '~/composables/useAuth'
 import { useTheme } from '~/composables/useTheme'
-import type { DigifiPageSide } from '~/utils/digifiTypes'
+import type { DigifiCapturePhoto, DigifiPageSide } from '~/utils/digifiTypes'
 
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
@@ -151,8 +151,29 @@ async function copyMobileLink() {
   companionMessage.value = 'Mobile link copied.'
 }
 
+function capturePhotoLabel(photo: DigifiCapturePhoto): string {
+  const time = new Date(photo.createdAt).toLocaleTimeString()
+  const sizeKb = Math.round(photo.byteSize / 1024)
+  const side = photo.pageSide ? (photo.pageSide === 'left' ? 'Left' : 'Right') : 'Unlabeled'
+  return `${time} · ${side} · ${sizeKb} KB`
+}
+
+function pageSideBadgeClasses(pageSide: DigifiPageSide | null | undefined): string {
+  if (pageSide === 'left') {
+    return isDark.value ? 'bg-blue-500/20 text-blue-200' : 'bg-blue-100 text-blue-800'
+  }
+  if (pageSide === 'right') {
+    return isDark.value ? 'bg-violet-500/20 text-violet-200' : 'bg-violet-100 text-violet-800'
+  }
+  return isDark.value ? 'bg-white/10 text-gray-400' : 'bg-gray-200 text-gray-600'
+}
+
 async function useSelectedCapture(pageSide: DigifiPageSide) {
   if (!selectedPhoto.value) return
+  if (selectedPhoto.value.pageSide && selectedPhoto.value.pageSide !== pageSide) {
+    companionMessage.value = `This photo was captured as ${selectedPhoto.value.pageSide} page on your phone.`
+    return
+  }
   applyingCapturedPhoto.value = true
   companionMessage.value = null
   try {
@@ -168,6 +189,15 @@ async function useSelectedCapture(pageSide: DigifiPageSide) {
   } finally {
     applyingCapturedPhoto.value = false
   }
+}
+
+async function scanSelectedLabeledCapture() {
+  const pageSide = selectedPhoto.value?.pageSide
+  if (!pageSide) {
+    companionMessage.value = 'This photo has no page label. Use Left or Right below, or recapture on your phone.'
+    return
+  }
+  await useSelectedCapture(pageSide)
 }
 
 function dropZoneClasses(pageSide: DigifiPageSide): string[] {
@@ -385,7 +415,7 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
             Phone companion capture
           </h3>
           <p class="text-xs mt-1" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
-            Open camera on phone, upload there, then apply that photo to left/right scan.
+            On your phone, pick <strong>Left page</strong> or <strong>Right page</strong> before each photo. Labels appear here automatically.
           </p>
         </div>
         <button
@@ -408,6 +438,12 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
         </div>
         <div class="space-y-2">
           <p class="text-xs break-all" :class="isDark ? 'text-gray-400' : 'text-gray-600'">{{ mobileUrl }}</p>
+          <p class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-500'">
+            QR uses <code class="text-[11px]">https://172.20.10.4:3000</code> (same Wi‑Fi). On your phone, open that
+            URL once and accept the dev certificate before scanning. Prefer
+            <code class="text-[11px]">https://172.20.10.4:3000/logbook-builder</code> on this laptop instead of
+            <code class="text-[11px]">0.0.0.0</code>.
+          </p>
           <div class="flex flex-wrap gap-2">
             <button
               type="button"
@@ -454,38 +490,57 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
                 :key="photo.id"
                 :value="photo.id"
               >
-                {{ new Date(photo.createdAt).toLocaleTimeString() }} • {{ Math.round(photo.byteSize / 1024) }} KB
+                {{ capturePhotoLabel(photo) }}
               </option>
             </select>
           </label>
-          <div class="flex items-end gap-2">
+          <div class="flex flex-col items-stretch justify-end gap-2">
             <button
+              v-if="selectedPhoto?.pageSide"
               type="button"
-              class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
-              :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
-              :disabled="applyingCapturedPhoto || scanning || loadingPhotos"
-              @click="useSelectedCapture('left')"
+              class="px-3 py-2 text-xs rounded-lg font-semibold text-white transition-colors disabled:opacity-50"
+              :class="selectedPhoto.pageSide === 'left' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-violet-600 hover:bg-violet-500'"
+              :disabled="applyingCapturedPhoto || scanning || loadingPhotos || (selectedPhoto.pageSide === 'right' && !canScanRight)"
+              @click="scanSelectedLabeledCapture"
             >
-              Use for left
+              Scan {{ selectedPhoto.pageSide === 'left' ? 'left' : 'right' }} page (from phone)
             </button>
-            <button
-              type="button"
-              class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
-              :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
-              :disabled="applyingCapturedPhoto || scanning || loadingPhotos || !canScanRight"
-              @click="useSelectedCapture('right')"
-            >
-              Use for right
-            </button>
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
+                :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
+                :disabled="applyingCapturedPhoto || scanning || loadingPhotos"
+                @click="useSelectedCapture('left')"
+              >
+                Force left
+              </button>
+              <button
+                type="button"
+                class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
+                :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
+                :disabled="applyingCapturedPhoto || scanning || loadingPhotos || !canScanRight"
+                @click="useSelectedCapture('right')"
+              >
+                Force right
+              </button>
+            </div>
           </div>
         </div>
-        <img
-          v-if="selectedPhoto?.signedUrl"
-          :src="selectedPhoto.signedUrl"
-          alt="Selected captured photo"
-          class="h-28 w-auto max-w-[240px] rounded-lg border object-cover"
-          :class="isDark ? 'border-white/10' : 'border-gray-200'"
-        >
+        <div v-if="selectedPhoto?.signedUrl" class="flex items-start gap-3">
+          <img
+            :src="selectedPhoto.signedUrl"
+            alt="Selected captured photo"
+            class="h-28 w-auto max-w-[240px] rounded-lg border object-cover"
+            :class="isDark ? 'border-white/10' : 'border-gray-200'"
+          >
+          <span
+            class="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+            :class="pageSideBadgeClasses(selectedPhoto.pageSide)"
+          >
+            {{ selectedPhoto.pageSide ? (selectedPhoto.pageSide === 'left' ? 'Left page' : 'Right page') : 'No label' }}
+          </span>
+        </div>
       </div>
     </div>
 

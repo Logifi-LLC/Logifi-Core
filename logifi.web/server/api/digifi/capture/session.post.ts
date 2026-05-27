@@ -1,6 +1,7 @@
 import { createError, defineEventHandler } from 'h3'
 import { getUserIdFromEvent, getSupabaseClient } from '../../../utils/supabase'
 import {
+  buildMobileCaptureUrl,
   DIGIFI_CAPTURE_MAX_PHOTOS_PER_SESSION,
   DIGIFI_CAPTURE_SESSION_TTL_MS,
   generateDigifiCaptureToken,
@@ -38,5 +39,6 @@ export default defineEventHandler(async (event) => {
     sessionId: data.id,
     token: data.token,
     expiresAt: data.expires_at,
+    mobileUrl: buildMobileCaptureUrl(event, data.token),
   }
 })

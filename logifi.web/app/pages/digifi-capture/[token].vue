@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import type { DigifiPageSide } from '~/utils/digifiTypes'
 
 interface SessionStatusResponse {
   ok: true
@@ -14,9 +15,12 @@ const token = computed(() => String(route.params.token ?? ''))
 const checking = ref(true)
 const sessionActive = ref(false)
 const sessionError = ref<string | null>(null)
-const uploading = ref(false)
+const uploadingSide = ref<DigifiPageSide | null>(null)
 const uploadMessage = ref<string | null>(null)
-const previewUrl = ref<string | null>(null)
+const lastPreviewBySide = ref<Partial<Record<DigifiPageSide, string>>>({})
+
+const leftInputRef = ref<HTMLInputElement | null>(null)
+const rightInputRef = ref<HTMLInputElement | null>(null)
 
 async function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality?: number): Promise<Blob> {
   return await new Promise<Blob>((resolve, reject) => {
@@ -70,7 +74,7 @@ async function validateToken() {
   }
 }
 
-async function uploadWithRetry(file: File): Promise<void> {
+async function uploadWithRetry(file: File, pageSide: DigifiPageSide): Promise<void> {
   const attempts = [0, 600, 1400]
   let lastError: unknown = null
   for (const delay of attempts) {
@@ -80,6 +84,7 @@ async function uploadWithRetry(file: File): Promise<void> {
     try {
       const form = new FormData()
       form.append('token', token.value)
+      form.append('pageSide', pageSide)
       form.append('image', file)
       await $fetch('/api/digifi/capture/upload', {
         method: 'POST',
@@ -93,26 +98,54 @@ async function uploadWithRetry(file: File): Promise<void> {
   throw lastError ?? new Error('Upload failed')
 }
 
-async function onFileSelected(event: Event) {
+function openCapture(pageSide: DigifiPageSide) {
+  if (!sessionActive.value || uploadingSide.value) return
+  const input = pageSide === 'left' ? leftInputRef.value : rightInputRef.value
+  input?.click()
+}
+
+async function onFileSelected(pageSide: DigifiPageSide, event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
   if (!file || !sessionActive.value) return
-  uploading.value = true
+
+  uploadingSide.value = pageSide
   uploadMessage.value = null
+  const sideLabel = pageSide === 'left' ? 'Left page' : 'Right page'
+
   try {
     const optimized = await optimizePhoto(file)
-    if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
-    previewUrl.value = URL.createObjectURL(optimized)
-    await uploadWithRetry(optimized)
-    uploadMessage.value = 'Uploaded. Your laptop should update instantly.'
+    const previous = lastPreviewBySide.value[pageSide]
+    if (previous) URL.revokeObjectURL(previous)
+    lastPreviewBySide.value = {
+      ...lastPreviewBySide.value,
+      [pageSide]: URL.createObjectURL(optimized),
+    }
+    await uploadWithRetry(optimized, pageSide)
+    uploadMessage.value = `${sideLabel} uploaded. Your laptop should update shortly.`
   } catch (error: unknown) {
     uploadMessage.value =
       (error as { data?: { statusMessage?: string } })?.data?.statusMessage ??
-      'Upload failed. Please try again.'
+      `${sideLabel} upload failed. Please try again.`
   } finally {
-    uploading.value = false
+    uploadingSide.value = null
   }
+}
+
+function zoneClasses(pageSide: DigifiPageSide): string[] {
+  const busy = uploadingSide.value === pageSide
+  const base = [
+    'rounded-2xl border-2 p-4 space-y-3 transition-colors',
+    busy ? 'border-blue-400 bg-blue-500/15' : 'border-white/15 bg-white/5',
+  ]
+  if (pageSide === 'left' && !busy) {
+    base.push('ring-1 ring-blue-500/30')
+  }
+  if (pageSide === 'right' && !busy) {
+    base.push('ring-1 ring-violet-500/30')
+  }
+  return base
 }
 
 onMounted(() => {
@@ -121,43 +154,118 @@ onMounted(() => {
 </script>
 
 <template>
-  <main class="min-h-screen bg-slate-950 text-slate-100 px-4 py-6">
-    <div class="mx-auto max-w-md space-y-4">
-      <h1 class="text-xl font-semibold">Logifi phone capture</h1>
-      <p class="text-sm text-slate-300">
-        Take a photo and upload it directly to your active Digifi session.
-      </p>
+  <main class="min-h-screen bg-slate-950 text-slate-100 px-4 py-6 font-quicksand">
+    <div class="mx-auto max-w-md space-y-5">
+      <header class="space-y-1">
+        <h1 class="text-xl font-semibold">Logifi phone capture</h1>
+        <p class="text-sm text-slate-300">
+          Choose which logbook page you are photographing, then take the picture.
+        </p>
+      </header>
 
-      <div class="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
-        <p v-if="checking" class="text-sm text-slate-300">Checking session…</p>
-        <p v-else-if="sessionError" class="text-sm text-rose-300">{{ sessionError }}</p>
-        <template v-else>
-          <label class="block">
-            <span class="sr-only">Capture photo</span>
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              class="block w-full text-sm file:mr-4 file:rounded-lg file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:text-white"
-              :disabled="uploading"
-              @change="onFileSelected"
-            >
-          </label>
-          <p class="text-xs text-slate-400">Photos are compressed before upload for faster transfer.</p>
-        </template>
-      </div>
+      <div v-if="checking" class="text-sm text-slate-300">Checking session…</div>
+      <p v-else-if="sessionError" class="text-sm text-rose-300">{{ sessionError }}</p>
 
-      <p v-if="uploading" class="text-sm text-blue-300">Uploading…</p>
-      <p v-else-if="uploadMessage" class="text-sm" :class="uploadMessage.startsWith('Uploaded') ? 'text-emerald-300' : 'text-rose-300'">
+      <template v-else>
+        <input
+          ref="leftInputRef"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          class="sr-only"
+          tabindex="-1"
+          aria-hidden="true"
+          @change="onFileSelected('left', $event)"
+        >
+        <input
+          ref="rightInputRef"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          class="sr-only"
+          tabindex="-1"
+          aria-hidden="true"
+          @change="onFileSelected('right', $event)"
+        >
+
+        <!-- Left page -->
+        <section :class="zoneClasses('left')" aria-labelledby="capture-left-heading">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <p id="capture-left-heading" class="text-base font-semibold text-blue-200">
+                1. Left page
+              </p>
+              <p class="text-xs text-slate-400 mt-0.5">
+                Photo of the left side of your open logbook spread
+              </p>
+            </div>
+            <span class="shrink-0 rounded-full bg-blue-500/20 px-2.5 py-1 text-[11px] font-semibold text-blue-200">
+              LEFT
+            </span>
+          </div>
+
+          <button
+            type="button"
+            class="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+            :disabled="!!uploadingSide"
+            @click="openCapture('left')"
+          >
+            {{ uploadingSide === 'left' ? 'Uploading left page…' : 'Take photo — left page' }}
+          </button>
+
+          <img
+            v-if="lastPreviewBySide.left"
+            :src="lastPreviewBySide.left"
+            alt="Last left page capture"
+            class="w-full rounded-lg border border-blue-500/30"
+          >
+        </section>
+
+        <!-- Right page -->
+        <section :class="zoneClasses('right')" aria-labelledby="capture-right-heading">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <p id="capture-right-heading" class="text-base font-semibold text-violet-200">
+                2. Right page
+              </p>
+              <p class="text-xs text-slate-400 mt-0.5">
+                Photo of the right side of your open logbook spread
+              </p>
+            </div>
+            <span class="shrink-0 rounded-full bg-violet-500/20 px-2.5 py-1 text-[11px] font-semibold text-violet-200">
+              RIGHT
+            </span>
+          </div>
+
+          <button
+            type="button"
+            class="w-full rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+            :disabled="!!uploadingSide"
+            @click="openCapture('right')"
+          >
+            {{ uploadingSide === 'right' ? 'Uploading right page…' : 'Take photo — right page' }}
+          </button>
+
+          <img
+            v-if="lastPreviewBySide.right"
+            :src="lastPreviewBySide.right"
+            alt="Last right page capture"
+            class="w-full rounded-lg border border-violet-500/30"
+          >
+        </section>
+
+        <p class="text-xs text-slate-500 text-center">
+          Photos are compressed before upload. You can capture each side more than once if needed.
+        </p>
+      </template>
+
+      <p
+        v-if="uploadMessage"
+        class="text-sm text-center"
+        :class="uploadMessage.includes('uploaded') ? 'text-emerald-300' : 'text-rose-300'"
+      >
         {{ uploadMessage }}
       </p>
-
-      <img
-        v-if="previewUrl"
-        :src="previewUrl"
-        alt="Latest captured photo"
-        class="w-full rounded-xl border border-white/10"
-      >
     </div>
   </main>
 </template>

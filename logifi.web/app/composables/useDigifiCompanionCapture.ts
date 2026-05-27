@@ -15,13 +15,6 @@ interface CapturePhotosResponse {
   photos: DigifiCapturePhoto[]
 }
 
-function toMobileCaptureUrl(token: string): string {
-  if (import.meta.client) {
-    return `${window.location.origin}/digifi-capture/${token}`
-  }
-  return `/digifi-capture/${token}`
-}
-
 function toQrUrl(text: string): string {
   return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(text)}`
 }
@@ -32,6 +25,7 @@ export function useDigifiCompanionCapture() {
   const sessionError = ref<string | null>(null)
   const sessionId = ref<string | null>(null)
   const sessionToken = ref<string | null>(null)
+  const mobileUrl = ref<string | null>(null)
   const expiresAt = ref<string | null>(null)
   const qrDataUrl = ref<string | null>(null)
   const photos = ref<DigifiCapturePhoto[]>([])
@@ -39,7 +33,6 @@ export function useDigifiCompanionCapture() {
   const selectedPhotoId = ref<string | null>(null)
   let channel: ReturnType<typeof supabase.channel> | null = null
 
-  const mobileUrl = computed(() => (sessionToken.value ? toMobileCaptureUrl(sessionToken.value) : null))
   const selectedPhoto = computed(() => photos.value.find((photo) => photo.id === selectedPhotoId.value) ?? null)
   const isSessionActive = computed(() => {
     if (!expiresAt.value) return false
@@ -112,8 +105,9 @@ export function useDigifiCompanionCapture() {
       })
       sessionId.value = result.sessionId
       sessionToken.value = result.token
+      mobileUrl.value = result.mobileUrl
       expiresAt.value = result.expiresAt
-      qrDataUrl.value = toQrUrl(toMobileCaptureUrl(result.token))
+      qrDataUrl.value = toQrUrl(result.mobileUrl)
       connectRealtime(result.sessionId)
       await loadPhotos()
     } catch (error: unknown) {

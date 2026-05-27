@@ -6,6 +6,7 @@ import {
   DIGIFI_CAPTURE_BUCKET,
   DIGIFI_CAPTURE_MAX_IMAGE_BYTES,
   extForCaptureMime,
+  parseDigifiCapturePageSide,
 } from '../../../utils/digifiCapture'
 
 export default defineEventHandler(async (event) => {
@@ -20,6 +21,7 @@ export default defineEventHandler(async (event) => {
   }
 
   let token = ''
+  let pageSideRaw = ''
   let imageBuffer: Buffer | null = null
   let imageMime = 'image/jpeg'
 
@@ -27,14 +29,21 @@ export default defineEventHandler(async (event) => {
     if (part.name === 'token' && part.data) {
       token = Buffer.from(part.data).toString('utf8').trim()
     }
+    if (part.name === 'pageSide' && part.data) {
+      pageSideRaw = Buffer.from(part.data).toString('utf8').trim()
+    }
     if (part.name === 'image' && part.data) {
       imageBuffer = Buffer.from(part.data)
       imageMime = part.type || 'image/jpeg'
     }
   }
 
+  const pageSide = parseDigifiCapturePageSide(pageSideRaw)
   if (!token || !imageBuffer?.length) {
     throw createError({ statusCode: 400, statusMessage: 'Missing token or image' })
+  }
+  if (!pageSide) {
+    throw createError({ statusCode: 400, statusMessage: 'Missing or invalid page side (left or right)' })
   }
   if (!DIGIFI_CAPTURE_ALLOWED_MIME.has(imageMime)) {
     throw createError({ statusCode: 400, statusMessage: 'Unsupported image type. Use JPEG, PNG, or WebP.' })
@@ -98,7 +107,7 @@ export default defineEventHandler(async (event) => {
     mime_type: imageMime,
     byte_size: imageBuffer.length,
     capture_source: 'mobile-web',
-    metadata: {},
+    metadata: { pageSide },
   })
 
   if (insertError) {
@@ -110,5 +119,6 @@ export default defineEventHandler(async (event) => {
     ok: true as const,
     photoId,
     sessionId: session.id,
+    pageSide,
   }
 })
