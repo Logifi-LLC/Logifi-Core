@@ -5,7 +5,6 @@ import LogbookBuilderToolbar from '~/components/logbook-builder/LogbookBuilderTo
 import LogbookBuilderValidateBar from '~/components/logbook-builder/LogbookBuilderValidateBar.vue'
 import LogbookBuilderDigifiPanel from '~/components/logbook-builder/LogbookBuilderDigifiPanel.vue'
 import { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
-import { useLogbookBuilderKeyboard } from '~/composables/useLogbookBuilderKeyboard'
 import {
   getStoredDraft,
   restoreDraftToGrid,
@@ -24,7 +23,6 @@ definePageMeta({ layout: 'default' })
 const gridRef = ref<InstanceType<typeof LogbookBuilderGrid> | null>(null)
 const grid = useLogbookBuilderGrid()
 provide('logbookBuilderGrid', grid)
-const { visibleColumns, rows } = grid
 const { user, isAuthenticated } = useAuth()
 
 let stopAutosave: (() => void) | null = null
@@ -115,13 +113,6 @@ watchEffect(async (onCleanup) => {
 })
 
 const { theme, isDark } = useTheme()
-
-useLogbookBuilderKeyboard({
-  rowCount: computed(() => rows.value.length),
-  columnCount: computed(() => visibleColumns.value.length),
-  focusCell: (row, col) => gridRef.value?.focusCellByIndex(row, col),
-  columnIdAt: (colIndex) => visibleColumns.value[colIndex]?.id ?? '',
-})
 </script>
 
 <template>
@@ -175,7 +166,7 @@ useLogbookBuilderKeyboard({
           <li>Use this grid to <strong>transcribe entries from a paper logbook</strong>, or use <strong>Digifi</strong> above to scan paper pages with AI, then review and edit before import.</li>
           <li><strong>Digifi:</strong> Configure columns (or load a template), set row count, then scan the left and right paper pages. AI pre-fills the grid; always verify before importing.</li>
           <li><strong>Toolbar:</strong> Set the number of rows; choose single-page or two-page layout (and “Columns on left” for two-page); add or remove columns; sign in to save or load templates.</li>
-          <li><strong>Grid:</strong> Click a cell to edit (first key replaces the cell); double-click or press F2 to edit in place. Drag column headers to reorder; drag the right edge to resize. Use Tab or Enter to move between cells. Your work is kept locally when you leave this page and comes back automatically until you import.</li>
+          <li><strong>Grid (Excel-style):</strong> Click to select a cell; type to replace its value. Double-click or F2 to edit in place. Arrow keys move the selection; Shift+arrow extends it. Tab / Enter move between cells; Shift+Enter moves up. Ctrl/Cmd+C, X, V for copy, cut, paste; Delete clears the selection. Ctrl+D fill down, Ctrl+R fill right; Ctrl+arrow jumps to the edge of filled cells; Home/End move across the row; Ctrl+Home/End jump to the first or last used cell. Drag the fill handle on the selection corner to copy values. Undo (Ctrl+Z) is not available—your draft is restored automatically when you return to this page. Drag column headers to reorder; drag the right edge to resize.</li>
           <li><strong>Approaches:</strong> Use the <strong>Approach</strong> column for counts, and the <strong>Approach Type</strong> dropdown (ILS, RNAV, Visual, etc.) when you want the type tracked. If the type is only written in remarks, you can leave the dropdown blank and the system will still count the approaches.</li>
           <li>Click <strong>Validate</strong> to check your data and see a summary with column totals. Then click <strong>Import</strong> on the confirmation step to add the entries to your logbook.</li>
         </ul>

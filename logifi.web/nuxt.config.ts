@@ -64,9 +64,8 @@ export default defineNuxtConfig({
         process.env.NUXT_PUBLIC_LIGHTNING_DONATION_QR_PATH !== undefined
           ? process.env.NUXT_PUBLIC_LIGHTNING_DONATION_QR_PATH
           : '/images/lightning-donation-qr.png',
-      /** Base URL for Digifi phone capture QR/links. Override if your LAN IP changes. */
-      companionCaptureOrigin:
-        process.env.NUXT_PUBLIC_COMPANION_CAPTURE_ORIGIN || 'https://172.20.10.4:3000',
+      /** Base URL for Digifi phone capture QR/links. Unset in dev to auto-detect LAN IP. */
+      companionCaptureOrigin: process.env.NUXT_PUBLIC_COMPANION_CAPTURE_ORIGIN || '',
     },
     // FC View OAuth (server-only; never expose to client)
     fcvClientId: process.env.FCV_CLIENT_ID || '',
@@ -78,8 +77,8 @@ export default defineNuxtConfig({
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
     // Digifi paper logbook scan (server-only)
     geminiApiKey: process.env.GEMINI_API_KEY || '',
-    digifiModel: process.env.NUXT_DIGIFI_MODEL || process.env.DIGIFI_MODEL || 'gemini-2.5-flash',
-    digifiProModel: process.env.NUXT_DIGIFI_PRO_MODEL || process.env.DIGIFI_PRO_MODEL || 'gemini-2.5-pro',
+    digifiModel: process.env.NUXT_DIGIFI_MODEL || process.env.DIGIFI_MODEL || 'gemini-3.5-flash',
+    digifiProModel: process.env.NUXT_DIGIFI_PRO_MODEL || process.env.DIGIFI_PRO_MODEL || 'gemini-3.1-pro',
     digifiMaxScansPerDay: parseInt(process.env.NUXT_DIGIFI_MAX_SCANS_PER_DAY || process.env.DIGIFI_MAX_SCANS_PER_DAY || '10', 10) || 10,
   },
   // Client-side only app (uses localStorage for data persistence)

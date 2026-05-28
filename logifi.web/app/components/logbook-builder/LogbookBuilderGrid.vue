@@ -1,8 +1,23 @@
 <script setup lang="ts">
-import { ref, inject, computed, onMounted, onUnmounted } from 'vue'
+import { ref, inject, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import type { Ref } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { DEFAULT_COLUMN_WIDTH } from '~/utils/logbookBuilderTypes'
+import {
+  buildValuesMatrix,
+  clearRangeCells,
+  fillDownRange,
+  fillRightRange,
+  findEdgeInDirection,
+  findLastUsedCell,
+  isArrowKey,
+  isPrintableKey,
+  matrixToTsv,
+  parseTsvMatrix,
+  selectionOrActive,
+  type ActiveCell,
+  type SelectionRange,
+} from '~/utils/logbookBuilderCommands'
 import LogbookBuilderCell from './LogbookBuilderCell.vue'
 import LogbookBuilderHeader from './LogbookBuilderHeader.vue'
 import LogbookBuilderRowTags from './LogbookBuilderRowTags.vue'
@@ -18,17 +33,7 @@ const { isDark } = useTheme()
 
 const draggedColumnId = ref<string | null>(null)
 
-type ActiveCell = {
-  rowIndex: number
-  colIndex: number
-}
-
-type SelectionRange = {
-  startRow: number
-  endRow: number
-  startCol: number
-  endCol: number
-}
+type GridMode = 'navigate' | 'edit'
 
 type DragFillState = {
   mode: 'single' | 'block'
@@ -53,6 +58,9 @@ const dragFill = ref<DragFillState | null>(null)
 const clipboard = ref<ClipboardPayload | null>(null)
 const isDraggingSelection = ref(false)
 const selectionAnchor = ref<ActiveCell | null>(null)
+const gridMode = ref<GridMode>('navigate')
+const editSnapshot = ref<string | null>(null)
+const editingCell = ref<ActiveCell | null>(null)
 
 function onHeaderDragStart(colId: string, e: DragEvent) {
   if (!e.dataTransfer) return
@@ -287,18 +295,220 @@ function computeDestRange(base: SelectionRange, target: ActiveCell): SelectionRa
   return null
 }
 
-function onCellFocus(rowIdx: number, colIdx: number) {
-  activeCell.value = clampRowCol(rowIdx, colIdx)
-  setActiveRowIndex(rowIdx)
-  const cell = activeCell.value
-  const currentSelection = activeSelection.value
-  if (!cell) return
-  if (!currentSelection || !isCellInSelection(cell.rowIndex, cell.colIndex)) {
-    setSelectionFromAnchor(cell, cell)
+function isCellEditing(rowIdx: number, colIdx: number): boolean {
+  const ec = editingCell.value
+  return gridMode.value === 'edit' && ec?.rowIndex === rowIdx && ec?.colIndex === colIdx
+}
+
+function isEventInGrid(target: EventTarget | null): boolean {
+  if (!target || !gridContainerRef.value) return false
+  return gridContainerRef.value.contains(target as Node)
+}
+
+function getValueAt(rowIdx: number, colIdx: number): string {
+  const col = visibleColumns.value[colIdx]
+  if (!col) return ''
+  return getCellValue(rowIdx, col.id)
+}
+
+function getCommandSelection(): SelectionRange {
+  const maxRow = Math.max(0, rows.value.length - 1)
+  const maxCol = Math.max(0, visibleColumns.value.length - 1)
+  const base = selectionOrActive(activeSelection.value, activeCell.value)
+  if (!base) {
+    return { startRow: 0, endRow: 0, startCol: 0, endCol: maxCol }
+  }
+  return {
+    startRow: Math.min(base.startRow, maxRow),
+    endRow: Math.min(base.endRow, maxRow),
+    startCol: Math.min(base.startCol, maxCol),
+    endCol: Math.min(base.endCol, maxCol),
   }
 }
 
+function enterNavigateMode() {
+  gridMode.value = 'navigate'
+  editingCell.value = null
+  editSnapshot.value = null
+}
+
+function focusGridContainer() {
+  gridContainerRef.value?.focus()
+}
+
+async function startEdit(
+  rowIdx: number,
+  colIdx: number,
+  options: { overwrite: boolean; initialChar?: string },
+) {
+  const col = visibleColumns.value[colIdx]
+  if (!col) return
+  const cell = clampRowCol(rowIdx, colIdx)
+  editSnapshot.value = getCellValue(cell.rowIndex, col.id)
+  gridMode.value = 'edit'
+  editingCell.value = cell
+  activeCell.value = cell
+  setSelectionFromAnchor(cell, cell)
+  setActiveRowIndex(cell.rowIndex)
+  await nextTick()
+  const el = cellRefs.value.get(cellKey(cell.rowIndex, col.id))
+  el?.beginEdit?.({ overwrite: options.overwrite })
+  if (options.initialChar != null) {
+    onCellInput(cell.rowIndex, col.id, options.initialChar)
+  }
+}
+
+function commitAndExitEdit() {
+  const ec = editingCell.value
+  if (ec) {
+    const col = visibleColumns.value[ec.colIndex]
+    if (col) {
+      const el = cellRefs.value.get(cellKey(ec.rowIndex, col.id))
+      el?.commitEdit?.()
+    }
+  }
+  enterNavigateMode()
+}
+
+function cancelEdit() {
+  const ec = editingCell.value
+  if (ec != null && editSnapshot.value != null) {
+    const col = visibleColumns.value[ec.colIndex]
+    if (col) {
+      setCell(ec.rowIndex, col.id, editSnapshot.value)
+      const el = cellRefs.value.get(cellKey(ec.rowIndex, col.id))
+      el?.cancelEdit?.(editSnapshot.value)
+    }
+  }
+  enterNavigateMode()
+}
+
+function navigateToCell(rowIdx: number, colIdx: number, extend = false) {
+  const cell = clampRowCol(rowIdx, colIdx)
+  if (extend) {
+    const anchor = selectionAnchor.value ?? activeCell.value ?? cell
+    setSelectionFromAnchor(anchor, cell)
+  } else {
+    setSelectionFromAnchor(cell, cell)
+  }
+  setActiveRowIndex(cell.rowIndex)
+  if (gridMode.value === 'navigate') {
+    focusGridContainer()
+  }
+}
+
+function moveSelectionByDelta(deltaRow: number, deltaCol: number, extend: boolean) {
+  const focus = activeCell.value ?? { rowIndex: 0, colIndex: 0 }
+  navigateToCell(focus.rowIndex + deltaRow, focus.colIndex + deltaCol, extend)
+}
+
+function moveTab(shift: boolean) {
+  const rowsCount = rows.value.length
+  const colsCount = visibleColumns.value.length
+  if (!rowsCount || !colsCount) return
+  let { rowIndex, colIndex } = activeCell.value ?? { rowIndex: 0, colIndex: 0 }
+  if (shift) {
+    if (colIndex > 0) colIndex--
+    else if (rowIndex > 0) {
+      rowIndex--
+      colIndex = colsCount - 1
+    }
+  } else {
+    if (colIndex < colsCount - 1) colIndex++
+    else if (rowIndex < rowsCount - 1) {
+      rowIndex++
+      colIndex = 0
+    }
+  }
+  navigateToCell(rowIndex, colIndex, false)
+}
+
+function moveEnter(shift: boolean) {
+  const rowsCount = rows.value.length
+  const colsCount = visibleColumns.value.length
+  if (!rowsCount || !colsCount) return
+  const focus = activeCell.value ?? { rowIndex: 0, colIndex: 0 }
+  const nextRow = shift ? focus.rowIndex - 1 : focus.rowIndex + 1
+  if (nextRow < 0 || nextRow >= rowsCount) return
+  navigateToCell(nextRow, focus.colIndex, false)
+}
+
+function applyCellUpdates(updates: Array<{ row: number; col: number; value: string }>) {
+  for (const { row, col, value } of updates) {
+    const colDef = visibleColumns.value[col]
+    if (!colDef) continue
+    setCell(row, colDef.id, value)
+    noteDigifiCellManualEdit(row, colDef.id, value)
+  }
+}
+
+function copySelection(cut: boolean) {
+  const range = getCommandSelection()
+  const values = buildValuesMatrix(range, getValueAt)
+  clipboard.value = {
+    width: range.endCol - range.startCol + 1,
+    height: range.endRow - range.startRow + 1,
+    values,
+  }
+  const tsv = matrixToTsv(values)
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(tsv).catch(() => {})
+  }
+  if (cut) {
+    applyCellUpdates(clearRangeCells(range))
+  }
+}
+
+function pasteAtActiveCell() {
+  const anchor = activeCell.value ?? { rowIndex: 0, colIndex: 0 }
+  const applyMatrix = (matrix: string[][]) => {
+    const maxRow = rows.value.length - 1
+    const maxCol = visibleColumns.value.length - 1
+    for (let rOff = 0; rOff < matrix.length; rOff++) {
+      const destRow = anchor.rowIndex + rOff
+      if (destRow > maxRow) break
+      const rowVals = matrix[rOff] ?? []
+      for (let cOff = 0; cOff < rowVals.length; cOff++) {
+        const destCol = anchor.colIndex + cOff
+        if (destCol > maxCol) break
+        const colDef = visibleColumns.value[destCol]
+        if (!colDef) continue
+        onCellInput(destRow, colDef.id, rowVals[cOff] ?? '')
+      }
+    }
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+    navigator.clipboard
+      .readText()
+      .then((text) => {
+        const matrix = parseTsvMatrix(text)
+        if (matrix.length && (matrix[0]?.length ?? 0) > 0) {
+          applyMatrix(matrix)
+        } else if (clipboard.value) {
+          applyMatrix(clipboard.value.values)
+        }
+      })
+      .catch(() => {
+        if (clipboard.value) applyMatrix(clipboard.value.values)
+      })
+  } else if (clipboard.value) {
+    applyMatrix(clipboard.value.values)
+  }
+}
+
+function clearCommandSelection() {
+  applyCellUpdates(clearRangeCells(getCommandSelection()))
+}
+
+function onCellFocus(rowIdx: number, colIdx: number) {
+  if (gridMode.value !== 'edit') return
+  activeCell.value = clampRowCol(rowIdx, colIdx)
+  setActiveRowIndex(rowIdx)
+}
+
 function onCellBlur() {
+  if (gridMode.value === 'edit') return
   setActiveRowIndex(null)
 }
 
@@ -343,12 +553,10 @@ function onGridMouseDown(event: MouseEvent) {
   const cell = cellFromEvent ?? findCellFromPoint(event.clientX, event.clientY)
   if (!cell) return
 
-  const targetTag = (event.target as HTMLElement | null)?.tagName?.toLowerCase()
-  const isFormControl = targetTag === 'input' || targetTag === 'select' || targetTag === 'textarea'
-  if (!isFormControl) {
-    // Prevent native text selection when dragging over plain cell area,
-    // but allow normal focus behavior when interacting directly with inputs/selects.
-    event.preventDefault()
+  event.preventDefault()
+
+  if (gridMode.value === 'edit') {
+    commitAndExitEdit()
   }
 
   if (event.shiftKey) {
@@ -360,8 +568,8 @@ function onGridMouseDown(event: MouseEvent) {
     setActiveRowIndex(cell.rowIndex)
   }
 
-  // Ensure the inner input/select receives focus so typing works even when clicking cell background.
-  focusCellByIndex(cell.rowIndex, cell.colIndex)
+  enterNavigateMode()
+  focusGridContainer()
 
   isDraggingSelection.value = true
 
@@ -502,178 +710,247 @@ function onFillHandleMouseDown(event: MouseEvent) {
   document.addEventListener('mouseup', handleMouseUp)
 }
 
+function shouldExitEditOnHorizontalArrow(key: string, input: HTMLInputElement): boolean {
+  const start = input.selectionStart ?? 0
+  const end = input.selectionEnd ?? 0
+  if (start !== end) return true
+  const len = input.value.length
+  if (key === 'ArrowLeft') return start === 0
+  if (key === 'ArrowRight') return start === len
+  return false
+}
+
 function handleKeyDown(e: KeyboardEvent) {
+  const inGrid =
+    isEventInGrid(e.target) ||
+    document.activeElement === gridContainerRef.value
+  if (!inGrid) return
+
   const keyRaw = e.key
   const key = keyRaw.toLowerCase()
   const isMeta = e.metaKey || e.ctrlKey
-  const target = e.target as HTMLElement | null
-  if (!target) return
-  const tagName = target.tagName?.toLowerCase()
-  if (tagName !== 'input' && tagName !== 'textarea' && tagName !== 'select') return
+  const maxRow = Math.max(0, rows.value.length - 1)
+  const maxCol = Math.max(0, visibleColumns.value.length - 1)
 
-  const dataset = target.dataset
-  const rowStr = dataset.builderRow
-  const colStr = dataset.builderCol
-  if (rowStr == null || colStr == null) return
-  const row = parseInt(rowStr, 10)
-  const col = parseInt(colStr, 10)
-  if (Number.isNaN(row) || Number.isNaN(col)) return
+  if (!activeCell.value && rows.value.length > 0) {
+    activeCell.value = { rowIndex: 0, colIndex: 0 }
+    activeSelection.value = makeSelectionRange(0, 0, 0, 0)
+  }
 
-  const cell = clampRowCol(row, col)
+  if (gridMode.value === 'edit') {
+    const ec = editingCell.value
+    if (!ec) {
+      enterNavigateMode()
+      return
+    }
 
+    if (keyRaw === 'Escape') {
+      e.preventDefault()
+      cancelEdit()
+      focusGridContainer()
+      return
+    }
+
+    if (keyRaw === 'Enter') {
+      e.preventDefault()
+      commitAndExitEdit()
+      moveEnter(e.shiftKey)
+      return
+    }
+
+    if (keyRaw === 'Tab') {
+      e.preventDefault()
+      commitAndExitEdit()
+      moveTab(e.shiftKey)
+      return
+    }
+
+    if (keyRaw === 'F2' && !isMeta && !e.altKey) {
+      e.preventDefault()
+      return
+    }
+
+    if (!isMeta && !e.altKey && isArrowKey(keyRaw)) {
+      const col = visibleColumns.value[ec.colIndex]
+      const cellEl = col ? cellRefs.value.get(cellKey(ec.rowIndex, col.id)) : null
+      const input = cellEl?.getInputElement?.() ?? null
+
+      if (keyRaw === 'ArrowUp' || keyRaw === 'ArrowDown') {
+        e.preventDefault()
+        commitAndExitEdit()
+        moveSelectionByDelta(keyRaw === 'ArrowUp' ? -1 : 1, 0, e.shiftKey)
+        return
+      }
+
+      if (input && !shouldExitEditOnHorizontalArrow(keyRaw, input)) {
+        return
+      }
+
+      e.preventDefault()
+      commitAndExitEdit()
+      const deltaCol = keyRaw === 'ArrowLeft' ? -1 : 1
+      moveSelectionByDelta(0, deltaCol, e.shiftKey)
+      return
+    }
+
+    if (isMeta) return
+    return
+  }
+
+  // Navigate mode
   if (keyRaw === 'F2' && !isMeta && !e.altKey) {
     e.preventDefault()
-    enterEditModeByIndex(cell.rowIndex, cell.colIndex)
+    const focus = activeCell.value ?? { rowIndex: 0, colIndex: 0 }
+    startEdit(focus.rowIndex, focus.colIndex, { overwrite: false })
     return
   }
 
-  const isArrowKey =
-    key === 'arrowup' ||
-    key === 'arrowdown' ||
-    key === 'arrowleft' ||
-    key === 'arrowright'
+  if (keyRaw === 'Escape') {
+    e.preventDefault()
+    enterNavigateMode()
+    return
+  }
 
-  if (!isMeta && !e.altKey && isArrowKey) {
-    const maxRow = Math.max(0, rows.value.length - 1)
-    const maxCol = Math.max(0, visibleColumns.value.length - 1)
+  if ((keyRaw === 'Delete' || keyRaw === 'Backspace') && !isMeta) {
+    e.preventDefault()
+    clearCommandSelection()
+    return
+  }
 
-    let anchor = selectionAnchor.value ?? activeCell.value ?? cell
-    anchor = clampRowCol(anchor.rowIndex, anchor.colIndex)
-
-    let focus = activeCell.value ?? cell
-    focus = clampRowCol(focus.rowIndex, focus.colIndex)
-
-    const delta = { row: 0, col: 0 }
-    switch (key) {
-      case 'arrowup':
-        delta.row = -1
-        break
-      case 'arrowdown':
-        delta.row = 1
-        break
-      case 'arrowleft':
-        delta.col = -1
-        break
-      case 'arrowright':
-        delta.col = 1
-        break
+  if (isMeta) {
+    if (key === 'c') {
+      e.preventDefault()
+      copySelection(false)
+      return
+    }
+    if (key === 'x') {
+      e.preventDefault()
+      copySelection(true)
+      return
+    }
+    if (key === 'v') {
+      e.preventDefault()
+      pasteAtActiveCell()
+      return
+    }
+    if (key === 'd') {
+      e.preventDefault()
+      applyCellUpdates(fillDownRange(getCommandSelection(), getValueAt))
+      return
+    }
+    if (key === 'r') {
+      e.preventDefault()
+      applyCellUpdates(fillRightRange(getCommandSelection(), getValueAt))
+      return
+    }
+    if (key === 'a') {
+      e.preventDefault()
+      activeSelection.value = makeSelectionRange(0, 0, maxRow, maxCol)
+      activeCell.value = { rowIndex: 0, colIndex: 0 }
+      selectionAnchor.value = { rowIndex: 0, colIndex: 0 }
+      return
     }
 
-    const nextFocus = clampRowCol(
-      focus.rowIndex + delta.row,
-      focus.colIndex + delta.col,
-    )
+    if (isArrowKey(keyRaw)) {
+      e.preventDefault()
+      const focus = activeCell.value ?? { rowIndex: 0, colIndex: 0 }
+      const dir =
+        keyRaw === 'ArrowUp' ? 'up' :
+        keyRaw === 'ArrowDown' ? 'down' :
+        keyRaw === 'ArrowLeft' ? 'left' : 'right'
+      const edge = findEdgeInDirection(
+        focus.rowIndex,
+        focus.colIndex,
+        dir,
+        maxRow,
+        maxCol,
+        getValueAt,
+      )
+      if (e.shiftKey) {
+        const anchor = selectionAnchor.value ?? focus
+        setSelectionFromAnchor(anchor, edge)
+      } else {
+        navigateToCell(edge.rowIndex, edge.colIndex, false)
+      }
+      return
+    }
 
+    if (keyRaw === 'Home') {
+      e.preventDefault()
+      const focus = activeCell.value ?? { rowIndex: 0, colIndex: 0 }
+      const target = { rowIndex: 0, colIndex: 0 }
+      if (e.shiftKey) {
+        setSelectionFromAnchor(selectionAnchor.value ?? focus, target)
+      } else {
+        navigateToCell(0, 0, false)
+      }
+      return
+    }
+
+    if (keyRaw === 'End') {
+      e.preventDefault()
+      const focus = activeCell.value ?? { rowIndex: 0, colIndex: 0 }
+      const last = findLastUsedCell(maxRow, maxCol, getValueAt)
+      if (e.shiftKey) {
+        setSelectionFromAnchor(selectionAnchor.value ?? focus, last)
+      } else {
+        navigateToCell(last.rowIndex, last.colIndex, false)
+      }
+      return
+    }
+  }
+
+  if (keyRaw === 'Home' && !isMeta) {
+    e.preventDefault()
+    const focus = activeCell.value ?? { rowIndex: 0, colIndex: 0 }
+    const target = { rowIndex: focus.rowIndex, colIndex: 0 }
     if (e.shiftKey) {
-      setSelectionFromAnchor(anchor, nextFocus)
+      setSelectionFromAnchor(selectionAnchor.value ?? focus, target)
     } else {
-      setSelectionFromAnchor(nextFocus, nextFocus)
+      navigateToCell(target.rowIndex, target.colIndex, false)
     }
-
-    focusCellByIndex(nextFocus.rowIndex, nextFocus.colIndex)
-    setActiveRowIndex(nextFocus.rowIndex)
-    e.preventDefault()
     return
   }
 
-  if (!isMeta || (key !== 'c' && key !== 'v')) return
-
-  if (key === 'c') {
-    const base = activeSelection.value ?? {
-      startRow: cell.rowIndex,
-      endRow: cell.rowIndex,
-      startCol: cell.colIndex,
-      endCol: cell.colIndex,
-    }
-    const maxRow = rows.value.length - 1
-    const maxCol = visibleColumns.value.length - 1
-    const startRow = Math.max(0, Math.min(base.startRow, maxRow))
-    const endRow = Math.max(0, Math.min(base.endRow, maxRow))
-    const startCol = Math.max(0, Math.min(base.startCol, maxCol))
-    const endCol = Math.max(0, Math.min(base.endCol, maxCol))
-
-    const height = endRow - startRow + 1
-    const width = endCol - startCol + 1
-    if (height <= 0 || width <= 0) return
-
-    const values: string[][] = []
-    for (let r = startRow; r <= endRow; r++) {
-      const rowVals: string[] = []
-      for (let c = startCol; c <= endCol; c++) {
-        const colDef = visibleColumns.value[c]
-        if (!colDef) {
-          rowVals.push('')
-          continue
-        }
-        rowVals.push(getCellValue(r, colDef.id))
-      }
-      values.push(rowVals)
-    }
-    clipboard.value = { width, height, values }
-
-    // Also try to copy to the system clipboard as TSV so it can be pasted into spreadsheets.
-    const tsvLines = values.map((rowVals) =>
-      rowVals.map((v) => v.replace(/\t/g, ' ')).join('\t')
-    )
-    const tsv = tsvLines.join('\n')
-    if (typeof navigator !== 'undefined' && (navigator as any).clipboard?.writeText) {
-      ;(navigator as any).clipboard.writeText(tsv).catch(() => {
-        // Ignore clipboard errors; internal clipboard still works.
-      })
-    }
+  if (keyRaw === 'End' && !isMeta) {
     e.preventDefault()
+    const focus = activeCell.value ?? { rowIndex: 0, colIndex: 0 }
+    const target = { rowIndex: focus.rowIndex, colIndex: maxCol }
+    if (e.shiftKey) {
+      setSelectionFromAnchor(selectionAnchor.value ?? focus, target)
+    } else {
+      navigateToCell(target.rowIndex, target.colIndex, false)
+    }
     return
   }
 
-  if (key === 'v') {
-    const applyMatrix = (matrix: string[][]) => {
-      const maxRow = rows.value.length - 1
-      const maxCol = visibleColumns.value.length - 1
-      const height = matrix.length
-      const width = matrix[0]?.length ?? 0
-      if (height <= 0 || width <= 0) return
-
-      for (let rOff = 0; rOff < height; rOff++) {
-        const destRow = cell.rowIndex + rOff
-        if (destRow > maxRow) break
-        const rowVals = matrix[rOff] ?? []
-        for (let cOff = 0; cOff < width; cOff++) {
-          const destCol = cell.colIndex + cOff
-          if (destCol > maxCol) break
-          const colDef = visibleColumns.value[destCol]
-          if (!colDef) continue
-          const value = rowVals[cOff] ?? ''
-          setCell(destRow, colDef.id, value)
-        }
-      }
-    }
-
-    const hasSystemClipboard =
-      typeof navigator !== 'undefined' &&
-      (navigator as any).clipboard?.readText
-
-    if (hasSystemClipboard) {
-      ;(navigator as any).clipboard
-        .readText()
-        .then((text: string) => {
-          const lines = text.split(/\r?\n/)
-          const matrix = lines.map((line) => line.split('\t'))
-          if (matrix.length && matrix[0].length) {
-            applyMatrix(matrix)
-          } else if (clipboard.value) {
-            applyMatrix(clipboard.value.values)
-          }
-        })
-        .catch(() => {
-          if (clipboard.value) {
-            applyMatrix(clipboard.value.values)
-          }
-        })
-    } else if (clipboard.value) {
-      applyMatrix(clipboard.value.values)
-    }
-
+  if (keyRaw === 'Enter' && !isMeta) {
     e.preventDefault()
+    moveEnter(e.shiftKey)
+    return
+  }
+
+  if (keyRaw === 'Tab' && !isMeta) {
+    e.preventDefault()
+    moveTab(e.shiftKey)
+    return
+  }
+
+  if (!isMeta && !e.altKey && isArrowKey(keyRaw)) {
+    e.preventDefault()
+    const delta =
+      keyRaw === 'ArrowUp' ? { row: -1, col: 0 } :
+      keyRaw === 'ArrowDown' ? { row: 1, col: 0 } :
+      keyRaw === 'ArrowLeft' ? { row: 0, col: -1 } :
+      { row: 0, col: 1 }
+    moveSelectionByDelta(delta.row, delta.col, e.shiftKey)
+    return
+  }
+
+  if (isPrintableKey(e)) {
+    e.preventDefault()
+    const focus = activeCell.value ?? { rowIndex: 0, colIndex: 0 }
+    startEdit(focus.rowIndex, focus.colIndex, { overwrite: true, initialChar: keyRaw })
   }
 }
 
@@ -750,7 +1027,13 @@ function startDividerDrag() {
 }
 
 const gridContainerRef = ref<HTMLElement | null>(null)
-type CellRefHandle = { focus: () => void; enterEditMode?: () => void }
+type CellRefHandle = {
+  focus: () => void
+  beginEdit?: (options: { overwrite: boolean }) => void
+  commitEdit?: () => void
+  cancelEdit?: (restoreValue: string) => void
+  getInputElement?: () => HTMLInputElement | null
+}
 const cellRefs = ref<Map<string, CellRefHandle>>(new Map())
 
 function cellKey(rowIdx: number, colId: string) {
@@ -812,23 +1095,11 @@ function focusCell(rowIdx: number, colId: string) {
   el?.focus?.()
 }
 
-function enterEditModeByIndex(rowIdx: number, colIdx: number) {
-  const col = visibleColumns.value[colIdx]
-  if (!col) return
-  const el = cellRefs.value.get(cellKey(rowIdx, col.id))
-  if (el?.enterEditMode) {
-    el.enterEditMode()
-  } else {
-    focusCell(rowIdx, col.id)
-  }
-}
-
 function onCellDoubleClick(event: MouseEvent) {
   event.preventDefault()
   const cell = getCellFromEvent(event)
   if (!cell) return
-  onCellFocus(cell.rowIndex, cell.colIndex)
-  enterEditModeByIndex(cell.rowIndex, cell.colIndex)
+  startEdit(cell.rowIndex, cell.colIndex, { overwrite: false })
 }
 
 function focusCellByIndex(rowIdx: number, colIdx: number) {
@@ -856,7 +1127,8 @@ defineExpose({
 <template>
   <div
     ref="gridContainerRef"
-    class="overflow-auto border pb-4"
+    tabindex="0"
+    class="overflow-auto border pb-4 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500/50"
     :class="isDark
       ? 'border-white/10 bg-gray-900 shadow-md shadow-black/40'
       : 'border-gray-200 bg-white shadow-sm'"
@@ -1019,6 +1291,7 @@ defineExpose({
                 :suggestions="getDigifiSuggestions(rowIdx, col.id, col.fieldKey)"
                 :builder-row="rowIdx"
                 :builder-col="colIdx"
+                :is-editing="isCellEditing(rowIdx, colIdx)"
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
                 @focus="onCellFocus(rowIdx, colIdx)"
                 @blur="onCellBlur"
@@ -1082,6 +1355,7 @@ defineExpose({
                 :suggestions="getDigifiSuggestions(rowIdx, col.id, col.fieldKey)"
                 :builder-row="rowIdx"
                 :builder-col="splitIndex + colIdx"
+                :is-editing="isCellEditing(rowIdx, splitIndex + colIdx)"
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
                 @focus="onCellFocus(rowIdx, splitIndex + colIdx)"
                 @blur="onCellBlur"
@@ -1140,6 +1414,7 @@ defineExpose({
                 :suggestions="getDigifiSuggestions(rowIdx, col.id, col.fieldKey)"
                 :builder-row="rowIdx"
                 :builder-col="colIdx"
+                :is-editing="isCellEditing(rowIdx, colIdx)"
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
                 @focus="onCellFocus(rowIdx, colIdx)"
                 @blur="onCellBlur"

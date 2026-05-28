@@ -14,15 +14,13 @@ export default defineComponent({
   props: {
     modelValue: { type: String, default: '' },
     fieldKey: { type: String as () => LogbookColumnKey | null, default: null },
-    /** When fieldKey is categoryClass, specific category (ASEL, etc.) makes this cell a time input. */
     categoryClassValue: { type: String, default: null },
-    /** When fieldKey is role, default role to show when cell is empty. */
     defaultRole: { type: String, default: null },
-    /** When fieldKey is identification (or aircraft), suggestions from other cells on the page. */
     suggestions: { type: Array as () => string[], default: () => [] },
     disabled: { type: Boolean, default: false },
     builderRow: { type: Number, default: undefined },
     builderCol: { type: Number, default: undefined },
+    isEditing: { type: Boolean, default: false },
   },
   emits: ['update:modelValue', 'focus', 'blur'],
   setup(props, { emit }) {
@@ -40,7 +38,7 @@ export default defineComponent({
     const isPilotRole = computed(() => props.fieldKey === 'pilotRole')
     const roleDisplayValue = computed(() => (props.modelValue || props.defaultRole || 'PIC').trim() || 'PIC')
     const { isDark } = useTheme()
-    
+
     const inputClass = computed(() => {
       const colors = isDark.value
         ? 'text-gray-100 placeholder-gray-500 focus:bg-white/5 focus:shadow-inner'
@@ -63,36 +61,57 @@ export default defineComponent({
       }
       return undefined
     })
-    function focus() {
+
+    function focusControl() {
       if (isRole.value) roleSelectRef.value?.focus()
       else if (isCategoryClass.value && !isCategoryClassTimeColumn.value) selectRef.value?.focus()
       else if (isApproachType.value) selectRef.value?.focus()
       else if (isPilotRole.value) selectRef.value?.focus()
       else inputRef.value?.focus()
     }
-    /** Excel-style in-place edit: double-click or F2 — type without clearing on first key. */
-    function enterEditMode() {
-      if (
-        isRole.value ||
-        (isCategoryClass.value && !isCategoryClassTimeColumn.value) ||
-        isApproachType.value ||
-        isPilotRole.value
-      ) {
-        focus()
-        return
-      }
-      const input = inputRef.value
-      if (!input) return
-      overwriteOnNextKey.value = false
-      input.focus()
-      const len = input.value.length
-      input.setSelectionRange(0, len)
+
+    function blurControl() {
+      if (isRole.value) roleSelectRef.value?.blur()
+      else if (isCategoryClass.value && !isCategoryClassTimeColumn.value) selectRef.value?.blur()
+      else if (isApproachType.value) selectRef.value?.blur()
+      else if (isPilotRole.value) selectRef.value?.blur()
+      else inputRef.value?.blur()
     }
+
+    /** Excel F2 / double-click: edit in place without clearing on first key. */
+    function beginEdit(options: { overwrite: boolean }) {
+      overwriteOnNextKey.value = options.overwrite
+      focusControl()
+      if (!options.overwrite) {
+        const input = inputRef.value
+        if (input) {
+          const len = input.value.length
+          input.setSelectionRange(0, len)
+        }
+      }
+    }
+
+    function commitEdit() {
+      overwriteOnNextKey.value = false
+      blurControl()
+    }
+
+    function cancelEdit(restoreValue: string) {
+      overwriteOnNextKey.value = false
+      emit('update:modelValue', restoreValue)
+      if (inputRef.value) inputRef.value.value = restoreValue
+      blurControl()
+    }
+
+    function getInputElement(): HTMLInputElement | null {
+      return inputRef.value
+    }
+
     function onInput(e: Event) {
       emit('update:modelValue', (e.target as HTMLInputElement).value)
     }
+
     function onInputKeydown(e: KeyboardEvent) {
-      // Excel-like overwrite: first printable key after focus replaces the whole cell.
       if (!overwriteOnNextKey.value) return
 
       const key = e.key
@@ -101,16 +120,14 @@ export default defineComponent({
         e.preventDefault()
         emit('update:modelValue', '')
         if (inputRef.value) inputRef.value.value = ''
-        // Keep overwrite flag so the next printable key starts fresh.
         return
       }
 
-      // Ignore control/navigation keys.
       if (
         e.ctrlKey ||
         e.metaKey ||
         e.altKey ||
-        key.length !== 1 // non-printable (e.g. ArrowUp, Enter)
+        key.length !== 1
       ) {
         return
       }
@@ -120,10 +137,11 @@ export default defineComponent({
       if (inputRef.value) inputRef.value.value = key
       overwriteOnNextKey.value = false
     }
+
     function onInputFocus() {
-      overwriteOnNextKey.value = true
       emit('focus')
     }
+
     function onInputBlur() {
       overwriteOnNextKey.value = false
 
@@ -137,9 +155,11 @@ export default defineComponent({
 
       emit('blur')
     }
+
     function onSelectChange(e: Event) {
       emit('update:modelValue', (e.target as HTMLSelectElement).value)
     }
+
     return {
       inputRef,
       selectRef,
@@ -157,8 +177,11 @@ export default defineComponent({
       roleOptions: ROLE_OPTIONS,
       approachTypeOptions: APPROACH_TYPE_OPTIONS,
       pilotRoleOptions: PILOT_ROLE_OPTIONS,
-      focus,
-      enterEditMode,
+      focus: focusControl,
+      beginEdit,
+      commitEdit,
+      cancelEdit,
+      getInputElement,
       onInput,
       onSelectChange,
       onInputKeydown,
@@ -176,6 +199,7 @@ export default defineComponent({
     :value="roleDisplayValue"
     :class="selectClass"
     :disabled="disabled"
+    :tabindex="isEditing ? 0 : -1"
     :data-builder-row="builderRow"
     :data-builder-col="builderCol"
     @focus="$emit('focus')"
@@ -190,6 +214,7 @@ export default defineComponent({
     :value="modelValue"
     :class="selectClass"
     :disabled="disabled"
+    :tabindex="isEditing ? 0 : -1"
     :data-builder-row="builderRow"
     :data-builder-col="builderCol"
     @focus="$emit('focus')"
@@ -205,6 +230,7 @@ export default defineComponent({
     :value="modelValue"
     :class="selectClass"
     :disabled="disabled"
+    :tabindex="isEditing ? 0 : -1"
     :data-builder-row="builderRow"
     :data-builder-col="builderCol"
     @focus="$emit('focus')"
@@ -220,6 +246,7 @@ export default defineComponent({
     :value="modelValue"
     :class="selectClass"
     :disabled="disabled"
+    :tabindex="isEditing ? 0 : -1"
     :data-builder-row="builderRow"
     :data-builder-col="builderCol"
     @focus="$emit('focus')"
@@ -235,6 +262,8 @@ export default defineComponent({
       type="text"
       :class="inputClass"
       :disabled="disabled"
+      :readonly="!isEditing"
+      :tabindex="isEditing ? 0 : -1"
       :data-builder-row="builderRow"
       :data-builder-col="builderCol"
       :list="listId"

@@ -49,6 +49,15 @@ const {
   getSelectedPhotoFile,
 } = useDigifiCompanionCapture()
 
+const companionCaptureOrigin = computed(() => {
+  if (!mobileUrl.value) return null
+  try {
+    return new URL(mobileUrl.value).origin
+  } catch {
+    return null
+  }
+})
+
 const isDark = computed(() => theme.value === 'dark')
 
 const canScanRight = computed(() => {
@@ -438,10 +447,10 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
         </div>
         <div class="space-y-2">
           <p class="text-xs break-all" :class="isDark ? 'text-gray-400' : 'text-gray-600'">{{ mobileUrl }}</p>
-          <p class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-500'">
-            QR uses <code class="text-[11px]">https://172.20.10.4:3000</code> (same Wi‑Fi). On your phone, open that
+          <p v-if="companionCaptureOrigin" class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-500'">
+            QR uses <code class="text-[11px]">{{ companionCaptureOrigin }}</code> (same Wi‑Fi). On your phone, open that
             URL once and accept the dev certificate before scanning. Prefer
-            <code class="text-[11px]">https://172.20.10.4:3000/logbook-builder</code> on this laptop instead of
+            <code class="text-[11px]">{{ companionCaptureOrigin }}/logbook-builder</code> on this laptop instead of
             <code class="text-[11px]">0.0.0.0</code>.
           </p>
           <div class="flex flex-wrap gap-2">

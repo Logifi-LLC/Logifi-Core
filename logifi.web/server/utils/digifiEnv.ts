@@ -20,12 +20,12 @@ export function getDigifiEnv() {
       process.env.NUXT_DIGIFI_MODEL,
       process.env.DIGIFI_MODEL,
       config.digifiModel
-    ) || 'gemini-2.5-flash',
+    ) || 'gemini-3.5-flash',
     proModel: pick(
       process.env.NUXT_DIGIFI_PRO_MODEL,
       process.env.DIGIFI_PRO_MODEL,
       config.digifiProModel
-    ) || 'gemini-2.5-pro',
+    ) || 'gemini-3.1-pro',
     maxScansPerDay: Math.max(
       1,
       parseInt(
