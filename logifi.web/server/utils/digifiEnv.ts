@@ -26,8 +26,10 @@ export class DigifiGeminiError extends Error {
   }
 }
 
-const DEFAULT_FLASH_FALLBACKS = ['gemini-2.5-flash', 'gemini-2.0-flash']
-const DEFAULT_PRO_FALLBACKS = ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash']
+/** Stay in the Gemini 3.x line — avoid silent downgrade to 2.x (much weaker for logbook OCR). */
+const DEFAULT_FLASH_FALLBACKS = ['gemini-3-flash-preview', 'gemini-3.1-flash-lite']
+/** Pro unavailable → 3.5 Flash (near-Pro per Google), then other 3.x flash tiers. */
+const DEFAULT_PRO_FALLBACKS = ['gemini-3.5-flash', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite']
 
 function parseModelList(value: string): string[] {
   return value

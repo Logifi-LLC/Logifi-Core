@@ -25,6 +25,36 @@ describe('digifiNormalize', () => {
     expect(normalizeCellValue('KFKR KLAF', 'destination', 2024)).toBe('KLAF')
   })
 
+  it('preserves correct From Route To when each column has one code', () => {
+    const rows = normalizeScanRows(
+      [{ rowIndex: 0, cells: { from: 'KLAF', route: 'KFKR', to: 'KLAF' } }],
+      [
+        { id: 'from', label: 'From', fieldKey: 'departure', order: 0 },
+        { id: 'route', label: 'Route', fieldKey: 'route', order: 1 },
+        { id: 'to', label: 'To', fieldKey: 'destination', order: 2 },
+      ],
+      2024
+    )
+    expect(rows[0].cells.from).toBe('KLAF')
+    expect(rows[0].cells.route).toBe('KFKR')
+    expect(rows[0].cells.to).toBe('KLAF')
+  })
+
+  it('fixes misread when route duplicates from and stop is in to', () => {
+    const rows = normalizeScanRows(
+      [{ rowIndex: 0, cells: { from: 'KLAF', route: 'KLAF', to: 'KFKR' } }],
+      [
+        { id: 'from', label: 'From', fieldKey: 'departure', order: 0 },
+        { id: 'route', label: 'Route', fieldKey: 'route', order: 1 },
+        { id: 'to', label: 'To', fieldKey: 'destination', order: 2 },
+      ],
+      2024
+    )
+    expect(rows[0].cells.from).toBe('KLAF')
+    expect(rows[0].cells.route).toBe('KFKR')
+    expect(rows[0].cells.to).toBe('KLAF')
+  })
+
   it('reconciles multi-stop routes to first/last From-To with middle in Route', () => {
     const rows = normalizeScanRows(
       [{

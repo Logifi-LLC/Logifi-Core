@@ -183,7 +183,7 @@ export default defineEventHandler(async (event) => {
       throw createError({
         statusCode: 503,
         statusMessage:
-          'The AI scan service is busy right now. Wait a minute and try again, or turn off “Higher accuracy” to use a faster model.',
+          'The AI scan service is busy right now. Wait a minute and try again.',
       })
     }
     console.error('[digifi] gemini error:', msg)

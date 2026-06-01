@@ -56,10 +56,37 @@ function reconcileRowAirports(
   const routeCol = columns.find((c) => c.fieldKey === 'route')
   if (!departureCol && !destinationCol) return cells
 
+  const depTokens = departureCol ? splitAirportCodes(cells[departureCol.id] ?? '') : []
+  const routeTokens = routeCol ? splitAirportCodes(cells[routeCol.id] ?? '') : []
+  const destTokens = destinationCol ? splitAirportCodes(cells[destinationCol.id] ?? '') : []
+
+  const needsFullReconcile =
+    depTokens.length > 1 || routeTokens.length > 1 || destTokens.length > 1
+
+  if (!needsFullReconcile) {
+    if (
+      routeCol &&
+      departureCol &&
+      destinationCol &&
+      depTokens.length === 1 &&
+      routeTokens.length === 1 &&
+      destTokens.length === 1 &&
+      depTokens[0] === routeTokens[0] &&
+      destTokens[0] !== depTokens[0]
+    ) {
+      const next = { ...cells }
+      next[departureCol.id] = depTokens[0]
+      next[routeCol.id] = destTokens[0]
+      next[destinationCol.id] = depTokens[0]
+      return next
+    }
+    return cells
+  }
+
   const orderedRaw: string[] = []
   if (departureCol) orderedRaw.push(cells[departureCol.id] ?? '')
-  if (destinationCol) orderedRaw.push(cells[destinationCol.id] ?? '')
   if (routeCol) orderedRaw.push(cells[routeCol.id] ?? '')
+  if (destinationCol) orderedRaw.push(cells[destinationCol.id] ?? '')
 
   const tokens = orderedRaw.flatMap((raw) => splitAirportCodes(raw))
   if (tokens.length <= 1) {
@@ -78,8 +105,8 @@ function reconcileRowAirports(
   const next = { ...cells }
   if (departureCol) next[departureCol.id] = first
   if (destinationCol) next[destinationCol.id] = last
-  if (routeCol && middle.length > 0) {
-    next[routeCol.id] = middle.join(' ')
+  if (routeCol) {
+    next[routeCol.id] = middle.length > 0 ? middle.join(' ') : ''
   }
   return next
 }

@@ -10,6 +10,24 @@ export { DigifiGeminiError } from './digifiEnv'
 export type { DigifiGeminiErrorCode } from './digifiEnv'
 
 const GEMINI_RETRY_DELAYS_MS = [2000, 5000, 10000]
+/** Full logbook pages with many rows/columns need a large JSON payload; default caps often truncate. */
+const GEMINI_MAX_OUTPUT_TOKENS = 65_536
+
+/** Parse model text as JSON; strips optional markdown fences some models still emit. */
+export function parseGeminiJsonText(text: string): unknown {
+  let trimmed = text.trim()
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
+  if (fenced) {
+    trimmed = fenced[1].trim()
+  }
+  return JSON.parse(trimmed)
+}
+
+function collectGeminiResponseText(
+  parts: Array<{ text?: string }> | undefined
+): string {
+  return (parts ?? []).map((part) => part.text ?? '').join('').trim()
+}
 
 function isRetryableHttpStatus(status: number): boolean {
   return status === 429 || status === 502 || status === 503 || status === 504
@@ -106,9 +124,9 @@ function buildAirportPromptRules(columns: DigifiTemplateColumn[]): string {
     lines.push('- Do not combine multiple airport codes in a single From or To cell.')
   }
   lines.push(
-    '- Example round trip KLAF-KFKR-KLAF on paper: From KLAF, To KLAF' +
-      (hasRoute ? ', Route KFKR' : '') +
-      ' (not To "KFKR KLAF").'
+    '- Example round trip KLAF-KFKR-KLAF on paper:' +
+      (hasRoute ? ' From KLAF, Route KFKR, To KLAF' : ' From KLAF, To KLAF') +
+      ' (not To "KFKR KLAF" and do not put the origin in Route).'
   )
   return lines.join('\n')
 }
@@ -338,6 +356,7 @@ async function callGeminiRowsOnModel(
     contents: [{ parts }],
     generationConfig: {
       temperature: 0.1,
+      maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
       responseMimeType: 'application/json',
       responseSchema: GEMINI_SCAN_RESPONSE_JSON_SCHEMA,
     },
@@ -366,10 +385,14 @@ async function callGeminiRowsOnModel(
     }
 
     const data = (await res.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string }> }
+        finishReason?: string
+      }>
       usageMetadata?: { totalTokenCount?: number }
     }
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text
+    const candidate = data.candidates?.[0]
+    const text = collectGeminiResponseText(candidate?.content?.parts)
     if (!text) {
       throw new DigifiGeminiError(
         'Gemini returned empty response',
@@ -383,11 +406,23 @@ async function callGeminiRowsOnModel(
       console.info('[digifi] scan tokens:', tokenCount, 'model:', model)
     }
 
+    const finishReason = candidate?.finishReason
+    if (finishReason === 'MAX_TOKENS') {
+      console.warn(
+        `[digifi] model ${model} hit output token limit (${text.length} chars); response likely truncated`
+      )
+    }
+
     try {
-      return JSON.parse(text)
+      return parseGeminiJsonText(text)
     } catch {
+      console.warn(
+        `[digifi] invalid JSON from ${model}: ${text.length} chars, finishReason=${finishReason ?? 'unknown'}, tail=${JSON.stringify(text.slice(-120))}`
+      )
       throw new DigifiGeminiError(
-        'Gemini returned invalid JSON',
+        finishReason === 'MAX_TOKENS'
+          ? 'Gemini response was truncated'
+          : 'Gemini returned invalid JSON',
         'INVALID_RESPONSE',
         [...modelsAttempted, model]
       )
@@ -427,11 +462,15 @@ async function callGeminiRows(
         throw error
       }
       const isLastModel = model === models[models.length - 1]
-      if (error.code === 'CAPACITY' && !isLastModel) {
-        console.warn(
-          `[digifi] model ${model} unavailable (${error.message.slice(0, 80)}…), trying ${models[attempted.length]}`
-        )
-        lastCapacityError = error
+      if ((error.code === 'CAPACITY' || error.code === 'INVALID_RESPONSE') && !isLastModel) {
+        const reason =
+          error.code === 'CAPACITY'
+            ? `unavailable (${error.message.slice(0, 80)}…)`
+            : error.message
+        console.warn(`[digifi] model ${model} ${reason}, trying ${models[attempted.length]}`)
+        if (error.code === 'CAPACITY') {
+          lastCapacityError = error
+        }
         continue
       }
       throw new DigifiGeminiError(error.message, error.code, attempted)
