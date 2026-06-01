@@ -3,7 +3,25 @@ import {
   geminiScanResponseSchema,
   type DigifiScanMetaInput,
 } from './digifiSchema'
+import { DigifiGeminiError, getDigifiModelChain } from './digifiEnv'
 import { getDigifiEnv } from './digifiEnv'
+
+export { DigifiGeminiError } from './digifiEnv'
+export type { DigifiGeminiErrorCode } from './digifiEnv'
+
+const GEMINI_RETRY_DELAYS_MS = [2000, 5000, 10000]
+
+function isRetryableHttpStatus(status: number): boolean {
+  return status === 429 || status === 502 || status === 503 || status === 504
+}
+
+function isCapacityHttpStatus(status: number): boolean {
+  return status === 429 || status === 503 || status === 504
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 import {
   APPROACH_TYPE_OPTIONS,
   CATEGORY_CLASS_OPTIONS,
@@ -65,8 +83,34 @@ function columnTypeHint(fieldKey: LogbookColumnKey | null): string {
   if (fieldKey === 'approachType') return `select one of: ${APPROACH_TYPE_OPTIONS.join(', ')}`
   if (fieldKey === 'categoryClass') return `select one of: ${CATEGORY_CLASS_OPTIONS.join(', ')}`
   if (fieldKey === 'pilotRole') return `select one of: ${PILOT_ROLE_OPTIONS.filter((p) => p.value).map((p) => p.value).join(', ')}`
-  if (fieldKey === 'departure' || fieldKey === 'destination') return 'airport code (3-4 letters)'
+  if (fieldKey === 'departure' || fieldKey === 'destination') {
+    return 'single departure or final destination airport code only (3-4 letters, one code)'
+  }
+  if (fieldKey === 'route') return 'intermediate stops only (one or more 3-4 letter codes, space-separated)'
   return 'text'
+}
+
+function buildAirportPromptRules(columns: DigifiTemplateColumn[]): string {
+  const hasDeparture = columns.some((c) => c.fieldKey === 'departure')
+  const hasDestination = columns.some((c) => c.fieldKey === 'destination')
+  const hasRoute = columns.some((c) => c.fieldKey === 'route')
+  if (!hasDeparture && !hasDestination) return ''
+
+  const lines = [
+    '- Airports: put only ONE airport code in the From/departure column (first airport of the trip).',
+    '- Put only ONE airport code in the To/destination column (final airport where the flight ended).',
+  ]
+  if (hasRoute) {
+    lines.push('- Put intermediate stops in the Route column only (not duplicated in From/To).')
+  } else {
+    lines.push('- Do not combine multiple airport codes in a single From or To cell.')
+  }
+  lines.push(
+    '- Example round trip KLAF-KFKR-KLAF on paper: From KLAF, To KLAF' +
+      (hasRoute ? ', Route KFKR' : '') +
+      ' (not To "KFKR KLAF").'
+  )
+  return lines.join('\n')
 }
 
 function buildColumnList(columns: DigifiTemplateColumn[], pageSide: 'left' | 'right', layout: string, splitIndex: number): DigifiTemplateColumn[] {
@@ -90,6 +134,7 @@ function buildPrompt(
         `- columnId "${c.id}": label "${c.label}" -> field ${c.fieldKey ?? 'unmapped'} (${columnTypeHint(c.fieldKey)})`
     )
     .join('\n')
+  const airportRules = buildAirportPromptRules(targetColumns)
 
   const pageDesc =
     meta.layout === 'two-page'
@@ -124,7 +169,7 @@ Rules:
 - Match handwriting to the column labels listed below.
 - Flight times as decimal hours (e.g. 1.5 not 1:30).
 - Dates as written on the paper.
-- Return ONLY valid JSON matching the schema.
+${airportRules ? `${airportRules}\n` : ''}- Return ONLY valid JSON matching the schema.
 
 Columns to extract on this page:
 ${colLines}
@@ -150,7 +195,7 @@ Rules:
 - Match handwriting to the column labels listed below.
 - Flight times as decimal hours (e.g. 1.5 not 1:30).
 - Dates as written on the paper.
-- Return ONLY valid JSON matching the schema.
+${airportRules ? `${airportRules}\n` : ''}- Return ONLY valid JSON matching the schema.
 
 Columns to extract on this page:
 ${colLines}
@@ -259,11 +304,12 @@ function mergePrimaryAndRescueRows(
   return [...rowMap.values()].sort((a, b) => a.rowIndex - b.rowIndex)
 }
 
-async function callGeminiRows(
+async function callGeminiRowsOnModel(
   model: string,
   prompt: string,
   overviewImage: DigifiImagePart,
-  chunkImages: DigifiImagePart[]
+  chunkImages: DigifiImagePart[],
+  modelsAttempted: string[]
 ): Promise<unknown> {
   const env = getDigifiEnv()
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.geminiApiKey)}`
@@ -297,22 +343,23 @@ async function callGeminiRows(
     },
   }
 
-  let lastError: Error | null = null
-  for (let attempt = 0; attempt < 3; attempt++) {
+  let lastError: DigifiGeminiError | null = null
+  for (let attempt = 0; attempt < GEMINI_RETRY_DELAYS_MS.length; attempt++) {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    if (res.status === 429 && attempt < 2) {
-      await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)))
-      continue
-    }
     if (!res.ok) {
       const errText = await res.text().catch(() => '')
-      lastError = new Error(`Gemini API ${res.status}: ${errText.slice(0, 200)}`)
-      if (res.status >= 500 && attempt < 2) {
-        await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)))
+      const code = isCapacityHttpStatus(res.status) ? 'CAPACITY' : 'UNKNOWN'
+      lastError = new DigifiGeminiError(
+        `Gemini API ${res.status}: ${errText.slice(0, 200)}`,
+        code,
+        [...modelsAttempted, model]
+      )
+      if (isRetryableHttpStatus(res.status) && attempt < GEMINI_RETRY_DELAYS_MS.length - 1) {
+        await sleep(GEMINI_RETRY_DELAYS_MS[attempt])
         continue
       }
       throw lastError
@@ -324,7 +371,11 @@ async function callGeminiRows(
     }
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text
     if (!text) {
-      throw new Error('Gemini returned empty response')
+      throw new DigifiGeminiError(
+        'Gemini returned empty response',
+        'INVALID_RESPONSE',
+        [...modelsAttempted, model]
+      )
     }
 
     const tokenCount = data.usageMetadata?.totalTokenCount
@@ -335,11 +386,62 @@ async function callGeminiRows(
     try {
       return JSON.parse(text)
     } catch {
-      throw new Error('Gemini returned invalid JSON')
+      throw new DigifiGeminiError(
+        'Gemini returned invalid JSON',
+        'INVALID_RESPONSE',
+        [...modelsAttempted, model]
+      )
     }
   }
 
-  throw lastError ?? new Error('Gemini request failed')
+  throw lastError ?? new DigifiGeminiError('Gemini request failed', 'UNKNOWN', modelsAttempted)
+}
+
+async function callGeminiRows(
+  models: string[],
+  prompt: string,
+  overviewImage: DigifiImagePart,
+  chunkImages: DigifiImagePart[]
+): Promise<{ data: unknown; modelUsed: string }> {
+  const attempted: string[] = []
+  let lastCapacityError: DigifiGeminiError | null = null
+
+  for (const model of models) {
+    attempted.push(model)
+    try {
+      const data = await callGeminiRowsOnModel(
+        model,
+        prompt,
+        overviewImage,
+        chunkImages,
+        attempted.slice(0, -1)
+      )
+      if (attempted.length > 1) {
+        console.info(
+          `[digifi] scan succeeded with fallback model ${model} (tried: ${attempted.join(' → ')})`
+        )
+      }
+      return { data, modelUsed: model }
+    } catch (error) {
+      if (!(error instanceof DigifiGeminiError)) {
+        throw error
+      }
+      const isLastModel = model === models[models.length - 1]
+      if (error.code === 'CAPACITY' && !isLastModel) {
+        console.warn(
+          `[digifi] model ${model} unavailable (${error.message.slice(0, 80)}…), trying ${models[attempted.length]}`
+        )
+        lastCapacityError = error
+        continue
+      }
+      throw new DigifiGeminiError(error.message, error.code, attempted)
+    }
+  }
+
+  throw (
+    lastCapacityError ??
+    new DigifiGeminiError('Gemini request failed', 'UNKNOWN', attempted)
+  )
 }
 
 export async function scanLogbookImageWithGemini(
@@ -365,7 +467,7 @@ export async function scanLogbookImageWithGemini(
   )
   const targetColumns = buildColumnList(meta.columns, meta.pageSide, meta.layout, splitIndex)
   const allowedColumnIds = new Set(targetColumns.map((column) => column.id))
-  const model = meta.useProModel ? env.proModel : env.model
+  const modelChain = getDigifiModelChain(Boolean(meta.useProModel))
   const strategyUsed: DigifiScanStrategy = chunkImages.length > 0 ? 'page-overview+row-bands' : 'page-overview'
   const overviewImage: DigifiImagePart = {
     label: 'Full-page overview image',
@@ -383,7 +485,9 @@ export async function scanLogbookImageWithGemini(
   const primaryPrompt = buildPrompt(meta, targetColumns, {
     chunkImages: labeledChunks,
   })
-  const primaryParsed = await callGeminiRows(model, primaryPrompt, overviewImage, labeledChunks)
+  const primaryResult = await callGeminiRows(modelChain, primaryPrompt, overviewImage, labeledChunks)
+  const primaryParsed = primaryResult.data
+  let modelUsed = primaryResult.modelUsed
   const primaryValidated = geminiScanResponseSchema.parse(primaryParsed)
   const primaryMappedRows = mapValidatedRows(primaryValidated.rows, allowedColumnIds, meta.rowCount)
   const primaryMerged = mergeRowsByIndex(primaryMappedRows)
@@ -404,7 +508,13 @@ export async function scanLogbookImageWithGemini(
         chunkImages: rescueChunks,
         focusRows,
       })
-      const rescueParsed = await callGeminiRows(model, rescuePrompt, overviewImage, rescueChunks)
+      const rescueResult = await callGeminiRows(modelChain, rescuePrompt, overviewImage, rescueChunks)
+      const rescueParsed = rescueResult.data
+      if (rescueResult.modelUsed !== modelUsed) {
+        console.info(
+          `[digifi] rescue scan used ${rescueResult.modelUsed} (primary used ${modelUsed})`
+        )
+      }
       const rescueValidated = geminiScanResponseSchema.parse(rescueParsed)
       const rescueMappedRows = mapValidatedRows(
         rescueValidated.rows,
@@ -426,7 +536,7 @@ export async function scanLogbookImageWithGemini(
 
   return {
     rows: finalRows,
-    modelUsed: model,
+    modelUsed,
     strategyUsed,
     chunkCount: labeledChunks.length,
     rescueAttempted,

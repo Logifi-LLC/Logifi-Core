@@ -78,7 +78,7 @@ export default defineComponent({
       else inputRef.value?.blur()
     }
 
-    /** Excel F2 / double-click: edit in place without clearing on first key. */
+    /** Excel F2 / double-click: edit in place; caret at end for small corrections. */
     function beginEdit(options: { overwrite: boolean }) {
       overwriteOnNextKey.value = options.overwrite
       focusControl()
@@ -86,7 +86,7 @@ export default defineComponent({
         const input = inputRef.value
         if (input) {
           const len = input.value.length
-          input.setSelectionRange(0, len)
+          input.setSelectionRange(len, len)
         }
       }
     }

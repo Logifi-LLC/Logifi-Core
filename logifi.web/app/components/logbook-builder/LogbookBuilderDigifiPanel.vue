@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { useLogbookBuilderDigifi } from '~/composables/useLogbookBuilderDigifi'
 import { useDigifiCompanionCapture } from '~/composables/useDigifiCompanionCapture'
 import { useAuth } from '~/composables/useAuth'
@@ -8,10 +8,15 @@ import type { DigifiCapturePhoto, DigifiPageSide } from '~/utils/digifiTypes'
 
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
+interface ScanQueueItem {
+  photoId: string
+  pageSide: DigifiPageSide
+  createdAt: string
+}
+
 const {
   scanning,
   error,
-  lastThumbnailUrl,
   lastFilledCount,
   lastScanSummary,
   scanRowWarning,
@@ -32,6 +37,15 @@ const companionMessage = ref<string | null>(null)
 const dragOverSide = ref<DigifiPageSide | null>(null)
 const scanningSide = ref<DigifiPageSide | null>(null)
 const applyingCapturedPhoto = ref(false)
+const queueStatus = ref<string | null>(null)
+
+const zonePreviewUrl = ref<Record<DigifiPageSide, string | null>>({ left: null, right: null })
+const zonePreviewObjectUrls = ref<Record<DigifiPageSide, string | null>>({ left: null, right: null })
+
+const knownPhotoIds = ref(new Set<string>())
+const processedPhotoIds = ref(new Set<string>())
+const scanQueue = ref<ScanQueueItem[]>([])
+const drainingQueue = ref(false)
 
 const {
   creatingSession,
@@ -46,6 +60,7 @@ const {
   createSession,
   loadPhotos,
   refreshSessionStatus,
+  getPhotoFile,
   getSelectedPhotoFile,
 } = useDigifiCompanionCapture()
 
@@ -59,6 +74,8 @@ const companionCaptureOrigin = computed(() => {
 })
 
 const isDark = computed(() => theme.value === 'dark')
+
+const unlabeledPhotos = computed(() => photos.value.filter((photo) => !photo.pageSide))
 
 const canScanRight = computed(() => {
   if (!canScan.value || scanning.value) return false
@@ -80,20 +97,167 @@ function canUseDropZone(pageSide: DigifiPageSide): boolean {
   return true
 }
 
-async function processFile(file: File | undefined, pageSide: DigifiPageSide) {
+function setZonePreview(pageSide: DigifiPageSide, url: string | null, isObjectUrl = false) {
+  const oldObjectUrl = zonePreviewObjectUrls.value[pageSide]
+  if (oldObjectUrl) {
+    URL.revokeObjectURL(oldObjectUrl)
+  }
+  zonePreviewUrl.value = {
+    ...zonePreviewUrl.value,
+    [pageSide]: url,
+  }
+  zonePreviewObjectUrls.value = {
+    ...zonePreviewObjectUrls.value,
+    [pageSide]: isObjectUrl ? url : null,
+  }
+}
+
+function updateQueueStatus() {
+  if (scanning.value && scanningSide.value) {
+    queueStatus.value = `Scanning ${scanningSide.value} page…`
+    return
+  }
+
+  const hasQueuedRight = scanQueue.value.some((item) => item.pageSide === 'right')
+  const hasQueuedLeft = scanQueue.value.some((item) => item.pageSide === 'left')
+  const rightBlocked =
+    layout.value === 'two-page' && !leftPageScanned.value && hasQueuedRight && !hasQueuedLeft
+
+  if (rightBlocked) {
+    queueStatus.value = 'Queued right page — waiting for left to finish'
+    return
+  }
+
+  if (scanQueue.value.length > 0) {
+    queueStatus.value = 'Preparing next scan…'
+    return
+  }
+
+  queueStatus.value = null
+}
+
+function enqueuePhoto(photo: DigifiCapturePhoto) {
+  if (!photo.pageSide) return
+  scanQueue.value = scanQueue.value.filter((item) => item.pageSide !== photo.pageSide)
+  if (!processedPhotoIds.value.has(photo.id)) {
+    scanQueue.value.push({
+      photoId: photo.id,
+      pageSide: photo.pageSide,
+      createdAt: photo.createdAt,
+    })
+  }
+}
+
+function pickNextScanJob(): ScanQueueItem | null {
+  const pending = [...scanQueue.value].sort((a, b) => {
+    if (a.pageSide !== b.pageSide) return a.pageSide === 'left' ? -1 : 1
+    return a.createdAt.localeCompare(b.createdAt)
+  })
+
+  for (const item of pending) {
+    if (item.pageSide === 'right' && layout.value === 'two-page' && !leftPageScanned.value) {
+      continue
+    }
+    return item
+  }
+  return null
+}
+
+function handleNewPhotos(newPhotos: DigifiCapturePhoto[]) {
+  for (const photo of newPhotos) {
+    if (knownPhotoIds.value.has(photo.id)) continue
+    knownPhotoIds.value.add(photo.id)
+
+    if (!photo.pageSide) {
+      companionMessage.value =
+        'A photo arrived without a page label. Use the options below to assign it, or recapture on your phone.'
+      continue
+    }
+
+    if (photo.signedUrl) {
+      setZonePreview(photo.pageSide, photo.signedUrl, false)
+    }
+    enqueuePhoto(photo)
+  }
+}
+
+async function drainScanQueue() {
+  if (drainingQueue.value || scanning.value || !canScan.value) {
+    updateQueueStatus()
+    return
+  }
+
+  const next = pickNextScanJob()
+  if (!next) {
+    updateQueueStatus()
+    return
+  }
+
+  const photo = photos.value.find((item) => item.id === next.photoId)
+  if (!photo) {
+    scanQueue.value = scanQueue.value.filter((item) => item.photoId !== next.photoId)
+    updateQueueStatus()
+    return
+  }
+
+  drainingQueue.value = true
+  scanQueue.value = scanQueue.value.filter((item) => item.photoId !== next.photoId)
+
+  try {
+    const file = await getPhotoFile(photo)
+    if (file) {
+      await processFile(file, next.pageSide, { fromQueue: true })
+      processedPhotoIds.value.add(next.photoId)
+    }
+  } catch (err: unknown) {
+    companionMessage.value = (err as Error).message || 'Could not scan captured photo.'
+  } finally {
+    drainingQueue.value = false
+    updateQueueStatus()
+    void drainScanQueue()
+  }
+}
+
+watch(
+  photos,
+  (currentPhotos) => {
+    const newPhotos = currentPhotos.filter((photo) => !knownPhotoIds.value.has(photo.id))
+    if (newPhotos.length === 0) return
+    handleNewPhotos(newPhotos)
+    void drainScanQueue()
+  },
+  { deep: true }
+)
+
+watch(scanning, (isScanning, wasScanning) => {
+  if (wasScanning && !isScanning) {
+    updateQueueStatus()
+    void drainScanQueue()
+  }
+})
+
+async function processFile(
+  file: File | undefined,
+  pageSide: DigifiPageSide,
+  options?: { fromQueue?: boolean }
+) {
   if (!file) return
   if (!isAcceptedImage(file)) {
     error.value = 'Please use a JPEG, PNG, or WebP image.'
     return
   }
-  if (!canUseDropZone(pageSide)) return
+  if (!canScan.value) return
+  if (!options?.fromQueue && !canUseDropZone(pageSide)) return
 
+  setZonePreview(pageSide, URL.createObjectURL(file), true)
   successMessage.value = null
   scanningSide.value = pageSide
+  updateQueueStatus()
   try {
     await scanPage(file, pageSide)
   } finally {
     scanningSide.value = null
+    updateQueueStatus()
   }
 
   if (!error.value && lastFilledCount.value > 0) {
@@ -151,7 +315,19 @@ async function onDrop(pageSide: DigifiPageSide, e: DragEvent) {
 
 async function createPhoneSession() {
   companionMessage.value = null
+  knownPhotoIds.value = new Set()
+  processedPhotoIds.value = new Set()
+  scanQueue.value = []
   await createSession()
+}
+
+async function refreshPhotosFromServer() {
+  await loadPhotos()
+  for (const photo of photos.value) {
+    if (photo.pageSide && photo.signedUrl) {
+      setZonePreview(photo.pageSide, photo.signedUrl, false)
+    }
+  }
 }
 
 async function copyMobileLink() {
@@ -163,18 +339,7 @@ async function copyMobileLink() {
 function capturePhotoLabel(photo: DigifiCapturePhoto): string {
   const time = new Date(photo.createdAt).toLocaleTimeString()
   const sizeKb = Math.round(photo.byteSize / 1024)
-  const side = photo.pageSide ? (photo.pageSide === 'left' ? 'Left' : 'Right') : 'Unlabeled'
-  return `${time} · ${side} · ${sizeKb} KB`
-}
-
-function pageSideBadgeClasses(pageSide: DigifiPageSide | null | undefined): string {
-  if (pageSide === 'left') {
-    return isDark.value ? 'bg-blue-500/20 text-blue-200' : 'bg-blue-100 text-blue-800'
-  }
-  if (pageSide === 'right') {
-    return isDark.value ? 'bg-violet-500/20 text-violet-200' : 'bg-violet-100 text-violet-800'
-  }
-  return isDark.value ? 'bg-white/10 text-gray-400' : 'bg-gray-200 text-gray-600'
+  return `${time} · ${sizeKb} KB`
 }
 
 async function useSelectedCapture(pageSide: DigifiPageSide) {
@@ -191,6 +356,7 @@ async function useSelectedCapture(pageSide: DigifiPageSide) {
       companionMessage.value = 'Select a captured photo first.'
       return
     }
+    setZonePreview(pageSide, selectedPhoto.value.signedUrl, false)
     await processFile(file, pageSide)
     if (!error.value) companionMessage.value = `Applied captured photo to ${pageSide} page.`
   } catch (err: unknown) {
@@ -200,22 +366,14 @@ async function useSelectedCapture(pageSide: DigifiPageSide) {
   }
 }
 
-async function scanSelectedLabeledCapture() {
-  const pageSide = selectedPhoto.value?.pageSide
-  if (!pageSide) {
-    companionMessage.value = 'This photo has no page label. Use Left or Right below, or recapture on your phone.'
-    return
-  }
-  await useSelectedCapture(pageSide)
-}
-
 function dropZoneClasses(pageSide: DigifiPageSide): string[] {
   const enabled = canUseDropZone(pageSide)
   const active = dragOverSide.value === pageSide
   const done = pageSide === 'left' && leftPageScanned.value
+  const hasPreview = Boolean(zonePreviewUrl.value[pageSide])
 
   const base = [
-    'relative flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-8 text-center transition-all min-h-[140px]',
+    'relative flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-8 text-center transition-all min-h-[180px] overflow-hidden',
     enabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-50',
   ]
 
@@ -225,12 +383,14 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
         ? 'border-blue-400 bg-blue-500/15 scale-[1.01]'
         : 'border-blue-500 bg-blue-50 scale-[1.01]'
     )
-  } else if (done && pageSide === 'left') {
+  } else if (done && pageSide === 'left' && !hasPreview) {
     base.push(
       isDark.value
         ? 'border-green-500/50 bg-green-500/10'
         : 'border-green-400 bg-green-50'
     )
+  } else if (hasPreview) {
+    base.push(isDark.value ? 'border-white/20 bg-black/20' : 'border-gray-300 bg-gray-100')
   } else {
     base.push(
       isDark.value
@@ -241,6 +401,25 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
 
   return base
 }
+
+function dropZoneHelperText(pageSide: DigifiPageSide): string {
+  if (scanningSide.value === pageSide) return 'Scanning…'
+  if (zonePreviewUrl.value[pageSide] && pageSide === 'left' && leftPageScanned.value) return 'Done — review the grid'
+  if (zonePreviewUrl.value[pageSide]) return 'Photo received'
+  if (!isAuthenticated.value) return 'Sign in to upload'
+  if (!canScan.value) return 'Configure columns first'
+  if (pageSide === 'right' && layout.value === 'two-page' && !leftPageScanned.value) {
+    return 'Scan the left page first'
+  }
+  return 'Drag & drop a photo here, or click to browse'
+}
+
+onUnmounted(() => {
+  for (const side of ['left', 'right'] as DigifiPageSide[]) {
+    const objectUrl = zonePreviewObjectUrls.value[side]
+    if (objectUrl) URL.revokeObjectURL(objectUrl)
+  }
+})
 </script>
 
 <template>
@@ -257,7 +436,8 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
         Digifi — scan paper logbook
       </h2>
       <p class="text-sm mt-1" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
-        Configure your columns (or load a template), set row count, then drag a photo onto each page zone or click to browse.
+        Configure your columns (or load a template), set row count, then drag a photo onto each page zone.
+        Phone photos appear in the zones and scan automatically.
       </p>
     </div>
 
@@ -266,7 +446,6 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
       :class="isDark ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-900'"
     >
       AI may misread handwriting. You are responsible for verifying all entries before importing.
-      Photos are sent to Google Gemini and stored temporarily (up to 24 hours). FC View credentials are never sent to AI.
     </p>
 
     <p
@@ -287,7 +466,7 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
       <template v-else>
         <li>Set `Rows` to the number of physical paper lines you expect to scan on this page.</li>
         <li v-if="layout === 'two-page'">
-        Two-page layout: left photo fills left columns; right photo fills right columns (same rows).
+          Two-page layout: left photo fills left columns; right photo fills right columns (same rows).
         </li>
         <li v-else>Single layout: left page fills from the top; right page continues on the next rows.</li>
       </template>
@@ -312,13 +491,21 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
       @change="onFileSelected('right', $event)"
     >
 
+    <p
+      v-if="queueStatus"
+      class="text-xs mb-3 rounded-lg px-3 py-2 border"
+      :class="isDark ? 'border-blue-500/30 bg-blue-500/10 text-blue-200' : 'border-blue-200 bg-blue-50 text-blue-800'"
+    >
+      {{ queueStatus }}
+    </p>
+
     <div class="grid sm:grid-cols-2 gap-4">
       <!-- Left page drop zone -->
       <div
         role="button"
         tabindex="0"
         :aria-disabled="!canUseDropZone('left')"
-        :aria-label="scanning ? 'Scanning left page' : 'Upload or drop left logbook page photo'"
+        :aria-label="scanningSide === 'left' ? 'Scanning left page' : 'Upload or drop left logbook page photo'"
         :class="dropZoneClasses('left')"
         @click="openFilePicker('left')"
         @keydown.enter.prevent="openFilePicker('left')"
@@ -328,34 +515,50 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
         @dragleave="onDragLeave('left', $event)"
         @drop="onDrop('left', $event)"
       >
-        <Icon
-          v-if="scanningSide === 'left'"
-          name="ri:loader-4-line"
-          size="32"
-          class="animate-spin text-blue-500"
+        <img
+          v-if="zonePreviewUrl.left"
+          :src="zonePreviewUrl.left"
+          alt="Left page preview"
+          class="absolute inset-0 h-full w-full object-cover"
+        >
+        <div
+          v-if="zonePreviewUrl.left"
+          class="absolute inset-0"
+          :class="isDark ? 'bg-black/40' : 'bg-white/30'"
         />
-        <Icon
-          v-else-if="leftPageScanned"
-          name="ri:check-line"
-          size="32"
-          class="text-green-500"
-        />
-        <Icon
-          v-else
-          name="ri:image-add-line"
-          size="32"
-          :class="isDark ? 'text-gray-400' : 'text-gray-500'"
-        />
-        <p class="text-sm font-semibold" :class="isDark ? 'text-white' : 'text-gray-900'">
-          {{ scanningSide === 'left' ? 'Scanning…' : '1. Left page' }}
-        </p>
-        <p class="text-xs max-w-[220px]" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
-          <template v-if="!isAuthenticated">Sign in to upload</template>
-          <template v-else-if="!canScan">Configure columns first</template>
-          <template v-else>
-            Drag &amp; drop a photo here, or click to browse
-          </template>
-        </p>
+
+        <div class="relative z-10 flex flex-col items-center gap-2">
+          <Icon
+            v-if="scanningSide === 'left'"
+            name="ri:loader-4-line"
+            size="32"
+            class="animate-spin text-blue-400 drop-shadow"
+          />
+          <Icon
+            v-else-if="leftPageScanned && !zonePreviewUrl.left"
+            name="ri:check-line"
+            size="32"
+            class="text-green-500"
+          />
+          <Icon
+            v-else-if="!zonePreviewUrl.left"
+            name="ri:image-add-line"
+            size="32"
+            :class="isDark ? 'text-gray-400' : 'text-gray-500'"
+          />
+          <p
+            class="text-sm font-semibold drop-shadow-sm"
+            :class="zonePreviewUrl.left ? (isDark ? 'text-white' : 'text-gray-900') : (isDark ? 'text-white' : 'text-gray-900')"
+          >
+            {{ scanningSide === 'left' ? 'Scanning…' : '1. Left page' }}
+          </p>
+          <p
+            class="text-xs max-w-[220px] drop-shadow-sm"
+            :class="zonePreviewUrl.left ? (isDark ? 'text-gray-200' : 'text-gray-700') : (isDark ? 'text-gray-400' : 'text-gray-600')"
+          >
+            {{ dropZoneHelperText('left') }}
+          </p>
+        </div>
       </div>
 
       <!-- Right page drop zone -->
@@ -363,7 +566,7 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
         role="button"
         tabindex="0"
         :aria-disabled="!canUseDropZone('right')"
-        :aria-label="scanning ? 'Scanning right page' : 'Upload or drop right logbook page photo'"
+        :aria-label="scanningSide === 'right' ? 'Scanning right page' : 'Upload or drop right logbook page photo'"
         :class="dropZoneClasses('right')"
         @click="openFilePicker('right')"
         @keydown.enter.prevent="openFilePicker('right')"
@@ -373,31 +576,44 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
         @dragleave="onDragLeave('right', $event)"
         @drop="onDrop('right', $event)"
       >
-        <Icon
-          v-if="scanningSide === 'right'"
-          name="ri:loader-4-line"
-          size="32"
-          class="animate-spin text-blue-500"
+        <img
+          v-if="zonePreviewUrl.right"
+          :src="zonePreviewUrl.right"
+          alt="Right page preview"
+          class="absolute inset-0 h-full w-full object-cover"
+        >
+        <div
+          v-if="zonePreviewUrl.right"
+          class="absolute inset-0"
+          :class="isDark ? 'bg-black/40' : 'bg-white/30'"
         />
-        <Icon
-          v-else
-          name="ri:image-add-line"
-          size="32"
-          :class="isDark ? 'text-gray-400' : 'text-gray-500'"
-        />
-        <p class="text-sm font-semibold" :class="isDark ? 'text-white' : 'text-gray-900'">
-          2. Right page
-        </p>
-        <p class="text-xs max-w-[220px]" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
-          <template v-if="layout === 'two-page' && !leftPageScanned">
-            Scan the left page first
-          </template>
-          <template v-else-if="!isAuthenticated">Sign in to upload</template>
-          <template v-else-if="!canScan">Configure columns first</template>
-          <template v-else>
-            Drag &amp; drop a photo here, or click to browse
-          </template>
-        </p>
+
+        <div class="relative z-10 flex flex-col items-center gap-2">
+          <Icon
+            v-if="scanningSide === 'right'"
+            name="ri:loader-4-line"
+            size="32"
+            class="animate-spin text-blue-400 drop-shadow"
+          />
+          <Icon
+            v-else-if="!zonePreviewUrl.right"
+            name="ri:image-add-line"
+            size="32"
+            :class="isDark ? 'text-gray-400' : 'text-gray-500'"
+          />
+          <p
+            class="text-sm font-semibold drop-shadow-sm"
+            :class="zonePreviewUrl.right ? (isDark ? 'text-white' : 'text-gray-900') : (isDark ? 'text-white' : 'text-gray-900')"
+          >
+            {{ scanningSide === 'right' ? 'Scanning…' : '2. Right page' }}
+          </p>
+          <p
+            class="text-xs max-w-[220px] drop-shadow-sm"
+            :class="zonePreviewUrl.right ? (isDark ? 'text-gray-200' : 'text-gray-700') : (isDark ? 'text-gray-400' : 'text-gray-600')"
+          >
+            {{ dropZoneHelperText('right') }}
+          </p>
+        </div>
       </div>
     </div>
 
@@ -424,7 +640,8 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
             Phone companion capture
           </h3>
           <p class="text-xs mt-1" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
-            On your phone, pick <strong>Left page</strong> or <strong>Right page</strong> before each photo. Labels appear here automatically.
+            On your phone, pick <strong>Left page</strong> or <strong>Right page</strong> before each photo.
+            Photos appear in the zones above and scan automatically.
           </p>
         </div>
         <button
@@ -474,7 +691,7 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
               type="button"
               class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
               :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
-              @click="loadPhotos"
+              @click="refreshPhotosFromServer"
             >
               Refresh photos
             </button>
@@ -485,17 +702,23 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
         </div>
       </div>
 
-      <div v-if="photos.length > 0" class="mt-4 space-y-3">
-        <div class="grid gap-2 sm:grid-cols-2">
-          <label class="text-xs" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
-            Captured photo
+      <details v-if="unlabeledPhotos.length > 0" class="mt-4">
+        <summary
+          class="text-xs font-semibold cursor-pointer"
+          :class="isDark ? 'text-gray-300' : 'text-gray-700'"
+        >
+          Unlabeled photos ({{ unlabeledPhotos.length }})
+        </summary>
+        <div class="mt-3 space-y-3">
+          <label class="text-xs block" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+            Select photo to assign
             <select
               v-model="selectedPhotoId"
               class="mt-1 w-full rounded-lg border px-2 py-2 text-xs"
               :class="isDark ? 'bg-gray-900 border-white/20 text-white' : 'bg-white border-gray-300 text-gray-900'"
             >
               <option
-                v-for="photo in photos"
+                v-for="photo in unlabeledPhotos"
                 :key="photo.id"
                 :value="photo.id"
               >
@@ -503,64 +726,28 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
               </option>
             </select>
           </label>
-          <div class="flex flex-col items-stretch justify-end gap-2">
+          <div class="flex flex-wrap gap-2">
             <button
-              v-if="selectedPhoto?.pageSide"
               type="button"
-              class="px-3 py-2 text-xs rounded-lg font-semibold text-white transition-colors disabled:opacity-50"
-              :class="selectedPhoto.pageSide === 'left' ? 'bg-blue-600 hover:bg-blue-500' : 'bg-violet-600 hover:bg-violet-500'"
-              :disabled="applyingCapturedPhoto || scanning || loadingPhotos || (selectedPhoto.pageSide === 'right' && !canScanRight)"
-              @click="scanSelectedLabeledCapture"
+              class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
+              :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
+              :disabled="applyingCapturedPhoto || scanning || loadingPhotos"
+              @click="useSelectedCapture('left')"
             >
-              Scan {{ selectedPhoto.pageSide === 'left' ? 'left' : 'right' }} page (from phone)
+              Assign to left
             </button>
-            <div class="flex flex-wrap gap-2">
-              <button
-                type="button"
-                class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
-                :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
-                :disabled="applyingCapturedPhoto || scanning || loadingPhotos"
-                @click="useSelectedCapture('left')"
-              >
-                Force left
-              </button>
-              <button
-                type="button"
-                class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
-                :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
-                :disabled="applyingCapturedPhoto || scanning || loadingPhotos || !canScanRight"
-                @click="useSelectedCapture('right')"
-              >
-                Force right
-              </button>
-            </div>
+            <button
+              type="button"
+              class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
+              :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
+              :disabled="applyingCapturedPhoto || scanning || loadingPhotos || !canScanRight"
+              @click="useSelectedCapture('right')"
+            >
+              Assign to right
+            </button>
           </div>
         </div>
-        <div v-if="selectedPhoto?.signedUrl" class="flex items-start gap-3">
-          <img
-            :src="selectedPhoto.signedUrl"
-            alt="Selected captured photo"
-            class="h-28 w-auto max-w-[240px] rounded-lg border object-cover"
-            :class="isDark ? 'border-white/10' : 'border-gray-200'"
-          >
-          <span
-            class="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-            :class="pageSideBadgeClasses(selectedPhoto.pageSide)"
-          >
-            {{ selectedPhoto.pageSide ? (selectedPhoto.pageSide === 'left' ? 'Left page' : 'Right page') : 'No label' }}
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="lastThumbnailUrl" class="mt-4 flex items-center gap-3">
-      <img
-        :src="lastThumbnailUrl"
-        alt="Last scanned page preview"
-        class="h-24 w-auto max-w-[200px] rounded-lg border object-cover"
-        :class="isDark ? 'border-white/10' : 'border-gray-200'"
-      >
-      <span class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-500'">Last scan preview</span>
+      </details>
     </div>
   </section>
 </template>

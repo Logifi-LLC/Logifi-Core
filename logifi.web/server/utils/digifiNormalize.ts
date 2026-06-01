@@ -19,7 +19,15 @@ const NUMERIC_KEYS: Set<LogbookColumnKey> = new Set([
   'categoryClass',
 ])
 
-const AIRPORT_KEYS: Set<LogbookColumnKey> = new Set(['departure', 'destination'])
+const AIRPORT_KEYS: Set<LogbookColumnKey> = new Set(['departure', 'destination', 'route'])
+
+const AIRPORT_TOKEN_RE = /\b[A-Z0-9]{3,4}\b/g
+
+/** Extract ICAO-like airport codes from free text (order preserved). */
+export function splitAirportCodes(value: string): string[] {
+  const matches = value.toUpperCase().match(AIRPORT_TOKEN_RE)
+  return matches ?? []
+}
 
 function normalizeNumeric(val: string): string {
   const s = val.replace(/\$/g, '').replace(/,/g, '').trim()
@@ -29,10 +37,51 @@ function normalizeNumeric(val: string): string {
   return String(Math.round(n * 10) / 10)
 }
 
-function normalizeAirport(val: string): string {
-  const s = val.trim().toUpperCase()
-  if (/^[A-Z0-9]{3,4}$/.test(s)) return s
+function normalizeAirport(val: string, fieldKey: LogbookColumnKey): string {
+  const tokens = splitAirportCodes(val)
+  if (tokens.length === 0) return val.trim()
+  if (tokens.length === 1) return tokens[0]
+  if (fieldKey === 'departure') return tokens[0]
+  if (fieldKey === 'destination') return tokens[tokens.length - 1]
+  if (fieldKey === 'route') return tokens.join(' ')
   return val.trim()
+}
+
+function reconcileRowAirports(
+  cells: Record<string, string>,
+  columns: DigifiTemplateColumn[]
+): Record<string, string> {
+  const departureCol = columns.find((c) => c.fieldKey === 'departure')
+  const destinationCol = columns.find((c) => c.fieldKey === 'destination')
+  const routeCol = columns.find((c) => c.fieldKey === 'route')
+  if (!departureCol && !destinationCol) return cells
+
+  const orderedRaw: string[] = []
+  if (departureCol) orderedRaw.push(cells[departureCol.id] ?? '')
+  if (destinationCol) orderedRaw.push(cells[destinationCol.id] ?? '')
+  if (routeCol) orderedRaw.push(cells[routeCol.id] ?? '')
+
+  const tokens = orderedRaw.flatMap((raw) => splitAirportCodes(raw))
+  if (tokens.length <= 1) {
+    const next = { ...cells }
+    const code = tokens[0]
+    if (code) {
+      if (departureCol) next[departureCol.id] = code
+      if (destinationCol) next[destinationCol.id] = code
+    }
+    return next
+  }
+
+  const first = tokens[0]
+  const last = tokens[tokens.length - 1]
+  const middle = tokens.slice(1, -1)
+  const next = { ...cells }
+  if (departureCol) next[departureCol.id] = first
+  if (destinationCol) next[destinationCol.id] = last
+  if (routeCol && middle.length > 0) {
+    next[routeCol.id] = middle.join(' ')
+  }
+  return next
 }
 
 function normalizeDate(val: string, defaultYear: number | null): string {
@@ -83,7 +132,7 @@ export function normalizeCellValue(
   if (!fieldKey) return v
   if (fieldKey === 'date') return normalizeDate(v, defaultYear)
   if (fieldKey === 'identification') return normalizeDigifiRegistrationKey(v)
-  if (AIRPORT_KEYS.has(fieldKey)) return normalizeAirport(v)
+  if (fieldKey && AIRPORT_KEYS.has(fieldKey)) return normalizeAirport(v, fieldKey)
   if (NUMERIC_KEYS.has(fieldKey) || (fieldKey === 'categoryClass' && categoryClassValue)) {
     return normalizeNumeric(v)
   }
@@ -97,8 +146,9 @@ export function normalizeScanRows(
 ): Array<{ rowIndex: number; cells: Record<string, string>; tags?: string[] }> {
   const colById = new Map(columns.map((c) => [c.id, c]))
   return rows.map((row) => {
+    const reconciledRaw = reconcileRowAirports(row.cells, columns)
     const cells: Record<string, string> = {}
-    for (const [colId, raw] of Object.entries(row.cells)) {
+    for (const [colId, raw] of Object.entries(reconciledRaw)) {
       const col = colById.get(colId)
       cells[colId] = normalizeCellValue(
         raw,

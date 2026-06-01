@@ -44,8 +44,9 @@ export function useDigifiCompanionCapture() {
     return token ? { Authorization: `Bearer ${token}` } : {}
   }
 
-  async function loadPhotos() {
-    if (!sessionId.value) return
+  async function loadPhotos(): Promise<DigifiCapturePhoto[]> {
+    if (!sessionId.value) return []
+    const previousIds = new Set(photos.value.map((photo) => photo.id))
     loadingPhotos.value = true
     try {
       const result = await $fetch<CapturePhotosResponse>('/api/digifi/capture/photos', {
@@ -53,12 +54,15 @@ export function useDigifiCompanionCapture() {
         headers: authHeaders(),
         query: { sessionId: sessionId.value },
       })
+      const newPhotos = result.photos.filter((photo) => !previousIds.has(photo.id))
       photos.value = result.photos
       if (!selectedPhotoId.value && result.photos.length > 0) {
         selectedPhotoId.value = result.photos[0].id
       }
+      return newPhotos
     } catch (error) {
       console.error('[digifi-capture] failed to load photos:', error)
+      return []
     } finally {
       loadingPhotos.value = false
     }
@@ -129,16 +133,21 @@ export function useDigifiCompanionCapture() {
     }
   }
 
-  async function getSelectedPhotoFile(): Promise<File | null> {
-    const current = selectedPhoto.value
-    if (!current?.signedUrl) return null
-    const response = await fetch(current.signedUrl)
+  async function getPhotoFile(photo: DigifiCapturePhoto): Promise<File | null> {
+    if (!photo.signedUrl) return null
+    const response = await fetch(photo.signedUrl)
     if (!response.ok) {
-      throw new Error('Could not fetch selected capture photo.')
+      throw new Error('Could not fetch capture photo.')
     }
     const blob = await response.blob()
-    const ext = current.mimeType === 'image/png' ? 'png' : current.mimeType === 'image/webp' ? 'webp' : 'jpg'
-    return new File([blob], `capture-${current.id}.${ext}`, { type: current.mimeType || blob.type })
+    const ext = photo.mimeType === 'image/png' ? 'png' : photo.mimeType === 'image/webp' ? 'webp' : 'jpg'
+    return new File([blob], `capture-${photo.id}.${ext}`, { type: photo.mimeType || blob.type })
+  }
+
+  async function getSelectedPhotoFile(): Promise<File | null> {
+    const current = selectedPhoto.value
+    if (!current) return null
+    return getPhotoFile(current)
   }
 
   onUnmounted(() => {
@@ -161,6 +170,7 @@ export function useDigifiCompanionCapture() {
     createSession,
     loadPhotos,
     refreshSessionStatus,
+    getPhotoFile,
     getSelectedPhotoFile,
   }
 }

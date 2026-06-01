@@ -352,7 +352,9 @@ async function startEdit(
   setActiveRowIndex(cell.rowIndex)
   await nextTick()
   const el = cellRefs.value.get(cellKey(cell.rowIndex, col.id))
-  el?.beginEdit?.({ overwrite: options.overwrite })
+  const beginOverwrite =
+    options.initialChar != null ? false : options.overwrite
+  el?.beginEdit?.({ overwrite: beginOverwrite })
   if (options.initialChar != null) {
     onCellInput(cell.rowIndex, col.id, options.initialChar)
   }

@@ -4,7 +4,7 @@ import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import { getSupabaseServiceClient } from '../../utils/supabaseService'
 import { digifiScanMetaSchema } from '../../utils/digifiSchema'
 import { getDigifiEnv } from '../../utils/digifiEnv'
-import { scanLogbookImageWithGemini } from '../../utils/digifiGemini'
+import { DigifiGeminiError, scanLogbookImageWithGemini } from '../../utils/digifiGemini'
 import { normalizeScanRows } from '../../utils/digifiNormalize'
 import { personalizeDigifiScanRows } from '../../utils/digifiPersonalization'
 import { analyzeDigifiScanRows } from '../../../app/utils/digifiScanDiagnostics'
@@ -177,6 +177,14 @@ export default defineEventHandler(async (event) => {
     const msg = e instanceof Error ? e.message : 'Scan failed'
     if (msg === 'DIGIFI_NOT_CONFIGURED') {
       throw createError({ statusCode: 503, statusMessage: 'Digifi scanning is not configured' })
+    }
+    if (e instanceof DigifiGeminiError && e.code === 'CAPACITY') {
+      console.error('[digifi] gemini capacity error:', msg, 'models:', e.modelsAttempted.join(' → '))
+      throw createError({
+        statusCode: 503,
+        statusMessage:
+          'The AI scan service is busy right now. Wait a minute and try again, or turn off “Higher accuracy” to use a faster model.',
+      })
     }
     console.error('[digifi] gemini error:', msg)
     throw createError({

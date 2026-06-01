@@ -284,31 +284,6 @@ function buildFcvFlightConditions(xcHours: number | null): string[] {
   return out
 }
 
-/** Recompute block-related fields from raw FC View flight (for repair/backfill). */
-export function recomputeFcvBlockFields(
-  flight: FcvFlight,
-  role: 'PIC' | 'SIC',
-  dep: string,
-  arr: string
-): {
-  blockHours: number | null
-  flight_time: Record<string, unknown>
-  flight_conditions: string[]
-  category_class_time: number | null
-} {
-  const blockHours = resolveFcvBlockHours(flight)
-  const flight_time = buildFlightTimeForFcv(blockHours, dep, arr, role)
-  const xcRaw = flight_time.crossCountry
-  const xcHours =
-    typeof xcRaw === 'number' && Number.isFinite(xcRaw) && xcRaw > 0 ? xcRaw : null
-  return {
-    blockHours,
-    flight_time,
-    flight_conditions: buildFcvFlightConditions(xcHours),
-    category_class_time: blockHours,
-  }
-}
-
 function buildFlightTimeForFcv(
   blockHours: number | null,
   dep: string,
