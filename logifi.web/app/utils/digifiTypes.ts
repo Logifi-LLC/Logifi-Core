@@ -29,6 +29,7 @@ export interface DigifiScanChunkMeta {
 
 /** Client request metadata (multipart field `meta`). */
 export interface DigifiScanMeta {
+  spreadId: string
   pageSide: DigifiPageSide
   layout: BuilderLayout
   rowCount: number
@@ -80,6 +81,8 @@ export interface DigifiScanRow {
 export interface DigifiScanResponse {
   ok: true
   scanId: string
+  credits?: number
+  creditCharged?: boolean
   rows: DigifiScanRow[]
   filledCellCount: number
   modelUsed: string
@@ -87,6 +90,17 @@ export interface DigifiScanResponse {
   chunkCount: number
   rescueAttempted: boolean
   rescueRecoveredCount: number
+  fallbackUsed?: boolean
+  modelsAttempted?: string[]
+  scanTimings?: {
+    primaryMs: number
+    rescueMs: number
+    totalMs: number
+    totalRequestMs: number
+    geminiMs: number
+    normalizeMs: number
+    personalizationMs: number
+  }
   rowsReturned: number
   distinctRowIndices: number[]
   missingRowIndices: number[]

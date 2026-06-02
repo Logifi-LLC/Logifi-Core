@@ -1,6 +1,7 @@
 import { ref, computed, inject } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { useAuth } from '~/composables/useAuth'
+import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import type {
   DigifiScanChunkMeta,
   DigifiPageSide,
@@ -13,11 +14,12 @@ import {
   formatDigifiScanWarning,
 } from '~/utils/digifiScanDiagnostics'
 
-const MAX_EDGE_PX = 2800
+/** Match server Gemini prep (digifiImagePrep) to avoid uploading oversized photos. */
+const MAX_EDGE_PX = 1024
 const JPEG_QUALITY = 0.92
 const MAX_PRIMARY_IMAGE_BYTES = 7_500_000
-const ROW_BAND_SIZE = 4
-const ROW_BAND_OVERLAP = 1
+const ROW_BAND_SIZE = 5
+const ROW_BAND_OVERLAP = 0
 const PAGE_HORIZONTAL_MARGIN_RATIO = 0.03
 const PAGE_VERTICAL_MARGIN_RATIO = 0.06
 
@@ -152,12 +154,14 @@ export function useLogbookBuilderDigifi() {
   }
 
   const { getAccessToken, isAuthenticated } = useAuth()
+  const { setCreditsFromScan, fetchBalance } = useDigifiCredits()
   const {
     visibleColumns,
     layout,
     rowCount,
     effectiveSplitIndex,
     defaultYear,
+    spreadId,
     applyScanResults,
     recordDigifiScanStatus,
     leftPageScanned,
@@ -169,6 +173,8 @@ export function useLogbookBuilderDigifi() {
   const lastThumbnailUrl = ref<string | null>(null)
   const lastFilledCount = ref(0)
   const scanRowWarning = ref<string | null>(null)
+  const scanPhase = ref<string | null>(null)
+  const scanDetail = ref<string | null>(null)
   const useProModel = ref(false)
   const lastScanSummary = ref<{
     pageSide: DigifiPageSide
@@ -190,6 +196,7 @@ export function useLogbookBuilderDigifi() {
       categoryClassValue: c.categoryClassValue,
     }))
     return {
+      spreadId: spreadId.value,
       pageSide,
       layout: layout.value,
       rowCount: rowCount.value,
@@ -227,6 +234,8 @@ export function useLogbookBuilderDigifi() {
     }
 
     scanning.value = true
+    scanPhase.value = 'Uploading image'
+    scanDetail.value = null
     error.value = null
     scanRowWarning.value = null
     lastFilledCount.value = 0
@@ -234,6 +243,7 @@ export function useLogbookBuilderDigifi() {
 
     try {
       const prepared = await prepareScanAssets(file, rowCount.value)
+      scanPhase.value = 'Reading page'
 
       const form = new FormData()
       form.append('image', prepared.imageFile)
@@ -247,6 +257,9 @@ export function useLogbookBuilderDigifi() {
         headers: authHeaders(),
         body: form,
       })
+      scanPhase.value = 'Filling rows'
+
+      setCreditsFromScan(result.credits)
 
       const applied = applyScanResults(pageSide, result.rows)
       lastFilledCount.value = applied.filled
@@ -267,7 +280,11 @@ export function useLogbookBuilderDigifi() {
         (result.reviewMessages?.length ?? 0) > 0
           ? `${result.reviewRequiredCount ?? result.reviewMessages?.length ?? 0} identification value(s) need review.`
           : null
-      scanRowWarning.value = [rowWarning, reviewWarning].filter(Boolean).join(' ')
+      const fallbackWarning =
+        result.fallbackUsed && (result.modelsAttempted?.length ?? 0) > 1
+          ? `Used fallback model path (${result.modelsAttempted?.join(' -> ')}).`
+          : null
+      scanRowWarning.value = [rowWarning, reviewWarning, fallbackWarning].filter(Boolean).join(' ')
       recordDigifiScanStatus({
         pageSide,
         expectedRowCount: rowCount.value,
@@ -297,24 +314,46 @@ export function useLogbookBuilderDigifi() {
         URL.revokeObjectURL(lastThumbnailUrl.value)
       }
       lastThumbnailUrl.value = URL.createObjectURL(prepared.previewBlob)
+      scanPhase.value = 'Applying results'
+      const creditNote =
+        result.creditCharged === false
+          ? 'No additional credit used for this scan.'
+          : null
+      scanDetail.value = [
+        result.scanTimings != null
+          ? `Scan completed in ${Math.round(result.scanTimings.totalRequestMs)}ms (Gemini ${Math.round(result.scanTimings.geminiMs)}ms).`
+          : null,
+        creditNote,
+      ]
+        .filter(Boolean)
+        .join(' ')
     } catch (e: unknown) {
       let msg = 'Scan failed. Try again with a clearer photo.'
       if (e && typeof e === 'object') {
         const err = e as {
+          statusCode?: number
           data?: { statusMessage?: string; message?: string }
           statusMessage?: string
           message?: string
         }
-        msg =
-          err.data?.statusMessage ??
-          err.data?.message ??
-          err.statusMessage ??
-          err.message ??
-          msg
+        if (err.statusCode === 402) {
+          msg =
+            err.data?.statusMessage ??
+            'Insufficient credits. Add pages from your dashboard.'
+          void fetchBalance()
+        } else {
+          msg =
+            err.data?.statusMessage ??
+            err.data?.message ??
+            err.statusMessage ??
+            err.message ??
+            msg
+        }
       }
       error.value = msg
     } finally {
       scanning.value = false
+      scanPhase.value = null
     }
   }
 
@@ -325,6 +364,8 @@ export function useLogbookBuilderDigifi() {
     lastFilledCount,
     lastScanSummary,
     scanRowWarning,
+    scanPhase,
+    scanDetail,
     useProModel,
     canScan,
     scanPage,

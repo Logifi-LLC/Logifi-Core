@@ -12,6 +12,7 @@ import {
 } from '~/utils/logbookBuilderTypes'
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
 import type { DigifiPageSide, DigifiScanCellMeta, DigifiScanRow, DigifiScanStrategy } from '~/utils/digifiTypes'
+import { createBuilderSpreadId } from '~/utils/logbookBuilderDraft'
 
 const FIELD_LABELS: Record<LogbookColumnKey, string> = {
   date: 'Date',
@@ -112,7 +113,13 @@ export function useLogbookBuilderGrid() {
   /** After a left-page scan in single layout, right page rows start at this index. */
   const singleLayoutRightStartRow: Ref<number> = ref(0)
   const leftPageScanned: Ref<boolean> = ref(false)
+  /** One credit covers left + right scans for this builder spread session. */
+  const spreadId: Ref<string> = ref(createBuilderSpreadId())
   const digifiScanStatusByPage: Ref<Partial<Record<DigifiPageSide, DigifiAppliedScanStatus>>> = ref({})
+
+  function regenerateSpreadId() {
+    spreadId.value = createBuilderSpreadId()
+  }
 
   function setActiveRowIndex(index: number | null) {
     activeRowIndex.value = index
@@ -253,6 +260,7 @@ export function useLogbookBuilderGrid() {
     const ids = cols.map((c) => c.id)
     rows.value = Array.from({ length: n }, () => createEmptyBuilderRow(ids))
     resetDigifiPageState()
+    regenerateSpreadId()
   }
 
   function clearGrid() {
@@ -261,6 +269,7 @@ export function useLogbookBuilderGrid() {
     singleLayoutRightStartRow.value = 0
     leftPageScanned.value = false
     digifiScanStatusByPage.value = {}
+    regenerateSpreadId()
   }
 
   function columnIdsForPageSide(pageSide: DigifiPageSide): string[] {
@@ -440,6 +449,8 @@ export function useLogbookBuilderGrid() {
     setActiveRowIndex,
     applyScanResults,
     leftPageScanned,
+    spreadId,
+    regenerateSpreadId,
     singleLayoutRightStartRow,
     digifiScanStatusByPage,
     recordDigifiScanStatus,

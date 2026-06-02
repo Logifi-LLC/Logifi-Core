@@ -3,11 +3,12 @@ import { randomUUID } from 'node:crypto'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import { getSupabaseServiceClient } from '../../utils/supabaseService'
 import { digifiScanMetaSchema } from '../../utils/digifiSchema'
-import { getDigifiEnv } from '../../utils/digifiEnv'
-import { DigifiGeminiError, scanLogbookImageWithGemini } from '../../utils/digifiGemini'
+import { DigifiGeminiError, getDigifiEnv } from '../../utils/digifiEnv'
+import { scanLogbookImageWithGemini } from '../../utils/digifiGemini'
 import { normalizeScanRows } from '../../utils/digifiNormalize'
 import { personalizeDigifiScanRows } from '../../utils/digifiPersonalization'
 import { analyzeDigifiScanRows } from '../../../app/utils/digifiScanDiagnostics'
+import { consumeCreditForSpread, linkSpreadChargeToScanSession } from '../../utils/creditsBalance'
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
@@ -23,6 +24,12 @@ function extForMime(mime: string): string {
  * Requires Authorization: Bearer <supabase_access_token>.
  */
 export default defineEventHandler(async (event) => {
+  const requestStartedAt = Date.now()
+  const t: Record<string, number> = {}
+  const mark = (key: string) => {
+    t[key] = Date.now()
+  }
+
   const userId = await getUserIdFromEvent(event)
   if (!userId) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
@@ -39,22 +46,14 @@ export default defineEventHandler(async (event) => {
   const supabase = getSupabaseClient(event)
   const service = getSupabaseServiceClient()
 
-  const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const { count, error: countError } = await supabase
-    .from('digifi_scan_sessions')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId)
-    .gte('created_at', dayAgo)
-
-  if (countError) {
-    console.error('[digifi] rate limit check failed:', countError.message)
-  } else if ((count ?? 0) >= env.maxScansPerDay) {
+  if (!service) {
     throw createError({
-      statusCode: 429,
-      statusMessage: `Daily scan limit reached (${env.maxScansPerDay} per day). Try again tomorrow.`,
+      statusCode: 503,
+      statusMessage: 'Digifi scanning is not configured on this server',
     })
   }
 
+  mark('afterAuth')
   const parts = await readMultipartFormData(event)
   if (!parts?.length) {
     throw createError({ statusCode: 400, statusMessage: 'Expected multipart form with image and meta' })
@@ -83,6 +82,13 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Missing image or meta field' })
   }
 
+  let meta
+  try {
+    meta = digifiScanMetaSchema.parse(JSON.parse(metaRaw))
+  } catch {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid meta JSON' })
+  }
+
   if (imageBuffer.length > env.maxImageBytes) {
     throw createError({
       statusCode: 413,
@@ -95,13 +101,6 @@ export default defineEventHandler(async (event) => {
       statusCode: 400,
       statusMessage: 'Unsupported image type. Use JPEG, PNG, or WebP.',
     })
-  }
-
-  let meta
-  try {
-    meta = digifiScanMetaSchema.parse(JSON.parse(metaRaw))
-  } catch {
-    throw createError({ statusCode: 400, statusMessage: 'Invalid meta JSON' })
   }
 
   const chunkImages = (meta.chunkedScan?.chunks ?? []).map((chunk) => {
@@ -136,8 +135,8 @@ export default defineEventHandler(async (event) => {
       .from('digifi_scan_sessions')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
+      .eq('spread_id', meta.spreadId)
       .eq('page_side', 'left')
-      .gte('created_at', dayAgo)
 
     if (!leftCount) {
       throw createError({
@@ -146,6 +145,19 @@ export default defineEventHandler(async (event) => {
       })
     }
   }
+
+  const creditResult = await consumeCreditForSpread(service, userId, {
+    spreadId: meta.spreadId,
+    layout: meta.layout,
+  })
+  if (!creditResult.ok) {
+    throw createError({
+      statusCode: 402,
+      statusMessage: 'Insufficient credits. Add pages from your dashboard.',
+    })
+  }
+
+  mark('afterCreditCheck')
 
   const scanId = randomUUID()
   const ext = extForMime(imageMime)
@@ -167,12 +179,14 @@ export default defineEventHandler(async (event) => {
 
   let geminiResult
   try {
+    mark('geminiStart')
     geminiResult = await scanLogbookImageWithGemini({
       imageBase64: imageBuffer.toString('base64'),
       mimeType: imageMime,
       meta,
       chunkImages,
     })
+    mark('afterGemini')
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Scan failed'
     if (msg === 'DIGIFI_NOT_CONFIGURED') {
@@ -186,6 +200,13 @@ export default defineEventHandler(async (event) => {
           'The AI scan service is busy right now. Wait a minute and try again.',
       })
     }
+    if (msg.toLowerCase().includes('fetch failed') || msg.toLowerCase().includes('network error')) {
+      console.error('[digifi] gemini network error:', msg)
+      throw createError({
+        statusCode: 503,
+        statusMessage: 'Could not reach the AI scan service. Check connectivity and try again.',
+      })
+    }
     console.error('[digifi] gemini error:', msg)
     throw createError({
       statusCode: 502,
@@ -194,10 +215,12 @@ export default defineEventHandler(async (event) => {
   }
 
   const normalizedRows = normalizeScanRows(geminiResult.rows, meta.columns, meta.defaultYear)
+  mark('afterNormalize')
   let personalizedRows = normalizedRows
   let reviewMessages: string[] = []
   let reviewRequiredCount = 0
   try {
+    const personalizationStartedAt = Date.now()
     const personalized = await personalizeDigifiScanRows({
       userId,
       supabase,
@@ -208,6 +231,7 @@ export default defineEventHandler(async (event) => {
     personalizedRows = personalized.rows
     reviewMessages = personalized.reviewMessages
     reviewRequiredCount = personalized.reviewRequiredCount
+    t.personalizationMs = Date.now() - personalizationStartedAt
   } catch (error) {
     console.error('[digifi] personalization failed:', error)
   }
@@ -217,6 +241,7 @@ export default defineEventHandler(async (event) => {
     user_id: userId,
     storage_path: storagePath,
     page_side: meta.pageSide,
+    spread_id: meta.spreadId,
     template_name: meta.templateName ?? null,
     layout: meta.layout,
     row_count: meta.rowCount,
@@ -226,6 +251,8 @@ export default defineEventHandler(async (event) => {
 
   if (insertError) {
     console.error('[digifi] session insert failed:', insertError.message)
+  } else if (creditResult.charged) {
+    await linkSpreadChargeToScanSession(service, userId, meta.spreadId, scanId)
   }
 
   let filledCellCount = 0
@@ -236,10 +263,23 @@ export default defineEventHandler(async (event) => {
   }
 
   const rowDiagnostics = analyzeDigifiScanRows(personalizedRows, meta.rowCount)
+  const totalMs = Date.now() - requestStartedAt
+  const geminiMs = t.afterGemini && t.geminiStart ? t.afterGemini - t.geminiStart : undefined
+  const normalizeMs = t.afterNormalize && t.afterGemini ? t.afterNormalize - t.afterGemini : undefined
+  console.info('[digifi] scan timing', {
+    totalMs,
+    geminiMs: geminiMs ?? null,
+    normalizeMs: normalizeMs ?? null,
+    personalizationMs: t.personalizationMs ?? null,
+    fallbackUsed: geminiResult.fallbackUsed,
+    modelsAttempted: geminiResult.modelsAttempted,
+  })
 
   return {
     ok: true as const,
     scanId,
+    credits: creditResult.balance,
+    creditCharged: creditResult.charged,
     rows: personalizedRows,
     filledCellCount,
     modelUsed: geminiResult.modelUsed,
@@ -247,6 +287,15 @@ export default defineEventHandler(async (event) => {
     chunkCount: geminiResult.chunkCount,
     rescueAttempted: geminiResult.rescueAttempted,
     rescueRecoveredCount: geminiResult.rescueRecoveredCount,
+    fallbackUsed: geminiResult.fallbackUsed,
+    modelsAttempted: geminiResult.modelsAttempted,
+    scanTimings: {
+      ...geminiResult.timings,
+      totalRequestMs: totalMs,
+      geminiMs: geminiMs ?? geminiResult.timings.primaryMs + geminiResult.timings.rescueMs,
+      normalizeMs: normalizeMs ?? 0,
+      personalizationMs: t.personalizationMs ?? 0,
+    },
     rowsReturned: rowDiagnostics.rowsReturned,
     distinctRowIndices: rowDiagnostics.distinctRowIndices,
     missingRowIndices: rowDiagnostics.missingRowIndices,

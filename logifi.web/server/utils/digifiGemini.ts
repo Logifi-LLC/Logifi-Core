@@ -1,26 +1,55 @@
 import {
-  GEMINI_SCAN_RESPONSE_JSON_SCHEMA,
-  geminiScanResponseSchema,
-  type DigifiScanMetaInput,
-} from './digifiSchema'
-import { DigifiGeminiError, getDigifiModelChain } from './digifiEnv'
-import { getDigifiEnv } from './digifiEnv'
+  APPROACH_TYPE_OPTIONS,
+  CATEGORY_CLASS_OPTIONS,
+  PILOT_ROLE_OPTIONS,
+  ROLE_OPTIONS,
+} from '../../app/utils/logbookBuilderTypes'
+import { analyzeDigifiScanRows } from '../../app/utils/digifiScanDiagnostics'
+import type { DigifiScanRow, DigifiScanStrategy, DigifiTemplateColumn } from '../../app/utils/digifiTypes'
+import type { LogbookColumnKey } from '../../app/utils/logbookTypes'
+import type { DigifiScanMetaInput } from './digifiSchema'
+import {
+  buildDigifiThinkingConfig,
+  computeDigifiMaxOutputTokens,
+  DigifiGeminiError,
+  getDigifiEnv,
+  getDigifiModelChain,
+  resolveDigifiMediaResolution,
+} from './digifiEnv'
+import { compressDigifiImageForGemini } from './digifiImagePrep'
+import { countRowsWithCells, isScanResponseIncomplete } from './digifiScanValidation'
+import { parseDigifiTsvResponse } from './digifiTsvParser'
 
-export { DigifiGeminiError } from './digifiEnv'
-export type { DigifiGeminiErrorCode } from './digifiEnv'
+interface DigifiGeminiGenerationOptions {
+  maxOutputTokens: number
+  mediaResolution: string
+}
 
 const GEMINI_RETRY_DELAYS_MS = [2000, 5000, 10000]
-/** Full logbook pages with many rows/columns need a large JSON payload; default caps often truncate. */
-const GEMINI_MAX_OUTPUT_TOKENS = 65_536
 
-/** Parse model text as JSON; strips optional markdown fences some models still emit. */
-export function parseGeminiJsonText(text: string): unknown {
-  let trimmed = text.trim()
-  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i)
-  if (fenced) {
-    trimmed = fenced[1].trim()
-  }
-  return JSON.parse(trimmed)
+interface DigifiImagePart {
+  label: string
+  imageBase64: string
+  mimeType: string
+}
+
+interface ScanLogbookImageWithGeminiOptions {
+  imageBase64: string
+  mimeType: string
+  meta: DigifiScanMetaInput
+  chunkImages?: Array<{
+    partName: string
+    rowStart: number
+    rowEnd: number
+    imageBase64: string
+    mimeType: string
+  }>
+}
+
+export interface DigifiScanTimings {
+  primaryMs: number
+  rescueMs: number
+  totalMs: number
 }
 
 function collectGeminiResponseText(
@@ -40,44 +69,10 @@ function isCapacityHttpStatus(status: number): boolean {
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
-import {
-  APPROACH_TYPE_OPTIONS,
-  CATEGORY_CLASS_OPTIONS,
-  PILOT_ROLE_OPTIONS,
-  ROLE_OPTIONS,
-} from '../../app/utils/logbookBuilderTypes'
-import { analyzeDigifiScanRows } from '../../app/utils/digifiScanDiagnostics'
-import type { DigifiScanStrategy, DigifiTemplateColumn } from '../../app/utils/digifiTypes'
-import type { LogbookColumnKey } from '../../app/utils/logbookTypes'
-
-interface DigifiImagePart {
-  label: string
-  imageBase64: string
-  mimeType: string
-}
-
-interface DigifiScanRowResult {
-  rowIndex: number
-  cells: Record<string, string>
-  tags?: string[]
-}
-
-interface ScanLogbookImageWithGeminiOptions {
-  imageBase64: string
-  mimeType: string
-  meta: DigifiScanMetaInput
-  chunkImages?: Array<{
-    partName: string
-    rowStart: number
-    rowEnd: number
-    imageBase64: string
-    mimeType: string
-  }>
-}
 
 function columnTypeHint(fieldKey: LogbookColumnKey | null): string {
   if (!fieldKey) return 'text'
-  if (fieldKey === 'date') return 'date (MM/DD, MM/DD/YY, or YYYY-MM-DD as written)'
+  if (fieldKey === 'date') return 'date'
   if (
     [
       'pic',
@@ -95,16 +90,14 @@ function columnTypeHint(fieldKey: LogbookColumnKey | null): string {
       'total',
     ].includes(fieldKey)
   ) {
-    return 'decimal flight time or count (e.g. 1.2)'
+    return 'decimal time or count'
   }
-  if (fieldKey === 'role') return `select one of: ${ROLE_OPTIONS.map((r) => r.value).join(', ')}`
-  if (fieldKey === 'approachType') return `select one of: ${APPROACH_TYPE_OPTIONS.join(', ')}`
-  if (fieldKey === 'categoryClass') return `select one of: ${CATEGORY_CLASS_OPTIONS.join(', ')}`
-  if (fieldKey === 'pilotRole') return `select one of: ${PILOT_ROLE_OPTIONS.filter((p) => p.value).map((p) => p.value).join(', ')}`
-  if (fieldKey === 'departure' || fieldKey === 'destination') {
-    return 'single departure or final destination airport code only (3-4 letters, one code)'
-  }
-  if (fieldKey === 'route') return 'intermediate stops only (one or more 3-4 letter codes, space-separated)'
+  if (fieldKey === 'role') return ROLE_OPTIONS.map((r) => r.value).join('|')
+  if (fieldKey === 'approachType') return APPROACH_TYPE_OPTIONS.join('|')
+  if (fieldKey === 'categoryClass') return CATEGORY_CLASS_OPTIONS.join('|')
+  if (fieldKey === 'pilotRole') return PILOT_ROLE_OPTIONS.filter((p) => p.value).map((p) => p.value).join('|')
+  if (fieldKey === 'departure' || fieldKey === 'destination') return 'airport code'
+  if (fieldKey === 'route') return 'route codes'
   return 'text'
 }
 
@@ -115,20 +108,13 @@ function buildAirportPromptRules(columns: DigifiTemplateColumn[]): string {
   if (!hasDeparture && !hasDestination) return ''
 
   const lines = [
-    '- Airports: put only ONE airport code in the From/departure column (first airport of the trip).',
-    '- Put only ONE airport code in the To/destination column (final airport where the flight ended).',
+    'From/departure: one airport code only.',
+    'To/destination: final airport code only.',
   ]
   if (hasRoute) {
-    lines.push('- Put intermediate stops in the Route column only (not duplicated in From/To).')
-  } else {
-    lines.push('- Do not combine multiple airport codes in a single From or To cell.')
+    lines.push('Route: intermediate stops only.')
   }
-  lines.push(
-    '- Example round trip KLAF-KFKR-KLAF on paper:' +
-      (hasRoute ? ' From KLAF, Route KFKR, To KLAF' : ' From KLAF, To KLAF') +
-      ' (not To "KFKR KLAF" and do not put the origin in Route).'
-  )
-  return lines.join('\n')
+  return lines.join(' ')
 }
 
 function buildColumnList(columns: DigifiTemplateColumn[], pageSide: 'left' | 'right', layout: string, splitIndex: number): DigifiTemplateColumn[] {
@@ -138,114 +124,70 @@ function buildColumnList(columns: DigifiTemplateColumn[], pageSide: 'left' | 'ri
   return sorted.slice(splitIndex)
 }
 
+const TSV_FORMAT_RULES = `Output format (strict):
+- Plain text only. No JSON, no markdown, no code fences, no headers.
+- One line per non-empty cell: rowIndex<TAB>columnId<TAB>value
+- Use the exact columnId strings listed below.
+- Flight times as decimal hours (1.5 not 1:30).
+- Dates as written on the paper.`
+
 function buildPrompt(
   meta: DigifiScanMetaInput,
   targetColumns: DigifiTemplateColumn[],
   options: {
+    includeRowBands: boolean
     chunkImages: Array<{ rowStart: number; rowEnd: number }>
     focusRows?: number[]
   }
 ): string {
   const colLines = targetColumns
-    .map(
-      (c) =>
-        `- columnId "${c.id}": label "${c.label}" -> field ${c.fieldKey ?? 'unmapped'} (${columnTypeHint(c.fieldKey)})`
-    )
-    .join('\n')
+    .map((c) => `${c.id} (${c.label}, ${columnTypeHint(c.fieldKey)})`)
+    .join('; ')
+
   const airportRules = buildAirportPromptRules(targetColumns)
 
   const pageDesc =
     meta.layout === 'two-page'
       ? meta.pageSide === 'left'
-        ? 'LEFT page of an open logbook spread (columns on the left side of the spread only).'
-        : 'RIGHT page of an open logbook spread (columns on the right side of the spread only).'
+        ? 'LEFT page of a two-page spread.'
+        : 'RIGHT page of a two-page spread.'
       : meta.pageSide === 'left'
-        ? 'LEFT paper page; extract rows starting at row index 0.'
-        : 'RIGHT paper page; extract rows starting at row index 0 (these map to the next rows in the grid after the left page was scanned).'
+        ? 'LEFT paper page.'
+        : 'RIGHT paper page.'
 
-  const chunkLines = options.chunkImages.length > 0
-    ? options.chunkImages
-        .map((chunk) => `- Attached zoomed row-band image covers rowIndex ${chunk.rowStart} through ${chunk.rowEnd}.`)
-        .join('\n')
-    : '- No zoomed row-band images were attached; rely on the overview page image only.'
+  const bandHint =
+    options.includeRowBands && options.chunkImages.length > 0
+      ? `Additional images are zoomed row bands for rows ${options.chunkImages.map((c) => `${c.rowStart}-${c.rowEnd}`).join(', ')}. Prefer band images for handwriting.`
+      : 'Use the attached page image only.'
 
   if (options.focusRows?.length) {
     const focusList = options.focusRows.join(', ')
-    return `You are transcribing specific missing pilot logbook rows into structured data.
-
+    return `Transcribe pilot logbook cells for rowIndex only: ${focusList}.
 ${pageDesc}
+${bandHint}
 
-The first attached image is the full-page overview. Additional images are zoomed row-band crops.
-${chunkLines}
+${TSV_FORMAT_RULES}
 
-Only return these rowIndex values: ${focusList}.
-Return exactly one row object for each requested rowIndex. Do not return any other rowIndex values.
-
-Rules:
-- Use the zoomed row-band images as the primary source for handwriting.
-- Use empty string "" only if a cell is blank or completely illegible; otherwise make your best guess.
-- Match handwriting to the column labels listed below.
-- Flight times as decimal hours (e.g. 1.5 not 1:30).
-- Dates as written on the paper.
-${airportRules ? `${airportRules}\n` : ''}- Return ONLY valid JSON matching the schema.
-
-Columns to extract on this page:
+Columns (columnId):
 ${colLines}
-`
+${airportRules ? `Airports: ${airportRules}` : ''}`
   }
 
-  return `You are transcribing a pilot paper logbook page into structured data.
-
+  return `Transcribe this pilot logbook page.
 ${pageDesc}
+${bandHint}
 
-The first attached image is the full-page overview. Additional images are zoomed row-band crops.
-${chunkLines}
+Extract rowIndex 0 through ${meta.rowCount - 1} (top to bottom). Include every row that has readable handwriting.
 
-Extract exactly ${meta.rowCount} physical row lines on this page (rowIndex 0 through ${meta.rowCount - 1}, top to bottom).
-Return one row object for every line position - do not skip rows even if handwriting is faint.
+${TSV_FORMAT_RULES}
 
-Rules:
-- Use the zoomed row-band images as the primary source for handwriting and the overview image for context.
-- rowIndex must be contiguous from 0 upward with no gaps.
-- If the same row appears in multiple row-band images, merge the best reading into a single row object.
-- Use empty string "" only if a cell is blank or completely illegible; otherwise make your best guess.
-- Do not stop early: include all ${meta.rowCount} rows.
-- Match handwriting to the column labels listed below.
-- Flight times as decimal hours (e.g. 1.5 not 1:30).
-- Dates as written on the paper.
-${airportRules ? `${airportRules}\n` : ''}- Return ONLY valid JSON matching the schema.
-
-Columns to extract on this page:
+Columns (columnId):
 ${colLines}
-`
+${airportRules ? `Airports: ${airportRules}` : ''}`
 }
 
-function mapValidatedRows(
-  validatedRows: Array<{ rowIndex: number; cells: Array<{ columnId: string; value: string }>; tags?: string[] }>,
-  allowedColumnIds: Set<string>,
-  maxRowCount: number,
-  focusRows?: Set<number>
-): DigifiScanRowResult[] {
-  return validatedRows
-    .filter((row) => row.rowIndex >= 0 && row.rowIndex < maxRowCount)
-    .filter((row) => !focusRows || focusRows.has(row.rowIndex))
-    .map((row) => {
-      const cells: Record<string, string> = {}
-      for (const cell of row.cells) {
-        if (allowedColumnIds.has(cell.columnId)) {
-          cells[cell.columnId] = cell.value ?? ''
-        }
-      }
-      return {
-        rowIndex: row.rowIndex,
-        cells,
-        tags: row.tags,
-      }
-    })
-}
-
-function mergeRowsByIndex(rows: DigifiScanRowResult[]): { rows: DigifiScanRowResult[]; duplicateRowIndices: number[] } {
-  const rowMap = new Map<number, DigifiScanRowResult>()
+function mergeRowsByIndex(rows: DigifiScanRow[]): { rows: DigifiScanRow[]; duplicateRowIndices: number[] } {
+  const rowMap = new Map<number, DigifiScanRow>()
   const duplicateRowIndices = new Set<number>()
 
   for (const row of rows) {
@@ -281,10 +223,10 @@ function mergeRowsByIndex(rows: DigifiScanRowResult[]): { rows: DigifiScanRowRes
 }
 
 function mergePrimaryAndRescueRows(
-  primaryRows: DigifiScanRowResult[],
-  rescueRows: DigifiScanRowResult[]
-): DigifiScanRowResult[] {
-  const rowMap = new Map<number, DigifiScanRowResult>(
+  primaryRows: DigifiScanRow[],
+  rescueRows: DigifiScanRow[]
+): DigifiScanRow[] {
+  const rowMap = new Map<number, DigifiScanRow>(
     primaryRows.map((row) => [
       row.rowIndex,
       {
@@ -327,13 +269,17 @@ async function callGeminiRowsOnModel(
   prompt: string,
   overviewImage: DigifiImagePart,
   chunkImages: DigifiImagePart[],
-  modelsAttempted: string[]
-): Promise<unknown> {
+  allowedColumnIds: Set<string>,
+  maxRowCount: number,
+  focusRows: Set<number> | undefined,
+  modelsAttempted: string[],
+  generation: DigifiGeminiGenerationOptions
+): Promise<DigifiScanRow[]> {
   const env = getDigifiEnv()
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.geminiApiKey)}`
   const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
     { text: prompt },
-    { text: 'Full-page overview image:' },
+    { text: 'Logbook page image:' },
     {
       inline_data: {
         mime_type: overviewImage.mimeType,
@@ -352,23 +298,43 @@ async function callGeminiRowsOnModel(
     })
   }
 
+  const thinkingConfig = buildDigifiThinkingConfig(model, env.geminiThinkingLevel)
+
   const body = {
     contents: [{ parts }],
     generationConfig: {
       temperature: 0.1,
-      maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS,
-      responseMimeType: 'application/json',
-      responseSchema: GEMINI_SCAN_RESPONSE_JSON_SCHEMA,
+      maxOutputTokens: generation.maxOutputTokens,
+      mediaResolution: generation.mediaResolution,
+      thinkingConfig,
     },
   }
 
   let lastError: DigifiGeminiError | null = null
   for (let attempt = 0; attempt < GEMINI_RETRY_DELAYS_MS.length; attempt++) {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    let res: Response
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    } catch (error) {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : 'Network request failed'
+      lastError = new DigifiGeminiError(
+        `Gemini network error: ${message}`,
+        'CAPACITY',
+        [...modelsAttempted, model]
+      )
+      if (attempt < GEMINI_RETRY_DELAYS_MS.length - 1) {
+        await sleep(GEMINI_RETRY_DELAYS_MS[attempt])
+        continue
+      }
+      throw lastError
+    }
     if (!res.ok) {
       const errText = await res.text().catch(() => '')
       const code = isCapacityHttpStatus(res.status) ? 'CAPACITY' : 'UNKNOWN'
@@ -389,7 +355,12 @@ async function callGeminiRowsOnModel(
         content?: { parts?: Array<{ text?: string }> }
         finishReason?: string
       }>
-      usageMetadata?: { totalTokenCount?: number }
+      usageMetadata?: {
+        totalTokenCount?: number
+        promptTokenCount?: number
+        candidatesTokenCount?: number
+        thoughtsTokenCount?: number
+      }
     }
     const candidate = data.candidates?.[0]
     const text = collectGeminiResponseText(candidate?.content?.parts)
@@ -401,28 +372,50 @@ async function callGeminiRowsOnModel(
       )
     }
 
-    const tokenCount = data.usageMetadata?.totalTokenCount
-    if (tokenCount != null) {
-      console.info('[digifi] scan tokens:', tokenCount, 'model:', model)
+    const usage = data.usageMetadata
+    if (usage?.totalTokenCount != null) {
+      console.info('[digifi] scan tokens:', {
+        total: usage.totalTokenCount,
+        prompt: usage.promptTokenCount,
+        output: usage.candidatesTokenCount,
+        thinking: usage.thoughtsTokenCount ?? 0,
+        thinkingConfig,
+        model,
+        imageParts: 1 + chunkImages.length,
+        maxOutputTokens: generation.maxOutputTokens,
+      })
     }
 
     const finishReason = candidate?.finishReason
     if (finishReason === 'MAX_TOKENS') {
       console.warn(
-        `[digifi] model ${model} hit output token limit (${text.length} chars); response likely truncated`
+        `[digifi] model ${model} hit output token limit (${text.length} chars, thinking=${usage?.thoughtsTokenCount ?? '?'}); response truncated`
+      )
+      throw new DigifiGeminiError(
+        'Gemini response was truncated',
+        'INVALID_RESPONSE',
+        [...modelsAttempted, model]
       )
     }
 
     try {
-      return parseGeminiJsonText(text)
-    } catch {
+      const rows = parseDigifiTsvResponse(text, allowedColumnIds, maxRowCount, focusRows)
+      if (rows.length === 0 && finishReason !== 'STOP') {
+        throw new Error('no rows parsed')
+      }
+      if (!focusRows && isScanResponseIncomplete(rows, maxRowCount)) {
+        throw new Error('too few rows parsed')
+      }
+      return rows
+    } catch (error) {
+      if (error instanceof DigifiGeminiError) throw error
       console.warn(
-        `[digifi] invalid JSON from ${model}: ${text.length} chars, finishReason=${finishReason ?? 'unknown'}, tail=${JSON.stringify(text.slice(-120))}`
+        `[digifi] invalid TSV from ${model}: ${text.length} chars, finishReason=${finishReason ?? 'unknown'}, tail=${JSON.stringify(text.slice(-120))}`
       )
       throw new DigifiGeminiError(
         finishReason === 'MAX_TOKENS'
           ? 'Gemini response was truncated'
-          : 'Gemini returned invalid JSON',
+          : 'Gemini returned unparseable text',
         'INVALID_RESPONSE',
         [...modelsAttempted, model]
       )
@@ -436,30 +429,42 @@ async function callGeminiRows(
   models: string[],
   prompt: string,
   overviewImage: DigifiImagePart,
-  chunkImages: DigifiImagePart[]
-): Promise<{ data: unknown; modelUsed: string }> {
+  chunkImages: DigifiImagePart[],
+  allowedColumnIds: Set<string>,
+  maxRowCount: number,
+  focusRows: Set<number> | undefined,
+  generation: DigifiGeminiGenerationOptions,
+  options?: { allowFallbackOnInvalidResponse?: boolean }
+): Promise<{ rows: DigifiScanRow[]; modelUsed: string }> {
   const attempted: string[] = []
   let lastCapacityError: DigifiGeminiError | null = null
 
   for (const model of models) {
     attempted.push(model)
     try {
-      const data = await callGeminiRowsOnModel(
+      const rows = await callGeminiRowsOnModel(
         model,
         prompt,
         overviewImage,
         chunkImages,
-        attempted.slice(0, -1)
+        allowedColumnIds,
+        maxRowCount,
+        focusRows,
+        attempted.slice(0, -1),
+        generation
       )
       if (attempted.length > 1) {
         console.info(
           `[digifi] scan succeeded with fallback model ${model} (tried: ${attempted.join(' → ')})`
         )
       }
-      return { data, modelUsed: model }
+      return { rows, modelUsed: model }
     } catch (error) {
       if (!(error instanceof DigifiGeminiError)) {
         throw error
+      }
+      if (error.code === 'INVALID_RESPONSE' && options?.allowFallbackOnInvalidResponse === false) {
+        throw new DigifiGeminiError(error.message, error.code, attempted)
       }
       const isLastModel = model === models[models.length - 1]
       if ((error.code === 'CAPACITY' || error.code === 'INVALID_RESPONSE') && !isLastModel) {
@@ -483,17 +488,30 @@ async function callGeminiRows(
   )
 }
 
+async function prepareGeminiImage(base64: string, mimeType: string): Promise<DigifiImagePart> {
+  const compressed = await compressDigifiImageForGemini(Buffer.from(base64, 'base64'), mimeType)
+  return {
+    label: 'Logbook page image',
+    imageBase64: compressed.base64,
+    mimeType: compressed.mimeType,
+  }
+}
+
 export async function scanLogbookImageWithGemini(
   options: ScanLogbookImageWithGeminiOptions
 ): Promise<{
-  rows: DigifiScanRowResult[]
+  rows: DigifiScanRow[]
   modelUsed: string
   strategyUsed: DigifiScanStrategy
   chunkCount: number
   rescueAttempted: boolean
   rescueRecoveredCount: number
   duplicateRowIndices: number[]
+  fallbackUsed: boolean
+  modelsAttempted: string[]
+  timings: DigifiScanTimings
 }> {
+  const startedAt = Date.now()
   const env = getDigifiEnv()
   if (!env.geminiApiKey) {
     throw new Error('DIGIFI_NOT_CONFIGURED')
@@ -506,80 +524,176 @@ export async function scanLogbookImageWithGemini(
   )
   const targetColumns = buildColumnList(meta.columns, meta.pageSide, meta.layout, splitIndex)
   const allowedColumnIds = new Set(targetColumns.map((column) => column.id))
-  const modelChain = getDigifiModelChain(Boolean(meta.useProModel))
-  const strategyUsed: DigifiScanStrategy = chunkImages.length > 0 ? 'page-overview+row-bands' : 'page-overview'
-  const overviewImage: DigifiImagePart = {
-    label: 'Full-page overview image',
-    imageBase64,
-    mimeType,
+  const useProModel = Boolean(meta.useProModel)
+  const modelChain = getDigifiModelChain(useProModel)
+  const sendRowBands = chunkImages.length > 0 && !env.disableRowBandsToGemini
+  const strategyUsed: DigifiScanStrategy = sendRowBands ? 'page-overview+row-bands' : 'page-overview'
+  const generation: DigifiGeminiGenerationOptions = {
+    maxOutputTokens: computeDigifiMaxOutputTokens(
+      meta.rowCount,
+      targetColumns.length,
+      env.geminiMaxOutputTokensCap
+    ),
+    mediaResolution: resolveDigifiMediaResolution(useProModel, env.geminiMediaResolution),
   }
-  const labeledChunks = chunkImages.map((chunk) => ({
-    label: `Zoomed row-band image for rowIndex ${chunk.rowStart} through ${chunk.rowEnd}:`,
+
+  const overviewImage = await prepareGeminiImage(imageBase64, mimeType)
+  const labeledChunks = sendRowBands
+    ? await Promise.all(
+        chunkImages.map(async (chunk) => {
+          const compressed = await compressDigifiImageForGemini(
+            Buffer.from(chunk.imageBase64, 'base64'),
+            chunk.mimeType
+          )
+          return {
+            label: `Row band rows ${chunk.rowStart}-${chunk.rowEnd}:`,
+            imageBase64: compressed.base64,
+            mimeType: compressed.mimeType,
+            rowStart: chunk.rowStart,
+            rowEnd: chunk.rowEnd,
+          }
+        })
+      )
+    : []
+
+  const apiChunks: DigifiImagePart[] = labeledChunks.map((chunk) => ({
+    label: chunk.label,
     imageBase64: chunk.imageBase64,
     mimeType: chunk.mimeType,
-    rowStart: chunk.rowStart,
-    rowEnd: chunk.rowEnd,
   }))
 
-  const primaryPrompt = buildPrompt(meta, targetColumns, {
-    chunkImages: labeledChunks,
-  })
-  const primaryResult = await callGeminiRows(modelChain, primaryPrompt, overviewImage, labeledChunks)
-  const primaryParsed = primaryResult.data
-  let modelUsed = primaryResult.modelUsed
-  const primaryValidated = geminiScanResponseSchema.parse(primaryParsed)
-  const primaryMappedRows = mapValidatedRows(primaryValidated.rows, allowedColumnIds, meta.rowCount)
-  const primaryMerged = mergeRowsByIndex(primaryMappedRows)
-  let finalRows = primaryMerged.rows
-  let duplicateRowIndices = new Set(primaryMerged.duplicateRowIndices)
+  let modelUsed = modelChain[0]
+  let fallbackUsed = false
+  const modelsAttempted = new Set<string>()
   let rescueAttempted = false
   let rescueRecoveredCount = 0
+  let primaryMs = 0
+  let rescueMs = 0
+  let finalRows: DigifiScanRow[] = []
+  let duplicateRowIndices = new Set<number>()
+
+  const buildScanPrompt = (focusRows?: number[]) =>
+    buildPrompt(meta, targetColumns, {
+      includeRowBands: sendRowBands,
+      chunkImages: labeledChunks,
+      focusRows,
+    })
+
+  const runModelChainFallback = async () => {
+    rescueAttempted = true
+    const rescueStartedAt = Date.now()
+    const fallbackResult = await callGeminiRows(
+      modelChain,
+      buildScanPrompt(),
+      overviewImage,
+      apiChunks,
+      allowedColumnIds,
+      meta.rowCount,
+      undefined,
+      generation
+    )
+    modelUsed = fallbackResult.modelUsed
+    modelsAttempted.add(fallbackResult.modelUsed)
+    fallbackUsed = fallbackResult.modelUsed !== modelChain[0]
+    const fallbackMerged = mergeRowsByIndex(fallbackResult.rows)
+    finalRows = fallbackMerged.rows
+    duplicateRowIndices = new Set(fallbackMerged.duplicateRowIndices)
+    rescueMs += Date.now() - rescueStartedAt
+  }
+
+  const primaryStartedAt = Date.now()
+  try {
+    const primaryResult = await callGeminiRows(
+      [modelChain[0]],
+      buildScanPrompt(),
+      overviewImage,
+      apiChunks,
+      allowedColumnIds,
+      meta.rowCount,
+      undefined,
+      generation,
+      { allowFallbackOnInvalidResponse: false }
+    )
+    modelUsed = primaryResult.modelUsed
+    modelsAttempted.add(primaryResult.modelUsed)
+    const primaryMerged = mergeRowsByIndex(primaryResult.rows)
+    finalRows = primaryMerged.rows
+    duplicateRowIndices = new Set(primaryMerged.duplicateRowIndices)
+    if (isScanResponseIncomplete(finalRows, meta.rowCount)) {
+      console.warn(
+        `[digifi] primary scan returned ${countRowsWithCells(finalRows)}/${meta.rowCount} rows; running model fallback`
+      )
+      await runModelChainFallback()
+    }
+  } catch (error) {
+    if (!(error instanceof DigifiGeminiError)) {
+      throw error
+    }
+    await runModelChainFallback()
+  } finally {
+    primaryMs = Date.now() - primaryStartedAt
+  }
 
   const primaryDiagnostics = analyzeDigifiScanRows(finalRows, meta.rowCount)
-  if (labeledChunks.length > 0 && primaryDiagnostics.missingRowIndices.length > 0) {
+  if (primaryDiagnostics.missingRowIndices.length > 0) {
     rescueAttempted = true
     const focusRows = primaryDiagnostics.missingRowIndices
-    const rescueChunks = labeledChunks.filter((chunk) =>
-      focusRows.some((rowIndex) => rowIndex >= chunk.rowStart && rowIndex <= chunk.rowEnd)
+    const rescueStartedAt = Date.now()
+    const rescueResult = await callGeminiRows(
+      modelChain,
+      buildScanPrompt(focusRows),
+      overviewImage,
+      sendRowBands
+        ? labeledChunks
+            .filter((chunk) =>
+              focusRows.some((row) => row >= chunk.rowStart && row <= chunk.rowEnd)
+            )
+            .map((chunk) => ({
+              label: chunk.label,
+              imageBase64: chunk.imageBase64,
+              mimeType: chunk.mimeType,
+            }))
+        : [],
+      allowedColumnIds,
+      meta.rowCount,
+      new Set(focusRows),
+      generation
     )
-    if (rescueChunks.length > 0) {
-      const rescuePrompt = buildPrompt(meta, targetColumns, {
-        chunkImages: rescueChunks,
-        focusRows,
-      })
-      const rescueResult = await callGeminiRows(modelChain, rescuePrompt, overviewImage, rescueChunks)
-      const rescueParsed = rescueResult.data
-      if (rescueResult.modelUsed !== modelUsed) {
-        console.info(
-          `[digifi] rescue scan used ${rescueResult.modelUsed} (primary used ${modelUsed})`
-        )
-      }
-      const rescueValidated = geminiScanResponseSchema.parse(rescueParsed)
-      const rescueMappedRows = mapValidatedRows(
-        rescueValidated.rows,
-        allowedColumnIds,
-        meta.rowCount,
-        new Set(focusRows)
+    modelsAttempted.add(rescueResult.modelUsed)
+    if (rescueResult.modelUsed !== modelChain[0]) fallbackUsed = true
+    if (rescueResult.modelUsed !== modelUsed) {
+      console.info(
+        `[digifi] rescue scan used ${rescueResult.modelUsed} (primary used ${modelUsed})`
       )
-      const rescueMerged = mergeRowsByIndex(rescueMappedRows)
-      finalRows = mergePrimaryAndRescueRows(finalRows, rescueMerged.rows)
-      for (const rowIndex of rescueMerged.duplicateRowIndices) {
-        duplicateRowIndices.add(rowIndex)
-      }
-      const finalDiagnostics = analyzeDigifiScanRows(finalRows, meta.rowCount)
-      rescueRecoveredCount = focusRows.filter(
-        (rowIndex) => !finalDiagnostics.missingRowIndices.includes(rowIndex)
-      ).length
     }
+    const rescueMerged = mergeRowsByIndex(rescueResult.rows)
+    finalRows = mergePrimaryAndRescueRows(finalRows, rescueMerged.rows)
+    for (const rowIndex of rescueMerged.duplicateRowIndices) {
+      duplicateRowIndices.add(rowIndex)
+    }
+    const finalDiagnostics = analyzeDigifiScanRows(finalRows, meta.rowCount)
+    rescueRecoveredCount = focusRows.filter(
+      (rowIndex) => !finalDiagnostics.missingRowIndices.includes(rowIndex)
+    ).length
+    rescueMs += Date.now() - rescueStartedAt
+  }
+
+  const timings: DigifiScanTimings = {
+    primaryMs,
+    rescueMs,
+    totalMs: Date.now() - startedAt,
   }
 
   return {
     rows: finalRows,
     modelUsed,
     strategyUsed,
-    chunkCount: labeledChunks.length,
+    chunkCount: chunkImages.length,
     rescueAttempted,
     rescueRecoveredCount,
     duplicateRowIndices: [...duplicateRowIndices].sort((a, b) => a - b),
+    fallbackUsed,
+    modelsAttempted: [...modelsAttempted],
+    timings,
   }
 }

@@ -2,6 +2,7 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useLogbookBuilderDigifi } from '~/composables/useLogbookBuilderDigifi'
 import { useDigifiCompanionCapture } from '~/composables/useDigifiCompanionCapture'
+import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { useAuth } from '~/composables/useAuth'
 import { useTheme } from '~/composables/useTheme'
 import type { DigifiCapturePhoto, DigifiPageSide } from '~/utils/digifiTypes'
@@ -20,6 +21,8 @@ const {
   lastFilledCount,
   lastScanSummary,
   scanRowWarning,
+  scanPhase,
+  scanDetail,
   useProModel,
   canScan,
   scanPage,
@@ -28,7 +31,9 @@ const {
 } = useLogbookBuilderDigifi()
 
 const { isAuthenticated } = useAuth()
+const { fetchBalance } = useDigifiCredits()
 const { theme } = useTheme()
+const showAddCreditsModal = ref(false)
 
 const leftInputRef = ref<HTMLInputElement | null>(null)
 const rightInputRef = ref<HTMLInputElement | null>(null)
@@ -271,6 +276,7 @@ async function processFile(
   } else if (!error.value) {
     successMessage.value = 'Scan complete. Review the grid and edit any misread cells.'
   }
+  void fetchBalance()
 }
 
 async function onFileSelected(pageSide: DigifiPageSide, event: Event) {
@@ -427,22 +433,15 @@ onUnmounted(() => {
     class="rounded-3xl p-4 sm:p-6 font-quicksand border shadow-[0_20px_50px_rgba(0,0,0,0.08)]"
     :class="isDark ? 'border-white/10 bg-gray-900' : 'border-gray-200 bg-white'"
   >
-    <div class="mb-4">
-      <h2
-        class="text-lg font-semibold flex items-center gap-2"
-        :class="isDark ? 'text-white' : 'text-gray-900'"
-      >
-        <Icon name="ri:scan-line" size="22" class="text-blue-500" />
-        Digifi — scan paper logbook
-      </h2>
-      <p class="text-sm mt-1" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
-        Configure your columns (or load a template), set row count, then drag a photo onto each page zone.
-        Phone photos appear in the zones and scan automatically.
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-4">
+      <p class="text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+        Upload page photos to pre-fill the grid.
       </p>
+      <DigifiCreditsIndicator compact @open-checkout="showAddCreditsModal = true" />
     </div>
 
     <p
-      class="text-xs mb-4 rounded-lg px-3 py-2 border"
+      class="text-xs mb-4 rounded-lg px-3 py-2 border inline-block"
       :class="isDark ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-900'"
     >
       AI may misread handwriting. You are responsible for verifying all entries before importing.
@@ -456,21 +455,6 @@ onUnmounted(() => {
     >
       {{ scanRowWarning }}
     </p>
-
-    <ul
-      class="text-sm mb-4 space-y-1 list-disc list-inside"
-      :class="isDark ? 'text-gray-400' : 'text-gray-600'"
-    >
-      <li v-if="!isAuthenticated">Sign in to use Digifi.</li>
-      <li v-else-if="!canScan">Add at least one column before scanning.</li>
-      <template v-else>
-        <li>Set `Rows` to the number of physical paper lines you expect to scan on this page.</li>
-        <li v-if="layout === 'two-page'">
-          Two-page layout: left photo fills left columns; right photo fills right columns (same rows).
-        </li>
-        <li v-else>Single layout: left page fills from the top; right page continues on the next rows.</li>
-      </template>
-    </ul>
 
     <input
       ref="leftInputRef"
@@ -497,6 +481,13 @@ onUnmounted(() => {
       :class="isDark ? 'border-blue-500/30 bg-blue-500/10 text-blue-200' : 'border-blue-200 bg-blue-50 text-blue-800'"
     >
       {{ queueStatus }}
+    </p>
+    <p
+      v-if="scanning && scanPhase"
+      class="text-xs mb-3 rounded-lg px-3 py-2 border"
+      :class="isDark ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-100' : 'border-indigo-200 bg-indigo-50 text-indigo-800'"
+    >
+      {{ scanPhase }}…
     </p>
 
     <div class="grid sm:grid-cols-2 gap-4">
@@ -629,10 +620,13 @@ onUnmounted(() => {
 
     <p v-if="error" class="mt-3 text-sm text-red-500 dark:text-red-400">{{ error }}</p>
     <p v-else-if="successMessage" class="mt-3 text-sm text-green-600 dark:text-green-400">{{ successMessage }}</p>
+    <p v-if="scanDetail && !error" class="mt-2 text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
+      {{ scanDetail }}
+    </p>
 
     <div
-      class="mt-6 rounded-2xl border p-4 sm:p-5"
-      :class="isDark ? 'border-white/10 bg-white/[0.03]' : 'border-gray-200 bg-gray-50/60'"
+      class="mt-6 pt-5 border-t"
+      :class="isDark ? 'border-white/10' : 'border-gray-200'"
     >
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -749,5 +743,10 @@ onUnmounted(() => {
         </div>
       </details>
     </div>
+
+    <DigifiAddCreditsModal
+      :is-open="showAddCreditsModal"
+      @close="showAddCreditsModal = false"
+    />
   </section>
 </template>

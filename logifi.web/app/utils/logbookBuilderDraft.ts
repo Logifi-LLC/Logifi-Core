@@ -8,9 +8,17 @@ import type {
 export const BUILDER_DRAFT_STORAGE_KEY = 'logifi-logbook-builder-draft'
 export const BUILDER_LAST_TEMPLATE_STORAGE_KEY = 'logifi-logbook-builder-last-template-id'
 
+export function createBuilderSpreadId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
+}
+
 export interface LogbookBuilderDraft {
   version: 1
   savedAt: string
+  spreadId: string
   columns: BuilderTemplateColumn[]
   layout: BuilderLayout
   rowCount: number
@@ -40,6 +48,9 @@ export function readDraftFromStorage(): LogbookBuilderDraft | null {
     const parsed = JSON.parse(raw) as LogbookBuilderDraft
     if (parsed?.version !== 1 || !Array.isArray(parsed.rows) || !Array.isArray(parsed.columns)) {
       return null
+    }
+    if (!parsed.spreadId || typeof parsed.spreadId !== 'string') {
+      parsed.spreadId = createBuilderSpreadId()
     }
     return parsed
   } catch {

@@ -266,6 +266,7 @@ export type Database = {
           user_id: string
           storage_path: string
           page_side: string
+          spread_id: string | null
           template_name: string | null
           layout: string
           row_count: number
@@ -278,6 +279,7 @@ export type Database = {
           user_id: string
           storage_path: string
           page_side: string
+          spread_id?: string | null
           template_name?: string | null
           layout?: string
           row_count?: number
@@ -290,12 +292,80 @@ export type Database = {
           user_id?: string
           storage_path?: string
           page_side?: string
+          spread_id?: string | null
           template_name?: string | null
           layout?: string
           row_count?: number
           model_used?: string | null
           created_at?: string
           expires_at?: string
+        }
+      }
+      digifi_spread_charges: {
+        Row: {
+          id: string
+          user_id: string
+          spread_id: string
+          layout: string
+          credits_charged: number
+          first_scan_session_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          spread_id: string
+          layout: string
+          credits_charged?: number
+          first_scan_session_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          spread_id?: string
+          layout?: string
+          credits_charged?: number
+          first_scan_session_id?: string | null
+          created_at?: string
+        }
+      }
+      credit_transactions: {
+        Row: {
+          id: string
+          user_id: string
+          amount: number
+          balance_after: number
+          type: string
+          description: string | null
+          spread_id: string | null
+          payment_method: string | null
+          reference_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          amount: number
+          balance_after: number
+          type: string
+          description?: string | null
+          spread_id?: string | null
+          payment_method?: string | null
+          reference_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          amount?: number
+          balance_after?: number
+          type?: string
+          description?: string | null
+          spread_id?: string | null
+          payment_method?: string | null
+          reference_id?: string | null
+          created_at?: string
         }
       }
       digifi_capture_sessions: {
@@ -407,6 +477,50 @@ export type Database = {
           sample_count?: number
           created_at?: string
           last_corrected_at?: string
+        }
+      }
+      user_profiles: {
+        Row: {
+          id: string
+          full_name: string | null
+          certificate_number: string | null
+          date_of_birth: string | null
+          place_of_birth: string | null
+          residential_address: Record<string, unknown> | null
+          mailing_address: Record<string, unknown> | null
+          preferences: Record<string, unknown> | null
+          column_config: Record<string, unknown> | null
+          credits: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          full_name?: string | null
+          certificate_number?: string | null
+          date_of_birth?: string | null
+          place_of_birth?: string | null
+          residential_address?: Record<string, unknown> | null
+          mailing_address?: Record<string, unknown> | null
+          preferences?: Record<string, unknown> | null
+          column_config?: Record<string, unknown> | null
+          credits?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          full_name?: string | null
+          certificate_number?: string | null
+          date_of_birth?: string | null
+          place_of_birth?: string | null
+          residential_address?: Record<string, unknown> | null
+          mailing_address?: Record<string, unknown> | null
+          preferences?: Record<string, unknown> | null
+          column_config?: Record<string, unknown> | null
+          credits?: number
+          created_at?: string
+          updated_at?: string
         }
       }
       logbook_builder_templates: {

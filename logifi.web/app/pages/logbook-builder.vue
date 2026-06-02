@@ -113,6 +113,9 @@ watchEffect(async (onCleanup) => {
 })
 
 const { theme, isDark } = useTheme()
+const showDigifiPanel = ref(false)
+const showInstructions = ref(false)
+const showDigifiChecklist = ref(false)
 </script>
 
 <template>
@@ -143,34 +146,148 @@ const { theme, isDark } = useTheme()
           Back to Logbook
         </NuxtLink>
       </div>
+
+      <section
+        class="rounded-2xl border px-4 py-3 sm:px-5 sm:py-4"
+        :class="theme === 'dark' ? 'border-white/10 bg-gray-900' : 'border-gray-200 bg-white'"
+      >
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            :class="[
+              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold font-quicksand transition-colors',
+              theme === 'dark'
+                ? 'border-white/15 text-gray-200 hover:bg-white/10'
+                : 'border-gray-300 text-gray-800 hover:bg-gray-100',
+            ]"
+            @click="showInstructions = !showInstructions"
+          >
+            <Icon :name="showInstructions ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'" size="16" />
+            Instructions
+          </button>
+          <button
+            type="button"
+            :class="[
+              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold font-quicksand transition-colors',
+              theme === 'dark'
+                ? 'border-blue-400/30 text-blue-300 hover:bg-blue-500/10'
+                : 'border-blue-300 text-blue-700 hover:bg-blue-50',
+            ]"
+            @click="showDigifiChecklist = !showDigifiChecklist"
+          >
+            <Icon :name="showDigifiChecklist ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'" size="16" />
+            Digifi Checklist
+          </button>
+        </div>
+
+        <Transition
+          enter-active-class="transition-all duration-200 ease-out"
+          enter-from-class="opacity-0 max-h-0"
+          enter-to-class="opacity-100 max-h-[1200px]"
+          leave-active-class="transition-all duration-150 ease-in"
+          leave-from-class="opacity-100 max-h-[1200px]"
+          leave-to-class="opacity-0 max-h-0"
+        >
+          <div v-if="showInstructions" class="mt-3 overflow-hidden">
+            <div
+              class="rounded-xl border p-4"
+              :class="theme === 'dark' ? 'border-white/10 bg-white/[0.03]' : 'border-gray-200 bg-gray-50'"
+            >
+              <h2 class="text-sm font-semibold mb-2" :class="theme === 'dark' ? 'text-white' : 'text-gray-900'">
+                Add Pages Instructions
+              </h2>
+              <ul
+                class="space-y-1.5 text-sm list-disc list-inside"
+                :class="theme === 'dark' ? 'text-gray-300' : 'text-gray-700'"
+              >
+                <li>Use the toolbar to set rows, layout, and columns before editing or scanning.</li>
+                <li>Type directly in the grid to transcribe pages manually when not using Digifi.</li>
+                <li>Use Validate to review totals and issues, then Import to add entries to your logbook.</li>
+              </ul>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition
+          enter-active-class="transition-all duration-200 ease-out"
+          enter-from-class="opacity-0 max-h-0"
+          enter-to-class="opacity-100 max-h-[1200px]"
+          leave-active-class="transition-all duration-150 ease-in"
+          leave-from-class="opacity-100 max-h-[1200px]"
+          leave-to-class="opacity-0 max-h-0"
+        >
+          <div v-if="showDigifiChecklist" class="mt-3 overflow-hidden">
+            <div
+              class="rounded-xl border p-4"
+              :class="theme === 'dark' ? 'border-blue-500/30 bg-blue-500/10' : 'border-blue-200 bg-blue-50'"
+            >
+              <h2 class="text-sm font-semibold mb-2" :class="theme === 'dark' ? 'text-blue-100' : 'text-blue-900'">
+                Pre-Scan Digifi Checklist
+              </h2>
+              <ul
+                class="space-y-1.5 text-sm list-disc list-inside"
+                :class="theme === 'dark' ? 'text-blue-100/90' : 'text-blue-900/90'"
+              >
+                <li>Confirm row count and layout (single-page or two-page) are correct.</li>
+                <li>Verify columns/template match the paper page format.</li>
+                <li>Ensure the page photo is flat, bright, and fully in frame.</li>
+                <li>In two-page mode, scan the left page first before scanning the right page.</li>
+                <li>After scan, review all AI-filled cells before importing.</li>
+              </ul>
+            </div>
+          </div>
+        </Transition>
+      </section>
       <LogbookBuilderToolbar />
-      <LogbookBuilderDigifiPanel />
+
+      <section
+        class="rounded-3xl p-4 sm:p-6 font-quicksand border shadow-[0_20px_50px_rgba(0,0,0,0.08)]"
+        :class="theme === 'dark' ? 'border-white/10 bg-gray-900' : 'border-gray-200 bg-white'"
+      >
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2
+              class="text-base sm:text-lg font-semibold flex items-center gap-2"
+              :class="theme === 'dark' ? 'text-white' : 'text-gray-900'"
+            >
+              <Icon name="ri:scan-line" size="20" class="text-blue-500" />
+              Digifi scanner (optional)
+            </h2>
+            <p class="text-sm mt-1" :class="theme === 'dark' ? 'text-gray-400' : 'text-gray-600'">
+              Use Digifi only when you want AI to pre-fill rows from paper page photos.
+            </p>
+          </div>
+          <button
+            type="button"
+            :class="[
+              'inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold font-quicksand transition-colors',
+              theme === 'dark'
+                ? 'border-blue-400/40 text-blue-300 hover:bg-blue-500/10'
+                : 'border-blue-300 text-blue-700 hover:bg-blue-50',
+            ]"
+            @click="showDigifiPanel = !showDigifiPanel"
+          >
+            <Icon :name="showDigifiPanel ? 'ri:subtract-line' : 'ri:add-line'" size="16" />
+            {{ showDigifiPanel ? 'Hide Digifi Scanner' : 'Open Digifi Scanner' }}
+          </button>
+        </div>
+
+        <Transition
+          enter-active-class="transition-all duration-200 ease-out"
+          enter-from-class="opacity-0 max-h-0"
+          enter-to-class="opacity-100 max-h-[2200px]"
+          leave-active-class="transition-all duration-150 ease-in"
+          leave-from-class="opacity-100 max-h-[2200px]"
+          leave-to-class="opacity-0 max-h-0"
+        >
+          <div v-if="showDigifiPanel" class="mt-4 overflow-hidden">
+            <LogbookBuilderDigifiPanel />
+          </div>
+        </Transition>
+      </section>
+
       <LogbookBuilderGrid ref="gridRef" />
       <LogbookBuilderValidateBar />
-      <section
-        class="rounded-3xl p-4 sm:p-6 font-quicksand border shadow-[0_20px_50px_rgba(0,0,0,0.15)]"
-        :class="theme === 'dark'
-          ? 'border-white/10 bg-gray-900'
-          : 'border-gray-200 bg-white'"
-      >
-        <h2
-          class="text-base font-semibold mb-3"
-          :class="theme === 'dark' ? 'text-white' : 'text-gray-900'"
-        >
-          How to use
-        </h2>
-        <ul
-          class="space-y-2 text-sm list-disc list-inside"
-          :class="theme === 'dark' ? 'text-gray-300' : 'text-gray-700'"
-        >
-          <li>Use this grid to <strong>transcribe entries from a paper logbook</strong>, or use <strong>Digifi</strong> above to scan paper pages with AI, then review and edit before import.</li>
-          <li><strong>Digifi:</strong> Configure columns (or load a template), set row count, then scan the left and right paper pages. AI pre-fills the grid; always verify before importing.</li>
-          <li><strong>Toolbar:</strong> Set the number of rows; choose single-page or two-page layout (and “Columns on left” for two-page); add or remove columns; sign in to save or load templates.</li>
-          <li><strong>Grid (Excel-style):</strong> Click to select a cell; type to replace its value. Double-click or F2 to edit in place. Arrow keys move the selection; Shift+arrow extends it. Tab / Enter move between cells; Shift+Enter moves up. Ctrl/Cmd+C, X, V for copy, cut, paste; Delete clears the selection. Ctrl+D fill down, Ctrl+R fill right; Ctrl+arrow jumps to the edge of filled cells; Home/End move across the row; Ctrl+Home/End jump to the first or last used cell. Drag the fill handle on the selection corner to copy values. Undo (Ctrl+Z) is not available—your draft is restored automatically when you return to this page. Drag column headers to reorder; drag the right edge to resize.</li>
-          <li><strong>Approaches:</strong> Use the <strong>Approach</strong> column for counts, and the <strong>Approach Type</strong> dropdown (ILS, RNAV, Visual, etc.) when you want the type tracked. If the type is only written in remarks, you can leave the dropdown blank and the system will still count the approaches.</li>
-          <li>Click <strong>Validate</strong> to check your data and see a summary with column totals. Then click <strong>Import</strong> on the confirmation step to add the entries to your logbook.</li>
-        </ul>
-      </section>
     </div>
   </div>
 </template>

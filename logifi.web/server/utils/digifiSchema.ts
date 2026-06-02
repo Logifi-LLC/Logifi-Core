@@ -49,6 +49,7 @@ const digifiScanChunkSchema = z.object({
 })
 
 export const digifiScanMetaSchema = z.object({
+  spreadId: z.string().uuid(),
   pageSide: z.enum(['left', 'right']),
   layout: z.enum(['single', 'two-page']),
   rowCount: z.number().int().min(1).max(100),

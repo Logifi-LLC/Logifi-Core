@@ -5342,6 +5342,11 @@ const handleUpdateEmail = async () => {
 
   const trimmed = accountEmail.value.trim()
 
+  if (!currentPassword.value) {
+    emailErrorMessage.value = 'Please enter your current password.'
+    return
+  }
+
   if (!trimmed) {
     emailErrorMessage.value = 'Please enter an email address.'
     return
@@ -5360,6 +5365,26 @@ const handleUpdateEmail = async () => {
   isUpdatingEmail.value = true
 
   try {
+    if (user.value?.email) {
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: user.value.email,
+        password: currentPassword.value
+      })
+
+      if (reauthError) {
+        const message = reauthError.message || 'Unable to verify current password.'
+        const lower = message.toLowerCase()
+        if (lower.includes('invalid login credentials')) {
+          emailErrorMessage.value = 'Current password is incorrect.'
+        } else if (lower.includes('session') || lower.includes('reauth')) {
+          emailErrorMessage.value = 'Your session has expired. Please sign out and sign back in, then try again.'
+        } else {
+          emailErrorMessage.value = message
+        }
+        return
+      }
+    }
+
     const { data, error } = await supabase.auth.updateUser({ email: trimmed })
 
     if (error) {
@@ -5386,6 +5411,8 @@ const handleUpdateEmail = async () => {
 
     emailSuccessMessage.value =
       'Email updated. If required by your provider, a verification email has been sent.'
+    currentPassword.value = ''
+    accountEmail.value = ''
   } catch (err: any) {
     const message = err?.message || 'Unable to update email. Please try again.'
     emailErrorMessage.value = message

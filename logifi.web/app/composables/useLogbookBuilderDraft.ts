@@ -1,9 +1,9 @@
 import { watch, type Ref } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import {
-  BUILDER_DRAFT_STORAGE_KEY,
   clearDraftStorage,
   columnsToTemplateColumns,
+  createBuilderSpreadId,
   draftHasContent,
   readDraftFromStorage,
   type LogbookBuilderDraft,
@@ -17,6 +17,7 @@ export function buildDraftFromGrid(grid: Grid): LogbookBuilderDraft {
   return {
     version: 1,
     savedAt: new Date().toISOString(),
+    spreadId: grid.spreadId.value,
     columns: columnsToTemplateColumns(grid.columns.value),
     layout: grid.layout.value,
     rowCount: grid.rowCount.value,
@@ -65,6 +66,7 @@ export function restoreDraftToGrid(grid: Grid, draft: LogbookBuilderDraft): void
   })
   grid.leftPageScanned.value = draft.leftPageScanned
   grid.singleLayoutRightStartRow.value = draft.singleLayoutRightStartRow
+  grid.spreadId.value = draft.spreadId || createBuilderSpreadId()
 }
 
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null
@@ -121,6 +123,7 @@ export function setupBuilderDraftAutosave(grid: Grid, debounceMs = 500): () => v
   const stopYear = watch(grid.defaultYear, scheduleSave)
   const stopLeft = watch(grid.leftPageScanned, scheduleSave)
   const stopRightStart = watch(grid.singleLayoutRightStartRow, scheduleSave)
+  const stopSpreadId = watch(grid.spreadId, scheduleSave)
 
   return () => {
     if (autosaveTimer) clearTimeout(autosaveTimer)
@@ -134,7 +137,6 @@ export function setupBuilderDraftAutosave(grid: Grid, debounceMs = 500): () => v
     stopYear()
     stopLeft()
     stopRightStart()
+    stopSpreadId()
   }
 }
-
-export { BUILDER_DRAFT_STORAGE_KEY, draftHasContent }

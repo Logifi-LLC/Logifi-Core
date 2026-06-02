@@ -27,7 +27,7 @@ export class DigifiGeminiError extends Error {
 }
 
 /** Stay in the Gemini 3.x line — avoid silent downgrade to 2.x (much weaker for logbook OCR). */
-const DEFAULT_FLASH_FALLBACKS = ['gemini-3-flash-preview', 'gemini-3.1-flash-lite']
+const DEFAULT_FLASH_FALLBACKS = ['gemini-3.5-flash', 'gemini-3.1-flash-lite']
 /** Pro unavailable → 3.5 Flash (near-Pro per Google), then other 3.x flash tiers. */
 const DEFAULT_PRO_FALLBACKS = ['gemini-3.5-flash', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite']
 
@@ -85,7 +85,7 @@ export function getDigifiEnv() {
       process.env.NUXT_DIGIFI_MODEL,
       process.env.DIGIFI_MODEL,
       config.digifiModel
-    ) || 'gemini-3.5-flash',
+    ) || 'gemini-3-flash-preview',
     modelFallbacks: modelFallbacksRaw ? parseModelList(modelFallbacksRaw) : [],
     proModel: pick(
       process.env.NUXT_DIGIFI_PRO_MODEL,
@@ -105,5 +105,88 @@ export function getDigifiEnv() {
       )
     ),
     maxImageBytes: 8 * 1024 * 1024,
+    /** Upper cap for maxOutputTokens (scaled per page via computeDigifiMaxOutputTokens). */
+    geminiMaxOutputTokensCap: Math.min(
+      20_000,
+      Math.max(
+        8192,
+        parseInt(
+          pick(
+            process.env.NUXT_DIGIFI_GEMINI_MAX_OUTPUT_TOKENS,
+            process.env.DIGIFI_GEMINI_MAX_OUTPUT_TOKENS,
+            '8192'
+          ) || '8192',
+          10
+        )
+      )
+    ),
+    geminiMediaResolution:
+      pick(
+        process.env.NUXT_DIGIFI_GEMINI_MEDIA_RESOLUTION,
+        process.env.DIGIFI_GEMINI_MEDIA_RESOLUTION,
+        'MEDIA_RESOLUTION_MEDIUM'
+      ) || 'MEDIA_RESOLUTION_MEDIUM',
+    /** Set DIGIFI_SEND_ROW_BANDS=false to stop sending client row-band crops to Gemini. */
+    disableRowBandsToGemini:
+      pick(
+        process.env.NUXT_DIGIFI_SEND_ROW_BANDS,
+        process.env.DIGIFI_SEND_ROW_BANDS,
+        'true'
+      ).toLowerCase() === 'false',
+    /**
+     * Gemini 3.x thinking_level (REST: generationConfig.thinkingConfig.thinkingLevel).
+     * Use "low" for OCR — enough reasoning for row/column alignment without default "medium" cost.
+     */
+    geminiThinkingLevel: normalizeGeminiThinkingLevel(
+      pick(
+        process.env.NUXT_DIGIFI_GEMINI_THINKING_LEVEL,
+        process.env.DIGIFI_GEMINI_THINKING_LEVEL,
+        'low'
+      ) || 'low'
+    ),
   }
+}
+
+const GEMINI_THINKING_LEVELS = ['minimal', 'low', 'medium', 'high'] as const
+export type DigifiGeminiThinkingLevel = (typeof GEMINI_THINKING_LEVELS)[number]
+
+function normalizeGeminiThinkingLevel(value: string): DigifiGeminiThinkingLevel {
+  const normalized = value.trim().toLowerCase()
+  if ((GEMINI_THINKING_LEVELS as readonly string[]).includes(normalized)) {
+    return normalized as DigifiGeminiThinkingLevel
+  }
+  return 'low'
+}
+
+/**
+ * Gemini 3.x (incl. 3.5 Flash): thinkingConfig.thinkingLevel only — never mix with thinkingBudget.
+ * Gemini 2.5: thinkingBudget 0 (2.5 does not use thinkingLevel).
+ * @see https://ai.google.dev/gemini-api/docs/thinking
+ */
+export function buildDigifiThinkingConfig(
+  model: string,
+  thinkingLevel: DigifiGeminiThinkingLevel
+): { thinkingLevel: DigifiGeminiThinkingLevel } | { thinkingBudget: number } {
+  if (/gemini-3/i.test(model)) {
+    return { thinkingLevel }
+  }
+  return { thinkingBudget: 0 }
+}
+
+/** Scale output budget by page size; visible TSV shares cap with thinking when level is not minimal. */
+export function computeDigifiMaxOutputTokens(
+  rowCount: number,
+  columnCount: number,
+  cap: number
+): number {
+  const scaled = 1024 + rowCount * Math.max(1, columnCount) * 12
+  return Math.min(cap, Math.max(8192, scaled))
+}
+
+export function resolveDigifiMediaResolution(
+  useProModel: boolean,
+  envDefault: string
+): string {
+  if (useProModel) return 'MEDIA_RESOLUTION_HIGH'
+  return envDefault
 }
