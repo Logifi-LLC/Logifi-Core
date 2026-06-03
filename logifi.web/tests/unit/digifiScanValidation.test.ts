@@ -7,14 +7,12 @@ import {
 
 describe('computeDigifiMaxOutputTokens', () => {
   it('scales with row and column count up to cap', () => {
-    expect(computeDigifiMaxOutputTokens(13, 10, 20_000)).toBe(8192)
-    expect(computeDigifiMaxOutputTokens(40, 15, 20_000)).toBe(
-      Math.min(20_000, 1024 + 40 * 15 * 12)
-    )
+    expect(computeDigifiMaxOutputTokens(13, 10, 20_000)).toBe(12_288)
+    expect(computeDigifiMaxOutputTokens(100, 20, 20_000)).toBe(20_000)
   })
 
-  it('never goes below 8192', () => {
-    expect(computeDigifiMaxOutputTokens(1, 1, 20_000)).toBe(8192)
+  it('never goes below 12288 floor', () => {
+    expect(computeDigifiMaxOutputTokens(1, 1, 20_000)).toBe(12_288)
   })
 })
 

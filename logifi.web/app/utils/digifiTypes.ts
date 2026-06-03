@@ -37,7 +37,6 @@ export interface DigifiScanMeta {
   defaultYear: number | null
   templateName?: string
   columns: DigifiTemplateColumn[]
-  useProModel?: boolean
   chunkedScan?: {
     strategy: Extract<DigifiScanStrategy, 'page-overview+row-bands'>
     chunkSize: number
@@ -92,6 +91,8 @@ export interface DigifiScanResponse {
   rescueRecoveredCount: number
   fallbackUsed?: boolean
   modelsAttempted?: string[]
+  /** generateContent HTTP requests for this page (1 expected with default settings). */
+  geminiApiCallCount?: number
   scanTimings?: {
     primaryMs: number
     rescueMs: number

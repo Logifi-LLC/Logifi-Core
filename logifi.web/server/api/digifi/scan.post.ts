@@ -200,6 +200,17 @@ export default defineEventHandler(async (event) => {
           'The AI scan service is busy right now. Wait a minute and try again.',
       })
     }
+    if (
+      e instanceof DigifiGeminiError &&
+      (e.code === 'CONFIG' || msg.includes('404'))
+    ) {
+      console.error('[digifi] gemini model error:', msg, 'models:', e.modelsAttempted.join(' → '))
+      throw createError({
+        statusCode: 503,
+        statusMessage:
+          'The AI scan model is not available on this API key. Restart the dev server after pulling latest config, or set NUXT_DIGIFI_MODEL=gemini-3.5-flash in .env.',
+      })
+    }
     if (msg.toLowerCase().includes('fetch failed') || msg.toLowerCase().includes('network error')) {
       console.error('[digifi] gemini network error:', msg)
       throw createError({
@@ -273,6 +284,7 @@ export default defineEventHandler(async (event) => {
     personalizationMs: t.personalizationMs ?? null,
     fallbackUsed: geminiResult.fallbackUsed,
     modelsAttempted: geminiResult.modelsAttempted,
+    geminiApiCallCount: geminiResult.geminiApiCallCount,
   })
 
   return {
@@ -289,6 +301,7 @@ export default defineEventHandler(async (event) => {
     rescueRecoveredCount: geminiResult.rescueRecoveredCount,
     fallbackUsed: geminiResult.fallbackUsed,
     modelsAttempted: geminiResult.modelsAttempted,
+    geminiApiCallCount: geminiResult.geminiApiCallCount,
     scanTimings: {
       ...geminiResult.timings,
       totalRequestMs: totalMs,

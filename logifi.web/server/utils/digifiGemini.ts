@@ -15,6 +15,9 @@ import {
   getDigifiEnv,
   getDigifiModelChain,
   resolveDigifiMediaResolution,
+  resolveDigifiThinkingLevel,
+  shouldTryNextDigifiModel,
+  type DigifiGeminiThinkingLevel,
 } from './digifiEnv'
 import { compressDigifiImageForGemini } from './digifiImagePrep'
 import { countRowsWithCells, isScanResponseIncomplete } from './digifiScanValidation'
@@ -23,9 +26,17 @@ import { parseDigifiTsvResponse } from './digifiTsvParser'
 interface DigifiGeminiGenerationOptions {
   maxOutputTokens: number
   mediaResolution: string
+  thinkingLevel: DigifiGeminiThinkingLevel
 }
 
-const GEMINI_RETRY_DELAYS_MS = [2000, 5000, 10000]
+/** Counts each generativelanguage.googleapis.com generateContent HTTP request (incl. retries). */
+export interface DigifiGeminiCallStats {
+  generateContentRequests: number
+}
+
+/** Initial request + one backoff retry per model (avoids triple-billing the same call). */
+const GEMINI_MAX_ATTEMPTS = 2
+const GEMINI_RETRY_DELAY_MS = 2500
 
 interface DigifiImagePart {
   label: string
@@ -273,7 +284,8 @@ async function callGeminiRowsOnModel(
   maxRowCount: number,
   focusRows: Set<number> | undefined,
   modelsAttempted: string[],
-  generation: DigifiGeminiGenerationOptions
+  generation: DigifiGeminiGenerationOptions,
+  callStats?: DigifiGeminiCallStats
 ): Promise<DigifiScanRow[]> {
   const env = getDigifiEnv()
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.geminiApiKey)}`
@@ -298,7 +310,7 @@ async function callGeminiRowsOnModel(
     })
   }
 
-  const thinkingConfig = buildDigifiThinkingConfig(model, env.geminiThinkingLevel)
+  const thinkingConfig = buildDigifiThinkingConfig(model, generation.thinkingLevel)
 
   const body = {
     contents: [{ parts }],
@@ -311,9 +323,10 @@ async function callGeminiRowsOnModel(
   }
 
   let lastError: DigifiGeminiError | null = null
-  for (let attempt = 0; attempt < GEMINI_RETRY_DELAYS_MS.length; attempt++) {
+  for (let attempt = 0; attempt < GEMINI_MAX_ATTEMPTS; attempt++) {
     let res: Response
     try {
+      if (callStats) callStats.generateContentRequests += 1
       res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -329,22 +342,27 @@ async function callGeminiRowsOnModel(
         'CAPACITY',
         [...modelsAttempted, model]
       )
-      if (attempt < GEMINI_RETRY_DELAYS_MS.length - 1) {
-        await sleep(GEMINI_RETRY_DELAYS_MS[attempt])
+      if (attempt < GEMINI_MAX_ATTEMPTS - 1) {
+        await sleep(GEMINI_RETRY_DELAY_MS)
         continue
       }
       throw lastError
     }
     if (!res.ok) {
       const errText = await res.text().catch(() => '')
-      const code = isCapacityHttpStatus(res.status) ? 'CAPACITY' : 'UNKNOWN'
+      const code =
+        res.status === 404
+          ? 'CONFIG'
+          : isCapacityHttpStatus(res.status)
+            ? 'CAPACITY'
+            : 'UNKNOWN'
       lastError = new DigifiGeminiError(
         `Gemini API ${res.status}: ${errText.slice(0, 200)}`,
         code,
         [...modelsAttempted, model]
       )
-      if (isRetryableHttpStatus(res.status) && attempt < GEMINI_RETRY_DELAYS_MS.length - 1) {
-        await sleep(GEMINI_RETRY_DELAYS_MS[attempt])
+      if (isRetryableHttpStatus(res.status) && attempt < GEMINI_MAX_ATTEMPTS - 1) {
+        await sleep(GEMINI_RETRY_DELAY_MS)
         continue
       }
       throw lastError
@@ -434,7 +452,7 @@ async function callGeminiRows(
   maxRowCount: number,
   focusRows: Set<number> | undefined,
   generation: DigifiGeminiGenerationOptions,
-  options?: { allowFallbackOnInvalidResponse?: boolean }
+  options?: { allowFallbackOnInvalidResponse?: boolean; callStats?: DigifiGeminiCallStats }
 ): Promise<{ rows: DigifiScanRow[]; modelUsed: string }> {
   const attempted: string[] = []
   let lastCapacityError: DigifiGeminiError | null = null
@@ -451,7 +469,8 @@ async function callGeminiRows(
         maxRowCount,
         focusRows,
         attempted.slice(0, -1),
-        generation
+        generation,
+        options?.callStats
       )
       if (attempted.length > 1) {
         console.info(
@@ -467,7 +486,7 @@ async function callGeminiRows(
         throw new DigifiGeminiError(error.message, error.code, attempted)
       }
       const isLastModel = model === models[models.length - 1]
-      if ((error.code === 'CAPACITY' || error.code === 'INVALID_RESPONSE') && !isLastModel) {
+      if (shouldTryNextDigifiModel(error.code) && !isLastModel) {
         const reason =
           error.code === 'CAPACITY'
             ? `unavailable (${error.message.slice(0, 80)}…)`
@@ -509,6 +528,7 @@ export async function scanLogbookImageWithGemini(
   duplicateRowIndices: number[]
   fallbackUsed: boolean
   modelsAttempted: string[]
+  geminiApiCallCount: number
   timings: DigifiScanTimings
 }> {
   const startedAt = Date.now()
@@ -524,17 +544,19 @@ export async function scanLogbookImageWithGemini(
   )
   const targetColumns = buildColumnList(meta.columns, meta.pageSide, meta.layout, splitIndex)
   const allowedColumnIds = new Set(targetColumns.map((column) => column.id))
-  const useProModel = Boolean(meta.useProModel)
-  const modelChain = getDigifiModelChain(useProModel)
+  const modelChain = getDigifiModelChain()
   const sendRowBands = chunkImages.length > 0 && !env.disableRowBandsToGemini
   const strategyUsed: DigifiScanStrategy = sendRowBands ? 'page-overview+row-bands' : 'page-overview'
+  const thinkingLevel = resolveDigifiThinkingLevel(env.geminiThinkingLevel)
+  const callStats: DigifiGeminiCallStats = { generateContentRequests: 0 }
   const generation: DigifiGeminiGenerationOptions = {
     maxOutputTokens: computeDigifiMaxOutputTokens(
       meta.rowCount,
       targetColumns.length,
       env.geminiMaxOutputTokensCap
     ),
-    mediaResolution: resolveDigifiMediaResolution(useProModel, env.geminiMediaResolution),
+    mediaResolution: resolveDigifiMediaResolution(env.geminiMediaResolution),
+    thinkingLevel,
   }
 
   const overviewImage = await prepareGeminiImage(imageBase64, mimeType)
@@ -580,17 +602,30 @@ export async function scanLogbookImageWithGemini(
     })
 
   const runModelChainFallback = async () => {
+    if (!env.enableCapacityModelFallback) {
+      console.warn('[digifi] capacity model fallback disabled — keeping primary scan result')
+      return
+    }
+    const fallbackModels = modelChain.slice(1)
+    if (fallbackModels.length === 0) {
+      console.warn('[digifi] skipping model fallback — no alternate models after primary')
+      return
+    }
+    console.warn(
+      `[digifi] gemini-3.5-flash unavailable, trying ${fallbackModels.join(' → ')}`
+    )
     rescueAttempted = true
     const rescueStartedAt = Date.now()
     const fallbackResult = await callGeminiRows(
-      modelChain,
+      fallbackModels,
       buildScanPrompt(),
       overviewImage,
       apiChunks,
       allowedColumnIds,
       meta.rowCount,
       undefined,
-      generation
+      generation,
+      { callStats }
     )
     modelUsed = fallbackResult.modelUsed
     modelsAttempted.add(fallbackResult.modelUsed)
@@ -612,7 +647,7 @@ export async function scanLogbookImageWithGemini(
       meta.rowCount,
       undefined,
       generation,
-      { allowFallbackOnInvalidResponse: false }
+      { allowFallbackOnInvalidResponse: false, callStats }
     )
     modelUsed = primaryResult.modelUsed
     modelsAttempted.add(primaryResult.modelUsed)
@@ -621,26 +656,29 @@ export async function scanLogbookImageWithGemini(
     duplicateRowIndices = new Set(primaryMerged.duplicateRowIndices)
     if (isScanResponseIncomplete(finalRows, meta.rowCount)) {
       console.warn(
-        `[digifi] primary scan returned ${countRowsWithCells(finalRows)}/${meta.rowCount} rows; running model fallback`
+        `[digifi] primary scan incomplete (${countRowsWithCells(finalRows)}/${meta.rowCount} rows); not retrying with alternate model`
       )
-      await runModelChainFallback()
     }
   } catch (error) {
     if (!(error instanceof DigifiGeminiError)) {
       throw error
     }
-    await runModelChainFallback()
+    if (shouldTryNextDigifiModel(error.code)) {
+      await runModelChainFallback()
+    } else {
+      throw error
+    }
   } finally {
     primaryMs = Date.now() - primaryStartedAt
   }
 
   const primaryDiagnostics = analyzeDigifiScanRows(finalRows, meta.rowCount)
-  if (primaryDiagnostics.missingRowIndices.length > 0) {
+  if (env.enableRescueScan && primaryDiagnostics.missingRowIndices.length > 0) {
     rescueAttempted = true
     const focusRows = primaryDiagnostics.missingRowIndices
     const rescueStartedAt = Date.now()
     const rescueResult = await callGeminiRows(
-      modelChain,
+      [modelChain[0]],
       buildScanPrompt(focusRows),
       overviewImage,
       sendRowBands
@@ -657,7 +695,8 @@ export async function scanLogbookImageWithGemini(
       allowedColumnIds,
       meta.rowCount,
       new Set(focusRows),
-      generation
+      generation,
+      { callStats }
     )
     modelsAttempted.add(rescueResult.modelUsed)
     if (rescueResult.modelUsed !== modelChain[0]) fallbackUsed = true
@@ -676,7 +715,18 @@ export async function scanLogbookImageWithGemini(
       (rowIndex) => !finalDiagnostics.missingRowIndices.includes(rowIndex)
     ).length
     rescueMs += Date.now() - rescueStartedAt
+  } else if (primaryDiagnostics.missingRowIndices.length > 0) {
+    console.warn(
+      `[digifi] ${primaryDiagnostics.missingRowIndices.length} missing row(s); rescue scan disabled (one API call per page)`
+    )
   }
+
+  const geminiApiCallCount = callStats.generateContentRequests
+  console.info('[digifi] gemini generateContent calls this page:', geminiApiCallCount, {
+    models: [...modelsAttempted],
+    thinkingLevel,
+    maxOutputTokens: generation.maxOutputTokens,
+  })
 
   const timings: DigifiScanTimings = {
     primaryMs,
@@ -694,6 +744,7 @@ export async function scanLogbookImageWithGemini(
     duplicateRowIndices: [...duplicateRowIndices].sort((a, b) => a - b),
     fallbackUsed,
     modelsAttempted: [...modelsAttempted],
+    geminiApiCallCount,
     timings,
   }
 }

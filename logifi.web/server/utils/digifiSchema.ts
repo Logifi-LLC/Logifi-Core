@@ -57,7 +57,6 @@ export const digifiScanMetaSchema = z.object({
   defaultYear: z.number().int().min(1900).max(2100).nullable(),
   templateName: z.string().max(200).optional(),
   columns: z.array(digifiTemplateColumnSchema).min(1).max(40),
-  useProModel: z.boolean().optional(),
   chunkedScan: z.object({
     strategy: z.literal('page-overview+row-bands'),
     chunkSize: z.number().int().min(1).max(20),

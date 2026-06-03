@@ -23,7 +23,6 @@ const {
   scanRowWarning,
   scanPhase,
   scanDetail,
-  useProModel,
   canScan,
   scanPage,
   leftPageScanned,
@@ -51,6 +50,7 @@ const knownPhotoIds = ref(new Set<string>())
 const processedPhotoIds = ref(new Set<string>())
 const scanQueue = ref<ScanQueueItem[]>([])
 const drainingQueue = ref(false)
+let drainChain: Promise<void> = Promise.resolve()
 
 const {
   creatingSession,
@@ -186,6 +186,20 @@ function handleNewPhotos(newPhotos: DigifiCapturePhoto[]) {
   }
 }
 
+function cancelQueuedScansForPage(pageSide: DigifiPageSide) {
+  scanQueue.value = scanQueue.value.filter((item) => item.pageSide !== pageSide)
+  for (const photo of photos.value) {
+    if (photo.pageSide === pageSide) {
+      processedPhotoIds.value.add(photo.id)
+    }
+  }
+}
+
+/** Serialize companion auto-scans so realtime + watch(scanning) cannot run two drains at once. */
+function scheduleDrainScanQueue() {
+  drainChain = drainChain.then(() => drainScanQueue()).catch(() => {})
+}
+
 async function drainScanQueue() {
   if (drainingQueue.value || scanning.value || !canScan.value) {
     updateQueueStatus()
@@ -198,10 +212,17 @@ async function drainScanQueue() {
     return
   }
 
+  if (processedPhotoIds.value.has(next.photoId)) {
+    scanQueue.value = scanQueue.value.filter((item) => item.photoId !== next.photoId)
+    scheduleDrainScanQueue()
+    return
+  }
+
   const photo = photos.value.find((item) => item.id === next.photoId)
   if (!photo) {
     scanQueue.value = scanQueue.value.filter((item) => item.photoId !== next.photoId)
     updateQueueStatus()
+    scheduleDrainScanQueue()
     return
   }
 
@@ -219,7 +240,7 @@ async function drainScanQueue() {
   } finally {
     drainingQueue.value = false
     updateQueueStatus()
-    void drainScanQueue()
+    scheduleDrainScanQueue()
   }
 }
 
@@ -229,7 +250,7 @@ watch(
     const newPhotos = currentPhotos.filter((photo) => !knownPhotoIds.value.has(photo.id))
     if (newPhotos.length === 0) return
     handleNewPhotos(newPhotos)
-    void drainScanQueue()
+    scheduleDrainScanQueue()
   },
   { deep: true }
 )
@@ -237,7 +258,7 @@ watch(
 watch(scanning, (isScanning, wasScanning) => {
   if (wasScanning && !isScanning) {
     updateQueueStatus()
-    void drainScanQueue()
+    scheduleDrainScanQueue()
   }
 })
 
@@ -252,7 +273,15 @@ async function processFile(
     return
   }
   if (!canScan.value) return
+  if (scanning.value && !options?.fromQueue) {
+    console.warn('[digifi] scan in progress — ignoring duplicate upload')
+    return
+  }
   if (!options?.fromQueue && !canUseDropZone(pageSide)) return
+
+  if (!options?.fromQueue) {
+    cancelQueuedScansForPage(pageSide)
+  }
 
   setZonePreview(pageSide, URL.createObjectURL(file), true)
   successMessage.value = null
@@ -606,16 +635,6 @@ onUnmounted(() => {
           </p>
         </div>
       </div>
-    </div>
-
-    <div class="mt-4 flex flex-wrap items-center gap-3">
-      <label
-        class="inline-flex items-center gap-2 text-sm cursor-pointer"
-        :class="isDark ? 'text-gray-300' : 'text-gray-700'"
-      >
-        <input v-model="useProModel" type="checkbox" class="rounded border-gray-400">
-        Higher accuracy (slower)
-      </label>
     </div>
 
     <p v-if="error" class="mt-3 text-sm text-red-500 dark:text-red-400">{{ error }}</p>

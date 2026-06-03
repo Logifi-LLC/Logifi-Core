@@ -15,7 +15,7 @@ import {
 } from '~/utils/digifiScanDiagnostics'
 
 /** Match server Gemini prep (digifiImagePrep) to avoid uploading oversized photos. */
-const MAX_EDGE_PX = 1024
+const MAX_EDGE_PX = 1536
 const JPEG_QUALITY = 0.92
 const MAX_PRIMARY_IMAGE_BYTES = 7_500_000
 const ROW_BAND_SIZE = 5
@@ -175,7 +175,6 @@ export function useLogbookBuilderDigifi() {
   const scanRowWarning = ref<string | null>(null)
   const scanPhase = ref<string | null>(null)
   const scanDetail = ref<string | null>(null)
-  const useProModel = ref(false)
   const lastScanSummary = ref<{
     pageSide: DigifiPageSide
     expectedRowCount: number
@@ -204,7 +203,6 @@ export function useLogbookBuilderDigifi() {
       defaultYear: defaultYear.value,
       templateName,
       columns,
-      useProModel: useProModel.value,
       chunkedScan: chunkMeta.length > 0
         ? {
             strategy: 'page-overview+row-bands',
@@ -223,6 +221,11 @@ export function useLogbookBuilderDigifi() {
   }
 
   async function scanPage(file: File, pageSide: DigifiPageSide, templateName?: string) {
+    if (scanning.value) {
+      console.warn('[digifi] scan already in progress — ignoring duplicate request')
+      return
+    }
+
     if (!isAuthenticated.value) {
       error.value = 'Sign in to use Digifi scanning.'
       return
@@ -323,6 +326,9 @@ export function useLogbookBuilderDigifi() {
         result.scanTimings != null
           ? `Scan completed in ${Math.round(result.scanTimings.totalRequestMs)}ms (Gemini ${Math.round(result.scanTimings.geminiMs)}ms).`
           : null,
+        result.geminiApiCallCount != null
+          ? `Gemini API calls for this page: ${result.geminiApiCallCount}.`
+          : null,
         creditNote,
       ]
         .filter(Boolean)
@@ -366,7 +372,6 @@ export function useLogbookBuilderDigifi() {
     scanRowWarning,
     scanPhase,
     scanDetail,
-    useProModel,
     canScan,
     scanPage,
     resetDigifiPageState,

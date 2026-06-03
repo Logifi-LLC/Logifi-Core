@@ -38,6 +38,10 @@ const devHttps = resolveDevHttpsPaths()
 
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
+  /** Avoid client manifest route-rule errors in dev (HTTPS / LAN); see nuxt/nuxt#24625 */
+  experimental: {
+    appManifest: false,
+  },
   devtools: { enabled: false },
   /** FC View OAuth requires https:// redirect URIs; use mkcert + NUXT_DEV_HTTPS_* (see env.example). */
   devServer: devHttps ? { https: devHttps } : undefined,
@@ -79,8 +83,7 @@ export default defineNuxtConfig({
     geminiApiKey: process.env.GEMINI_API_KEY || '',
     digifiModel: process.env.NUXT_DIGIFI_MODEL || process.env.DIGIFI_MODEL || 'gemini-3.5-flash',
     digifiModelFallbacks: process.env.NUXT_DIGIFI_MODEL_FALLBACKS || process.env.DIGIFI_MODEL_FALLBACKS || '',
-    digifiProModel: process.env.NUXT_DIGIFI_PRO_MODEL || process.env.DIGIFI_PRO_MODEL || 'gemini-3.1-pro',
-    digifiProModelFallbacks: process.env.NUXT_DIGIFI_PRO_MODEL_FALLBACKS || process.env.DIGIFI_PRO_MODEL_FALLBACKS || '',
+    digifiEnableCapacityModelFallback: process.env.NUXT_DIGIFI_ENABLE_CAPACITY_MODEL_FALLBACK || '',
     digifiMaxScansPerDay: parseInt(process.env.NUXT_DIGIFI_MAX_SCANS_PER_DAY || process.env.DIGIFI_MAX_SCANS_PER_DAY || '10', 10) || 10,
   },
   // Client-side only app (uses localStorage for data persistence)

@@ -1,7 +1,8 @@
 import sharp from 'sharp'
 
-export const DIGIFI_GEMINI_IMAGE_MAX_EDGE_PX = 1024
-export const DIGIFI_GEMINI_JPEG_QUALITY = 75
+/** Larger edge + quality for paid-tier OCR accuracy (still JPEG for API payload size). */
+export const DIGIFI_GEMINI_IMAGE_MAX_EDGE_PX = 1536
+export const DIGIFI_GEMINI_JPEG_QUALITY = 88
 
 export interface DigifiCompressedImage {
   buffer: Buffer

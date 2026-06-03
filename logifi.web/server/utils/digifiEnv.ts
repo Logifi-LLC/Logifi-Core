@@ -27,15 +27,31 @@ export class DigifiGeminiError extends Error {
 }
 
 /** Stay in the Gemini 3.x line — avoid silent downgrade to 2.x (much weaker for logbook OCR). */
-const DEFAULT_FLASH_FALLBACKS = ['gemini-3.5-flash', 'gemini-3.1-flash-lite']
-/** Pro unavailable → 3.5 Flash (near-Pro per Google), then other 3.x flash tiers. */
-const DEFAULT_PRO_FALLBACKS = ['gemini-3.5-flash', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite']
+/** Used only when 3.5 Flash hits capacity/outage (429/503/etc.), not for weak OCR. */
+const DEFAULT_MODEL_FALLBACKS = ['gemini-3-flash-preview']
+
+/** Paid-tier default is gemini-3.5-flash; map legacy Pro ids to 3.5 Flash. */
+export function normalizeDigifiModelId(model: string): string {
+  const trimmed = model.trim()
+  if (
+    trimmed === 'gemini-3.1-pro' ||
+    trimmed === 'gemini-3.1-pro-preview'
+  ) {
+    return 'gemini-3.5-flash'
+  }
+  return trimmed
+}
+
+/** Flash-Lite is excluded from automatic fallbacks (poor logbook OCR). */
+export function isAllowedDigifiFallbackModel(model: string): boolean {
+  return !/flash-lite/i.test(model.trim())
+}
 
 function parseModelList(value: string): string[] {
   return value
     .split(',')
-    .map((part) => part.trim())
-    .filter(Boolean)
+    .map((part) => normalizeDigifiModelId(part.trim()))
+    .filter((part) => part && isAllowedDigifiFallbackModel(part))
 }
 
 /** Ordered unique model ids: primary first, then configured/default fallbacks. */
@@ -49,18 +65,33 @@ export function buildDigifiModelChain(
   for (const model of [primary, ...configuredFallbacks, ...defaultFallbacks]) {
     const trimmed = model.trim()
     if (!trimmed || seen.has(trimmed)) continue
+    if (chain.length > 0 && !isAllowedDigifiFallbackModel(trimmed)) continue
     seen.add(trimmed)
     chain.push(trimmed)
   }
   return chain
 }
 
-export function getDigifiModelChain(useProModel: boolean): string[] {
+/** Primary gemini-3.5-flash; optional fallbacks when enableCapacityModelFallback is true. */
+export function getDigifiModelChain(): string[] {
   const env = getDigifiEnv()
-  if (useProModel) {
-    return buildDigifiModelChain(env.proModel, env.proModelFallbacks, DEFAULT_PRO_FALLBACKS)
-  }
-  return buildDigifiModelChain(env.model, env.modelFallbacks, DEFAULT_FLASH_FALLBACKS)
+  const configuredFallbacks = env.enableCapacityModelFallback ? env.modelFallbacks : []
+  const defaultFallbacks = env.enableCapacityModelFallback ? DEFAULT_MODEL_FALLBACKS : []
+  return buildDigifiModelChain(env.model, configuredFallbacks, defaultFallbacks)
+}
+
+/** Advance model chain only on outage / rate limit — not on truncation or bad OCR. */
+export function shouldTryNextDigifiModel(errorCode: DigifiGeminiErrorCode): boolean {
+  return errorCode === 'CAPACITY' || errorCode === 'CONFIG'
+}
+
+/** OCR: keep internal reasoning low so visible TSV fits maxOutputTokens (thinking shares the budget on 3.x). */
+export function resolveDigifiThinkingLevel(
+  envLevel?: DigifiGeminiThinkingLevel
+): DigifiGeminiThinkingLevel {
+  const level = envLevel ?? 'low'
+  if (level === 'high' || level === 'medium') return 'low'
+  return level
 }
 
 export function getDigifiEnv() {
@@ -70,10 +101,12 @@ export function getDigifiEnv() {
     process.env.DIGIFI_MODEL_FALLBACKS,
     config.digifiModelFallbacks
   )
-  const proModelFallbacksRaw = pick(
-    process.env.NUXT_DIGIFI_PRO_MODEL_FALLBACKS,
-    process.env.DIGIFI_PRO_MODEL_FALLBACKS,
-    config.digifiProModelFallbacks
+  const capacityFallbackRaw = pick(
+    process.env.NUXT_DIGIFI_ENABLE_CAPACITY_MODEL_FALLBACK,
+    process.env.DIGIFI_ENABLE_CAPACITY_MODEL_FALLBACK,
+    process.env.NUXT_DIGIFI_ENABLE_MODEL_FALLBACK,
+    process.env.DIGIFI_ENABLE_MODEL_FALLBACK,
+    config.digifiEnableCapacityModelFallback
   )
   return {
     geminiApiKey: pick(
@@ -81,18 +114,14 @@ export function getDigifiEnv() {
       process.env.NUXT_GEMINI_API_KEY,
       config.geminiApiKey
     ),
-    model: pick(
-      process.env.NUXT_DIGIFI_MODEL,
-      process.env.DIGIFI_MODEL,
-      config.digifiModel
-    ) || 'gemini-3-flash-preview',
+    model: normalizeDigifiModelId(
+      pick(
+        process.env.NUXT_DIGIFI_MODEL,
+        process.env.DIGIFI_MODEL,
+        config.digifiModel
+      ) || 'gemini-3.5-flash'
+    ),
     modelFallbacks: modelFallbacksRaw ? parseModelList(modelFallbacksRaw) : [],
-    proModel: pick(
-      process.env.NUXT_DIGIFI_PRO_MODEL,
-      process.env.DIGIFI_PRO_MODEL,
-      config.digifiProModel
-    ) || 'gemini-3.1-pro',
-    proModelFallbacks: proModelFallbacksRaw ? parseModelList(proModelFallbacksRaw) : [],
     maxScansPerDay: Math.max(
       1,
       parseInt(
@@ -114,18 +143,30 @@ export function getDigifiEnv() {
           pick(
             process.env.NUXT_DIGIFI_GEMINI_MAX_OUTPUT_TOKENS,
             process.env.DIGIFI_GEMINI_MAX_OUTPUT_TOKENS,
-            '8192'
-          ) || '8192',
+            '20000'
+          ) || '20000',
           10
         )
       )
     ),
+    /** When true (default), try gemini-3-flash-preview if 3.5 is unavailable (429/503/404). */
+    enableCapacityModelFallback:
+      capacityFallbackRaw === ''
+        ? true
+        : capacityFallbackRaw.toLowerCase() === 'true',
+    /** When false (default), skip second Gemini call for missing rows. */
+    enableRescueScan:
+      pick(
+        process.env.NUXT_DIGIFI_ENABLE_RESCUE_SCAN,
+        process.env.DIGIFI_ENABLE_RESCUE_SCAN,
+        'false'
+      ).toLowerCase() === 'true',
     geminiMediaResolution:
       pick(
         process.env.NUXT_DIGIFI_GEMINI_MEDIA_RESOLUTION,
         process.env.DIGIFI_GEMINI_MEDIA_RESOLUTION,
-        'MEDIA_RESOLUTION_MEDIUM'
-      ) || 'MEDIA_RESOLUTION_MEDIUM',
+        'MEDIA_RESOLUTION_HIGH'
+      ) || 'MEDIA_RESOLUTION_HIGH',
     /** Set DIGIFI_SEND_ROW_BANDS=false to stop sending client row-band crops to Gemini. */
     disableRowBandsToGemini:
       pick(
@@ -135,7 +176,7 @@ export function getDigifiEnv() {
       ).toLowerCase() === 'false',
     /**
      * Gemini 3.x thinking_level (REST: generationConfig.thinkingConfig.thinkingLevel).
-     * Use "low" for OCR — enough reasoning for row/column alignment without default "medium" cost.
+     * Default "low" — "high" is capped to low so thinking does not exhaust output tokens.
      */
     geminiThinkingLevel: normalizeGeminiThinkingLevel(
       pick(
@@ -173,20 +214,16 @@ export function buildDigifiThinkingConfig(
   return { thinkingBudget: 0 }
 }
 
-/** Scale output budget by page size; visible TSV shares cap with thinking when level is not minimal. */
+/** Scale output budget by page size; avoid a fixed 8192 floor that truncates dense pages when thinking runs. */
 export function computeDigifiMaxOutputTokens(
   rowCount: number,
   columnCount: number,
   cap: number
 ): number {
-  const scaled = 1024 + rowCount * Math.max(1, columnCount) * 12
-  return Math.min(cap, Math.max(8192, scaled))
+  const scaled = 2048 + rowCount * Math.max(1, columnCount) * 16
+  return Math.min(cap, Math.max(scaled, 12288))
 }
 
-export function resolveDigifiMediaResolution(
-  useProModel: boolean,
-  envDefault: string
-): string {
-  if (useProModel) return 'MEDIA_RESOLUTION_HIGH'
-  return envDefault
+export function resolveDigifiMediaResolution(envDefault: string): string {
+  return envDefault === 'MEDIA_RESOLUTION_LOW' ? 'MEDIA_RESOLUTION_LOW' : 'MEDIA_RESOLUTION_HIGH'
 }
