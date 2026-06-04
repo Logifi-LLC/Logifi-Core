@@ -91,4 +91,32 @@ describe('useLogbookBuilderGrid applyScanResults', () => {
     expect(grid.rows.value[0].digifiCellMeta?.[col]?.userConfirmed).toBe(true)
     expect(grid.rows.value[0].digifiCellMeta?.[col]?.needsReview).toBe(false)
   })
+
+  it('flags common-mistake fields with verifyCarefully after scan apply', () => {
+    const fromCol = grid.visibleColumns.value.find((c) => c.fieldKey === 'departure')
+    if (!fromCol) {
+      grid.addColumn('departure')
+    }
+    const departure = grid.visibleColumns.value.find((c) => c.fieldKey === 'departure')
+    expect(departure).toBeDefined()
+    if (!departure) return
+
+    grid.applyScanResults('left', [{
+      rowIndex: 0,
+      cells: { [departure.id]: 'KORD' },
+      cellMeta: {
+        [departure.id]: {
+          fieldKey: 'departure',
+          rawValue: 'KORD',
+          resolvedValue: 'KORD',
+          strategy: 'raw',
+          confidence: 'low',
+          autoApplied: false,
+          needsReview: false,
+        },
+      },
+    }])
+
+    expect(grid.rows.value[0].digifiCellMeta?.[departure.id]?.verifyCarefully).toBe(true)
+  })
 })

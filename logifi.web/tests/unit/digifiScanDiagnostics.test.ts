@@ -36,6 +36,19 @@ describe('digifiScanDiagnostics', () => {
     expect(msg).toContain('1')
   })
 
+  it('adds early-gap hint when top rows are missing', () => {
+    const d = analyzeDigifiScanRows(
+      [
+        { rowIndex: 0, cells: { a: '1' } },
+        { rowIndex: 3, cells: { a: '2' } },
+      ],
+      5
+    )
+    const msg = formatDigifiScanWarning(d, 5)
+    expect(msg).toContain('Missing row line(s)')
+    expect(msg).toContain('shifted up')
+  })
+
   it('tracks duplicate and empty rows', () => {
     const d = analyzeDigifiScanRows(
       [

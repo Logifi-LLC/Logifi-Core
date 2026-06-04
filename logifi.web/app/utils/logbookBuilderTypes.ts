@@ -57,11 +57,35 @@ export const CATEGORY_CLASS_OPTIONS = [
   'ASEL', 'AMEL', 'ASES', 'AMES', 'HELI', 'GYRO', 'GLID', 'BAL', 'AIRS', 'PL', 'WSC-L', 'WSC-S',
 ] as const
 
+/** Field keys rendered as native select elements in builder cells (not category/class time columns). */
+export const BUILDER_SELECT_FIELD_KEYS: LogbookColumnKey[] = [
+  'role',
+  'pilotRole',
+  'approachType',
+  'categoryClass',
+]
+
+export function isBuilderSelectField(column: {
+  fieldKey: LogbookColumnKey | null
+  categoryClassValue?: string
+}): boolean {
+  if (!column.fieldKey || !BUILDER_SELECT_FIELD_KEYS.includes(column.fieldKey)) return false
+  if (column.fieldKey === 'categoryClass' && column.categoryClassValue != null) return false
+  return true
+}
+
+/** Digifi does not OCR these — set manually (toolbar default role, Pilot Role dropdown). */
+export const DIGIFI_MANUAL_ONLY_FIELD_KEYS: LogbookColumnKey[] = ['role', 'pilotRole']
+
+export function isDigifiManualOnlyField(fieldKey: LogbookColumnKey | null): boolean {
+  return fieldKey != null && DIGIFI_MANUAL_ONLY_FIELD_KEYS.includes(fieldKey)
+}
+
 /** Role options for Default role and Role column (match main logbook). */
 export const ROLE_OPTIONS = [
   { value: 'PIC', label: 'PIC' },
   { value: 'SIC', label: 'SIC' },
-  { value: 'Dual Received', label: 'Dual Received' },
+  { value: 'Dual Received', label: 'Student (Dual Received)' },
   { value: 'Solo', label: 'Solo' },
   { value: 'Safety Pilot', label: 'Safety Pilot' },
   { value: 'Examiner', label: 'Examiner' },

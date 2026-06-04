@@ -12,6 +12,7 @@ import {
 } from '~/utils/logbookBuilderTypes'
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
 import type { DigifiPageSide, DigifiScanCellMeta, DigifiScanRow, DigifiScanStrategy } from '~/utils/digifiTypes'
+import { applyDigifiVerifyCarefullyFlags } from '~/utils/digifiCommonMistakes'
 import { createBuilderSpreadId } from '~/utils/logbookBuilderDraft'
 
 const FIELD_LABELS: Record<LogbookColumnKey, string> = {
@@ -50,6 +51,26 @@ export interface ApplyScanResultsResult {
   filled: number
   baseRow: number
   allowedColumnIds: string[]
+  verifyCarefullyCount: number
+}
+
+const MAX_UNDO_STACK = 50
+
+export interface GridUndoSnapshot {
+  rows: BuilderRow[]
+  rowCount: number
+}
+
+function cloneBuilderRow(row: BuilderRow): BuilderRow {
+  return {
+    cells: { ...row.cells },
+    tags: row.tags ? [...row.tags] : undefined,
+    digifiCellMeta: row.digifiCellMeta
+      ? Object.fromEntries(
+          Object.entries(row.digifiCellMeta).map(([id, meta]) => [id, { ...meta }])
+        )
+      : undefined,
+  }
 }
 
 export interface DigifiAppliedScanStatus {
@@ -116,6 +137,51 @@ export function useLogbookBuilderGrid() {
   /** One credit covers left + right scans for this builder spread session. */
   const spreadId: Ref<string> = ref(createBuilderSpreadId())
   const digifiScanStatusByPage: Ref<Partial<Record<DigifiPageSide, DigifiAppliedScanStatus>>> = ref({})
+  const undoStack: Ref<GridUndoSnapshot[]> = ref([])
+  const redoStack: Ref<GridUndoSnapshot[]> = ref([])
+
+  function captureUndoSnapshot(): GridUndoSnapshot {
+    return {
+      rows: rows.value.map(cloneBuilderRow),
+      rowCount: rowCount.value,
+    }
+  }
+
+  function restoreUndoSnapshot(snapshot: GridUndoSnapshot) {
+    rows.value = snapshot.rows.map(cloneBuilderRow)
+    rowCount.value = snapshot.rowCount
+  }
+
+  function pushUndoSnapshot() {
+    undoStack.value.push(captureUndoSnapshot())
+    if (undoStack.value.length > MAX_UNDO_STACK) {
+      undoStack.value.shift()
+    }
+    redoStack.value = []
+  }
+
+  function undo(): boolean {
+    if (undoStack.value.length === 0) return false
+    redoStack.value.push(captureUndoSnapshot())
+    const snapshot = undoStack.value.pop()
+    if (!snapshot) return false
+    restoreUndoSnapshot(snapshot)
+    return true
+  }
+
+  function redo(): boolean {
+    if (redoStack.value.length === 0) return false
+    undoStack.value.push(captureUndoSnapshot())
+    const snapshot = redoStack.value.pop()
+    if (!snapshot) return false
+    restoreUndoSnapshot(snapshot)
+    return true
+  }
+
+  function clearUndoHistory() {
+    undoStack.value = []
+    redoStack.value = []
+  }
 
   function regenerateSpreadId() {
     spreadId.value = createBuilderSpreadId()
@@ -157,11 +223,8 @@ export function useLogbookBuilderGrid() {
         ...currentMeta,
         userConfirmed: true,
         needsReview: false,
+        verifyCarefully: false,
       },
-    }
-    const stillNeedsReview = Object.values(row.digifiCellMeta ?? {}).some((meta) => meta?.needsReview)
-    if (!stillNeedsReview && row.tags?.includes('Digifi Review')) {
-      row.tags = row.tags.filter((tag) => tag !== 'Digifi Review')
     }
   }
 
@@ -261,6 +324,7 @@ export function useLogbookBuilderGrid() {
     rows.value = Array.from({ length: n }, () => createEmptyBuilderRow(ids))
     resetDigifiPageState()
     regenerateSpreadId()
+    clearUndoHistory()
   }
 
   function clearGrid() {
@@ -270,6 +334,7 @@ export function useLogbookBuilderGrid() {
     leftPageScanned.value = false
     digifiScanStatusByPage.value = {}
     regenerateSpreadId()
+    clearUndoHistory()
   }
 
   function columnIdsForPageSide(pageSide: DigifiPageSide): string[] {
@@ -304,6 +369,7 @@ export function useLogbookBuilderGrid() {
    * Single layout: left photo fills from row 0; right photo fills from the next empty row block.
    */
   function applyScanResults(pageSide: DigifiPageSide, scanRows: DigifiScanRow[]): ApplyScanResultsResult {
+    pushUndoSnapshot()
     const allowedColIds = new Set(columnIdsForPageSide(pageSide))
     let filled = 0
 
@@ -349,10 +415,22 @@ export function useLogbookBuilderGrid() {
       leftPageScanned.value = true
     }
 
+    const verifyCarefullyCount = applyDigifiVerifyCarefullyFlags({
+      rows: rows.value,
+      columns: columns.value,
+      pageSide,
+      layout: layout.value,
+      splitIndex: effectiveSplitIndex.value,
+      baseRow,
+      scanRowIndices: scanRows.map((row) => row.rowIndex),
+      allowedColumnIds: allowedColIds,
+    })
+
     return {
       filled,
       baseRow,
       allowedColumnIds: [...allowedColIds],
+      verifyCarefullyCount,
     }
   }
 
@@ -457,5 +535,10 @@ export function useLogbookBuilderGrid() {
     clearDigifiScanStatus,
     getDigifiImportBlockers,
     resetDigifiPageState,
+    pushUndoSnapshot,
+    undo,
+    redo,
+    canUndo: computed(() => undoStack.value.length > 0),
+    canRedo: computed(() => redoStack.value.length > 0),
   }
 }

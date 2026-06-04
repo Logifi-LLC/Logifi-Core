@@ -601,9 +601,6 @@ export async function personalizeDigifiScanRows(options: {
 
     if (meta.needsReview) {
       reviewRequiredCount += 1
-      const tags = new Set(row.tags ?? [])
-      tags.add('Digifi Review')
-      row.tags = [...tags]
       const candidatePreview = (meta.candidates ?? []).slice(0, 3).map((candidate) => candidate.value).join(', ')
       reviewMessages.push(
         `Row ${row.rowIndex + 1}: review identification "${meta.rawValue || currentValue}"${candidatePreview ? ` (${candidatePreview})` : ''}.`

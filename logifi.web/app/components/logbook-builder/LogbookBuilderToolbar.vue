@@ -176,12 +176,17 @@ function onRowCountInput(e: Event) {
     :class="isDark ? 'border-white/10 bg-gray-900 shadow-md shadow-black/40' : 'border-gray-200 bg-white'"
   >
     <div class="flex items-center gap-2">
-      <span class="text-sm font-medium transition-colors" :class="isDark ? 'text-gray-300' : 'text-gray-900'">Rows:</span>
+      <span
+        class="text-sm font-medium transition-colors"
+        :class="isDark ? 'text-gray-300' : 'text-gray-900'"
+        title="Count only flight entry lines on the page, not the bottom totals or carry-forward row. Wrong counts cause Digifi to merge or overwrite lines."
+      >Rows:</span>
       <input
         type="number"
         :value="rowCount"
         min="1"
         max="100"
+        title="Flight entry lines only — exclude the paper totals row at the bottom"
         :class="[
           'w-16 rounded border px-2 py-1 text-sm shadow-sm transition-colors',
           isDark

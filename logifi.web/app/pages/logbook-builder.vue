@@ -4,6 +4,7 @@ import LogbookBuilderGrid from '~/components/logbook-builder/LogbookBuilderGrid.
 import LogbookBuilderToolbar from '~/components/logbook-builder/LogbookBuilderToolbar.vue'
 import LogbookBuilderValidateBar from '~/components/logbook-builder/LogbookBuilderValidateBar.vue'
 import LogbookBuilderDigifiPanel from '~/components/logbook-builder/LogbookBuilderDigifiPanel.vue'
+import DigifiCommonMistakesPanel from '~/components/digifi/DigifiCommonMistakesPanel.vue'
 import { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import {
   getStoredDraft,
@@ -116,6 +117,7 @@ const { theme, isDark } = useTheme()
 const showDigifiPanel = ref(false)
 const showInstructions = ref(false)
 const showDigifiChecklist = ref(false)
+const showDigifiCommonMistakes = ref(false)
 </script>
 
 <template>
@@ -178,6 +180,19 @@ const showDigifiChecklist = ref(false)
             <Icon :name="showDigifiChecklist ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'" size="16" />
             Digifi Checklist
           </button>
+          <button
+            type="button"
+            :class="[
+              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold font-quicksand transition-colors',
+              theme === 'dark'
+                ? 'border-orange-400/30 text-orange-300 hover:bg-orange-500/10'
+                : 'border-orange-300 text-orange-800 hover:bg-orange-50',
+            ]"
+            @click="showDigifiCommonMistakes = !showDigifiCommonMistakes"
+          >
+            <Icon :name="showDigifiCommonMistakes ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'" size="16" />
+            Common mistakes
+          </button>
         </div>
 
         <Transition
@@ -235,6 +250,19 @@ const showDigifiChecklist = ref(false)
                 <li>After scan, review all AI-filled cells before importing.</li>
               </ul>
             </div>
+          </div>
+        </Transition>
+
+        <Transition
+          enter-active-class="transition-all duration-200 ease-out"
+          enter-from-class="opacity-0 max-h-0"
+          enter-to-class="opacity-100 max-h-[1200px]"
+          leave-active-class="transition-all duration-150 ease-in"
+          leave-from-class="opacity-100 max-h-[1200px]"
+          leave-to-class="opacity-0 max-h-0"
+        >
+          <div v-if="showDigifiCommonMistakes" class="mt-3 overflow-hidden">
+            <DigifiCommonMistakesPanel :is-dark="theme === 'dark'" />
           </div>
         </Transition>
       </section>

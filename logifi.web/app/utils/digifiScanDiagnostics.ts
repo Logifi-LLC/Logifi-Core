@@ -71,6 +71,12 @@ export function formatDigifiScanWarning(
     parts.push(
       `Missing row line(s) on the grid: ${preview}${suffix} (paper row numbers). Fill these in manually.`
     )
+    const hasEarlyGap = missingRowIndices.some((i) => i <= 2)
+    if (hasEarlyGap) {
+      parts.push(
+        'Rows near the top of the page were skipped — later lines may be shifted up. Confirm Rows matches flight lines only (not the totals row), then fix or re-scan.'
+      )
+    }
   }
   if (duplicateRowIndices.length > 0) {
     const preview = duplicateRowIndices.slice(0, 5).map((i) => i + 1).join(', ')

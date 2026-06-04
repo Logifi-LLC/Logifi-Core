@@ -474,6 +474,7 @@ onUnmounted(() => {
       :class="isDark ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-900'"
     >
       AI may misread handwriting. You are responsible for verifying all entries before importing.
+      See Common mistakes above for what to double-check first.
     </p>
 
     <p

@@ -2,7 +2,7 @@
 import { ref, inject, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import type { Ref } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
-import { DEFAULT_COLUMN_WIDTH } from '~/utils/logbookBuilderTypes'
+import { DEFAULT_COLUMN_WIDTH, isBuilderSelectField } from '~/utils/logbookBuilderTypes'
 import {
   buildValuesMatrix,
   clearRangeCells,
@@ -25,7 +25,28 @@ import { useTheme } from '~/composables/useTheme'
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
 if (!grid) throw new Error('LogbookBuilderGrid must be used inside a page that provides logbookBuilderGrid')
-const { visibleColumns, rows, setCell, setRowTags, updateColumn, reorderColumns, layout, effectiveSplitIndex, setTwoPageSplitIndex, tagsColumnWidth, setColumnWidth, setTagsColumnWidth, MIN_COLUMN_WIDTH, MAX_COLUMN_WIDTH, activeRowIndex, setActiveRowIndex, noteDigifiCellManualEdit } = grid
+const {
+  visibleColumns,
+  rows,
+  setCell,
+  setRowTags,
+  updateColumn,
+  reorderColumns,
+  layout,
+  effectiveSplitIndex,
+  setTwoPageSplitIndex,
+  tagsColumnWidth,
+  setColumnWidth,
+  setTagsColumnWidth,
+  MIN_COLUMN_WIDTH,
+  MAX_COLUMN_WIDTH,
+  activeRowIndex,
+  setActiveRowIndex,
+  noteDigifiCellManualEdit,
+  pushUndoSnapshot,
+  undo,
+  redo,
+} = grid
 
 const builderPilots = inject<Ref<string[]> | null>('builderPilots', null)
 
@@ -193,6 +214,7 @@ function isSelectionRightEdge(rowIdx: number, colIdx: number): boolean {
 
 function applyFillFromActiveToRange(range: SelectionRange, source: ActiveCell | null) {
   if (!source) return
+  pushUndoSnapshot()
   const cols = visibleColumns.value
   const sourceCol = cols[source.colIndex]
   if (!sourceCol) return
@@ -211,6 +233,7 @@ function applyFillFromActiveToRange(range: SelectionRange, source: ActiveCell | 
 }
 
 function applyBlockCopy(base: SelectionRange, dest: SelectionRange) {
+  pushUndoSnapshot()
   const cols = visibleColumns.value
   for (let r = dest.startRow; r <= dest.endRow; r++) {
     const rowOffset = r - dest.startRow
@@ -336,6 +359,22 @@ function focusGridContainer() {
   gridContainerRef.value?.focus()
 }
 
+function eventTargetIsSelectControl(target: EventTarget | null): boolean {
+  if (!target || !(target instanceof HTMLElement)) return false
+  const tag = target.tagName
+  return tag === 'SELECT' || tag === 'OPTION'
+}
+
+function isSelectColumn(colIdx: number): boolean {
+  const col = visibleColumns.value[colIdx]
+  return col ? isBuilderSelectField(col) : false
+}
+
+function isActiveSelectColumn(): boolean {
+  const focus = activeCell.value
+  return focus != null && isSelectColumn(focus.colIndex)
+}
+
 async function startEdit(
   rowIdx: number,
   colIdx: number,
@@ -344,6 +383,12 @@ async function startEdit(
   const col = visibleColumns.value[colIdx]
   if (!col) return
   const cell = clampRowCol(rowIdx, colIdx)
+  const sameCell =
+    editingCell.value?.rowIndex === cell.rowIndex &&
+    editingCell.value?.colIndex === cell.colIndex
+  if (!sameCell) {
+    pushUndoSnapshot()
+  }
   editSnapshot.value = getCellValue(cell.rowIndex, col.id)
   gridMode.value = 'edit'
   editingCell.value = cell
@@ -436,6 +481,8 @@ function moveEnter(shift: boolean) {
 }
 
 function applyCellUpdates(updates: Array<{ row: number; col: number; value: string }>) {
+  if (updates.length === 0) return
+  pushUndoSnapshot()
   for (const { row, col, value } of updates) {
     const colDef = visibleColumns.value[col]
     if (!colDef) continue
@@ -464,6 +511,8 @@ function copySelection(cut: boolean) {
 function pasteAtActiveCell() {
   const anchor = activeCell.value ?? { rowIndex: 0, colIndex: 0 }
   const applyMatrix = (matrix: string[][]) => {
+    if (!matrix.length) return
+    pushUndoSnapshot()
     const maxRow = rows.value.length - 1
     const maxCol = visibleColumns.value.length - 1
     for (let rOff = 0; rOff < matrix.length; rOff++) {
@@ -554,6 +603,36 @@ function onGridMouseDown(event: MouseEvent) {
   const cellFromEvent = getCellFromEvent(event)
   const cell = cellFromEvent ?? findCellFromPoint(event.clientX, event.clientY)
   if (!cell) return
+
+  const col = visibleColumns.value[cell.colIndex]
+  const isPilotInputCell =
+    col?.fieldKey === 'pilots' &&
+    (event.target instanceof HTMLInputElement ||
+      (event.target instanceof HTMLElement && event.target.closest('input[data-builder-row]')))
+  const isSelectCell =
+    eventTargetIsSelectControl(event.target) ||
+    (col != null && isBuilderSelectField(col))
+
+  if ((isSelectCell || isPilotInputCell) && col) {
+    if (
+      gridMode.value === 'edit' &&
+      editingCell.value &&
+      (editingCell.value.rowIndex !== cell.rowIndex ||
+        editingCell.value.colIndex !== cell.colIndex)
+    ) {
+      commitAndExitEdit()
+    }
+    if (event.shiftKey) {
+      const anchor = selectionAnchor.value ?? activeCell.value ?? cell
+      setSelectionFromAnchor(anchor, cell)
+      setActiveRowIndex(anchor.rowIndex)
+    } else {
+      setSelectionFromAnchor(cell, cell)
+      setActiveRowIndex(cell.rowIndex)
+    }
+    void startEdit(cell.rowIndex, cell.colIndex, { overwrite: false })
+    return
+  }
 
   event.preventDefault()
 
@@ -739,6 +818,32 @@ function handleKeyDown(e: KeyboardEvent) {
     activeSelection.value = makeSelectionRange(0, 0, 0, 0)
   }
 
+  if (isMeta && key === 'z') {
+    e.preventDefault()
+    if (gridMode.value === 'edit') {
+      cancelEdit()
+    }
+    if (e.shiftKey) {
+      redo()
+    } else {
+      undo()
+    }
+    enterNavigateMode()
+    focusGridContainer()
+    return
+  }
+
+  if (isMeta && key === 'y') {
+    e.preventDefault()
+    if (gridMode.value === 'edit') {
+      cancelEdit()
+    }
+    redo()
+    enterNavigateMode()
+    focusGridContainer()
+    return
+  }
+
   if (gridMode.value === 'edit') {
     const ec = editingCell.value
     if (!ec) {
@@ -795,7 +900,6 @@ function handleKeyDown(e: KeyboardEvent) {
       return
     }
 
-    if (isMeta) return
     return
   }
 
@@ -949,9 +1053,24 @@ function handleKeyDown(e: KeyboardEvent) {
     return
   }
 
+  if (
+    !isMeta &&
+    isActiveSelectColumn() &&
+    (keyRaw === ' ' || (e.altKey && keyRaw === 'ArrowDown'))
+  ) {
+    e.preventDefault()
+    const focus = activeCell.value ?? { rowIndex: 0, colIndex: 0 }
+    void startEdit(focus.rowIndex, focus.colIndex, { overwrite: false })
+    return
+  }
+
   if (isPrintableKey(e)) {
     e.preventDefault()
     const focus = activeCell.value ?? { rowIndex: 0, colIndex: 0 }
+    if (isSelectColumn(focus.colIndex)) {
+      void startEdit(focus.rowIndex, focus.colIndex, { overwrite: false })
+      return
+    }
     startEdit(focus.rowIndex, focus.colIndex, { overwrite: true, initialChar: keyRaw })
   }
 }
@@ -992,9 +1111,26 @@ const identificationUsedOnPage = computed(() => {
   return [...new Set(values)]
 })
 
+const pilotsColumn = computed(() => visibleColumns.value.find((c) => c.fieldKey === 'pilots'))
+
 const builderPilotSuggestions = computed<string[]>(() => {
-  if (!builderPilots) return []
-  return builderPilots.value ?? []
+  const seen = new Map<string, string>()
+  const add = (name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    const key = trimmed.toLowerCase()
+    if (!seen.has(key)) seen.set(key, trimmed)
+  }
+  if (builderPilots) {
+    for (const name of builderPilots.value ?? []) add(name)
+  }
+  const col = pilotsColumn.value
+  if (col) {
+    for (const row of rows.value) {
+      add(row.cells?.[col.id] ?? '')
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b))
 })
 
 const tableRef = ref<HTMLTableElement | null>(null)
@@ -1035,6 +1171,7 @@ type CellRefHandle = {
   commitEdit?: () => void
   cancelEdit?: (restoreValue: string) => void
   getInputElement?: () => HTMLInputElement | null
+  getSelectElement?: () => HTMLSelectElement | null
 }
 const cellRefs = ref<Map<string, CellRefHandle>>(new Map())
 
@@ -1066,19 +1203,49 @@ function getDigifiCellTitle(rowIdx: number, colId: string): string | undefined {
     const preview = meta.candidates?.slice(0, 3).map((candidate) => candidate.value).join(', ')
     return `${meta.message ?? 'Review this AI match.'}${preview ? ` Top matches: ${preview}.` : ''}`
   }
+  if (meta.verifyCarefully && !meta.userConfirmed) {
+    return meta.message ?? 'Double-check this AI-filled value against the photo.'
+  }
   if (meta.autoApplied && meta.rawValue.trim() && meta.rawValue.trim() !== meta.resolvedValue.trim()) {
     return meta.message ?? `AI changed "${meta.rawValue}" to "${meta.resolvedValue}".`
   }
   return meta.message
 }
 
-function digifiCellState(rowIdx: number, colId: string): 'review' | 'auto' | 'confirmed' | null {
+type DigifiCellVisualState = 'review' | 'caution' | 'auto' | 'confirmed' | null
+
+function digifiCellState(rowIdx: number, colId: string): DigifiCellVisualState {
   const meta = getDigifiCellMeta(rowIdx, colId)
   if (!meta) return null
   if (meta.needsReview) return 'review'
+  if (meta.verifyCarefully && !meta.userConfirmed) return 'caution'
   if (meta.userConfirmed) return 'confirmed'
   if (meta.autoApplied) return 'auto'
   return null
+}
+
+function digifiCellBackgroundClass(state: DigifiCellVisualState): string {
+  if (state === 'review') return isDark.value ? 'bg-amber-500/10' : 'bg-amber-50/70'
+  if (state === 'caution') return isDark.value ? 'bg-orange-500/10' : 'bg-orange-50/70'
+  if (state === 'auto') return isDark.value ? 'bg-emerald-500/10' : 'bg-emerald-50/70'
+  if (state === 'confirmed') return isDark.value ? 'bg-sky-500/10' : 'bg-sky-50/70'
+  return ''
+}
+
+function digifiCellBadgeClass(state: DigifiCellVisualState): string {
+  if (state === 'review') {
+    return isDark.value ? 'bg-amber-500/20 text-amber-200' : 'bg-amber-100 text-amber-800'
+  }
+  if (state === 'caution') {
+    return isDark.value ? 'bg-orange-500/20 text-orange-200' : 'bg-orange-100 text-orange-800'
+  }
+  return isDark.value ? 'bg-emerald-500/20 text-emerald-200' : 'bg-emerald-100 text-emerald-800'
+}
+
+function digifiCellBadgeLabel(state: DigifiCellVisualState): string {
+  if (state === 'review') return '?'
+  if (state === 'caution') return '!'
+  return 'AI'
 }
 
 function onCellInput(rowIdx: number, colId: string, value: string) {
@@ -1268,9 +1435,7 @@ defineExpose({
               :class="[
                 'relative border p-0 text-center',
                 isDark ? 'border-white/10' : 'border-gray-200',
-                digifiCellState(rowIdx, col.id) === 'review' ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50/70') : '',
-                digifiCellState(rowIdx, col.id) === 'auto' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50/70') : '',
-                digifiCellState(rowIdx, col.id) === 'confirmed' ? (isDark ? 'bg-sky-500/10' : 'bg-sky-50/70') : '',
+                digifiCellBackgroundClass(digifiCellState(rowIdx, col.id)),
                 isCellInSelection(rowIdx, colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
                 isActiveCell(rowIdx, colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400 shadow-inner' : 'ring-1 ring-inset ring-blue-500') : '',
                 isSelectionTopEdge(rowIdx, colIdx) ? 'border-t-2 border-t-blue-500' : '',
@@ -1302,14 +1467,10 @@ defineExpose({
                 v-if="digifiCellState(rowIdx, col.id)"
                 :class="[
                   'pointer-events-none absolute left-1 top-1 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-                  digifiCellState(rowIdx, col.id) === 'review'
-                    ? (isDark ? 'bg-amber-500/20 text-amber-200' : 'bg-amber-100 text-amber-800')
-                    : digifiCellState(rowIdx, col.id) === 'auto'
-                      ? (isDark ? 'bg-emerald-500/20 text-emerald-200' : 'bg-emerald-100 text-emerald-800')
-                      : (isDark ? 'bg-sky-500/20 text-sky-200' : 'bg-sky-100 text-sky-800'),
+                  digifiCellBadgeClass(digifiCellState(rowIdx, col.id)),
                 ]"
               >
-                {{ digifiCellState(rowIdx, col.id) === 'review' ? '?' : 'AI' }}
+                {{ digifiCellBadgeLabel(digifiCellState(rowIdx, col.id)) }}
               </span>
               <button
                 v-if="isHandleCell(rowIdx, colIdx)"
@@ -1332,9 +1493,7 @@ defineExpose({
               :class="[
                 'relative border p-0 text-center',
                 isDark ? 'border-white/10' : 'border-gray-200',
-                digifiCellState(rowIdx, col.id) === 'review' ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50/70') : '',
-                digifiCellState(rowIdx, col.id) === 'auto' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50/70') : '',
-                digifiCellState(rowIdx, col.id) === 'confirmed' ? (isDark ? 'bg-sky-500/10' : 'bg-sky-50/70') : '',
+                digifiCellBackgroundClass(digifiCellState(rowIdx, col.id)),
                 isCellInSelection(rowIdx, splitIndex + colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
                 isActiveCell(rowIdx, splitIndex + colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400 shadow-inner' : 'ring-1 ring-inset ring-blue-500') : '',
                 isSelectionTopEdge(rowIdx, splitIndex + colIdx) ? 'border-t-2 border-t-blue-500' : '',
@@ -1366,14 +1525,10 @@ defineExpose({
                 v-if="digifiCellState(rowIdx, col.id)"
                 :class="[
                   'pointer-events-none absolute left-1 top-1 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-                  digifiCellState(rowIdx, col.id) === 'review'
-                    ? (isDark ? 'bg-amber-500/20 text-amber-200' : 'bg-amber-100 text-amber-800')
-                    : digifiCellState(rowIdx, col.id) === 'auto'
-                      ? (isDark ? 'bg-emerald-500/20 text-emerald-200' : 'bg-emerald-100 text-emerald-800')
-                      : (isDark ? 'bg-sky-500/20 text-sky-200' : 'bg-sky-100 text-sky-800'),
+                  digifiCellBadgeClass(digifiCellState(rowIdx, col.id)),
                 ]"
               >
-                {{ digifiCellState(rowIdx, col.id) === 'review' ? '?' : 'AI' }}
+                {{ digifiCellBadgeLabel(digifiCellState(rowIdx, col.id)) }}
               </span>
               <button
                 v-if="isHandleCell(rowIdx, splitIndex + colIdx)"
@@ -1391,9 +1546,7 @@ defineExpose({
               :class="[
                 'relative border p-0 text-center',
                 isDark ? 'border-white/10' : 'border-gray-200',
-                digifiCellState(rowIdx, col.id) === 'review' ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50/70') : '',
-                digifiCellState(rowIdx, col.id) === 'auto' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50/70') : '',
-                digifiCellState(rowIdx, col.id) === 'confirmed' ? (isDark ? 'bg-sky-500/10' : 'bg-sky-50/70') : '',
+                digifiCellBackgroundClass(digifiCellState(rowIdx, col.id)),
                 isCellInSelection(rowIdx, colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
                 isActiveCell(rowIdx, colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400 shadow-inner' : 'ring-1 ring-inset ring-blue-500') : '',
                 isSelectionTopEdge(rowIdx, colIdx) ? 'border-t-2 border-t-blue-500' : '',
@@ -1425,14 +1578,10 @@ defineExpose({
                 v-if="digifiCellState(rowIdx, col.id)"
                 :class="[
                   'pointer-events-none absolute left-1 top-1 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-                  digifiCellState(rowIdx, col.id) === 'review'
-                    ? (isDark ? 'bg-amber-500/20 text-amber-200' : 'bg-amber-100 text-amber-800')
-                    : digifiCellState(rowIdx, col.id) === 'auto'
-                      ? (isDark ? 'bg-emerald-500/20 text-emerald-200' : 'bg-emerald-100 text-emerald-800')
-                      : (isDark ? 'bg-sky-500/20 text-sky-200' : 'bg-sky-100 text-sky-800'),
+                  digifiCellBadgeClass(digifiCellState(rowIdx, col.id)),
                 ]"
               >
-                {{ digifiCellState(rowIdx, col.id) === 'review' ? '?' : 'AI' }}
+                {{ digifiCellBadgeLabel(digifiCellState(rowIdx, col.id)) }}
               </span>
               <button
                 v-if="isHandleCell(rowIdx, colIdx)"

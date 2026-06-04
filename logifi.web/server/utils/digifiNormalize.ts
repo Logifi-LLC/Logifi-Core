@@ -1,4 +1,5 @@
 import type { DigifiTemplateColumn } from '../../app/utils/digifiTypes'
+import { isDigifiManualOnlyField } from '../../app/utils/logbookBuilderTypes'
 import { normalizeDigifiRegistrationKey } from '../../app/utils/digifiFeedback'
 import type { LogbookColumnKey } from '../../app/utils/logbookTypes'
 
@@ -177,6 +178,7 @@ export function normalizeScanRows(
     const cells: Record<string, string> = {}
     for (const [colId, raw] of Object.entries(reconciledRaw)) {
       const col = colById.get(colId)
+      if (col && isDigifiManualOnlyField(col.fieldKey)) continue
       cells[colId] = normalizeCellValue(
         raw,
         col?.fieldKey ?? null,

@@ -127,6 +127,16 @@ onUnmounted(() => {
 
 const displayLabel = computed(() => props.column.label || 'Unmapped')
 
+const columnHeaderTitle = computed(() => {
+  if (props.column.fieldKey === 'role') {
+    return 'Your role on this flight (PIC, Student/Dual Received, Instructor, etc.)'
+  }
+  if (props.column.fieldKey === 'pilotRole') {
+    return "Other crew member's job (Student, Instructor, Captain, First Officer, etc.)"
+  }
+  return displayLabel.value
+})
+
 const isNumeric = computed(() => {
   const k = props.column.fieldKey
   return k != null && ['pic','sic','dualR','solo','night','actual','hood','dualG','xc','dayLandings','nightLandings','approach','total'].includes(k)
@@ -147,7 +157,7 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
         'w-full min-w-0 truncate rounded border-0 bg-transparent py-0.5 text-center text-xs font-semibold uppercase tracking-wider focus:ring-1 focus:ring-blue-500 transition-colors',
         isDark ? 'text-gray-400 hover:bg-white/10 hover:text-gray-300' : 'text-black hover:bg-gray-50'
       ]"
-      :title="displayLabel"
+      :title="columnHeaderTitle"
       @click="open = !open"
     >
       {{ displayLabel }}

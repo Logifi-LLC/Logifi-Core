@@ -1,8 +1,7 @@
 import {
   APPROACH_TYPE_OPTIONS,
   CATEGORY_CLASS_OPTIONS,
-  PILOT_ROLE_OPTIONS,
-  ROLE_OPTIONS,
+  isDigifiManualOnlyField,
 } from '../../app/utils/logbookBuilderTypes'
 import { analyzeDigifiScanRows } from '../../app/utils/digifiScanDiagnostics'
 import type { DigifiScanRow, DigifiScanStrategy, DigifiTemplateColumn } from '../../app/utils/digifiTypes'
@@ -22,6 +21,7 @@ import {
 import { compressDigifiImageForGemini } from './digifiImagePrep'
 import { countRowsWithCells, isScanResponseIncomplete } from './digifiScanValidation'
 import { parseDigifiTsvResponse } from './digifiTsvParser'
+import { DIGIFI_COMMON_MISTAKE_PROMPT_RULES } from '../../app/utils/digifiCommonMistakes'
 
 interface DigifiGeminiGenerationOptions {
   maxOutputTokens: number
@@ -103,10 +103,11 @@ function columnTypeHint(fieldKey: LogbookColumnKey | null): string {
   ) {
     return 'decimal time or count'
   }
-  if (fieldKey === 'role') return ROLE_OPTIONS.map((r) => r.value).join('|')
   if (fieldKey === 'approachType') return APPROACH_TYPE_OPTIONS.join('|')
   if (fieldKey === 'categoryClass') return CATEGORY_CLASS_OPTIONS.join('|')
-  if (fieldKey === 'pilotRole') return PILOT_ROLE_OPTIONS.filter((p) => p.value).map((p) => p.value).join('|')
+  if (fieldKey === 'remarks') {
+    return 'free text; vertical stacked lines in one remarks box = one cell value (not separate rows/columns)'
+  }
   if (fieldKey === 'departure' || fieldKey === 'destination') return 'airport code'
   if (fieldKey === 'route') return 'route codes'
   return 'text'
@@ -128,11 +129,21 @@ function buildAirportPromptRules(columns: DigifiTemplateColumn[]): string {
   return lines.join(' ')
 }
 
-function buildColumnList(columns: DigifiTemplateColumn[], pageSide: 'left' | 'right', layout: string, splitIndex: number): DigifiTemplateColumn[] {
+export function buildColumnList(
+  columns: DigifiTemplateColumn[],
+  pageSide: 'left' | 'right',
+  layout: string,
+  splitIndex: number
+): DigifiTemplateColumn[] {
   const sorted = [...columns].sort((a, b) => a.order - b.order)
   if (layout !== 'two-page') return sorted
   if (pageSide === 'left') return sorted.slice(0, splitIndex)
   return sorted.slice(splitIndex)
+}
+
+/** Columns Gemini may transcribe (Role / Pilot Role are manual-only). */
+export function filterDigifiScanColumns(columns: DigifiTemplateColumn[]): DigifiTemplateColumn[] {
+  return columns.filter((col) => !isDigifiManualOnlyField(col.fieldKey))
 }
 
 const TSV_FORMAT_RULES = `Output format (strict):
@@ -140,7 +151,10 @@ const TSV_FORMAT_RULES = `Output format (strict):
 - One line per non-empty cell: rowIndex<TAB>columnId<TAB>value
 - Use the exact columnId strings listed below.
 - Flight times as decimal hours (1.5 not 1:30).
-- Dates as written on the paper.`
+- Dates as written on the paper.
+- Do not transcribe page footer totals, "brought forward", "carried forward", or other summary-only rows unless they are individual flight lines with a date or aircraft.
+- If the last rowIndex is only cumulative totals (no date, aircraft, or route), leave that rowIndex empty.
+- Do not create extra rowIndex values or columnId values for sub-lines inside a single remarks box.`
 
 function buildPrompt(
   meta: DigifiScanMetaInput,
@@ -156,6 +170,8 @@ function buildPrompt(
     .join('; ')
 
   const airportRules = buildAirportPromptRules(targetColumns)
+  const mistakeRules = DIGIFI_COMMON_MISTAKE_PROMPT_RULES
+  const extraRules = [airportRules ? `Airports: ${airportRules}` : '', mistakeRules].filter(Boolean).join('\n')
 
   const pageDesc =
     meta.layout === 'two-page'
@@ -181,20 +197,23 @@ ${TSV_FORMAT_RULES}
 
 Columns (columnId):
 ${colLines}
-${airportRules ? `Airports: ${airportRules}` : ''}`
+${extraRules}`
   }
 
   return `Transcribe this pilot logbook page.
 ${pageDesc}
 ${bandHint}
 
-Extract rowIndex 0 through ${meta.rowCount - 1} (top to bottom). Include every row that has readable handwriting.
+Extract rowIndex 0 through ${meta.rowCount - 1} (top to bottom). rowIndex 0 is the first flight line below the header; rowIndex 1 is the second line, and so on.
+Include every flight line that has any readable handwriting in date, aircraft, identification, or remarks — do not skip sparse or light lines.
+If unsure between two physical lines, use separate rowIndex values rather than merging lines.
+Exclude footer/carry/totals summary rows from row indices.
 
 ${TSV_FORMAT_RULES}
 
 Columns (columnId):
 ${colLines}
-${airportRules ? `Airports: ${airportRules}` : ''}`
+${extraRules}`
 }
 
 function mergeRowsByIndex(rows: DigifiScanRow[]): { rows: DigifiScanRow[]; duplicateRowIndices: number[] } {
@@ -542,7 +561,9 @@ export async function scanLogbookImageWithGemini(
     Math.max(1, meta.twoPageSplitIndex),
     Math.max(1, meta.columns.length - 1)
   )
-  const targetColumns = buildColumnList(meta.columns, meta.pageSide, meta.layout, splitIndex)
+  const targetColumns = filterDigifiScanColumns(
+    buildColumnList(meta.columns, meta.pageSide, meta.layout, splitIndex)
+  )
   const allowedColumnIds = new Set(targetColumns.map((column) => column.id))
   const modelChain = getDigifiModelChain()
   const sendRowBands = chunkImages.length > 0 && !env.disableRowBandsToGemini

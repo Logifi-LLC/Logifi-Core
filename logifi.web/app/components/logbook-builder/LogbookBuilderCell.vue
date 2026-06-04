@@ -1,7 +1,13 @@
 <script lang="ts">
-import { defineComponent, computed, ref } from 'vue'
+import { defineComponent, computed, ref, watch, nextTick } from 'vue'
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
-import { CATEGORY_CLASS_OPTIONS, ROLE_OPTIONS, APPROACH_TYPE_OPTIONS, PILOT_ROLE_OPTIONS } from '~/utils/logbookBuilderTypes'
+import {
+  CATEGORY_CLASS_OPTIONS,
+  ROLE_OPTIONS,
+  APPROACH_TYPE_OPTIONS,
+  PILOT_ROLE_OPTIONS,
+} from '~/utils/logbookBuilderTypes'
+import { filterPilotSuggestions, handlePilotSuggestKeydown } from '~/utils/pilotNameSuggest'
 import { useTheme } from '~/composables/useTheme'
 
 const numericKeys: LogbookColumnKey[] = [
@@ -36,8 +42,53 @@ export default defineComponent({
     const isCategoryClassTimeColumn = computed(() => props.fieldKey === 'categoryClass' && props.categoryClassValue != null)
     const isApproachType = computed(() => props.fieldKey === 'approachType')
     const isPilotRole = computed(() => props.fieldKey === 'pilotRole')
+    const isPilots = computed(() => props.fieldKey === 'pilots')
     const roleDisplayValue = computed(() => (props.modelValue || props.defaultRole || 'PIC').trim() || 'PIC')
     const { isDark } = useTheme()
+
+    const showPilotDropdown = ref(false)
+    const highlightedPilotIndex = ref(-1)
+    const pilotMenuPosition = ref({ top: 0, left: 0, width: 120 })
+    let pilotBlurTimer: ReturnType<typeof setTimeout> | null = null
+
+    const filteredPilotSuggestions = computed(() =>
+      filterPilotSuggestions(props.suggestions ?? [], props.modelValue ?? '')
+    )
+
+    watch(
+      () => props.isEditing,
+      (editing) => {
+        if (!editing) {
+          showPilotDropdown.value = false
+          highlightedPilotIndex.value = -1
+        }
+      }
+    )
+
+    function updatePilotMenuPosition() {
+      const el = inputRef.value
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      pilotMenuPosition.value = {
+        top: rect.bottom + 2,
+        left: rect.left,
+        width: Math.max(rect.width, 120),
+      }
+    }
+
+    function openPilotDropdown() {
+      if (!props.isEditing || filteredPilotSuggestions.value.length === 0) return
+      showPilotDropdown.value = true
+      highlightedPilotIndex.value = filteredPilotSuggestions.value.length > 0 ? 0 : -1
+      nextTick(() => updatePilotMenuPosition())
+    }
+
+    function selectPilotName(name: string) {
+      emit('update:modelValue', name)
+      if (inputRef.value) inputRef.value.value = name
+      showPilotDropdown.value = false
+      highlightedPilotIndex.value = -1
+    }
 
     const inputClass = computed(() => {
       const colors = isDark.value
@@ -56,7 +107,7 @@ export default defineComponent({
 
     const listId = computed(() => {
       if (!props.suggestions || !props.suggestions.length) return undefined
-      if (props.fieldKey === 'identification' || props.fieldKey === 'pilots') {
+      if (props.fieldKey === 'identification') {
         return `suggestions-${props.fieldKey}-${props.builderRow}-${props.builderCol}`
       }
       return undefined
@@ -107,6 +158,10 @@ export default defineComponent({
       return inputRef.value
     }
 
+    function getSelectElement(): HTMLSelectElement | null {
+      return roleSelectRef.value ?? selectRef.value ?? null
+    }
+
     function onInput(e: Event) {
       emit('update:modelValue', (e.target as HTMLInputElement).value)
     }
@@ -142,17 +197,64 @@ export default defineComponent({
       emit('focus')
     }
 
-    function onInputBlur() {
-      overwriteOnNextKey.value = false
+    function onPilotFocus() {
+      if (pilotBlurTimer) {
+        clearTimeout(pilotBlurTimer)
+        pilotBlurTimer = null
+      }
+      emit('focus')
+      openPilotDropdown()
+    }
 
-      if (props.fieldKey === 'pilots') {
+    function onPilotInput(e: Event) {
+      onInput(e)
+      openPilotDropdown()
+    }
+
+    function onPilotKeydown(e: KeyboardEvent) {
+      if (showPilotDropdown.value && filteredPilotSuggestions.value.length > 0) {
+        const result = handlePilotSuggestKeydown({
+          key: e.key,
+          items: filteredPilotSuggestions.value,
+          highlightIndex: highlightedPilotIndex.value,
+        })
+        if (result.type === 'prevent') {
+          e.preventDefault()
+          highlightedPilotIndex.value = result.highlightIndex
+          return
+        }
+        if (result.type === 'select') {
+          e.preventDefault()
+          selectPilotName(result.value)
+          return
+        }
+        if (result.type === 'close') {
+          e.preventDefault()
+          showPilotDropdown.value = false
+          highlightedPilotIndex.value = -1
+          return
+        }
+      }
+      onInputKeydown(e)
+    }
+
+    function onPilotBlur() {
+      overwriteOnNextKey.value = false
+      pilotBlurTimer = setTimeout(() => {
+        showPilotDropdown.value = false
+        highlightedPilotIndex.value = -1
         const normalized = (props.modelValue || '').trim()
         if (normalized !== props.modelValue) {
           emit('update:modelValue', normalized)
           if (inputRef.value) inputRef.value.value = normalized
         }
-      }
+        emit('blur')
+        pilotBlurTimer = null
+      }, 150)
+    }
 
+    function onInputBlur() {
+      overwriteOnNextKey.value = false
       emit('blur')
     }
 
@@ -172,6 +274,13 @@ export default defineComponent({
       isCategoryClassTimeColumn,
       isApproachType,
       isPilotRole,
+      isPilots,
+      isDark,
+      showPilotDropdown,
+      highlightedPilotIndex,
+      pilotMenuPosition,
+      filteredPilotSuggestions,
+      selectPilotName,
       roleDisplayValue,
       categoryClassOptions: CATEGORY_CLASS_OPTIONS,
       roleOptions: ROLE_OPTIONS,
@@ -182,11 +291,16 @@ export default defineComponent({
       commitEdit,
       cancelEdit,
       getInputElement,
+      getSelectElement,
       onInput,
       onSelectChange,
       onInputKeydown,
       onInputFocus,
       onInputBlur,
+      onPilotFocus,
+      onPilotInput,
+      onPilotKeydown,
+      onPilotBlur,
     }
   },
 })
@@ -202,6 +316,7 @@ export default defineComponent({
     :tabindex="isEditing ? 0 : -1"
     :data-builder-row="builderRow"
     :data-builder-col="builderCol"
+    @mousedown.stop
     @focus="$emit('focus')"
     @blur="$emit('blur')"
     @change="onSelectChange($event)"
@@ -217,6 +332,7 @@ export default defineComponent({
     :tabindex="isEditing ? 0 : -1"
     :data-builder-row="builderRow"
     :data-builder-col="builderCol"
+    @mousedown.stop
     @focus="$emit('focus')"
     @blur="$emit('blur')"
     @change="onSelectChange($event)"
@@ -233,6 +349,7 @@ export default defineComponent({
     :tabindex="isEditing ? 0 : -1"
     :data-builder-row="builderRow"
     :data-builder-col="builderCol"
+    @mousedown.stop
     @focus="$emit('focus')"
     @blur="$emit('blur')"
     @change="onSelectChange($event)"
@@ -249,12 +366,65 @@ export default defineComponent({
     :tabindex="isEditing ? 0 : -1"
     :data-builder-row="builderRow"
     :data-builder-col="builderCol"
+    @mousedown.stop
     @focus="$emit('focus')"
     @blur="$emit('blur')"
     @change="onSelectChange($event)"
   >
     <option v-for="opt in pilotRoleOptions" :key="opt.value || 'empty'" :value="opt.value">{{ opt.label }}</option>
   </select>
+  <div
+    v-else-if="isPilots"
+    class="relative w-full min-w-0"
+    @mousedown.stop
+  >
+    <input
+      ref="inputRef"
+      :value="modelValue"
+      type="text"
+      autocomplete="off"
+      :class="inputClass"
+      :disabled="disabled"
+      :readonly="!isEditing"
+      :tabindex="isEditing ? 0 : -1"
+      :data-builder-row="builderRow"
+      :data-builder-col="builderCol"
+      placeholder="Pilot name"
+      @focus="onPilotFocus"
+      @blur="onPilotBlur"
+      @keydown="onPilotKeydown"
+      @input="onPilotInput($event)"
+    />
+    <Teleport to="body">
+      <div
+        v-if="showPilotDropdown && isEditing && filteredPilotSuggestions.length > 0"
+        class="fixed z-[100] max-h-48 overflow-y-auto rounded border shadow-lg font-quicksand text-sm"
+        :class="isDark ? 'border-white/10 bg-gray-900 text-gray-100' : 'border-gray-200 bg-white text-gray-900'"
+        :style="{
+          top: pilotMenuPosition.top + 'px',
+          left: pilotMenuPosition.left + 'px',
+          width: pilotMenuPosition.width + 'px',
+        }"
+        data-builder-pilot-dropdown
+      >
+        <button
+          v-for="(pilot, index) in filteredPilotSuggestions"
+          :key="pilot"
+          type="button"
+          :data-index="index"
+          class="w-full px-3 py-2 text-left text-sm transition-colors"
+          :class="
+            highlightedPilotIndex === index
+              ? (isDark ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
+              : (isDark ? 'text-gray-100 hover:bg-white/10' : 'text-gray-900 hover:bg-gray-100')
+          "
+          @mousedown.prevent="selectPilotName(pilot)"
+        >
+          {{ pilot }}
+        </button>
+      </div>
+    </Teleport>
+  </div>
   <template v-else>
     <input
       ref="inputRef"
