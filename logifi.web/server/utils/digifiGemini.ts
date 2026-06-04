@@ -106,7 +106,7 @@ function columnTypeHint(fieldKey: LogbookColumnKey | null): string {
   if (fieldKey === 'approachType') return APPROACH_TYPE_OPTIONS.join('|')
   if (fieldKey === 'categoryClass') return CATEGORY_CLASS_OPTIONS.join('|')
   if (fieldKey === 'remarks') {
-    return 'free text; vertical stacked lines in one remarks box = one cell value (not separate rows/columns)'
+    return 'free text; stacked lines in one remarks box = one cell — join lines with " | " in the value (never the characters backslash-n); not separate rows/columns'
   }
   if (fieldKey === 'departure' || fieldKey === 'destination') return 'airport code'
   if (fieldKey === 'route') return 'route codes'

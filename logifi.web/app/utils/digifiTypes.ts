@@ -63,8 +63,6 @@ export interface DigifiScanCellMeta {
   confidence: DigifiPersonalizationConfidence
   autoApplied: boolean
   needsReview: boolean
-  /** High-mistake Digifi field — user should verify even when AI looks confident. */
-  verifyCarefully?: boolean
   userConfirmed?: boolean
   message?: string
   contextKey?: string

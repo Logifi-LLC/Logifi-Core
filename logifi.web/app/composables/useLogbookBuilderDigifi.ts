@@ -13,7 +13,6 @@ import {
   analyzeDigifiScanRows,
   formatDigifiScanWarning,
 } from '~/utils/digifiScanDiagnostics'
-import { formatDigifiVerifyCarefullyWarning } from '~/utils/digifiCommonMistakes'
 
 /** Match server Gemini prep (digifiImagePrep) to avoid uploading oversized photos. */
 const MAX_EDGE_PX = 1536
@@ -288,10 +287,7 @@ export function useLogbookBuilderDigifi() {
         result.fallbackUsed && (result.modelsAttempted?.length ?? 0) > 1
           ? `Used fallback model path (${result.modelsAttempted?.join(' -> ')}).`
           : null
-      const verifyCarefullyWarning = formatDigifiVerifyCarefullyWarning(applied.verifyCarefullyCount)
-      scanRowWarning.value = [rowWarning, reviewWarning, verifyCarefullyWarning, fallbackWarning]
-        .filter(Boolean)
-        .join(' ')
+      scanRowWarning.value = [rowWarning, reviewWarning, fallbackWarning].filter(Boolean).join(' ')
       recordDigifiScanStatus({
         pageSide,
         expectedRowCount: rowCount.value,

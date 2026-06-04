@@ -31,6 +31,7 @@ export default defineComponent({
   emits: ['update:modelValue', 'focus', 'blur'],
   setup(props, { emit }) {
     const inputRef = ref<HTMLInputElement | null>(null)
+    const textareaRef = ref<HTMLTextAreaElement | null>(null)
     const selectRef = ref<HTMLSelectElement | null>(null)
     const roleSelectRef = ref<HTMLSelectElement | null>(null)
     const overwriteOnNextKey = ref(false)
@@ -43,6 +44,7 @@ export default defineComponent({
     const isApproachType = computed(() => props.fieldKey === 'approachType')
     const isPilotRole = computed(() => props.fieldKey === 'pilotRole')
     const isPilots = computed(() => props.fieldKey === 'pilots')
+    const isRemarks = computed(() => props.fieldKey === 'remarks')
     const roleDisplayValue = computed(() => (props.modelValue || props.defaultRole || 'PIC').trim() || 'PIC')
     const { isDark } = useTheme()
 
@@ -90,11 +92,17 @@ export default defineComponent({
       highlightedPilotIndex.value = -1
     }
 
+    function getTextControl(): HTMLInputElement | HTMLTextAreaElement | null {
+      return isRemarks.value ? textareaRef.value : inputRef.value
+    }
+
     const inputClass = computed(() => {
       const colors = isDark.value
         ? 'text-gray-100 placeholder-gray-500 focus:bg-white/5 focus:shadow-inner'
         : 'text-gray-900 placeholder-gray-400 focus:bg-blue-50'
-      const base = `w-full min-w-0 border-0 bg-transparent px-1.5 py-0.5 text-center text-sm font-quicksand outline-none min-h-[1.75rem] focus:ring-1 focus:ring-inset focus:ring-blue-500 ${colors}`
+      const align = isRemarks.value ? 'text-left whitespace-pre-wrap resize-none' : 'text-center'
+      const minH = isRemarks.value ? 'min-h-[2.75rem]' : 'min-h-[1.75rem]'
+      const base = `w-full min-w-0 border-0 bg-transparent px-1.5 py-0.5 text-sm font-quicksand outline-none ${minH} focus:ring-1 focus:ring-inset focus:ring-blue-500 ${align} ${colors}`
       const mono = (isNumeric.value || isCategoryClassTimeColumn.value) ? 'font-mono' : ''
       return `${base} ${mono}`
     })
@@ -118,7 +126,7 @@ export default defineComponent({
       else if (isCategoryClass.value && !isCategoryClassTimeColumn.value) selectRef.value?.focus()
       else if (isApproachType.value) selectRef.value?.focus()
       else if (isPilotRole.value) selectRef.value?.focus()
-      else inputRef.value?.focus()
+      else getTextControl()?.focus()
     }
 
     function blurControl() {
@@ -126,7 +134,7 @@ export default defineComponent({
       else if (isCategoryClass.value && !isCategoryClassTimeColumn.value) selectRef.value?.blur()
       else if (isApproachType.value) selectRef.value?.blur()
       else if (isPilotRole.value) selectRef.value?.blur()
-      else inputRef.value?.blur()
+      else getTextControl()?.blur()
     }
 
     /** Excel F2 / double-click: edit in place; caret at end for small corrections. */
@@ -134,10 +142,10 @@ export default defineComponent({
       overwriteOnNextKey.value = options.overwrite
       focusControl()
       if (!options.overwrite) {
-        const input = inputRef.value
-        if (input) {
-          const len = input.value.length
-          input.setSelectionRange(len, len)
+        const control = getTextControl()
+        if (control) {
+          const len = control.value.length
+          control.setSelectionRange(len, len)
         }
       }
     }
@@ -150,12 +158,13 @@ export default defineComponent({
     function cancelEdit(restoreValue: string) {
       overwriteOnNextKey.value = false
       emit('update:modelValue', restoreValue)
-      if (inputRef.value) inputRef.value.value = restoreValue
+      const control = getTextControl()
+      if (control) control.value = restoreValue
       blurControl()
     }
 
-    function getInputElement(): HTMLInputElement | null {
-      return inputRef.value
+    function getInputElement(): HTMLInputElement | HTMLTextAreaElement | null {
+      return getTextControl()
     }
 
     function getSelectElement(): HTMLSelectElement | null {
@@ -163,7 +172,7 @@ export default defineComponent({
     }
 
     function onInput(e: Event) {
-      emit('update:modelValue', (e.target as HTMLInputElement).value)
+      emit('update:modelValue', (e.target as HTMLInputElement | HTMLTextAreaElement).value)
     }
 
     function onInputKeydown(e: KeyboardEvent) {
@@ -174,7 +183,8 @@ export default defineComponent({
       if (key === 'Backspace' || key === 'Delete') {
         e.preventDefault()
         emit('update:modelValue', '')
-        if (inputRef.value) inputRef.value.value = ''
+        const control = getTextControl()
+        if (control) control.value = ''
         return
       }
 
@@ -189,7 +199,8 @@ export default defineComponent({
 
       e.preventDefault()
       emit('update:modelValue', key)
-      if (inputRef.value) inputRef.value.value = key
+      const control = getTextControl()
+      if (control) control.value = key
       overwriteOnNextKey.value = false
     }
 
@@ -275,6 +286,8 @@ export default defineComponent({
       isApproachType,
       isPilotRole,
       isPilots,
+      isRemarks,
+      textareaRef,
       isDark,
       showPilotDropdown,
       highlightedPilotIndex,
@@ -425,6 +438,22 @@ export default defineComponent({
       </div>
     </Teleport>
   </div>
+  <textarea
+    v-else-if="isRemarks"
+    ref="textareaRef"
+    :value="modelValue"
+    rows="2"
+    :class="inputClass"
+    :disabled="disabled"
+    :readonly="!isEditing"
+    :tabindex="isEditing ? 0 : -1"
+    :data-builder-row="builderRow"
+    :data-builder-col="builderCol"
+    @focus="onInputFocus"
+    @blur="onInputBlur"
+    @keydown="onInputKeydown"
+    @input="onInput($event)"
+  />
   <template v-else>
     <input
       ref="inputRef"

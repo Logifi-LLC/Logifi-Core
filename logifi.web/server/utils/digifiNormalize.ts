@@ -112,6 +112,18 @@ function reconcileRowAirports(
   return next
 }
 
+/** TSV-safe remarks: turn literal \\n and real newlines into " | " separators. */
+export function normalizeRemarks(val: string): string {
+  return val
+    .replace(/\\r\\n/g, ' | ')
+    .replace(/\\n/g, ' | ')
+    .replace(/\\r/g, ' | ')
+    .replace(/\r?\n/g, ' | ')
+    .replace(/\s*\|\s*/g, ' | ')
+    .replace(/(?: \| )+/g, ' | ')
+    .trim()
+}
+
 function normalizeDate(val: string, defaultYear: number | null): string {
   const s = val.trim()
   if (!s) return ''
@@ -155,8 +167,10 @@ export function normalizeCellValue(
   defaultYear: number | null,
   categoryClassValue?: string
 ): string {
-  let v = (value ?? '').trim().replace(/\s+/g, ' ')
-  if (!v) return ''
+  const trimmed = (value ?? '').trim()
+  if (!trimmed) return ''
+  if (fieldKey === 'remarks') return normalizeRemarks(trimmed)
+  let v = trimmed.replace(/\s+/g, ' ')
   if (!fieldKey) return v
   if (fieldKey === 'date') return normalizeDate(v, defaultYear)
   if (fieldKey === 'identification') return normalizeDigifiRegistrationKey(v)

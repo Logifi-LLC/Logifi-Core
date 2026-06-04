@@ -1170,7 +1170,7 @@ type CellRefHandle = {
   beginEdit?: (options: { overwrite: boolean }) => void
   commitEdit?: () => void
   cancelEdit?: (restoreValue: string) => void
-  getInputElement?: () => HTMLInputElement | null
+  getInputElement?: () => HTMLInputElement | HTMLTextAreaElement | null
   getSelectElement?: () => HTMLSelectElement | null
 }
 const cellRefs = ref<Map<string, CellRefHandle>>(new Map())
@@ -1203,49 +1203,19 @@ function getDigifiCellTitle(rowIdx: number, colId: string): string | undefined {
     const preview = meta.candidates?.slice(0, 3).map((candidate) => candidate.value).join(', ')
     return `${meta.message ?? 'Review this AI match.'}${preview ? ` Top matches: ${preview}.` : ''}`
   }
-  if (meta.verifyCarefully && !meta.userConfirmed) {
-    return meta.message ?? 'Double-check this AI-filled value against the photo.'
-  }
   if (meta.autoApplied && meta.rawValue.trim() && meta.rawValue.trim() !== meta.resolvedValue.trim()) {
     return meta.message ?? `AI changed "${meta.rawValue}" to "${meta.resolvedValue}".`
   }
   return meta.message
 }
 
-type DigifiCellVisualState = 'review' | 'caution' | 'auto' | 'confirmed' | null
-
-function digifiCellState(rowIdx: number, colId: string): DigifiCellVisualState {
+function digifiCellState(rowIdx: number, colId: string): 'review' | 'auto' | 'confirmed' | null {
   const meta = getDigifiCellMeta(rowIdx, colId)
   if (!meta) return null
   if (meta.needsReview) return 'review'
-  if (meta.verifyCarefully && !meta.userConfirmed) return 'caution'
   if (meta.userConfirmed) return 'confirmed'
   if (meta.autoApplied) return 'auto'
   return null
-}
-
-function digifiCellBackgroundClass(state: DigifiCellVisualState): string {
-  if (state === 'review') return isDark.value ? 'bg-amber-500/10' : 'bg-amber-50/70'
-  if (state === 'caution') return isDark.value ? 'bg-orange-500/10' : 'bg-orange-50/70'
-  if (state === 'auto') return isDark.value ? 'bg-emerald-500/10' : 'bg-emerald-50/70'
-  if (state === 'confirmed') return isDark.value ? 'bg-sky-500/10' : 'bg-sky-50/70'
-  return ''
-}
-
-function digifiCellBadgeClass(state: DigifiCellVisualState): string {
-  if (state === 'review') {
-    return isDark.value ? 'bg-amber-500/20 text-amber-200' : 'bg-amber-100 text-amber-800'
-  }
-  if (state === 'caution') {
-    return isDark.value ? 'bg-orange-500/20 text-orange-200' : 'bg-orange-100 text-orange-800'
-  }
-  return isDark.value ? 'bg-emerald-500/20 text-emerald-200' : 'bg-emerald-100 text-emerald-800'
-}
-
-function digifiCellBadgeLabel(state: DigifiCellVisualState): string {
-  if (state === 'review') return '?'
-  if (state === 'caution') return '!'
-  return 'AI'
 }
 
 function onCellInput(rowIdx: number, colId: string, value: string) {
@@ -1435,7 +1405,9 @@ defineExpose({
               :class="[
                 'relative border p-0 text-center',
                 isDark ? 'border-white/10' : 'border-gray-200',
-                digifiCellBackgroundClass(digifiCellState(rowIdx, col.id)),
+                digifiCellState(rowIdx, col.id) === 'review' ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50/70') : '',
+                digifiCellState(rowIdx, col.id) === 'auto' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50/70') : '',
+                digifiCellState(rowIdx, col.id) === 'confirmed' ? (isDark ? 'bg-sky-500/10' : 'bg-sky-50/70') : '',
                 isCellInSelection(rowIdx, colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
                 isActiveCell(rowIdx, colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400 shadow-inner' : 'ring-1 ring-inset ring-blue-500') : '',
                 isSelectionTopEdge(rowIdx, colIdx) ? 'border-t-2 border-t-blue-500' : '',
@@ -1467,10 +1439,14 @@ defineExpose({
                 v-if="digifiCellState(rowIdx, col.id)"
                 :class="[
                   'pointer-events-none absolute left-1 top-1 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-                  digifiCellBadgeClass(digifiCellState(rowIdx, col.id)),
+                  digifiCellState(rowIdx, col.id) === 'review'
+                    ? (isDark ? 'bg-amber-500/20 text-amber-200' : 'bg-amber-100 text-amber-800')
+                    : digifiCellState(rowIdx, col.id) === 'auto'
+                      ? (isDark ? 'bg-emerald-500/20 text-emerald-200' : 'bg-emerald-100 text-emerald-800')
+                      : (isDark ? 'bg-sky-500/20 text-sky-200' : 'bg-sky-100 text-sky-800'),
                 ]"
               >
-                {{ digifiCellBadgeLabel(digifiCellState(rowIdx, col.id)) }}
+                {{ digifiCellState(rowIdx, col.id) === 'review' ? '?' : 'AI' }}
               </span>
               <button
                 v-if="isHandleCell(rowIdx, colIdx)"
@@ -1493,7 +1469,9 @@ defineExpose({
               :class="[
                 'relative border p-0 text-center',
                 isDark ? 'border-white/10' : 'border-gray-200',
-                digifiCellBackgroundClass(digifiCellState(rowIdx, col.id)),
+                digifiCellState(rowIdx, col.id) === 'review' ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50/70') : '',
+                digifiCellState(rowIdx, col.id) === 'auto' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50/70') : '',
+                digifiCellState(rowIdx, col.id) === 'confirmed' ? (isDark ? 'bg-sky-500/10' : 'bg-sky-50/70') : '',
                 isCellInSelection(rowIdx, splitIndex + colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
                 isActiveCell(rowIdx, splitIndex + colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400 shadow-inner' : 'ring-1 ring-inset ring-blue-500') : '',
                 isSelectionTopEdge(rowIdx, splitIndex + colIdx) ? 'border-t-2 border-t-blue-500' : '',
@@ -1525,10 +1503,14 @@ defineExpose({
                 v-if="digifiCellState(rowIdx, col.id)"
                 :class="[
                   'pointer-events-none absolute left-1 top-1 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-                  digifiCellBadgeClass(digifiCellState(rowIdx, col.id)),
+                  digifiCellState(rowIdx, col.id) === 'review'
+                    ? (isDark ? 'bg-amber-500/20 text-amber-200' : 'bg-amber-100 text-amber-800')
+                    : digifiCellState(rowIdx, col.id) === 'auto'
+                      ? (isDark ? 'bg-emerald-500/20 text-emerald-200' : 'bg-emerald-100 text-emerald-800')
+                      : (isDark ? 'bg-sky-500/20 text-sky-200' : 'bg-sky-100 text-sky-800'),
                 ]"
               >
-                {{ digifiCellBadgeLabel(digifiCellState(rowIdx, col.id)) }}
+                {{ digifiCellState(rowIdx, col.id) === 'review' ? '?' : 'AI' }}
               </span>
               <button
                 v-if="isHandleCell(rowIdx, splitIndex + colIdx)"
@@ -1546,7 +1528,9 @@ defineExpose({
               :class="[
                 'relative border p-0 text-center',
                 isDark ? 'border-white/10' : 'border-gray-200',
-                digifiCellBackgroundClass(digifiCellState(rowIdx, col.id)),
+                digifiCellState(rowIdx, col.id) === 'review' ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50/70') : '',
+                digifiCellState(rowIdx, col.id) === 'auto' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50/70') : '',
+                digifiCellState(rowIdx, col.id) === 'confirmed' ? (isDark ? 'bg-sky-500/10' : 'bg-sky-50/70') : '',
                 isCellInSelection(rowIdx, colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
                 isActiveCell(rowIdx, colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400 shadow-inner' : 'ring-1 ring-inset ring-blue-500') : '',
                 isSelectionTopEdge(rowIdx, colIdx) ? 'border-t-2 border-t-blue-500' : '',
@@ -1578,10 +1562,14 @@ defineExpose({
                 v-if="digifiCellState(rowIdx, col.id)"
                 :class="[
                   'pointer-events-none absolute left-1 top-1 rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-                  digifiCellBadgeClass(digifiCellState(rowIdx, col.id)),
+                  digifiCellState(rowIdx, col.id) === 'review'
+                    ? (isDark ? 'bg-amber-500/20 text-amber-200' : 'bg-amber-100 text-amber-800')
+                    : digifiCellState(rowIdx, col.id) === 'auto'
+                      ? (isDark ? 'bg-emerald-500/20 text-emerald-200' : 'bg-emerald-100 text-emerald-800')
+                      : (isDark ? 'bg-sky-500/20 text-sky-200' : 'bg-sky-100 text-sky-800'),
                 ]"
               >
-                {{ digifiCellBadgeLabel(digifiCellState(rowIdx, col.id)) }}
+                {{ digifiCellState(rowIdx, col.id) === 'review' ? '?' : 'AI' }}
               </span>
               <button
                 v-if="isHandleCell(rowIdx, colIdx)"

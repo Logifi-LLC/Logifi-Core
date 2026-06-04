@@ -12,7 +12,6 @@ import {
 } from '~/utils/logbookBuilderTypes'
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
 import type { DigifiPageSide, DigifiScanCellMeta, DigifiScanRow, DigifiScanStrategy } from '~/utils/digifiTypes'
-import { applyDigifiVerifyCarefullyFlags } from '~/utils/digifiCommonMistakes'
 import { createBuilderSpreadId } from '~/utils/logbookBuilderDraft'
 
 const FIELD_LABELS: Record<LogbookColumnKey, string> = {
@@ -51,7 +50,6 @@ export interface ApplyScanResultsResult {
   filled: number
   baseRow: number
   allowedColumnIds: string[]
-  verifyCarefullyCount: number
 }
 
 const MAX_UNDO_STACK = 50
@@ -223,7 +221,6 @@ export function useLogbookBuilderGrid() {
         ...currentMeta,
         userConfirmed: true,
         needsReview: false,
-        verifyCarefully: false,
       },
     }
   }
@@ -415,22 +412,10 @@ export function useLogbookBuilderGrid() {
       leftPageScanned.value = true
     }
 
-    const verifyCarefullyCount = applyDigifiVerifyCarefullyFlags({
-      rows: rows.value,
-      columns: columns.value,
-      pageSide,
-      layout: layout.value,
-      splitIndex: effectiveSplitIndex.value,
-      baseRow,
-      scanRowIndices: scanRows.map((row) => row.rowIndex),
-      allowedColumnIds: allowedColIds,
-    })
-
     return {
       filled,
       baseRow,
       allowedColumnIds: [...allowedColIds],
-      verifyCarefullyCount,
     }
   }
 

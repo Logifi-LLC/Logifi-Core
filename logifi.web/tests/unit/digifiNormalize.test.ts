@@ -90,6 +90,12 @@ describe('digifiNormalize', () => {
     expect(normalizeCellValue('3/15', 'date', 2024)).toBe('2024-03-15')
   })
 
+  it('normalizes remarks: literal \\n and newlines become pipe separators', () => {
+    expect(normalizeCellValue('McCaffrey\\nCheckride', 'remarks', 2024)).toBe('McCaffrey | Checkride')
+    expect(normalizeCellValue('line1\nline2', 'remarks', 2024)).toBe('line1 | line2')
+    expect(normalizeCellValue('a\\r\\nb', 'remarks', 2024)).toBe('a | b')
+  })
+
   it('normalizes scan rows by column field', () => {
     const rows = normalizeScanRows(
       [{ rowIndex: 0, cells: { c1: ' kord ', c2: '1.2' } }],
