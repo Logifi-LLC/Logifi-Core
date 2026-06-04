@@ -774,7 +774,7 @@
                 leave-to-class="opacity-0 -translate-y-2"
               >
                 <div
-                  v-if="showUpdatesBanner"
+                  v-if="showLatestBanner && latestUpdate"
                   :class="[
                     'relative p-6 rounded-2xl border text-left transition-colors duration-300 mb-6',
                     isDarkMode
@@ -786,23 +786,44 @@
                     type="button"
                     class="absolute right-4 top-4 rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/10 dark:hover:text-gray-200 transition-colors"
                     aria-label="Dismiss"
-                    @click="dismissUpdates"
+                    @click="dismissLatest"
                   >
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </button>
-                  <h2 :class="['text-lg font-quicksand font-semibold mb-4 pr-10', isDarkMode ? 'text-white' : 'text-gray-900']">
+                  <h2 :class="['text-lg font-quicksand font-semibold mb-3 pr-10', isDarkMode ? 'text-white' : 'text-gray-900']">
                     Updates!
                   </h2>
-                  <ul :class="['space-y-2 text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-600']">
-                    <li>
-                      <strong>Add pages</strong> — Build multi-page logbook spreads with the new Logbook Builder. Add rows, choose columns, and use two-page layout for left/right printing.
-                    </li>
-                    <li>
-                      <strong>Upgraded UI</strong> — Refined dashboard and a cleaner experience across light and dark mode.
+                  <ProductUpdateHeadline
+                    v-if="latestUpdate.tagline"
+                    :title="latestUpdate.title"
+                    :tagline="latestUpdate.tagline"
+                    :is-dark-mode="isDarkMode"
+                    compact
+                    heading-tag="p"
+                  />
+                  <p
+                    v-else
+                    :class="['text-sm font-quicksand font-semibold mb-3', isDarkMode ? 'text-white' : 'text-gray-900']"
+                  >
+                    {{ latestUpdate.title }}
+                  </p>
+                  <ul :class="['space-y-2 text-sm font-quicksand mb-4', isDarkMode ? 'text-gray-300' : 'text-gray-600']">
+                    <li v-for="(bullet, i) in latestUpdate.bullets.slice(0, 3)" :key="i">
+                      {{ bullet }}
                     </li>
                   </ul>
+                  <button
+                    type="button"
+                    :class="[
+                      'text-sm font-quicksand font-semibold transition-colors',
+                      isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'
+                    ]"
+                    @click="openSettingsUpdates"
+                  >
+                    View all updates
+                  </button>
                 </div>
               </Transition>
               <Transition
@@ -850,7 +871,7 @@
                 </div>
               </Transition>
               <div
-                v-if="!showUpdatesBanner && !showRegulatorySnapshot"
+                v-if="!showLatestBanner && !showRegulatorySnapshot"
                 class="flex items-center justify-center"
               >
                 <button
@@ -861,7 +882,7 @@
                       ? 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
                       : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
                   ]"
-                  @click="showAllUpdates"
+                  @click="restoreLatestBanner"
                 >
                   <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -5299,6 +5320,9 @@ import IntegrityStatus from '../components/IntegrityStatus.vue'
 import ComplianceChecklist from '../components/ComplianceChecklist.vue'
 import CurrencyDashboard from '../components/CurrencyDashboard.vue'
 import DashboardSettingsModal from '../components/settings/DashboardSettingsModal.vue'
+import ProductUpdateHeadline from '../components/ProductUpdateHeadline.vue'
+import { useProductUpdates } from '../composables/useProductUpdates'
+import type { SettingsTabId } from '../components/settings/settingsNav'
 import FcvApiDisclaimers from '../components/fcv/FcvApiDisclaimers.vue'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '../utils/migrateLocalStorage'
 import { findDuplicateEntries, checkDuplicatesInDatabase } from '../utils/duplicateDetection'
@@ -5549,17 +5573,19 @@ const syncStatusTitle = computed(() => {
 })
 
 const showAuthModal = ref(false)
-const showUpdatesBanner = ref(true)
-function dismissUpdates() {
-  showUpdatesBanner.value = false
-}
+const {
+  latestUpdate,
+  showLatestBanner,
+  dismissLatest,
+  restoreLatestBanner,
+} = useProductUpdates()
 const showRegulatorySnapshot = ref(true)
 function dismissSnapshot() {
   showRegulatorySnapshot.value = false
 }
-function showAllUpdates() {
-  showUpdatesBanner.value = true
-  showRegulatorySnapshot.value = true
+function openSettingsUpdates() {
+  activeSettingsTab.value = 'updates'
+  showSettingsModal.value = true
 }
 const isMigrating = ref(false)
 const migrationProgress = ref({ step: '', current: 0, total: 0 })
@@ -7037,7 +7063,7 @@ const catalogOpenState = reactive<Record<CatalogKey, boolean>>({
 })
 const isSidebarCollapsed = ref(false)
 const showSettingsModal = ref(false)
-const activeSettingsTab = ref<'profile' | 'account' | 'preferences' | 'data' | 'compliance'>('profile')
+const activeSettingsTab = ref<SettingsTabId>('profile')
 /** Sub-panes inside Settings → Pilot Profile (full-width each). */
 const pilotProfileSubTab = ref<'profile' | 'stats'>('profile')
 const show8710Fields = ref(false)

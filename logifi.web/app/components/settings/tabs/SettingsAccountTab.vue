@@ -10,7 +10,7 @@
       </p>
     </section>
 
-    <SettingsSection title="Digifi Credits" description="1 credit covers a full spread scan (left + right sides and rescans in the same session)." :is-dark-mode="isDarkMode">
+    <SettingsSection title="Digifi Credits" description="1 credit covers one full spread scan (left + right pages)." :is-dark-mode="isDarkMode">
       <div
         class="rounded-xl border p-4"
         :class="isDarkMode ? 'border-gray-700 bg-gray-900/40' : 'border-gray-200 bg-white'"

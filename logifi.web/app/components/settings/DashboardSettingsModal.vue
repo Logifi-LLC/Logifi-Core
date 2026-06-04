@@ -54,6 +54,11 @@
       @toggle-metric="$emit('toggle-metric', $event)"
     />
 
+    <SettingsUpdatesTab
+      v-show="activeTab === 'updates'"
+      :is-dark-mode="isDarkMode"
+    />
+
     <SettingsDataTab
       v-show="activeTab === 'data'"
       :is-dark-mode="isDarkMode"
@@ -85,6 +90,7 @@ import SettingsModalShell from './SettingsModalShell.vue'
 import SettingsProfileTab, { type PilotProfileForm } from './tabs/SettingsProfileTab.vue'
 import SettingsAccountTab from './tabs/SettingsAccountTab.vue'
 import SettingsPreferencesTab from './tabs/SettingsPreferencesTab.vue'
+import SettingsUpdatesTab from './tabs/SettingsUpdatesTab.vue'
 import SettingsDataTab from './tabs/SettingsDataTab.vue'
 import SettingsComplianceTab from './tabs/SettingsComplianceTab.vue'
 import type { SettingsTabId } from './settingsNav'

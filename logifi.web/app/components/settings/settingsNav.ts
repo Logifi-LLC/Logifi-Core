@@ -1,4 +1,4 @@
-export type SettingsTabId = 'profile' | 'account' | 'preferences' | 'data' | 'compliance'
+export type SettingsTabId = 'profile' | 'account' | 'preferences' | 'updates' | 'data' | 'compliance'
 
 export interface SettingsNavItem {
   id: SettingsTabId
@@ -10,6 +10,7 @@ export const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
   { id: 'profile', label: 'Pilot Profile', icon: 'ri:user-smile-line' },
   { id: 'account', label: 'Account', icon: 'ri:shield-user-line' },
   { id: 'preferences', label: 'Preferences', icon: 'ri:settings-4-line' },
+  { id: 'updates', label: 'Updates', icon: 'ri:megaphone-line' },
   { id: 'data', label: 'Data & Sync', icon: 'ri:database-2-line' },
   { id: 'compliance', label: 'Compliance', icon: 'ri:shield-check-line' },
 ]

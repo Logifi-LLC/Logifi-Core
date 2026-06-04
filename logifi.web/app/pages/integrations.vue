@@ -40,43 +40,94 @@
     </header>
 
     <main class="pt-32 pb-16 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto">
-      <div class="flex flex-wrap items-center gap-3 mb-4">
-        <h1 class="text-4xl font-bold text-gray-950 m-0 drop-shadow-sm dark:text-gray-900">Flight Crew View Import</h1>
-        <span
-          v-if="fcvUiShowPill"
-          class="shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900"
-        >
-          {{ fcvUiPillText }}
-        </span>
-      </div>
-      <p class="text-gray-800 mb-8 text-lg font-medium dark:text-gray-700">
-        Logifi can connect to Flight Crew View so you can preview and import your FC View flight
-        history into your logbook (when the integration is enabled for your account).
+      <h1 class="text-4xl font-bold text-gray-950 mb-4 drop-shadow-sm dark:text-gray-900">Integrations</h1>
+      <p class="text-gray-800 mb-6 text-lg font-medium dark:text-gray-700">
+        Logifi connects to external services for logbook import and paper-to-digital scanning.
       </p>
 
-      <FcvApiDisclaimers class="mb-10" tone="marketing" />
+      <nav class="flex flex-wrap gap-3 mb-10 text-sm font-medium">
+        <a href="#fcv" class="text-blue-600 hover:underline dark:text-blue-600">Flight Crew View</a>
+        <span class="text-gray-400">·</span>
+        <a href="#gemini" class="text-blue-600 hover:underline dark:text-blue-600">Google Gemini (Digifi)</a>
+      </nav>
 
-      <div
-        class="relative overflow-hidden rounded-[28px] border border-white/15 bg-white/10 backdrop-blur-md shadow-[0_0_42px_-12px_rgba(59,130,246,0.24),0_0_56px_-18px_rgba(37,99,235,0.14)] p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8"
-      >
-        <section class="prose prose-gray max-w-none text-gray-800 space-y-4 dark:text-gray-800">
-          <h2 class="text-2xl font-bold text-gray-950 font-quicksand mt-0 dark:text-gray-900">What this integration does</h2>
-          <p class="text-lg leading-relaxed">
-            After you authorize Logifi with Flight Crew View, our servers fetch flights you choose by
-            date range. You review a preview (including optional duplicate warnings) before import.
-            Imports are intended to be idempotent using stable flight identifiers from FC View.
-          </p>
-          <p class="text-lg leading-relaxed">
-            This is for
-            <strong class="text-gray-950 dark:text-gray-900">logbook record-keeping only</strong>. Logifi does not use FC View data for flight
-            planning, dispatch, weather or NOTAM briefing, or any operational decision-making.
-          </p>
-          <p class="text-lg leading-relaxed">
-            More detail on data handling:
-            <NuxtLink to="/data-sources?from=landing" class="text-blue-600 font-bold hover:underline dark:text-blue-600">Data sources &amp; third-party APIs</NuxtLink>.
-          </p>
-        </section>
-      </div>
+      <!-- Flight Crew View -->
+      <section id="fcv" class="scroll-mt-28 mb-10">
+        <div class="flex flex-wrap items-center gap-3 mb-4">
+          <h2 class="text-2xl font-bold text-gray-950 m-0 drop-shadow-sm dark:text-gray-900">Flight Crew View Import</h2>
+          <span
+            v-if="fcvUiShowPill"
+            class="shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900"
+          >
+            {{ fcvUiPillText }}
+          </span>
+        </div>
+        <p class="text-gray-800 mb-6 text-lg font-medium dark:text-gray-700">
+          Logifi can connect to Flight Crew View so you can preview and import your FC View flight
+          history into your logbook (when the integration is enabled for your account).
+        </p>
+
+        <div
+          class="relative overflow-hidden rounded-[28px] border border-white/15 bg-white/10 backdrop-blur-md shadow-[0_0_42px_-12px_rgba(59,130,246,0.24),0_0_56px_-18px_rgba(37,99,235,0.14)] p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8"
+        >
+          <FcvApiDisclaimers class="not-prose mb-8" tone="marketing" />
+          <div class="prose prose-gray max-w-none text-gray-800 space-y-4 dark:text-gray-800">
+            <h3 class="text-xl font-bold text-gray-950 font-quicksand mt-0 dark:text-gray-900">What this integration does</h3>
+            <p class="text-lg leading-relaxed">
+              After you authorize Logifi with Flight Crew View, our servers fetch flights you choose by
+              date range. You review a preview (including optional duplicate warnings) before import.
+              Imports are intended to be idempotent using stable flight identifiers from FC View.
+            </p>
+            <p class="text-lg leading-relaxed">
+              This is for
+              <strong class="text-gray-950 dark:text-gray-900">logbook record-keeping only</strong>. Logifi does not use FC View data for flight
+              planning, dispatch, weather or NOTAM briefing, or any operational decision-making.
+            </p>
+            <p class="text-lg leading-relaxed">
+              More detail on data handling:
+              <NuxtLink to="/data-sources?from=landing" class="text-blue-600 font-bold hover:underline dark:text-blue-600">Data sources &amp; third-party APIs</NuxtLink>.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Google Gemini (powers Digifi) -->
+      <section id="gemini" class="scroll-mt-28">
+        <h2 class="text-2xl font-bold text-gray-950 mb-4 drop-shadow-sm dark:text-gray-900">Google Gemini</h2>
+        <p class="text-gray-800 mb-6 text-lg font-medium dark:text-gray-700">
+          Logifi integrates with <strong class="text-gray-950 dark:text-gray-900">Google Gemini</strong> to power
+          <strong class="text-gray-950 dark:text-gray-900">Digifi</strong>—our paper logbook scanning feature. Upload photos of handwritten pages; Gemini transcribes entries for you to review and import.
+        </p>
+
+        <div
+          class="relative overflow-hidden rounded-[28px] border border-white/15 bg-white/10 backdrop-blur-md shadow-[0_0_42px_-12px_rgba(59,130,246,0.24),0_0_56px_-18px_rgba(37,99,235,0.14)] p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8"
+        >
+          <div class="prose prose-gray max-w-none text-gray-800 space-y-4 dark:text-gray-800">
+            <h3 class="text-xl font-bold text-gray-950 font-quicksand mt-0 dark:text-gray-900">What this integration does</h3>
+            <p class="text-lg leading-relaxed">
+              When you use Digifi, Logifi sends your logbook scan images and extracted text to
+              <strong class="text-gray-950 dark:text-gray-900">Google Gemini</strong> for transcription into your logbook grid.
+              You review and edit before importing into your digital logbook.
+            </p>
+            <p class="text-lg leading-relaxed">
+              Scan images are stored in our private storage bucket for up to
+              <strong class="text-gray-950 dark:text-gray-900">24 hours</strong> (for support), then deleted.
+              We do not send FC View tokens, authorization codes, or passkeys to Gemini or any other AI provider.
+            </p>
+            <p class="text-lg leading-relaxed">
+              Digifi scanning uses a pay-per-spread credit model—see
+              <NuxtLink to="/pricing" class="text-blue-600 font-bold hover:underline dark:text-blue-600">Pricing</NuxtLink>
+              for rates. Purchase credits in Settings → Account after signing in.
+            </p>
+            <p class="text-lg leading-relaxed">
+              More detail on data handling:
+              <NuxtLink to="/data-sources?from=landing" class="text-blue-600 font-bold hover:underline dark:text-blue-600">Data sources &amp; third-party APIs</NuxtLink>
+              and our
+              <NuxtLink to="/privacy?from=landing#digifi" class="text-blue-600 font-bold hover:underline dark:text-blue-600">Privacy Policy (Digifi)</NuxtLink>.
+            </p>
+          </div>
+        </div>
+      </section>
     </main>
 
     <footer class="border-t border-white/10 bg-white/5 backdrop-blur-md pb-6 pt-2 mt-12 transition-colors duration-300">
@@ -139,12 +190,12 @@ const handleAuthSuccess = () => {
 }
 
 useHead({
-  title: 'Flight Crew View integration | Logifi',
+  title: 'Integrations | Logifi',
   meta: [
     {
       name: 'description',
       content:
-        'How Logifi connects to Flight Crew View for logbook import. Required FCV API disclaimers.',
+        'Logifi integrations: Flight Crew View logbook import and Google Gemini for Digifi paper scanning.',
     },
   ],
 })

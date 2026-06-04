@@ -142,7 +142,7 @@
           </p>
         </section>
 
-        <section class="mb-10">
+        <section id="digifi" class="mb-10 scroll-mt-28">
           <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">6a. Digifi (paper logbook scanning)</h2>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
             If you use Digifi on Add Pages, you upload photos of your paper logbook. Our servers send those images to

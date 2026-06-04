@@ -58,7 +58,7 @@
           </h1>
           
           <p class="max-w-2xl mx-auto text-xl text-gray-700 mb-12 animate-slide-up delay-100 dark:text-gray-700">
-            Logifi is constantly innovating with new technology to keep your records secure, organized, and FAA-compliant.
+            Logifi is constantly innovating with new technology to keep your records secure, organized, and FAA-compliant—including AI-powered paper-to-digital scanning with Digifi.
           </p>
           
           <div class="flex flex-col sm:flex-row items-center justify-center gap-4 animate-slide-up delay-200">
@@ -113,15 +113,27 @@
                   :key="i"
                   :class="[
                     'bg-white/10 backdrop-blur-md p-8 rounded-3xl border border-white/15 flex flex-col md:h-full shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)]',
-                    i === 0 ? 'md:col-span-4' : '',
-                    i === 1 ? 'md:col-span-2' : '',
-                    i === 2 ? 'md:col-span-6' : '',
+                    i === 0 ? 'md:col-span-6 ring-1 ring-blue-400/35 shadow-[0_0_48px_-8px_rgba(59,130,246,0.38)]' : '',
+                    i >= 1 ? 'md:col-span-2' : '',
                   ]"
                 >
                   <div class="w-12 h-12 bg-blue-50/70 rounded-xl flex items-center justify-center text-blue-600 mb-6 dark:bg-blue-50/70 dark:text-blue-600">
                     <Icon :name="feature.icon" size="24" />
                   </div>
-                  <h3 class="text-xl font-bold mb-3 dark:text-gray-900">{{ feature.title }}</h3>
+                  <div v-if="'featured' in feature && feature.featured" class="mb-3">
+                    <h3 class="text-2xl sm:text-3xl font-bold tracking-tight dark:text-gray-900">
+                      <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-600 dark:to-indigo-600">
+                        {{ feature.title }}
+                      </span>
+                    </h3>
+                    <p
+                      v-if="'tagline' in feature && feature.tagline"
+                      class="mt-1.5 text-sm font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-600"
+                    >
+                      {{ feature.tagline }}
+                    </p>
+                  </div>
+                  <h3 v-else class="text-xl font-bold mb-3 dark:text-gray-900">{{ feature.title }}</h3>
                   <p class="text-gray-700 leading-relaxed dark:text-gray-700 md:grow">{{ feature.description }}</p>
                 </div>
               </div>
@@ -231,6 +243,13 @@ const handleAuthSuccess = () => {
 
 const features = [
   {
+    title: 'Digifi',
+    tagline: 'Paper logbook scanning',
+    description: 'Scan paper logbook spreads with your phone or camera. AI transcribes handwriting into your digital logbook—you review and edit before import.',
+    icon: 'ri:scan-line',
+    featured: true,
+  },
+  {
     title: 'Open Source Logbook',
     description: 'Built with transparency and community collaboration. View our code, contribute, and help shape the future of digital flight logging.',
     icon: 'ri:open-source-line'
@@ -249,9 +268,9 @@ const features = [
 
 const featuresToCome = [
   {
-    title: 'Digifi',
-    description: 'AI-powered digitization of paper logbooks with advanced handwriting recognition technology.',
-    icon: 'ri:scan-line'
+    title: 'The Hangar',
+    description: 'A community hub where pilots share flights, debrief experiences, and ask questions. Share ideas via Feedback until The Hangar launches.',
+    icon: 'ri:flight-takeoff-line'
   },
   {
     title: 'Student/Instructor Portals',

@@ -62,14 +62,14 @@ export function formatDigifiScanWarning(
   const parts: string[] = []
   if (rowsReturned < expectedRowCount) {
     parts.push(
-      `Expected ${expectedRowCount} rows but the scan returned ${rowsReturned}. Check that Rows is set to ${expectedRowCount} and rescan with a clearer photo.`
+      `Expected ${expectedRowCount} rows but the scan returned ${rowsReturned}. Check that Rows is set to ${expectedRowCount} and scan with a clearer photo.`
     )
   }
   if (missingRowIndices.length > 0) {
     const preview = missingRowIndices.slice(0, 5).map((i) => i + 1).join(', ')
     const suffix = missingRowIndices.length > 5 ? '…' : ''
     parts.push(
-      `Missing row line(s) on the grid: ${preview}${suffix} (paper row numbers). Fill these in manually or rescan.`
+      `Missing row line(s) on the grid: ${preview}${suffix} (paper row numbers). Fill these in manually.`
     )
   }
   if (duplicateRowIndices.length > 0) {

@@ -393,7 +393,7 @@ export function useLogbookBuilderGrid() {
         .join(', ')
       const suffix = unresolved.size > 5 ? '…' : ''
       issues.push(
-        `${status.pageSide === 'left' ? 'Left' : 'Right'} page still has unresolved Digifi rows at grid line(s) ${preview}${suffix}. Fill those rows manually or rescan before importing.`
+        `${status.pageSide === 'left' ? 'Left' : 'Right'} page still has unresolved Digifi rows at grid line(s) ${preview}${suffix}. Fill those rows manually before importing.`
       )
     }
     return issues

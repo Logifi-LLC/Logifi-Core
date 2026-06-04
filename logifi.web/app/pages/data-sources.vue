@@ -155,7 +155,7 @@
           </p>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
             Scan images are stored in our private storage bucket for up to <strong :class="isFromLanding ? 'text-gray-950 dark:text-gray-900' : ''">24 hours</strong>
-            (for re-scan and support), then deleted. We do not send FC View tokens, authorization codes, or passkeys to Gemini or any other AI provider.
+            (for support), then deleted. We do not send FC View tokens, authorization codes, or passkeys to Gemini or any other AI provider.
           </p>
         </section>
 
