@@ -79,6 +79,49 @@
           </button>
         </div>
       </div>
+
+      <button
+        type="button"
+        class="mt-4 flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left text-sm font-semibold font-quicksand transition-colors"
+        :class="isDarkMode ? 'border-gray-700 bg-gray-800/50 hover:bg-gray-800' : 'border-gray-200 bg-gray-50 hover:bg-gray-100'"
+        @click="showImportGuide = !showImportGuide"
+      >
+        <span>Supported columns</span>
+        <Icon :name="showImportGuide ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'" size="18" />
+      </button>
+      <div
+        v-show="showImportGuide"
+        class="mt-2 rounded-lg border p-4 text-sm font-quicksand space-y-3"
+        :class="isDarkMode ? 'border-gray-700 bg-gray-900/40 text-gray-300' : 'border-gray-200 bg-white text-gray-700'"
+      >
+        <p>
+          Logifi accepts flexible column headers. Export from Logifi for the canonical round-trip format.
+        </p>
+        <div>
+          <p class="font-semibold mb-1">Required for Part 61 validation</p>
+          <ul class="list-disc pl-5 space-y-0.5">
+            <li>Date</li>
+            <li>Role (or PIC/SIC/Dual Received time to infer role)</li>
+            <li>Category/Class (e.g. HELI, ASEL)</li>
+            <li>Registration / Ident</li>
+            <li>Aircraft Make/Model or Aircraft Type</li>
+            <li>Total Flight Time or Total (Turbine accepted as alias)</li>
+          </ul>
+        </div>
+        <div>
+          <p class="font-semibold mb-1">Common time column aliases</p>
+          <ul class="list-disc pl-5 space-y-0.5">
+            <li>Night → Night</li>
+            <li>Actual → Actual Instrument</li>
+            <li>Hood → Simulated Instrument</li>
+            <li>NVG → NVG time (enable military fields in Profile)</li>
+            <li>Dual Received → Dual Received</li>
+          </ul>
+        </div>
+        <p :class="helper" class="text-xs">
+          Enable <strong>Military logbook fields</strong> under Profile to log NVG hours and use the NVG flight condition.
+        </p>
+      </div>
     </SettingsSection>
 
     <SettingsSection
@@ -129,7 +172,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import SettingsSection from '../SettingsSection.vue'
 import { useSettingsClasses } from '../useSettingsClasses'
 import FcvSync from '~/components/fcv/FcvSync.vue'
@@ -157,6 +200,8 @@ defineEmits<{
   'export-logbook': []
   'generate-8710': []
 }>()
+
+const showImportGuide = ref(false)
 
 const { helper, btnPrimary, btnSecondary } = useSettingsClasses(computed(() => props.isDarkMode))
 

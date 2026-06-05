@@ -13,6 +13,14 @@ export interface DuplicateEntryMatchShape {
   destination: string
   oooiOut?: string | null
   flightTimeTotal?: number | null
+  /** Night hours — part of import duplicate fingerprint */
+  night?: number | null
+  /** NVG hours — part of import duplicate fingerprint */
+  nvg?: number | null
+  /** Actual instrument hours */
+  actualInstrument?: number | null
+  /** Simulated instrument (hood) hours */
+  simulatedInstrument?: number | null
 }
 
 /**
@@ -22,8 +30,22 @@ export interface DuplicateEntryMatchShape {
  */
 export type DuplicateMatchMode = 'standard' | 'importLeg'
 
+const TIME_BREAKDOWN_KEYS = [
+  'night',
+  'nvg',
+  'actualInstrument',
+  'simulatedInstrument',
+] as const satisfies readonly (keyof DuplicateEntryMatchShape)[]
+
 function normalizeRegistrationForMatch(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
+function normalizeTimeField(value: number | null | undefined): number {
+  if (value === null || value === undefined || typeof value !== 'number' || !Number.isFinite(value)) {
+    return 0
+  }
+  return Math.round(value * 10) / 10
 }
 
 function totalsMatchApproximately(a: number, b: number): boolean {
@@ -35,6 +57,25 @@ function airportFieldForMatch(value: string | undefined): string {
   const raw = (value || 'UNKNOWN').trim().toUpperCase()
   if (raw === '' || raw === 'UNKNOWN') return raw
   return canonicalizeAirportCodeForMatch(raw)
+}
+
+function isBothRouteUnknown(entry: DuplicateEntryMatchShape, existing: DuplicateEntryMatchShape): boolean {
+  return (
+    airportFieldForMatch(entry.departure) === 'UNKNOWN' &&
+    airportFieldForMatch(entry.destination) === 'UNKNOWN' &&
+    airportFieldForMatch(existing.departure) === 'UNKNOWN' &&
+    airportFieldForMatch(existing.destination) === 'UNKNOWN'
+  )
+}
+
+/** Night, NVG, actual, and hood must match exactly (null/undefined → 0). */
+function timeBreakdownMatches(entry: DuplicateEntryMatchShape, existing: DuplicateEntryMatchShape): boolean {
+  for (const key of TIME_BREAKDOWN_KEYS) {
+    if (normalizeTimeField(entry[key]) !== normalizeTimeField(existing[key])) {
+      return false
+    }
+  }
+  return true
 }
 
 /**
@@ -82,6 +123,10 @@ export function entriesDuplicateMatch(
     return true
   }
 
+  if (!timeBreakdownMatches(entry, existing)) {
+    return false
+  }
+
   const existingTotal = existing.flightTimeTotal
   const entryTotal = entry.flightTimeTotal
   if (
@@ -92,7 +137,12 @@ export function entriesDuplicateMatch(
     typeof existingTotal === 'number' &&
     typeof entryTotal === 'number'
   ) {
-    return totalsMatchApproximately(existingTotal, entryTotal)
+    const entryNorm = normalizeTimeField(entryTotal)
+    const existingNorm = normalizeTimeField(existingTotal)
+    if (isBothRouteUnknown(entry, existing)) {
+      return entryNorm === existingNorm
+    }
+    return totalsMatchApproximately(entryNorm, existingNorm)
   }
 
   return true

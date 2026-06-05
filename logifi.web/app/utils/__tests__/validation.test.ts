@@ -189,6 +189,71 @@ describe('validation', () => {
       const warnings = results.filter(r => r.type === 'warning' && r.field === 'pic')
       expect(warnings.length).toBeGreaterThan(0)
     })
+
+    it('should error for negative NVG time', () => {
+      const entry = createTestEntry({
+        flightTime: {
+          total: 2.0,
+          pic: 2.0,
+          sic: null,
+          dual: null,
+          solo: null,
+          night: null,
+          nvg: -0.5,
+          actualInstrument: null,
+          simulatedInstrument: null,
+          crossCountry: null
+        }
+      })
+
+      const results = validateFlightTime(entry)
+      const errors = results.filter(r => r.type === 'error' && r.field === 'nvg')
+      expect(errors.length).toBeGreaterThan(0)
+    })
+
+    it('should warn when NVG time exceeds total time', () => {
+      const entry = createTestEntry({
+        flightTime: {
+          total: 2.0,
+          pic: 2.0,
+          sic: null,
+          dual: null,
+          solo: null,
+          night: 1.0,
+          nvg: 3.0,
+          actualInstrument: null,
+          simulatedInstrument: null,
+          crossCountry: null
+        }
+      })
+
+      const results = validateFlightTime(entry)
+      const warnings = results.filter(r => r.type === 'warning' && r.field === 'nvg')
+      expect(warnings.length).toBeGreaterThan(0)
+    })
+
+    it('should warn when NVG time exceeds night time', () => {
+      const entry = createTestEntry({
+        flightTime: {
+          total: 2.0,
+          pic: 2.0,
+          sic: null,
+          dual: null,
+          solo: null,
+          night: 1.0,
+          nvg: 1.5,
+          actualInstrument: null,
+          simulatedInstrument: null,
+          crossCountry: null
+        }
+      })
+
+      const results = validateFlightTime(entry)
+      const warnings = results.filter(
+        r => r.type === 'warning' && r.field === 'nvg' && r.message.includes('night')
+      )
+      expect(warnings.length).toBeGreaterThan(0)
+    })
   })
 
   describe('validateCrossCountry', () => {

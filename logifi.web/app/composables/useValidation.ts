@@ -129,7 +129,7 @@ export const useValidation = () => {
       
       // Numeric precision validation for flight times
       if (entry.flightTime) {
-        const timeFields = ['total', 'pic', 'sic', 'dual', 'solo', 'night', 'actualInstrument', 'simulatedInstrument', 'crossCountry', 'dualGiven'] as const
+        const timeFields = ['total', 'pic', 'sic', 'dual', 'solo', 'night', 'nvg', 'actualInstrument', 'simulatedInstrument', 'crossCountry', 'dualGiven'] as const
         timeFields.forEach(field => {
           const value = entry.flightTime[field]
           if (value !== null && value !== undefined) {

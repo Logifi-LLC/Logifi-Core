@@ -208,6 +208,7 @@ export function validateFlightTime(entry: LogEntry): ValidationResult[] {
   const dual = getNumericValue(flightTime.dual)
   const solo = getNumericValue(flightTime.solo)
   const night = getNumericValue(flightTime.night)
+  const nvg = getNumericValue(flightTime.nvg)
   const actualInstrument = getNumericValue(flightTime.actualInstrument)
   const simulatedInstrument = getNumericValue(flightTime.simulatedInstrument)
   const crossCountry = getNumericValue(flightTime.crossCountry)
@@ -269,6 +270,15 @@ export function validateFlightTime(entry: LogEntry): ValidationResult[] {
       type: 'error',
       field: 'night',
       message: 'Night time cannot be negative',
+      suggestion: 'Please enter a positive value or leave blank'
+    })
+  }
+
+  if (isProvided(flightTime.nvg) && nvg < 0) {
+    results.push({
+      type: 'error',
+      field: 'nvg',
+      message: 'NVG time cannot be negative',
       suggestion: 'Please enter a positive value or leave blank'
     })
   }
@@ -350,6 +360,15 @@ export function validateFlightTime(entry: LogEntry): ValidationResult[] {
       })
     }
 
+    if (isProvided(flightTime.nvg) && nvg > total) {
+      results.push({
+        type: 'warning',
+        field: 'nvg',
+        message: `NVG time (${nvg.toFixed(2)}) exceeds total time (${total.toFixed(2)})`,
+        suggestion: 'NVG time should not exceed total flight time'
+      })
+    }
+
     if (isProvided(flightTime.actualInstrument) && actualInstrument > total) {
       results.push({
         type: 'warning',
@@ -392,6 +411,15 @@ export function validateFlightTime(entry: LogEntry): ValidationResult[] {
         field: 'dualGiven',
         message: `Dual given time (${dualGiven.toFixed(2)}) exceeds total time (${total.toFixed(2)})`,
         suggestion: 'Dual given time should not exceed total flight time'
+      })
+    }
+
+    if (isProvided(flightTime.nvg) && isProvided(flightTime.night) && nvg > night && night > 0) {
+      results.push({
+        type: 'warning',
+        field: 'nvg',
+        message: `NVG time (${nvg.toFixed(2)}) exceeds night time (${night.toFixed(2)})`,
+        suggestion: 'NVG time is usually a subset of night time'
       })
     }
 

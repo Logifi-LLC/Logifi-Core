@@ -6,13 +6,18 @@ import {
 } from '../../shared/duplicateEntryMatch'
 
 function logEntryToDuplicateShape(entry: LogEntry): DuplicateEntryMatchShape {
+  const ft = entry.flightTime
   return {
     date: entry.date,
     registration: entry.registration,
     departure: entry.departure,
     destination: entry.destination,
     oooiOut: entry.oooi?.out,
-    flightTimeTotal: entry.flightTime?.total ?? null,
+    flightTimeTotal: ft?.total ?? null,
+    night: ft?.night ?? null,
+    nvg: ft?.nvg ?? null,
+    actualInstrument: ft?.actualInstrument ?? null,
+    simulatedInstrument: ft?.simulatedInstrument ?? null,
   }
 }
 

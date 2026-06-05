@@ -52,4 +52,71 @@ describe('entriesDuplicateMatch', () => {
     const b = { ...a, oooiOut: '18:00', flightTimeTotal: 1.25 }
     expect(entriesDuplicateMatch(a, b, 'importLeg')).toBe(false)
   })
+
+  it('splits same-day route-less rows when NVG time differs (military import)', () => {
+    const base = {
+      date: '2024-10-03',
+      registration: 'Military',
+      departure: 'UNKNOWN',
+      destination: 'UNKNOWN',
+      flightTimeTotal: 1.5 as number | null,
+    }
+    const noNvg = { ...base, nvg: 0 }
+    const withNvg = { ...base, nvg: 1.5 }
+    expect(entriesDuplicateMatch(noNvg, withNvg)).toBe(false)
+  })
+
+  it('splits same-day route-less rows when hood time differs', () => {
+    const base = {
+      date: '2024-07-25',
+      registration: 'Military',
+      departure: 'UNKNOWN',
+      destination: 'UNKNOWN',
+      flightTimeTotal: 0.5 as number | null,
+    }
+    const hood = { ...base, simulatedInstrument: 0.5 }
+    const plain = { ...base, simulatedInstrument: 0 }
+    expect(entriesDuplicateMatch(hood, plain)).toBe(false)
+  })
+
+  it('requires exact total when route is UNKNOWN (no 0.1h epsilon)', () => {
+    const a = {
+      date: '2024-07-24',
+      registration: 'Military',
+      departure: 'UNKNOWN',
+      destination: 'UNKNOWN',
+      flightTimeTotal: 0.3 as number | null,
+      simulatedInstrument: 0,
+    }
+    const b = { ...a, flightTimeTotal: 0.2, simulatedInstrument: 0.2 }
+    expect(entriesDuplicateMatch(a, b)).toBe(false)
+  })
+
+  it('still matches identical route-less spreadsheet duplicate rows', () => {
+    const row = {
+      date: '2024-12-17',
+      registration: 'Military',
+      departure: 'UNKNOWN',
+      destination: 'UNKNOWN',
+      flightTimeTotal: 2 as number | null,
+      night: 0,
+      nvg: 0,
+      actualInstrument: 0,
+      simulatedInstrument: 0,
+    }
+    expect(entriesDuplicateMatch(row, { ...row })).toBe(true)
+  })
+
+  it('splits same route and total when night time differs', () => {
+    const base = {
+      date: '2024-11-07',
+      registration: 'Military',
+      departure: 'UNKNOWN',
+      destination: 'UNKNOWN',
+      flightTimeTotal: 0.5 as number | null,
+    }
+    const night = { ...base, night: 0.5 }
+    const hood = { ...base, simulatedInstrument: 0.5 }
+    expect(entriesDuplicateMatch(night, hood)).toBe(false)
+  })
 })

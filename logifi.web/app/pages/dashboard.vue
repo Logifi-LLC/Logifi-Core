@@ -424,7 +424,7 @@
               </div>
               <div class="flex flex-wrap gap-2">
                 <label
-                  v-for="opt in conditionOptions"
+                  v-for="opt in activeConditionOptions"
                   :key="'filter-cond-' + opt.value"
                   :class="[
                     'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-quicksand cursor-pointer transition-all',
@@ -718,8 +718,12 @@
                     </p>
                   </div>
                 </div>
-                <!-- Sim totals (simplified: Total, Instrument, Dual Received only) -->
-                <div v-else class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                <!-- Sim totals -->
+                <div
+                  v-else
+                  class="grid gap-4 grid-cols-1 sm:grid-cols-2"
+                  :class="pilotProfile.enableMilitaryFields ? 'lg:grid-cols-5' : 'lg:grid-cols-3'"
+                >
                   <div
                     v-for="summaryField in simOverviewFields"
                     :key="summaryField.key"
@@ -954,7 +958,7 @@
                   </div>
                   <div class="space-y-2 max-h-96 overflow-y-auto">
                     <div
-                      v-for="col in columnConfig.sort((a, b) => a.order - b.order)"
+                      v-for="col in displayColumnConfig.sort((a, b) => a.order - b.order)"
                       :key="col.key"
                       :draggable="true"
                       @dragstart="draggedColumnKey = col.key"
@@ -1200,6 +1204,10 @@
                       <template v-else-if="col.key === 'night'">
                         {{ formatNumber(entry.flightTime.night) }}
                       </template>
+                      <!-- NVG Column -->
+                      <template v-else-if="col.key === 'nvg'">
+                        {{ formatNumber(entry.flightTime.nvg) }}
+                      </template>
                       <!-- Actual Column -->
                       <template v-else-if="col.key === 'actual'">
                         {{ formatNumber(entry.flightTime.actualInstrument) }}
@@ -1431,12 +1439,14 @@
                         if (val === '' || val === '-') {
                           inlineEditEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = null;
                           inlineEditEntry.flightTime.total = null;
+                          syncSimRoleTime(inlineEditEntry);
                           return;
                         }
                         const num = parseFloat(val.replace(/[^\d.-]/g, ''));
                         const ok = !isNaN(num) && isFinite(num);
                         inlineEditEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = ok ? num : null;
                         inlineEditEntry.flightTime.total = ok ? num : null;
+                        syncSimRoleTime(inlineEditEntry);
                       }"
                       @blur="(e) => {
                         if (!inlineEditEntry) return;
@@ -1450,34 +1460,114 @@
                   </div>
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Role</label>
-                    <select v-model="inlineEditEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']">
+                    <select v-model="inlineEditEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @change="inlineEditEntry && syncSimRoleTime(inlineEditEntry)">
                       <option v-for="role in roleOptions" :key="role" :value="role">{{ roleDisplayLabel(role) }}</option>
                     </select>
                   </div>
                 </div>
-                <div class="mt-4 pt-3 border-t" :class="isDarkMode ? 'border-gray-600' : 'border-gray-200'">
-                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Simulated instrument (hrs)</label>
-                  <input
-                    :value="inlineEditEntry?.flightTime.simulatedInstrument === null || inlineEditEntry?.flightTime.simulatedInstrument === undefined || inlineEditEntry?.flightTime.simulatedInstrument === 0 ? '' : String(inlineEditEntry?.flightTime.simulatedInstrument ?? '')"
-                    type="text"
-                    inputmode="decimal"
-                    placeholder="0.0"
-                    :class="['w-full max-w-[120px] rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200', (inlineEditEntry?.flightTime.simulatedInstrument === null || inlineEditEntry?.flightTime.simulatedInstrument === 0 || inlineEditEntry?.flightTime.simulatedInstrument === undefined) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
-                    @input="(e) => {
-                      if (!inlineEditEntry) return;
-                      const input = e.target as HTMLInputElement;
-                      const val = input.value.trim();
-                      if (val === '' || val === '-') { inlineEditEntry.flightTime.simulatedInstrument = null; return; }
-                      const num = parseFloat(val.replace(/[^\d.-]/g, ''));
-                      inlineEditEntry.flightTime.simulatedInstrument = !isNaN(num) && isFinite(num) ? num : null;
-                    }"
-                    @blur="(e) => {
-                      if (!inlineEditEntry) return;
-                      const input = e.target as HTMLInputElement;
-                      const val = inlineEditEntry.flightTime.simulatedInstrument;
-                      if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
-                    }"
-                  />
+                <div
+                  class="mt-4 pt-3 border-t grid gap-4 grid-cols-1 sm:grid-cols-2"
+                  :class="[
+                    isDarkMode ? 'border-gray-600' : 'border-gray-200',
+                    pilotProfile.enableMilitaryFields ? 'lg:grid-cols-4' : ''
+                  ]"
+                >
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Sim Inst (hrs)</label>
+                    <input
+                      :value="inlineEditEntry?.flightTime.simulatedInstrument === null || inlineEditEntry?.flightTime.simulatedInstrument === undefined || inlineEditEntry?.flightTime.simulatedInstrument === 0 ? '' : String(inlineEditEntry?.flightTime.simulatedInstrument ?? '')"
+                      type="text"
+                      inputmode="decimal"
+                      placeholder="0.0"
+                      :class="['w-full max-w-[120px] rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200', (inlineEditEntry?.flightTime.simulatedInstrument === null || inlineEditEntry?.flightTime.simulatedInstrument === 0 || inlineEditEntry?.flightTime.simulatedInstrument === undefined) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                      @input="(e) => {
+                        if (!inlineEditEntry) return;
+                        const input = e.target as HTMLInputElement;
+                        const val = input.value.trim();
+                        if (val === '' || val === '-') { inlineEditEntry.flightTime.simulatedInstrument = null; return; }
+                        const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+                        inlineEditEntry.flightTime.simulatedInstrument = !isNaN(num) && isFinite(num) ? num : null;
+                      }"
+                      @blur="(e) => {
+                        if (!inlineEditEntry) return;
+                        const input = e.target as HTMLInputElement;
+                        const val = inlineEditEntry.flightTime.simulatedInstrument;
+                        if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                      }"
+                    />
+                  </div>
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Dual Rcvd (hrs)</label>
+                    <input
+                      :value="inlineEditEntry?.flightTime.dual === null || inlineEditEntry?.flightTime.dual === undefined || inlineEditEntry?.flightTime.dual === 0 ? '' : String(inlineEditEntry?.flightTime.dual ?? '')"
+                      type="text"
+                      inputmode="decimal"
+                      placeholder="0.0"
+                      :class="['w-full max-w-[120px] rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200', (inlineEditEntry?.flightTime.dual === null || inlineEditEntry?.flightTime.dual === 0 || inlineEditEntry?.flightTime.dual === undefined) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                      @input="(e) => {
+                        if (!inlineEditEntry) return;
+                        const input = e.target as HTMLInputElement;
+                        const val = input.value.trim();
+                        if (val === '' || val === '-') { inlineEditEntry.flightTime.dual = null; return; }
+                        const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+                        inlineEditEntry.flightTime.dual = !isNaN(num) && isFinite(num) ? num : null;
+                      }"
+                      @blur="(e) => {
+                        if (!inlineEditEntry) return;
+                        const input = e.target as HTMLInputElement;
+                        const val = inlineEditEntry.flightTime.dual;
+                        if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                      }"
+                    />
+                  </div>
+                  <div v-if="pilotProfile.enableMilitaryFields">
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night (hrs)</label>
+                    <input
+                      :value="inlineEditEntry?.flightTime.night === null || inlineEditEntry?.flightTime.night === undefined || inlineEditEntry?.flightTime.night === 0 ? '' : String(inlineEditEntry?.flightTime.night ?? '')"
+                      type="text"
+                      inputmode="decimal"
+                      placeholder="0.0"
+                      :class="['w-full max-w-[120px] rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200', (inlineEditEntry?.flightTime.night === null || inlineEditEntry?.flightTime.night === 0 || inlineEditEntry?.flightTime.night === undefined) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                      @input="(e) => {
+                        if (!inlineEditEntry) return;
+                        const input = e.target as HTMLInputElement;
+                        const val = input.value.trim();
+                        if (val === '' || val === '-') { inlineEditEntry.flightTime.night = null; return; }
+                        const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+                        inlineEditEntry.flightTime.night = !isNaN(num) && isFinite(num) ? num : null;
+                      }"
+                      @blur="(e) => {
+                        if (!inlineEditEntry) return;
+                        const input = e.target as HTMLInputElement;
+                        const val = inlineEditEntry.flightTime.night;
+                        if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                      }"
+                    />
+                  </div>
+                  <div v-if="pilotProfile.enableMilitaryFields">
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">NVG (hrs)</label>
+                    <input
+                      :value="inlineEditEntry?.flightTime.nvg === null || inlineEditEntry?.flightTime.nvg === undefined || inlineEditEntry?.flightTime.nvg === 0 ? '' : String(inlineEditEntry?.flightTime.nvg ?? '')"
+                      type="text"
+                      inputmode="decimal"
+                      placeholder="0.0"
+                      :class="['w-full max-w-[120px] rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200', (inlineEditEntry?.flightTime.nvg === null || inlineEditEntry?.flightTime.nvg === 0 || inlineEditEntry?.flightTime.nvg === undefined) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                      @input="(e) => {
+                        if (!inlineEditEntry) return;
+                        const input = e.target as HTMLInputElement;
+                        const val = input.value.trim();
+                        if (val === '' || val === '-') { inlineEditEntry.flightTime.nvg = null; return; }
+                        const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+                        inlineEditEntry.flightTime.nvg = !isNaN(num) && isFinite(num) ? num : null;
+                      }"
+                      @blur="(e) => {
+                        if (!inlineEditEntry) return;
+                        const input = e.target as HTMLInputElement;
+                        const val = inlineEditEntry.flightTime.nvg;
+                        if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                      }"
+                    />
+                  </div>
                 </div>
               </div>
               <!-- Optional details -->
@@ -1561,7 +1651,7 @@
               </div>
               <!-- Conditions, Tags, Remarks, Pilot -->
               <div class="flex flex-wrap gap-3">
-                <label v-for="condition in conditionOptions" :key="condition.value" :class="['inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all', (inlineEditEntry.flightConditions || []).includes(condition.value) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')]">
+                <label v-for="condition in activeConditionOptions" :key="condition.value" :class="['inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all', (inlineEditEntry.flightConditions || []).includes(condition.value) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')]">
                   <input v-model="inlineEditEntry.flightConditions" :value="condition.value" type="checkbox" :class="['h-4 w-4 rounded border transition-colors', isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500']" />
                   <span>{{ condition.label }}</span>
                 </label>
@@ -1928,7 +2018,7 @@
 
             <div class="flex flex-wrap gap-3">
               <label
-                v-for="condition in conditionOptions"
+                v-for="condition in activeConditionOptions"
                 :key="condition.value"
                 :class="[
                   'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all',
@@ -2200,12 +2290,14 @@
                             if (val === '' || val === '-') {
                               newEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = null;
                               newEntry.flightTime.total = null;
+                              syncSimRoleTime(newEntry);
                               return;
                             }
                             const num = parseFloat(val.replace(/[^\d.-]/g, ''));
                             const ok = !isNaN(num) && isFinite(num);
                             newEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'] = ok ? num : null;
                             newEntry.flightTime.total = ok ? num : null;
+                            syncSimRoleTime(newEntry);
                           }"
                           @blur="(e) => {
                             const sel = getSelectedSimType(newEntry);
@@ -2218,32 +2310,106 @@
                       </div>
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Role</label>
-                        <select v-model="newEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']">
+                        <select v-model="newEntry.role" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @change="syncSimRoleTime(newEntry)">
                           <option v-for="role in roleOptions" :key="role" :value="role">{{ roleDisplayLabel(role) }}</option>
                         </select>
                       </div>
                     </div>
-                    <div class="mt-4 pt-3 border-t" :class="isDarkMode ? 'border-gray-600' : 'border-gray-200'">
-                      <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Simulated instrument (hrs)</label>
-                      <input
-                        :value="newEntry.flightTime.simulatedInstrument === null || newEntry.flightTime.simulatedInstrument === undefined || newEntry.flightTime.simulatedInstrument === 0 ? '' : String(newEntry.flightTime.simulatedInstrument)"
-                        type="text"
-                        inputmode="decimal"
-                        placeholder="0.0"
-                        :class="['w-full max-w-[120px] rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200', (newEntry.flightTime.simulatedInstrument === null || newEntry.flightTime.simulatedInstrument === 0 || newEntry.flightTime.simulatedInstrument === undefined) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
-                        @input="(e) => {
-                          const input = e.target as HTMLInputElement;
-                          const val = input.value.trim();
-                          if (val === '' || val === '-') { newEntry.flightTime.simulatedInstrument = null; return; }
-                          const num = parseFloat(val.replace(/[^\d.-]/g, ''));
-                          newEntry.flightTime.simulatedInstrument = !isNaN(num) && isFinite(num) ? num : null;
-                        }"
-                        @blur="(e) => {
-                          const input = e.target as HTMLInputElement;
-                          const val = newEntry.flightTime.simulatedInstrument;
-                          if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
-                        }"
-                      />
+                    <div
+                      class="mt-4 pt-3 border-t grid gap-4 grid-cols-1 sm:grid-cols-2"
+                      :class="[
+                        isDarkMode ? 'border-gray-600' : 'border-gray-200',
+                        pilotProfile.enableMilitaryFields ? 'lg:grid-cols-4' : ''
+                      ]"
+                    >
+                      <div>
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Sim Inst (hrs)</label>
+                        <input
+                          :value="newEntry.flightTime.simulatedInstrument === null || newEntry.flightTime.simulatedInstrument === undefined || newEntry.flightTime.simulatedInstrument === 0 ? '' : String(newEntry.flightTime.simulatedInstrument)"
+                          type="text"
+                          inputmode="decimal"
+                          placeholder="0.0"
+                          :class="['w-full max-w-[120px] rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200', (newEntry.flightTime.simulatedInstrument === null || newEntry.flightTime.simulatedInstrument === 0 || newEntry.flightTime.simulatedInstrument === undefined) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                          @input="(e) => {
+                            const input = e.target as HTMLInputElement;
+                            const val = input.value.trim();
+                            if (val === '' || val === '-') { newEntry.flightTime.simulatedInstrument = null; return; }
+                            const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+                            newEntry.flightTime.simulatedInstrument = !isNaN(num) && isFinite(num) ? num : null;
+                          }"
+                          @blur="(e) => {
+                            const input = e.target as HTMLInputElement;
+                            const val = newEntry.flightTime.simulatedInstrument;
+                            if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                          }"
+                        />
+                      </div>
+                      <div>
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Dual Rcvd (hrs)</label>
+                        <input
+                          :value="newEntry.flightTime.dual === null || newEntry.flightTime.dual === undefined || newEntry.flightTime.dual === 0 ? '' : String(newEntry.flightTime.dual)"
+                          type="text"
+                          inputmode="decimal"
+                          placeholder="0.0"
+                          :class="['w-full max-w-[120px] rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200', (newEntry.flightTime.dual === null || newEntry.flightTime.dual === 0 || newEntry.flightTime.dual === undefined) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                          @input="(e) => {
+                            const input = e.target as HTMLInputElement;
+                            const val = input.value.trim();
+                            if (val === '' || val === '-') { newEntry.flightTime.dual = null; return; }
+                            const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+                            newEntry.flightTime.dual = !isNaN(num) && isFinite(num) ? num : null;
+                          }"
+                          @blur="(e) => {
+                            const input = e.target as HTMLInputElement;
+                            const val = newEntry.flightTime.dual;
+                            if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                          }"
+                        />
+                      </div>
+                      <div v-if="pilotProfile.enableMilitaryFields">
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night (hrs)</label>
+                        <input
+                          :value="newEntry.flightTime.night === null || newEntry.flightTime.night === undefined || newEntry.flightTime.night === 0 ? '' : String(newEntry.flightTime.night)"
+                          type="text"
+                          inputmode="decimal"
+                          placeholder="0.0"
+                          :class="['w-full max-w-[120px] rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200', (newEntry.flightTime.night === null || newEntry.flightTime.night === 0 || newEntry.flightTime.night === undefined) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                          @input="(e) => {
+                            const input = e.target as HTMLInputElement;
+                            const val = input.value.trim();
+                            if (val === '' || val === '-') { newEntry.flightTime.night = null; return; }
+                            const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+                            newEntry.flightTime.night = !isNaN(num) && isFinite(num) ? num : null;
+                          }"
+                          @blur="(e) => {
+                            const input = e.target as HTMLInputElement;
+                            const val = newEntry.flightTime.night;
+                            if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                          }"
+                        />
+                      </div>
+                      <div v-if="pilotProfile.enableMilitaryFields">
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">NVG (hrs)</label>
+                        <input
+                          :value="newEntry.flightTime.nvg === null || newEntry.flightTime.nvg === undefined || newEntry.flightTime.nvg === 0 ? '' : String(newEntry.flightTime.nvg ?? '')"
+                          type="text"
+                          inputmode="decimal"
+                          placeholder="0.0"
+                          :class="['w-full max-w-[120px] rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200', (newEntry.flightTime.nvg === null || newEntry.flightTime.nvg === 0 || newEntry.flightTime.nvg === undefined) ? (isDarkMode ? 'text-gray-500' : 'text-gray-400') : (isDarkMode ? 'text-white' : 'text-gray-900')]"
+                          @input="(e) => {
+                            const input = e.target as HTMLInputElement;
+                            const val = input.value.trim();
+                            if (val === '' || val === '-') { newEntry.flightTime.nvg = null; return; }
+                            const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+                            newEntry.flightTime.nvg = !isNaN(num) && isFinite(num) ? num : null;
+                          }"
+                          @blur="(e) => {
+                            const input = e.target as HTMLInputElement;
+                            const val = newEntry.flightTime.nvg;
+                            if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                          }"
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -2365,7 +2531,7 @@
 
                   <!-- Conditions, Tags, Remarks, Pilot -->
                   <div class="flex flex-wrap gap-3">
-                    <label v-for="condition in conditionOptions" :key="condition.value" :class="['inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all', (newEntry.flightConditions || []).includes(condition.value) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')]">
+                    <label v-for="condition in activeConditionOptions" :key="condition.value" :class="['inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all', (newEntry.flightConditions || []).includes(condition.value) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')]">
                       <input v-model="newEntry.flightConditions" :value="condition.value" type="checkbox" :class="['h-4 w-4 rounded border transition-colors', isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500']" />
                       <span>{{ condition.label }}</span>
                     </label>
@@ -2771,7 +2937,7 @@
 
               <div class="flex flex-wrap gap-3">
                 <label
-                  v-for="condition in conditionOptions"
+                  v-for="condition in activeConditionOptions"
                   :key="condition.value"
                   :class="[
                     'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all',
@@ -2956,6 +3122,7 @@
                                  result.field === 'dual' ? 'Dual Received' : 
                                  result.field === 'solo' ? 'Solo' : 
                                  result.field === 'night' ? 'Night' : 
+                                 result.field === 'nvg' ? 'NVG' : 
                                  result.field === 'actualInstrument' ? 'Actual Instrument' : 
                                  result.field === 'simulatedInstrument' ? 'Simulated Instrument' : 
                                  result.field === 'crossCountry' ? 'Cross-Country' : 
@@ -4330,6 +4497,23 @@
             </div>
           </div>
 
+          <!-- Simulator type for training device families -->
+          <div v-if="renameFamilyShowSimType" class="pt-4 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+            <label :class="['block text-sm font-semibold font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+              Simulator Type
+            </label>
+            <select
+              v-model="renameFamilySimType"
+              :class="['w-full rounded-lg border px-3 py-2 text-sm font-quicksand', isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']"
+            >
+              <option value="">Not set (default ATD on import)</option>
+              <option v-for="opt in categoryClassSimOptions" :key="opt" :value="opt">{{ opt }}</option>
+            </select>
+            <p :class="['text-xs mt-1', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
+              Saved to your catalog for future imports. Existing simulator entries in this family can be updated when you save.
+            </p>
+          </div>
+
           <!-- Tags for this family (applied to all entries in family, autofill on new entries) -->
           <div v-if="isAuthenticated" class="pt-4 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
             <div :class="['text-sm font-semibold font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Tags</div>
@@ -4383,24 +4567,25 @@
           </button>
           <button
             @click="confirmRenameFamily"
-            :disabled="!renameFamilyNewName.trim() || renameFamilyNewName.trim() === renameFamilyOldName"
+            :disabled="!renameFamilyNewName.trim() || (!renameFamilyShowSimType && renameFamilyNewName.trim() === renameFamilyOldName)"
             :class="[
               'px-4 py-2 rounded-lg font-semibold font-quicksand transition-colors',
-              (!renameFamilyNewName.trim() || renameFamilyNewName.trim() === renameFamilyOldName)
+              (!renameFamilyNewName.trim() || (!renameFamilyShowSimType && renameFamilyNewName.trim() === renameFamilyOldName))
                 ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-500 cursor-not-allowed')
                 : (isDarkMode ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-blue-600 text-white hover:bg-blue-700')
             ]"
           >
-            Rename
+            {{ renameFamilyNewName.trim() === renameFamilyOldName ? 'Save' : 'Rename' }}
           </button>
         </div>
       </div>
     </div>
 
     <!-- Import Preview Modal -->
+    <Teleport to="body">
     <div
       v-if="showImportPreview && importPreviewStatistics && importPreviewMetadata"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50"
       @click.self="cancelImport"
     >
       <div
@@ -4473,41 +4658,30 @@
 
           <!-- Flight Time Statistics -->
           <div>
-            <h4 :class="['text-lg font-semibold font-quicksand mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
+            <h4 :class="['text-lg font-semibold font-quicksand', importPreviewStatistics.duplicates > 0 ? 'mb-1' : 'mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
               Flight Time
             </h4>
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
-                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Total</div>
+            <p
+              v-if="importPreviewStatistics.duplicates > 0"
+              :class="['text-xs font-quicksand mb-4', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+            >
+              Totals reflect all rows in this file (including duplicates). Only non-duplicate rows will be imported.
+            </p>
+            <div v-if="importPreviewTimeCards.length" class="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div
+                v-for="card in importPreviewTimeCards"
+                :key="card.label"
+                :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']"
+              >
+                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">{{ card.label }}</div>
                 <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
-                  {{ importPreviewStatistics.totalFlightTime.toFixed(1) }}h
-                </div>
-              </div>
-              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
-                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">PIC</div>
-                <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
-                  {{ importPreviewStatistics.picTime.toFixed(1) }}h
-                </div>
-              </div>
-              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
-                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Night</div>
-                <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
-                  {{ importPreviewStatistics.nightTime.toFixed(1) }}h
-                </div>
-              </div>
-              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
-                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">XC</div>
-                <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
-                  {{ importPreviewStatistics.crossCountryTime.toFixed(1) }}h
-                </div>
-              </div>
-              <div :class="['rounded-lg border p-3', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-white']">
-                <div :class="['text-xs font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Instrument</div>
-                <div :class="['text-lg font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
-                  {{ (importPreviewStatistics.actualInstrumentTime + importPreviewStatistics.simulatedInstrumentTime).toFixed(1) }}h
+                  {{ card.hours.toFixed(1) }}h
                 </div>
               </div>
             </div>
+            <p v-else :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+              No flight time data found in entries to import.
+            </p>
           </div>
 
           <!-- Performance Statistics -->
@@ -4625,67 +4799,131 @@
                 ... and {{ importPreviewStatistics.duplicateEntries.length - 10 }} more duplicate {{ importPreviewStatistics.duplicateEntries.length - 10 === 1 ? 'entry' : 'entries' }}
               </div>
             </div>
+            <div class="mt-4 p-3 rounded-lg border" :class="[isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-gray-50']">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  v-model="importDuplicatesFlagged"
+                  class="rounded"
+                />
+                <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">
+                  Import duplicate entries and flag them for review
+                </span>
+              </label>
+              <p :class="['text-xs mt-1 ml-6', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                Use Import All to save every row in this file. Rows that match your logbook will be flagged with a note in remarks.
+              </p>
+            </div>
+          </div>
+
+          <!-- Simulator device types (when sim rows need FFS/FTD/ATD) -->
+          <div v-if="importPreviewSimDevices.length > 0">
+            <h4 :class="['text-lg font-semibold font-quicksand mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
+              Simulator Devices
+            </h4>
+            <p :class="['text-xs font-quicksand mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+              Choose the device type for each simulator before importing. Defaults to your catalog setting or ATD.
+            </p>
+            <div class="space-y-3">
+              <div
+                v-for="device in importPreviewSimDevices"
+                :key="device.key"
+                :class="['rounded-lg border p-4', isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-gray-50']"
+              >
+                <div class="flex flex-wrap items-center gap-3 justify-between">
+                  <div :class="['text-sm font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+                    {{ device.makeModel }}<span v-if="device.registration" :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']"> · {{ device.registration }}</span>
+                  </div>
+                  <select
+                    v-model="importSimTypeOverrides[device.key]"
+                    :class="['rounded-lg border px-3 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900']"
+                  >
+                    <option v-for="opt in categoryClassSimOptions" :key="opt" :value="opt">{{ opt }}</option>
+                  </select>
+                </div>
+                <label class="flex items-center gap-2 mt-3 cursor-pointer">
+                  <input
+                    v-model="importSimRememberDevice[device.key]"
+                    type="checkbox"
+                    class="rounded"
+                  />
+                  <span :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+                    Remember this device type in catalog
+                  </span>
+                </label>
+              </div>
+            </div>
           </div>
 
           <!-- Entry List -->
           <div>
             <h4 :class="['text-lg font-semibold font-quicksand mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
-              Entries to Import ({{ importPreviewEntries.length }})
+              Entries in File ({{ importPreviewStatistics.totalEntries }})
             </h4>
             <div class="space-y-2 max-h-96 overflow-y-auto">
               <div
-                v-for="entry in importPreviewEntries"
-                :key="entry.id"
+                v-for="item in importPreviewListItems"
+                :key="item.entry.id"
                 :class="[
                   'rounded-lg border p-3 cursor-pointer transition-colors',
                   isDarkMode 
                     ? 'border-gray-700 bg-gray-900/30 hover:bg-gray-900/50' 
                     : 'border-gray-300 bg-white hover:bg-gray-50'
                 ]"
-                @click="togglePreviewEntry(entry.id)"
+                @click="togglePreviewEntry(item.entry.id)"
               >
                 <div class="flex items-center justify-between">
                   <div class="flex-1">
                     <div class="flex items-center gap-3">
                       <div :class="['text-sm font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">
-                        {{ formatDisplayDate(entry.date) }}
+                        {{ formatDisplayDate(item.entry.date) }}
                       </div>
                       <div :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
-                        {{ entry.registration }}
+                        {{ item.entry.registration }}
                       </div>
                       <div :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                        {{ entry.aircraftMakeModel }}
+                        {{ item.entry.aircraftMakeModel }}
                       </div>
+                      <span
+                        v-if="item.status === 'duplicate'"
+                        :class="['inline-block rounded px-1.5 py-0.5 text-xs font-quicksand', isDarkMode ? 'bg-yellow-900/50 text-yellow-300' : 'bg-yellow-100 text-yellow-800']"
+                      >
+                        Duplicate
+                      </span>
                     </div>
                     <div class="flex items-center gap-2 mt-1">
                       <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                        {{ entry.departure }} → {{ entry.destination }}
+                        {{ item.entry.departure }} → {{ item.entry.destination }}
                       </div>
                       <div :class="['text-xs font-mono', isDarkMode ? 'text-blue-400' : 'text-blue-600']">
-                        {{ (entry.flightTime.total ?? 0).toFixed(1) }}h
+                        {{ (item.entry.flightTime.total ?? 0).toFixed(1) }}h
                       </div>
                     </div>
                   </div>
                   <Icon 
-                    :name="expandedPreviewEntries.has(entry.id) ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'" 
+                    :name="expandedPreviewEntries.has(item.entry.id) ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'" 
                     size="20" 
                     :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']"
                   />
                 </div>
-                <div v-if="expandedPreviewEntries.has(entry.id)" class="mt-3 pt-3 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+                <div v-if="expandedPreviewEntries.has(item.entry.id)" class="mt-3 pt-3 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
                   <div class="grid grid-cols-2 gap-2 text-xs">
-                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Role:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ roleDisplayLabel(entry.role) }}</span></div>
-                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">PIC:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.flightTime.pic ?? 0).toFixed(1) }}h</span></div>
-                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Night:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.flightTime.night ?? 0).toFixed(1) }}h</span></div>
-                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">XC:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.flightTime.crossCountry ?? 0).toFixed(1) }}h</span></div>
-                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Landings:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.performance.dayLandings ?? 0) + (entry.performance.nightLandings ?? 0) }}</span></div>
-                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Approaches:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ getTotalApproachCount(entry.performance) }}</span></div>
-                    <div v-if="(entry.tags || []).length" class="col-span-2 flex flex-wrap gap-1">
-                      <span v-for="t in (entry.tags || [])" :key="t" :class="['inline-block rounded px-1.5 py-0.5 text-xs', isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700']">{{ t }}</span>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Role:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ roleDisplayLabel(item.entry.role) }}</span></div>
+                    <div
+                      v-for="timeField in entryNonZeroTimeFields(item.entry)"
+                      :key="timeField.label"
+                    >
+                      <span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">{{ timeField.label }}:</span>
+                      <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ timeField.hours.toFixed(1) }}h</span>
+                    </div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Landings:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (item.entry.performance.dayLandings ?? 0) + (item.entry.performance.nightLandings ?? 0) }}</span></div>
+                    <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Approaches:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ getTotalApproachCount(item.entry.performance) }}</span></div>
+                    <div v-if="(item.entry.tags || []).length" class="col-span-2 flex flex-wrap gap-1">
+                      <span v-for="t in (item.entry.tags || [])" :key="t" :class="['inline-block rounded px-1.5 py-0.5 text-xs', isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700']">{{ t }}</span>
                     </div>
                   </div>
-                  <div v-if="entry.remarks" class="mt-2 text-xs" :class="[isDarkMode ? 'text-gray-300' : 'text-gray-600']">
-                    {{ entry.remarks }}
+                  <div v-if="item.entry.remarks" class="mt-2 text-xs" :class="[isDarkMode ? 'text-gray-300' : 'text-gray-600']">
+                    {{ item.entry.remarks }}
                   </div>
                 </div>
               </div>
@@ -4707,105 +4945,44 @@
             Cancel
           </button>
           <button
-            @click="confirmImport"
+            v-if="importPreviewStatistics.duplicates > 0"
+            @click="handleSkipDuplicatesImport"
+            :class="[
+              'px-4 py-2 rounded-lg font-quicksand transition-colors',
+              importPreviewToImportCount > 0
+                ? 'bg-green-600 hover:bg-green-700 text-white'
+                : (isDarkMode ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white' : 'bg-gray-300 hover:bg-gray-400 text-gray-900')
+            ]"
+          >
+            Skip Duplicates & Import ({{ importPreviewToImportCount }})
+          </button>
+          <button
+            v-if="importPreviewStatistics.duplicates > 0"
+            :disabled="!importDuplicatesFlagged"
+            @click="handleImportAllWithDuplicates"
+            :class="[
+              'px-4 py-2 rounded-lg font-quicksand transition-colors',
+              importDuplicatesFlagged
+                ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+            ]"
+          >
+            Import All ({{ importPreviewStatistics.totalEntries }})
+          </button>
+          <button
+            v-else
+            @click="handleSkipDuplicatesImport"
             :class="[
               'px-4 py-2 rounded-lg font-quicksand transition-colors',
               'bg-green-600 hover:bg-green-700 text-white'
             ]"
           >
-            Confirm Import
+            Import ({{ importPreviewToImportCount }})
           </button>
         </div>
       </div>
     </div>
-  </div>
-
-  <!-- Duplicate Confirmation Dialog -->
-  <div
-    v-if="showDuplicateConfirmDialog && importPreviewStatistics"
-    class="fixed inset-0 z-50 flex items-center justify-center p-4"
-    @click.self="handleDuplicateConfirm(false)"
-  >
-    <div
-      :class="[
-        'relative w-full max-w-md rounded-2xl border shadow-2xl transition-colors duration-300',
-        isDarkMode 
-          ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' 
-          : 'bg-white border-gray-200 shadow-sm'
-      ]"
-      @click.stop
-    >
-      <div class="flex items-center justify-between p-6 border-b" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
-        <h3 :class="['text-xl font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
-          Duplicate Entries Detected
-        </h3>
-        <button
-          @click="handleDuplicateConfirm(false)"
-          :class="[
-            'p-1 rounded-lg transition-colors',
-            isDarkMode 
-              ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-300'
-          ]"
-          aria-label="Close"
-        >
-          <Icon name="ri:close-line" size="24" />
-        </button>
-      </div>
-      
-      <div class="p-6 space-y-4">
-        <div :class="['flex items-start gap-3', isDarkMode ? 'text-yellow-200' : 'text-yellow-700']">
-          <Icon name="ri:alert-line" size="24" class="flex-shrink-0 mt-0.5" />
-          <div class="flex-1">
-            <p :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
-              Found {{ importPreviewStatistics.duplicates }} duplicate {{ importPreviewStatistics.duplicates === 1 ? 'entry' : 'entries' }} that match existing entries in your logbook.
-            </p>
-            <p :class="['text-sm font-quicksand mt-2', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
-              Duplicates are detected based on date and registration. Importing duplicates may create duplicate entries in your logbook.
-            </p>
-          </div>
-        </div>
-        
-        <div v-if="importPreviewStatistics.duplicateEntries.length > 0" 
-             :class="['rounded-lg border p-3 max-h-40 overflow-y-auto', isDarkMode ? 'border-yellow-700/50 bg-yellow-900/10' : 'border-yellow-300 bg-yellow-50']">
-          <div :class="['text-xs font-semibold font-quicksand mb-2', isDarkMode ? 'text-yellow-300' : 'text-yellow-700']">
-            Sample duplicates:
-          </div>
-          <div v-for="(dup, index) in importPreviewStatistics.duplicateEntries.slice(0, 3)" :key="index"
-               :class="['text-xs font-quicksand py-1', isDarkMode ? 'text-yellow-200' : 'text-yellow-800']">
-            {{ formatDisplayDate(dup.entry.date) }} · {{ dup.entry.registration }} · {{ dup.entry.departure }} → {{ dup.entry.destination }}
-          </div>
-          <div v-if="importPreviewStatistics.duplicateEntries.length > 3"
-               :class="['text-xs font-quicksand py-1', isDarkMode ? 'text-yellow-300' : 'text-yellow-700']">
-            ... and {{ importPreviewStatistics.duplicateEntries.length - 3 }} more
-          </div>
-        </div>
-      </div>
-      
-      <div class="flex items-center justify-end gap-3 p-6 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
-        <button
-          @click="handleDuplicateConfirm(false)"
-          :class="[
-            'px-4 py-2 rounded-lg font-quicksand transition-colors',
-            isDarkMode 
-              ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20' 
-              : 'bg-gray-300 hover:bg-gray-400 text-gray-900'
-          ]"
-        >
-          Cancel
-        </button>
-        <button
-          @click="handleDuplicateConfirm(true)"
-          :class="[
-            'px-4 py-2 rounded-lg font-quicksand transition-colors',
-            'bg-yellow-600 hover:bg-yellow-700 text-white'
-          ]"
-        >
-          Import Anyway
-        </button>
-      </div>
-    </div>
-  </div>
+    </Teleport>
 
   <!-- Duplicate Override Confirmation Dialog (for individual entry saves) -->
   <div
@@ -4895,9 +5072,10 @@
   </div>
 
   <!-- Export Dialog (trust-first: scope + preview) -->
+  <Teleport to="body">
   <div
     v-if="showExportDialog"
-    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50"
     @click.self="closeExportDialog"
   >
     <div
@@ -5160,8 +5338,10 @@
       </div>
     </div>
   </div>
+  </Teleport>
 
   <!-- End Main Content -->
+  </div>
   
   <!-- Loading State -->
   <div
@@ -5264,6 +5444,28 @@ import { getAirportIanaTimezone, normalizeTimezoneToIANA } from '../../shared/ai
 import { calculateSectionII, calculateSectionIII } from '../utils/form8710Calculator'
 import type { Form8710Data, AircraftCategory8710, ComplianceMetadata } from '../utils/form8710Types'
 import { mapCategoryTo8710, isTrainingDevice } from '../utils/form8710Types'
+import {
+  applySimulatorImport,
+  getSimTimeSum,
+  inferLogbookType,
+  isLikelySimulatorRow,
+  normalizeSimulatorInstrumentTime,
+  readSimHintsFromRawRow,
+} from '../utils/importSimulator'
+import {
+  resolveImportNumber,
+  resolveImportAircraftMakeModel,
+  resolveImportRole,
+  extractBaseModelName,
+} from '../utils/importFieldMap'
+import {
+  getCatalogSimDeviceType,
+  setCatalogSimDeviceType,
+  mergeSimDeviceCatalog,
+  getSimDeviceCatalogSnapshot,
+  loadSimDeviceCatalogFromStorage,
+  type SimTypeKey,
+} from '../utils/simDeviceCatalog'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
 import { useDataIntegrity } from '../composables/useDataIntegrity'
@@ -5633,6 +5835,8 @@ watch(authLoading, (loading) => {
 // Initialize IndexedDB and start background sync on mount
 onMounted(async () => {
   if (!isBrowser) return
+
+  loadSimDeviceCatalogFromStorage()
   
   try {
     // Initialize IndexedDB
@@ -5969,6 +6173,8 @@ const conditionOptions = [
   { value: 'crossCountry', label: 'Cross-Country' }
 ] as const
 
+const nvgConditionOption = { value: 'nvg', label: 'NVG' } as const
+
 const flightTimeFields: readonly { key: FlightTimeKey; label: string }[] = [
   { key: 'total', label: 'Total Time *' },
   { key: 'pic', label: 'Pilot in Command' },
@@ -5976,6 +6182,7 @@ const flightTimeFields: readonly { key: FlightTimeKey; label: string }[] = [
   { key: 'dual', label: 'Dual Received' },
   { key: 'solo', label: 'Solo' },
   { key: 'night', label: 'Night' },
+  { key: 'nvg', label: 'NVG (Night Vision Goggle)' },
   { key: 'actualInstrument', label: 'Actual Instrument' },
   { key: 'dualGiven', label: 'Dual Given' },
   { key: 'crossCountry', label: 'Cross-Country' },
@@ -5985,10 +6192,6 @@ const flightTimeFields: readonly { key: FlightTimeKey; label: string }[] = [
   { key: 'atd', label: 'ATD hrs' }
 ] as const
 
-const mainTimeFields = flightTimeFields.filter(
-  (f) => f.key !== 'ffs' && f.key !== 'ftd' && f.key !== 'atd'
-)
-
 const simTimeFields = [
   { key: 'ffs' as const, label: 'FFS' },
   { key: 'ftd' as const, label: 'FTD' },
@@ -5997,7 +6200,7 @@ const simTimeFields = [
 
 const mainTimeShortLabels: Record<string, string> = {
   total: 'Total Time', pic: 'PIC', sic: 'SIC', dual: 'Dual R', solo: 'Solo',
-  night: 'Night', actualInstrument: 'Actual', dualGiven: 'Dual G', crossCountry: 'XC', simulatedInstrument: 'Hood'
+  night: 'Night', nvg: 'NVG', actualInstrument: 'Actual', dualGiven: 'Dual G', crossCountry: 'XC', simulatedInstrument: 'Hood'
 }
 
 // Category/Class dropdown options (Option A: aircraft row + Sim row)
@@ -6031,6 +6234,8 @@ interface PilotProfilePrefs {
   certificates: string
   flightGoals: string
   notes: string
+  /** Show military logbook fields (e.g. NVG time + condition) */
+  enableMilitaryFields: boolean
   // 8710 Form fields
   dateOfBirth: string
   placeOfBirth: string
@@ -6069,6 +6274,7 @@ const pilotProfileDefaults: PilotProfilePrefs = {
   certificates: '',
   flightGoals: '',
   notes: '',
+  enableMilitaryFields: false,
   // 8710 Form fields
   dateOfBirth: '',
   placeOfBirth: '',
@@ -6089,6 +6295,7 @@ type TotalsMetricKey =
   | 'soloTime'
   | 'picTime'
   | 'nightTime'
+  | 'nvgTime'
   | 'instrumentTime'
   | 'crossCountry'
   | 'dualGiven'
@@ -6099,7 +6306,7 @@ type TotalsMetricKey =
   | 'ftd'
   | 'atd'
 
-const availableTotalsMetrics: readonly { key: TotalsMetricKey; label: string }[] = [
+const baseTotalsMetrics: readonly { key: TotalsMetricKey; label: string }[] = [
   { key: 'totalTime', label: 'Total Time (hrs)' },
   { key: 'soloTime', label: 'Solo Time (hrs)' },
   { key: 'picTime', label: 'PIC Time (hrs)' },
@@ -6114,13 +6321,6 @@ const availableTotalsMetrics: readonly { key: TotalsMetricKey; label: string }[]
   { key: 'ftd', label: 'FTD (hrs)' },
   { key: 'atd', label: 'ATD (hrs)' }
 ] as const
-
-// Fixed metrics for Simulator Totals Overview (simpler than Flight)
-const simOverviewFields: readonly { key: TotalsMetricKey; label: string }[] = [
-  { key: 'totalTime', label: 'Total Time (hrs)' },
-  { key: 'instrumentTime', label: 'Instrument Time (hrs)' },
-  { key: 'dualReceived', label: 'Dual Received (hrs)' }
-]
 
 // Default selected metrics (Total Time must always be first)
 const defaultSelectedMetrics: TotalsMetricKey[] = [
@@ -6143,7 +6343,7 @@ function loadSelectedTotalsMetrics(): void {
     try {
       const parsed = JSON.parse(saved) as TotalsMetricKey[]
       // Validate that all keys are valid
-      if (Array.isArray(parsed) && parsed.every(k => availableTotalsMetrics.some(m => m.key === k))) {
+      if (Array.isArray(parsed) && parsed.every(k => availableTotalsMetrics.value.some(m => m.key === k))) {
         // Ensure totalTime is always first
         const withoutTotal = parsed.filter(k => k !== 'totalTime')
         selectedTotalsMetrics.value = ['totalTime', ...withoutTotal]
@@ -6181,7 +6381,7 @@ function toggleTotalsMetric(key: TotalsMetricKey): void {
 // Computed summaryFields based on user selection
 const summaryFields = computed(() => {
   return selectedTotalsMetrics.value
-    .map(key => availableTotalsMetrics.find(m => m.key === key))
+    .map(key => availableTotalsMetrics.value.find(m => m.key === key))
     .filter((m): m is { key: TotalsMetricKey; label: string } => m !== undefined)
 })
 
@@ -6236,12 +6436,17 @@ function saveColumnConfig(): void {
   window.localStorage.setItem(COLUMN_CONFIG_STORAGE_KEY, JSON.stringify(columnConfig.value))
 }
 
-// Computed: visible columns sorted by order
+// Computed: visible columns sorted by order (NVG hidden unless military fields enabled)
 const visibleColumns = computed(() => {
   return columnConfig.value
     .filter(col => col.visible)
+    .filter(col => col.key !== 'nvg' || pilotProfile.enableMilitaryFields)
     .sort((a, b) => a.order - b.order)
 })
+
+const displayColumnConfig = computed(() =>
+  columnConfig.value.filter(col => col.key !== 'nvg' || pilotProfile.enableMilitaryFields)
+)
 
 // Toggle column visibility
 function toggleColumnVisibility(key: LogbookColumnKey): void {
@@ -6672,6 +6877,18 @@ async function saveInlineEdit(): Promise<void> {
     oooi: inlineEditEntry.value.oooi && Object.values(inlineEditEntry.value.oooi).some(v => v) ? { ...inlineEditEntry.value.oooi } : undefined
   }
 
+  if (inferLogbookType(updatedEntry) === 'simulator') {
+    normalizeSimulatorInstrumentTime(updatedEntry)
+    updatedEntry.flightConditions = autoCheckFlightConditions(
+      updatedEntry.flightConditions,
+      updatedEntry.flightTime.night,
+      updatedEntry.flightTime.actualInstrument,
+      updatedEntry.flightTime.simulatedInstrument,
+      updatedEntry.flightTime.crossCountry,
+      updatedEntry.flightTime.nvg ?? null
+    )
+  }
+
   const targetId = inlineEditEntry.value.id
 
   // Save to Supabase if authenticated, otherwise save to localStorage
@@ -7031,6 +7248,44 @@ const highlightedInlinePilotIndex = ref(-1)
 const { theme, isDark, setTheme } = useTheme()
 const isDarkMode = isDark
 const pilotProfile = reactive<PilotProfilePrefs>({ ...pilotProfileDefaults })
+
+const activeConditionOptions = computed(() => {
+  if (pilotProfile.enableMilitaryFields) {
+    return [...conditionOptions, nvgConditionOption]
+  }
+  return [...conditionOptions]
+})
+
+const mainTimeFields = computed(() =>
+  flightTimeFields.filter((f) => {
+    if (f.key === 'ffs' || f.key === 'ftd' || f.key === 'atd') return false
+    if (f.key === 'nvg' && !pilotProfile.enableMilitaryFields) return false
+    return true
+  })
+)
+
+const availableTotalsMetrics = computed(() => {
+  if (!pilotProfile.enableMilitaryFields) return [...baseTotalsMetrics]
+  const metrics: { key: TotalsMetricKey; label: string }[] = [...baseTotalsMetrics]
+  const nightIdx = metrics.findIndex((m) => m.key === 'nightTime')
+  metrics.splice(nightIdx + 1, 0, { key: 'nvgTime', label: 'NVG Time (hrs)' })
+  return metrics
+})
+
+const simOverviewFields = computed((): { key: TotalsMetricKey; label: string }[] => {
+  const fields: { key: TotalsMetricKey; label: string }[] = [
+    { key: 'totalTime', label: 'Total Time (hrs)' },
+    { key: 'instrumentTime', label: 'Instrument Time (hrs)' }
+  ]
+  if (pilotProfile.enableMilitaryFields) {
+    fields.push(
+      { key: 'nightTime', label: 'Night Time (hrs)' },
+      { key: 'nvgTime', label: 'NVG Time (hrs)' }
+    )
+  }
+  fields.push({ key: 'dualReceived', label: 'Dual Received (hrs)' })
+  return fields
+})
 const pilotProfileLoaded = ref(false)
 const csvFileInput = ref<HTMLInputElement | null>(null)
 
@@ -7123,12 +7378,16 @@ interface ImportStatistics {
   picTime: number
   sicTime: number
   nightTime: number
+  nvgTime: number
   crossCountryTime: number
   actualInstrumentTime: number
   simulatedInstrumentTime: number
   dualReceivedTime: number
   dualGivenTime: number
   soloTime: number
+  ffsTime: number
+  ftdTime: number
+  atdTime: number
   totalLandings: number
   dayLandings: number
   nightLandings: number
@@ -7225,14 +7484,115 @@ function calculateExportStatistics(entries: LogEntry[]): ExportStatistics {
   }
 }
 
+type ImportPreviewStatsKey =
+  | 'totalFlightTime'
+  | 'picTime'
+  | 'sicTime'
+  | 'dualReceivedTime'
+  | 'soloTime'
+  | 'nightTime'
+  | 'nvgTime'
+  | 'actualInstrumentTime'
+  | 'simulatedInstrumentTime'
+  | 'dualGivenTime'
+  | 'crossCountryTime'
+  | 'ffsTime'
+  | 'ftdTime'
+  | 'atdTime'
+
+const importPreviewTimeFields: { key: FlightTimeKey; label: string; statsKey: ImportPreviewStatsKey }[] = [
+  { key: 'total', label: 'Total', statsKey: 'totalFlightTime' },
+  { key: 'pic', label: 'PIC', statsKey: 'picTime' },
+  { key: 'sic', label: 'SIC', statsKey: 'sicTime' },
+  { key: 'dual', label: 'Dual Received', statsKey: 'dualReceivedTime' },
+  { key: 'solo', label: 'Solo', statsKey: 'soloTime' },
+  { key: 'night', label: 'Night', statsKey: 'nightTime' },
+  { key: 'nvg', label: 'NVG', statsKey: 'nvgTime' },
+  { key: 'actualInstrument', label: 'Actual', statsKey: 'actualInstrumentTime' },
+  { key: 'simulatedInstrument', label: 'Hood', statsKey: 'simulatedInstrumentTime' },
+  { key: 'dualGiven', label: 'Dual Given', statsKey: 'dualGivenTime' },
+  { key: 'crossCountry', label: 'XC', statsKey: 'crossCountryTime' },
+  { key: 'ffs', label: 'FFS', statsKey: 'ffsTime' },
+  { key: 'ftd', label: 'FTD', statsKey: 'ftdTime' },
+  { key: 'atd', label: 'ATD', statsKey: 'atdTime' },
+]
+
 const showImportPreview = ref(false)
+/** Every normalized row from the file — used for Import All. */
+const importPreviewAllEntries = ref<LogEntry[]>([])
+/** Non-duplicate rows (+ error rows) for legacy list helpers. */
 const importPreviewEntries = ref<LogEntry[]>([])
 const importPreviewStatistics = ref<ImportStatistics | null>(null)
 const importPreviewMetadata = ref<ImportMetadata | null>(null)
+
+const importPreviewTimeCards = computed(() => {
+  const stats = importPreviewStatistics.value
+  if (!stats) return []
+  return importPreviewTimeFields
+    .map(f => ({ label: f.label, hours: stats[f.statsKey] ?? 0 }))
+    .filter(c => c.hours > 0)
+})
+
+const importPreviewToImportCount = computed(() => {
+  const stats = importPreviewStatistics.value
+  if (!stats) return 0
+  return stats.totalEntries - stats.duplicates - stats.errors
+})
+
+const importPreviewListItems = computed(() => {
+  const stats = importPreviewStatistics.value
+  if (!stats) return []
+  const items: { entry: LogEntry; status: 'new' | 'duplicate' }[] = importPreviewEntries.value.map(
+    entry => ({ entry, status: 'new' as const })
+  )
+  for (const dup of stats.duplicateEntries) {
+    items.push({ entry: dup.entry, status: 'duplicate' })
+  }
+  return items
+})
+
+function entryNonZeroTimeFields(entry: LogEntry): { label: string; hours: number }[] {
+  return importPreviewTimeFields
+    .map(f => ({ label: f.label, hours: entry.flightTime[f.key] ?? 0 }))
+    .filter(t => t.hours > 0)
+}
 const expandedPreviewEntries = ref<Set<string>>(new Set())
-const showDuplicateConfirmDialog = ref(false)
-const importWithDuplicates = ref(false)
+const importDuplicatesFlagged = ref(false)
 const importWithErrors = ref(false)
+const importSimTypeOverrides = ref<Record<string, SimTypeKey>>({})
+const importSimRememberDevice = ref<Record<string, boolean>>({})
+
+function importPreviewSimDeviceKey(entry: LogEntry): string {
+  return `${normalizeAircraftFamily(entry.aircraftMakeModel)}|${(entry.registration || '').toUpperCase()}`
+}
+
+const importPreviewSimDevices = computed(() => {
+  const devices: Array<{ key: string; makeModel: string; registration: string }> = []
+  const seen = new Set<string>()
+  for (const entry of importPreviewAllEntries.value) {
+    if (inferLogbookType(entry) !== 'simulator') continue
+    const key = importPreviewSimDeviceKey(entry)
+    if (seen.has(key)) continue
+    seen.add(key)
+    devices.push({
+      key,
+      makeModel: entry.aircraftMakeModel,
+      registration: entry.registration,
+    })
+  }
+  return devices
+})
+
+function initImportSimTypeOverrides(): void {
+  const overrides: Record<string, SimTypeKey> = {}
+  const remember: Record<string, boolean> = {}
+  for (const device of importPreviewSimDevices.value) {
+    overrides[device.key] = getCatalogSimDeviceType(device.makeModel) ?? 'ATD'
+    remember[device.key] = true
+  }
+  importSimTypeOverrides.value = overrides
+  importSimRememberDevice.value = remember
+}
 const showDuplicateOverrideDialog = ref(false)
 
 // Export dialog state (trust-first export: scope + preview)
@@ -7465,6 +7825,7 @@ function exportToCSV(entries?: LogEntry[]): void {
     'Flight Conditions',
     'Remarks',
     'Tags',
+    'Logbook Type',
     'Out',
     'Off',
     'On',
@@ -7475,10 +7836,13 @@ function exportToCSV(entries?: LogEntry[]): void {
     'Dual Received',
     'Solo',
     'Night',
+    'NVG',
     'Actual Instrument',
     'Simulated Instrument',
     'Cross Country',
-    'Ground Simulator',
+    'FFS',
+    'FTD',
+    'ATD',
     'Dual Given',
     'Day Landings',
     'Night Landings',
@@ -7563,6 +7927,7 @@ function exportToCSV(entries?: LogEntry[]): void {
       (entry.flightConditions || []).join('; '),
       entry.remarks || '',
       (entry.tags || []).join(', '),
+      inferLogbookType(entry),
       entry.oooi?.out || '',
       entry.oooi?.off || '',
       entry.oooi?.on || '',
@@ -7573,9 +7938,12 @@ function exportToCSV(entries?: LogEntry[]): void {
       formatTimeValue(entry.flightTime.dual),
       formatTimeValue(entry.flightTime.solo),
       formatTimeValue(entry.flightTime.night),
+      formatTimeValue(entry.flightTime.nvg),
       ...getInstrumentSplit(entry),
       formatTimeValue(entry.flightTime.crossCountry),
-      '0.0', // Ground Simulator - Logifi doesn't track ground simulator time separately
+      formatTimeValue(entry.flightTime.ffs),
+      formatTimeValue(entry.flightTime.ftd),
+      formatTimeValue(entry.flightTime.atd),
       formatTimeValue(entry.flightTime.dualGiven),
       formatCountValue(entry.performance.dayLandings),
       formatCountValue(entry.performance.nightLandings),
@@ -8008,51 +8376,6 @@ function isUserName(name: string): boolean {
   return name.trim().toLowerCase() === userName.toLowerCase()
 }
 
-// Extract base aircraft model name from full model string
-// Examples: "C-172 S G-1000, Cessna Skyhawk SP" -> "C-172"
-//           "PA-28-181 Archer II" -> "PA-28"
-//           "SR-22T G6" -> "SR-22"
-function extractBaseModelName(model: string): string {
-  if (!model || !model.trim()) return ''
-  
-  const trimmed = model.trim()
-  
-  // Common aircraft model patterns: [Letter(s)]-[Number(s)]
-  // Match patterns like: C-172, PA-28, SR-22, BE-58, DA-42, etc.
-  const modelPattern = /^([A-Z]{1,3})-(\d{2,4})/i
-  
-  const match = trimmed.match(modelPattern)
-  if (match && match[1] && match[2]) {
-    // Found pattern like C-172, PA-28, etc.
-    return `${match[1].toUpperCase()}-${match[2]}`
-  }
-  
-  // Fallback: take everything before the first comma
-  const commaIndex = trimmed.indexOf(',')
-  if (commaIndex > 0) {
-    const beforeComma = trimmed.substring(0, commaIndex).trim()
-    // Try to extract base model from this part
-    const fallbackMatch = beforeComma.match(modelPattern)
-    if (fallbackMatch && fallbackMatch[1] && fallbackMatch[2]) {
-      return `${fallbackMatch[1].toUpperCase()}-${fallbackMatch[2]}`
-    }
-    // If no pattern found, return first part before comma (but limit length)
-    const parts = beforeComma.split(/\s+/)
-    if (parts.length > 0 && parts[0] && parts[0].length <= 20) {
-      return parts[0]
-    }
-  }
-  
-  // Last resort: return first word if it looks like a model (has dash or is short)
-  const words = trimmed.split(/\s+/)
-  const firstWord = words[0]
-  if (firstWord && (firstWord.includes('-') || firstWord.length <= 10)) {
-    return firstWord
-  }
-  
-  return trimmed
-}
-
 async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<LogEntry | null> {
   try {
     // Parse date - handle various formats
@@ -8091,7 +8414,32 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
       return null // Invalid date format
     }
-    
+
+    const simHints = readSimHintsFromRawRow(rawEntry)
+    const rawAircraftMakeModel = resolveImportAircraftMakeModel(rawEntry)
+    const aircraftMakeModelPreview = simHints.isSimulator
+      ? (rawAircraftMakeModel || 'Unknown')
+      : (extractBaseModelName(rawAircraftMakeModel) || 'Unknown')
+    const categoryClassPreview = normalizeCategoryClassLabel(
+      findFieldValue(rawEntry, [
+        'aircraftType_selectedAircraftClass',
+        'aircraftType_selectedCategory',
+        'Aircraft Category/Class', 'aircraft category/class',
+        'Category/Class', 'category/class', 'Category Class', 'category class',
+        'aircraftCategoryClass',
+      ]) || ''
+    )
+    const likelySimulatorRow = isLikelySimulatorRow(simHints, {
+      aircraftMakeModel: aircraftMakeModelPreview || 'Unknown',
+      aircraftCategoryClass: categoryClassPreview,
+      trainingElements: findFieldValue(rawEntry, ['Training Elements', 'training elements', 'TrainingElements', 'trainingElements']),
+      flightTime: {
+        ffs: simHints.ffs ?? null,
+        ftd: simHints.ftd ?? null,
+        atd: simHints.atd ?? null,
+      },
+    })
+
     // Required fields - try multiple common column names for registration
     // Try Logten field names first (they use aircraft_ prefix for registration!)
     let registration = findFieldValue(rawEntry, [
@@ -8123,26 +8471,24 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
       }
     }
     
+    if (!registration && likelySimulatorRow) {
+      registration =
+        findFieldValue(rawEntry, [
+          'Ident', 'ident', 'IDENT',
+          'Aircraft ID', 'aircraft id', 'AircraftID', 'aircraftID',
+          'Identification', 'identification',
+        ]) ||
+        aircraftMakeModelPreview ||
+        'SIM-UNK'
+    }
+
     if (!registration) return null
-    
+
     // Map CSV/JSON fields to LogEntry format
     const entry: LogEntry = {
       id: generateEntryId(),
       date: dateStr,
-      role: (() => {
-        // Determine role from PIC/SIC time values
-        const picTime = normalizeNumber(rawEntry.flight_pic || rawEntry.PIC || rawEntry.pic || 0) || 0
-        const sicTime = normalizeNumber(rawEntry.flight_sic || rawEntry.SIC || rawEntry.sic || 0) || 0
-        
-        if (picTime > 0) {
-          return 'PIC'
-        } else if (sicTime > 0) {
-          return 'SIC'
-        }
-        
-        // Fallback to existing role field
-        return findFieldValue(rawEntry, ['Role', 'role', 'ROLE']) || ''
-      })(),
+      role: resolveImportRole(rawEntry),
       aircraftCategoryClass: normalizeCategoryClassLabel(
         findFieldValue(rawEntry, [
           'aircraftType_selectedAircraftClass',  // Logten (e.g., "Multi-Engine Land")
@@ -8152,23 +8498,10 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
           'aircraftCategoryClass'
         ]) || ''
       ),
-      categoryClassTime: normalizeNumber(rawEntry.flight_totalTime || rawEntry['Total Flight Time'] || rawEntry.total || rawEntry.flightTime?.total),
-      aircraftMakeModel: extractBaseModelName(
-        findFieldValue(rawEntry, [
-          'aircraftType_model',  // Logten
-          'Aircraft Make/Model', 'aircraft make/model',
-          'Model', 'model', 'MODEL',
-          'aircraftMakeModel'
-        ]) || (() => {
-          // Try combining make and model from Logten
-          const make = findFieldValue(rawEntry, ['aircraftType_make'])
-          const model = findFieldValue(rawEntry, ['aircraftType_model'])
-          if (make && model) {
-            return `${make} ${model}`.trim()
-          }
-          return ''
-        })()
-      ),
+      categoryClassTime: resolveImportNumber(rawEntry, 'total'),
+      aircraftMakeModel: (simHints.isSimulator || likelySimulatorRow)
+        ? (rawAircraftMakeModel || 'Unknown')
+        : extractBaseModelName(rawAircraftMakeModel),
       registration: registration.toUpperCase(),
       flightNumber: findFieldValue(rawEntry, [
         'flight_flightNumber',  // Logten
@@ -8446,27 +8779,38 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
           if (hasLogtenOOOI) {
             return null // Will be calculated from OOOI times
           }
-          return normalizeNumber(rawEntry.flight_totalTime || rawEntry['Total Flight Time'] || rawEntry.total || rawEntry.flightTime?.total)
+          return resolveImportNumber(rawEntry, 'total')
         })(),
-        pic: normalizeNumber(rawEntry.flight_pic || rawEntry.PIC || rawEntry.pic || rawEntry.flightTime?.pic),
-        sic: normalizeNumber(rawEntry.flight_sic || rawEntry.SIC || rawEntry.sic || rawEntry.flightTime?.sic),
-        dual: normalizeNumber(rawEntry.flight_dualReceived || rawEntry['Dual Received'] || rawEntry.dual || rawEntry.flightTime?.dual),
-        solo: normalizeNumber(rawEntry.flight_solo || rawEntry.Solo || rawEntry['Solo Time'] || rawEntry.solo || rawEntry.flightTime?.solo),
-        night: normalizeNumber(
-          findFieldValue(rawEntry, [
-            'flight_nightTime',  // Logten (with Time suffix)
-            'flight_night',  // Logten
-            'Night Time', 'night time', 'NightTime', 'nightTime',
-            'Night', 'night', 'NIGHT',
-            'flightTime?.night'
-          ]) || rawEntry.flight_night || rawEntry.Night || rawEntry.night || rawEntry.flightTime?.night
-        ),
-        actualInstrument: normalizeNumber(rawEntry.flight_actualInstrument || rawEntry['Actual Instrument'] || rawEntry.IMC || rawEntry.imc || rawEntry.actualInstrument || rawEntry.flightTime?.actualInstrument),
-        dualGiven: normalizeNumber(rawEntry.flight_dualGiven || rawEntry['Dual Given'] || rawEntry.CFI || rawEntry.cfi || rawEntry.dualGiven || rawEntry.flightTime?.dualGiven),
-        crossCountry: normalizeNumber(rawEntry.flight_crossCountry || rawEntry['Cross Country'] || rawEntry['X-Country'] || rawEntry['X-C'] || rawEntry.crossCountry || rawEntry.flightTime?.crossCountry),
+        pic: resolveImportNumber(rawEntry, 'pic'),
+        sic: resolveImportNumber(rawEntry, 'sic'),
+        dual: resolveImportNumber(rawEntry, 'dual'),
+        solo: resolveImportNumber(rawEntry, 'solo'),
+        night: resolveImportNumber(rawEntry, 'night'),
+        nvg: resolveImportNumber(rawEntry, 'nvg'),
+        actualInstrument: resolveImportNumber(rawEntry, 'actualInstrument'),
+        dualGiven: resolveImportNumber(rawEntry, 'dualGiven'),
+        crossCountry: resolveImportNumber(rawEntry, 'crossCountry'),
         // IMPORTANT: Map "Simulated Instrument" to simulatedInstrument (hood time)
         // NOT "Ground Simulator" - that's a different field
-        simulatedInstrument: normalizeNumber(rawEntry.flight_simulatedInstrument || rawEntry['Simulated Instrument'] || rawEntry.simulatedInstrument || rawEntry.hood || rawEntry.flightTime?.simulatedInstrument)
+        simulatedInstrument: resolveImportNumber(rawEntry, 'simulatedInstrument'),
+        ffs: normalizeNumber(
+          findFieldValue(rawEntry, ['FFS', 'ffs', 'flight_ffs', 'Full Flight Simulator']) ||
+          rawEntry.flight_ffs ||
+          rawEntry.flightTime?.ffs ||
+          simHints.ffs
+        ),
+        ftd: normalizeNumber(
+          findFieldValue(rawEntry, ['FTD', 'ftd', 'flight_ftd', 'Flight Training Device']) ||
+          rawEntry.flight_ftd ||
+          rawEntry.flightTime?.ftd ||
+          simHints.ftd
+        ),
+        atd: normalizeNumber(
+          findFieldValue(rawEntry, ['ATD', 'atd', 'flight_atd', 'Aviation Training Device']) ||
+          rawEntry.flight_atd ||
+          rawEntry.flightTime?.atd ||
+          simHints.atd
+        ),
       },
       performance: {
         dayTakeoffs: normalizeNumber(rawEntry['Day Takeoffs'] || rawEntry['FS Day Landings'] || rawEntry.dayTakeoffs || rawEntry.performance?.dayTakeoffs),
@@ -8674,13 +9018,17 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
       }
     }
     
-    // Auto-check flight conditions based on time entries
+    applySimulatorImport(entry, simHints)
+    entry.logbookType = inferLogbookType(entry)
+
+    // Auto-check flight conditions after simulator normalization (actual → simulated)
     entry.flightConditions = autoCheckFlightConditions(
       entry.flightConditions,
       entry.flightTime.night,
       entry.flightTime.actualInstrument,
       entry.flightTime.simulatedInstrument,
-      entry.flightTime.crossCountry
+      entry.flightTime.crossCountry,
+      entry.flightTime.nvg ?? null
     )
     
     return entry
@@ -8701,12 +9049,16 @@ async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statist
   let picTime = 0
   let sicTime = 0
   let nightTime = 0
+  let nvgTime = 0
   let crossCountryTime = 0
   let actualInstrumentTime = 0
   let simulatedInstrumentTime = 0
   let dualReceivedTime = 0
   let dualGivenTime = 0
   let soloTime = 0
+  let ffsTime = 0
+  let ftdTime = 0
+  let atdTime = 0
   let totalLandings = 0
   let dayLandings = 0
   let nightLandings = 0
@@ -8714,6 +9066,8 @@ async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statist
   
   const dates: string[] = []
   const errorMessages: string[] = []
+  /** Entries accepted in this import batch so far — mirrors importEntries growing logEntries. */
+  const batchAccepted: LogEntry[] = []
   
   for (const entry of entries) {
     // Provide defaults for missing required fields
@@ -8734,9 +9088,34 @@ async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statist
       errorMessages.push(`Entry ${entry.date} ${entry.registration}: ${validationError}`)
       continue
     }
+
+    // File-level stats: all validated rows (including duplicates) so preview totals stay visible on re-import
+    dates.push(entry.date)
+    totalFlightTime += entry.flightTime.total ?? 0
+    picTime += entry.flightTime.pic ?? 0
+    sicTime += entry.flightTime.sic ?? 0
+    nightTime += entry.flightTime.night ?? 0
+    nvgTime += entry.flightTime.nvg ?? 0
+    crossCountryTime += entry.flightTime.crossCountry ?? 0
+    actualInstrumentTime += entry.flightTime.actualInstrument ?? 0
+    simulatedInstrumentTime += entry.flightTime.simulatedInstrument ?? 0
+    dualReceivedTime += entry.flightTime.dual ?? 0
+    dualGivenTime += entry.flightTime.dualGiven ?? 0
+    soloTime += entry.flightTime.solo ?? 0
+    ffsTime += entry.flightTime.ffs ?? 0
+    ftdTime += entry.flightTime.ftd ?? 0
+    atdTime += entry.flightTime.atd ?? 0
+    dayLandings += entry.performance.dayLandings ?? 0
+    nightLandings += entry.performance.nightLandings ?? 0
+    totalLandings += (entry.performance.dayLandings ?? 0) + (entry.performance.nightLandings ?? 0)
+    totalApproaches += getTotalApproachCount(entry.performance)
+    const aircraftKey = `${entry.aircraftMakeModel} (${entry.registration})`
+    aircraftBreakdown[aircraftKey] = (aircraftBreakdown[aircraftKey] || 0) + 1
     
-    // Check for duplicates and find matching entries
-    const matches = findDuplicateEntries(entry, logEntries.value)
+    // Check duplicates against logbook AND earlier rows in this file (same order as importEntries)
+    const logbookMatches = findDuplicateEntries(entry, logEntries.value)
+    const batchMatches = findDuplicateEntries(entry, batchAccepted)
+    const matches = [...logbookMatches, ...batchMatches]
     if (matches.length > 0) {
       duplicates.push(entry)
       duplicateEntries.push({ entry, matches })
@@ -8745,28 +9124,7 @@ async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statist
     
     // Entry is valid and not a duplicate
     validEntries.push(entry)
-    dates.push(entry.date)
-    
-    // Accumulate statistics
-    totalFlightTime += entry.flightTime.total ?? 0
-    picTime += entry.flightTime.pic ?? 0
-    sicTime += entry.flightTime.sic ?? 0
-    nightTime += entry.flightTime.night ?? 0
-    crossCountryTime += entry.flightTime.crossCountry ?? 0
-    actualInstrumentTime += entry.flightTime.actualInstrument ?? 0
-    simulatedInstrumentTime += entry.flightTime.simulatedInstrument ?? 0
-    dualReceivedTime += entry.flightTime.dual ?? 0
-    dualGivenTime += entry.flightTime.dualGiven ?? 0
-    soloTime += entry.flightTime.solo ?? 0
-    
-    dayLandings += entry.performance.dayLandings ?? 0
-    nightLandings += entry.performance.nightLandings ?? 0
-    totalLandings += (entry.performance.dayLandings ?? 0) + (entry.performance.nightLandings ?? 0)
-    totalApproaches += getTotalApproachCount(entry.performance)
-    
-    // Aircraft breakdown
-    const aircraftKey = `${entry.aircraftMakeModel} (${entry.registration})`
-    aircraftBreakdown[aircraftKey] = (aircraftBreakdown[aircraftKey] || 0) + 1
+    batchAccepted.push(entry)
   }
   
   // Calculate date range
@@ -8786,12 +9144,16 @@ async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statist
     picTime,
     sicTime,
     nightTime,
+    nvgTime,
     crossCountryTime,
     actualInstrumentTime,
     simulatedInstrumentTime,
     dualReceivedTime,
     dualGivenTime,
     soloTime,
+    ffsTime,
+    ftdTime,
+    atdTime,
     totalLandings,
     dayLandings,
     nightLandings,
@@ -8805,8 +9167,8 @@ async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statist
   return { statistics, validEntries, duplicates, errors }
 }
 
-async function importEntries(entries: LogEntry[], importDuplicates: boolean = false, importWithErrorsFlag: boolean = false): Promise<{ imported: number; skipped: number; errors: string[] }> {
-  const result = { imported: 0, skipped: 0, errors: [] as string[] }
+async function importEntries(entries: LogEntry[], importDuplicates: boolean = false, importWithErrorsFlag: boolean = false): Promise<{ imported: number; skipped: number; flaggedDuplicates: number; errors: string[] }> {
+  const result = { imported: 0, skipped: 0, flaggedDuplicates: 0, errors: [] as string[] }
   
   // Determine import source from metadata
   const importSource = importPreviewMetadata.value?.fileType?.toLowerCase() || 'unknown'
@@ -8900,6 +9262,13 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
     if (matches.length > 0 && !importDuplicates) {
       result.skipped++
       continue
+    }
+    if (matches.length > 0 && importDuplicates) {
+      const match = matches[0]!
+      entry.flagged = true
+      result.flaggedDuplicates++
+      const dupNote = `[Import Duplicate: matches ${match.date} ${match.registration}]`
+      entry.remarks = (entry.remarks || '') + (entry.remarks ? '\n\n' : '') + dupNote
     }
     
     // Save to Supabase if authenticated
@@ -9008,31 +9377,23 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
   return result
 }
 
-async function confirmImport(): Promise<void> {
-  if (!importPreviewEntries.value.length || !importPreviewStatistics.value) {
+async function proceedWithImport(includeDuplicates: boolean): Promise<void> {
+  if (!importPreviewStatistics.value?.totalEntries || !importPreviewAllEntries.value.length) {
     return
   }
-  
-  // Check if there are duplicates and show confirmation dialog
-  if (importPreviewStatistics.value.duplicates > 0 && !importWithDuplicates.value) {
-    showDuplicateConfirmDialog.value = true
-    return
-  }
-  
-  // Proceed with import
-  await proceedWithImport()
-}
 
-async function proceedWithImport(): Promise<void> {
-  if (!importPreviewEntries.value.length || !importPreviewStatistics.value) {
-    return
-  }
-  
-  // Import the entries (with duplicates if user confirmed, with errors if checkbox is checked)
-  const result = await importEntries(importPreviewEntries.value, importWithDuplicates.value, importWithErrors.value)
-  
-  // Show result
+  applyImportSimTypeOverrides()
+
+  const result = await importEntries(
+    importPreviewAllEntries.value,
+    includeDuplicates,
+    importWithErrors.value
+  )
+
   let message = `Import complete!\n\nImported: ${result.imported} ${result.imported === 1 ? 'entry' : 'entries'}`
+  if (result.flaggedDuplicates > 0) {
+    message += ` (${result.flaggedDuplicates} flagged as duplicates)`
+  }
   if (result.skipped > 0) {
     message += `\nSkipped (duplicates): ${result.skipped} ${result.skipped === 1 ? 'entry' : 'entries'}`
   }
@@ -9043,28 +9404,38 @@ async function proceedWithImport(): Promise<void> {
     }
   }
   alert(message)
-  
-  // Close preview and reset
+
   cancelImport()
 }
 
-function handleDuplicateConfirm(importAnyway: boolean): void {
-  importWithDuplicates.value = importAnyway
-  showDuplicateConfirmDialog.value = false
-  if (importAnyway) {
-    proceedWithImport()
+async function handleSkipDuplicatesImport(): Promise<void> {
+  if (!importPreviewStatistics.value) return
+  if (importPreviewToImportCount.value === 0) {
+    const total = importPreviewStatistics.value.totalEntries
+    alert(
+      `Nothing new to import. Check "Import duplicate entries and flag them for review" to add all ${total} rows (duplicates will be flagged).`
+    )
+    return
   }
+  await proceedWithImport(false)
+}
+
+async function handleImportAllWithDuplicates(): Promise<void> {
+  if (!importDuplicatesFlagged.value) return
+  await proceedWithImport(true)
 }
 
 function cancelImport(): void {
   showImportPreview.value = false
+  importPreviewAllEntries.value = []
   importPreviewEntries.value = []
   importPreviewStatistics.value = null
   importPreviewMetadata.value = null
   expandedPreviewEntries.value = new Set()
-  showDuplicateConfirmDialog.value = false
-  importWithDuplicates.value = false
+  importDuplicatesFlagged.value = false
   importWithErrors.value = false
+  importSimTypeOverrides.value = {}
+  importSimRememberDevice.value = {}
 }
 
 function togglePreviewEntry(entryId: string): void {
@@ -9168,7 +9539,7 @@ async function processCSVFile(file: File): Promise<void> {
     
     // Calculate statistics and show preview
     const { statistics, validEntries, errors } = await calculateImportStatistics(entries)
-    // Include all entries (valid + errors) so error entries can be imported if checkbox is checked
+    importPreviewAllEntries.value = entries
     importPreviewEntries.value = [...validEntries, ...errors.map(e => e.entry)]
     importPreviewStatistics.value = statistics
     importPreviewMetadata.value = {
@@ -9176,7 +9547,9 @@ async function processCSVFile(file: File): Promise<void> {
       fileType: 'CSV',
       importedAt: new Date().toISOString()
     }
+    importDuplicatesFlagged.value = false
     showImportPreview.value = true
+    initImportSimTypeOverrides()
   } catch (error) {
     console.error('Error importing CSV:', error)
     alert(`Error importing CSV file: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -9233,7 +9606,7 @@ async function processJSONFile(file: File): Promise<void> {
     
     // Calculate statistics and show preview
     const { statistics, validEntries, errors } = await calculateImportStatistics(normalizedEntries)
-    // Include all entries (valid + errors) so error entries can be imported if checkbox is checked
+    importPreviewAllEntries.value = normalizedEntries
     importPreviewEntries.value = [...validEntries, ...errors.map(e => e.entry)]
     importPreviewStatistics.value = statistics
     importPreviewMetadata.value = {
@@ -9241,7 +9614,9 @@ async function processJSONFile(file: File): Promise<void> {
       fileType: 'JSON',
       importedAt: new Date().toISOString()
     }
+    importDuplicatesFlagged.value = false
     showImportPreview.value = true
+    initImportSimTypeOverrides()
   } catch (error) {
     console.error('Error importing JSON:', error)
     alert(`Error importing JSON file: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -9379,13 +9754,20 @@ async function loadPilotProfileFromSupabase(): Promise<void> {
       prefs.mailingState = mail.state ?? ''
       prefs.mailingZip = mail.zip ?? ''
     }
-    const pref = data.preferences as Record<string, string> | null
+    const pref = data.preferences as Record<string, unknown> | null
     if (pref) {
-      prefs.callsign = pref.callsign ?? ''
-      prefs.homeBase = pref.homeBase ?? ''
-      prefs.certificates = pref.certificates ?? ''
-      prefs.flightGoals = pref.flightGoals ?? ''
-      prefs.notes = pref.notes ?? ''
+      prefs.callsign = (pref.callsign as string) ?? ''
+      prefs.homeBase = (pref.homeBase as string) ?? ''
+      prefs.certificates = (pref.certificates as string) ?? ''
+      prefs.flightGoals = (pref.flightGoals as string) ?? ''
+      prefs.notes = (pref.notes as string) ?? ''
+      if (pref.enableMilitaryFields != null) {
+        prefs.enableMilitaryFields = pref.enableMilitaryFields === true || pref.enableMilitaryFields === 'true'
+      }
+      const simTypes = pref.simDeviceTypes as Record<string, SimTypeKey> | undefined
+      if (simTypes && typeof simTypes === 'object') {
+        mergeSimDeviceCatalog(simTypes)
+      }
     }
     Object.assign(pilotProfile, pilotProfileDefaults, prefs)
     savePilotProfilePrefs() // persist merged result to localStorage
@@ -9426,13 +9808,18 @@ function savePilotProfileToSupabase(): void {
           zip: pilotProfile.mailingZip || ''
         }
       }
-      const preferences: Record<string, string> = {}
+      const preferences: Record<string, unknown> = {}
       if (pilotProfile.callsign) preferences.callsign = pilotProfile.callsign
       if (pilotProfile.homeBase) preferences.homeBase = pilotProfile.homeBase
       if (pilotProfile.certificates) preferences.certificates = pilotProfile.certificates
       if (pilotProfile.flightGoals) preferences.flightGoals = pilotProfile.flightGoals
       if (pilotProfile.notes) preferences.notes = pilotProfile.notes
-      if (Object.keys(preferences).length > 0) updateData.preferences = preferences
+      preferences.enableMilitaryFields = pilotProfile.enableMilitaryFields
+      const simCatalog = getSimDeviceCatalogSnapshot()
+      if (Object.keys(simCatalog).length > 0) {
+        preferences.simDeviceTypes = simCatalog
+      }
+      updateData.preferences = preferences
       const { error } = await (supabase.from('user_profiles') as any)
         .upsert({ id: userId, ...updateData }, { onConflict: 'id' })
       if (error) console.warn('[SavePilotProfile] Supabase error:', error)
@@ -9500,6 +9887,18 @@ const crewModalLastTagEntryCount = ref<number | null>(null)
 const showRenameFamilyModal = ref(false)
 const renameFamilyOldName = ref<string>('')
 const renameFamilyNewName = ref<string>('')
+const renameFamilySimType = ref<'' | SimTypeKey>('')
+
+const renameFamilyShowSimType = computed(() => {
+  const name = renameFamilyOldName.value
+  if (!name) return false
+  if (activeLogbook.value === 'simulator') return true
+  return isTrainingDevice({
+    aircraftMakeModel: name,
+    aircraftCategoryClass: '',
+    trainingElements: '',
+  })
+})
 const editFamilyNewTagInput = ref('')
 const editFamilyShowAddTag = ref(false)
 /** After adding a family tag, number of log entries it was applied to (for Edit Family modal). */
@@ -9946,7 +10345,6 @@ function fillFieldWithTotalTime(fieldKey: FlightTimeKey, totalTime: number | nul
   }
 }
 
-type SimTypeKey = 'FFS' | 'FTD' | 'ATD'
 function getSelectedSimType(entry: { flightTime: { ffs?: number | null; ftd?: number | null; atd?: number | null } } | null): '' | SimTypeKey {
   if (!entry?.flightTime) return ''
   const ft = entry.flightTime
@@ -9983,11 +10381,61 @@ function setSimType(entry: { flightTime: { ffs?: number | null; ftd?: number | n
   }
 }
 
+function applySimTypeToEntry(entry: LogEntry, type: SimTypeKey): void {
+  const ft = entry.flightTime
+  const time = (ft.ffs ?? 0) || (ft.ftd ?? 0) || (ft.atd ?? 0) || (ft.total ?? 0) || 0
+  setSimType(entry, type)
+  if (time > 0) {
+    entry.flightTime[type.toLowerCase() as 'ffs' | 'ftd' | 'atd'] = time
+  }
+  entry.logbookType = 'simulator'
+}
+
+function applyImportSimTypeOverrides(): void {
+  for (const entry of importPreviewAllEntries.value) {
+    if (inferLogbookType(entry) !== 'simulator') continue
+    const key = importPreviewSimDeviceKey(entry)
+    const type = importSimTypeOverrides.value[key]
+    if (!type) continue
+    applySimTypeToEntry(entry, type)
+    if (importSimRememberDevice.value[key]) {
+      setCatalogSimDeviceType(entry.aircraftMakeModel, type)
+    }
+  }
+  persistSimDeviceCatalog()
+}
+
+function persistSimDeviceCatalog(): void {
+  savePilotProfilePrefs()
+  savePilotProfileToSupabase()
+}
+
 function getSimTimeDisplayValue(entry: { flightTime: { ffs?: number | null; ftd?: number | null; atd?: number | null } }): string {
   const sel = getSelectedSimType(entry)
   if (!sel) return ''
   const v = entry.flightTime[sel.toLowerCase() as 'ffs' | 'ftd' | 'atd']
   return v === null || v === undefined || v === 0 ? '' : String(v)
+}
+
+/** Distribute sim session time into pic/sic/dual/solo based on role. */
+function syncSimRoleTime(entry: { role: string; flightTime: FlightTimeBreakdown }): void {
+  const ft = entry.flightTime
+  const simTime = getSimTimeSum(entry as LogEntry)
+  ft.pic = null
+  ft.sic = null
+  ft.dual = null
+  ft.solo = null
+  if (simTime <= 0) return
+  if (entry.role === 'PIC') {
+    ft.pic = simTime
+  } else if (entry.role === 'SIC') {
+    ft.sic = simTime
+  } else if (entry.role === 'Dual Received') {
+    ft.dual = simTime
+  } else if (entry.role === 'Solo') {
+    ft.solo = simTime
+    ft.pic = simTime
+  }
 }
 
 function toggleFixedTag(entry: { tags?: string[] }, tag: string): void {
@@ -10021,7 +10469,7 @@ function customTagsFor(entry: { tags?: string[] }): string[] {
 function createBlankEntry(): EditableLogEntry {
   return {
     date: '',
-    role: roleOptions[0],
+    role: activeLogbook.value === 'simulator' ? 'Dual Received' : roleOptions[0],
     aircraftCategoryClass: '',
     categoryClassTime: null,
     aircraftMakeModel: '',
@@ -10245,7 +10693,8 @@ function autoCheckFlightConditions(
   nightTime: number | null, 
   actualInstrumentTime: number | null, 
   simulatedInstrumentTime: number | null, 
-  xcTime: number | null
+  xcTime: number | null,
+  nvgTime: number | null = null
 ): string[] {
   const conditionSet = new Set(conditions)
   
@@ -10254,6 +10703,11 @@ function autoCheckFlightConditions(
   // even when night time is not captured yet.
   if (nightTime && nightTime > 0) {
     conditionSet.add('nightVfr')
+  }
+
+  // Auto-check NVG when NVG time > 0; do not auto-uncheck when cleared (matches night)
+  if (nvgTime && nvgTime > 0) {
+    conditionSet.add('nvg')
   }
   
   // Auto-check IFR AND Actual Instrument if actual instrument time > 0
@@ -10450,6 +10904,7 @@ function closeContextMenu(): void {
 function openRenameFamilyModal(): void {
   renameFamilyOldName.value = contextMenuFamilyName.value
   renameFamilyNewName.value = contextMenuFamilyName.value
+  renameFamilySimType.value = getCatalogSimDeviceType(contextMenuFamilyName.value) ?? ''
   closeContextMenu()
   showRenameFamilyModal.value = true
 }
@@ -10458,9 +10913,56 @@ function closeRenameFamilyModal(): void {
   showRenameFamilyModal.value = false
   renameFamilyOldName.value = ''
   renameFamilyNewName.value = ''
+  renameFamilySimType.value = ''
   editFamilyShowAddTag.value = false
   editFamilyNewTagInput.value = ''
   editFamilyLastTagEntryCount.value = null
+}
+
+async function backfillFamilySimType(familyName: string, type: SimTypeKey | null): Promise<void> {
+  const group = getFamilyRenameGroup(familyName)
+  const groupSet = new Set(group.map((s) => s.toUpperCase()))
+  const entriesToUpdate = logEntries.value.filter((entry) => {
+    const normalized = normalizeAircraftFamily(entry.aircraftMakeModel)
+    return (
+      normalized &&
+      groupSet.has(normalized.toUpperCase()) &&
+      inferLogbookType(entry) === 'simulator'
+    )
+  })
+  if (!entriesToUpdate.length) return
+
+  for (const entry of entriesToUpdate) {
+    if (type) {
+      applySimTypeToEntry(entry, type)
+    }
+  }
+
+  if (isAuthenticated.value && user.value) {
+    for (const entry of entriesToUpdate) {
+      try {
+        await (supabase.from('log_entries') as any)
+          .update({
+            aircraft_category_class: entry.aircraftCategoryClass,
+            flight_time: entry.flightTime,
+            logbook_type: entry.logbookType,
+          })
+          .eq('id', entry.id)
+          .eq('user_id', user.value.id)
+        await updateEntryInIndexedDB(entry)
+      } catch (e) {
+        console.warn('[backfillFamilySimType] update failed for', entry.id, e)
+      }
+    }
+  }
+}
+
+async function saveFamilySimTypeSetting(familyName: string, type: '' | SimTypeKey): Promise<void> {
+  setCatalogSimDeviceType(familyName, type || null)
+  persistSimDeviceCatalog()
+  if (type) {
+    await backfillFamilySimType(familyName, type)
+  }
 }
 
 async function renameAircraftFamily(oldFamilyName: string, newFamilyName: string): Promise<void> {
@@ -10471,6 +10973,13 @@ async function renameAircraftFamily(oldFamilyName: string, newFamilyName: string
   const trimmedNewName = newFamilyName.trim()
   if (!trimmedNewName) {
     return
+  }
+
+  const catalogSimType = getCatalogSimDeviceType(oldFamilyName)
+  if (catalogSimType) {
+    setCatalogSimDeviceType(trimmedNewName, catalogSimType)
+    setCatalogSimDeviceType(oldFamilyName, null)
+    persistSimDeviceCatalog()
   }
 
   const group = getFamilyRenameGroup(oldFamilyName)
@@ -10575,7 +11084,13 @@ async function confirmRenameFamily(): Promise<void> {
     return
   }
 
-  if (trimmedNewName === renameFamilyOldName.value) {
+  const nameChanged = trimmedNewName !== renameFamilyOldName.value
+  const simTypeToSave = renameFamilyShowSimType.value ? renameFamilySimType.value : ''
+
+  if (!nameChanged) {
+    if (simTypeToSave) {
+      await saveFamilySimTypeSetting(renameFamilyOldName.value, simTypeToSave)
+    }
     closeRenameFamilyModal()
     return
   }
@@ -10588,6 +11103,9 @@ async function confirmRenameFamily(): Promise<void> {
   }
 
   await renameAircraftFamily(renameFamilyOldName.value, trimmedNewName)
+  if (simTypeToSave) {
+    await saveFamilySimTypeSetting(trimmedNewName, simTypeToSave)
+  }
 }
 
 // Computed: count of entries that will be renamed (full consolidation group, including typos)
@@ -11820,6 +12338,7 @@ watch(
 watch(
   () => [
     newEntry.flightTime.night,
+    newEntry.flightTime.nvg,
     newEntry.flightTime.actualInstrument,
     newEntry.flightTime.simulatedInstrument,
     newEntry.flightTime.crossCountry
@@ -11830,7 +12349,8 @@ watch(
       newEntry.flightTime.night,
       newEntry.flightTime.actualInstrument,
       newEntry.flightTime.simulatedInstrument,
-      newEntry.flightTime.crossCountry
+      newEntry.flightTime.crossCountry,
+      newEntry.flightTime.nvg ?? null
     )
   },
   { deep: true }
@@ -11840,6 +12360,7 @@ watch(
 watch(
   () => [
     inlineEditEntry.value?.flightTime.night,
+    inlineEditEntry.value?.flightTime.nvg,
     inlineEditEntry.value?.flightTime.actualInstrument,
     inlineEditEntry.value?.flightTime.simulatedInstrument,
     inlineEditEntry.value?.flightTime.crossCountry
@@ -11851,7 +12372,8 @@ watch(
       inlineEditEntry.value.flightTime.night,
       inlineEditEntry.value.flightTime.actualInstrument,
       inlineEditEntry.value.flightTime.simulatedInstrument,
-      inlineEditEntry.value.flightTime.crossCountry
+      inlineEditEntry.value.flightTime.crossCountry,
+      inlineEditEntry.value.flightTime.nvg ?? null
     )
   },
   { deep: true }
@@ -11961,6 +12483,18 @@ async function submitEntry(): Promise<void> {
         (newEntry.oooi.in && newEntry.oooi.in.trim())
       return hasOOOITimes ? { ...newEntry.oooi } : undefined
     })()
+  }
+
+  if (inferLogbookType(baseEntry) === 'simulator') {
+    normalizeSimulatorInstrumentTime(baseEntry)
+    baseEntry.flightConditions = autoCheckFlightConditions(
+      baseEntry.flightConditions,
+      baseEntry.flightTime.night,
+      baseEntry.flightTime.actualInstrument,
+      baseEntry.flightTime.simulatedInstrument,
+      baseEntry.flightTime.crossCountry,
+      baseEntry.flightTime.nvg ?? null
+    )
   }
 
   // Debug: Log the flightTime object being saved
@@ -12383,7 +12917,7 @@ async function loadEntries(): Promise<void> {
         normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
         entry.performance = normalizedPerformance
         
-        if (entry.logbookType === undefined) entry.logbookType = getEntryLogbookType(entry)
+        if (entry.logbookType === undefined) entry.logbookType = inferLogbookType(entry)
         return entry
       })
       
@@ -12523,8 +13057,88 @@ async function loadEntries(): Promise<void> {
     startBackgroundSync()
   }
 
+  await migrateSimulatorInstrumentOnLoad()
+
   // FC View rows may arrive without persisted night values; derive from OOOI for display consistency.
   void enrichFcvNightDataForDisplay()
+}
+
+/** One-time-style migration: simulator entries cannot have actual instrument time. */
+async function migrateSimulatorInstrumentOnLoad(): Promise<void> {
+  const migrated: LogEntry[] = []
+
+  logEntries.value = logEntries.value.map((entry) => {
+    if (inferLogbookType(entry) !== 'simulator') return entry
+    if ((entry.flightTime.actualInstrument ?? 0) <= 0) return entry
+
+    const updated: LogEntry = {
+      ...entry,
+      flightTime: { ...entry.flightTime },
+      flightConditions: [...(entry.flightConditions || [])],
+    }
+    normalizeSimulatorInstrumentTime(updated)
+    updated.flightConditions = autoCheckFlightConditions(
+      updated.flightConditions,
+      updated.flightTime.night,
+      updated.flightTime.actualInstrument,
+      updated.flightTime.simulatedInstrument,
+      updated.flightTime.crossCountry,
+      updated.flightTime.nvg ?? null
+    )
+    migrated.push(updated)
+    return updated
+  })
+
+  if (migrated.length === 0) return
+
+  console.log('[MigrateSimInstrument] Normalized', migrated.length, 'simulator entries')
+
+  await Promise.all(
+    migrated.map((entry) =>
+      updateEntryInIndexedDB(entry).catch((err) => {
+        console.warn('[MigrateSimInstrument] Failed to update IndexedDB:', entry.id, err)
+      })
+    )
+  )
+
+  if (isAuthenticated.value && user.value) {
+    for (const entry of migrated) {
+      const dbEntry: any = {
+        id: entry.id,
+        user_id: user.value.id,
+        date: entry.date,
+        role: entry.role,
+        aircraft_category_class: entry.aircraftCategoryClass,
+        category_class_time: entry.categoryClassTime,
+        aircraft_make_model: entry.aircraftMakeModel,
+        registration: entry.registration,
+        flight_number: entry.flightNumber,
+        departure: entry.departure,
+        destination: entry.destination,
+        route: entry.route,
+        training_elements: entry.trainingElements || null,
+        training_instructor: entry.trainingInstructor || null,
+        instructor_certificate: entry.instructorCertificate || null,
+        flight_conditions: entry.flightConditions,
+        remarks: entry.remarks || null,
+        tags: Array.isArray(entry.tags) ? entry.tags : [],
+        logbook_type: entry.logbookType ?? 'simulator',
+        flight_time: entry.flightTime,
+        performance: entry.performance,
+        oooi: entry.oooi || null,
+        flagged: entry.flagged ?? false,
+        is_imported: entry.isImported ?? false,
+        import_source: entry.importSource ?? null,
+        import_batch_id: entry.importBatchId ?? null,
+        original_entry_date: entry.originalEntryDate ?? null,
+        import_metadata: entry.importMetadata ?? null,
+      }
+      await addToQueue('update', entry.id, dbEntry)
+    }
+    if (isOnline.value) {
+      processQueue()
+    }
+  }
 }
 
 async function handleFcvImported(payload: {
@@ -12572,7 +13186,8 @@ async function enrichFcvNightDataForDisplay(): Promise<void> {
         night,
         normalizeNumber(entry.flightTime?.actualInstrument),
         normalizeNumber(entry.flightTime?.simulatedInstrument),
-        normalizeNumber(entry.flightTime?.crossCountry)
+        normalizeNumber(entry.flightTime?.crossCountry),
+        normalizeNumber(entry.flightTime?.nvg)
       )
 
       return {
@@ -12974,14 +13589,6 @@ watch(
   }
 )
 
-function getEntryLogbookType(entry: LogEntry): 'flight' | 'simulator' {
-  if (entry.logbookType === 'flight' || entry.logbookType === 'simulator') return entry.logbookType
-  const ft = entry.flightTime ?? {}
-  const simTime = (ft.ffs ?? 0) + (ft.ftd ?? 0) + (ft.atd ?? 0)
-  const airplaneTotal = Math.max(0, (ft.total ?? 0) - simTime)
-  return simTime > 0 && airplaneTotal === 0 ? 'simulator' : 'flight'
-}
-
 const filteredEntries = computed(() => {
   const term = searchTerm.value.trim().toLowerCase()
   const activeAircraft = new Set(getActiveFilterKeys(selectedFilters.aircraft).map(k => k.toUpperCase()))
@@ -12992,7 +13599,7 @@ const filteredEntries = computed(() => {
   const activeCategoryClass = new Set(getActiveFilterKeys(selectedFilters.categoryClass).map(k => k.toUpperCase()))
 
   const result = logEntries.value.filter((entry) => {
-    if (getEntryLogbookType(entry) !== activeLogbook.value) return false
+    if (inferLogbookType(entry) !== activeLogbook.value) return false
 
     // text search
     const matchesTerm =
@@ -13158,6 +13765,7 @@ const totals = computed(() => {
       simTimeAccumulator.dual += ft.dual ?? 0
       simTimeAccumulator.solo += ft.solo ?? 0
       simTimeAccumulator.night += ft.night ?? 0
+      simTimeAccumulator.nvg += ft.nvg ?? 0
       simTimeAccumulator.actualInstrument += ft.actualInstrument ?? 0
       simTimeAccumulator.simulatedInstrument += ft.simulatedInstrument ?? 0
       simTimeAccumulator.crossCountry += ft.crossCountry ?? 0
@@ -13213,7 +13821,7 @@ const catalogs = computed<CatalogsValue>(() => {
   const familyMakeModelCounts: Record<string, Record<string, number>> = {}
   const familyToItemsMap: Record<string, Set<string>> = {}
   const entriesForActiveCatalog = logEntries.value.filter(
-    (entry) => getEntryLogbookType(entry) === activeLogbook.value
+    (entry) => inferLogbookType(entry) === activeLogbook.value
   )
 
   entriesForActiveCatalog.forEach((entry) => {
@@ -13797,7 +14405,7 @@ const pilotProfileStats = computed<PilotProfileStats>(() => {
 
     (entry.flightConditions || []).forEach((condition) => {
       const rawValue = condition?.trim() || ''
-      const label = conditionOptions.find((opt) => opt.value === rawValue)?.label || rawValue
+      const label = activeConditionOptions.value.find((opt) => opt.value === rawValue)?.label || rawValue
       if (label) {
         conditionCounts[label] = (conditionCounts[label] || 0) + 1
       }
@@ -13824,7 +14432,7 @@ const pilotProfileStats = computed<PilotProfileStats>(() => {
   stats.favoriteRoute = getTopKey(routeCounts)
   // Create a map of label to index for fixed ordering
   const conditionOrderMap = new Map<string, number>(
-    conditionOptions.map((opt, index) => [opt.label, index])
+    activeConditionOptions.value.map((opt, index) => [opt.label, index])
   )
   
   stats.conditions = Object.entries(conditionCounts)
@@ -13832,7 +14440,7 @@ const pilotProfileStats = computed<PilotProfileStats>(() => {
     .sort((a, b) => {
       const orderA = conditionOrderMap.get(a[0]) ?? Infinity
       const orderB = conditionOrderMap.get(b[0]) ?? Infinity
-      return orderA - orderB // Sort by fixed order from conditionOptions
+      return orderA - orderB // Sort by fixed order from activeConditionOptions
     })
     .map(([label, count]) => ({ label, count }))
 
@@ -14041,6 +14649,9 @@ function formatTotalValue(key: TotalsMetricKey): string {
   if (key === 'nightTime') {
     return safeNumber(totals.value.time.night).toFixed(1)
   }
+  if (key === 'nvgTime') {
+    return safeNumber(totals.value.time.nvg).toFixed(1)
+  }
   if (key === 'instrumentTime') {
     const simulated = safeNumber(totals.value.time.simulatedInstrument)
     const actual = safeNumber(totals.value.time.actualInstrument)
@@ -14088,6 +14699,7 @@ function formatSimTotalValue(key: TotalsMetricKey): string {
   if (key === 'soloTime') return safeNumber(sim.solo).toFixed(1)
   if (key === 'picTime') return safeNumber(sim.pic).toFixed(1)
   if (key === 'nightTime') return safeNumber(sim.night).toFixed(1)
+  if (key === 'nvgTime') return safeNumber(sim.nvg).toFixed(1)
   if (key === 'instrumentTime') {
     const inst = safeNumber(sim.actualInstrument) + safeNumber(sim.simulatedInstrument)
     return inst.toFixed(1)
@@ -14104,14 +14716,14 @@ function conditionLabel(value: string): string {
   if (value === 'dayVfr') {
     return ''
   }
-  const option = conditionOptions.find((option) => option.value === value)
+  const option = activeConditionOptions.value.find((option) => option.value === value)
   return option ? option.label : value
 }
 
 function sortConditionsInFixedOrder(conditions: string[]): string[] {
   // Create a map of value to index for fixed ordering
   const conditionOrderMap = new Map<string, number>(
-    conditionOptions.map((opt, index) => [opt.value, index])
+    activeConditionOptions.value.map((opt, index) => [opt.value, index])
   )
   
   // Sort by the original values first, then map to labels
@@ -14126,7 +14738,7 @@ function sortConditionsInFixedOrder(conditions: string[]): string[] {
   return sorted
     .map((cond) => {
       if (cond === 'dayVfr') return ''
-      const option = conditionOptions.find((opt) => opt.value === cond)
+      const option = activeConditionOptions.value.find((opt) => opt.value === cond)
       return option ? option.label : cond
     })
     .filter((label): label is string => Boolean(label))
@@ -14138,7 +14750,8 @@ function getDisplayConditions(entry: LogEntry): string[] {
     normalizeNumber(entry.flightTime?.night),
     normalizeNumber(entry.flightTime?.actualInstrument),
     normalizeNumber(entry.flightTime?.simulatedInstrument),
-    normalizeNumber(entry.flightTime?.crossCountry)
+    normalizeNumber(entry.flightTime?.crossCountry),
+    normalizeNumber(entry.flightTime?.nvg)
   )
   return sortConditionsInFixedOrder(merged)
 }

@@ -21,6 +21,7 @@ interface PilotProfilePrefs {
   certificates?: string
   flightGoals?: string
   notes?: string
+  enableMilitaryFields?: boolean
   dateOfBirth?: string
   placeOfBirth?: string
   residentialAddress?: string

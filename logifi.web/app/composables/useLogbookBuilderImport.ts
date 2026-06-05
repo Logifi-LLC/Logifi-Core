@@ -16,6 +16,12 @@ import {
   saveEntryToIndexedDB,
   initIndexedDB,
 } from '~/utils/indexedDB'
+import {
+  applySimulatorImport,
+  inferLogbookType,
+  parseSimDeviceType,
+  type SimDeviceType,
+} from '~/utils/importSimulator'
 
 /** Mirror of sanitizeFlightConditions from index.vue for builder import. */
 function sanitizeFlightConditions(conditions: string[]): string[] {
@@ -159,6 +165,8 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
     let remarks = ''
     let flightConditions: string[] = []
     let isSimulator = false
+    let simulatorCellValue = ''
+    let simDeviceType: SimDeviceType | null = null
     let rowRole = ''
     let trainingElements = ''
     let trainingInstructor = ''
@@ -190,7 +198,12 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
           if (val) route = val
           break
         case 'simulator':
-          if (val.trim()) isSimulator = true
+          if (val.trim()) {
+            isSimulator = true
+            simulatorCellValue = val
+            const fromCell = parseSimDeviceType(val)
+            if (fromCell) simDeviceType = fromCell
+          }
           break
         case 'role':
           if (val) rowRole = normalizeRoleFromCell(val) || val.trim()
@@ -202,6 +215,11 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
             flightTime.total = parseDecimal(val) ?? flightTime.total
           } else if (val) {
             aircraftCategoryClass = val.trim()
+          }
+          const fromCategory = parseSimDeviceType(aircraftCategoryClass)
+          if (fromCategory && !isSimulator) {
+            isSimulator = true
+            simDeviceType = fromCategory
           }
           break
         }
@@ -236,6 +254,9 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
           break
         case 'night':
           flightTime.night = parseDecimal(val) ?? flightTime.night
+          break
+        case 'nvg':
+          flightTime.nvg = parseDecimal(val) ?? flightTime.nvg
           break
         case 'actual':
           flightTime.actualInstrument = parseDecimal(val) ?? flightTime.actualInstrument
@@ -295,21 +316,6 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
       }
     }
 
-    if ((flightTime.night ?? 0) > 0 && !flightConditions.includes('nightVfr')) {
-      flightConditions = [...flightConditions, 'nightVfr']
-    }
-    if ((flightTime.actualInstrument ?? 0) > 0) {
-      if (!flightConditions.includes('actualInstrument')) flightConditions = [...flightConditions, 'actualInstrument']
-      if (!flightConditions.includes('ifr')) flightConditions = [...flightConditions, 'ifr']
-    }
-    if ((flightTime.crossCountry ?? 0) > 0 && !flightConditions.includes('crossCountry')) {
-      flightConditions = [...flightConditions, 'crossCountry']
-    }
-    if ((flightTime.simulatedInstrument ?? 0) > 0 && !flightConditions.includes('simInstrument')) {
-      flightConditions = [...flightConditions, 'simInstrument']
-    }
-    flightConditions = sanitizeFlightConditions(flightConditions)
-
     // Ensure structured approaches array is populated for imported entries.
     if (!performance.approaches || performance.approaches.length === 0) {
       performance.approaches = getApproachesFromPerformance(performance)
@@ -341,6 +347,33 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
       isImported: true,
       importSource: 'logbook_builder',
     }
+    applySimulatorImport(entry, {
+      isSimulator,
+      simDeviceType,
+      simulatorCellValue: simulatorCellValue || undefined,
+    })
+    entry.logbookType = inferLogbookType(entry)
+
+    let conditions = [...entry.flightConditions]
+    const ft = entry.flightTime
+    if ((ft.night ?? 0) > 0 && !conditions.includes('nightVfr')) {
+      conditions = [...conditions, 'nightVfr']
+    }
+    if ((ft.actualInstrument ?? 0) > 0) {
+      if (!conditions.includes('actualInstrument')) conditions = [...conditions, 'actualInstrument']
+      if (!conditions.includes('ifr')) conditions = [...conditions, 'ifr']
+    }
+    if ((ft.crossCountry ?? 0) > 0 && !conditions.includes('crossCountry')) {
+      conditions = [...conditions, 'crossCountry']
+    }
+    if ((ft.simulatedInstrument ?? 0) > 0 && !conditions.includes('simInstrument')) {
+      conditions = [...conditions, 'simInstrument']
+    }
+    if ((ft.nvg ?? 0) > 0 && !conditions.includes('nvg')) {
+      conditions = [...conditions, 'nvg']
+    }
+    entry.flightConditions = sanitizeFlightConditions(conditions)
+
     entries.push(entry)
   }
   return entries
@@ -348,7 +381,7 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
 
 /** Summable numeric field keys (times, landings, approaches). */
 const SUMMABLE_FIELD_KEYS = new Set<LogbookColumnKey>([
-  'pic', 'sic', 'dualR', 'solo', 'night', 'actual', 'hood', 'dualG', 'xc',
+  'pic', 'sic', 'dualR', 'solo', 'night', 'nvg', 'actual', 'hood', 'dualG', 'xc',
   'dayLandings', 'nightLandings', 'approach', 'total',
 ])
 
@@ -364,6 +397,7 @@ function getEntryNumericValue(entry: LogEntry, fieldKey: LogbookColumnKey): numb
     case 'dualR': return ft.dual ?? 0
     case 'solo': return ft.solo ?? 0
     case 'night': return ft.night ?? 0
+    case 'nvg': return ft.nvg ?? 0
     case 'actual': return ft.actualInstrument ?? 0
     case 'hood': return ft.simulatedInstrument ?? 0
     case 'dualG': return ft.dualGiven ?? 0
