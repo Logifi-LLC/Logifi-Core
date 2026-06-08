@@ -27,7 +27,7 @@
     "@tailwindcss/vite": "^4.1.18",
     "csv-parse": "^6.1.0",
     "luxon": "^3.7.2",
-    "nuxt": "^4.2.2",
+    "nuxt": "^4.4.7",
     "suncalc": "^1.9.0",
     "tailwindcss": "^4.1.18",
     "unzipper": "^0.12.3",
@@ -39,12 +39,12 @@
     "@testing-library/vue": "^8.1.0",
     "@types/luxon": "^3.7.1",
     "@types/suncalc": "^1.9.2",
-    "@vitest/ui": "^4.0.17",
+    "@vitest/ui": "^4.1.8",
     "@vue/test-utils": "^2.4.6",
     "happy-dom": "^20.1.0",
     "pnpm": "^10.28.2",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.17"
+    "vitest": "^4.1.8"
   },
   "overrides": {
     "lodash@*": "^4.17.23",
@@ -59,21 +59,29 @@
     "h3": "^1.15.5",
     "tar": "^7.5.7",
     "node-tar": "^7.5.7",
-    "devalue": "^5.6.2",
+    "devalue": "^5.8.1",
     "diff": "^8.0.3",
     "jsdiff": "^8.0.3",
-    "nanotar": "^0.2.1"
+    "nanotar": "^0.2.1",
+    "postcss": "^8.5.15",
+    "simple-git": "^3.36.0",
+    "js-cookie": "^3.0.8",
+    "ws": "^8.21.0"
   },
   "pnpm": {
     "overrides": {
       "h3": "^1.15.5",
       "tar": "^7.5.7",
       "node-tar": "^7.5.7",
-      "devalue": "^5.6.2",
+      "devalue": "^5.8.1",
       "diff": "^8.0.3",
       "jsdiff": "^8.0.3",
       "lodash@*": "^4.17.23",
-      "nanotar": "^0.2.1"
+      "nanotar": "^0.2.1",
+      "postcss": "^8.5.15",
+      "simple-git": "^3.36.0",
+      "js-cookie": "^3.0.8",
+      "ws": "^8.21.0"
     }
   }
 }
