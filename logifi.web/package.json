@@ -10,6 +10,8 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "update-aircraft-db": "node scripts/download-faa-aircraft.js",
+    "build-airport-supplement": "node scripts/build-us-airport-supplement.mjs",
+    "build-navaid-index": "node scripts/build-navaid-index.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui",

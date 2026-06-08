@@ -2489,7 +2489,7 @@
                       </div>
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
-                        <input v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="OPTIONAL" @blur="newEntry.route = (newEntry.route || '').trim().toUpperCase()" />
+                        <input v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="OPTIONAL" @input="() => nextTick(() => checkAndAutoLogCrossCountry())" @blur="newEntry.route = (newEntry.route || '').trim().toUpperCase(); checkAndAutoLogCrossCountry()" />
                       </div>
                     </div>
                   </div>
@@ -2814,7 +2814,7 @@
                 </div>
                 <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
-                  <input v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @blur="newEntry.route = (newEntry.route || '').trim().toUpperCase()" />
+                  <input v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @input="() => nextTick(() => checkAndAutoLogCrossCountry())" @blur="newEntry.route = (newEntry.route || '').trim().toUpperCase(); checkAndAutoLogCrossCountry()" />
                 </div>
               </div>
               
@@ -5437,7 +5437,16 @@ import type { AircraftInfo } from '../composables/useAircraftLookup'
 import { useAirportLookup } from '../composables/useAirportLookup'
 import type { AirportInfo } from '../composables/useAirportLookup'
 import { getPilotInitialsFromName } from '../utils/pilotProfile'
-import { validateCrossCountry, calculateDistanceNM } from '../utils/validation'
+import {
+  validateCrossCountry,
+  computeCrossCountryDistanceNm,
+  parseRouteAirportCodes,
+  getEntryAirportCodes,
+  qualifiesForCrossCountryDistance,
+  type CrossCountryAirportCoords,
+  type AirportCoordinates
+} from '../utils/validation'
+import { useLocationLookup } from '../composables/useLocationLookup'
 import { calculateNightTime } from '../utils/nightTimeCalculator'
 import { DateTime } from 'luxon'
 import { getAirportIanaTimezone, normalizeTimezoneToIANA } from '../../shared/airportTimezone'
@@ -9855,6 +9864,16 @@ const currentAircraftFamilyName = computed(() => {
 
 // Airport lookup
 const { lookupAirport } = useAirportLookup()
+const { lookupLocationCoords, getLocationCoordsFromCache } = useLocationLookup()
+
+const locationClassificationCache = ref<Record<string, 'airport' | 'navaid' | 'unknown'>>({})
+const classifiedRouteAirportSet = computed(() => {
+  const set = new Set<string>()
+  for (const [code, kind] of Object.entries(locationClassificationCache.value)) {
+    if (kind === 'airport') set.add(code)
+  }
+  return set
+})
 const showAirportModal = ref(false)
 const currentAirportInfo = ref<AirportInfo | null>(null)
 const loadingAirportInfo = ref(false)
@@ -9862,6 +9881,32 @@ const airportInfoError = ref<string | null>(null)
 
 // Airport names cache for display in catalog
 const airportNames = ref<Record<string, string>>({})
+const airportNamesLoading = new Set<string>()
+
+async function ensureAirportNameLoaded(code: string): Promise<void> {
+  const normalized = code.trim().toUpperCase()
+  if (!normalized || airportNamesLoading.has(normalized)) {
+    return
+  }
+  if (airportNames.value[normalized]) {
+    return
+  }
+
+  airportNamesLoading.add(normalized)
+  try {
+    const info = await lookupAirport(normalized)
+    if (info?.name) {
+      airportNames.value = { ...airportNames.value, [normalized]: info.name }
+    } else {
+      airportNames.value = { ...airportNames.value, [normalized]: '' }
+    }
+  } catch (error) {
+    airportNames.value = { ...airportNames.value, [normalized]: '' }
+    console.warn(`Failed to load airport name for ${normalized}:`, error)
+  } finally {
+    airportNamesLoading.delete(normalized)
+  }
+}
 
 // Format airport display text: "CODE - Name" or just "CODE" if name not loaded
 function getAirportDisplayText(code: string): string {
@@ -10577,6 +10622,15 @@ function toggleCatalogSection(key: CatalogKey): void {
   catalogOpenState[key] = !catalogOpenState[key]
 }
 
+function sortAirportCatalogCodes(a: string, b: string): number {
+  const aStartsWithNumber = /^\d/.test(a)
+  const bStartsWithNumber = /^\d/.test(b)
+  if (aStartsWithNumber !== bStartsWithNumber) {
+    return aStartsWithNumber ? 1 : -1
+  }
+  return a.localeCompare(b)
+}
+
 function normalizedCatalogSearch(key: CatalogKey): string {
   return (catalogSearchTerms[key] || '').trim().toLowerCase()
 }
@@ -10585,6 +10639,13 @@ function getFilteredCatalogItems(key: Exclude<CatalogKey, 'aircraft'>): string[]
   const items = catalogs.value[key] || []
   const query = normalizedCatalogSearch(key)
   if (!query) return items
+  if (key === 'airports') {
+    return items.filter((code) => {
+      if (code.toLowerCase().includes(query)) return true
+      const name = airportNames.value[code]
+      return name ? name.toLowerCase().includes(query) : false
+    })
+  }
   return items.filter((item) => item.toLowerCase().includes(query))
 }
 
@@ -11902,7 +11963,7 @@ function clearCrossCountryFromEntry(entry: { flightTime?: { crossCountry?: numbe
   }
 }
 
-watch(() => [newEntry.departure, newEntry.destination, newEntry.flightTime.crossCountry, newEntry.date, newEntry.flightTime.total, newEntry.oooi?.out, newEntry.oooi?.in], async () => {
+watch(() => [newEntry.departure, newEntry.destination, newEntry.route, newEntry.flightTime.crossCountry, newEntry.date, newEntry.flightTime.total, newEntry.oooi?.out, newEntry.oooi?.in], async () => {
   if (!newEntry.departure || !newEntry.destination || newEntry.departure === 'UNKNOWN' || newEntry.destination === 'UNKNOWN') {
     clearCrossCountryFromEntry(newEntry)
     return
@@ -11926,31 +11987,17 @@ watch(() => [newEntry.departure, newEntry.destination, newEntry.flightTime.cross
   
   const currentXcTime = newEntry.flightTime.crossCountry ?? 0
   lastKnownXcTime.value = currentXcTime
-  
-  const MIN_CROSS_COUNTRY_DISTANCE_NM = 50
-  // Synchronous XC update when both airports are in cache (instant when cached)
-  const depCoords = getAirportCoordsFromCache(newEntry.departure || '')
-  const destCoords = getAirportCoordsFromCache(newEntry.destination || '')
-  if (depCoords && destCoords) {
-    const airportCoordsDep = { latitude: depCoords.lat, longitude: depCoords.lon }
-    const airportCoordsDest = { latitude: destCoords.lat, longitude: destCoords.lon }
-    const distanceNm = calculateDistanceNM(airportCoordsDep, airportCoordsDest)
-    if (distanceNm >= MIN_CROSS_COUNTRY_DISTANCE_NM && !xcTimeManuallySet.value) {
+
+  const distanceNm = getCrossCountryDistanceFromCache(newEntry)
+  if (distanceNm !== null) {
+    if (qualifiesForCrossCountryDistance(distanceNm) && !xcTimeManuallySet.value) {
       const xcValue = Math.round(totalTimeForWatch * 10) / 10
-      newEntry.flightTime.crossCountry = xcValue
-      lastKnownXcTime.value = xcValue
-      const indexCrossCountryLabel = newEntry.flightConditions.indexOf('Cross-Country')
-      if (indexCrossCountryLabel > -1) {
-        newEntry.flightConditions.splice(indexCrossCountryLabel, 1)
-      }
-      if (!newEntry.flightConditions.includes('crossCountry')) {
-        newEntry.flightConditions.push('crossCountry')
-      }
-    } else if (distanceNm < MIN_CROSS_COUNTRY_DISTANCE_NM) {
+      setCrossCountryOnEntry(newEntry, xcValue)
+    } else if (!qualifiesForCrossCountryDistance(distanceNm)) {
       clearCrossCountryFromEntry(newEntry)
     }
   } else {
-    // Both airports present but not both in cache: clear XC so no stale value; async will set if distance >= 50
+    // Departure present but not enough cached coords: clear stale XC; async lookup will set if qualified
     clearCrossCountryFromEntry(newEntry)
   }
   
@@ -12081,34 +12128,137 @@ function getAirportCoordsFromCache(code: string): { lat: number; lon: number } |
   return null
 }
 
+function buildCrossCountryCoordsFromCache(entry: {
+  departure?: string
+  destination?: string
+  route?: string
+}): CrossCountryAirportCoords | null {
+  const depCoords = getAirportCoordsFromCache(entry.departure || '')
+  if (!depCoords) return null
+
+  const airportCoords: CrossCountryAirportCoords = {
+    departure: { latitude: depCoords.lat, longitude: depCoords.lon }
+  }
+
+  const destCoords = getAirportCoordsFromCache(entry.destination || '')
+  if (destCoords) {
+    airportCoords.destination = { latitude: destCoords.lat, longitude: destCoords.lon }
+  }
+
+  const routeCoords: AirportCoordinates[] = []
+  for (const code of parseRouteAirportCodes(entry.route || '')) {
+    const cached = getLocationCoordsFromCache(code) ?? getAirportCoordsFromCache(code)
+    if (cached) {
+      routeCoords.push({ latitude: cached.lat, longitude: cached.lon })
+    }
+  }
+  if (routeCoords.length > 0) {
+    airportCoords.route = routeCoords
+  }
+
+  if (!airportCoords.destination && (!airportCoords.route || airportCoords.route.length === 0)) {
+    return null
+  }
+
+  return airportCoords
+}
+
+function getCrossCountryDistanceFromCache(entry: {
+  departure?: string
+  destination?: string
+  route?: string
+}): number | null {
+  const coords = buildCrossCountryCoordsFromCache(entry)
+  if (!coords?.departure) return null
+  return computeCrossCountryDistanceNm(coords.departure, coords.destination, coords.route)
+}
+
+async function buildCrossCountryCoordsWithLookup(entry: {
+  departure?: string
+  destination?: string
+  route?: string
+}): Promise<CrossCountryAirportCoords | null> {
+  const departure = (entry.departure || '').trim()
+  const destination = (entry.destination || '').trim()
+  if (!departure || !destination || departure === 'UNKNOWN' || destination === 'UNKNOWN') {
+    return null
+  }
+
+  const routeCodes = [...new Set(parseRouteAirportCodes(entry.route || ''))]
+  const [depInfo, destInfo, ...routeInfos] = await Promise.all([
+    lookupAirport(departure),
+    lookupAirport(destination),
+    ...routeCodes.map((code) => lookupLocationCoords(code))
+  ])
+
+  const airportCoords: CrossCountryAirportCoords = {}
+
+  if (depInfo?.latitude !== undefined && depInfo?.longitude !== undefined) {
+    airportCoords.departure = {
+      latitude: depInfo.latitude,
+      longitude: depInfo.longitude
+    }
+  }
+
+  if (destInfo?.latitude !== undefined && destInfo?.longitude !== undefined) {
+    airportCoords.destination = {
+      latitude: destInfo.latitude,
+      longitude: destInfo.longitude
+    }
+  }
+
+  const routeCoords: AirportCoordinates[] = []
+  routeInfos.forEach((info) => {
+    if (info?.latitude != null && info?.longitude != null) {
+      routeCoords.push({
+        latitude: info.latitude,
+        longitude: info.longitude
+      })
+    }
+  })
+  if (routeCoords.length > 0) {
+    airportCoords.route = routeCoords
+  }
+
+  if (
+    !airportCoords.departure ||
+    (!airportCoords.destination && (!airportCoords.route || airportCoords.route.length === 0))
+  ) {
+    return null
+  }
+
+  return airportCoords
+}
+
+function setCrossCountryOnEntry(
+  entry: { flightTime?: { crossCountry?: number | null }; flightConditions?: string[] },
+  xcValue: number
+): void {
+  if (!entry?.flightTime) return
+  entry.flightTime.crossCountry = xcValue
+  lastKnownXcTime.value = xcValue
+  const indexCrossCountryLabel = (entry.flightConditions || []).indexOf('Cross-Country')
+  if (indexCrossCountryLabel > -1) {
+    entry.flightConditions!.splice(indexCrossCountryLabel, 1)
+  }
+  if (!(entry.flightConditions || []).includes('crossCountry')) {
+    entry.flightConditions = entry.flightConditions || []
+    entry.flightConditions.push('crossCountry')
+  }
+}
+
 /** Align XC with OOOI-derived block when inline commercial edit recalculates total (parity with add-entry flow). */
 function syncCrossCountryWithCommercialOooiTotal(entry: LogEntry, blockHours: number): void {
   if (!entry.departure?.trim() || !entry.destination?.trim()) return
   if (entry.departure === 'UNKNOWN' || entry.destination === 'UNKNOWN') return
-  const dep = entry.departure.trim().toUpperCase()
-  const arr = entry.destination.trim().toUpperCase()
-  if (dep === arr) return
 
   const xcValue = Math.round(blockHours * 10) / 10
   const hasCcCondition = (entry.flightConditions || []).includes('crossCountry')
-  const MIN_CROSS_COUNTRY_DISTANCE_NM = 50
-  const depCoords = getAirportCoordsFromCache(entry.departure)
-  const destCoords = getAirportCoordsFromCache(entry.destination)
+  const distanceNm = getCrossCountryDistanceFromCache(entry)
 
-  if (depCoords && destCoords) {
-    const distanceNm = calculateDistanceNM(
-      { latitude: depCoords.lat, longitude: depCoords.lon },
-      { latitude: destCoords.lat, longitude: destCoords.lon }
-    )
-    if (distanceNm >= MIN_CROSS_COUNTRY_DISTANCE_NM) {
-      entry.flightTime.crossCountry = xcValue
-      const indexCrossCountryLabel = entry.flightConditions.indexOf('Cross-Country')
-      if (indexCrossCountryLabel > -1) {
-        entry.flightConditions.splice(indexCrossCountryLabel, 1)
-      }
-      if (!entry.flightConditions.includes('crossCountry')) {
-        entry.flightConditions.push('crossCountry')
-      }
+  if (distanceNm !== null) {
+    if (qualifiesForCrossCountryDistance(distanceNm)) {
+      setCrossCountryOnEntry(entry, xcValue)
     } else {
       clearCrossCountryFromEntry(entry)
     }
@@ -13627,11 +13777,10 @@ const filteredEntries = computed(() => {
       }
     }
 
-    // airports filter (either departure or destination must match any active airport)
+    // airports filter (dep/dest + route tokens classified as airports)
     if (activeAirports.size > 0) {
-      const dep = (entry.departure || '').toUpperCase()
-      const dst = (entry.destination || '').toUpperCase()
-      if (!activeAirports.has(dep) && !activeAirports.has(dst)) {
+      const entryCodes = getEntryAirportCodes(entry, classifiedRouteAirportSet.value)
+      if (!entryCodes.some((code) => activeAirports.has(code))) {
         return false
       }
     }
@@ -13839,12 +13988,7 @@ const catalogs = computed<CatalogsValue>(() => {
         if (!familyToItemsMap[fam]) familyToItemsMap[fam] = new Set<string>()
       }
     }
-    if (entry.departure.trim()) {
-      airports.add(entry.departure.trim().toUpperCase())
-    }
-    if (entry.destination.trim()) {
-      airports.add(entry.destination.trim().toUpperCase())
-    }
+    getEntryAirportCodes(entry, classifiedRouteAirportSet.value).forEach((code) => airports.add(code))
     if (entry.trainingElements.trim()) {
       pilots.add(entry.trainingElements.trim())
     }
@@ -13891,7 +14035,7 @@ const catalogs = computed<CatalogsValue>(() => {
 
   return {
     aircraft: Array.from(aircraft).sort((a, b) => a.localeCompare(b)),
-    airports: Array.from(airports).sort((a, b) => a.localeCompare(b)),
+    airports: Array.from(airports).sort(sortAirportCatalogCodes),
     pilots: Array.from(pilots).sort((a, b) => a.localeCompare(b)),
     categoryClass: Array.from(categoryClass).sort((a, b) => a.localeCompare(b)),
     families: Array.from(familiesSet).sort((a, b) => a.localeCompare(b)),
@@ -13911,24 +14055,46 @@ const catalogTags = computed(() => {
   return Array.from(set).sort((a, b) => a.localeCompare(b))
 })
 
+// Classify route tokens (navaid vs airport) for catalog and filtering
+watchEffect(() => {
+  const routeTokens = new Set<string>()
+  logEntries.value
+    .filter((entry) => inferLogbookType(entry) === activeLogbook.value)
+    .forEach((entry) => {
+      parseRouteAirportCodes(entry.route || '').forEach((token) => routeTokens.add(token))
+    })
+
+  const uncached = [...routeTokens].filter((token) => locationClassificationCache.value[token] === undefined)
+  if (uncached.length === 0) return
+
+  void (async () => {
+    for (let i = 0; i < uncached.length; i += 100) {
+      const chunk = uncached.slice(i, i + 100)
+      try {
+        const response = await $fetch<{
+          success: boolean
+          results?: Record<string, 'airport' | 'navaid' | 'unknown'>
+        }>('/api/classify-locations', {
+          method: 'POST',
+          body: { codes: chunk }
+        })
+        if (response.success && response.results) {
+          locationClassificationCache.value = {
+            ...locationClassificationCache.value,
+            ...response.results
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to classify route locations:', error)
+      }
+    }
+  })()
+})
+
 // Lazy load airport names for display in catalog
 watchEffect(() => {
-  const airportCodes = catalogs.value.airports
-  airportCodes.forEach(async (code) => {
-    // Skip if already cached or currently loading
-    if (airportNames.value[code]) {
-      return
-    }
-    
-    try {
-      const info = await lookupAirport(code)
-      if (info && info.name) {
-        airportNames.value[code] = info.name
-      }
-    } catch (error) {
-      // Silently fail - will just show code without name
-      console.warn(`Failed to load airport name for ${code}:`, error)
-    }
+  catalogs.value.airports.forEach((code) => {
+    void ensureAirportNameLoaded(code)
   })
 })
 
@@ -14142,90 +14308,43 @@ async function prefetchAirportCoords(airportCode: string): Promise<void> {
 // Validation will only run when Save Entry button is pressed
 async function checkAndAutoLogCrossCountry(): Promise<void> {
   // Only require airports - date is not needed for cross-country distance calculation
-  if (!newEntry.departure || !newEntry.destination || 
+  if (!newEntry.departure || !newEntry.destination ||
       newEntry.departure === 'UNKNOWN' || newEntry.destination === 'UNKNOWN') {
     clearCrossCountryFromEntry(newEntry)
     return
   }
-  
+
   const entryToValidate: LogEntry = {
     ...newEntry,
     id: 'temp'
   }
-  
+
   try {
-    // Only run cross-country validation, not full Part 61 validation
-    // We'll use validateCrossCountry directly to avoid triggering full validation
-    // Note: lookupAirport is already defined in the component scope (line 7579)
-    
-    // Lookup airport coordinates for distance calculation
-    const departure = (newEntry.departure || '').trim()
-    const destination = (newEntry.destination || '').trim()
-    
-    if (departure && destination && departure !== 'UNKNOWN' && destination !== 'UNKNOWN') {
-      try {
-        const [depInfo, destInfo] = await Promise.all([
-          lookupAirport(departure),
-          lookupAirport(destination)
-        ])
-        
-        const airportCoords: { departure?: { latitude: number; longitude: number }; destination?: { latitude: number; longitude: number } } = {}
-        
-        if (depInfo?.latitude !== undefined && depInfo?.longitude !== undefined) {
-          airportCoords.departure = {
-            latitude: depInfo.latitude,
-            longitude: depInfo.longitude
-          }
-        }
-        
-        if (destInfo?.latitude !== undefined && destInfo?.longitude !== undefined) {
-          airportCoords.destination = {
-            latitude: destInfo.latitude,
-            longitude: destInfo.longitude
-          }
-        }
-        
-        // Only pass coordinates if we have both
-        if (airportCoords.departure && airportCoords.destination) {
-          const results = validateCrossCountry(entryToValidate, airportCoords)
-          
-          // Auto-apply cross-country time if suggested (only if distance >= 50nm)
-          const crossCountryResult = results.find(r => r.field === 'crossCountry' && r.autoFix)
-          const crossCountryWarning = results.find(r => r.field === 'crossCountry' && r.type === 'warning' && r.message?.includes('distance is only'))
-          
-          // Helper to safely get numeric value
-          const getNumValue = (val: number | null | undefined): number => {
-            return val === null || val === undefined || isNaN(val) ? 0 : val
-          }
-          
-          // If distance is too short (< 50nm), always clear XC and remove condition
-          if (crossCountryWarning) {
-            clearCrossCountryFromEntry(newEntry)
-          } else if (crossCountryResult?.autoFix && crossCountryResult.autoFix.field === 'crossCountry') {
-            // When distance >= 50nm, XC time = total time 1:1 at all times (stay in sync when OOOI updates total)
-            const currentTotalTime = getNumValue(newEntry.flightTime.total)
-            const totalValid = currentTotalTime > 0 && currentTotalTime <= 24
-            const shouldSetXc = totalValid && !xcTimeManuallySet.value
-            if (shouldSetXc) {
-              const xcValue = Math.round(currentTotalTime * 10) / 10
-              newEntry.flightTime.crossCountry = xcValue
-              lastKnownXcTime.value = xcValue
-              const indexCrossCountryLabel = newEntry.flightConditions.indexOf('Cross-Country')
-              if (indexCrossCountryLabel > -1) {
-                newEntry.flightConditions.splice(indexCrossCountryLabel, 1)
-              }
-              if (!newEntry.flightConditions.includes('crossCountry')) {
-                newEntry.flightConditions.push('crossCountry')
-              }
-            }
-          }
-        } else {
-          // Do not have both coords (lookup failed or one missing): clear XC so we never leave it set when unsure
-          clearCrossCountryFromEntry(newEntry)
-        }
-      } catch (err) {
-        console.warn('Failed to lookup airport coordinates for cross-country check:', err)
+    const airportCoords = await buildCrossCountryCoordsWithLookup(newEntry)
+
+    if (airportCoords) {
+      const results = validateCrossCountry(entryToValidate, airportCoords)
+
+      const crossCountryResult = results.find(r => r.field === 'crossCountry' && r.autoFix)
+      const crossCountryWarning = results.find(r => r.field === 'crossCountry' && r.type === 'warning' && r.message?.includes('distance is only'))
+
+      const getNumValue = (val: number | null | undefined): number => {
+        return val === null || val === undefined || isNaN(val) ? 0 : val
       }
+
+      if (crossCountryWarning) {
+        clearCrossCountryFromEntry(newEntry)
+      } else if (crossCountryResult?.autoFix && crossCountryResult.autoFix.field === 'crossCountry') {
+        const currentTotalTime = getNumValue(newEntry.flightTime.total)
+        const totalValid = currentTotalTime > 0 && currentTotalTime <= 24
+        const shouldSetXc = totalValid && !xcTimeManuallySet.value
+        if (shouldSetXc) {
+          const xcValue = Math.round(currentTotalTime * 10) / 10
+          setCrossCountryOnEntry(newEntry, xcValue)
+        }
+      }
+    } else {
+      clearCrossCountryFromEntry(newEntry)
     }
   } catch (error) {
     console.warn('Failed to check and auto-log cross-country:', error)
@@ -14390,10 +14509,7 @@ const pilotProfileStats = computed<PilotProfileStats>(() => {
     stats.dayLandings += coerceNumber(entry.performance.dayLandings)
     stats.nightLandings += coerceNumber(entry.performance.nightLandings)
 
-    const dep = (entry.departure || '').trim()
-    const dst = (entry.destination || '').trim()
-    if (dep) airports.add(dep.toUpperCase())
-    if (dst) airports.add(dst.toUpperCase())
+    getEntryAirportCodes(entry, classifiedRouteAirportSet.value).forEach((code) => airports.add(code))
 
     const routeLabel = buildRouteLabel(entry)
     routeCounts[routeLabel] = (routeCounts[routeLabel] || 0) + 1
