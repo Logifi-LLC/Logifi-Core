@@ -1,34 +1,28 @@
-export interface AircraftInfo {
-  registration: string
-  make?: string
-  model?: string
-  year?: string
-  owner?: string
-  engineType?: string
-  category?: string
-  city?: string
-  state?: string
-  serialNumber?: string
-  airworthinessDate?: string
-  source?: string
-}
+import {
+  lookupAircraftLocal,
+  AircraftDatabaseLoadError,
+  type AircraftInfo,
+} from '../../shared/aircraftLookupLocal'
+import { isCapacitorNative } from '~/composables/useCapacitorPlatform'
+
+export type { AircraftInfo }
 
 const AIRCRAFT_CACHE_KEY = 'logifi://aircraft-cache'
 const CACHE_EXPIRY_DAYS = 30
 
 /**
  * Lookup aircraft information by registration number
- * Uses hybrid approach: local database first, then FAA API fallback
+ * Uses hybrid approach: local database first, then FAA API fallback (web only)
  */
 export const useAircraftLookup = () => {
   const getCachedAircraft = (registration: string): AircraftInfo | null => {
     if (typeof window === 'undefined') return null
-    
+
     try {
       const cache = JSON.parse(window.localStorage.getItem(AIRCRAFT_CACHE_KEY) || '{}')
       const normalizedReg = registration.trim().toUpperCase().replace(/[-\s]/g, '')
       const cached = cache[normalizedReg]
-      
+
       if (cached && cached.lastUpdated) {
         const cacheAge = (Date.now() - new Date(cached.lastUpdated).getTime()) / (1000 * 60 * 60 * 24)
         if (cacheAge < CACHE_EXPIRY_DAYS) {
@@ -39,19 +33,19 @@ export const useAircraftLookup = () => {
     } catch (error) {
       console.warn('Failed to read aircraft cache:', error)
     }
-    
+
     return null
   }
 
   const setCachedAircraft = (registration: string, info: AircraftInfo) => {
     if (typeof window === 'undefined') return
-    
+
     try {
       const cache = JSON.parse(window.localStorage.getItem(AIRCRAFT_CACHE_KEY) || '{}')
       const normalizedReg = registration.trim().toUpperCase().replace(/[-\s]/g, '')
       cache[normalizedReg] = {
         ...info,
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
       }
       window.localStorage.setItem(AIRCRAFT_CACHE_KEY, JSON.stringify(cache))
     } catch (error) {
@@ -64,16 +58,21 @@ export const useAircraftLookup = () => {
       return null
     }
 
-    // Normalize registration (remove spaces/dashes, ensure uppercase)
     const normalizedReg = registration.trim().toUpperCase().replace(/[-\s]/g, '')
 
-    // Check cache first
     const cached = getCachedAircraft(normalizedReg)
     if (cached) {
       return cached
     }
 
-    // Lookup via server-side API (hybrid: local DB + FAA fallback)
+    if (isCapacitorNative()) {
+      const info = await lookupAircraftLocal(normalizedReg)
+      if (info) {
+        setCachedAircraft(normalizedReg, info)
+      }
+      return info
+    }
+
     try {
       console.log('Calling aircraft lookup API for:', normalizedReg)
       const response = await $fetch<{ success: boolean; data?: AircraftInfo; error?: string }>(
@@ -103,15 +102,19 @@ export const useAircraftLookup = () => {
     const results = new Map<string, AircraftInfo>()
     const uniqueRegs = [...new Set(registrations.filter(Boolean))]
 
-    // Lookup with a small delay between requests to respect rate limits
     for (const reg of uniqueRegs) {
-      const info = await lookupAircraft(reg)
-      if (info) {
-        const normalizedReg = reg.trim().toUpperCase().replace(/[-\s]/g, '')
-        results.set(normalizedReg, info)
+      try {
+        const info = await lookupAircraft(reg)
+        if (info) {
+          const normalizedReg = reg.trim().toUpperCase().replace(/[-\s]/g, '')
+          results.set(normalizedReg, info)
+        }
+      } catch (error) {
+        if (error instanceof AircraftDatabaseLoadError) {
+          throw error
+        }
       }
-      // Small delay to avoid overwhelming the API
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise((resolve) => setTimeout(resolve, 100))
     }
 
     return results
@@ -119,6 +122,6 @@ export const useAircraftLookup = () => {
 
   return {
     lookupAircraft,
-    lookupMultiple
+    lookupMultiple,
   }
 }

@@ -688,25 +688,16 @@ export function validatePart61RequiredFields(entry: LogEntry): ValidationResult[
   const nightTime = getNumericValue(flightTime.night)
   const hasNightTime = isProvided(flightTime.night) && nightTime > 0
   const flightConditions = entry.flightConditions || []
-  const hasDayCondition = flightConditions.some(c => c.toLowerCase().includes('day'))
   const hasNightCondition = flightConditions.some(c => c.toLowerCase().includes('night'))
 
+  // Day is implicit when Night is not selected; only warn when night time is logged
+  // without a matching night flight condition.
   if (hasNightTime && !hasNightCondition) {
     results.push({
       type: 'warning',
       field: 'flightConditions',
       message: 'Night time is logged but flight conditions do not indicate night flight',
       suggestion: 'Please add "Night" to flight conditions if this flight included night time'
-    })
-  }
-
-  // Also check if day/night conditions are present when they should be
-  if (hasTotalTime && !hasDayCondition && !hasNightCondition && flightConditions.length === 0) {
-    results.push({
-      type: 'warning',
-      field: 'flightConditions',
-      message: 'Flight conditions (day/night) should be recorded per 14 CFR Part 61.51(b)',
-      suggestion: 'Please indicate whether this flight was conducted during day or night conditions'
     })
   }
 

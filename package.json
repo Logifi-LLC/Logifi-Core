@@ -4,6 +4,12 @@
   "description": "Logifi engine: composables, validation, utils for logbook apps",
   "type": "module",
   "private": true,
+  "scripts": {
+    "build:web": "npm run generate --prefix logifi.web",
+    "cap:sync": "npm run prepare-ios-data --prefix logifi.web && npm run build:web && npx cap sync ios",
+    "cap:open:ios": "npx cap open ios",
+    "cap:run:ios": "npm run cap:sync && npx cap run ios"
+  },
   "main": "./logifi.web/app/index.ts",
   "types": "./logifi.web/app/index.ts",
   "exports": {
@@ -30,5 +36,10 @@
   },
   "files": [
     "logifi.web/app"
-  ]
+  ],
+  "dependencies": {
+    "@capacitor/cli": "^8.4.0",
+    "@capacitor/core": "^8.4.0",
+    "@capacitor/ios": "^8.4.0"
+  }
 }

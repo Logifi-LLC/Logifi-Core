@@ -13,6 +13,7 @@
 // Static database will be lazy-loaded from filesystem
 import { readFileSync } from 'fs'
 import { join } from 'path'
+import { resolveDbRegistrationKey } from '../../shared/aircraftLookupLocal'
 
 let aircraftDatabase: Record<string, any> | null = null
 let databaseLoadAttempted = false
@@ -59,14 +60,16 @@ export default defineEventHandler(async (event) => {
   try {
     // 1. Try local database first (instant lookup, offline)
     const db = loadDatabase()
-    const localResult = db?.[normalizedReg]
-    
+    const dbKey = db ? resolveDbRegistrationKey(normalizedReg, db) : null
+    const localResult = dbKey ? db?.[dbKey] : undefined
+
     if (localResult) {
       console.log(`✅ Found ${normalizedReg} in local database`)
       return {
         success: true,
         data: {
           ...localResult,
+          registration: normalizedReg,
           source: 'Local Database (FAA)'
         }
       }
