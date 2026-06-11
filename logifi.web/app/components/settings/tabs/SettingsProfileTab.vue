@@ -48,121 +48,12 @@
           </div>
           <SettingsField label="Certificates & ratings" :is-dark-mode="isDarkMode">
             <template #default="{ inputClass }">
-              <div class="space-y-3">
-                <div
-                  class="rounded-lg border p-3"
-                  :class="isDarkMode ? 'border-gray-600 bg-gray-900/40' : 'border-gray-200 bg-gray-50'"
-                >
-                  <div class="flex flex-wrap items-center justify-between gap-2">
-                    <p :class="[helper, 'text-xs']">
-                      Import from the public FAA airman registry (certificates &amp; ratings only).
-                    </p>
-                    <button
-                      type="button"
-                      :class="btnSecondary"
-                      class="!px-3 !py-1.5 text-xs"
-                      @click="showRegistryImport = !showRegistryImport"
-                    >
-                      {{ showRegistryImport ? 'Hide' : 'Pull from registry' }}
-                    </button>
-                  </div>
-                  <div v-show="showRegistryImport" class="mt-3 space-y-3 border-t pt-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-200'">
-                    <div class="grid gap-3 sm:grid-cols-2">
-                      <div class="space-y-1">
-                        <label :class="label">Last name</label>
-                        <input v-model="registryLastName" type="text" placeholder="Yeager" :class="input" />
-                      </div>
-                      <div class="space-y-1">
-                        <label :class="label">Certificate number</label>
-                        <input v-model="registryCertNumber" type="text" inputmode="numeric" placeholder="12345678" :class="input" />
-                      </div>
-                    </div>
-                    <div class="space-y-1">
-                      <label :class="label">First name <span :class="helper" class="font-normal">(optional)</span></label>
-                      <input v-model="registryFirstName" type="text" placeholder="Charles" :class="input" />
-                    </div>
-                    <div v-if="registryCandidates.length > 0" class="space-y-2">
-                      <p :class="[helper, 'text-xs']">Multiple pilots matched. Select yours:</p>
-                      <div class="space-y-1.5">
-                        <label
-                          v-for="candidate in registryCandidates"
-                          :key="candidate.eventTarget"
-                          class="flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 text-sm"
-                          :class="
-                            registrySelectedTarget === candidate.eventTarget
-                              ? isDarkMode
-                                ? 'border-blue-500 bg-blue-900/20'
-                                : 'border-blue-400 bg-blue-50'
-                              : isDarkMode
-                                ? 'border-gray-600'
-                                : 'border-gray-200'
-                          "
-                        >
-                          <input
-                            v-model="registrySelectedTarget"
-                            type="radio"
-                            class="mt-1"
-                            :value="candidate.eventTarget"
-                          />
-                          <span>{{ candidate.displayName }}</span>
-                        </label>
-                      </div>
-                    </div>
-                    <p
-                      v-if="registryNotice"
-                      :class="[helper, 'text-xs']"
-                    >
-                      {{ registryNotice }}
-                    </p>
-                    <p v-if="registryError" class="text-xs text-red-500">{{ registryError }}</p>
-                    <div
-                      v-if="registryPreview"
-                      class="rounded-lg border px-3 py-2 text-sm"
-                      :class="isDarkMode ? 'border-gray-600 bg-gray-900/60' : 'border-gray-200 bg-white'"
-                    >
-                      <p class="font-semibold">{{ registryPreview.name }}</p>
-                      <p :class="[helper, 'mt-1 whitespace-pre-wrap']">{{ registryPreview.certificates }}</p>
-                    </div>
-                    <div class="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        :class="btnPrimary"
-                        class="!px-3 !py-1.5 text-xs"
-                        :disabled="registryLoading"
-                        @click="runRegistryLookup"
-                      >
-                        {{
-                          registryLoading
-                            ? 'Looking up…'
-                            : registryCandidates.length > 0 && !registryPreview
-                              ? 'Load selected'
-                              : registryPreview
-                                ? 'Look up again'
-                                : 'Look up'
-                        }}
-                      </button>
-                      <button
-                        v-if="registryPreview"
-                        type="button"
-                        :class="btnSecondary"
-                        class="!px-3 !py-1.5 text-xs"
-                        @click="applyRegistryPreview"
-                      >
-                        Apply to profile
-                      </button>
-                    </div>
-                    <p :class="[helper, 'text-xs']">
-                      FAA does not return date of birth or certificate number in results. Review imported data before saving.
-                    </p>
-                  </div>
-                </div>
-                <SettingsAutoTextarea
-                  ref="certificatesTextareaRef"
-                  v-model="profile.certificates"
-                  placeholder="Commercial ASEL · Instrument Airplane"
-                  :input-class="inputClass"
-                />
-              </div>
+              <SettingsAutoTextarea
+                ref="certificatesTextareaRef"
+                v-model="profile.certificates"
+                placeholder="Commercial ASEL · Instrument Airplane"
+                :input-class="inputClass"
+              />
             </template>
           </SettingsField>
           <SettingsField label="Current focus" :is-dark-mode="isDarkMode">
@@ -228,11 +119,6 @@
                 <input v-model="profile.mailingState" type="text" placeholder="State" maxlength="2" :class="[inputClass, 'uppercase']" />
                 <input v-model="profile.mailingZip" type="text" placeholder="ZIP" maxlength="10" :class="inputClass" />
               </div>
-            </template>
-          </SettingsField>
-          <SettingsField label="Certificate number" hint="(optional)" :is-dark-mode="isDarkMode">
-            <template #default="{ inputClass }">
-              <input v-model="profile.certificateNumber" type="text" placeholder="12345678" :class="inputClass" />
             </template>
           </SettingsField>
         </div>
@@ -321,17 +207,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import SettingsSection from '../SettingsSection.vue'
 import SettingsField from '../SettingsField.vue'
 import SettingsAutoTextarea from '../SettingsAutoTextarea.vue'
 import SettingsSubNav from '../SettingsSubNav.vue'
 import { useSettingsClasses } from '../useSettingsClasses'
-import {
-  useAirmanLookup,
-  type AirmanRegistryCandidate,
-  type AirmanRegistryData,
-} from '~/composables/useAirmanLookup'
 
 export interface PilotProfileForm {
   name: string
@@ -371,116 +252,11 @@ defineEmits<{
   'open-currency': []
 }>()
 
-const { section, input, label, helper, btnPrimary, btnSecondary } = useSettingsClasses(
+const { section, helper, btnPrimary } = useSettingsClasses(
   computed(() => props.isDarkMode)
 )
 
-const { lookupAirman } = useAirmanLookup()
-
-const showRegistryImport = ref(false)
-const registryLastName = ref('')
-const registryFirstName = ref('')
-const registryCertNumber = ref('')
-const registryLoading = ref(false)
-const registryError = ref('')
-const registryNotice = ref('')
-const registryPreview = ref<AirmanRegistryData | null>(null)
-const registryCandidates = ref<AirmanRegistryCandidate[]>([])
-const registrySelectedTarget = ref('')
 const certificatesTextareaRef = ref<InstanceType<typeof SettingsAutoTextarea> | null>(null)
-
-function splitNameForRegistry(fullName: string): { firstName: string; lastName: string } {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return { firstName: '', lastName: '' }
-  if (parts.length === 1) return { firstName: '', lastName: parts[0] }
-  return { firstName: parts.slice(0, -1).join(' '), lastName: parts[parts.length - 1] }
-}
-
-watch(
-  () => props.profile.name,
-  (name) => {
-    if (registryLastName.value.trim()) return
-    const split = splitNameForRegistry(name || '')
-    registryLastName.value = split.lastName
-    registryFirstName.value = split.firstName
-  },
-  { immediate: true }
-)
-
-watch(
-  () => props.profile.certificateNumber,
-  (cert) => {
-    if (!registryCertNumber.value.trim() && cert?.trim()) {
-      registryCertNumber.value = cert.trim()
-    }
-  },
-  { immediate: true }
-)
-
-async function runRegistryLookup() {
-  registryError.value = ''
-  registryNotice.value = ''
-  if (!registryCandidates.value.length) {
-    registryPreview.value = null
-  }
-
-  if (!registryLastName.value.trim() || !registryCertNumber.value.trim()) {
-    registryError.value = 'Last name and certificate number are required.'
-    return
-  }
-
-  registryLoading.value = true
-  try {
-    const response = await lookupAirman({
-      lastName: registryLastName.value,
-      certificateNumber: registryCertNumber.value,
-      firstName: registryFirstName.value || undefined,
-      eventTarget: registrySelectedTarget.value || undefined,
-    })
-
-    if (response.success) {
-      registryPreview.value = response.data
-      registryCandidates.value = []
-      registrySelectedTarget.value = ''
-      registryNotice.value = ''
-      return
-    }
-
-    if ('code' in response && response.code === 'MULTIPLE_MATCHES') {
-      registryCandidates.value = response.candidates
-      if (!registrySelectedTarget.value) {
-        registrySelectedTarget.value = response.candidates[0]?.eventTarget ?? ''
-      }
-      registryNotice.value = response.message
-      return
-    }
-
-    registryCandidates.value = []
-    registryError.value = response.error ?? 'Lookup failed.'
-  } finally {
-    registryLoading.value = false
-  }
-}
-
-function applyRegistryPreview() {
-  if (!registryPreview.value) return
-  props.profile.name = registryPreview.value.name
-  props.profile.certificates = registryPreview.value.certificates
-  props.profile.certificateNumber = registryCertNumber.value.trim()
-  if (registryPreview.value.residentialAddress) {
-    props.profile.residentialAddress = registryPreview.value.residentialAddress
-  }
-  if (registryPreview.value.residentialCity) {
-    props.profile.residentialCity = registryPreview.value.residentialCity
-  }
-  if (registryPreview.value.residentialState) {
-    props.profile.residentialState = registryPreview.value.residentialState
-  }
-  if (registryPreview.value.residentialZip) {
-    props.profile.residentialZip = registryPreview.value.residentialZip
-  }
-  nextTick(() => certificatesTextareaRef.value?.resize())
-}
 
 const profileSubTabs = [
   { value: 'profile', label: 'Personal', id: 'pilot-profile-tab-form', panelId: 'pilot-profile-panel-profile' },

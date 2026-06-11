@@ -71,6 +71,7 @@
       :is-drag-over="isDragOverImport"
       :entry-count="entryCount"
       @retry-sync="$emit('retry-sync')"
+      @sync-now="$emit('sync-now')"
       @import-dragover="$emit('import-dragover')"
       @import-dragenter="$emit('import-dragenter')"
       @import-dragleave="$emit('import-dragleave')"
@@ -149,6 +150,7 @@ defineEmits<{
   'set-clock-zone': [zone: 'UTC' | 'Local']
   'toggle-metric': [key: string]
   'retry-sync': []
+  'sync-now': []
   'import-dragover': []
   'import-dragenter': []
   'import-dragleave': []

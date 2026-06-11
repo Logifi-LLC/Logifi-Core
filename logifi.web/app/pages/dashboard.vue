@@ -63,6 +63,29 @@
     </div>
   </div>
 
+  <!-- Pull-to-refresh indicator (iOS) -->
+  <div
+    v-if="isIos && (pullDistance > 0 || isPullRefreshing)"
+    class="fixed left-0 right-0 z-40 flex justify-center pointer-events-none transition-opacity duration-200"
+    :style="{ top: 'calc(env(safe-area-inset-top) + 3.25rem)' }"
+  >
+    <div
+      class="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium font-quicksand shadow-md"
+      :class="isDarkMode ? 'bg-gray-800 text-gray-200' : 'bg-white text-gray-700'"
+      :style="{ transform: `translateY(${pullDistance}px)` }"
+    >
+      <Icon
+        :name="isPullRefreshing ? 'ri:loader-4-line' : 'ri:arrow-down-line'"
+        size="16"
+        :class="{
+          'animate-spin': isPullRefreshing,
+          'rotate-180': pullDistance >= 70 && !isPullRefreshing,
+        }"
+      />
+      {{ isPullRefreshing ? 'Syncing...' : pullDistance >= 70 ? 'Release to sync' : 'Pull to sync' }}
+    </div>
+  </div>
+
   <!-- Main Content (only show when authenticated) -->
   <div v-if="isAuthenticated && !authLoading">
       <header>
@@ -755,12 +778,19 @@
                   </div>
                 </div>
                 <!-- Flight totals (airplane time) -->
-                <div v-if="totalsViewMode === 'flight'" class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                <div
+                  v-if="totalsViewMode === 'flight'"
+                  :class="[
+                    'grid gap-4',
+                    isIos ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+                  ]"
+                >
                   <div
                     v-for="summaryField in summaryFields"
                     :key="summaryField.key"
                     :class="[
-                      'rounded-xl border px-4 py-5 text-left transition-all duration-300 relative overflow-hidden group',
+                      'rounded-xl border text-left transition-all duration-300 relative overflow-hidden group',
+                      isIos ? 'px-3 py-3' : 'px-4 py-5',
                       summaryField.key === 'totalTime'
                         ? (isDarkMode 
                             ? 'bg-blue-500/20 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.15)]'
@@ -784,8 +814,8 @@
                     <p :class="[
                       'font-semibold font-quicksand mt-2 relative z-10',
                       summaryField.key === 'totalTime'
-                        ? 'text-3xl tracking-tight'
-                        : 'text-2xl',
+                        ? (isIos ? 'text-2xl tracking-tight' : 'text-3xl tracking-tight')
+                        : (isIos ? 'text-xl' : 'text-2xl'),
                       summaryField.key === 'totalTime'
                         ? (isDarkMode ? 'text-white drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'text-gray-900')
                         : (isDarkMode ? 'text-gray-200' : 'text-gray-900')
@@ -795,12 +825,19 @@
                   </div>
                 </div>
                 <!-- Sim totals (simplified: Total, Instrument, Dual Received only) -->
-                <div v-else class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                <div
+                  v-else
+                  :class="[
+                    'grid gap-4',
+                    isIos ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+                  ]"
+                >
                   <div
                     v-for="summaryField in simOverviewFields"
                     :key="summaryField.key"
                     :class="[
-                      'rounded-xl border px-4 py-5 text-left transition-all duration-300 relative overflow-hidden group',
+                      'rounded-xl border text-left transition-all duration-300 relative overflow-hidden group',
+                      isIos ? 'px-3 py-3' : 'px-4 py-5',
                       summaryField.key === 'totalTime'
                         ? (isDarkMode 
                             ? 'bg-blue-500/20 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.15)]'
@@ -822,8 +859,8 @@
                     <p :class="[
                       'font-semibold font-quicksand mt-2 relative z-10',
                       summaryField.key === 'totalTime'
-                        ? 'text-3xl tracking-tight'
-                        : 'text-2xl',
+                        ? (isIos ? 'text-2xl tracking-tight' : 'text-3xl tracking-tight')
+                        : (isIos ? 'text-xl' : 'text-2xl'),
                       summaryField.key === 'totalTime'
                         ? (isDarkMode ? 'text-white drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'text-gray-900')
                         : (isDarkMode ? 'text-gray-200' : 'text-gray-900')
@@ -970,14 +1007,14 @@
                   Entries are stored locally in this browser to align with AC&nbsp;120-78B data integrity expectations. Export and secured archival features will follow the signing workflow.
             </p>
       </div>
-              <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
-                <div class="relative">
+              <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end w-full lg:w-auto">
+                <div class="relative w-full sm:w-60">
               <input 
                     v-model="searchTerm"
                     type="search"
                     placeholder="Search entries"
                     :class="[
-                      'w-full sm:w-60 rounded-lg border px-5 py-2 focus:outline-none focus:ring-2 font-quicksand transition-colors duration-300',
+                      'w-full rounded-lg border px-5 py-2 focus:outline-none focus:ring-2 font-quicksand transition-colors duration-300',
                       isDarkMode 
                         ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500' 
                         : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400 focus:ring-blue-500'
@@ -987,20 +1024,6 @@
             <Icon name="ri:search-line" size="18" />
           </span>        
           </div>
-                <div>
-              <button
-            type="button"
-            @click="toggleEntryForm"
-                    :class="[
-              'inline-flex items-center px-5 py-2 rounded-lg text-sm sm:text-base font-quicksand font-medium transition-all duration-200',
-                      isDarkMode 
-                ? (isEntryFormOpen ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20')
-                : (isEntryFormOpen ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900')
-            ]"
-          >
-            {{ isEntryFormOpen ? 'Hide Entry' : 'Add Entry' }}
-          </button>
-            </div>
               </div>
         </div>
 
@@ -1737,16 +1760,12 @@
                       <option value="First Officer">First Officer</option>
                     </select>
                   </div>
-                  <div :class="['relative', isIos ? 'col-span-2 order-3' : '']">
+                  <div :class="['relative', isIos ? 'col-span-2' : '']">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Name</label>
                     <input v-model="inlineEditEntry.trainingElements" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Pilot Name" autocomplete="off" @focus="showInlinePilotNameDropdown = true; highlightedInlinePilotIndex = filteredPilotsForInline.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'inlinePilot', filteredPilotsForInline, (item) => selectPilotNameForInline(item))" @blur="handleInlinePilotNameBlur" />
                     <div v-if="showInlinePilotNameDropdown && filteredPilotsForInline.length > 0" data-dropdown="inlinePilot" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']">
                       <button v-for="(pilot, index) in filteredPilotsForInline" :key="pilot" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm transition-colors', highlightedInlinePilotIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectPilotNameForInline(pilot)">{{ pilot }}</button>
                     </div>
-                  </div>
-                  <div :class="isIos ? 'order-2' : ''">
-                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
-                    <input v-model="inlineEditEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Certificate #" />
                   </div>
                 </div>
               </div>
@@ -1799,7 +1818,7 @@
               </div>
               <div :class="['grid gap-2 p-2 rounded border border-dashed border-gray-600/50', isIos ? 'entry-grid-ios-2' : 'grid-cols-2 sm:grid-cols-4']">
                <div v-for="field in oooiFields" :key="field">
-                  <label :class="['block text-[10px] uppercase font-bold mb-1 text-center', isDarkMode ? 'text-blue-400' : 'text-blue-600']">{{ field }}</label>
+                  <label :class="['block text-[10px] uppercase font-bold mb-1 text-center', isDarkMode ? 'text-blue-400' : 'text-blue-600']">{{ oooiFieldLabels[field] }}</label>
                   <input 
                     v-if="inlineEditEntry?.oooi" 
                     v-model="inlineEditEntry.oooi[field]" 
@@ -2145,7 +2164,7 @@
                     <option value="First Officer">First Officer</option>
                   </select>
                 </div>
-                <div :class="['relative', isIos ? 'col-span-2 order-3' : '']">
+                <div :class="['relative', isIos ? 'col-span-2' : '']">
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Name</label>
                   <input 
                     v-model="inlineEditEntry.trainingElements" 
@@ -2179,10 +2198,6 @@
                       {{ pilot }}
                     </button>
                   </div>
-                </div>
-                <div :class="isIos ? 'order-2' : ''">
-                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
-                  <input v-model="inlineEditEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Certificate #" />
                 </div>
                </div>
              </div>
@@ -2232,9 +2247,15 @@
                 <button
                   type="button"
                   @click.stop="saveInlineEdit"
-                  :class="['px-4 py-2 rounded-lg text-sm font-bold shadow-lg', isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white']"
+                  :disabled="isSavingInlineEdit"
+                  :class="[
+                    'inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-bold shadow-lg',
+                    isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white',
+                    isSavingInlineEdit ? 'opacity-60 cursor-not-allowed' : ''
+                  ]"
                 >
-                  Confirm Changes
+                  <Icon v-if="isSavingInlineEdit" name="ri:loader-4-line" class="animate-spin mr-2" size="16" />
+                  {{ isSavingInlineEdit ? 'Saving…' : 'Confirm Changes' }}
                 </button>
               </div>
             </div>
@@ -2580,16 +2601,12 @@
                           <option value="First Officer">First Officer</option>
                         </select>
                       </div>
-                      <div :class="['relative', isIos ? 'col-span-2 order-3' : '']">
+                      <div :class="['relative', isIos ? 'col-span-2' : '']">
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Name</label>
                         <input v-model="newEntry.trainingElements" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Pilot Name" autocomplete="off" @focus="showPilotNameDropdown = true; highlightedPilotIndex = filteredPilots.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'pilot', filteredPilots, (item) => selectPilotName(item))" @blur="handlePilotNameBlur" />
                         <div v-if="showPilotNameDropdown && filteredPilots.length > 0" data-dropdown="pilot" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']">
                           <button v-for="(pilot, index) in filteredPilots" :key="pilot" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm transition-colors', highlightedPilotIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectPilotName(pilot)">{{ pilot }}</button>
                         </div>
-                      </div>
-                      <div :class="isIos ? 'order-2' : ''">
-                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
-                        <input v-model="newEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Certificate #" />
                       </div>
                     </div>
                   </div>
@@ -2630,7 +2647,7 @@
                 </div>
                 <div :class="['grid gap-2 p-2 rounded border border-dashed border-gray-600/50', isIos ? 'entry-grid-ios-2' : 'grid-cols-2 sm:grid-cols-4']">
                  <div v-for="field in oooiFields" :key="field">
-                    <label :class="['block text-[10px] uppercase font-bold mb-1 text-center', isDarkMode ? 'text-blue-400' : 'text-blue-600']">{{ field }}</label>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1 text-center', isDarkMode ? 'text-blue-400' : 'text-blue-600']">{{ oooiFieldLabels[field] }}</label>
                     <input 
                       v-if="newEntry.oooi" 
                       v-model="newEntry.oooi[field]" 
@@ -3021,7 +3038,7 @@
                       <option value="First Officer">First Officer</option>
                     </select>
                   </div>
-                  <div :class="['relative', isIos ? 'col-span-2 order-3' : '']">
+                  <div :class="['relative', isIos ? 'col-span-2' : '']">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Name</label>
                     <input 
                       v-model="newEntry.trainingElements" 
@@ -3055,10 +3072,6 @@
                         {{ pilot }}
                       </button>
                     </div>
-                  </div>
-                  <div :class="isIos ? 'order-2' : ''">
-                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
-                    <input v-model="newEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Certificate #" />
                   </div>
                 </div>
               </div>
@@ -3228,39 +3241,20 @@
                   >
                     {{ hasErrors ? 'Save Despite Errors' : 'Save Anyway' }}
                   </button>
-                  <template v-if="lastSavedEntry">
-                    <button
-                      type="button"
-                      :class="[
-                        'inline-flex items-center justify-center rounded-lg px-6 py-2 font-semibold font-quicksand transition-all',
-                        isDarkMode ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-600 text-white hover:bg-blue-700'
-                      ]"
-                      @click="prefillForNextFlight(lastSavedEntry!)"
-                    >
-                      Add next flight
-                    </button>
-                    <button
-                      type="button"
-                      :class="[
-                        'inline-flex items-center justify-center rounded-lg px-6 py-2 border font-semibold font-quicksand transition-all',
-                        isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200'
-                      ]"
-                      @click="closeAddEntryAfterSave"
-                    >
-                      Close
-                    </button>
-                  </template>
                   <button
                     v-else-if="!duplicateWarning && !validationWarning"
                     type="submit"
+                    :disabled="isSavingEntry"
                     :class="[
                       'inline-flex items-center justify-center rounded-lg px-6 py-2 font-semibold font-quicksand transition-all',
                       isDarkMode 
                         ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-blue-600 text-white hover:bg-blue-700',
+                      isSavingEntry ? 'opacity-60 cursor-not-allowed' : ''
                     ]"
                   >
-                    {{ editingEntryId ? 'Update Entry' : 'Save Entry' }}
+                    <Icon v-if="isSavingEntry" name="ri:loader-4-line" class="animate-spin mr-2" size="18" />
+                    {{ isSavingEntry ? 'Saving…' : (editingEntryId ? 'Update Entry' : 'Save Entry') }}
                   </button>
                 </div>
               </div>
@@ -3320,6 +3314,7 @@
       @set-clock-zone="setClockZone"
       @toggle-metric="toggleTotalsMetric"
       @retry-sync="retryFailed()"
+      @sync-now="refreshDashboardData()"
       @import-dragover="handleImportDragOver"
       @import-dragenter="handleImportDragEnter"
       @import-dragleave="handleImportDragLeave"
@@ -3617,14 +3612,6 @@
                   </div>
                 </div>
                 
-                <div v-if="form8710PreviewData?.sectionI?.certificateNumber">
-                  <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
-                    Certificate Number
-                  </label>
-                  <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-900 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-gray-50 border-gray-300 text-gray-900']">
-                    {{ form8710PreviewData.sectionI.certificateNumber }}
-                  </div>
-                </div>
               </div>
               
               <div>
@@ -5451,11 +5438,14 @@ import { useAuth } from '../composables/useAuth'
 import { useDataIntegrity } from '../composables/useDataIntegrity'
 import { useValidation } from '../composables/useValidation'
 import { useOffline } from '../composables/useOffline'
+import { useToast } from '../composables/useToast'
+import { withTimeout } from '../utils/promiseTimeout'
 import { useSyncQueue } from '../composables/useSyncQueue'
 import { useExport } from '../composables/useExport'
 import { useCurrency } from '../composables/useCurrency'
 import { useCapacitorPlatform } from '../composables/useCapacitorPlatform'
 import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGestures'
+import { usePullToRefresh } from '../composables/usePullToRefresh'
 import AuthModal from '../components/AuthModal.vue'
 import AuditTrail from '../components/AuditTrail.vue'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
@@ -5681,7 +5671,8 @@ const { validateEntry: validateEntryIntegrity } = useDataIntegrity()
 const { validateEntry: validateFlightTimeEntry, validationErrors, validationWarnings, hasErrors, hasWarnings, clearValidation } = useValidation()
 
 // Offline support
-const { isOnline, isSyncing, syncProgress, updateSyncProgress } = useOffline()
+const { isOnline, isSyncing, syncProgress, updateSyncProgress, checkOnlineStatus } = useOffline()
+const { showToast } = useToast()
 const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync, retryFailed } = useSyncQueue()
 
 // Currency tracking
@@ -5731,6 +5722,7 @@ function openSettingsUpdates() {
 }
 const isMigrating = ref(false)
 const migrationProgress = ref({ step: '', current: 0, total: 0 })
+const isDashboardRefreshing = ref(false)
 
 // Log entries - must be declared before any functions that use it
 const logEntries = ref<LogEntry[]>([])
@@ -5783,6 +5775,12 @@ const handleLogout = async () => {
 // Watch for authentication changes and trigger migration on first login
 watch(isAuthenticated, async (authenticated) => {
   if (authenticated && user.value) {
+    await loadEntries()
+
+    if (!isOnline.value) {
+      return
+    }
+
     // Check if migration is needed
     if (!hasMigrationCompleted()) {
       isMigrating.value = true
@@ -5793,10 +5791,9 @@ watch(isAuthenticated, async (authenticated) => {
             migrationProgress.value = { step, current, total }
           }
         )
-        
+
         if (result.success) {
           console.log('Migration completed:', result)
-          // Reload entries from Supabase after migration
           await loadEntries()
           await fetchEntityTags()
           await fetchUserTagPresets()
@@ -5809,8 +5806,6 @@ watch(isAuthenticated, async (authenticated) => {
         isMigrating.value = false
       }
     } else {
-      // Migration already completed - load entries directly
-      await loadEntries()
       await fetchEntityTags()
       await fetchUserTagPresets()
     }
@@ -5893,8 +5888,7 @@ onUnmounted(() => {
 // Watch for online status changes to trigger sync
 watch(isOnline, (online) => {
   if (online && isAuthenticated.value && user.value) {
-    // When coming back online, process sync queue
-    processQueue()
+    void refreshDashboardData()
   }
 })
 
@@ -6186,6 +6180,13 @@ function roleDisplayLabel(role: string): string {
   return role === 'Dual Received' ? 'Student' : role
 }
 const oooiFields: (keyof OOOITimes)[] = ['out', 'off', 'on', 'in']
+const oooiFieldLabels: Record<keyof OOOITimes, string> = {
+  out: 'Out',
+  off: 'Off',
+  on: 'On',
+  in: 'In',
+  isZulu: 'Zulu'
+}
 
 const entryTagOptions = ['Checkride', 'Flight Review', 'IPC'] as const
 
@@ -6753,9 +6754,9 @@ const duplicateWarning = ref<{ matches: LogEntry[] } | null>(null)
 const saveAnyway = ref(false)
 const validationWarning = ref<boolean>(false)
 const saveAnywayValidation = ref(false)
+const isSavingEntry = ref(false)
+const isSavingInlineEdit = ref(false)
 const isEntryFormOpen = ref(false)
-/** After saving a new entry, hold it so "Add next flight" can prefill departure/date */
-const lastSavedEntry = ref<LogEntry | null>(null)
 const isCommercialMode = ref(false)
 
 function toggleCommercialMode(): void {
@@ -6841,8 +6842,10 @@ function toggleInlineOOOIMode(): void {
 }
 
 async function saveInlineEdit(): Promise<void> {
-  if (!inlineEditEntry.value) return
-  
+  if (!inlineEditEntry.value || isSavingInlineEdit.value) return
+  isSavingInlineEdit.value = true
+
+  try {
   // Basic validation: date always required; aircraft/ident required only when not logging simulator time
   if (!inlineEditEntry.value.date) {
     alert('Date is required.')
@@ -7193,10 +7196,15 @@ async function saveInlineEdit(): Promise<void> {
     logEntries.value.find(e => e.id === targetId)?.flightTime.night
   )
 
+  showToast('Entry updated', 3000)
+
   expandedEntryId.value = null
   inlineEditEntry.value = null
   isInlineCommercialMode.value = false
   showAuditTrailSidebar.value = false
+  } finally {
+    isSavingInlineEdit.value = false
+  }
 }
 
 function cancelInlineEdit(): void {
@@ -7760,7 +7768,6 @@ function exportToCSV(entries?: LogEntry[]): void {
     'Route',
     'Training Elements',
     'Training Instructor',
-    'Instructor Certificate',
     'Flight Conditions',
     'Remarks',
     'Tags',
@@ -7858,7 +7865,6 @@ function exportToCSV(entries?: LogEntry[]): void {
       entry.route || '',
       entry.trainingElements || '',
       entry.trainingInstructor || '',
-      entry.instructorCertificate || '',
       (entry.flightConditions || []).join('; '),
       entry.remarks || '',
       (entry.tags || []).join(', '),
@@ -10362,44 +10368,12 @@ function resetForm(): void {
   validationWarning.value = false
   saveAnywayValidation.value = false
   clearValidation()
-  lastSavedEntry.value = null
   successMessage.value = null
   Object.assign(newEntry, createBlankEntry())
   editingEntryId.value = null
   // Reset manual XC time tracking when form is reset
   xcTimeManuallySet.value = false
   lastKnownXcTime.value = null
-}
-
-/** Prefill new entry form for "Add next flight": departure = last destination, date = same day; clear rest */
-function prefillForNextFlight(entry: LogEntry): void {
-  lastSavedEntry.value = null
-  successMessage.value = null
-  Object.assign(newEntry, createBlankEntry())
-  newEntry.departure = entry.destination || ''
-  newEntry.date = entry.date ? normalizeDateForInput(entry.date) : newEntry.date
-  duplicateWarning.value = null
-  saveAnyway.value = false
-  validationWarning.value = false
-  saveAnywayValidation.value = false
-  clearValidation()
-  xcTimeManuallySet.value = false
-  lastKnownXcTime.value = null
-}
-
-function closeAddEntryAfterSave(): void {
-  lastSavedEntry.value = null
-  successMessage.value = null
-  Object.assign(newEntry, createBlankEntry())
-  editingEntryId.value = null
-  duplicateWarning.value = null
-  saveAnyway.value = false
-  validationWarning.value = false
-  saveAnywayValidation.value = false
-  clearValidation()
-  xcTimeManuallySet.value = false
-  lastKnownXcTime.value = null
-  isEntryFormOpen.value = false
 }
 
 function toggleEntryForm(): void {
@@ -10411,7 +10385,6 @@ function toggleEntryForm(): void {
     expandedEntryId.value = null
     inlineEditEntry.value = null
     isInlineCommercialMode.value = false
-    lastSavedEntry.value = null
     successMessage.value = null
     editingEntryId.value = null
     Object.assign(newEntry, createBlankEntry())
@@ -10638,6 +10611,22 @@ useCatalogDrawerGestures({
     }
   },
   onClose: closeCatalogDrawer,
+})
+
+const pullToRefreshDisabled = computed(
+  () =>
+    showSettingsModal.value ||
+    isEntryFormOpen.value ||
+    isCatalogDrawerOpen.value ||
+    expandedEntryId.value !== null ||
+    showCrewProfileModal.value ||
+    showAuthModal.value ||
+    isDashboardRefreshing.value
+)
+
+const { pullDistance, isRefreshing: isPullRefreshing } = usePullToRefresh({
+  onRefresh: refreshDashboardData,
+  disabled: pullToRefreshDisabled,
 })
 
 // Helpers to extract keys for filters
@@ -11625,7 +11614,7 @@ async function calculateDuration(
 }
 
 // Watcher to auto-calculate total time and flight time
-watch(() => [newEntry.oooi?.out, newEntry.oooi?.in, newEntry.oooi?.off, newEntry.oooi?.on, newEntry.role, newEntry.departure, newEntry.destination, newEntry.date], async () => {
+watch(() => [newEntry.oooi?.out, newEntry.oooi?.off, newEntry.oooi?.on, newEntry.oooi?.in, newEntry.role, newEntry.departure, newEntry.destination, newEntry.date], async () => {
   if (!isCommercialMode.value || !newEntry.oooi) return
   
   if (newEntry.oooi.out && newEntry.oooi.in) {
@@ -11804,7 +11793,7 @@ watch(() => [newEntry.departure, newEntry.destination, newEntry.flightTime.cross
   }, 500)
 })
 
-watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.in, inlineEditEntry.value?.oooi?.off, inlineEditEntry.value?.oooi?.on, inlineEditEntry.value?.role, inlineEditEntry.value?.departure, inlineEditEntry.value?.destination, inlineEditEntry.value?.date], async () => {
+watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.off, inlineEditEntry.value?.oooi?.on, inlineEditEntry.value?.oooi?.in, inlineEditEntry.value?.role, inlineEditEntry.value?.departure, inlineEditEntry.value?.destination, inlineEditEntry.value?.date], async () => {
   if (!isInlineCommercialMode.value || !inlineEditEntry.value?.oooi) return
   
   if (inlineEditEntry.value.oooi.out && inlineEditEntry.value.oooi.in) {
@@ -12256,6 +12245,10 @@ watch(
 )
 
 async function submitEntry(): Promise<void> {
+  if (isSavingEntry.value) return
+  isSavingEntry.value = true
+
+  try {
   validationError.value = null
   successMessage.value = null
   duplicateWarning.value = null
@@ -12412,7 +12405,6 @@ async function submitEntry(): Promise<void> {
   const shouldFlag = saveAnywayValidation.value && !onlyPastDateIssues
 
   // LOCAL-FIRST: Always save to IndexedDB first, then queue for sync
-  try {
     // Generate entry ID if new entry
     const entryId = editingEntryId.value || generateEntryId()
     
@@ -12484,21 +12476,15 @@ async function submitEntry(): Promise<void> {
       }
     }
 
-    // Show success message
-    successMessage.value = editingEntryId.value ? 'Entry updated.' : 'Entry saved.'
+    // Show success toast and close form
+    showToast(editingEntryId.value ? 'Entry updated' : 'Entry saved', 3000)
     duplicateWarning.value = null
     saveAnyway.value = false
     validationWarning.value = false
     saveAnywayValidation.value = false
     clearValidation()
-
-    // For new entry: offer "Add next flight" (keep panel open). For edit: reset and close below.
-    if (!editingEntryId.value) {
-      lastSavedEntry.value = entryToSave
-    }
-
-    // Sync queue will handle Supabase sync in the background
-    // No need to wait for it here - IndexedDB is the source of truth
+    resetForm()
+    isEntryFormOpen.value = false
 
   } catch (error) {
     console.error('[SaveEntry] Error saving entry:', error)
@@ -12509,14 +12495,9 @@ async function submitEntry(): Promise<void> {
     }
     successMessage.value = 'Error saving entry. Please try again.'
     validationError.value = error instanceof Error ? error.message : 'Failed to save entry'
-    return
+  } finally {
+    isSavingEntry.value = false
   }
-
-  if (editingEntryId.value) {
-    resetForm()
-    isEntryFormOpen.value = false
-  }
-  // When !editingEntryId we left lastSavedEntry set; panel stays open for "Add next flight" or "Close"
 }
 
 // Helper function to check if a string is a valid UUID
@@ -12762,6 +12743,7 @@ async function loadEntries(): Promise<void> {
   // If authenticated and online, sync with Supabase (merge using last-write-wins)
   if (isAuthenticated.value && user.value && isOnline.value) {
     try {
+      await withTimeout((async () => {
       // Paginate in batches of 1000 (Supabase default max per request)
       const BATCH_SIZE = 1000
       let allData: any[] = []
@@ -12878,6 +12860,7 @@ async function loadEntries(): Promise<void> {
         
         console.log('[LoadEntries] Merged entries: IndexedDB + Supabase =', logEntries.value.length, 'entries')
       }
+      })(), 15000, 'Load entries from Supabase')
     } catch (err) {
       console.error('[LoadEntries] Error syncing with Supabase:', err)
       // Continue with IndexedDB entries
@@ -12894,6 +12877,50 @@ async function loadEntries(): Promise<void> {
 
   // FC View rows may arrive without persisted night values; derive from OOOI for display consistency.
   void enrichFcvNightDataForDisplay()
+}
+
+async function refreshDashboardData(): Promise<void> {
+  if (isDashboardRefreshing.value) return
+  isDashboardRefreshing.value = true
+
+  try {
+    await checkOnlineStatus()
+
+    if (!isAuthenticated.value || !user.value) {
+      showToast('Sign in to sync')
+      return
+    }
+
+    if (!isOnline.value) {
+      showToast('Offline — showing local data')
+      return
+    }
+
+    const countBefore = logEntries.value.length
+
+    await loadEntries()
+    await processQueue()
+    await fetchEntityTags()
+    await fetchUserTagPresets()
+    await loadPilotProfileFromSupabase()
+    await loadCrewProfiles()
+
+    if (logEntries.value.length > 0) {
+      calculateAllCurrency(logEntries.value)
+    }
+
+    const added = logEntries.value.length - countBefore
+    if (added > 0) {
+      showToast(`Synced — ${added} new ${added === 1 ? 'entry' : 'entries'}`)
+    } else {
+      showToast('Synced')
+    }
+  } catch (err) {
+    console.error('[refreshDashboardData]', err)
+    showToast('Sync failed')
+  } finally {
+    isDashboardRefreshing.value = false
+  }
 }
 
 async function handleFcvImported(payload: {
@@ -13223,10 +13250,12 @@ onMounted(async () => {
   loadColumnConfig()
   loadActiveLogbook()
   loadPilotProfilePrefs()
-  if (isAuthenticated.value && user.value) {
+  if (isAuthenticated.value && user.value && isOnline.value) {
     await loadPilotProfileFromSupabase()
+    await loadCrewProfiles()
+  } else {
+    loadCrewProfilesFromLocalStorage()
   }
-  await loadCrewProfiles()
   // Normalize and autofill aircraft category/class labels on load
   normalizeAndAutofillCategories()
   

@@ -1,4 +1,5 @@
 import { isCapacitorIos } from '~/composables/useCapacitorPlatform'
+import { withTimeout } from '~/utils/promiseTimeout'
 
 // Global auth middleware
 // Ensures authentication state is initialized on every route
@@ -35,7 +36,11 @@ export default defineNuxtRouteMiddleware(async (to) => {
   // This middleware runs before page components mount
   const { initAuth, isPasswordRecoverySession } = useAuth()
 
-  await initAuth()
+  try {
+    await withTimeout(initAuth(), 10000, 'Auth initialization')
+  } catch (err) {
+    console.warn('[auth.global] Auth init failed or timed out; continuing in offline mode:', err)
+  }
 
   if (isPasswordRecoverySession.value && to.path !== '/reset-password') {
     return navigateTo('/reset-password')

@@ -1,8 +1,10 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { supabase, isSupabaseAvailable } from '~/lib/supabase'
+import { withTimeout } from '~/utils/promiseTimeout'
 
 export const useOffline = () => {
-  const isOnline = ref<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true)
+  const isOnline = ref(false)
+  const connectivityReady = ref(false)
   const isSyncing = ref<boolean>(false)
   const syncProgress = ref<{
     current: number
@@ -26,8 +28,11 @@ export const useOffline = () => {
     }
 
     try {
-      // Try a simple query to check connectivity
-      const { error } = await supabase.from('log_entries').select('id').limit(1)
+      const { error } = await withTimeout(
+        supabase.from('log_entries').select('id').limit(1),
+        5000,
+        'Supabase connectivity check'
+      )
       return !error
     } catch {
       return false
@@ -39,15 +44,16 @@ export const useOffline = () => {
    */
   const updateOnlineStatus = async () => {
     const browserOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
-    
+
     if (!browserOnline) {
       isOnline.value = false
+      connectivityReady.value = true
       return
     }
 
-    // If browser says online, verify Supabase is reachable
     const supabaseReachable = await checkSupabaseConnectivity()
     isOnline.value = supabaseReachable
+    connectivityReady.value = true
   }
 
   /**
@@ -56,16 +62,14 @@ export const useOffline = () => {
   const startMonitoring = () => {
     if (typeof window === 'undefined') return
 
-    // Listen to browser online/offline events
     window.addEventListener('online', updateOnlineStatus)
     window.addEventListener('offline', () => {
       isOnline.value = false
+      connectivityReady.value = true
     })
 
-    // Periodic connectivity check (every 30 seconds)
     connectivityCheckInterval = setInterval(updateOnlineStatus, 30000)
 
-    // Initial check
     updateOnlineStatus()
   }
 
@@ -116,6 +120,7 @@ export const useOffline = () => {
 
   return {
     isOnline: computed(() => isOnline.value),
+    connectivityReady: computed(() => connectivityReady.value),
     isSyncing: computed(() => isSyncing.value),
     syncProgress: computed(() => syncProgress.value),
     checkOnlineStatus: updateOnlineStatus,
@@ -125,4 +130,3 @@ export const useOffline = () => {
     stopMonitoring
   }
 }
-

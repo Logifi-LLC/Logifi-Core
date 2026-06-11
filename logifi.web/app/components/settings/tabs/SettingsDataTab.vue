@@ -26,21 +26,38 @@
           Sync error
         </span>
       </div>
-      <button
-        v-if="queueLength > 0 && isOnline"
-        type="button"
-        :disabled="isSyncing"
-        class="mt-3 inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium font-quicksand disabled:opacity-50"
-        :class="
-          isDarkMode
-            ? 'border-gray-600 text-blue-400 hover:bg-gray-800'
-            : 'border-gray-200 text-blue-700 hover:bg-gray-50'
-        "
-        @click="$emit('retry-sync')"
-      >
-        <Icon name="ri:refresh-line" size="16" :class="{ 'animate-spin': isSyncing }" />
-        Retry sync
-      </button>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button
+          v-if="isOnline"
+          type="button"
+          :disabled="isSyncing"
+          class="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium font-quicksand disabled:opacity-50"
+          :class="
+            isDarkMode
+              ? 'border-gray-600 text-blue-400 hover:bg-gray-800'
+              : 'border-gray-200 text-blue-700 hover:bg-gray-50'
+          "
+          @click="$emit('sync-now')"
+        >
+          <Icon name="ri:refresh-line" size="16" :class="{ 'animate-spin': isSyncing }" />
+          Sync now
+        </button>
+        <button
+          v-if="queueLength > 0 && isOnline"
+          type="button"
+          :disabled="isSyncing"
+          class="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium font-quicksand disabled:opacity-50"
+          :class="
+            isDarkMode
+              ? 'border-gray-600 text-blue-400 hover:bg-gray-800'
+              : 'border-gray-200 text-blue-700 hover:bg-gray-50'
+          "
+          @click="$emit('retry-sync')"
+        >
+          <Icon name="ri:refresh-line" size="16" :class="{ 'animate-spin': isSyncing }" />
+          Retry sync
+        </button>
+      </div>
     </SettingsSection>
 
     <SettingsSection
@@ -148,6 +165,7 @@ const props = defineProps<{
 
 defineEmits<{
   'retry-sync': []
+  'sync-now': []
   'import-dragover': []
   'import-dragenter': []
   'import-dragleave': []

@@ -49,7 +49,38 @@
       </div>
     </header>
 
-    <!-- App header (dashboard / default) -->
+    <!-- App header — iOS compact (from dashboard / in-app) -->
+    <header v-else-if="isAppShell && isIos">
+      <div
+        :class="[
+          'fixed top-0 inset-x-0 z-50 pt-[env(safe-area-inset-top)] transition-colors duration-300',
+          effectiveDark ? 'bg-gray-900/95 border-b border-gray-700/50' : 'bg-gray-50/95 border-b border-gray-200/80'
+        ]"
+      >
+        <div class="flex items-center justify-between px-4 py-2">
+          <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-quicksand font-semibold transition-colors"
+            :class="effectiveDark ? 'text-gray-200 hover:bg-gray-800' : 'text-gray-800 hover:bg-gray-200'"
+            @click="goBack"
+          >
+            <Icon name="ri:arrow-left-line" size="18" />
+            Back
+          </button>
+          <h1
+            :class="[
+              'text-base font-semibold font-quicksand truncate px-2',
+              effectiveDark ? 'text-white' : 'text-gray-900'
+            ]"
+          >
+            Open Source
+          </h1>
+          <span class="w-16 shrink-0" aria-hidden="true" />
+        </div>
+      </div>
+    </header>
+
+    <!-- App header (dashboard / default — desktop & web) -->
     <header v-else>
       <div
         :class="[
@@ -113,17 +144,28 @@
     <!-- Main Content -->
     <main
       :class="[
-        'pb-16 px-4 sm:px-6 lg:px-8',
-        isFromLanding ? 'relative z-10 pt-32' : 'pt-24'
+        'px-4 sm:px-6 lg:px-8',
+        isFromLanding
+          ? 'relative z-10 pt-32 pb-16'
+          : isIos
+            ? 'pt-[calc(3rem+env(safe-area-inset-top))] pb-[calc(4rem+env(safe-area-inset-bottom))]'
+            : 'pt-24 pb-16'
       ]"
     >
       <div :class="['max-w-4xl mx-auto', isFromLanding ? 'relative overflow-hidden rounded-[28px] border border-white/15 bg-white/10 backdrop-blur-md shadow-[0_0_42px_-12px_rgba(59,130,246,0.24),0_0_56px_-18px_rgba(37,99,235,0.14)] p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8' : '']">
         <!-- Hero Section -->
-        <div class="text-center mb-12">
-          <div :class="['inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-6 shadow-lg', isFromLanding ? 'bg-blue-600 shadow-[0_0_24px_-2px_rgba(37,99,235,0.55)]' : 'bg-blue-600 shadow-blue-900/20']">
-            <Icon name="ri:open-source-line" size="32" class="text-white" />
+        <div :class="['text-center', isAppShell && isIos ? 'mb-8' : 'mb-12']">
+          <div
+            :class="[
+              'inline-flex items-center justify-center rounded-2xl shadow-lg',
+              isAppShell && isIos ? 'w-14 h-14 mb-4' : 'w-16 h-16 mb-6',
+              isFromLanding ? 'bg-blue-600 shadow-[0_0_24px_-2px_rgba(37,99,235,0.55)]' : 'bg-blue-600 shadow-blue-900/20'
+            ]"
+          >
+            <Icon name="ri:open-source-line" :size="isAppShell && isIos ? 28 : 32" class="text-white" />
           </div>
           <h1
+            v-if="!(isAppShell && isIos)"
             :class="[
               'font-bold font-quicksand mb-4',
               isFromLanding ? 'text-4xl text-gray-950 dark:text-gray-900 drop-shadow-sm' : ['text-4xl', effectiveDark ? 'text-white' : 'text-gray-900']
@@ -410,10 +452,12 @@ import { computed, ref, onMounted, onUnmounted, watch, onBeforeUnmount } from 'v
 import { useRoute, useRouter } from '#imports'
 import AuthModal from '~/components/AuthModal.vue'
 import TechnicalTopographyBg from '~/components/TechnicalTopographyBg.vue'
+import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
 
 const route = useRoute()
 const router = useRouter()
 const runtimeConfig = useRuntimeConfig()
+const { isIos } = useCapacitorPlatform()
 
 const lightningAddress = computed(() => {
   const v = runtimeConfig.public.lightningDonationAddress
@@ -489,6 +533,7 @@ const goBack = () => {
 const { theme, isDark, applyDocumentTheme } = useTheme()
 /** `?from=landing` uses marketing shell; app chrome uses theme. */
 const isFromLanding = computed(() => route.query.from === 'landing')
+const isAppShell = computed(() => !isFromLanding.value)
 const effectiveDark = computed(() => isDark.value && !isFromLanding.value)
 
 if (import.meta.client) {
