@@ -7,6 +7,7 @@ const MAX_PULL = 120
 export type PullToRefreshOptions = {
   onRefresh: () => Promise<void>
   disabled?: Ref<boolean> | ComputedRef<boolean>
+  scrollContainerRef?: Ref<HTMLElement | null>
 }
 
 export function usePullToRefresh(options: PullToRefreshOptions) {
@@ -20,6 +21,8 @@ export function usePullToRefresh(options: PullToRefreshOptions) {
 
   function getScrollTop(): number {
     if (typeof window === 'undefined') return 0
+    const container = options.scrollContainerRef?.value
+    if (container) return container.scrollTop
     return window.scrollY || document.documentElement.scrollTop
   }
 
@@ -71,7 +74,7 @@ export function usePullToRefresh(options: PullToRefreshOptions) {
 
     isPulling.value = true
     e.preventDefault()
-    pullDistance.value = Math.min(dy * 0.5, MAX_PULL)
+    pullDistance.value = Math.min(dy, MAX_PULL)
   }
 
   async function onTouchEnd() {

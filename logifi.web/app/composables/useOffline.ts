@@ -68,7 +68,7 @@ export const useOffline = () => {
       connectivityReady.value = true
     })
 
-    connectivityCheckInterval = setInterval(updateOnlineStatus, 30000)
+    connectivityCheckInterval = setInterval(updateOnlineStatus, 90000)
 
     updateOnlineStatus()
   }

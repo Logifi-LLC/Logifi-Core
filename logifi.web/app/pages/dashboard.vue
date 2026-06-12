@@ -66,13 +66,12 @@
   <!-- Pull-to-refresh indicator (iOS) -->
   <div
     v-if="isIos && (pullDistance > 0 || isPullRefreshing)"
-    class="fixed left-0 right-0 z-40 flex justify-center pointer-events-none transition-opacity duration-200"
-    :style="{ top: 'calc(env(safe-area-inset-top) + 3.25rem)' }"
+    class="fixed left-0 right-0 top-0 z-40 flex items-end justify-center pointer-events-none pb-2"
+    :style="{ height: `calc(env(safe-area-inset-top, 0px) + ${isPullRefreshing ? 70 : pullDistance}px)` }"
   >
     <div
       class="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium font-quicksand shadow-md"
       :class="isDarkMode ? 'bg-gray-800 text-gray-200' : 'bg-white text-gray-700'"
-      :style="{ transform: `translateY(${pullDistance}px)` }"
     >
       <Icon
         :name="isPullRefreshing ? 'ri:loader-4-line' : 'ri:arrow-down-line'"
@@ -88,11 +87,12 @@
 
   <!-- Main Content (only show when authenticated) -->
   <div v-if="isAuthenticated && !authLoading">
+    <div :style="pullTransformStyle">
       <header>
       <div
         :class="[
-          'fixed top-0 left-0 right-0 z-30 transition-colors duration-300',
-          isIos ? 'pt-[env(safe-area-inset-top)]' : '',
+          'left-0 right-0 z-30 transition-colors duration-300',
+          isIos ? 'sticky top-0 pt-[env(safe-area-inset-top)]' : 'fixed top-0',
           isDarkMode
             ? 'border-gray-700/50 bg-gray-950/95'
             : 'border-gray-400/50 bg-gray-50/95'
@@ -182,7 +182,7 @@
           </template>
           <button
             type="button"
-            @click="showSettingsModal = true"
+            @click="openSettings()"
             :class="[
               'h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all duration-200 shadow-sm border',
               isDarkMode 
@@ -200,10 +200,9 @@
 
     <main
       :class="[
-        'min-h-screen flex flex-col px-4 sm:px-6 lg:px-8 transition-colors duration-300',
-        isIos ? 'overflow-x-hidden' : 'overflow-x-auto',
+        'min-h-screen flex flex-col px-4 sm:px-6 lg:px-8 transition-colors duration-300 overflow-x-hidden',
         isIos
-          ? 'pt-[calc(7.5rem+env(safe-area-inset-top))] pb-[calc(5rem+env(safe-area-inset-bottom))]'
+          ? 'pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))]'
           : 'pt-40 pb-20',
         isDarkMode ? '' : ''
       ]"
@@ -279,13 +278,13 @@
               ? 'bg-gray-900 border-white/10 text-gray-200 shadow-md shadow-black/40'
               : 'bg-gray-100 border-gray-200 text-gray-800 shadow-sm',
             isIos
-              ? 'catalog-drawer-ios fixed left-0 top-0 z-50 h-full w-full max-w-sm overflow-y-auto pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] px-5 py-6 shadow-2xl'
+              ? 'catalog-drawer-ios fixed left-0 top-0 z-50 h-full w-full max-w-sm overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] px-5 py-6 shadow-2xl'
               : isSidebarCollapsed
                 ? 'lg:w-16 px-3 py-4'
                 : 'lg:w-72 xl:w-80 px-5 py-6'
           ]"
         >
-          <div :class="['flex items-center mb-6', isSidebarCollapsed && !isIos ? 'justify-center' : 'justify-between']">
+          <div :class="['flex items-center mb-6 flex-shrink-0', isSidebarCollapsed && !isIos ? 'justify-center' : 'justify-between']">
             <div v-show="!isSidebarCollapsed || isIos" class="flex-1">
               <h2 :class="['text-lg font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
                 Logbook Catalog
@@ -333,7 +332,11 @@
               </button>
             </div>
           </div>
-          <div v-show="!isSidebarCollapsed || isIos" class="space-y-6 flex-1">
+          <div
+            v-show="!isSidebarCollapsed || isIos"
+            :class="isIos ? 'catalog-drawer-ios-scroll flex-1 min-h-0 overflow-y-auto' : 'flex-1'"
+          >
+            <div class="space-y-6">
             <div
               v-for="section in catalogSections"
               :key="section.key"
@@ -395,7 +398,7 @@
 
                   <!-- Aircraft: family tree -->
                   <template v-if="section.key === 'aircraft'">
-                    <ul :class="['space-y-2 text-sm max-h-56 overflow-y-auto pr-1 font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+                    <ul :class="['space-y-2 text-sm pr-1 font-quicksand', !isIos && 'max-h-56 overflow-y-auto', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
                       <li v-for="fam in getFilteredAircraftFamilies()" :key="'fam-' + fam" class="space-y-1">
                         <div class="flex items-center justify-between">
                           <div class="flex items-center gap-2">
@@ -451,7 +454,8 @@
                   <template v-else>
                     <ul
                   :class="[
-                    'space-y-2 text-sm max-h-48 overflow-y-auto pr-1 font-quicksand',
+                    'space-y-2 text-sm pr-1 font-quicksand',
+                    !isIos && 'max-h-48 overflow-y-auto',
                     isDarkMode ? 'text-gray-300' : 'text-gray-700'
                   ]"
                 >
@@ -629,6 +633,7 @@
                     </button>
             </div>
           </div>
+            </div>
           </div>
           <div v-show="isSidebarCollapsed && !isIos" class="flex flex-col items-center gap-4">
             <Icon 
@@ -657,7 +662,7 @@
         </aside>
         </Transition>
 
-        <div class="flex-1 space-y-12 min-w-0 overflow-x-auto">
+        <div class="flex-1 space-y-12 min-w-0">
           <section class="text-center lg:text-left">
 
             <div class="space-y-6">
@@ -803,13 +808,15 @@
                     <!-- Decorative glow for Total Time -->
                     <div v-if="summaryField.key === 'totalTime'" class="absolute -right-6 -top-6 w-24 h-24 bg-blue-500/10 rounded-full blur-xl group-hover:bg-blue-500/20 transition-colors duration-500"></div>
                     
-                    <p :class="[
+                    <p
+                      :title="summaryField.label"
+                      :class="[
                       'text-xs uppercase tracking-wider font-semibold font-quicksand relative z-10',
                       summaryField.key === 'totalTime'
                         ? (isDarkMode ? 'text-blue-400' : 'text-blue-600')
                         : (isDarkMode ? 'text-gray-400' : 'text-gray-500')
                     ]">
-                      {{ summaryField.label }}
+                      {{ summaryField.cardLabel ?? summaryField.label }}
                     </p>
                     <p :class="[
                       'font-semibold font-quicksand mt-2 relative z-10',
@@ -848,13 +855,15 @@
                     ]"
                   >
                     <div v-if="summaryField.key === 'totalTime'" class="absolute -right-6 -top-6 w-24 h-24 bg-blue-500/10 rounded-full blur-xl group-hover:bg-blue-500/20 transition-colors duration-500"></div>
-                    <p :class="[
+                    <p
+                      :title="summaryField.label"
+                      :class="[
                       'text-xs uppercase tracking-wider font-semibold font-quicksand relative z-10',
                       summaryField.key === 'totalTime'
                         ? (isDarkMode ? 'text-blue-400' : 'text-blue-600')
                         : (isDarkMode ? 'text-gray-400' : 'text-gray-500')
                     ]">
-                      {{ summaryField.label }}
+                      {{ summaryField.cardLabel ?? summaryField.label }}
                     </p>
                     <p :class="[
                       'font-semibold font-quicksand mt-2 relative z-10',
@@ -1036,120 +1045,17 @@
                 Sorted by most recent entry date.
               </span>
             </div>
-              <!-- Floating Settings Button Above DATE Column -->
-              <div 
-                v-if="filteredEntries.length > 0 && visibleColumns.find(c => c.key === 'date')"
-                class="relative column-settings-container"
-              >
-                <button
-                  type="button"
-                  @click.stop="showColumnSettings = !showColumnSettings"
-                  :class="[
-                    'p-1.5 rounded transition-colors',
-                    isDarkMode 
-                      ? 'hover:bg-white/10 text-gray-400 hover:text-gray-300 bg-white/5 border border-white/10 shadow-sm shadow-black/20' 
-                      : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700 bg-gray-100'
-                  ]"
-                  aria-label="Column settings"
-                >
-                  <Icon name="ri:settings-3-line" size="16" />
-                </button>
-                <!-- Column Settings Dropdown -->
-                <div
-                  v-if="showColumnSettings"
-                  :class="[
-                    'absolute right-0 top-full mt-2 w-80 rounded-xl border shadow-2xl p-4 z-50',
-                    isDarkMode 
-                  ? 'bg-gray-900 border-white/10 shadow-xl shadow-black/50' 
-                  : 'bg-white border-gray-200'
-                  ]"
-                  @click.stop
-                >
-                  <div class="flex items-center justify-between mb-4">
-                    <h3 :class="['font-semibold font-quicksand text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
-                      Column Settings
-                    </h3>
-                    <button
-                      @click="showColumnSettings = false"
-                      :class="['hover:opacity-70 transition-opacity', isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700']"
-                      aria-label="Close column settings"
-                    >
-                      <Icon name="ri:close-line" size="20" />
-                    </button>
-                  </div>
-                  <div class="space-y-2 max-h-96 overflow-y-auto">
-                    <div
-                      v-for="col in columnConfig.sort((a, b) => a.order - b.order)"
-                      :key="col.key"
-                      :draggable="true"
-                      @dragstart="draggedColumnKey = col.key"
-                      @dragover.prevent
-                      @drop.prevent="handleColumnDrop(col.key)"
-                      :class="[
-                        'flex items-center gap-3 p-2 rounded-lg cursor-move transition-colors',
-                        draggedColumnKey === col.key 
-                          ? (isDarkMode ? 'bg-gray-700 opacity-50' : 'bg-gray-200 opacity-50')
-                          : (isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-200')
-                      ]"
-                    >
-                      <Icon 
-                        name="ri:drag-move-2-line" 
-                        size="16" 
-                        :class="[isDarkMode ? 'text-gray-500' : 'text-gray-400']"
-                      />
-                      <label
-                        :class="[
-                          'flex-1 flex items-center gap-2 cursor-pointer',
-                          col.required ? 'opacity-60' : ''
-                        ]"
-                      >
-                        <input
-                          type="checkbox"
-                          :checked="col.visible"
-                          :disabled="col.required"
-                          @change="toggleColumnVisibility(col.key)"
-                          :class="[
-                            'h-4 w-4 rounded border transition-colors',
-                            isDarkMode 
-                              ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' 
-                              : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500'
-                          ]"
-                        />
-                        <span :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
-                          {{ col.label }}
-                          <span v-if="col.required" :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']">(required)</span>
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-                  <div class="mt-4 pt-4 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
-                    <div class="flex flex-col gap-2">
-                      <button
-                        @click="resetColumnWidths()"
-                        :class="[
-                          'w-full px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
-                          isDarkMode 
-                            ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' 
-                            : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                        ]"
-                      >
-                        Reset Column Widths
-                      </button>
-                      <button
-                        @click="resetColumnConfig()"
-                        :class="[
-                          'w-full px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
-                          isDarkMode 
-                            ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' 
-                            : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                        ]"
-                      >
-                        Reset to Defaults
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <button
+              v-if="filteredEntries.length > 0"
+              type="button"
+              :class="[
+                'mt-4 text-xs font-quicksand underline-offset-2 hover:underline transition-colors',
+                isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-700 hover:text-blue-800',
+              ]"
+              @click="openEntryCardPreferences"
+            >
+              Customize entry cards in Settings →
+            </button>
           </div>
 
             <div
@@ -1172,222 +1078,18 @@
               </template>
           </div>
 
-            <div
+            <LogEntryList
               v-else
-              ref="tableContainerRef"
-                      :class="[
-                'mt-6 rounded-2xl border transition-colors duration-300 relative overflow-x-auto',
-                        isDarkMode 
-    ? 'border-gray-700' 
-    : 'border-gray-300 shadow-sm'
-              ]"
-            >
-              <table 
-                ref="tableRef"
-                :class="[
-                  'w-full divide-y text-left font-quicksand',
-                  isDarkMode 
-                    ? 'divide-white/10 bg-gray-900 border-white/10 shadow-md shadow-black/40' 
-                      : 'divide-gray-200 bg-gray-100'
-                ]" 
-                style="table-layout: fixed; width: 100%;"
-              >
-                <thead 
-                  ref="tableHeaderRef"
-                  :class="[
-                    'uppercase text-xs font-semibold tracking-wider font-quicksand z-20',
-                    isDarkMode 
-                      ? 'bg-gray-900 text-gray-400 border-b border-white/10 shadow-md shadow-black/40' 
-                      : 'bg-gray-100 text-gray-500 border-b border-gray-200'
-                  ]"
-                >
-                  <tr>
-                    <th 
-                      v-for="col in visibleColumns" 
-                      :key="col.key"
-                      :class="[
-                        'font-medium relative group',
-                        getHeaderTextAlign(col),
-                        col.responsiveClass || '',
-                        ...getColumnPadding(col)
-                      ]"
-                      :style="col.width ? `width: ${col.width}px;` : ''"
-                    >
-                      {{ col.label }}
-                      <!-- Resize handle -->
-                      <div
-                        class="absolute top-0 right-0 h-full w-1 cursor-col-resize opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                        :class="isDarkMode ? 'hover:bg-blue-500' : 'hover:bg-blue-600'"
-                        @mousedown.prevent="startResize(col.key, $event)"
-                        style="margin-right: -2px;"
-                      ></div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody :class="[
-                  'divide-y text-sm font-quicksand',
-                  isDarkMode 
-                    ? 'divide-gray-700 bg-gray-900 text-gray-300' 
-                    : 'divide-gray-200 bg-gray-100 text-gray-600'
-                ]">
-                  <template v-for="entry in filteredEntries" :key="entry.id">
-                  <tr
-                    :class="[
-                      'transition-all duration-200 border-l-4',
-                      entry.flagged
-                        ? (isDarkMode 
-                          ? 'bg-amber-900/20 border-l-amber-500 hover:bg-amber-900/30' 
-                          : 'bg-amber-50 border-l-amber-500 hover:bg-amber-100')
-                        : (isDarkMode 
-                          ? 'hover:bg-white/10 border-transparent hover:border-blue-500/50' 
-                          : 'hover:bg-gray-200 border-transparent hover:border-blue-500')
-                    ]"
-                      class="cursor-pointer"
-                      @click="beginInlineEditing(entry)"
-                  >
-                    <td 
-                      v-for="col in visibleColumns"
-                      :key="col.key"
-                      :class="[...getCellClasses(col), getCellTextColor(col)]"
-                      :style="col.width ? `width: ${col.width}px;` : ''"
-                    >
-                      <!-- Date Column -->
-                      <template v-if="col.key === 'date'">
-                        <div>
-                        <div :class="['font-semibold text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
-                          {{ formatDisplayDate(entry.date) }}
-                        </div>
-                        <div :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                          {{ roleDisplayLabel(entry.role) }}
-                          </div>
-                        </div>
-                      </template>
-                      <!-- Aircraft Column -->
-                      <template v-else-if="col.key === 'aircraft'">
-                        <div :class="['text-sm truncate', isDarkMode ? 'text-gray-200' : 'text-gray-900']">{{ entry.aircraftMakeModel }}</div>
-                        <div :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                          {{ entry.aircraftCategoryClass }}
-                        </div>
-                      </template>
-                      <!-- Identification Column -->
-                      <template v-else-if="col.key === 'identification'">
-                        {{ entry.registration }}
-                      </template>
-                      <!-- Flight Number Column -->
-                      <template v-else-if="col.key === 'flightNumber'">
-                        {{ entry.flightNumber || '—' }}
-                      </template>
-                      <!-- From → To Column -->
-                      <template v-else-if="col.key === 'fromTo'">
-                        <div :class="['font-semibold text-sm truncate', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                          {{ entry.departure }} → {{ entry.destination }}
-                        </div>
-                        <div v-if="entry.route" :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                          {{ entry.route }}
-                        </div>
-                      </template>
-                      <!-- Conditions Column -->
-                      <template v-else-if="col.key === 'conditions'">
-                        <div class="flex flex-wrap gap-1">
-                          <span
-                            v-for="condition in getDisplayConditions(entry)"
-                            :key="`${entry.id}-${condition}`"
-                            :class="[
-                              'rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold border',
-                              isDarkMode 
-                                ? 'bg-gray-900 border-white/10 text-gray-300 shadow-md shadow-black/40' 
-                                : 'bg-gray-100 border-gray-200 text-gray-600'
-                            ]"
-                          >
-                            {{ condition }}
-                          </span>
-                          <span
-                            :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']"
-                            v-if="getDisplayConditions(entry).length === 0"
-                          >
-                            —
-                          </span>
-                        </div>
-                      </template>
-                      <!-- Remarks Column -->
-                      <template v-else-if="col.key === 'remarks'">
-                        <div class="whitespace-normal break-words">{{ entry.remarks || '—' }}</div>
-                      </template>
-                      <!-- PIC Column -->
-                      <template v-else-if="col.key === 'pic'">
-                        {{ formatNumber(entry.flightTime.pic) }}
-                      </template>
-                      <!-- SIC Column -->
-                      <template v-else-if="col.key === 'sic'">
-                        {{ formatNumber(entry.flightTime.sic) }}
-                      </template>
-                      <!-- Dual R Column -->
-                      <template v-else-if="col.key === 'dualR'">
-                        {{ formatNumber(entry.flightTime.dual) }}
-                      </template>
-                      <!-- Solo Column -->
-                      <template v-else-if="col.key === 'solo'">
-                        {{ formatNumber(entry.flightTime.solo) }}
-                      </template>
-                      <!-- Night Column -->
-                      <template v-else-if="col.key === 'night'">
-                        {{ formatNumber(entry.flightTime.night) }}
-                      </template>
-                      <!-- Actual Column -->
-                      <template v-else-if="col.key === 'actual'">
-                        {{ formatNumber(entry.flightTime.actualInstrument) }}
-                      </template>
-                      <!-- Hood Column -->
-                      <template v-else-if="col.key === 'hood'">
-                        {{ formatNumber(entry.flightTime.simulatedInstrument) }}
-                      </template>
-                      <!-- Dual G Column -->
-                      <template v-else-if="col.key === 'dualG'">
-                        {{ formatNumber(entry.flightTime.dualGiven) }}
-                      </template>
-                      <!-- XC Column -->
-                      <template v-else-if="col.key === 'xc'">
-                        {{ formatNumber(entry.flightTime.crossCountry) }}
-                      </template>
-                      <!-- Day Landings Column -->
-                      <template v-else-if="col.key === 'dayLandings'">
-                        {{ entry.performance.dayLandings ?? '—' }}
-                      </template>
-                      <!-- Night Landings Column -->
-                      <template v-else-if="col.key === 'nightLandings'">
-                        {{ entry.performance.nightLandings ?? '—' }}
-                      </template>
-                      <!-- Approach Column -->
-                      <template v-else-if="col.key === 'approach'">
-                        {{ getTotalApproachCount(entry.performance) || '—' }}
-                      </template>
-                      <!-- Pilots Column -->
-                      <template v-else-if="col.key === 'pilots'">
-                        <div class="truncate">{{ entry.trainingElements || '—' }}</div>
-                      </template>
-                      <!-- Total Column -->
-                      <template v-else-if="col.key === 'total'">
-                        <span :class="[
-                          entry.importSource === 'fc_view'
-                            ? (isDarkMode ? 'text-amber-400' : 'text-amber-600')
-                            : entry.importSource === 'logbook_builder'
-                            ? (isDarkMode ? 'text-green-400' : 'text-green-600')
-                            : entry.isImported && entry.importSource !== 'localStorage'
-                              ? (isDarkMode ? 'text-red-400' : 'text-red-600')
-                              : (isDarkMode ? 'text-blue-400' : 'text-blue-600')
-                        ]">
-                          {{ formatNumber(entry.flightTime.total) }}
-                        </span>
-                      </template>
-                    </td>
-                    </tr>
-                  </template>
-                </tbody>
-              </table>
-            </div>
+              :entries="filteredEntries"
+              :is-dark-mode="isDarkMode"
+              :visible-detail-fields="visibleDetailFields"
+              :show-remarks-footer="showRemarksFooter"
+              @select="beginInlineEditing"
+            />
       </div>
     </div>
     </main>
+    </div>
 
     <!-- Backdrop Overlay for Edit Panel -->
     <Transition name="fade">
@@ -3268,12 +2970,14 @@
     <DashboardSettingsModal
       v-if="showSettingsModal"
       :open="showSettingsModal"
-      :active-tab="activeSettingsTab"
+      :stack="settingsStack"
       :is-dark-mode="isDarkMode"
       :profile="pilotProfile"
+      :profile-preview="settingsProfilePreview"
       v-model:profile-sub-tab="pilotProfileSubTab"
       v-model:show8710="show8710Fields"
       :initials="pilotInitials"
+      :updates-badge="settingsUpdatesBadge"
       :stat-cards="pilotStatCards"
       :profile-stats="settingsProfileStats"
       :currency-summary="settingsCurrencySummary"
@@ -3303,9 +3007,10 @@
       :queue-length="queueLength"
       :is-drag-over-import="isDragOverImport"
       :entry-count="logEntries.length"
-      @close="showSettingsModal = false"
+      @close="closeSettings"
       @logout="handleLogout"
-      @update:active-tab="activeSettingsTab = $event"
+      @pop="popSettingsFrame"
+      @push="pushSettingsFrame"
       @open-currency="showCurrencyDashboard = true"
       @update-email="handleUpdateEmail"
       @update-password="handleUpdatePassword"
@@ -3313,14 +3018,24 @@
       @set-clock-format="setClockFormat"
       @set-clock-zone="setClockZone"
       @toggle-metric="toggleTotalsMetric"
+      :entry-card-presets="entryCardPresets"
+      :active-entry-card-preset-id="activePresetId"
+      :entry-card-picker-fields="pickerFields"
+      :entry-card-detail-crowded="detailFieldCrowded"
+      @apply-entry-card-preset="applyPreset"
+      @toggle-entry-card-field="toggleColumnVisibility"
+      @entry-card-drag-start="onEntryCardDragStart"
+      @entry-card-drop="handleColumnDrop"
+      @entry-card-move-up="(key) => moveColumn(key, 'up')"
+      @entry-card-move-down="(key) => moveColumn(key, 'down')"
+      @reset-entry-card="resetColumnConfig"
       @retry-sync="retryFailed()"
       @sync-now="refreshDashboardData()"
       @import-dragover="handleImportDragOver"
       @import-dragenter="handleImportDragEnter"
       @import-dragleave="handleImportDragLeave"
       @import-drop="handleImportDrop"
-      @browse-csv="() => csvFileInput?.click()"
-      @browse-json="() => jsonFileInput?.click()"
+      @import-file="handleSettingsImportFile"
       @export-logbook="openExportDialog"
       @generate-8710="showForm8710Modal = true"
     />
@@ -5405,7 +5120,6 @@ import {
   createEmptyFlightTime,
   createEmptyPerformance,
   createEmptyOOOI,
-  DEFAULT_COLUMN_CONFIG,
   getApproachesFromPerformance,
   getTotalApproachCount
 } from '../utils/logbookTypes'
@@ -5415,7 +5129,6 @@ import type {
   FlightTimeBreakdown,
   FlightTimeKey,
   LogEntry,
-  LogbookColumnConfig,
   LogbookColumnKey,
   OOOITimes,
   PerformanceKey,
@@ -5446,15 +5159,17 @@ import { useCurrency } from '../composables/useCurrency'
 import { useCapacitorPlatform } from '../composables/useCapacitorPlatform'
 import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGestures'
 import { usePullToRefresh } from '../composables/usePullToRefresh'
+import { useEntryCardConfig } from '../composables/useEntryCardConfig'
 import AuthModal from '../components/AuthModal.vue'
 import AuditTrail from '../components/AuditTrail.vue'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
 import ComplianceChecklist from '../components/ComplianceChecklist.vue'
 import CurrencyDashboard from '../components/CurrencyDashboard.vue'
 import DashboardSettingsModal from '../components/settings/DashboardSettingsModal.vue'
+import LogEntryList from '../components/logbook/LogEntryList.vue'
 import ProductUpdateHeadline from '../components/ProductUpdateHeadline.vue'
 import { useProductUpdates } from '../composables/useProductUpdates'
-import type { SettingsTabId } from '../components/settings/settingsNav'
+import type { SettingsStackFrame, SettingsTabId } from '../components/settings/settingsNav'
 import FcvApiDisclaimers from '../components/fcv/FcvApiDisclaimers.vue'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '../utils/migrateLocalStorage'
 import { findDuplicateEntries, checkDuplicatesInDatabase } from '../utils/duplicateDetection'
@@ -5673,7 +5388,7 @@ const { validateEntry: validateFlightTimeEntry, validationErrors, validationWarn
 // Offline support
 const { isOnline, isSyncing, syncProgress, updateSyncProgress, checkOnlineStatus } = useOffline()
 const { showToast } = useToast()
-const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync, retryFailed } = useSyncQueue()
+const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync, retryFailed, refreshQueueLength } = useSyncQueue()
 
 // Currency tracking
 const {
@@ -5716,9 +5431,28 @@ const showRegulatorySnapshot = ref(true)
 function dismissSnapshot() {
   showRegulatorySnapshot.value = false
 }
-function openSettingsUpdates() {
-  activeSettingsTab.value = 'updates'
+function openSettings(tab?: SettingsTabId) {
+  settingsStack.value = tab ? ['root', tab] : ['root']
   showSettingsModal.value = true
+}
+
+function openSettingsUpdates() {
+  openSettings('updates')
+}
+
+function pushSettingsFrame(frame: SettingsStackFrame) {
+  settingsStack.value = [...settingsStack.value, frame]
+}
+
+function popSettingsFrame() {
+  if (settingsStack.value.length > 1) {
+    settingsStack.value = settingsStack.value.slice(0, -1)
+  }
+}
+
+function closeSettings() {
+  showSettingsModal.value = false
+  settingsStack.value = ['root']
 }
 const isMigrating = ref(false)
 const migrationProgress = ref({ step: '', current: 0, total: 0 })
@@ -5760,7 +5494,7 @@ const { isIos } = useCapacitorPlatform()
 const handleLogout = async () => {
   await authSignOut()
   logEntries.value = []
-  showSettingsModal.value = false
+  closeSettings()
   dashboardFcvConnected.value = false
   showFcvFetchPanel.value = false
   if (isIos.value) {
@@ -5869,15 +5603,24 @@ onMounted(async () => {
     window.addEventListener('scroll', handleScroll, { passive: true })
     // Check initial scroll position
     handleScroll()
+
+    document.addEventListener('visibilitychange', handleAppResume)
   } catch (error) {
     console.error('[App] Failed to initialize IndexedDB:', error)
   }
 })
 
+function handleAppResume(): void {
+  if (document.visibilityState !== 'visible') return
+  if (!isAuthenticated.value || !user.value || isProcessing.value || !isOnline.value) return
+  void processQueue({ silent: true })
+}
+
 // Cleanup scroll event listener on unmount
 onUnmounted(() => {
   if (isBrowser) {
     window.removeEventListener('scroll', handleScroll)
+    document.removeEventListener('visibilitychange', handleAppResume)
     if (isIos.value) {
       setIosOverlayScrollLock(false)
       window.removeEventListener('keydown', handleIosOverlayEscape)
@@ -5885,10 +5628,10 @@ onUnmounted(() => {
   }
 })
 
-// Watch for online status changes to trigger sync
-watch(isOnline, (online) => {
-  if (online && isAuthenticated.value && user.value) {
-    void refreshDashboardData()
+// Reconnect: drain outbound queue only (no full reload)
+watch(isOnline, (online, wasOnline) => {
+  if (online && !wasOnline && isAuthenticated.value && user.value) {
+    void processQueue({ silent: true })
   }
 })
 
@@ -6328,12 +6071,14 @@ type TotalsMetricKey =
   | 'ftd'
   | 'atd'
 
-const availableTotalsMetrics: readonly { key: TotalsMetricKey; label: string }[] = [
+type TotalsMetric = { key: TotalsMetricKey; label: string; cardLabel?: string }
+
+const availableTotalsMetrics: readonly TotalsMetric[] = [
   { key: 'totalTime', label: 'Total Time (hrs)' },
   { key: 'soloTime', label: 'Solo Time (hrs)' },
   { key: 'picTime', label: 'PIC Time (hrs)' },
   { key: 'nightTime', label: 'Night Time (hrs)' },
-  { key: 'instrumentTime', label: 'Instrument Time (hrs)' },
+  { key: 'instrumentTime', label: 'Instrument Time (hrs)', cardLabel: 'Instrument (hrs)' },
   { key: 'crossCountry', label: 'Cross Country (hrs)' },
   { key: 'dualGiven', label: 'Dual Given (hrs)' },
   { key: 'sic', label: 'SIC (hrs)' },
@@ -6345,9 +6090,9 @@ const availableTotalsMetrics: readonly { key: TotalsMetricKey; label: string }[]
 ] as const
 
 // Fixed metrics for Simulator Totals Overview (simpler than Flight)
-const simOverviewFields: readonly { key: TotalsMetricKey; label: string }[] = [
+const simOverviewFields: readonly TotalsMetric[] = [
   { key: 'totalTime', label: 'Total Time (hrs)' },
-  { key: 'instrumentTime', label: 'Instrument Time (hrs)' },
+  { key: 'instrumentTime', label: 'Instrument Time (hrs)', cardLabel: 'Instrument (hrs)' },
   { key: 'dualReceived', label: 'Dual Received (hrs)' }
 ]
 
@@ -6411,289 +6156,32 @@ function toggleTotalsMetric(key: TotalsMetricKey): void {
 const summaryFields = computed(() => {
   return selectedTotalsMetrics.value
     .map(key => availableTotalsMetrics.find(m => m.key === key))
-    .filter((m): m is { key: TotalsMetricKey; label: string } => m !== undefined)
+    .filter((m): m is TotalsMetric => m !== undefined)
 })
 
-// Column configuration for logbook table
-const COLUMN_CONFIG_STORAGE_KEY = 'logifi-logbook-columns'
-const columnConfig = ref<LogbookColumnConfig[]>(DEFAULT_COLUMN_CONFIG.map(c => ({ ...c })))
+// Entry card configuration (shared with Settings → Preferences)
+const {
+  activePresetId,
+  draggedColumnKey,
+  visibleDetailFields,
+  showRemarksFooter,
+  detailFieldCrowded,
+  pickerFields,
+  presets: entryCardPresets,
+  loadColumnConfig,
+  toggleColumnVisibility,
+  handleColumnDrop,
+  moveColumn,
+  resetColumnConfig,
+  applyPreset,
+} = useEntryCardConfig()
 
-// Load column configuration from localStorage
-function loadColumnConfig(): void {
-  if (!isBrowser) return
-  const saved = window.localStorage.getItem(COLUMN_CONFIG_STORAGE_KEY)
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved) as LogbookColumnConfig[]
-      // Validate the saved config and merge with defaults
-      if (Array.isArray(parsed)) {
-        // Start with defaults and merge saved values
-        const merged = DEFAULT_COLUMN_CONFIG.map(defaultCol => {
-          const savedCol = parsed.find(p => p.key === defaultCol.key)
-          if (savedCol) {
-            // Use saved values but ensure required fields match defaults
-            return {
-              ...savedCol,
-              required: defaultCol.required,
-              label: defaultCol.label,
-              responsiveClass: defaultCol.responsiveClass,
-              width: savedCol.width ?? defaultCol.width, // Preserve saved width or use default
-              visible: defaultCol.required ? true : savedCol.visible // Force required columns to be visible
-            }
-          }
-          // New column not in saved config, use default
-          return { ...defaultCol }
-        })
-        // Ensure required columns are visible
-        merged.forEach(col => {
-          if (col.required) col.visible = true
-        })
-        columnConfig.value = merged
-        saveColumnConfig() // Save merged config back to update localStorage with new columns
-        return
-      }
-    } catch {
-      // Invalid JSON, use defaults
-    }
-  }
-  columnConfig.value = DEFAULT_COLUMN_CONFIG.map(c => ({ ...c }))
+function openEntryCardPreferences(): void {
+  openSettings('preferences')
 }
 
-// Save column configuration to localStorage
-function saveColumnConfig(): void {
-  if (!isBrowser) return
-  window.localStorage.setItem(COLUMN_CONFIG_STORAGE_KEY, JSON.stringify(columnConfig.value))
-}
-
-// Computed: visible columns sorted by order
-const visibleColumns = computed(() => {
-  return columnConfig.value
-    .filter(col => col.visible)
-    .sort((a, b) => a.order - b.order)
-})
-
-// Toggle column visibility
-function toggleColumnVisibility(key: LogbookColumnKey): void {
-  const col = columnConfig.value.find(c => c.key === key)
-  if (!col || col.required) return // Can't hide required columns
-  
-  // Ensure at least one non-required column remains visible
-  const visibleNonRequired = columnConfig.value.filter(c => c.visible && !c.required)
-  if (visibleNonRequired.length === 1 && col.visible) {
-    // Can't hide the last visible non-required column
-    return
-  }
-  
-  col.visible = !col.visible
-  saveColumnConfig()
-}
-
-// Reorder columns
-function reorderColumns(draggedKey: LogbookColumnKey, targetOrder: number): void {
-  const draggedCol = columnConfig.value.find(c => c.key === draggedKey)
-  if (!draggedCol) return
-  
-  const currentOrder = draggedCol.order
-  
-  // Update orders
-  columnConfig.value.forEach(col => {
-    if (col.key === draggedKey) {
-      col.order = targetOrder
-    } else if (targetOrder < currentOrder) {
-      // Moving up: shift columns down
-      if (col.order >= targetOrder && col.order < currentOrder) {
-        col.order += 1
-      }
-    } else {
-      // Moving down: shift columns up
-      if (col.order > currentOrder && col.order <= targetOrder) {
-        col.order -= 1
-      }
-    }
-  })
-  
-  saveColumnConfig()
-}
-
-// Reset to defaults
-function resetColumnConfig(): void {
-  columnConfig.value = DEFAULT_COLUMN_CONFIG.map(c => ({ ...c }))
-  saveColumnConfig()
-}
-
-// Drag and drop state
-const draggedColumnKey = ref<LogbookColumnKey | null>(null)
-
-// Handle column drop for reordering
-function handleColumnDrop(targetKey: LogbookColumnKey): void {
-  if (!draggedColumnKey.value || draggedColumnKey.value === targetKey) {
-    draggedColumnKey.value = null
-    return
-  }
-  
-  const targetCol = columnConfig.value.find(c => c.key === targetKey)
-  if (!targetCol) {
-    draggedColumnKey.value = null
-    return
-  }
-  
-  reorderColumns(draggedColumnKey.value, targetCol.order)
-  draggedColumnKey.value = null
-}
-
-// Column resize state
-const resizingColumn = ref<LogbookColumnKey | null>(null)
-const resizeStartX = ref(0)
-const resizeStartWidth = ref(0)
-
-// Start column resize
-function startResize(columnKey: LogbookColumnKey, event: MouseEvent): void {
-  const col = columnConfig.value.find(c => c.key === columnKey)
-  if (!col) return
-  
-  resizingColumn.value = columnKey
-  resizeStartX.value = event.clientX
-  resizeStartWidth.value = col.width ?? 100
-  
-  document.addEventListener('mousemove', handleResize)
-  document.addEventListener('mouseup', stopResize)
-  event.preventDefault()
-}
-
-// Handle resize during drag
-function handleResize(event: MouseEvent): void {
-  if (!resizingColumn.value) return
-  
-  const col = columnConfig.value.find(c => c.key === resizingColumn.value)
-  if (!col) return
-  
-  const deltaX = event.clientX - resizeStartX.value
-  const newWidth = Math.max(50, resizeStartWidth.value + deltaX) // Minimum width of 50px
-  
-  col.width = newWidth
-}
-
-// Stop resize
-function stopResize(): void {
-  if (resizingColumn.value) {
-    saveColumnConfig()
-  }
-  resizingColumn.value = null
-  document.removeEventListener('mousemove', handleResize)
-  document.removeEventListener('mouseup', stopResize)
-}
-
-// Reset column widths to defaults
-function resetColumnWidths(): void {
-  columnConfig.value.forEach(col => {
-    const defaultCol = DEFAULT_COLUMN_CONFIG.find(d => d.key === col.key)
-    if (defaultCol && defaultCol.width) {
-      col.width = defaultCol.width
-    }
-  })
-  saveColumnConfig()
-}
-
-// Helper function to get padding classes for headers and cells (must match)
-function getColumnPadding(col: LogbookColumnConfig): string[] {
-  switch (col.key) {
-    case 'date':
-    case 'total':
-      return ['px-3', 'py-3']
-    default:
-      return ['px-2', 'py-3']
-  }
-}
-
-// Helper function to get text alignment for headers (must match cells)
-function getHeaderTextAlign(col: LogbookColumnConfig): string {
-  // Right-align numeric columns to match cell alignment
-  switch (col.key) {
-    case 'total':
-    case 'pic':
-    case 'sic':
-    case 'dualR':
-    case 'solo':
-    case 'night':
-    case 'actual':
-    case 'hood':
-    case 'dualG':
-    case 'xc':
-    case 'dayLandings':
-    case 'nightLandings':
-    case 'approach':
-      return 'text-right'
-    default:
-      return ''
-  }
-}
-
-// Helper function to get cell classes for a column
-function getCellClasses(col: LogbookColumnConfig): string[] {
-  const baseClasses = ['align-top']
-  const padding = getColumnPadding(col)
-  if (col.responsiveClass) {
-    baseClasses.push(col.responsiveClass)
-  }
-  
-  switch (col.key) {
-    case 'date':
-      return [...padding, ...baseClasses]
-    case 'total':
-      return [...padding, 'text-right', 'font-bold', 'font-mono', ...baseClasses]
-    case 'identification':
-      return [...padding, 'uppercase', 'font-mono', 'text-xs', 'tracking-wide', ...baseClasses]
-    case 'flightNumber':
-      return [...padding, 'uppercase', 'font-mono', 'text-xs', ...baseClasses]
-    case 'remarks':
-      return [...padding, 'text-sm', 'italic', ...baseClasses]
-    case 'pic':
-    case 'sic':
-    case 'dualR':
-    case 'solo':
-    case 'night':
-    case 'actual':
-    case 'hood':
-    case 'dualG':
-    case 'xc':
-    case 'dayLandings':
-    case 'nightLandings':
-    case 'approach':
-      return [...padding, 'text-right', 'font-mono', 'text-sm', ...baseClasses]
-    case 'pilots':
-      return [...padding, 'text-sm', ...baseClasses]
-    default:
-      return [...padding, ...baseClasses]
-  }
-}
-
-// Helper function to get cell text color classes
-function getCellTextColor(col: LogbookColumnConfig): string {
-  switch (col.key) {
-    case 'total':
-      return isDarkMode.value ? 'text-blue-400' : 'text-blue-600'
-    case 'identification':
-    case 'flightNumber':
-      return isDarkMode.value ? 'text-gray-300' : 'text-gray-700'
-    case 'remarks':
-      return isDarkMode.value ? 'text-gray-400' : 'text-gray-500'
-    case 'pic':
-    case 'sic':
-    case 'dualR':
-    case 'solo':
-    case 'night':
-    case 'actual':
-    case 'hood':
-    case 'dualG':
-    case 'xc':
-    case 'dayLandings':
-    case 'nightLandings':
-    case 'approach':
-    case 'pilots':
-      return isDarkMode.value ? 'text-gray-300' : 'text-gray-700'
-    default:
-      return ''
-  }
+function onEntryCardDragStart(key: LogbookColumnKey): void {
+  draggedColumnKey.value = key
 }
 
 const catalogSections = [
@@ -6770,9 +6258,6 @@ function toggleCommercialMode(): void {
 // Sticky header refs
 const rootScrollContainerRef = ref<HTMLElement | null>(null)
 const fcvFetchSectionRef = ref<HTMLElement | null>(null)
-const tableHeaderRef = ref<HTMLElement | null>(null)
-const tableContainerRef = ref<HTMLElement | null>(null)
-const tableRef = ref<HTMLTableElement | null>(null)
 const showScrollToTop = ref(false)
 const handleScroll = (): void => {
   if (!isBrowser) return
@@ -6956,7 +6441,6 @@ async function saveInlineEdit(): Promise<void> {
         await updateEntryInIndexedDB(updatedEntry)
         const queueEntry = { ...dbEntry, id: targetId, user_id: user.value.id }
         await addToQueue('insert', targetId, queueEntry)
-        if (isOnline.value) processQueue()
         logEntries.value = sortEntriesByDateAndOOOI(
           logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
         )
@@ -6985,7 +6469,6 @@ async function saveInlineEdit(): Promise<void> {
         console.log('[SaveInlineEdit] Update returned 0 rows, saving to IndexedDB and queueing for sync')
         await updateEntryInIndexedDB(updatedEntry)
         await addToQueue('update', targetId, dbEntry)
-        if (isOnline.value) processQueue()
         logEntries.value = sortEntriesByDateAndOOOI(
           logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
         )
@@ -7228,19 +6711,28 @@ const catalogDrawerRef = ref<HTMLElement | null>(null)
 const entryFormDrawerRef = ref<HTMLElement | null>(null)
 const editEntryDrawerRef = ref<HTMLElement | null>(null)
 const showSettingsModal = ref(false)
-const activeSettingsTab = ref<SettingsTabId>('profile')
+const settingsStack = ref<SettingsStackFrame[]>(['root'])
 /** Sub-panes inside Settings → Pilot Profile (full-width each). */
 const pilotProfileSubTab = ref<'profile' | 'stats'>('profile')
 const show8710Fields = ref(false)
-watch(activeSettingsTab, (tab) => {
-  if (tab === 'profile') pilotProfileSubTab.value = 'profile'
+
+const settingsProfilePreview = computed(() => ({
+  name: pilotProfile.name,
+  callsign: pilotProfile.callsign,
+  initials: getPilotInitialsFromName(pilotProfile.name),
+}))
+
+const settingsUpdatesBadge = computed(() => (showLatestBanner.value ? 'New' : undefined))
+
+watch(settingsStack, (stack) => {
+  const current = stack[stack.length - 1]
+  if (current === 'profile') pilotProfileSubTab.value = 'profile'
 })
 
 const MIN_PASSWORD_LENGTH = 8
 const showImportSection = ref(true)
 const showExportSection = ref(true)
 const showIdentDropdown = ref(false)
-const showColumnSettings = ref(false)
 const showInlineIdentDropdown = ref(false)
 const showAuditTrail = ref(false)
 const auditTrailEntryId = ref<string | null>(null)
@@ -9627,6 +9119,18 @@ async function handleImportDrop(event: DragEvent): Promise<void> {
   }
 }
 
+async function handleSettingsImportFile(file: File): Promise<void> {
+  const fileName = file.name.toLowerCase()
+
+  if (fileName.endsWith('.csv') || fileName.endsWith('.txt') || file.type === 'text/csv' || file.type === 'text/plain') {
+    await processCSVFile(file)
+  } else if (fileName.endsWith('.json') || file.type === 'application/json') {
+    await processJSONFile(file)
+  } else {
+    alert(`Please choose a CSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`)
+  }
+}
+
 function loadPilotProfilePrefs(): void {
   if (!isBrowser) return
   try {
@@ -10624,9 +10128,17 @@ const pullToRefreshDisabled = computed(
     isDashboardRefreshing.value
 )
 
-const { pullDistance, isRefreshing: isPullRefreshing } = usePullToRefresh({
+const { pullDistance, isPulling, isRefreshing: isPullRefreshing } = usePullToRefresh({
   onRefresh: refreshDashboardData,
   disabled: pullToRefreshDisabled,
+  scrollContainerRef: rootScrollContainerRef,
+})
+
+const pullTransformStyle = computed(() => {
+  if (!isIos.value) return {}
+  const y = isPullRefreshing.value ? 70 : pullDistance.value
+  const transition = isPulling.value ? 'none' : 'transform 0.25s ease-out'
+  return { transform: `translateY(${y}px)`, transition }
 })
 
 // Helpers to extract keys for filters
@@ -12469,11 +11981,6 @@ async function submitEntry(): Promise<void> {
         // For inserts, include the UUID so Supabase uses it
         await addToQueue('insert', entryId, dbEntry)
       }
-
-      // If online, try immediate sync
-      if (isOnline.value) {
-        processQueue()
-      }
     }
 
     // Show success toast and close form
@@ -12896,10 +12403,13 @@ async function refreshDashboardData(): Promise<void> {
       return
     }
 
+    await refreshQueueLength()
+    const queueBefore = queueLength.value
     const countBefore = logEntries.value.length
 
     await loadEntries()
     await processQueue()
+    await refreshQueueLength()
     await fetchEntityTags()
     await fetchUserTagPresets()
     await loadPilotProfileFromSupabase()
@@ -12910,9 +12420,12 @@ async function refreshDashboardData(): Promise<void> {
     }
 
     const added = logEntries.value.length - countBefore
+    const queueCleared = queueBefore > 0 && queueLength.value === 0
     if (added > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 300))
       showToast(`Synced — ${added} new ${added === 1 ? 'entry' : 'entries'}`)
-    } else {
+    } else if (queueCleared) {
+      await new Promise((resolve) => setTimeout(resolve, 300))
       showToast('Synced')
     }
   } catch (err) {
@@ -13275,9 +12788,6 @@ onMounted(async () => {
   const handleClickOutside = (event: MouseEvent) => {
     const target = event.target as HTMLElement
 
-    if (showColumnSettings.value && !target.closest('.column-settings-container')) {
-      showColumnSettings.value = false
-    }
     // Close context menu when clicking outside
     if (contextMenuVisible.value && !target.closest('.context-menu-container')) {
       closeContextMenu()
@@ -14514,6 +14024,10 @@ function getDisplayConditions(entry: LogEntry): string[] {
   overflow-x: hidden;
   min-width: 0;
   max-width: 100%;
+}
+
+.catalog-drawer-ios-scroll {
+  -webkit-overflow-scrolling: touch;
 }
 
 .catalog-drawer-ios input[type='text'] {
