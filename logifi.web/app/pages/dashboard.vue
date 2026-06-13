@@ -200,7 +200,8 @@
 
     <main
       :class="[
-        'min-h-screen flex flex-col px-4 sm:px-6 lg:px-8 transition-colors duration-300 overflow-x-hidden',
+        'min-h-screen flex flex-col px-4 sm:px-6 lg:px-8 transition-colors duration-300',
+        isIos ? 'overflow-x-hidden' : 'overflow-x-auto',
         isIos
           ? 'pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))]'
           : 'pt-40 pb-20',
@@ -663,7 +664,7 @@
           </Transition>
         </Teleport>
 
-        <div class="flex-1 space-y-12 min-w-0">
+        <div :class="['flex-1 space-y-12 min-w-0', isIos ? '' : 'overflow-x-auto']">
           <section class="text-center lg:text-left">
 
             <div class="space-y-6">
@@ -1047,7 +1048,7 @@
               </span>
             </div>
             <button
-              v-if="filteredEntries.length > 0"
+              v-if="isIos && filteredEntries.length > 0"
               type="button"
               :class="[
                 'mt-4 text-xs font-quicksand underline-offset-2 hover:underline transition-colors',
@@ -1080,13 +1081,208 @@
           </div>
 
             <LogEntryList
-              v-else
+              v-else-if="isIos"
               :entries="filteredEntries"
               :is-dark-mode="isDarkMode"
               :visible-detail-fields="visibleDetailFields"
               :show-remarks-footer="showRemarksFooter"
               @select="beginInlineEditing"
             />
+
+            <div
+              v-else
+              ref="tableContainerRef"
+              :class="[
+                'mt-6 rounded-2xl border transition-colors duration-300 relative overflow-x-auto',
+                isDarkMode
+                  ? 'border-gray-700'
+                  : 'border-gray-300 shadow-sm'
+              ]"
+            >
+              <table
+                ref="tableRef"
+                :class="[
+                  'w-full divide-y text-left font-quicksand',
+                  isDarkMode
+                    ? 'divide-white/10 bg-gray-900 border-white/10 shadow-md shadow-black/40'
+                    : 'divide-gray-200 bg-gray-100'
+                ]"
+                style="table-layout: fixed; width: 100%;"
+              >
+                <thead
+                  ref="tableHeaderRef"
+                  :class="[
+                    'uppercase text-xs font-semibold tracking-wider font-quicksand z-20',
+                    isDarkMode
+                      ? 'bg-gray-900 text-gray-400 border-b border-white/10 shadow-md shadow-black/40'
+                      : 'bg-gray-100 text-gray-500 border-b border-gray-200'
+                  ]"
+                >
+                  <tr>
+                    <th
+                      v-for="col in visibleColumns"
+                      :key="col.key"
+                      :class="[
+                        'font-medium relative group',
+                        getHeaderTextAlign(col),
+                        col.responsiveClass || '',
+                        ...getColumnPadding(col)
+                      ]"
+                      :style="col.width ? `width: ${col.width}px;` : ''"
+                    >
+                      {{ col.label }}
+                      <div
+                        class="absolute top-0 right-0 h-full w-1 cursor-col-resize opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                        :class="isDarkMode ? 'hover:bg-blue-500' : 'hover:bg-blue-600'"
+                        @mousedown.prevent="startResize(col.key, $event)"
+                        style="margin-right: -2px;"
+                      />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody
+                  :class="[
+                    'divide-y text-sm font-quicksand',
+                    isDarkMode
+                      ? 'divide-gray-700 bg-gray-900 text-gray-300'
+                      : 'divide-gray-200 bg-gray-100 text-gray-600'
+                  ]"
+                >
+                  <template v-for="entry in filteredEntries" :key="entry.id">
+                    <tr
+                      :class="[
+                        'transition-all duration-200 border-l-4 cursor-pointer',
+                        entry.flagged
+                          ? (isDarkMode
+                            ? 'bg-amber-900/20 border-l-amber-500 hover:bg-amber-900/30'
+                            : 'bg-amber-50 border-l-amber-500 hover:bg-amber-100')
+                          : (isDarkMode
+                            ? 'hover:bg-white/10 border-transparent hover:border-blue-500/50'
+                            : 'hover:bg-gray-200 border-transparent hover:border-blue-500')
+                      ]"
+                      @click="beginInlineEditing(entry)"
+                    >
+                      <td
+                        v-for="col in visibleColumns"
+                        :key="col.key"
+                        :class="[...getCellClasses(col), getCellTextColor(col)]"
+                        :style="col.width ? `width: ${col.width}px;` : ''"
+                      >
+                        <template v-if="col.key === 'date'">
+                          <div>
+                            <div :class="['font-semibold text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
+                              {{ formatDisplayDate(entry.date) }}
+                            </div>
+                            <div :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                              {{ roleDisplayLabel(entry.role) }}
+                            </div>
+                          </div>
+                        </template>
+                        <template v-else-if="col.key === 'aircraft'">
+                          <div :class="['text-sm truncate', isDarkMode ? 'text-gray-200' : 'text-gray-900']">{{ entry.aircraftMakeModel }}</div>
+                          <div :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                            {{ entry.aircraftCategoryClass }}
+                          </div>
+                        </template>
+                        <template v-else-if="col.key === 'identification'">
+                          {{ entry.registration }}
+                        </template>
+                        <template v-else-if="col.key === 'flightNumber'">
+                          {{ entry.flightNumber || '—' }}
+                        </template>
+                        <template v-else-if="col.key === 'fromTo'">
+                          <div :class="['font-semibold text-sm truncate', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
+                            {{ entry.departure }} → {{ entry.destination }}
+                          </div>
+                          <div v-if="entry.route" :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                            {{ entry.route }}
+                          </div>
+                        </template>
+                        <template v-else-if="col.key === 'conditions'">
+                          <div class="flex flex-wrap gap-1">
+                            <span
+                              v-for="condition in getDisplayConditions(entry)"
+                              :key="`${entry.id}-${condition}`"
+                              :class="[
+                                'rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold border',
+                                isDarkMode
+                                  ? 'bg-gray-900 border-white/10 text-gray-300 shadow-md shadow-black/40'
+                                  : 'bg-gray-100 border-gray-200 text-gray-600'
+                              ]"
+                            >
+                              {{ condition }}
+                            </span>
+                            <span
+                              v-if="getDisplayConditions(entry).length === 0"
+                              :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+                            >
+                              —
+                            </span>
+                          </div>
+                        </template>
+                        <template v-else-if="col.key === 'remarks'">
+                          <div class="whitespace-normal break-words">{{ entry.remarks || '—' }}</div>
+                        </template>
+                        <template v-else-if="col.key === 'pic'">
+                          {{ formatNumber(entry.flightTime.pic) }}
+                        </template>
+                        <template v-else-if="col.key === 'sic'">
+                          {{ formatNumber(entry.flightTime.sic) }}
+                        </template>
+                        <template v-else-if="col.key === 'dualR'">
+                          {{ formatNumber(entry.flightTime.dual) }}
+                        </template>
+                        <template v-else-if="col.key === 'solo'">
+                          {{ formatNumber(entry.flightTime.solo) }}
+                        </template>
+                        <template v-else-if="col.key === 'night'">
+                          {{ formatNumber(entry.flightTime.night) }}
+                        </template>
+                        <template v-else-if="col.key === 'actual'">
+                          {{ formatNumber(entry.flightTime.actualInstrument) }}
+                        </template>
+                        <template v-else-if="col.key === 'hood'">
+                          {{ formatNumber(entry.flightTime.simulatedInstrument) }}
+                        </template>
+                        <template v-else-if="col.key === 'dualG'">
+                          {{ formatNumber(entry.flightTime.dualGiven) }}
+                        </template>
+                        <template v-else-if="col.key === 'xc'">
+                          {{ formatNumber(entry.flightTime.crossCountry) }}
+                        </template>
+                        <template v-else-if="col.key === 'dayLandings'">
+                          {{ entry.performance.dayLandings ?? '—' }}
+                        </template>
+                        <template v-else-if="col.key === 'nightLandings'">
+                          {{ entry.performance.nightLandings ?? '—' }}
+                        </template>
+                        <template v-else-if="col.key === 'approach'">
+                          {{ getTotalApproachCount(entry.performance) || '—' }}
+                        </template>
+                        <template v-else-if="col.key === 'pilots'">
+                          <div class="truncate">{{ entry.trainingElements || '—' }}</div>
+                        </template>
+                        <template v-else-if="col.key === 'total'">
+                          <span
+                            :class="[
+                              entry.importSource === 'fc_view'
+                                ? (isDarkMode ? 'text-amber-400' : 'text-amber-600')
+                                : entry.importSource === 'logbook_builder'
+                                  ? (isDarkMode ? 'text-green-400' : 'text-green-600')
+                                  : entry.isImported && entry.importSource !== 'localStorage'
+                                    ? (isDarkMode ? 'text-red-400' : 'text-red-600')
+                                    : (isDarkMode ? 'text-blue-400' : 'text-blue-600')
+                            ]"
+                          >
+                            {{ formatNumber(entry.flightTime.total) }}
+                          </span>
+                        </template>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
       </div>
     </div>
     </main>
@@ -3023,13 +3219,13 @@
       :active-entry-card-preset-id="activePresetId"
       :entry-card-picker-fields="pickerFields"
       :entry-card-detail-crowded="detailFieldCrowded"
-      @apply-entry-card-preset="applyPreset"
-      @toggle-entry-card-field="toggleColumnVisibility"
+      @apply-entry-card-preset="applyEntryCardPreset"
+      @toggle-entry-card-field="toggleEntryCardFieldVisibility"
       @entry-card-drag-start="onEntryCardDragStart"
-      @entry-card-drop="handleColumnDrop"
-      @entry-card-move-up="(key) => moveColumn(key, 'up')"
-      @entry-card-move-down="(key) => moveColumn(key, 'down')"
-      @reset-entry-card="resetColumnConfig"
+      @entry-card-drop="handleEntryCardColumnDrop"
+      @entry-card-move-up="(key) => moveEntryCardColumn(key, 'up')"
+      @entry-card-move-down="(key) => moveEntryCardColumn(key, 'down')"
+      @reset-entry-card="resetEntryCardConfig"
       @retry-sync="retryFailed()"
       @sync-now="refreshDashboardData()"
       @import-dragover="handleImportDragOver"
@@ -5160,6 +5356,7 @@ import {
   createEmptyFlightTime,
   createEmptyPerformance,
   createEmptyOOOI,
+  DEFAULT_COLUMN_CONFIG,
   getApproachesFromPerformance,
   getTotalApproachCount
 } from '../utils/logbookTypes'
@@ -5169,6 +5366,7 @@ import type {
   FlightTimeBreakdown,
   FlightTimeKey,
   LogEntry,
+  LogbookColumnConfig,
   LogbookColumnKey,
   OOOITimes,
   PerformanceKey,
@@ -5632,6 +5830,7 @@ async function onUserSessionReady(userId: string): Promise<void> {
   await loadCrewProfiles()
   loadSelectedTotalsMetrics()
   loadColumnConfig()
+  loadEntryCardConfig()
   loadActiveLogbook()
   startBackgroundSync()
 }
@@ -6256,21 +6455,208 @@ const summaryFields = computed(() => {
     .filter((m): m is TotalsMetric => m !== undefined)
 })
 
-// Entry card configuration (shared with Settings → Preferences)
+// Column configuration for web logbook table
+const COLUMN_CONFIG_STORAGE_KEY = ACCOUNT_SCOPED_STORAGE_KEYS.COLUMN_CONFIG
+const columnConfig = ref<LogbookColumnConfig[]>(DEFAULT_COLUMN_CONFIG.map(c => ({ ...c })))
+
+function loadColumnConfig(): void {
+  if (!isBrowser) return
+  const saved = readUserScopedLocal(COLUMN_CONFIG_STORAGE_KEY, true)
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved) as LogbookColumnConfig[]
+      if (Array.isArray(parsed)) {
+        const merged = DEFAULT_COLUMN_CONFIG.map(defaultCol => {
+          const savedCol = parsed.find(p => p.key === defaultCol.key)
+          if (savedCol) {
+            return {
+              ...savedCol,
+              required: defaultCol.required,
+              label: defaultCol.label,
+              responsiveClass: defaultCol.responsiveClass,
+              width: savedCol.width ?? defaultCol.width,
+              visible: defaultCol.required ? true : savedCol.visible
+            }
+          }
+          return { ...defaultCol }
+        })
+        merged.forEach(col => {
+          if (col.required) col.visible = true
+        })
+        columnConfig.value = merged
+        saveColumnConfig()
+        return
+      }
+    } catch {
+      // Invalid JSON, use defaults
+    }
+  }
+  columnConfig.value = DEFAULT_COLUMN_CONFIG.map(c => ({ ...c }))
+}
+
+function saveColumnConfig(): void {
+  if (!isBrowser) return
+  writeUserScopedLocal(COLUMN_CONFIG_STORAGE_KEY, JSON.stringify(columnConfig.value))
+}
+
+const visibleColumns = computed(() => {
+  return columnConfig.value
+    .filter(col => col.visible)
+    .sort((a, b) => a.order - b.order)
+})
+
+const resizingColumn = ref<LogbookColumnKey | null>(null)
+const resizeStartX = ref(0)
+const resizeStartWidth = ref(0)
+
+function startResize(columnKey: LogbookColumnKey, event: MouseEvent): void {
+  const col = columnConfig.value.find(c => c.key === columnKey)
+  if (!col) return
+
+  resizingColumn.value = columnKey
+  resizeStartX.value = event.clientX
+  resizeStartWidth.value = col.width ?? 100
+
+  document.addEventListener('mousemove', handleResize)
+  document.addEventListener('mouseup', stopResize)
+  event.preventDefault()
+}
+
+function handleResize(event: MouseEvent): void {
+  if (!resizingColumn.value) return
+
+  const col = columnConfig.value.find(c => c.key === resizingColumn.value)
+  if (!col) return
+
+  const deltaX = event.clientX - resizeStartX.value
+  col.width = Math.max(50, resizeStartWidth.value + deltaX)
+}
+
+function stopResize(): void {
+  if (resizingColumn.value) {
+    saveColumnConfig()
+  }
+  resizingColumn.value = null
+  document.removeEventListener('mousemove', handleResize)
+  document.removeEventListener('mouseup', stopResize)
+}
+
+function getColumnPadding(col: LogbookColumnConfig): string[] {
+  switch (col.key) {
+    case 'date':
+    case 'total':
+      return ['px-3', 'py-3']
+    default:
+      return ['px-2', 'py-3']
+  }
+}
+
+function getHeaderTextAlign(col: LogbookColumnConfig): string {
+  switch (col.key) {
+    case 'total':
+    case 'pic':
+    case 'sic':
+    case 'dualR':
+    case 'solo':
+    case 'night':
+    case 'actual':
+    case 'hood':
+    case 'dualG':
+    case 'xc':
+    case 'dayLandings':
+    case 'nightLandings':
+    case 'approach':
+      return 'text-right'
+    default:
+      return ''
+  }
+}
+
+function getCellClasses(col: LogbookColumnConfig): string[] {
+  const baseClasses = ['align-top']
+  const padding = getColumnPadding(col)
+  if (col.responsiveClass) {
+    baseClasses.push(col.responsiveClass)
+  }
+
+  switch (col.key) {
+    case 'date':
+      return [...padding, ...baseClasses]
+    case 'total':
+      return [...padding, 'text-right', 'font-bold', 'font-mono', ...baseClasses]
+    case 'identification':
+      return [...padding, 'uppercase', 'font-mono', 'text-xs', 'tracking-wide', ...baseClasses]
+    case 'flightNumber':
+      return [...padding, 'uppercase', 'font-mono', 'text-xs', ...baseClasses]
+    case 'remarks':
+      return [...padding, 'text-sm', 'italic', ...baseClasses]
+    case 'pic':
+    case 'sic':
+    case 'dualR':
+    case 'solo':
+    case 'night':
+    case 'actual':
+    case 'hood':
+    case 'dualG':
+    case 'xc':
+    case 'dayLandings':
+    case 'nightLandings':
+    case 'approach':
+      return [...padding, 'text-right', 'font-mono', 'text-sm', ...baseClasses]
+    case 'pilots':
+      return [...padding, 'text-sm', ...baseClasses]
+    default:
+      return [...padding, ...baseClasses]
+  }
+}
+
+function getCellTextColor(col: LogbookColumnConfig): string {
+  switch (col.key) {
+    case 'total':
+      return isDarkMode.value ? 'text-blue-400' : 'text-blue-600'
+    case 'identification':
+    case 'flightNumber':
+      return isDarkMode.value ? 'text-gray-300' : 'text-gray-700'
+    case 'remarks':
+      return isDarkMode.value ? 'text-gray-400' : 'text-gray-500'
+    case 'pic':
+    case 'sic':
+    case 'dualR':
+    case 'solo':
+    case 'night':
+    case 'actual':
+    case 'hood':
+    case 'dualG':
+    case 'xc':
+    case 'dayLandings':
+    case 'nightLandings':
+    case 'approach':
+    case 'pilots':
+      return isDarkMode.value ? 'text-gray-300' : 'text-gray-700'
+    default:
+      return ''
+  }
+}
+
+const tableHeaderRef = ref<HTMLElement | null>(null)
+const tableContainerRef = ref<HTMLElement | null>(null)
+const tableRef = ref<HTMLTableElement | null>(null)
+
+// Entry card configuration for iOS (Settings → Preferences)
 const {
   activePresetId,
-  draggedColumnKey,
+  draggedColumnKey: entryCardDraggedColumnKey,
   visibleDetailFields,
   showRemarksFooter,
   detailFieldCrowded,
   pickerFields,
   presets: entryCardPresets,
-  loadColumnConfig,
-  toggleColumnVisibility,
-  handleColumnDrop,
-  moveColumn,
-  resetColumnConfig,
-  applyPreset,
+  loadColumnConfig: loadEntryCardConfig,
+  toggleColumnVisibility: toggleEntryCardFieldVisibility,
+  handleColumnDrop: handleEntryCardColumnDrop,
+  moveColumn: moveEntryCardColumn,
+  resetColumnConfig: resetEntryCardConfig,
+  applyPreset: applyEntryCardPreset,
 } = useEntryCardConfig()
 
 function openEntryCardPreferences(): void {
@@ -6278,7 +6664,7 @@ function openEntryCardPreferences(): void {
 }
 
 function onEntryCardDragStart(key: LogbookColumnKey): void {
-  draggedColumnKey.value = key
+  entryCardDraggedColumnKey.value = key
 }
 
 const catalogSections = [
