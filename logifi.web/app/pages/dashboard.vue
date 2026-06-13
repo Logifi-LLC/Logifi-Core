@@ -5832,6 +5832,7 @@ async function onUserSessionReady(userId: string): Promise<void> {
   loadColumnConfig()
   loadEntryCardConfig()
   loadActiveLogbook()
+  maybeAutoOpenEntryFormForEmptyLogbook()
   startBackgroundSync()
 }
 
@@ -9670,6 +9671,15 @@ function resetForm(): void {
   lastKnownXcTime.value = null
 }
 
+function maybeAutoOpenEntryFormForEmptyLogbook(): void {
+  if (logEntries.value.length === 0 && isAuthenticated.value) {
+    expandedEntryId.value = null
+    inlineEditEntry.value = null
+    isInlineCommercialMode.value = false
+    isEntryFormOpen.value = true
+  }
+}
+
 function toggleEntryForm(): void {
   const willBeOpen = !isEntryFormOpen.value
   isEntryFormOpen.value = willBeOpen
@@ -12547,14 +12557,6 @@ onMounted(async () => {
   loadClockPrefs()
   normalizeAndAutofillCategories()
 
-  if (logEntries.value.length === 0 && isAuthenticated.value) {
-    // Ensure inline edit is closed when auto-opening Add Entry form
-    expandedEntryId.value = null
-    inlineEditEntry.value = null
-    isInlineCommercialMode.value = false
-    isEntryFormOpen.value = true
-  }
-  
   // Close settings when clicking outside
   const handleClickOutside = (event: MouseEvent) => {
     const target = event.target as HTMLElement
