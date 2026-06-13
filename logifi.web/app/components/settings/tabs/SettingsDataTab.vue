@@ -1,136 +1,113 @@
 <template>
-  <div class="mx-auto max-w-3xl space-y-6">
-    <SettingsSection title="Sync status" :is-dark-mode="isDarkMode">
-      <div class="flex flex-wrap items-center gap-2">
-        <span
-          class="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium font-quicksand"
-          :class="syncBadgeClass"
+  <div class="space-y-6">
+    <SettingsListGroup title="Sync" :is-dark-mode="isDarkMode">
+      <div class="flex items-center justify-between gap-3 px-4 py-3">
+        <div class="min-w-0">
+          <p class="text-sm font-medium" :class="isDarkMode ? 'text-gray-100' : 'text-gray-900'">Status</p>
+          <div class="mt-1 flex flex-wrap items-center gap-2">
+            <span class="inline-flex items-center gap-1.5 text-xs font-medium font-quicksand" :class="syncBadgeClass">
+              <Icon :name="syncStatusIcon" :class="{ 'animate-spin': isSyncing }" size="14" />
+              {{ syncStatusText }}
+            </span>
+            <span
+              v-if="queueLength > 0"
+              class="inline-flex items-center gap-1.5 text-xs font-medium font-quicksand"
+              :class="isDarkMode ? 'text-orange-400' : 'text-orange-700'"
+            >
+              {{ queueLength }} pending
+            </span>
+          </div>
+        </div>
+        <button
+          v-if="isOnline"
+          type="button"
+          :disabled="isSyncing"
+          class="shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium font-quicksand disabled:opacity-50"
+          :class="isDarkMode ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-600 text-white hover:bg-blue-700'"
+          @click="$emit('sync-now')"
         >
-          <Icon :name="syncStatusIcon" :class="{ 'animate-spin': isSyncing }" size="14" />
-          {{ syncStatusText }}
-        </span>
-        <span
-          v-if="queueLength > 0"
-          class="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium font-quicksand"
-          :class="isDarkMode ? 'bg-orange-900/30 text-orange-400' : 'bg-orange-100 text-orange-800'"
-        >
-          <Icon name="ri:time-line" size="14" />
-          {{ queueLength }} pending
-        </span>
-        <span
-          v-if="syncError"
-          class="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium font-quicksand"
-          :class="isDarkMode ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-800'"
-        >
-          <Icon name="ri:error-warning-line" size="14" />
-          Sync error
-        </span>
+          Sync
+        </button>
       </div>
-      <button
-        v-if="queueLength > 0 && isOnline"
-        type="button"
-        :disabled="isSyncing"
-        class="mt-3 inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium font-quicksand disabled:opacity-50"
-        :class="
-          isDarkMode
-            ? 'border-gray-600 text-blue-400 hover:bg-gray-800'
-            : 'border-gray-200 text-blue-700 hover:bg-gray-50'
-        "
-        @click="$emit('retry-sync')"
-      >
-        <Icon name="ri:refresh-line" size="16" :class="{ 'animate-spin': isSyncing }" />
-        Retry sync
-      </button>
-    </SettingsSection>
+      <div v-if="queueLength > 0 && isOnline" class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
+        <button
+          type="button"
+          :disabled="isSyncing"
+          class="text-sm font-medium font-quicksand disabled:opacity-50"
+          :class="isDarkMode ? 'text-blue-400' : 'text-blue-600'"
+          @click="$emit('retry-sync')"
+        >
+          Retry failed sync
+        </button>
+      </div>
+    </SettingsListGroup>
 
-    <SettingsSection
-      title="Import"
-      description="CSV or JSON. Duplicate entries (same date and registration) are skipped."
-      :is-dark-mode="isDarkMode"
-    >
+    <SettingsListGroup title="Import" :is-dark-mode="isDarkMode">
       <div
-        class="rounded-lg border-2 border-dashed p-6 text-center transition-colors"
-        :class="
-          isDragOver
-            ? isDarkMode
-              ? 'border-green-600 bg-green-900/20'
-              : 'border-green-500 bg-green-50'
-            : isDarkMode
-              ? 'border-gray-700 bg-gray-800/40'
-              : 'border-gray-300 bg-gray-50'
-        "
+        class="px-4 py-3"
         @dragover.prevent="$emit('import-dragover')"
         @dragenter.prevent="$emit('import-dragenter')"
         @dragleave="$emit('import-dragleave')"
         @drop.prevent="$emit('import-drop', $event)"
       >
-        <Icon name="ri:upload-cloud-2-line" size="28" :class="isDarkMode ? 'text-gray-500' : 'text-gray-400'" class="mx-auto mb-2" />
-        <p class="mb-4 text-sm font-medium" :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">
-          {{ isDragOver ? 'Drop file here' : 'Drag and drop a file, or browse' }}
+        <SettingsListRow
+          label="Import file"
+          subtitle="CSV or JSON"
+          icon="ri:upload-cloud-2-line"
+          :is-dark-mode="isDarkMode"
+          :show-chevron="false"
+          @click="fileInputRef?.click()"
+        />
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept=".csv,.json,text/csv,application/json"
+          class="hidden"
+          @change="onFileSelected"
+        />
+        <p :class="[helper, 'mt-2 px-1 text-xs']">
+          Duplicates (same date and registration) are skipped. Drag and drop also works on desktop.
         </p>
-        <div class="flex flex-col items-center justify-center gap-2 sm:flex-row">
-          <button type="button" :class="btnSecondary" @click="$emit('browse-csv')">
-            <Icon name="ri:file-excel-2-line" size="16" class="mr-1.5 inline" />
-            CSV
-          </button>
-          <button type="button" :class="btnSecondary" @click="$emit('browse-json')">
-            <Icon name="ri:file-code-line" size="16" class="mr-1.5 inline" />
-            JSON
-          </button>
-        </div>
       </div>
-    </SettingsSection>
+    </SettingsListGroup>
 
-    <SettingsSection
-      title="Integrations"
-      description="Connect external logbook services."
-      :is-dark-mode="isDarkMode"
-    >
-      <p class="mb-4 text-sm">
-        <NuxtLink
-          to="/data-sources?from=dashboard"
-          :class="isDarkMode ? 'text-blue-400 hover:underline' : 'text-blue-600 hover:underline'"
-        >
-          Data sources &amp; third-party APIs
-        </NuxtLink>
-      </p>
-      <FcvSync mode="connect" :is-dark-mode="isDarkMode" show-rollout-label />
-    </SettingsSection>
-
-    <SettingsSection title="Export" :is-dark-mode="isDarkMode">
-      <p :class="helper" class="mb-4">
-        Download a logbook backup or generate FAA Form 8710.
-        <span class="mt-1 block font-medium">{{ entryCount }} {{ entryCount === 1 ? 'entry' : 'entries' }}</span>
-      </p>
-      <div class="flex flex-col gap-2 sm:flex-row">
-        <button
-          type="button"
-          :disabled="entryCount === 0"
-          :class="btnPrimary"
-          class="disabled:cursor-not-allowed"
-          @click="$emit('export-logbook')"
-        >
-          <Icon name="ri:download-cloud-2-line" size="16" class="mr-1.5 inline" />
-          Export logbook
-        </button>
-        <button
-          type="button"
-          :disabled="entryCount === 0"
-          :class="btnSecondary"
-          class="disabled:cursor-not-allowed disabled:opacity-50"
-          @click="$emit('generate-8710')"
-        >
-          <Icon name="ri:file-pdf-line" size="16" class="mr-1.5 inline" />
-          Generate 8710
-        </button>
+    <SettingsListGroup title="Integrations" :is-dark-mode="isDarkMode">
+      <SettingsListRow
+        label="Data sources"
+        subtitle="Third-party APIs"
+        icon="ri:links-line"
+        :is-dark-mode="isDarkMode"
+        to="/data-sources?from=dashboard"
+        @click="$emit('close')"
+      />
+      <div class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
+        <FcvSync mode="connect" :is-dark-mode="isDarkMode" show-rollout-label />
       </div>
-    </SettingsSection>
+    </SettingsListGroup>
+
+    <SettingsListGroup title="Export" :is-dark-mode="isDarkMode">
+      <SettingsListRow
+        label="Export logbook"
+        :subtitle="`${entryCount} ${entryCount === 1 ? 'entry' : 'entries'}`"
+        icon="ri:download-cloud-2-line"
+        :is-dark-mode="isDarkMode"
+        @click="entryCount > 0 && $emit('export-logbook')"
+      />
+      <SettingsListRow
+        label="Generate FAA Form 8710"
+        subtitle="PDF from logbook data"
+        icon="ri:file-pdf-line"
+        :is-dark-mode="isDarkMode"
+        @click="entryCount > 0 && $emit('generate-8710')"
+      />
+    </SettingsListGroup>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import SettingsSection from '../SettingsSection.vue'
+import { computed, ref } from 'vue'
+import SettingsListGroup from '../SettingsListGroup.vue'
+import SettingsListRow from '../SettingsListRow.vue'
 import { useSettingsClasses } from '../useSettingsClasses'
 import FcvSync from '~/components/fcv/FcvSync.vue'
 
@@ -146,27 +123,38 @@ const props = defineProps<{
   entryCount: number
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   'retry-sync': []
+  'sync-now': []
   'import-dragover': []
   'import-dragenter': []
   'import-dragleave': []
   'import-drop': [event: DragEvent]
-  'browse-csv': []
-  'browse-json': []
+  'import-file': [file: File]
   'export-logbook': []
   'generate-8710': []
+  close: []
 }>()
 
-const { helper, btnPrimary, btnSecondary } = useSettingsClasses(computed(() => props.isDarkMode))
+const { helper } = useSettingsClasses(computed(() => props.isDarkMode))
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const syncBadgeClass = computed(() => {
   if (!props.isOnline) {
-    return props.isDarkMode ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-800'
+    return props.isDarkMode ? 'text-red-400' : 'text-red-700'
   }
   if (props.isSyncing) {
-    return props.isDarkMode ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-100 text-yellow-800'
+    return props.isDarkMode ? 'text-yellow-400' : 'text-yellow-700'
   }
-  return props.isDarkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-800'
+  return props.isDarkMode ? 'text-green-400' : 'text-green-700'
 })
+
+function onFileSelected(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  emit('import-file', file)
+  input.value = ''
+}
 </script>

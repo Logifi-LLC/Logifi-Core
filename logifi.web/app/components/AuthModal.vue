@@ -1,7 +1,7 @@
 <template>
   <div
     class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm"
-    @click.self="$emit('close')"
+    @click.self="handleBackdropClick"
   >
     <div
       :class="[
@@ -23,6 +23,7 @@
         </p>
         
         <button
+          v-if="dismissible"
           @click="$emit('close')"
           :class="[
             'absolute top-4 right-4 p-2 rounded-full transition-all',
@@ -251,14 +252,25 @@
 import { ref, computed, watch } from 'vue'
 import { useAuth } from '~/composables/useAuth'
 
-const props = defineProps<{
-  isDarkMode?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    isDarkMode?: boolean
+    /** When false, hide close control and ignore backdrop dismiss (e.g. iOS login gate). */
+    dismissible?: boolean
+  }>(),
+  { dismissible: true }
+)
 
 const emit = defineEmits<{
   close: []
   success: []
 }>()
+
+function handleBackdropClick() {
+  if (props.dismissible) {
+    emit('close')
+  }
+}
 
 const { signUp, signIn, signInWithGoogle, resetPassword, isLoading: authLoading, error: authErrorState } = useAuth()
 

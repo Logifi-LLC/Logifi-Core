@@ -40,6 +40,10 @@ export function findDuplicateEntries(entry: LogEntry, existingEntries: LogEntry[
  * Returns array of matching entries from the database
  */
 export async function checkDuplicatesInDatabase(entry: LogEntry, userId: string, excludeEntryId?: string): Promise<LogEntry[]> {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return []
+  }
+
   try {
     // Query for entries matching date and registration (case-insensitive)
     let query = supabase

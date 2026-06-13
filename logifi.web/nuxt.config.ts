@@ -95,6 +95,12 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
+      meta: [
+        {
+          name: 'viewport',
+          content: 'width=device-width, initial-scale=1, viewport-fit=cover',
+        },
+      ],
       link: [
         { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon.png' },
         { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/favicon.png' },

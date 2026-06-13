@@ -343,5 +343,50 @@ describe('validation', () => {
       const errors = results.filter(r => r.type === 'error' && r.field === 'total')
       expect(errors.length).toBeGreaterThan(0)
     })
+
+    it('should not warn about day/night when flight conditions are empty and no night time', () => {
+      const entry = createTestEntry({
+        flightConditions: [],
+        flightTime: {
+          total: 2.0,
+          pic: 2.0,
+          sic: null,
+          dual: null,
+          solo: null,
+          night: null,
+          actualInstrument: null,
+          simulatedInstrument: null,
+          crossCountry: null
+        }
+      })
+
+      const results = validatePart61RequiredFields(entry)
+
+      const warnings = results.filter(r => r.type === 'warning' && r.field === 'flightConditions')
+      expect(warnings.length).toBe(0)
+    })
+
+    it('should warn when night time is logged without night flight condition', () => {
+      const entry = createTestEntry({
+        flightConditions: [],
+        flightTime: {
+          total: 2.0,
+          pic: 2.0,
+          sic: null,
+          dual: null,
+          solo: null,
+          night: 1.0,
+          actualInstrument: null,
+          simulatedInstrument: null,
+          crossCountry: null
+        }
+      })
+
+      const results = validatePart61RequiredFields(entry)
+
+      const warnings = results.filter(r => r.type === 'warning' && r.field === 'flightConditions')
+      expect(warnings.length).toBe(1)
+      expect(warnings[0]?.message).toContain('Night time is logged')
+    })
   })
 })

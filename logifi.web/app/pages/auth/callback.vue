@@ -29,7 +29,7 @@
           <p class="text-sm text-red-600 dark:text-red-400 mb-4">{{ error }}</p>
           <div class="space-y-2">
             <NuxtLink
-              to="/"
+              :to="errorHomePath"
               class="block w-full px-4 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all active:scale-[0.98] shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20"
             >
               Return to Home
@@ -54,6 +54,9 @@ import { useAuth } from '~/composables/useAuth'
 type CallbackKind = 'signup' | 'recovery' | 'signin'
 
 const { initAuth, isAuthenticated, user, isPasswordRecoverySession } = useAuth()
+const { isIos } = useCapacitorPlatform()
+
+const errorHomePath = computed(() => (isIos.value ? '/dashboard' : '/'))
 
 const isProcessing = ref(true)
 const isSuccess = ref(false)

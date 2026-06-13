@@ -8,7 +8,10 @@ let supabaseClient: ReturnType<typeof createClient<Database>> | null = null
 function initializeSupabase() {
   if (!supabaseClient) {
     const config = getSupabaseConfig()
-    
+    if (!config) {
+      throw new Error('Supabase is not configured. Check NUXT_PUBLIC_SUPABASE_URL and NUXT_PUBLIC_SUPABASE_ANON_KEY.')
+    }
+
     // Debug: Log what we're getting (only in dev)
     if (process.dev || (typeof window !== 'undefined' && window.location.hostname === 'localhost')) {
       console.log('🔍 Supabase Config Check:', {
@@ -42,7 +45,7 @@ SUPABASE_URL=https://your-project-id.supabase.co`)
       }
     )
   }
-  
+
   return supabaseClient
 }
 
@@ -63,11 +66,7 @@ export const supabase = new Proxy({} as ReturnType<typeof createClient<Database>
 // Helper to check if Supabase is available (for offline support)
 export const isSupabaseAvailable = () => {
   if (typeof window === 'undefined') return false
-  try {
-    const config = getSupabaseConfig()
-    return !!config.url && !!config.anonKey
-  } catch {
-    return false
-  }
+  const config = getSupabaseConfig()
+  return !!(config?.url && config?.anonKey)
 }
 

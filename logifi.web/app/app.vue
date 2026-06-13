@@ -4,7 +4,7 @@
       <div
         v-if="toastMessage"
         role="status"
-        class="fixed top-4 left-1/2 z-[200] flex max-w-md w-[calc(100%-2rem)] -translate-x-1/2 items-start gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 font-quicksand text-sm font-medium text-gray-900 shadow-lg dark:border-gray-700 dark:bg-gray-900 dark:text-white"
+        class="fixed top-[calc(env(safe-area-inset-top,0px)+1rem)] left-1/2 z-[200] flex max-w-md w-[calc(100%-2rem)] -translate-x-1/2 items-start gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 font-quicksand text-sm font-medium text-gray-900 shadow-lg dark:border-gray-700 dark:bg-gray-900 dark:text-white"
       >
         <Icon name="ri:checkbox-circle-fill" class="mt-0.5 flex-shrink-0 text-emerald-500" size="20" />
         <p class="flex-1 pt-0.5">{{ toastMessage }}</p>

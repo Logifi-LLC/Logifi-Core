@@ -331,6 +331,8 @@ export const useAuditTrail = () => {
     isZulu: 'Zulu (UTC)'
   }
 
+  const OOOI_FIELD_ORDER = ['out', 'off', 'on', 'in', 'isZulu'] as const
+
   const getFieldDiff = (oldData: any, newData: any, changedFields: string[]) => {
     const diffs: Array<{ field: string; oldValue: any; newValue: any }> = []
 
@@ -345,9 +347,12 @@ export const useAuditTrail = () => {
       fieldName: string,
       oldObj: Record<string, any> | null,
       newObj: Record<string, any> | null,
-      labels: Record<string, string>
+      labels: Record<string, string>,
+      keysOrder?: readonly string[]
     ) => {
-      const keys = new Set([...(oldObj ? Object.keys(oldObj) : []), ...(newObj ? Object.keys(newObj) : [])])
+      const keys = keysOrder
+        ? [...keysOrder]
+        : [...new Set([...(oldObj ? Object.keys(oldObj) : []), ...(newObj ? Object.keys(newObj) : [])])]
       keys.forEach(key => {
         const oldVal = oldObj?.[key]
         const newVal = newObj?.[key]
@@ -374,7 +379,7 @@ export const useAuditTrail = () => {
         return
       }
       if (field === 'oooi') {
-        expandNested('oooi', oldValue && typeof oldValue === 'object' ? oldValue : null, newValue && typeof newValue === 'object' ? newValue : null, OOOI_LABELS)
+        expandNested('oooi', oldValue && typeof oldValue === 'object' ? oldValue : null, newValue && typeof newValue === 'object' ? newValue : null, OOOI_LABELS, OOOI_FIELD_ORDER)
         return
       }
 

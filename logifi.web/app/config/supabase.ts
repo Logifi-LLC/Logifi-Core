@@ -8,14 +8,14 @@
 
 // Get config from runtimeConfig (Nuxt's way - reads from .env automatically)
 // This must be called lazily (not at module load time) to work with Nuxt's context
-export function getSupabaseConfig() {
+export function getSupabaseConfig(): { url: string; anonKey: string } | null {
   const config = useRuntimeConfig()
   const url = config.public?.supabaseUrl
   const anonKey = config.public?.supabaseAnonKey
-  
+
   if (!url || !anonKey) {
-    const error = new Error(`Missing Supabase environment variables in runtimeConfig!
-    
+    const message = `Missing Supabase environment variables in runtimeConfig!
+
 Please check your .env file in logifi.web/.env
 
 Required:
@@ -26,14 +26,12 @@ Current values:
 - supabaseUrl: ${url ? 'SET' : 'MISSING'}
 - supabaseAnonKey: ${anonKey ? 'SET' : 'MISSING'}
 
-After updating .env, restart your dev server!`)
-    
-    if (process.dev) {
-      console.error(error.message)
-    }
-    throw error
+After updating .env, restart your dev server!`
+
+    console.error(message)
+    return null
   }
-  
+
   return { url, anonKey }
 }
 

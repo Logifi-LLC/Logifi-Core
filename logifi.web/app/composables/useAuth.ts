@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import type { User, Session } from '@supabase/supabase-js'
-import { supabase } from '~/lib/supabase'
+import { supabase, isSupabaseAvailable } from '~/lib/supabase'
+import { withTimeout } from '~/utils/promiseTimeout'
 
 // Shared state across all instances of useAuth
 const globalUser = ref<User | null>(null)
@@ -38,7 +39,7 @@ export const useAuth = () => {
       error.value = null
 
       // Subscribe before getSession() so PASSWORD_RECOVERY (fired after URL parse) is never missed.
-      if (!authStateSubscription) {
+      if (isSupabaseAvailable() && !authStateSubscription) {
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           async (event, newSession) => {
             console.log('Auth state changed:', event, newSession?.user?.email)
@@ -68,14 +69,20 @@ export const useAuth = () => {
         authStateSubscription = subscription
       }
 
-      const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession()
+      if (isSupabaseAvailable()) {
+        const { data: { session: currentSession }, error: sessionError } = await withTimeout(
+          supabase.auth.getSession(),
+          8000,
+          'Auth getSession'
+        )
 
-      if (sessionError) {
-        throw sessionError
+        if (sessionError) {
+          throw sessionError
+        }
+
+        session.value = currentSession
+        user.value = currentSession?.user ?? null
       }
-
-      session.value = currentSession
-      user.value = currentSession?.user ?? null
 
       authInitialized = true
     } catch (err) {
@@ -83,6 +90,7 @@ export const useAuth = () => {
       error.value = err instanceof Error ? err.message : 'Failed to initialize authentication'
       user.value = null
       session.value = null
+      authInitialized = true
     } finally {
       isLoading.value = false
     }

@@ -19,14 +19,17 @@ const RETRY_DELAY_BASE = 1000 // 1 second base delay
 /** Shared across composable instances so dashboard and sync share the same active user. */
 const activeUserId = ref<string | null>(null)
 
+export type ProcessQueueOptions = {
+  silent?: boolean
+}
+
 export const useSyncQueue = () => {
   const { isOnline, updateSyncProgress, resetSyncProgress } = useOffline()
   const queueLength = ref<number>(0)
   const isProcessing = ref<boolean>(false)
   const syncError = ref<string | null>(null)
 
-  let backgroundSyncInterval: ReturnType<typeof setInterval> | null = null
-  let isBackgroundSyncActive = false
+  let hasDrainedOnOpen = false
 
   const setActiveUserId = (userId: string | null) => {
     activeUserId.value = userId
@@ -60,8 +63,9 @@ export const useSyncQueue = () => {
       await addToSyncQueue(operation, entryId, scopedUserId, entryData)
       await refreshQueueLength()
 
+      // If online, try immediate sync (silent — no spinner)
       if (isOnline.value) {
-        processQueue()
+        processQueue({ silent: true })
       }
     } catch (error) {
       console.error('Failed to add to sync queue:', error)
@@ -157,9 +161,10 @@ export const useSyncQueue = () => {
         return false
       }
 
+      // Schedule retry with exponential backoff (silent)
       setTimeout(() => {
         if (isOnline.value) {
-          processQueue()
+          processQueue({ silent: true })
         }
       }, getRetryDelay(newRetryCount))
 
@@ -302,7 +307,9 @@ export const useSyncQueue = () => {
   /**
    * Process sync queue for the active user only
    */
-  const processQueue = async (): Promise<void> => {
+  const processQueue = async (options?: ProcessQueueOptions): Promise<void> => {
+    const silent = options?.silent ?? false
+
     if (!isOnline.value || isProcessing.value) {
       return
     }
@@ -341,11 +348,15 @@ export const useSyncQueue = () => {
         return
       }
 
-      updateSyncProgress(0, processableItems.length, 'syncing')
+      if (!silent) {
+        updateSyncProgress(0, processableItems.length, 'syncing')
+      }
 
       for (let i = 0; i < processableItems.length; i++) {
         const item = processableItems[i]
-        updateSyncProgress(i, processableItems.length, 'syncing')
+        if (!silent) {
+          updateSyncProgress(i, processableItems.length, 'syncing')
+        }
         await processQueueItem(item)
 
         if (i < processableItems.length - 1) {
@@ -353,51 +364,55 @@ export const useSyncQueue = () => {
         }
       }
 
-      updateSyncProgress(processableItems.length, processableItems.length, 'complete')
+      if (!silent) {
+        updateSyncProgress(processableItems.length, processableItems.length, 'complete')
+      } else {
+        resetSyncProgress()
+      }
       await refreshQueueLength()
 
       const remainingQueue = await getSyncQueue(userId)
       if (remainingQueue.length > 0 && isOnline.value) {
+        // Wait a bit before retrying failed items (silent)
         setTimeout(() => {
           if (isOnline.value) {
-            processQueue()
+            processQueue({ silent: true })
           }
         }, 2000)
       }
     } catch (error: any) {
       console.error('Error processing sync queue:', error)
       syncError.value = error.message || String(error)
-      updateSyncProgress(0, 0, 'error', syncError.value)
+      if (!silent) {
+        updateSyncProgress(0, 0, 'error', syncError.value)
+      } else {
+        resetSyncProgress()
+      }
     } finally {
       isProcessing.value = false
     }
   }
 
+  /**
+   * Drain sync queue once on app open (event-driven; no periodic poll).
+   */
   const startBackgroundSync = () => {
-    if (isBackgroundSyncActive) {
+    if (hasDrainedOnOpen) {
       return
     }
 
-    isBackgroundSyncActive = true
+    hasDrainedOnOpen = true
 
     if (isOnline.value) {
-      processQueue()
+      processQueue({ silent: true })
     }
-
-    backgroundSyncInterval = setInterval(() => {
-      if (isOnline.value && !isProcessing.value) {
-        processQueue()
-      }
-    }, 10000)
   }
 
+  /**
+   * @deprecated No periodic sync to stop; kept for call-site compatibility.
+   */
   const stopBackgroundSync = () => {
-    isBackgroundSyncActive = false
-
-    if (backgroundSyncInterval) {
-      clearInterval(backgroundSyncInterval)
-      backgroundSyncInterval = null
-    }
+    hasDrainedOnOpen = false
   }
 
   const retryFailed = async (): Promise<void> => {

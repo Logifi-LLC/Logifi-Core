@@ -10,6 +10,7 @@
   <AuthModal
     v-if="showAuthModal"
     :is-dark-mode="isDarkMode"
+    :dismissible="!isIos"
     @close="showAuthModal = false"
     @success="showAuthModal = false"
   />
@@ -62,28 +63,80 @@
     </div>
   </div>
 
+  <!-- Pull-to-refresh indicator (iOS) -->
+  <div
+    v-if="isIos && (pullDistance > 0 || isPullRefreshing)"
+    class="fixed left-0 right-0 top-0 z-40 flex items-end justify-center pointer-events-none pb-2"
+    :style="{ height: `calc(env(safe-area-inset-top, 0px) + ${isPullRefreshing ? 70 : pullDistance}px)` }"
+  >
+    <div
+      class="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium font-quicksand shadow-md"
+      :class="isDarkMode ? 'bg-gray-800 text-gray-200' : 'bg-white text-gray-700'"
+    >
+      <Icon
+        :name="isPullRefreshing ? 'ri:loader-4-line' : 'ri:arrow-down-line'"
+        size="16"
+        :class="{
+          'animate-spin': isPullRefreshing,
+          'rotate-180': pullDistance >= 70 && !isPullRefreshing,
+        }"
+      />
+      {{ isPullRefreshing ? 'Syncing...' : pullDistance >= 70 ? 'Release to sync' : 'Pull to sync' }}
+    </div>
+  </div>
+
   <!-- Main Content (only show when authenticated) -->
   <div v-if="isAuthenticated && !authLoading">
+    <div :style="pullTransformStyle">
       <header>
       <div
         :class="[
-          'fixed top-0 left-0 right-0 z-30 transition-colors duration-300',
-          isDarkMode 
-            ? 'border-gray-700/50' 
-            : 'border-gray-400/50'
+          'left-0 right-0 z-30 transition-colors duration-300',
+          isIos ? 'sticky top-0 pt-[env(safe-area-inset-top)]' : 'fixed top-0',
+          isDarkMode
+            ? 'border-gray-700/50 bg-gray-950/95'
+            : 'border-gray-400/50 bg-gray-50/95'
         ]"
       >
-        <div class="mr-auto px-6 sm:px-8 py-4 flex items-center justify-between relative">
-        <a class="left" href="/dashboard">
+        <div
+          :class="[
+            'mr-auto px-6 sm:px-8 flex items-center justify-between relative',
+            isIos ? 'py-2' : 'py-4'
+          ]"
+        >
+        <div class="flex items-center gap-2 min-w-0">
+          <button
+            v-if="isIos"
+            type="button"
+            class="relative flex-shrink-0 p-2 rounded-lg transition-colors"
+            :class="[
+              isDarkMode
+                ? 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'
+            ]"
+            aria-label="Open Logbook Catalog"
+            @click="openCatalogDrawer"
+          >
+            <Icon name="ri:database-2-line" :size="24" />
+            <span
+              v-if="activeCatalogFilterCount > 0"
+              class="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white"
+            >
+              {{ activeCatalogFilterCount > 9 ? '9+' : activeCatalogFilterCount }}
+            </span>
+          </button>
+        <a v-if="!isIos" class="left" href="/dashboard">
             <img
               src="/images/logifi-logo.png"
               alt="logifi"
               :class="[
-                'h-20 sm:h-24 lg:h-28 w-auto transition-all duration-300',
+                'w-auto transition-all duration-300',
+                'h-20 sm:h-24 lg:h-28',
                 isDarkMode ? '' : 'brightness-[0.2]'
               ]"
             />
           </a>
+        </div>
         <div class="absolute inset-x-0 flex justify-center pointer-events-none">
           <span
             :class="[
@@ -129,7 +182,7 @@
           </template>
           <button
             type="button"
-            @click="showSettingsModal = true"
+            @click="openSettings()"
             :class="[
               'h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all duration-200 shadow-sm border',
               isDarkMode 
@@ -145,7 +198,15 @@
         </div>
       </header>
 
-    <main :class="['min-h-screen flex flex-col pt-40 pb-20 px-4 sm:px-6 lg:px-8 transition-colors duration-300 overflow-x-auto', isDarkMode ? '' : '']">
+    <main
+      :class="[
+        'min-h-screen flex flex-col px-4 sm:px-6 lg:px-8 transition-colors duration-300 overflow-x-hidden',
+        isIos
+          ? 'pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))]'
+          : 'pt-40 pb-20',
+        isDarkMode ? '' : ''
+      ]"
+    >
       <section
         v-show="showFcvFetchPanel && dashboardFcvConnected"
         ref="fcvFetchSectionRef"
@@ -199,19 +260,33 @@
         </div>
       </section>
       <div class="mr-auto w-full max-w-full flex flex-col gap-10 lg:flex-row">
-        <aside
-          :class="[
+        <Teleport to="body" :disabled="!isIos">
+          <Transition name="fade">
+            <div
+              v-if="isIos && isCatalogDrawerOpen"
+              class="fixed inset-0 z-40 bg-black/50"
+              aria-hidden="true"
+              @click="closeCatalogDrawer"
+            />
+          </Transition>
+          <Transition name="slide-left">
+          <aside
+            v-if="!isIos || isCatalogDrawerOpen"
+            ref="catalogDrawerRef"
+            :class="[
             'flex-shrink-0 rounded-2xl border text-left font-quicksand transition-all duration-300 flex flex-col',
             theme === 'dark'
               ? 'bg-gray-900 border-white/10 text-gray-200 shadow-md shadow-black/40'
               : 'bg-gray-100 border-gray-200 text-gray-800 shadow-sm',
-            isSidebarCollapsed
-              ? 'lg:w-16 px-3 py-4'
-              : 'lg:w-72 xl:w-80 px-5 py-6'
+            isIos
+              ? 'catalog-drawer-ios fixed left-0 top-0 z-50 h-[100dvh] w-full max-w-sm overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] px-5 py-6 shadow-2xl'
+              : isSidebarCollapsed
+                ? 'lg:w-16 px-3 py-4'
+                : 'lg:w-72 xl:w-80 px-5 py-6'
           ]"
         >
-          <div :class="['flex items-center mb-6', isSidebarCollapsed ? 'justify-center' : 'justify-between']">
-            <div v-show="!isSidebarCollapsed" class="flex-1">
+          <div :class="['flex items-center mb-6 flex-shrink-0', isSidebarCollapsed && !isIos ? 'justify-center' : 'justify-between']">
+            <div v-show="!isSidebarCollapsed || isIos" class="flex-1">
               <h2 :class="['text-lg font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
                 Logbook Catalog
               </h2>
@@ -221,12 +296,27 @@
         </div>
             <div class="flex items-center gap-2">
               <Icon 
-                v-show="!isSidebarCollapsed"
+                v-show="!isSidebarCollapsed && !isIos"
                 :name="'ri:database-2-line'" 
                 :size="22" 
                 :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']" 
               />
               <button
+                v-if="isIos"
+                type="button"
+                @click="closeCatalogDrawer"
+                :class="[
+                  'p-1.5 rounded-lg transition-colors',
+                  isDarkMode
+                    ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-300'
+                    : 'hover:bg-gray-200 text-gray-600 hover:text-gray-700'
+                ]"
+                aria-label="Close Logbook Catalog"
+              >
+                <Icon name="ri:close-line" :size="20" />
+              </button>
+              <button
+                v-else
                 @click="toggleSidebar"
                 :class="[
                   'p-1.5 rounded-lg transition-colors',
@@ -243,7 +333,11 @@
               </button>
             </div>
           </div>
-          <div v-show="!isSidebarCollapsed" class="space-y-6 flex-1">
+          <div
+            v-show="!isSidebarCollapsed || isIos"
+            :class="isIos ? 'catalog-drawer-ios-scroll flex-1 min-h-0 overflow-y-auto' : 'flex-1'"
+          >
+            <div class="space-y-6">
             <div
               v-for="section in catalogSections"
               :key="section.key"
@@ -305,7 +399,7 @@
 
                   <!-- Aircraft: family tree -->
                   <template v-if="section.key === 'aircraft'">
-                    <ul :class="['space-y-2 text-sm max-h-56 overflow-y-auto pr-1 font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+                    <ul :class="['catalog-section-scroll space-y-2 text-sm max-h-56 overflow-y-auto pr-1 font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
                       <li v-for="fam in getFilteredAircraftFamilies()" :key="'fam-' + fam" class="space-y-1">
                         <div class="flex items-center justify-between">
                           <div class="flex items-center gap-2">
@@ -361,7 +455,7 @@
                   <template v-else>
                     <ul
                   :class="[
-                    'space-y-2 text-sm max-h-48 overflow-y-auto pr-1 font-quicksand',
+                    'catalog-section-scroll space-y-2 text-sm max-h-48 overflow-y-auto pr-1 font-quicksand',
                     isDarkMode ? 'text-gray-300' : 'text-gray-700'
                   ]"
                 >
@@ -369,7 +463,7 @@
                     v-for="item in getFilteredCatalogItemsForSection(section.key)"
                     :key="`${section.key}-${item}`"
                     :class="[
-                      'flex items-center gap-2',
+                      'flex items-center gap-2 min-w-0',
                           (section.key === 'airports' || section.key === 'pilots') ? 'cursor-pointer hover:opacity-70 transition-opacity' : ''
                         ]"
                         @click="section.key === 'airports' ? showAirportInfo(item) : section.key === 'pilots' ? showCrewProfile(item) : null"
@@ -397,7 +491,7 @@
                             }
                           "
                         />
-                    <span class="truncate" :title="section.key === 'airports' ? getAirportDisplayText(item) : item">
+                    <span class="truncate min-w-0 flex-1" :title="section.key === 'airports' ? getAirportDisplayText(item) : item">
                       {{ section.key === 'airports' ? getAirportDisplayText(item) : item }}
                     </span>
                   </li>
@@ -407,7 +501,7 @@
             </div>
 
           <!-- Conditions filter section -->
-          <div v-show="!isSidebarCollapsed">
+          <div v-show="!isSidebarCollapsed || isIos">
             <div
               :class="[
                 'rounded-xl border px-4 py-4 transition-colors duration-300',
@@ -450,7 +544,7 @@
                 </div>
 
           <!-- Flag/Tag Entries filter section -->
-          <div v-show="!isSidebarCollapsed">
+          <div v-show="!isSidebarCollapsed || isIos">
             <div
               :class="[
                 'rounded-xl border px-4 py-4 transition-colors duration-300',
@@ -510,7 +604,7 @@
           </div>
 
           <!-- Filters active section -->
-          <div v-show="!isSidebarCollapsed" class="relative settings-container pt-6">
+          <div v-show="!isSidebarCollapsed || isIos" class="relative settings-container pt-6">
             <div class="mb-3 flex items-center justify-between">
               <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                 Filters active:
@@ -539,8 +633,9 @@
                     </button>
             </div>
           </div>
+            </div>
           </div>
-          <div v-show="isSidebarCollapsed" class="flex flex-col items-center gap-4">
+          <div v-show="isSidebarCollapsed && !isIos" class="flex flex-col items-center gap-4">
             <Icon 
               :name="'ri:database-2-line'" 
               :size="24" 
@@ -564,9 +659,11 @@
             </div>
             </div>
           </div>
-        </aside>
+          </aside>
+          </Transition>
+        </Teleport>
 
-        <div class="flex-1 space-y-12 min-w-0 overflow-x-auto">
+        <div class="flex-1 space-y-12 min-w-0">
           <section class="text-center lg:text-left">
 
             <div class="space-y-6">
@@ -687,12 +784,19 @@
                   </div>
                 </div>
                 <!-- Flight totals (airplane time) -->
-                <div v-if="totalsViewMode === 'flight'" class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                <div
+                  v-if="totalsViewMode === 'flight'"
+                  :class="[
+                    'grid gap-4',
+                    isIos ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+                  ]"
+                >
                   <div
                     v-for="summaryField in summaryFields"
                     :key="summaryField.key"
                     :class="[
-                      'rounded-xl border px-4 py-5 text-left transition-all duration-300 relative overflow-hidden group',
+                      'rounded-xl border text-left transition-all duration-300 relative overflow-hidden group',
+                      isIos ? 'px-3 py-3' : 'px-4 py-5',
                       summaryField.key === 'totalTime'
                         ? (isDarkMode 
                             ? 'bg-blue-500/20 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.15)]'
@@ -705,19 +809,21 @@
                     <!-- Decorative glow for Total Time -->
                     <div v-if="summaryField.key === 'totalTime'" class="absolute -right-6 -top-6 w-24 h-24 bg-blue-500/10 rounded-full blur-xl group-hover:bg-blue-500/20 transition-colors duration-500"></div>
                     
-                    <p :class="[
+                    <p
+                      :title="summaryField.label"
+                      :class="[
                       'text-xs uppercase tracking-wider font-semibold font-quicksand relative z-10',
                       summaryField.key === 'totalTime'
                         ? (isDarkMode ? 'text-blue-400' : 'text-blue-600')
                         : (isDarkMode ? 'text-gray-400' : 'text-gray-500')
                     ]">
-                      {{ summaryField.label }}
+                      {{ summaryField.cardLabel ?? summaryField.label }}
                     </p>
                     <p :class="[
                       'font-semibold font-quicksand mt-2 relative z-10',
                       summaryField.key === 'totalTime'
-                        ? 'text-3xl tracking-tight'
-                        : 'text-2xl',
+                        ? (isIos ? 'text-2xl tracking-tight' : 'text-3xl tracking-tight')
+                        : (isIos ? 'text-xl' : 'text-2xl'),
                       summaryField.key === 'totalTime'
                         ? (isDarkMode ? 'text-white drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'text-gray-900')
                         : (isDarkMode ? 'text-gray-200' : 'text-gray-900')
@@ -727,12 +833,19 @@
                   </div>
                 </div>
                 <!-- Sim totals (simplified: Total, Instrument, Dual Received only) -->
-                <div v-else class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                <div
+                  v-else
+                  :class="[
+                    'grid gap-4',
+                    isIos ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+                  ]"
+                >
                   <div
                     v-for="summaryField in simOverviewFields"
                     :key="summaryField.key"
                     :class="[
-                      'rounded-xl border px-4 py-5 text-left transition-all duration-300 relative overflow-hidden group',
+                      'rounded-xl border text-left transition-all duration-300 relative overflow-hidden group',
+                      isIos ? 'px-3 py-3' : 'px-4 py-5',
                       summaryField.key === 'totalTime'
                         ? (isDarkMode 
                             ? 'bg-blue-500/20 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.15)]'
@@ -743,19 +856,21 @@
                     ]"
                   >
                     <div v-if="summaryField.key === 'totalTime'" class="absolute -right-6 -top-6 w-24 h-24 bg-blue-500/10 rounded-full blur-xl group-hover:bg-blue-500/20 transition-colors duration-500"></div>
-                    <p :class="[
+                    <p
+                      :title="summaryField.label"
+                      :class="[
                       'text-xs uppercase tracking-wider font-semibold font-quicksand relative z-10',
                       summaryField.key === 'totalTime'
                         ? (isDarkMode ? 'text-blue-400' : 'text-blue-600')
                         : (isDarkMode ? 'text-gray-400' : 'text-gray-500')
                     ]">
-                      {{ summaryField.label }}
+                      {{ summaryField.cardLabel ?? summaryField.label }}
                     </p>
                     <p :class="[
                       'font-semibold font-quicksand mt-2 relative z-10',
                       summaryField.key === 'totalTime'
-                        ? 'text-3xl tracking-tight'
-                        : 'text-2xl',
+                        ? (isIos ? 'text-2xl tracking-tight' : 'text-3xl tracking-tight')
+                        : (isIos ? 'text-xl' : 'text-2xl'),
                       summaryField.key === 'totalTime'
                         ? (isDarkMode ? 'text-white drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'text-gray-900')
                         : (isDarkMode ? 'text-gray-200' : 'text-gray-900')
@@ -902,14 +1017,14 @@
                   Entries are stored locally in this browser to align with AC&nbsp;120-78B data integrity expectations. Export and secured archival features will follow the signing workflow.
             </p>
       </div>
-              <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
-                <div class="relative">
+              <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end w-full lg:w-auto">
+                <div class="relative w-full sm:w-60">
               <input 
                     v-model="searchTerm"
                     type="search"
                     placeholder="Search entries"
                     :class="[
-                      'w-full sm:w-60 rounded-lg border px-5 py-2 focus:outline-none focus:ring-2 font-quicksand transition-colors duration-300',
+                      'w-full rounded-lg border px-5 py-2 focus:outline-none focus:ring-2 font-quicksand transition-colors duration-300',
                       isDarkMode 
                         ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500' 
                         : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400 focus:ring-blue-500'
@@ -919,20 +1034,6 @@
             <Icon name="ri:search-line" size="18" />
           </span>        
           </div>
-                <div>
-              <button
-            type="button"
-            @click="toggleEntryForm"
-                    :class="[
-              'inline-flex items-center px-5 py-2 rounded-lg text-sm sm:text-base font-quicksand font-medium transition-all duration-200',
-                      isDarkMode 
-                ? (isEntryFormOpen ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20')
-                : (isEntryFormOpen ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-900')
-            ]"
-          >
-            {{ isEntryFormOpen ? 'Hide Entry' : 'Add Entry' }}
-          </button>
-            </div>
               </div>
         </div>
 
@@ -945,120 +1046,17 @@
                 Sorted by most recent entry date.
               </span>
             </div>
-              <!-- Floating Settings Button Above DATE Column -->
-              <div 
-                v-if="filteredEntries.length > 0 && visibleColumns.find(c => c.key === 'date')"
-                class="relative column-settings-container"
-              >
-                <button
-                  type="button"
-                  @click.stop="showColumnSettings = !showColumnSettings"
-                  :class="[
-                    'p-1.5 rounded transition-colors',
-                    isDarkMode 
-                      ? 'hover:bg-white/10 text-gray-400 hover:text-gray-300 bg-white/5 border border-white/10 shadow-sm shadow-black/20' 
-                      : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700 bg-gray-100'
-                  ]"
-                  aria-label="Column settings"
-                >
-                  <Icon name="ri:settings-3-line" size="16" />
-                </button>
-                <!-- Column Settings Dropdown -->
-                <div
-                  v-if="showColumnSettings"
-                  :class="[
-                    'absolute right-0 top-full mt-2 w-80 rounded-xl border shadow-2xl p-4 z-50',
-                    isDarkMode 
-                  ? 'bg-gray-900 border-white/10 shadow-xl shadow-black/50' 
-                  : 'bg-white border-gray-200'
-                  ]"
-                  @click.stop
-                >
-                  <div class="flex items-center justify-between mb-4">
-                    <h3 :class="['font-semibold font-quicksand text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
-                      Column Settings
-                    </h3>
-                    <button
-                      @click="showColumnSettings = false"
-                      :class="['hover:opacity-70 transition-opacity', isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700']"
-                      aria-label="Close column settings"
-                    >
-                      <Icon name="ri:close-line" size="20" />
-                    </button>
-                  </div>
-                  <div class="space-y-2 max-h-96 overflow-y-auto">
-                    <div
-                      v-for="col in columnConfig.sort((a, b) => a.order - b.order)"
-                      :key="col.key"
-                      :draggable="true"
-                      @dragstart="draggedColumnKey = col.key"
-                      @dragover.prevent
-                      @drop.prevent="handleColumnDrop(col.key)"
-                      :class="[
-                        'flex items-center gap-3 p-2 rounded-lg cursor-move transition-colors',
-                        draggedColumnKey === col.key 
-                          ? (isDarkMode ? 'bg-gray-700 opacity-50' : 'bg-gray-200 opacity-50')
-                          : (isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-200')
-                      ]"
-                    >
-                      <Icon 
-                        name="ri:drag-move-2-line" 
-                        size="16" 
-                        :class="[isDarkMode ? 'text-gray-500' : 'text-gray-400']"
-                      />
-                      <label
-                        :class="[
-                          'flex-1 flex items-center gap-2 cursor-pointer',
-                          col.required ? 'opacity-60' : ''
-                        ]"
-                      >
-                        <input
-                          type="checkbox"
-                          :checked="col.visible"
-                          :disabled="col.required"
-                          @change="toggleColumnVisibility(col.key)"
-                          :class="[
-                            'h-4 w-4 rounded border transition-colors',
-                            isDarkMode 
-                              ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' 
-                              : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500'
-                          ]"
-                        />
-                        <span :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
-                          {{ col.label }}
-                          <span v-if="col.required" :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']">(required)</span>
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-                  <div class="mt-4 pt-4 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
-                    <div class="flex flex-col gap-2">
-                      <button
-                        @click="resetColumnWidths()"
-                        :class="[
-                          'w-full px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
-                          isDarkMode 
-                            ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' 
-                            : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                        ]"
-                      >
-                        Reset Column Widths
-                      </button>
-                      <button
-                        @click="resetColumnConfig()"
-                        :class="[
-                          'w-full px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
-                          isDarkMode 
-                            ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' 
-                            : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                        ]"
-                      >
-                        Reset to Defaults
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <button
+              v-if="filteredEntries.length > 0"
+              type="button"
+              :class="[
+                'mt-4 text-xs font-quicksand underline-offset-2 hover:underline transition-colors',
+                isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-700 hover:text-blue-800',
+              ]"
+              @click="openEntryCardPreferences"
+            >
+              Customize entry cards in Settings →
+            </button>
           </div>
 
             <div
@@ -1081,235 +1079,51 @@
               </template>
           </div>
 
-            <div
+            <LogEntryList
               v-else
-              ref="tableContainerRef"
-                      :class="[
-                'mt-6 rounded-2xl border transition-colors duration-300 relative overflow-x-auto',
-                        isDarkMode 
-    ? 'border-gray-700' 
-    : 'border-gray-300 shadow-sm'
-              ]"
-            >
-              <table 
-                ref="tableRef"
-                :class="[
-                  'w-full divide-y text-left font-quicksand',
-                  isDarkMode 
-                    ? 'divide-white/10 bg-gray-900 border-white/10 shadow-md shadow-black/40' 
-                      : 'divide-gray-200 bg-gray-100'
-                ]" 
-                style="table-layout: fixed; width: 100%;"
-              >
-                <thead 
-                  ref="tableHeaderRef"
-                  :class="[
-                    'uppercase text-xs font-semibold tracking-wider font-quicksand z-20',
-                    isDarkMode 
-                      ? 'bg-gray-900 text-gray-400 border-b border-white/10 shadow-md shadow-black/40' 
-                      : 'bg-gray-100 text-gray-500 border-b border-gray-200'
-                  ]"
-                >
-                  <tr>
-                    <th 
-                      v-for="col in visibleColumns" 
-                      :key="col.key"
-                      :class="[
-                        'font-medium relative group',
-                        getHeaderTextAlign(col),
-                        col.responsiveClass || '',
-                        ...getColumnPadding(col)
-                      ]"
-                      :style="col.width ? `width: ${col.width}px;` : ''"
-                    >
-                      {{ col.label }}
-                      <!-- Resize handle -->
-                      <div
-                        class="absolute top-0 right-0 h-full w-1 cursor-col-resize opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                        :class="isDarkMode ? 'hover:bg-blue-500' : 'hover:bg-blue-600'"
-                        @mousedown.prevent="startResize(col.key, $event)"
-                        style="margin-right: -2px;"
-                      ></div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody :class="[
-                  'divide-y text-sm font-quicksand',
-                  isDarkMode 
-                    ? 'divide-gray-700 bg-gray-900 text-gray-300' 
-                    : 'divide-gray-200 bg-gray-100 text-gray-600'
-                ]">
-                  <template v-for="entry in filteredEntries" :key="entry.id">
-                  <tr
-                    :class="[
-                      'transition-all duration-200 border-l-4',
-                      entry.flagged
-                        ? (isDarkMode 
-                          ? 'bg-amber-900/20 border-l-amber-500 hover:bg-amber-900/30' 
-                          : 'bg-amber-50 border-l-amber-500 hover:bg-amber-100')
-                        : (isDarkMode 
-                          ? 'hover:bg-white/10 border-transparent hover:border-blue-500/50' 
-                          : 'hover:bg-gray-200 border-transparent hover:border-blue-500')
-                    ]"
-                      class="cursor-pointer"
-                      @click="beginInlineEditing(entry)"
-                  >
-                    <td 
-                      v-for="col in visibleColumns"
-                      :key="col.key"
-                      :class="[...getCellClasses(col), getCellTextColor(col)]"
-                      :style="col.width ? `width: ${col.width}px;` : ''"
-                    >
-                      <!-- Date Column -->
-                      <template v-if="col.key === 'date'">
-                        <div>
-                        <div :class="['font-semibold text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
-                          {{ formatDisplayDate(entry.date) }}
-                        </div>
-                        <div :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                          {{ roleDisplayLabel(entry.role) }}
-                          </div>
-                        </div>
-                      </template>
-                      <!-- Aircraft Column -->
-                      <template v-else-if="col.key === 'aircraft'">
-                        <div :class="['text-sm truncate', isDarkMode ? 'text-gray-200' : 'text-gray-900']">{{ entry.aircraftMakeModel }}</div>
-                        <div :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                          {{ entry.aircraftCategoryClass }}
-                        </div>
-                      </template>
-                      <!-- Identification Column -->
-                      <template v-else-if="col.key === 'identification'">
-                        {{ entry.registration }}
-                      </template>
-                      <!-- Flight Number Column -->
-                      <template v-else-if="col.key === 'flightNumber'">
-                        {{ entry.flightNumber || '—' }}
-                      </template>
-                      <!-- From → To Column -->
-                      <template v-else-if="col.key === 'fromTo'">
-                        <div :class="['font-semibold text-sm truncate', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                          {{ entry.departure }} → {{ entry.destination }}
-                        </div>
-                        <div v-if="entry.route" :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                          {{ entry.route }}
-                        </div>
-                      </template>
-                      <!-- Conditions Column -->
-                      <template v-else-if="col.key === 'conditions'">
-                        <div class="flex flex-wrap gap-1">
-                          <span
-                            v-for="condition in getDisplayConditions(entry)"
-                            :key="`${entry.id}-${condition}`"
-                            :class="[
-                              'rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold border',
-                              isDarkMode 
-                                ? 'bg-gray-900 border-white/10 text-gray-300 shadow-md shadow-black/40' 
-                                : 'bg-gray-100 border-gray-200 text-gray-600'
-                            ]"
-                          >
-                            {{ condition }}
-                          </span>
-                          <span
-                            :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']"
-                            v-if="getDisplayConditions(entry).length === 0"
-                          >
-                            —
-                          </span>
-                        </div>
-                      </template>
-                      <!-- Remarks Column -->
-                      <template v-else-if="col.key === 'remarks'">
-                        <div class="whitespace-normal break-words">{{ entry.remarks || '—' }}</div>
-                      </template>
-                      <!-- PIC Column -->
-                      <template v-else-if="col.key === 'pic'">
-                        {{ formatNumber(entry.flightTime.pic) }}
-                      </template>
-                      <!-- SIC Column -->
-                      <template v-else-if="col.key === 'sic'">
-                        {{ formatNumber(entry.flightTime.sic) }}
-                      </template>
-                      <!-- Dual R Column -->
-                      <template v-else-if="col.key === 'dualR'">
-                        {{ formatNumber(entry.flightTime.dual) }}
-                      </template>
-                      <!-- Solo Column -->
-                      <template v-else-if="col.key === 'solo'">
-                        {{ formatNumber(entry.flightTime.solo) }}
-                      </template>
-                      <!-- Night Column -->
-                      <template v-else-if="col.key === 'night'">
-                        {{ formatNumber(entry.flightTime.night) }}
-                      </template>
-                      <!-- Actual Column -->
-                      <template v-else-if="col.key === 'actual'">
-                        {{ formatNumber(entry.flightTime.actualInstrument) }}
-                      </template>
-                      <!-- Hood Column -->
-                      <template v-else-if="col.key === 'hood'">
-                        {{ formatNumber(entry.flightTime.simulatedInstrument) }}
-                      </template>
-                      <!-- Dual G Column -->
-                      <template v-else-if="col.key === 'dualG'">
-                        {{ formatNumber(entry.flightTime.dualGiven) }}
-                      </template>
-                      <!-- XC Column -->
-                      <template v-else-if="col.key === 'xc'">
-                        {{ formatNumber(entry.flightTime.crossCountry) }}
-                      </template>
-                      <!-- Day Landings Column -->
-                      <template v-else-if="col.key === 'dayLandings'">
-                        {{ entry.performance.dayLandings ?? '—' }}
-                      </template>
-                      <!-- Night Landings Column -->
-                      <template v-else-if="col.key === 'nightLandings'">
-                        {{ entry.performance.nightLandings ?? '—' }}
-                      </template>
-                      <!-- Approach Column -->
-                      <template v-else-if="col.key === 'approach'">
-                        {{ getTotalApproachCount(entry.performance) || '—' }}
-                      </template>
-                      <!-- Pilots Column -->
-                      <template v-else-if="col.key === 'pilots'">
-                        <div class="truncate">{{ entry.trainingElements || '—' }}</div>
-                      </template>
-                      <!-- Total Column -->
-                      <template v-else-if="col.key === 'total'">
-                        <span :class="[
-                          entry.importSource === 'fc_view'
-                            ? (isDarkMode ? 'text-amber-400' : 'text-amber-600')
-                            : entry.importSource === 'logbook_builder'
-                            ? (isDarkMode ? 'text-green-400' : 'text-green-600')
-                            : entry.isImported && entry.importSource !== 'localStorage'
-                              ? (isDarkMode ? 'text-red-400' : 'text-red-600')
-                              : (isDarkMode ? 'text-blue-400' : 'text-blue-600')
-                        ]">
-                          {{ formatNumber(entry.flightTime.total) }}
-                        </span>
-                      </template>
-                    </td>
-                    </tr>
-                  </template>
-                </tbody>
-              </table>
-            </div>
+              :entries="filteredEntries"
+              :is-dark-mode="isDarkMode"
+              :visible-detail-fields="visibleDetailFields"
+              :show-remarks-footer="showRemarksFooter"
+              @select="beginInlineEditing"
+            />
       </div>
     </div>
     </main>
+    </div>
 
     <!-- Backdrop Overlay for Edit Panel -->
     <Transition name="fade">
       <div
         v-if="expandedEntryId !== null"
-        class="fixed inset-0 z-40 bg-black/50 pointer-events-none"
+        :class="[
+          'fixed inset-0 z-40 bg-black/50',
+          isIos ? '' : 'pointer-events-none'
+        ]"
+        aria-hidden="true"
+        @click="isIos && cancelInlineEdit()"
       ></div>
     </Transition>
 
     <!-- Right-Side Edit Panel -->
     <Transition name="slide-right">
-      <div v-if="expandedEntryId !== null && inlineEditEntry" class="fixed right-0 top-0 h-full w-full md:w-[500px] lg:w-[600px] z-50" @keydown.escape="cancelInlineEdit" tabindex="-1">
-        <div class="h-full flex flex-col shadow-2xl relative" :class="isDarkMode ? 'bg-gray-900 border-l border-gray-700' : 'bg-gray-50 border-l border-gray-200'">
+      <div
+        v-if="expandedEntryId !== null && inlineEditEntry"
+        ref="editEntryDrawerRef"
+        :class="[
+          'fixed left-0 right-0 top-0 h-full w-full max-w-[100dvw] md:w-[500px] lg:w-[600px] md:max-w-none md:left-auto z-50 overflow-x-hidden overscroll-x-none',
+          isIos ? 'pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]' : ''
+        ]"
+        @keydown.escape="cancelInlineEdit"
+        tabindex="-1"
+      >
+        <div
+          :class="[
+            'h-full flex flex-col shadow-2xl relative overflow-x-hidden min-w-0 max-w-full w-full',
+            isIos ? 'entry-panel-ios' : '',
+            isDarkMode ? 'bg-gray-900 border-l border-gray-700' : 'bg-gray-50 border-l border-gray-200'
+          ]"
+        >
           <!-- Audit Trail Sidebar -->
           <Transition name="slide-left">
             <div
@@ -1405,20 +1219,24 @@
             type="button"
             @click="cancelInlineEdit"
             :class="[
-              'p-2 rounded-lg transition-colors text-xl leading-none',
+              'p-2 rounded-lg transition-colors',
               isDarkMode 
                 ? 'text-gray-400 hover:text-gray-200 hover:bg-white/10' 
                 : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'
             ]"
             aria-label="Close panel"
           >
-            ×
+            <Icon name="ri:close-line" size="20" />
           </button>
           </div>
           
           <!-- Scrollable Form Content -->
-          <div class="flex-1 overflow-y-auto p-6" data-edit-panel>
-          <div v-if="inlineEditEntry" class="grid gap-6">
+          <div
+            class="flex-1 overflow-y-auto overflow-x-hidden min-w-0 w-full max-w-full box-border"
+            :class="[isIos ? 'py-4 entry-panel-ios' : 'p-6']"
+            data-edit-panel
+          >
+          <div v-if="inlineEditEntry" class="grid gap-6 min-w-0 max-w-full w-full">
 
             <!-- Simulator edit layout -->
             <template v-if="inlineEditEntry.logbookType === 'simulator'">
@@ -1439,7 +1257,7 @@
               <!-- Session block -->
               <div :class="['rounded-lg border p-4', isDarkMode ? 'border-white/10 bg-gray-900/50 shadow-md shadow-black/40' : 'border-gray-200 bg-white']">
                 <div :class="['text-[10px] uppercase font-bold mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Session</div>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4']">
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Date</label>
                     <input v-model="inlineEditEntry.date" type="date" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
@@ -1525,7 +1343,7 @@
               <!-- Optional details -->
               <div :class="['rounded-lg border p-4', isDarkMode ? 'border-white/10 bg-gray-900/30 shadow-md shadow-black/40' : 'border-gray-200 bg-gray-50/50']">
                 <div :class="['text-[10px] uppercase font-bold mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Optional — Aircraft &amp; Route</div>
-                <div class="grid gap-4 md:grid-cols-2">
+                <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'md:grid-cols-2']">
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Aircraft</label>
                     <input v-model="inlineEditEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="OPTIONAL" />
@@ -1548,7 +1366,7 @@
                     </div>
                   </div>
                 </div>
-                <div class="grid gap-4 mt-3 grid-cols-1 md:grid-cols-[1fr_1fr_2fr]">
+                <div :class="['grid gap-4 mt-3', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 md:grid-cols-[1fr_1fr_2fr]']">
                   <div class="relative">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">From</label>
                     <input v-model="inlineEditEntry.departure" type="text" :class="['w-full rounded border px-2 py-1 text-sm uppercase font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="OPTIONAL" autocomplete="off" @input="inlineEditEntry.departure = ($event.target as HTMLInputElement).value.toUpperCase()" @focus="showInlineFromDropdown = true; highlightedInlineFromIndex = filteredAirportsForInlineFrom.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'inlineFrom', filteredAirportsForInlineFrom, (item) => selectAirportForInlineFrom(item))" @blur="handleInlineFromBlur" />
@@ -1563,7 +1381,7 @@
                       <button v-for="(airport, index) in filteredAirportsForInlineTo" :key="airport" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedInlineToIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectAirportForInlineTo(airport)">{{ airport }}</button>
                     </div>
                   </div>
-                  <div>
+                  <div :class="isIos ? 'col-span-2' : ''">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
                     <input v-model="inlineEditEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="OPTIONAL" @blur="inlineEditEntry.route = (inlineEditEntry.route || '').trim().toUpperCase()" />
                   </div>
@@ -1572,7 +1390,7 @@
               <!-- Performance -->
               <div>
                 <div :class="['text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Performance</div>
-                <div class="grid gap-4 grid-cols-2 md:grid-cols-4">
+                <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4']">
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day Ldg</label>
                     <input v-model.number="inlineEditEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
@@ -1602,26 +1420,26 @@
                 </div>
               </div>
               <!-- Conditions, Tags, Remarks, Pilot -->
-              <div class="flex flex-wrap gap-3">
-                <label v-for="condition in conditionOptions" :key="condition.value" :class="['inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all', (inlineEditEntry.flightConditions || []).includes(condition.value) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')]">
-                  <input v-model="inlineEditEntry.flightConditions" :value="condition.value" type="checkbox" :class="['h-4 w-4 rounded border transition-colors', isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500']" />
+              <div :class="isIos ? 'grid gap-2 entry-grid-ios-2' : 'flex flex-wrap gap-3'">
+                <label v-for="condition in conditionOptions" :key="condition.value" :class="['rounded-lg border text-sm font-quicksand cursor-pointer transition-all', isIos ? 'entry-chip-ios' : 'inline-flex items-center gap-2 px-4 py-2', (inlineEditEntry.flightConditions || []).includes(condition.value) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')]">
+                  <input v-model="inlineEditEntry.flightConditions" :value="condition.value" type="checkbox" :class="['rounded border transition-colors flex-shrink-0', isIos ? 'h-[18px] w-[18px]' : 'h-4 w-4', isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500']" />
                   <span>{{ condition.label }}</span>
                 </label>
               </div>
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Tags</label>
-                <div class="flex flex-wrap gap-2 mb-3 items-center">
+                <div :class="[isIos ? 'grid gap-2 entry-grid-ios-2 mb-3' : 'flex flex-wrap gap-2 mb-3 items-center']">
                   <template v-for="tag in [...allTagOptions, ...customTagsFor(inlineEditEntry)]" :key="'sim-inline-' + tag">
-                    <label :class="['inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-quicksand cursor-pointer transition-all', (inlineEditEntry.tags || []).includes(tag) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-300 bg-gray-100 text-gray-600 hover:border-gray-400')]">
-                      <input v-model="inlineEditEntry.tags" type="checkbox" :value="tag" :class="['h-3.5 w-3.5 rounded']" />
+                    <label :class="['rounded-lg border text-sm font-quicksand cursor-pointer transition-all', isIos ? 'entry-chip-ios' : 'inline-flex items-center gap-2 px-3 py-1.5', (inlineEditEntry.tags || []).includes(tag) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-300 bg-gray-100 text-gray-600 hover:border-gray-400')]">
+                      <input v-model="inlineEditEntry.tags" type="checkbox" :value="tag" :class="['rounded border transition-colors flex-shrink-0', isIos ? 'h-[18px] w-[18px]' : 'h-4 w-4', isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500']" />
                       <span>{{ tag }}</span>
                     </label>
                   </template>
                   <template v-if="!showInlineCustomTagInput">
-                    <button type="button" @click="showInlineCustomTagInput = true" :class="['inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-sm font-quicksand transition-all', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200']" aria-label="Add custom tag">+</button>
+                    <button type="button" @click="showInlineCustomTagInput = true" :class="['inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-sm font-quicksand transition-all', isIos ? 'col-span-2' : '', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200']" aria-label="Add custom tag">+</button>
                   </template>
                   <template v-else>
-                    <div class="inline-flex gap-1 items-center">
+                    <div :class="['inline-flex gap-1 items-center', isIos ? 'col-span-2' : '']">
                       <input v-model="customTagInputInline" type="text" placeholder="Custom tag" :class="['w-28 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addCustomTag(inlineEditEntry, customTagInputInline); customTagInputInline = ''; showInlineCustomTagInput = false" />
                       <button type="button" @click="addCustomTag(inlineEditEntry, customTagInputInline); customTagInputInline = ''; showInlineCustomTagInput = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
                       <button type="button" @click="showInlineCustomTagInput = false; customTagInputInline = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
@@ -1633,7 +1451,7 @@
               </div>
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Pilot</label>
-                <div class="grid gap-4 md:grid-cols-3">
+                <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'md:grid-cols-3']">
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Job</label>
                     <select v-model="inlineEditEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']">
@@ -1645,16 +1463,12 @@
                       <option value="First Officer">First Officer</option>
                     </select>
                   </div>
-                  <div class="relative">
+                  <div :class="['relative', isIos ? 'col-span-2' : '']">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Name</label>
                     <input v-model="inlineEditEntry.trainingElements" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Pilot Name" autocomplete="off" @focus="showInlinePilotNameDropdown = true; highlightedInlinePilotIndex = filteredPilotsForInline.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'inlinePilot', filteredPilotsForInline, (item) => selectPilotNameForInline(item))" @blur="handleInlinePilotNameBlur" />
                     <div v-if="showInlinePilotNameDropdown && filteredPilotsForInline.length > 0" data-dropdown="inlinePilot" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']">
                       <button v-for="(pilot, index) in filteredPilotsForInline" :key="pilot" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm transition-colors', highlightedInlinePilotIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectPilotNameForInline(pilot)">{{ pilot }}</button>
                     </div>
-                  </div>
-                  <div>
-                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
-                    <input v-model="inlineEditEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Certificate #" />
                   </div>
                 </div>
               </div>
@@ -1705,9 +1519,9 @@
                   {{ inlineEditEntry.oooi.isZulu ? 'Zulu (UTC)' : 'Local' }}
                 </button>
               </div>
-              <div class="grid grid-cols-4 gap-2 p-2 rounded border border-dashed border-gray-600/50">
+              <div :class="['grid gap-2 p-2 rounded border border-dashed border-gray-600/50', isIos ? 'entry-grid-ios-2' : 'grid-cols-2 sm:grid-cols-4']">
                <div v-for="field in oooiFields" :key="field">
-                  <label :class="['block text-[10px] uppercase font-bold mb-1 text-center', isDarkMode ? 'text-blue-400' : 'text-blue-600']">{{ field }}</label>
+                  <label :class="['block text-[10px] uppercase font-bold mb-1 text-center', isDarkMode ? 'text-blue-400' : 'text-blue-600']">{{ oooiFieldLabels[field] }}</label>
                   <input 
                     v-if="inlineEditEntry?.oooi" 
                     v-model="inlineEditEntry.oooi[field]" 
@@ -1721,7 +1535,7 @@
                </div>
             </div>
 
-            <div class="grid gap-4 md:grid-cols-4">
+            <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'md:grid-cols-4']">
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Date</label>
                 <input v-model="inlineEditEntry.date" type="date" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
@@ -1772,7 +1586,7 @@
                 </div>
               </div>
             </div>
-            <div class="grid gap-4 md:grid-cols-4 mb-2">
+            <div :class="['grid gap-4 mb-2 items-end', isIos ? 'entry-grid-ios-1' : 'md:grid-cols-4']">
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Flight Number</label>
                 <input 
@@ -1785,7 +1599,7 @@
               </div>
             </div>
 
-            <div class="grid gap-4" style="grid-template-columns: 1fr 1fr 2fr 1.5fr;">
+            <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4']">
               <div class="relative">
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">From</label>
                 <input 
@@ -1856,10 +1670,10 @@
                   </button>
                 </div>
               </div>
-              <div>
+              <div :class="isIos ? 'col-span-2' : ''">
                 <!-- Category/Class row (aircraft only) -->
-                <div class="flex gap-2">
-                  <div class="flex-[0.6]">
+                <div :class="['gap-2', isIos ? 'grid entry-grid-ios-cat-time' : 'flex flex-col sm:flex-row']">
+                  <div :class="isIos ? '' : 'flex-1 sm:flex-[0.6]'">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class</label>
                     <select
                       :value="categoryClassAircraftOptions.includes(inlineEditEntry.aircraftCategoryClass as any) ? inlineEditEntry.aircraftCategoryClass : ''"
@@ -1870,13 +1684,13 @@
                       <option v-for="opt in categoryClassAircraftOptions" :key="opt" :value="opt">{{ opt }}</option>
                     </select>
                   </div>
-                  <div class="flex-[1.4]">
+                  <div :class="isIos ? '' : 'flex-1 sm:flex-[1.4]'">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
                     <input v-model.number="inlineEditEntry.categoryClassTime" type="number" step="0.1" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="0.0" />
                   </div>
                 </div>
               </div>
-              <div>
+              <div :class="isIos ? 'col-span-2' : ''">
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
                 <input v-model="inlineEditEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @blur="inlineEditEntry.route = (inlineEditEntry.route || '').trim().toUpperCase()" />
               </div>
@@ -1885,9 +1699,9 @@
             <!-- Flight Times Inline (main air time only; sim time is under Category/Class) -->
              <div>
               <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
-              <div class="grid grid-cols-5 gap-3 w-full">
+              <div :class="['grid gap-3 w-full', isIos ? 'entry-grid-ios-2' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5']">
                 <div v-for="field in mainTimeFields" :key="field.key">
-                  <div :class="['text-[9px] uppercase font-bold mb-1 text-center whitespace-nowrap', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
+                  <div :class="['text-[9px] uppercase font-bold mb-1 text-center whitespace-normal sm:whitespace-nowrap', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
                     {{ mainTimeShortLabels[field.key] ?? field.label }}
                   </div>
                   <input
@@ -1928,7 +1742,7 @@
              </div>
 
              <!-- Performance Inline -->
-             <div class="grid gap-4 grid-cols-4">
+             <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4']">
                <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day Ldg</label>
                   <input v-model.number="inlineEditEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
@@ -1941,7 +1755,7 @@
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Holds</label>
                   <input v-model.number="inlineEditEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                </div>
-               <div class="col-span-4">
+               <div class="col-span-2 md:col-span-4">
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Approaches</label>
                   <div class="space-y-1.5">
                     <div
@@ -1968,12 +1782,13 @@
                </div>
              </div>
 
-            <div class="flex flex-wrap gap-3">
+            <div :class="isIos ? 'grid gap-2 entry-grid-ios-2' : 'flex flex-wrap gap-3'">
               <label
                 v-for="condition in conditionOptions"
                 :key="condition.value"
                 :class="[
-                  'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all',
+                  'rounded-lg border text-sm font-quicksand cursor-pointer transition-all',
+                  isIos ? 'entry-chip-ios' : 'inline-flex items-center gap-2 px-4 py-2',
                   (inlineEditEntry.flightConditions || []).includes(condition.value)
                     ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700')
                     : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')
@@ -1984,7 +1799,8 @@
                   :value="condition.value"
                   type="checkbox"
                   :class="[
-                    'h-4 w-4 rounded border transition-colors',
+                    'rounded border transition-colors flex-shrink-0',
+                    isIos ? 'h-[18px] w-[18px]' : 'h-4 w-4',
                     isDarkMode 
                       ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' 
                       : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500'
@@ -1996,25 +1812,26 @@
 
             <div>
               <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Tags</label>
-              <div class="flex flex-wrap gap-2 mb-3 items-center">
+              <div :class="[isIos ? 'grid gap-2 entry-grid-ios-2 mb-3' : 'flex flex-wrap gap-2 mb-3 items-center']">
                 <template v-for="tag in [...allTagOptions, ...customTagsFor(inlineEditEntry)]" :key="'inline-' + tag">
                   <label
                     :class="[
-                      'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-quicksand cursor-pointer transition-all',
+                      'rounded-lg border text-sm font-quicksand cursor-pointer transition-all',
+                      isIos ? 'entry-chip-ios' : 'inline-flex items-center gap-2 px-3 py-1.5',
                       (inlineEditEntry.tags || []).includes(tag)
                         ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700')
                         : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-300 bg-gray-100 text-gray-600 hover:border-gray-400')
                     ]"
                   >
-                    <input v-model="inlineEditEntry.tags" type="checkbox" :value="tag" :class="['h-3.5 w-3.5 rounded']" />
+                    <input v-model="inlineEditEntry.tags" type="checkbox" :value="tag" :class="['rounded border transition-colors flex-shrink-0', isIos ? 'h-[18px] w-[18px]' : 'h-4 w-4', isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500']" />
                     <span>{{ tag }}</span>
                   </label>
                 </template>
                 <template v-if="!showInlineCustomTagInput">
-                  <button type="button" @click="showInlineCustomTagInput = true" :class="['inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-sm font-quicksand transition-all', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200']" aria-label="Add custom tag">+</button>
+                  <button type="button" @click="showInlineCustomTagInput = true" :class="['inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-sm font-quicksand transition-all', isIos ? 'col-span-2' : '', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200']" aria-label="Add custom tag">+</button>
                 </template>
                 <template v-else>
-                  <div class="inline-flex gap-1 items-center">
+                  <div :class="['inline-flex gap-1 items-center', isIos ? 'col-span-2' : '']">
                     <input v-model="customTagInputInline" type="text" placeholder="Custom tag" :class="['w-28 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addCustomTag(inlineEditEntry, customTagInputInline); customTagInputInline = ''; showInlineCustomTagInput = false" />
                     <button type="button" @click="addCustomTag(inlineEditEntry, customTagInputInline); customTagInputInline = ''; showInlineCustomTagInput = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
                     <button type="button" @click="showInlineCustomTagInput = false; customTagInputInline = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
@@ -2038,7 +1855,7 @@
             <!-- Pilot Section -->
             <div>
               <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Pilot</label>
-              <div class="grid gap-4 md:grid-cols-3">
+              <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'md:grid-cols-3']">
                 <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Job</label>
                   <select v-model="inlineEditEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']">
@@ -2050,7 +1867,7 @@
                     <option value="First Officer">First Officer</option>
                   </select>
                 </div>
-                <div class="relative">
+                <div :class="['relative', isIos ? 'col-span-2' : '']">
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Name</label>
                   <input 
                     v-model="inlineEditEntry.trainingElements" 
@@ -2085,18 +1902,15 @@
                     </button>
                   </div>
                 </div>
-                <div>
-                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
-                  <input v-model="inlineEditEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Certificate #" />
-                </div>
                </div>
              </div>
 
             </template>
 
             <div 
-              class="flex items-center justify-between mt-2 pt-4 border-t"
               :class="[
+                'flex items-center justify-between mt-2 pt-4 border-t',
+                isIos ? 'entry-panel-actions-ios flex-col items-stretch gap-3' : '',
                 isDarkMode ? 'border-gray-700' : 'border-gray-200'
               ]"
             >
@@ -2136,9 +1950,15 @@
                 <button
                   type="button"
                   @click.stop="saveInlineEdit"
-                  :class="['px-4 py-2 rounded-lg text-sm font-bold shadow-lg', isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white']"
+                  :disabled="isSavingInlineEdit"
+                  :class="[
+                    'inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-bold shadow-lg',
+                    isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white',
+                    isSavingInlineEdit ? 'opacity-60 cursor-not-allowed' : ''
+                  ]"
                 >
-                  Confirm Changes
+                  <Icon v-if="isSavingInlineEdit" name="ri:loader-4-line" class="animate-spin mr-2" size="16" />
+                  {{ isSavingInlineEdit ? 'Saving…' : 'Confirm Changes' }}
                 </button>
               </div>
             </div>
@@ -2153,14 +1973,34 @@
     <Transition name="fade">
       <div
         v-if="isEntryFormOpen"
-        class="fixed inset-0 z-40 bg-black/50 pointer-events-none"
+        :class="[
+          'fixed inset-0 z-40 bg-black/50',
+          isIos ? '' : 'pointer-events-none'
+        ]"
+        aria-hidden="true"
+        @click="isIos && toggleEntryForm()"
       ></div>
     </Transition>
 
     <!-- Right-Side Add Entry Panel -->
     <Transition name="slide-right">
-      <div v-if="isEntryFormOpen" class="fixed right-0 top-0 h-full w-full md:w-[500px] lg:w-[600px] z-50" @keydown.escape="toggleEntryForm" tabindex="-1">
-        <div class="h-full flex flex-col shadow-2xl" :class="isDarkMode ? 'bg-gray-900 border-l border-gray-700' : 'bg-gray-50 border-l border-gray-200'">
+      <div
+        v-if="isEntryFormOpen"
+        ref="entryFormDrawerRef"
+        :class="[
+          'fixed left-0 right-0 top-0 h-full w-full max-w-[100dvw] md:w-[500px] lg:w-[600px] md:max-w-none md:left-auto z-50 overflow-x-hidden overscroll-x-none',
+          isIos ? 'pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]' : ''
+        ]"
+        @keydown.escape="toggleEntryForm"
+        tabindex="-1"
+      >
+        <div
+          :class="[
+            'h-full flex flex-col shadow-2xl overflow-x-hidden min-w-0 max-w-full w-full',
+            isIos ? 'entry-panel-ios' : '',
+            isDarkMode ? 'bg-gray-900 border-l border-gray-700' : 'bg-gray-50 border-l border-gray-200'
+          ]"
+        >
           <!-- Panel Header -->
           <div class="flex items-center justify-between gap-3 p-4 border-b" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-200']">
             <div class="flex items-center gap-2 min-w-0">
@@ -2175,6 +2015,7 @@
               </span>
             </div>
             <NuxtLink
+              v-if="!isIos"
               to="/logbook-builder"
               :class="[
                 'flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-quicksand font-medium transition-colors',
@@ -2188,20 +2029,24 @@
               type="button"
               @click="toggleEntryForm"
               :class="[
-                'p-2 rounded-lg transition-colors text-xl leading-none',
+                'p-2 rounded-lg transition-colors',
                 isDarkMode 
                   ? 'text-gray-400 hover:text-gray-200 hover:bg-white/10' 
                   : 'text-gray-500 hover:text-gray-900 hover:bg-gray-200'
               ]"
               aria-label="Close panel"
             >
-              ×
+              <Icon name="ri:close-line" size="20" />
             </button>
           </div>
           
           <!-- Scrollable Form Content -->
-          <div class="flex-1 overflow-y-auto p-6" data-add-entry-panel>
-            <form class="grid gap-6" @submit.prevent="submitEntry">
+          <div
+            class="flex-1 overflow-y-auto overflow-x-hidden min-w-0 w-full max-w-full box-border"
+            :class="[isIos ? 'py-4 entry-panel-ios' : 'p-6']"
+            data-add-entry-panel
+          >
+            <form class="grid gap-6 min-w-0 max-w-full w-full" @submit.prevent="submitEntry">
 
               <!-- Simulator layout -->
               <template v-if="activeLogbook === 'simulator'">
@@ -2209,7 +2054,7 @@
                   <!-- Session block: Date, Type, Time, Role -->
                   <div :class="['rounded-lg border p-4', isDarkMode ? 'border-white/10 bg-gray-900/50 shadow-md shadow-black/40' : 'border-gray-200 bg-white']">
                     <div :class="['text-[10px] uppercase font-bold mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Session</div>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4']">
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Date</label>
                         <input v-model="newEntry.date" type="date" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" required />
@@ -2292,7 +2137,7 @@
                   <!-- Optional details (collapsible) -->
                   <div :class="['rounded-lg border p-4', isDarkMode ? 'border-white/10 bg-gray-900/30 shadow-md shadow-black/40' : 'border-gray-200 bg-gray-50/50']">
                     <div :class="['text-[10px] uppercase font-bold mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Optional — Aircraft &amp; Route</div>
-                    <div class="grid gap-4 md:grid-cols-2">
+                    <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'md:grid-cols-2']">
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Aircraft</label>
                         <input v-model="newEntry.aircraftMakeModel" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="OPTIONAL" />
@@ -2328,7 +2173,7 @@
                         </div>
                       </div>
                     </div>
-                    <div class="grid gap-4 mt-3 grid-cols-1 md:grid-cols-[1fr_1fr_2fr]">
+                    <div :class="['grid gap-4 mt-3', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 md:grid-cols-[1fr_1fr_2fr]']">
                       <div class="relative">
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">From</label>
                         <input
@@ -2363,7 +2208,7 @@
                           <button v-for="(airport, index) in filteredAirportsForTo" :key="airport" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedToIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectAirportForTo(airport)">{{ airport }}</button>
                         </div>
                       </div>
-                      <div>
+                      <div :class="isIos ? 'col-span-2' : ''">
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
                         <input v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="OPTIONAL" @blur="newEntry.route = (newEntry.route || '').trim().toUpperCase()" />
                       </div>
@@ -2373,7 +2218,7 @@
                   <!-- Performance: Approaches & Holds -->
                   <div>
                     <div :class="['text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Performance</div>
-                    <div class="grid gap-4 grid-cols-2 md:grid-cols-4">
+                    <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4']">
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day Ldg</label>
                         <input v-model.number="newEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
@@ -2406,33 +2251,34 @@
                   </div>
 
                   <!-- Conditions, Tags, Remarks, Pilot -->
-                  <div class="flex flex-wrap gap-3">
-                    <label v-for="condition in conditionOptions" :key="condition.value" :class="['inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all', (newEntry.flightConditions || []).includes(condition.value) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')]">
-                      <input v-model="newEntry.flightConditions" :value="condition.value" type="checkbox" :class="['h-4 w-4 rounded border transition-colors', isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500']" />
+                  <div :class="isIos ? 'grid gap-2 entry-grid-ios-2' : 'flex flex-wrap gap-3'">
+                    <label v-for="condition in conditionOptions" :key="condition.value" :class="['rounded-lg border text-sm font-quicksand cursor-pointer transition-all', isIos ? 'entry-chip-ios' : 'inline-flex items-center gap-2 px-4 py-2', (newEntry.flightConditions || []).includes(condition.value) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')]">
+                      <input v-model="newEntry.flightConditions" :value="condition.value" type="checkbox" :class="['rounded border transition-colors flex-shrink-0', isIos ? 'h-[18px] w-[18px]' : 'h-4 w-4', isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500']" />
                       <span>{{ condition.label }}</span>
                     </label>
                   </div>
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Tags</label>
-                    <div class="flex flex-wrap gap-2 mb-3 items-center">
+                    <div :class="[isIos ? 'grid gap-2 entry-grid-ios-2 mb-3' : 'flex flex-wrap gap-2 mb-3 items-center']">
                       <template v-for="tag in [...allTagOptions, ...customTagsFor(newEntry)]" :key="'sim-new-' + tag">
                         <label
                           :class="[
-                            'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-quicksand cursor-pointer transition-all',
+                            'rounded-lg border text-sm font-quicksand cursor-pointer transition-all',
+                            isIos ? 'entry-chip-ios' : 'inline-flex items-center gap-2 px-3 py-1.5',
                             (newEntry.tags || []).includes(tag)
                               ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700')
                               : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-300 bg-gray-100 text-gray-600 hover:border-gray-400')
                           ]"
                         >
-                          <input v-model="newEntry.tags" type="checkbox" :value="tag" :class="['h-3.5 w-3.5 rounded']" />
+                          <input v-model="newEntry.tags" type="checkbox" :value="tag" :class="['rounded border transition-colors flex-shrink-0', isIos ? 'h-[18px] w-[18px]' : 'h-4 w-4', isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500']" />
                           <span>{{ tag }}</span>
                         </label>
                       </template>
                       <template v-if="!showNewEntryCustomTagInput">
-                        <button type="button" @click="showNewEntryCustomTagInput = true" :class="['inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-sm font-quicksand transition-all', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200']" aria-label="Add custom tag">+</button>
+                        <button type="button" @click="showNewEntryCustomTagInput = true" :class="['inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-sm font-quicksand transition-all', isIos ? 'col-span-2' : '', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200']" aria-label="Add custom tag">+</button>
                       </template>
                       <template v-else>
-                        <div class="inline-flex gap-1 items-center">
+                        <div :class="['inline-flex gap-1 items-center', isIos ? 'col-span-2' : '']">
                           <input v-model="customTagInput" type="text" placeholder="Custom tag" :class="['w-28 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" />
                           <button type="button" @click="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
                           <button type="button" @click="showNewEntryCustomTagInput = false; customTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
@@ -2446,7 +2292,7 @@
                   </div>
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Pilot</label>
-                    <div class="grid gap-4 md:grid-cols-3">
+                    <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'md:grid-cols-3']">
                       <div>
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Job</label>
                         <select v-model="newEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']">
@@ -2458,16 +2304,12 @@
                           <option value="First Officer">First Officer</option>
                         </select>
                       </div>
-                      <div class="relative">
+                      <div :class="['relative', isIos ? 'col-span-2' : '']">
                         <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Name</label>
                         <input v-model="newEntry.trainingElements" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Pilot Name" autocomplete="off" @focus="showPilotNameDropdown = true; highlightedPilotIndex = filteredPilots.length > 0 ? 0 : -1" @keydown="(e) => handleDropdownKeydown(e, 'pilot', filteredPilots, (item) => selectPilotName(item))" @blur="handlePilotNameBlur" />
                         <div v-if="showPilotNameDropdown && filteredPilots.length > 0" data-dropdown="pilot" :class="['absolute z-50 w-full mt-1 max-h-48 overflow-y-auto rounded border shadow-lg', isDarkMode ? 'bg-black/20 border-white/10 shadow-inner' : 'bg-white border-gray-200']">
                           <button v-for="(pilot, index) in filteredPilots" :key="pilot" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm transition-colors', highlightedPilotIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectPilotName(pilot)">{{ pilot }}</button>
                         </div>
-                      </div>
-                      <div>
-                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
-                        <input v-model="newEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Certificate #" />
                       </div>
                     </div>
                   </div>
@@ -2506,9 +2348,9 @@
                     {{ newEntry.oooi?.isZulu ? 'Zulu (UTC)' : 'Local' }}
                   </button>
                 </div>
-                <div class="grid grid-cols-4 gap-2 p-2 rounded border border-dashed border-gray-600/50">
+                <div :class="['grid gap-2 p-2 rounded border border-dashed border-gray-600/50', isIos ? 'entry-grid-ios-2' : 'grid-cols-2 sm:grid-cols-4']">
                  <div v-for="field in oooiFields" :key="field">
-                    <label :class="['block text-[10px] uppercase font-bold mb-1 text-center', isDarkMode ? 'text-blue-400' : 'text-blue-600']">{{ field }}</label>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1 text-center', isDarkMode ? 'text-blue-400' : 'text-blue-600']">{{ oooiFieldLabels[field] }}</label>
                     <input 
                       v-if="newEntry.oooi" 
                       v-model="newEntry.oooi[field]" 
@@ -2522,7 +2364,7 @@
                  </div>
               </div>
             
-              <div class="grid gap-4 md:grid-cols-4">
+              <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'md:grid-cols-4']">
                 <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Date</label>
                   <input v-model="newEntry.date" type="date" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" required />
@@ -2574,7 +2416,7 @@
                   </div>
                 </div>
               </div>
-              <div class="grid gap-4 md:grid-cols-4 mb-2 items-end">
+              <div :class="['grid gap-4 mb-2 items-end', isIos ? 'entry-grid-ios-1' : 'md:grid-cols-4']">
                 <div>
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Flight Number</label>
                   <input 
@@ -2587,7 +2429,7 @@
                 </div>
               </div>
 
-              <div class="grid gap-4" style="grid-template-columns: 1fr 1fr 2fr 1.5fr;">
+              <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4']">
                 <div class="relative">
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">From</label>
                   <input 
@@ -2668,10 +2510,10 @@
                     </button>
                   </div>
                 </div>
-                <div>
+                <div :class="isIos ? 'col-span-2' : ''">
                   <!-- Category/Class row (aircraft only) -->
-                  <div class="flex gap-2">
-                    <div class="flex-[0.6]">
+                  <div :class="['gap-2', isIos ? 'grid entry-grid-ios-cat-time' : 'flex flex-col sm:flex-row']">
+                    <div :class="isIos ? '' : 'flex-1 sm:flex-[0.6]'">
                       <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class</label>
                       <select
                         :value="categoryClassAircraftOptions.includes(newEntry.aircraftCategoryClass as any) ? newEntry.aircraftCategoryClass : ''"
@@ -2682,13 +2524,13 @@
                         <option v-for="opt in categoryClassAircraftOptions" :key="opt" :value="opt">{{ opt }}</option>
                       </select>
                     </div>
-                    <div class="flex-[1.4]">
+                    <div :class="isIos ? '' : 'flex-1 sm:flex-[1.4]'">
                       <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
                       <input v-model.number="newEntry.categoryClassTime" type="number" step="0.1" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="0.0" />
                     </div>
                   </div>
                 </div>
-                <div>
+                <div :class="isIos ? 'col-span-2' : ''">
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
                   <input v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @blur="newEntry.route = (newEntry.route || '').trim().toUpperCase()" />
                 </div>
@@ -2697,9 +2539,9 @@
               <!-- Flight Times (main air time only; sim time is under Category/Class) -->
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
-                <div class="grid grid-cols-5 gap-3 w-full">
+                <div :class="['grid gap-3 w-full', isIos ? 'entry-grid-ios-2' : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-5']">
                   <div v-for="field in mainTimeFields" :key="field.key">
-                    <div :class="['text-[9px] uppercase font-bold mb-1 text-center whitespace-nowrap', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
+                    <div :class="['text-[9px] uppercase font-bold mb-1 text-center whitespace-normal sm:whitespace-nowrap', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
                       {{ mainTimeShortLabels[field.key] ?? field.label }}
                     </div>
                     <input
@@ -2771,7 +2613,7 @@
               </div>
 
                <!-- Performance -->
-               <div class="grid gap-4 grid-cols-4">
+               <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-4']">
                  <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day Ldg</label>
                     <input v-model.number="newEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
@@ -2784,7 +2626,7 @@
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Holds</label>
                     <input v-model.number="newEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                  </div>
-                 <div class="col-span-4">
+                 <div class="col-span-2 md:col-span-4">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Approaches</label>
                     <div class="space-y-1.5">
                       <div
@@ -2811,12 +2653,13 @@
                  </div>
                </div>
 
-              <div class="flex flex-wrap gap-3">
+              <div :class="isIos ? 'grid gap-2 entry-grid-ios-2' : 'flex flex-wrap gap-3'">
                 <label
                   v-for="condition in conditionOptions"
                   :key="condition.value"
                   :class="[
-                    'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-quicksand cursor-pointer transition-all',
+                    'rounded-lg border text-sm font-quicksand cursor-pointer transition-all',
+                    isIos ? 'entry-chip-ios' : 'inline-flex items-center gap-2 px-4 py-2',
                     (newEntry.flightConditions || []).includes(condition.value)
                       ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700')
                       : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')
@@ -2827,7 +2670,8 @@
                     :value="condition.value"
                     type="checkbox"
                     :class="[
-                      'h-4 w-4 rounded border transition-colors',
+                      'rounded border transition-colors flex-shrink-0',
+                      isIos ? 'h-[18px] w-[18px]' : 'h-4 w-4',
                       isDarkMode 
                         ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' 
                         : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500'
@@ -2839,25 +2683,26 @@
 
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Tags</label>
-                <div class="flex flex-wrap gap-2 mb-3 items-center">
+                <div :class="[isIos ? 'grid gap-2 entry-grid-ios-2 mb-3' : 'flex flex-wrap gap-2 mb-3 items-center']">
                   <template v-for="tag in [...allTagOptions, ...customTagsFor(newEntry)]" :key="'new-' + tag">
                     <label
                       :class="[
-                        'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-quicksand cursor-pointer transition-all',
+                        'rounded-lg border text-sm font-quicksand cursor-pointer transition-all',
+                        isIos ? 'entry-chip-ios' : 'inline-flex items-center gap-2 px-3 py-1.5',
                         (newEntry.tags || []).includes(tag)
                           ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700')
                           : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:border-gray-500' : 'border-gray-300 bg-gray-100 text-gray-600 hover:border-gray-400')
                       ]"
                     >
-                      <input v-model="newEntry.tags" type="checkbox" :value="tag" :class="['h-3.5 w-3.5 rounded']" />
+                      <input v-model="newEntry.tags" type="checkbox" :value="tag" :class="['rounded border transition-colors flex-shrink-0', isIos ? 'h-[18px] w-[18px]' : 'h-4 w-4', isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500']" />
                       <span>{{ tag }}</span>
                     </label>
                   </template>
                   <template v-if="!showNewEntryCustomTagInput">
-                    <button type="button" @click="showNewEntryCustomTagInput = true" :class="['inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-sm font-quicksand transition-all', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200']" aria-label="Add custom tag">+</button>
+                    <button type="button" @click="showNewEntryCustomTagInput = true" :class="['inline-flex items-center justify-center rounded-lg border px-3 py-1.5 text-sm font-quicksand transition-all', isIos ? 'col-span-2' : '', isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-400 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200']" aria-label="Add custom tag">+</button>
                   </template>
                   <template v-else>
-                    <div class="inline-flex gap-1 items-center">
+                    <div :class="['inline-flex gap-1 items-center', isIos ? 'col-span-2' : '']">
                       <input v-model="customTagInput" type="text" placeholder="Custom tag" :class="['w-28 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" />
                       <button type="button" @click="addCustomTag(newEntry, customTagInput); customTagInput = ''; showNewEntryCustomTagInput = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
                       <button type="button" @click="showNewEntryCustomTagInput = false; customTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
@@ -2884,7 +2729,7 @@
               <!-- Pilot Section -->
               <div>
                 <label :class="['block text-[10px] uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Pilot</label>
-                <div class="grid gap-4 md:grid-cols-3">
+                <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'md:grid-cols-3']">
                   <div>
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Job</label>
                     <select v-model="newEntry.trainingInstructor" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']">
@@ -2896,7 +2741,7 @@
                       <option value="First Officer">First Officer</option>
                     </select>
                   </div>
-                  <div class="relative">
+                  <div :class="['relative', isIos ? 'col-span-2' : '']">
                     <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Name</label>
                     <input 
                       v-model="newEntry.trainingElements" 
@@ -2931,16 +2776,17 @@
                       </button>
                     </div>
                   </div>
-                  <div>
-                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Number</label>
-                    <input v-model="newEntry.instructorCertificate" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="Certificate #" />
-                  </div>
                 </div>
               </div>
 
               </template>
 
-              <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div
+                :class="[
+                  'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4',
+                  isIos ? 'entry-panel-actions-ios' : ''
+                ]"
+              >
                 <div class="flex flex-col gap-2">
                   <div v-if="validationError" :class="['font-quicksand text-sm', isDarkMode ? 'text-red-400' : 'text-red-600']">
                     {{ validationError }}
@@ -3024,7 +2870,12 @@
                     {{ successMessage }}
                   </div>
                 </div>
-                <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end">
+                <div
+                  :class="[
+                    'flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end',
+                    isIos ? 'entry-panel-actions-ios w-full' : ''
+                  ]"
+                >
                   <button
                     v-if="editingEntryId"
                     type="button"
@@ -3093,39 +2944,20 @@
                   >
                     {{ hasErrors ? 'Save Despite Errors' : 'Save Anyway' }}
                   </button>
-                  <template v-if="lastSavedEntry">
-                    <button
-                      type="button"
-                      :class="[
-                        'inline-flex items-center justify-center rounded-lg px-6 py-2 font-semibold font-quicksand transition-all',
-                        isDarkMode ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-600 text-white hover:bg-blue-700'
-                      ]"
-                      @click="prefillForNextFlight(lastSavedEntry!)"
-                    >
-                      Add next flight
-                    </button>
-                    <button
-                      type="button"
-                      :class="[
-                        'inline-flex items-center justify-center rounded-lg px-6 py-2 border font-semibold font-quicksand transition-all',
-                        isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200'
-                      ]"
-                      @click="closeAddEntryAfterSave"
-                    >
-                      Close
-                    </button>
-                  </template>
                   <button
                     v-else-if="!duplicateWarning && !validationWarning"
                     type="submit"
+                    :disabled="isSavingEntry"
                     :class="[
                       'inline-flex items-center justify-center rounded-lg px-6 py-2 font-semibold font-quicksand transition-all',
                       isDarkMode 
                         ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-blue-600 text-white hover:bg-blue-700',
+                      isSavingEntry ? 'opacity-60 cursor-not-allowed' : ''
                     ]"
                   >
-                    {{ editingEntryId ? 'Update Entry' : 'Save Entry' }}
+                    <Icon v-if="isSavingEntry" name="ri:loader-4-line" class="animate-spin mr-2" size="18" />
+                    {{ isSavingEntry ? 'Saving…' : (editingEntryId ? 'Update Entry' : 'Save Entry') }}
                   </button>
                 </div>
               </div>
@@ -3139,12 +2971,14 @@
     <DashboardSettingsModal
       v-if="showSettingsModal"
       :open="showSettingsModal"
-      :active-tab="activeSettingsTab"
+      :stack="settingsStack"
       :is-dark-mode="isDarkMode"
       :profile="pilotProfile"
+      :profile-preview="settingsProfilePreview"
       v-model:profile-sub-tab="pilotProfileSubTab"
       v-model:show8710="show8710Fields"
       :initials="pilotInitials"
+      :updates-badge="settingsUpdatesBadge"
       :stat-cards="pilotStatCards"
       :profile-stats="settingsProfileStats"
       :currency-summary="settingsCurrencySummary"
@@ -3174,9 +3008,10 @@
       :queue-length="queueLength"
       :is-drag-over-import="isDragOverImport"
       :entry-count="logEntries.length"
-      @close="showSettingsModal = false"
+      @close="closeSettings"
       @logout="handleLogout"
-      @update:active-tab="activeSettingsTab = $event"
+      @pop="popSettingsFrame"
+      @push="pushSettingsFrame"
       @open-currency="showCurrencyDashboard = true"
       @update-email="handleUpdateEmail"
       @update-password="handleUpdatePassword"
@@ -3184,13 +3019,24 @@
       @set-clock-format="setClockFormat"
       @set-clock-zone="setClockZone"
       @toggle-metric="toggleTotalsMetric"
+      :entry-card-presets="entryCardPresets"
+      :active-entry-card-preset-id="activePresetId"
+      :entry-card-picker-fields="pickerFields"
+      :entry-card-detail-crowded="detailFieldCrowded"
+      @apply-entry-card-preset="applyPreset"
+      @toggle-entry-card-field="toggleColumnVisibility"
+      @entry-card-drag-start="onEntryCardDragStart"
+      @entry-card-drop="handleColumnDrop"
+      @entry-card-move-up="(key) => moveColumn(key, 'up')"
+      @entry-card-move-down="(key) => moveColumn(key, 'down')"
+      @reset-entry-card="resetColumnConfig"
       @retry-sync="retryFailed()"
+      @sync-now="refreshDashboardData()"
       @import-dragover="handleImportDragOver"
       @import-dragenter="handleImportDragEnter"
       @import-dragleave="handleImportDragLeave"
       @import-drop="handleImportDrop"
-      @browse-csv="() => csvFileInput?.click()"
-      @browse-json="() => jsonFileInput?.click()"
+      @import-file="handleSettingsImportFile"
       @export-logbook="openExportDialog"
       @generate-8710="showForm8710Modal = true"
     />
@@ -3497,14 +3343,6 @@
                   </div>
                 </div>
                 
-                <div v-if="form8710PreviewData?.sectionI?.certificateNumber">
-                  <label :class="['block text-xs font-semibold uppercase mb-1', isDarkMode ? 'text-gray-400 print:text-gray-700' : 'text-gray-600']">
-                    Certificate Number
-                  </label>
-                  <div :class="['px-3 py-2 rounded border', isDarkMode ? 'bg-gray-900 border-gray-600 text-white print:bg-white print:text-black print:border-gray-400' : 'bg-gray-50 border-gray-300 text-gray-900']">
-                    {{ form8710PreviewData.sectionI.certificateNumber }}
-                  </div>
-                </div>
               </div>
               
               <div>
@@ -4081,12 +3919,15 @@
     <!-- Crew/Instructor Profile Modal -->
     <div
       v-if="showCrewProfileModal && currentCrewName"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      :class="[
+        'fixed inset-0 z-[60] flex items-center justify-center p-4 overflow-x-hidden',
+        isIos ? 'catalog-modal-ios' : ''
+      ]"
       @click.self="closeCrewProfileModal"
     >
       <div
         :class="[
-          'relative w-full max-w-lg rounded-2xl border shadow-2xl transition-colors duration-300',
+          'relative w-full max-w-lg min-w-0 overflow-x-hidden rounded-2xl border shadow-2xl transition-colors duration-300',
           isDarkMode 
             ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' 
             : 'bg-white border-gray-200 shadow-sm'
@@ -4113,7 +3954,7 @@
                 @keyup.enter="saveCrewNameEdit"
                 @keyup.escape="cancelCrewNameEdit"
                 @click.stop
-                autofocus
+                :autofocus="!isIos"
               />
               <h3 
                 v-else
@@ -4185,8 +4026,8 @@
                       <button type="button" aria-label="Remove from presets" @click="removeTagPreset(tag)" :class="['rounded p-0.5', isDarkMode ? 'hover:bg-gray-500' : 'hover:bg-gray-300']"><Icon name="ri:close-line" size="12" /></button>
                     </span>
                   </div>
-                  <div class="inline-flex gap-1 items-center">
-                    <input v-model="crewModalNewTagInput" type="text" placeholder="Or type new tag" :class="['w-32 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addEntityTag('person', currentCrewName, crewModalNewTagInput); crewModalNewTagInput = ''; crewModalShowAddTag = false" />
+                  <div class="flex flex-wrap gap-1 items-center max-w-full">
+                    <input v-model="crewModalNewTagInput" type="text" placeholder="Or type new tag" :class="['min-w-0 flex-1 max-w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addEntityTag('person', currentCrewName, crewModalNewTagInput); crewModalNewTagInput = ''; crewModalShowAddTag = false" />
                     <button type="button" @click="addEntityTag('person', currentCrewName, crewModalNewTagInput); crewModalNewTagInput = ''; crewModalShowAddTag = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
                     <button type="button" @click="crewModalShowAddTag = false; crewModalNewTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
                   </div>
@@ -4248,15 +4089,15 @@
                 v-for="flight in crewRecentFlights.slice(0, 5)"
                 :key="flight.id"
                 :class="[
-                  'rounded-lg p-3 flex items-center justify-between',
+                  'rounded-lg p-3 flex items-center justify-between gap-2 min-w-0',
                   isDarkMode ? 'bg-gray-700/50' : 'bg-gray-300'
                 ]"
               >
-                <div>
-                  <div :class="['text-sm font-quicksand font-medium', isDarkMode ? 'text-white' : 'text-gray-900']">
+                <div class="min-w-0 flex-1">
+                  <div :class="['text-sm font-quicksand font-medium truncate', isDarkMode ? 'text-white' : 'text-gray-900']">
                     {{ flight.departure }} → {{ flight.destination }}
                   </div>
-                  <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                  <div :class="['text-xs font-quicksand truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                     {{ formatDisplayDate(flight.date) }} · {{ flight.aircraftMakeModel || flight.registration }}
                   </div>
                 </div>
@@ -5269,10 +5110,11 @@
       v-if="showScrollToTop && !isEntryFormOpen"
       @click="scrollToTop"
       :class="[
-        'fixed bottom-6 z-40 transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 border-none p-0',
-        isSidebarCollapsed 
-          ? 'lg:left-16' 
-          : 'lg:left-44 xl:left-48'
+        'fixed z-40 transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 border-none p-0',
+        isIos
+          ? 'left-1/2 bottom-[calc(1.5rem+env(safe-area-inset-bottom))]'
+          : 'bottom-6',
+        !isIos && (isSidebarCollapsed ? 'lg:left-16' : 'lg:left-44 xl:left-48')
       ]"
       style="background: transparent !important; background-color: transparent !important; appearance: none; -webkit-appearance: none; transform: translateX(-50%);"
       aria-label="Scroll to top"
@@ -5298,7 +5140,8 @@
       type="button"
       @click="toggleEntryForm"
       :class="[
-        'fixed bottom-6 right-6 z-40 flex items-center justify-center w-12 h-12 rounded-full shadow-lg transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 font-quicksand font-medium',
+        'fixed right-6 z-40 flex items-center justify-center w-12 h-12 rounded-full shadow-lg transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 font-quicksand font-medium',
+        isIos ? 'bottom-[calc(1.5rem+env(safe-area-inset-bottom))]' : 'bottom-6',
         isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white focus:ring-blue-400' : 'bg-blue-500 hover:bg-blue-600 text-white focus:ring-blue-300'
       ]"
       aria-label="Add entry"
@@ -5317,7 +5160,6 @@ import {
   createEmptyFlightTime,
   createEmptyPerformance,
   createEmptyOOOI,
-  DEFAULT_COLUMN_CONFIG,
   getApproachesFromPerformance,
   getTotalApproachCount
 } from '../utils/logbookTypes'
@@ -5327,7 +5169,6 @@ import type {
   FlightTimeBreakdown,
   FlightTimeKey,
   LogEntry,
-  LogbookColumnConfig,
   LogbookColumnKey,
   OOOITimes,
   PerformanceKey,
@@ -5350,6 +5191,8 @@ import { useAuth } from '../composables/useAuth'
 import { useDataIntegrity } from '../composables/useDataIntegrity'
 import { useValidation } from '../composables/useValidation'
 import { useOffline } from '../composables/useOffline'
+import { useToast } from '../composables/useToast'
+import { withTimeout } from '../utils/promiseTimeout'
 import { useSyncQueue } from '../composables/useSyncQueue'
 import { useExport } from '../composables/useExport'
 import { logbookDataBridgeService } from '../../shared/logbookDataBridge'
@@ -5363,15 +5206,20 @@ import { findFieldValue, mapRawRowToLogEntry } from '../../shared/logbookDataBri
 import { applyLogtenCrewFields } from '../utils/logbookImportEnrichments'
 import { parseBridgeFile } from '../../shared/logbookDataBridge/fileParser'
 import { useCurrency } from '../composables/useCurrency'
+import { useCapacitorPlatform } from '../composables/useCapacitorPlatform'
+import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGestures'
+import { usePullToRefresh } from '../composables/usePullToRefresh'
+import { useEntryCardConfig } from '../composables/useEntryCardConfig'
 import AuthModal from '../components/AuthModal.vue'
 import AuditTrail from '../components/AuditTrail.vue'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
 import ComplianceChecklist from '../components/ComplianceChecklist.vue'
 import CurrencyDashboard from '../components/CurrencyDashboard.vue'
 import DashboardSettingsModal from '../components/settings/DashboardSettingsModal.vue'
+import LogEntryList from '../components/logbook/LogEntryList.vue'
 import ProductUpdateHeadline from '../components/ProductUpdateHeadline.vue'
 import { useProductUpdates } from '../composables/useProductUpdates'
-import type { SettingsTabId } from '../components/settings/settingsNav'
+import type { SettingsStackFrame, SettingsTabId } from '../components/settings/settingsNav'
 import FcvApiDisclaimers from '../components/fcv/FcvApiDisclaimers.vue'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '../utils/migrateLocalStorage'
 import { findDuplicateEntries, checkDuplicatesInDatabase } from '../utils/duplicateDetection'
@@ -5595,8 +5443,9 @@ const { validateEntry: validateEntryIntegrity } = useDataIntegrity()
 const { validateEntry: validateFlightTimeEntry, validationErrors, validationWarnings, hasErrors, hasWarnings, clearValidation } = useValidation()
 
 // Offline support
-const { isOnline, isSyncing, syncProgress, updateSyncProgress } = useOffline()
-const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync, retryFailed, setActiveUserId } = useSyncQueue()
+const { isOnline, isSyncing, syncProgress, updateSyncProgress, checkOnlineStatus } = useOffline()
+const { showToast } = useToast()
+const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync, retryFailed, setActiveUserId, refreshQueueLength } = useSyncQueue()
 
 function getStorageUserId(): string | undefined {
   return user.value?.id
@@ -5666,12 +5515,32 @@ const showRegulatorySnapshot = ref(true)
 function dismissSnapshot() {
   showRegulatorySnapshot.value = false
 }
-function openSettingsUpdates() {
-  activeSettingsTab.value = 'updates'
+function openSettings(tab?: SettingsTabId) {
+  settingsStack.value = tab ? ['root', tab] : ['root']
   showSettingsModal.value = true
+}
+
+function openSettingsUpdates() {
+  openSettings('updates')
+}
+
+function pushSettingsFrame(frame: SettingsStackFrame) {
+  settingsStack.value = [...settingsStack.value, frame]
+}
+
+function popSettingsFrame() {
+  if (settingsStack.value.length > 1) {
+    settingsStack.value = settingsStack.value.slice(0, -1)
+  }
+}
+
+function closeSettings() {
+  showSettingsModal.value = false
+  settingsStack.value = ['root']
 }
 const isMigrating = ref(false)
 const migrationProgress = ref({ step: '', current: 0, total: 0 })
+const isDashboardRefreshing = ref(false)
 
 // Log entries - must be declared before any functions that use it
 const logEntries = ref<LogEntry[]>([])
@@ -5704,16 +5573,23 @@ async function refreshDashboardFcvStatus(): Promise<void> {
   }
 }
 
+const { isIos } = useCapacitorPlatform()
+
 const handleLogout = async () => {
   stopBackgroundSync()
   setActiveUserId(null)
   await authSignOut()
   logEntries.value = []
-  showSettingsModal.value = false
-  showAuthModal.value = false
+  closeSettings()
   dashboardFcvConnected.value = false
   showFcvFetchPanel.value = false
-  router.push('/?from=app')
+  if (isIos.value) {
+    showAuthModal.value = true
+    router.push('/dashboard')
+  } else {
+    showAuthModal.value = false
+    router.push('/?from=app')
+  }
 }
 
 async function onUserSessionReady(userId: string): Promise<void> {
@@ -5824,23 +5700,35 @@ onMounted(async () => {
 
     window.addEventListener('scroll', handleScroll, { passive: true })
     handleScroll()
+
+    document.addEventListener('visibilitychange', handleAppResume)
   } catch (error) {
     console.error('[App] Failed to initialize IndexedDB:', error)
   }
 })
 
+function handleAppResume(): void {
+  if (document.visibilityState !== 'visible') return
+  if (!isAuthenticated.value || !user.value || isProcessing.value || !isOnline.value) return
+  void processQueue({ silent: true })
+}
+
 // Cleanup scroll event listener on unmount
 onUnmounted(() => {
   if (isBrowser) {
     window.removeEventListener('scroll', handleScroll)
+    document.removeEventListener('visibilitychange', handleAppResume)
+    if (isIos.value) {
+      setIosOverlayScrollLock(false)
+      window.removeEventListener('keydown', handleIosOverlayEscape)
+    }
   }
 })
 
-// Watch for online status changes to trigger sync
-watch(isOnline, (online) => {
-  if (online && isAuthenticated.value && user.value) {
-    // When coming back online, process sync queue
-    processQueue()
+// Reconnect: drain outbound queue only (no full reload)
+watch(isOnline, (online, wasOnline) => {
+  if (online && !wasOnline && isAuthenticated.value && user.value) {
+    void processQueue({ silent: true })
   }
 })
 
@@ -6132,6 +6020,13 @@ function roleDisplayLabel(role: string): string {
   return role === 'Dual Received' ? 'Student' : role
 }
 const oooiFields: (keyof OOOITimes)[] = ['out', 'off', 'on', 'in']
+const oooiFieldLabels: Record<keyof OOOITimes, string> = {
+  out: 'Out',
+  off: 'Off',
+  on: 'On',
+  in: 'In',
+  isZulu: 'Zulu'
+}
 
 const entryTagOptions = ['Checkride', 'Flight Review', 'IPC'] as const
 
@@ -6273,12 +6168,14 @@ type TotalsMetricKey =
   | 'ftd'
   | 'atd'
 
-const availableTotalsMetrics: readonly { key: TotalsMetricKey; label: string }[] = [
+type TotalsMetric = { key: TotalsMetricKey; label: string; cardLabel?: string }
+
+const availableTotalsMetrics: readonly TotalsMetric[] = [
   { key: 'totalTime', label: 'Total Time (hrs)' },
   { key: 'soloTime', label: 'Solo Time (hrs)' },
   { key: 'picTime', label: 'PIC Time (hrs)' },
   { key: 'nightTime', label: 'Night Time (hrs)' },
-  { key: 'instrumentTime', label: 'Instrument Time (hrs)' },
+  { key: 'instrumentTime', label: 'Instrument Time (hrs)', cardLabel: 'Instrument (hrs)' },
   { key: 'crossCountry', label: 'Cross Country (hrs)' },
   { key: 'dualGiven', label: 'Dual Given (hrs)' },
   { key: 'sic', label: 'SIC (hrs)' },
@@ -6290,9 +6187,9 @@ const availableTotalsMetrics: readonly { key: TotalsMetricKey; label: string }[]
 ] as const
 
 // Fixed metrics for Simulator Totals Overview (simpler than Flight)
-const simOverviewFields: readonly { key: TotalsMetricKey; label: string }[] = [
+const simOverviewFields: readonly TotalsMetric[] = [
   { key: 'totalTime', label: 'Total Time (hrs)' },
-  { key: 'instrumentTime', label: 'Instrument Time (hrs)' },
+  { key: 'instrumentTime', label: 'Instrument Time (hrs)', cardLabel: 'Instrument (hrs)' },
   { key: 'dualReceived', label: 'Dual Received (hrs)' }
 ]
 
@@ -6356,289 +6253,32 @@ function toggleTotalsMetric(key: TotalsMetricKey): void {
 const summaryFields = computed(() => {
   return selectedTotalsMetrics.value
     .map(key => availableTotalsMetrics.find(m => m.key === key))
-    .filter((m): m is { key: TotalsMetricKey; label: string } => m !== undefined)
+    .filter((m): m is TotalsMetric => m !== undefined)
 })
 
-// Column configuration for logbook table
-const COLUMN_CONFIG_STORAGE_KEY = ACCOUNT_SCOPED_STORAGE_KEYS.COLUMN_CONFIG
-const columnConfig = ref<LogbookColumnConfig[]>(DEFAULT_COLUMN_CONFIG.map(c => ({ ...c })))
+// Entry card configuration (shared with Settings → Preferences)
+const {
+  activePresetId,
+  draggedColumnKey,
+  visibleDetailFields,
+  showRemarksFooter,
+  detailFieldCrowded,
+  pickerFields,
+  presets: entryCardPresets,
+  loadColumnConfig,
+  toggleColumnVisibility,
+  handleColumnDrop,
+  moveColumn,
+  resetColumnConfig,
+  applyPreset,
+} = useEntryCardConfig()
 
-// Load column configuration from localStorage
-function loadColumnConfig(): void {
-  if (!isBrowser) return
-  const saved = readUserScopedLocal(COLUMN_CONFIG_STORAGE_KEY, true)
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved) as LogbookColumnConfig[]
-      // Validate the saved config and merge with defaults
-      if (Array.isArray(parsed)) {
-        // Start with defaults and merge saved values
-        const merged = DEFAULT_COLUMN_CONFIG.map(defaultCol => {
-          const savedCol = parsed.find(p => p.key === defaultCol.key)
-          if (savedCol) {
-            // Use saved values but ensure required fields match defaults
-            return {
-              ...savedCol,
-              required: defaultCol.required,
-              label: defaultCol.label,
-              responsiveClass: defaultCol.responsiveClass,
-              width: savedCol.width ?? defaultCol.width, // Preserve saved width or use default
-              visible: defaultCol.required ? true : savedCol.visible // Force required columns to be visible
-            }
-          }
-          // New column not in saved config, use default
-          return { ...defaultCol }
-        })
-        // Ensure required columns are visible
-        merged.forEach(col => {
-          if (col.required) col.visible = true
-        })
-        columnConfig.value = merged
-        saveColumnConfig() // Save merged config back to update localStorage with new columns
-        return
-      }
-    } catch {
-      // Invalid JSON, use defaults
-    }
-  }
-  columnConfig.value = DEFAULT_COLUMN_CONFIG.map(c => ({ ...c }))
+function openEntryCardPreferences(): void {
+  openSettings('preferences')
 }
 
-// Save column configuration to localStorage
-function saveColumnConfig(): void {
-  if (!isBrowser) return
-  writeUserScopedLocal(COLUMN_CONFIG_STORAGE_KEY, JSON.stringify(columnConfig.value))
-}
-
-// Computed: visible columns sorted by order
-const visibleColumns = computed(() => {
-  return columnConfig.value
-    .filter(col => col.visible)
-    .sort((a, b) => a.order - b.order)
-})
-
-// Toggle column visibility
-function toggleColumnVisibility(key: LogbookColumnKey): void {
-  const col = columnConfig.value.find(c => c.key === key)
-  if (!col || col.required) return // Can't hide required columns
-  
-  // Ensure at least one non-required column remains visible
-  const visibleNonRequired = columnConfig.value.filter(c => c.visible && !c.required)
-  if (visibleNonRequired.length === 1 && col.visible) {
-    // Can't hide the last visible non-required column
-    return
-  }
-  
-  col.visible = !col.visible
-  saveColumnConfig()
-}
-
-// Reorder columns
-function reorderColumns(draggedKey: LogbookColumnKey, targetOrder: number): void {
-  const draggedCol = columnConfig.value.find(c => c.key === draggedKey)
-  if (!draggedCol) return
-  
-  const currentOrder = draggedCol.order
-  
-  // Update orders
-  columnConfig.value.forEach(col => {
-    if (col.key === draggedKey) {
-      col.order = targetOrder
-    } else if (targetOrder < currentOrder) {
-      // Moving up: shift columns down
-      if (col.order >= targetOrder && col.order < currentOrder) {
-        col.order += 1
-      }
-    } else {
-      // Moving down: shift columns up
-      if (col.order > currentOrder && col.order <= targetOrder) {
-        col.order -= 1
-      }
-    }
-  })
-  
-  saveColumnConfig()
-}
-
-// Reset to defaults
-function resetColumnConfig(): void {
-  columnConfig.value = DEFAULT_COLUMN_CONFIG.map(c => ({ ...c }))
-  saveColumnConfig()
-}
-
-// Drag and drop state
-const draggedColumnKey = ref<LogbookColumnKey | null>(null)
-
-// Handle column drop for reordering
-function handleColumnDrop(targetKey: LogbookColumnKey): void {
-  if (!draggedColumnKey.value || draggedColumnKey.value === targetKey) {
-    draggedColumnKey.value = null
-    return
-  }
-  
-  const targetCol = columnConfig.value.find(c => c.key === targetKey)
-  if (!targetCol) {
-    draggedColumnKey.value = null
-    return
-  }
-  
-  reorderColumns(draggedColumnKey.value, targetCol.order)
-  draggedColumnKey.value = null
-}
-
-// Column resize state
-const resizingColumn = ref<LogbookColumnKey | null>(null)
-const resizeStartX = ref(0)
-const resizeStartWidth = ref(0)
-
-// Start column resize
-function startResize(columnKey: LogbookColumnKey, event: MouseEvent): void {
-  const col = columnConfig.value.find(c => c.key === columnKey)
-  if (!col) return
-  
-  resizingColumn.value = columnKey
-  resizeStartX.value = event.clientX
-  resizeStartWidth.value = col.width ?? 100
-  
-  document.addEventListener('mousemove', handleResize)
-  document.addEventListener('mouseup', stopResize)
-  event.preventDefault()
-}
-
-// Handle resize during drag
-function handleResize(event: MouseEvent): void {
-  if (!resizingColumn.value) return
-  
-  const col = columnConfig.value.find(c => c.key === resizingColumn.value)
-  if (!col) return
-  
-  const deltaX = event.clientX - resizeStartX.value
-  const newWidth = Math.max(50, resizeStartWidth.value + deltaX) // Minimum width of 50px
-  
-  col.width = newWidth
-}
-
-// Stop resize
-function stopResize(): void {
-  if (resizingColumn.value) {
-    saveColumnConfig()
-  }
-  resizingColumn.value = null
-  document.removeEventListener('mousemove', handleResize)
-  document.removeEventListener('mouseup', stopResize)
-}
-
-// Reset column widths to defaults
-function resetColumnWidths(): void {
-  columnConfig.value.forEach(col => {
-    const defaultCol = DEFAULT_COLUMN_CONFIG.find(d => d.key === col.key)
-    if (defaultCol && defaultCol.width) {
-      col.width = defaultCol.width
-    }
-  })
-  saveColumnConfig()
-}
-
-// Helper function to get padding classes for headers and cells (must match)
-function getColumnPadding(col: LogbookColumnConfig): string[] {
-  switch (col.key) {
-    case 'date':
-    case 'total':
-      return ['px-3', 'py-3']
-    default:
-      return ['px-2', 'py-3']
-  }
-}
-
-// Helper function to get text alignment for headers (must match cells)
-function getHeaderTextAlign(col: LogbookColumnConfig): string {
-  // Right-align numeric columns to match cell alignment
-  switch (col.key) {
-    case 'total':
-    case 'pic':
-    case 'sic':
-    case 'dualR':
-    case 'solo':
-    case 'night':
-    case 'actual':
-    case 'hood':
-    case 'dualG':
-    case 'xc':
-    case 'dayLandings':
-    case 'nightLandings':
-    case 'approach':
-      return 'text-right'
-    default:
-      return ''
-  }
-}
-
-// Helper function to get cell classes for a column
-function getCellClasses(col: LogbookColumnConfig): string[] {
-  const baseClasses = ['align-top']
-  const padding = getColumnPadding(col)
-  if (col.responsiveClass) {
-    baseClasses.push(col.responsiveClass)
-  }
-  
-  switch (col.key) {
-    case 'date':
-      return [...padding, ...baseClasses]
-    case 'total':
-      return [...padding, 'text-right', 'font-bold', 'font-mono', ...baseClasses]
-    case 'identification':
-      return [...padding, 'uppercase', 'font-mono', 'text-xs', 'tracking-wide', ...baseClasses]
-    case 'flightNumber':
-      return [...padding, 'uppercase', 'font-mono', 'text-xs', ...baseClasses]
-    case 'remarks':
-      return [...padding, 'text-sm', 'italic', ...baseClasses]
-    case 'pic':
-    case 'sic':
-    case 'dualR':
-    case 'solo':
-    case 'night':
-    case 'actual':
-    case 'hood':
-    case 'dualG':
-    case 'xc':
-    case 'dayLandings':
-    case 'nightLandings':
-    case 'approach':
-      return [...padding, 'text-right', 'font-mono', 'text-sm', ...baseClasses]
-    case 'pilots':
-      return [...padding, 'text-sm', ...baseClasses]
-    default:
-      return [...padding, ...baseClasses]
-  }
-}
-
-// Helper function to get cell text color classes
-function getCellTextColor(col: LogbookColumnConfig): string {
-  switch (col.key) {
-    case 'total':
-      return isDarkMode.value ? 'text-blue-400' : 'text-blue-600'
-    case 'identification':
-    case 'flightNumber':
-      return isDarkMode.value ? 'text-gray-300' : 'text-gray-700'
-    case 'remarks':
-      return isDarkMode.value ? 'text-gray-400' : 'text-gray-500'
-    case 'pic':
-    case 'sic':
-    case 'dualR':
-    case 'solo':
-    case 'night':
-    case 'actual':
-    case 'hood':
-    case 'dualG':
-    case 'xc':
-    case 'dayLandings':
-    case 'nightLandings':
-    case 'approach':
-    case 'pilots':
-      return isDarkMode.value ? 'text-gray-300' : 'text-gray-700'
-    default:
-      return ''
-  }
+function onEntryCardDragStart(key: LogbookColumnKey): void {
+  draggedColumnKey.value = key
 }
 
 const catalogSections = [
@@ -6699,9 +6339,9 @@ const duplicateWarning = ref<{ matches: LogEntry[] } | null>(null)
 const saveAnyway = ref(false)
 const validationWarning = ref<boolean>(false)
 const saveAnywayValidation = ref(false)
+const isSavingEntry = ref(false)
+const isSavingInlineEdit = ref(false)
 const isEntryFormOpen = ref(false)
-/** After saving a new entry, hold it so "Add next flight" can prefill departure/date */
-const lastSavedEntry = ref<LogEntry | null>(null)
 const isCommercialMode = ref(false)
 
 function toggleCommercialMode(): void {
@@ -6715,9 +6355,6 @@ function toggleCommercialMode(): void {
 // Sticky header refs
 const rootScrollContainerRef = ref<HTMLElement | null>(null)
 const fcvFetchSectionRef = ref<HTMLElement | null>(null)
-const tableHeaderRef = ref<HTMLElement | null>(null)
-const tableContainerRef = ref<HTMLElement | null>(null)
-const tableRef = ref<HTMLTableElement | null>(null)
 const showScrollToTop = ref(false)
 const handleScroll = (): void => {
   if (!isBrowser) return
@@ -6787,8 +6424,10 @@ function toggleInlineOOOIMode(): void {
 }
 
 async function saveInlineEdit(): Promise<void> {
-  if (!inlineEditEntry.value) return
-  
+  if (!inlineEditEntry.value || isSavingInlineEdit.value) return
+  isSavingInlineEdit.value = true
+
+  try {
   // Basic validation: date always required; aircraft/ident required only when not logging simulator time
   if (!inlineEditEntry.value.date) {
     alert('Date is required.')
@@ -6899,7 +6538,7 @@ async function saveInlineEdit(): Promise<void> {
         await updateEntryInIndexedDB(updatedEntry, { userId: user.value.id })
         const queueEntry = { ...dbEntry, id: targetId, user_id: user.value.id }
         await addToQueue('insert', targetId, queueEntry, user.value.id)
-        if (isOnline.value) processQueue()
+        if (isOnline.value) processQueue({ silent: true })
         logEntries.value = sortEntriesByDateAndOOOI(
           logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
         )
@@ -6928,7 +6567,7 @@ async function saveInlineEdit(): Promise<void> {
         console.log('[SaveInlineEdit] Update returned 0 rows, saving to IndexedDB and queueing for sync')
         await updateEntryInIndexedDB(updatedEntry, { userId: user.value.id })
         await addToQueue('update', targetId, dbEntry, user.value.id)
-        if (isOnline.value) processQueue()
+        if (isOnline.value) processQueue({ silent: true })
         logEntries.value = sortEntriesByDateAndOOOI(
           logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
         )
@@ -7139,10 +6778,15 @@ async function saveInlineEdit(): Promise<void> {
     logEntries.value.find(e => e.id === targetId)?.flightTime.night
   )
 
+  showToast('Entry updated', 3000)
+
   expandedEntryId.value = null
   inlineEditEntry.value = null
   isInlineCommercialMode.value = false
   showAuditTrailSidebar.value = false
+  } finally {
+    isSavingInlineEdit.value = false
+  }
 }
 
 function cancelInlineEdit(): void {
@@ -7161,20 +6805,33 @@ const catalogOpenState = reactive<Record<CatalogKey, boolean>>({
   categoryClass: true
 })
 const isSidebarCollapsed = ref(false)
+const isCatalogDrawerOpen = ref(false)
+const catalogDrawerRef = ref<HTMLElement | null>(null)
+const entryFormDrawerRef = ref<HTMLElement | null>(null)
+const editEntryDrawerRef = ref<HTMLElement | null>(null)
 const showSettingsModal = ref(false)
-const activeSettingsTab = ref<SettingsTabId>('profile')
+const settingsStack = ref<SettingsStackFrame[]>(['root'])
 /** Sub-panes inside Settings → Pilot Profile (full-width each). */
 const pilotProfileSubTab = ref<'profile' | 'stats'>('profile')
 const show8710Fields = ref(false)
-watch(activeSettingsTab, (tab) => {
-  if (tab === 'profile') pilotProfileSubTab.value = 'profile'
+
+const settingsProfilePreview = computed(() => ({
+  name: pilotProfile.name,
+  callsign: pilotProfile.callsign,
+  initials: getPilotInitialsFromName(pilotProfile.name),
+}))
+
+const settingsUpdatesBadge = computed(() => (showLatestBanner.value ? 'New' : undefined))
+
+watch(settingsStack, (stack) => {
+  const current = stack[stack.length - 1]
+  if (current === 'profile') pilotProfileSubTab.value = 'profile'
 })
 
 const MIN_PASSWORD_LENGTH = 8
 const showImportSection = ref(true)
 const showExportSection = ref(true)
 const showIdentDropdown = ref(false)
-const showColumnSettings = ref(false)
 const showInlineIdentDropdown = ref(false)
 const showAuditTrail = ref(false)
 const auditTrailEntryId = ref<string | null>(null)
@@ -7549,6 +7206,18 @@ const selectedFilters = reactive({
   flagged: false, // filter for flagged entries
   tags: {} as Record<string, boolean> // key: tag label (e.g., 'Checkride', 'IPC')
 })
+
+const activeCatalogFilterCount = computed(() => (
+  Object.values(selectedFilters.aircraft).filter(Boolean).length +
+  Object.values(selectedFilters.airports).filter(Boolean).length +
+  Object.values(selectedFilters.pilots).filter(Boolean).length +
+  Object.values(selectedFilters.conditions).filter(Boolean).length +
+  Object.values(selectedFilters.families).filter(Boolean).length +
+  Object.values(selectedFilters.categoryClass).filter(Boolean).length +
+  Object.values(selectedFilters.tags).filter(Boolean).length +
+  (selectedFilters.flagged ? 1 : 0)
+))
+
 const catalogSearchTerms = reactive<Record<CatalogKey, string>>({
   aircraft: '',
   airports: '',
@@ -8854,6 +8523,18 @@ async function handleImportDrop(event: DragEvent): Promise<void> {
   }
 }
 
+async function handleSettingsImportFile(file: File): Promise<void> {
+  const fileName = file.name.toLowerCase()
+
+  if (fileName.endsWith('.csv') || fileName.endsWith('.txt') || file.type === 'text/csv' || file.type === 'text/plain') {
+    await processCSVFile(file)
+  } else if (fileName.endsWith('.json') || file.type === 'application/json') {
+    await processJSONFile(file)
+  } else {
+    alert(`Please choose a CSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`)
+  }
+}
+
 function loadPilotProfilePrefs(): void {
   if (!isBrowser) return
   try {
@@ -9595,44 +9276,12 @@ function resetForm(): void {
   validationWarning.value = false
   saveAnywayValidation.value = false
   clearValidation()
-  lastSavedEntry.value = null
   successMessage.value = null
   Object.assign(newEntry, createBlankEntry())
   editingEntryId.value = null
   // Reset manual XC time tracking when form is reset
   xcTimeManuallySet.value = false
   lastKnownXcTime.value = null
-}
-
-/** Prefill new entry form for "Add next flight": departure = last destination, date = same day; clear rest */
-function prefillForNextFlight(entry: LogEntry): void {
-  lastSavedEntry.value = null
-  successMessage.value = null
-  Object.assign(newEntry, createBlankEntry())
-  newEntry.departure = entry.destination || ''
-  newEntry.date = entry.date ? normalizeDateForInput(entry.date) : newEntry.date
-  duplicateWarning.value = null
-  saveAnyway.value = false
-  validationWarning.value = false
-  saveAnywayValidation.value = false
-  clearValidation()
-  xcTimeManuallySet.value = false
-  lastKnownXcTime.value = null
-}
-
-function closeAddEntryAfterSave(): void {
-  lastSavedEntry.value = null
-  successMessage.value = null
-  Object.assign(newEntry, createBlankEntry())
-  editingEntryId.value = null
-  duplicateWarning.value = null
-  saveAnyway.value = false
-  validationWarning.value = false
-  saveAnywayValidation.value = false
-  clearValidation()
-  xcTimeManuallySet.value = false
-  lastKnownXcTime.value = null
-  isEntryFormOpen.value = false
 }
 
 function toggleEntryForm(): void {
@@ -9644,7 +9293,6 @@ function toggleEntryForm(): void {
     expandedEntryId.value = null
     inlineEditEntry.value = null
     isInlineCommercialMode.value = false
-    lastSavedEntry.value = null
     successMessage.value = null
     editingEntryId.value = null
     Object.assign(newEntry, createBlankEntry())
@@ -9818,6 +9466,84 @@ function autoCheckFlightConditions(
 function toggleSidebar(): void {
   isSidebarCollapsed.value = !isSidebarCollapsed.value
 }
+
+function openCatalogDrawer(): void {
+  isCatalogDrawerOpen.value = true
+}
+
+function closeCatalogDrawer(): void {
+  isCatalogDrawerOpen.value = false
+}
+
+function handleIosOverlayEscape(e: KeyboardEvent) {
+  if (e.key !== 'Escape') return
+  if (showCrewProfileModal.value) {
+    closeCrewProfileModal()
+  } else if (isCatalogDrawerOpen.value) {
+    closeCatalogDrawer()
+  } else if (isEntryFormOpen.value) {
+    toggleEntryForm()
+  } else if (expandedEntryId.value !== null) {
+    cancelInlineEdit()
+  }
+}
+
+const isIosOverlayOpen = computed(
+  () => isCatalogDrawerOpen.value || isEntryFormOpen.value || expandedEntryId.value !== null || showCrewProfileModal.value
+)
+
+function setIosOverlayScrollLock(open: boolean): void {
+  if (!isBrowser || !isIos.value) return
+  document.documentElement.style.overflow = open ? 'hidden' : ''
+  document.documentElement.style.overflowX = open ? 'hidden' : ''
+  document.body.style.overflowX = open ? 'hidden' : ''
+  document.body.style.overflow = open ? 'hidden' : ''
+}
+
+watch(isIosOverlayOpen, (open) => {
+  if (!isBrowser || !isIos.value) return
+  setIosOverlayScrollLock(open)
+  if (open) {
+    window.addEventListener('keydown', handleIosOverlayEscape)
+  } else {
+    window.removeEventListener('keydown', handleIosOverlayEscape)
+  }
+})
+
+useCatalogDrawerGestures({
+  isOpen: isCatalogDrawerOpen,
+  drawerEl: catalogDrawerRef,
+  onOpen: () => {
+    if (!isEntryFormOpen.value && expandedEntryId.value === null) {
+      openCatalogDrawer()
+    }
+  },
+  onClose: closeCatalogDrawer,
+})
+
+const pullToRefreshDisabled = computed(
+  () =>
+    showSettingsModal.value ||
+    isEntryFormOpen.value ||
+    isCatalogDrawerOpen.value ||
+    expandedEntryId.value !== null ||
+    showCrewProfileModal.value ||
+    showAuthModal.value ||
+    isDashboardRefreshing.value
+)
+
+const { pullDistance, isPulling, isRefreshing: isPullRefreshing } = usePullToRefresh({
+  onRefresh: refreshDashboardData,
+  disabled: pullToRefreshDisabled,
+  scrollContainerRef: rootScrollContainerRef,
+})
+
+const pullTransformStyle = computed(() => {
+  if (!isIos.value) return {}
+  const y = isPullRefreshing.value ? 70 : pullDistance.value
+  const transition = isPulling.value ? 'none' : 'transform 0.25s ease-out'
+  return { transform: `translateY(${y}px)`, transition }
+})
 
 // Helpers to extract keys for filters
 function extractTailFromCatalogItem(item: string): string | null {
@@ -10175,6 +9901,9 @@ function closeAirportModal(): void {
 
 // Crew/Instructor profile functions
 function showCrewProfile(name: string): void {
+  if (isIos.value) {
+    closeCatalogDrawer()
+  }
   currentCrewName.value = name
   showCrewProfileModal.value = true
 }
@@ -10801,7 +10530,7 @@ async function calculateDuration(
 }
 
 // Watcher to auto-calculate total time and flight time
-watch(() => [newEntry.oooi?.out, newEntry.oooi?.in, newEntry.oooi?.off, newEntry.oooi?.on, newEntry.role, newEntry.departure, newEntry.destination, newEntry.date], async () => {
+watch(() => [newEntry.oooi?.out, newEntry.oooi?.off, newEntry.oooi?.on, newEntry.oooi?.in, newEntry.role, newEntry.departure, newEntry.destination, newEntry.date], async () => {
   if (!isCommercialMode.value || !newEntry.oooi) return
   
   if (newEntry.oooi.out && newEntry.oooi.in) {
@@ -10980,7 +10709,7 @@ watch(() => [newEntry.departure, newEntry.destination, newEntry.flightTime.cross
   }, 500)
 })
 
-watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.in, inlineEditEntry.value?.oooi?.off, inlineEditEntry.value?.oooi?.on, inlineEditEntry.value?.role, inlineEditEntry.value?.departure, inlineEditEntry.value?.destination, inlineEditEntry.value?.date], async () => {
+watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.off, inlineEditEntry.value?.oooi?.on, inlineEditEntry.value?.oooi?.in, inlineEditEntry.value?.role, inlineEditEntry.value?.departure, inlineEditEntry.value?.destination, inlineEditEntry.value?.date], async () => {
   if (!isInlineCommercialMode.value || !inlineEditEntry.value?.oooi) return
   
   if (inlineEditEntry.value.oooi.out && inlineEditEntry.value.oooi.in) {
@@ -11432,6 +11161,10 @@ watch(
 )
 
 async function submitEntry(): Promise<void> {
+  if (isSavingEntry.value) return
+  isSavingEntry.value = true
+
+  try {
   validationError.value = null
   successMessage.value = null
   duplicateWarning.value = null
@@ -11588,7 +11321,6 @@ async function submitEntry(): Promise<void> {
   const shouldFlag = saveAnywayValidation.value && !onlyPastDateIssues
 
   // LOCAL-FIRST: Always save to IndexedDB first, then queue for sync
-  try {
     // Generate entry ID if new entry
     const entryId = editingEntryId.value || generateEntryId()
     
@@ -11658,28 +11390,17 @@ async function submitEntry(): Promise<void> {
         // For inserts, include the UUID so Supabase uses it
         await addToQueue('insert', entryId, dbEntry, userId)
       }
-
-      // If online, try immediate sync
-      if (isOnline.value) {
-        processQueue()
-      }
     }
 
-    // Show success message
-    successMessage.value = editingEntryId.value ? 'Entry updated.' : 'Entry saved.'
+    // Show success toast and close form
+    showToast(editingEntryId.value ? 'Entry updated' : 'Entry saved', 3000)
     duplicateWarning.value = null
     saveAnyway.value = false
     validationWarning.value = false
     saveAnywayValidation.value = false
     clearValidation()
-
-    // For new entry: offer "Add next flight" (keep panel open). For edit: reset and close below.
-    if (!editingEntryId.value) {
-      lastSavedEntry.value = entryToSave
-    }
-
-    // Sync queue will handle Supabase sync in the background
-    // No need to wait for it here - IndexedDB is the source of truth
+    resetForm()
+    isEntryFormOpen.value = false
 
   } catch (error) {
     console.error('[SaveEntry] Error saving entry:', error)
@@ -11690,14 +11411,9 @@ async function submitEntry(): Promise<void> {
     }
     successMessage.value = 'Error saving entry. Please try again.'
     validationError.value = error instanceof Error ? error.message : 'Failed to save entry'
-    return
+  } finally {
+    isSavingEntry.value = false
   }
-
-  if (editingEntryId.value) {
-    resetForm()
-    isEntryFormOpen.value = false
-  }
-  // When !editingEntryId we left lastSavedEntry set; panel stays open for "Add next flight" or "Close"
 }
 
 // Helper function to check if a string is a valid UUID
@@ -11943,6 +11659,7 @@ async function loadEntries(): Promise<void> {
   // If authenticated and online, sync with Supabase (merge using last-write-wins)
   if (isAuthenticated.value && user.value && isOnline.value) {
     try {
+      await withTimeout((async () => {
       // Paginate in batches of 1000 (Supabase default max per request)
       const BATCH_SIZE = 1000
       let allData: any[] = []
@@ -12060,6 +11777,7 @@ async function loadEntries(): Promise<void> {
         
         console.log('[LoadEntries] Merged entries: IndexedDB + Supabase =', logEntries.value.length, 'entries')
       }
+      })(), 15000, 'Load entries from Supabase')
     } catch (err) {
       console.error('[LoadEntries] Error syncing with Supabase:', err)
       // Continue with IndexedDB entries
@@ -12076,6 +11794,56 @@ async function loadEntries(): Promise<void> {
 
   // FC View rows may arrive without persisted night values; derive from OOOI for display consistency.
   void enrichFcvNightDataForDisplay()
+}
+
+async function refreshDashboardData(): Promise<void> {
+  if (isDashboardRefreshing.value) return
+  isDashboardRefreshing.value = true
+
+  try {
+    await checkOnlineStatus()
+
+    if (!isAuthenticated.value || !user.value) {
+      showToast('Sign in to sync')
+      return
+    }
+
+    if (!isOnline.value) {
+      showToast('Offline — showing local data')
+      return
+    }
+
+    await refreshQueueLength()
+    const queueBefore = queueLength.value
+    const countBefore = logEntries.value.length
+
+    await loadEntries()
+    await processQueue()
+    await refreshQueueLength()
+    await fetchEntityTags()
+    await fetchUserTagPresets()
+    await loadPilotProfileFromSupabase()
+    await loadCrewProfiles()
+
+    if (logEntries.value.length > 0) {
+      calculateAllCurrency(logEntries.value)
+    }
+
+    const added = logEntries.value.length - countBefore
+    const queueCleared = queueBefore > 0 && queueLength.value === 0
+    if (added > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      showToast(`Synced — ${added} new ${added === 1 ? 'entry' : 'entries'}`)
+    } else if (queueCleared) {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      showToast('Synced')
+    }
+  } catch (err) {
+    console.error('[refreshDashboardData]', err)
+    showToast('Sync failed')
+  } finally {
+    isDashboardRefreshing.value = false
+  }
 }
 
 async function handleFcvImported(payload: {
@@ -12405,9 +12173,6 @@ onMounted(async () => {
   const handleClickOutside = (event: MouseEvent) => {
     const target = event.target as HTMLElement
 
-    if (showColumnSettings.value && !target.closest('.column-settings-container')) {
-      showColumnSettings.value = false
-    }
     // Close context menu when clicking outside
     if (contextMenuVisible.value && !target.closest('.context-menu-container')) {
       closeContextMenu()
@@ -12478,7 +12243,7 @@ watch(
 watch(
   expandedEntryId,
   (newId) => {
-    if (newId !== null && inlineEditEntry.value) {
+    if (newId !== null && inlineEditEntry.value && !isIos.value) {
       // Use nextTick to ensure DOM is updated
       setTimeout(() => {
         const firstInput = document.querySelector('[data-edit-panel] input[type="date"], [data-edit-panel] input[type="text"]') as HTMLInputElement
@@ -12494,7 +12259,7 @@ watch(
 watch(
   isEntryFormOpen,
   (isOpen) => {
-    if (isOpen) {
+    if (isOpen && !isIos.value) {
       // Use nextTick to ensure DOM is updated
       setTimeout(() => {
         const firstInput = document.querySelector('[data-add-entry-panel] input[type="date"], [data-add-entry-panel] input[type="text"]') as HTMLInputElement
@@ -13634,6 +13399,157 @@ function getDisplayConditions(entry: LogEntry): string[] {
 </script>
 
 <style scoped>
+[data-add-entry-panel],
+[data-edit-panel] {
+  min-width: 0;
+}
+
+[data-add-entry-panel] .grid,
+[data-edit-panel] .grid {
+  min-width: 0;
+}
+
+.catalog-drawer-ios {
+  overflow-x: hidden;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.catalog-drawer-ios-scroll,
+.catalog-section-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: auto;
+}
+
+.catalog-drawer-ios input[type='text'] {
+  font-size: 16px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.catalog-modal-ios input:not([type='checkbox']):not([type='radio']),
+.catalog-modal-ios textarea {
+  font-size: 16px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.entry-panel-ios,
+.entry-panel-ios form,
+.entry-panel-ios .grid,
+.entry-panel-ios .rounded-lg {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.entry-panel-ios .flex,
+.entry-panel-ios .inline-flex {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.entry-panel-ios .flex:not(.flex-col) {
+  flex-wrap: wrap;
+}
+
+[data-add-entry-panel].entry-panel-ios,
+[data-edit-panel].entry-panel-ios {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  touch-action: pan-y;
+  overflow-x: hidden;
+}
+
+.entry-panel-ios .rounded-lg.border {
+  padding: 0.75rem;
+}
+
+.entry-panel-ios .entry-grid-ios-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.entry-panel-ios .entry-grid-ios-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.entry-panel-ios .entry-grid-ios-cat-time {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 5.5rem);
+}
+
+.entry-panel-ios label.block.uppercase.font-bold {
+  font-size: 11px;
+}
+
+.entry-panel-ios div.uppercase.font-bold {
+  font-size: 11px;
+}
+
+.entry-panel-ios div.uppercase.font-bold.mb-1.text-center {
+  font-size: 10px;
+}
+
+.entry-panel-ios input:not([type='checkbox']):not([type='radio']),
+.entry-panel-ios select,
+.entry-panel-ios textarea {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 16px;
+}
+
+.entry-panel-ios input[type='checkbox'] {
+  width: 1.125rem;
+  height: 1.125rem;
+  min-width: 1.125rem;
+  max-width: 1.125rem;
+  flex-shrink: 0;
+  margin: 0;
+  font-size: inherit;
+}
+
+.entry-panel-ios input[type='date'],
+.entry-panel-ios select {
+  -webkit-appearance: none;
+  appearance: none;
+  min-height: 2.125rem;
+  line-height: 1.25rem;
+}
+
+.entry-panel-ios input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+.entry-panel-ios select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 0.75rem;
+  padding-right: 1.75rem;
+}
+
+.entry-panel-ios .entry-chip-ios {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  min-height: 2.25rem;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.entry-panel-actions-ios {
+  width: 100%;
+}
+
+.entry-panel-actions-ios button {
+  width: 100%;
+  max-width: 100%;
+}
+
 /* Fade transition for backdrop */
 .fade-enter-active,
 .fade-leave-active {
