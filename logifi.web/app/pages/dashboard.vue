@@ -259,26 +259,27 @@
           </p>
         </div>
       </section>
-      <Transition name="fade">
-        <div
-          v-if="isIos && isCatalogDrawerOpen"
-          class="fixed inset-0 z-40 bg-black/50"
-          aria-hidden="true"
-          @click="closeCatalogDrawer"
-        />
-      </Transition>
       <div class="mr-auto w-full max-w-full flex flex-col gap-10 lg:flex-row">
-        <Transition name="slide-left">
-        <aside
-          v-if="!isIos || isCatalogDrawerOpen"
-          ref="catalogDrawerRef"
-          :class="[
+        <Teleport to="body" :disabled="!isIos">
+          <Transition name="fade">
+            <div
+              v-if="isIos && isCatalogDrawerOpen"
+              class="fixed inset-0 z-40 bg-black/50"
+              aria-hidden="true"
+              @click="closeCatalogDrawer"
+            />
+          </Transition>
+          <Transition name="slide-left">
+          <aside
+            v-if="!isIos || isCatalogDrawerOpen"
+            ref="catalogDrawerRef"
+            :class="[
             'flex-shrink-0 rounded-2xl border text-left font-quicksand transition-all duration-300 flex flex-col',
             theme === 'dark'
               ? 'bg-gray-900 border-white/10 text-gray-200 shadow-md shadow-black/40'
               : 'bg-gray-100 border-gray-200 text-gray-800 shadow-sm',
             isIos
-              ? 'catalog-drawer-ios fixed left-0 top-0 z-50 h-full w-full max-w-sm overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] px-5 py-6 shadow-2xl'
+              ? 'catalog-drawer-ios fixed left-0 top-0 z-50 h-[100dvh] w-full max-w-sm overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] px-5 py-6 shadow-2xl'
               : isSidebarCollapsed
                 ? 'lg:w-16 px-3 py-4'
                 : 'lg:w-72 xl:w-80 px-5 py-6'
@@ -398,7 +399,7 @@
 
                   <!-- Aircraft: family tree -->
                   <template v-if="section.key === 'aircraft'">
-                    <ul :class="['space-y-2 text-sm pr-1 font-quicksand', !isIos && 'max-h-56 overflow-y-auto', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+                    <ul :class="['catalog-section-scroll space-y-2 text-sm max-h-56 overflow-y-auto pr-1 font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
                       <li v-for="fam in getFilteredAircraftFamilies()" :key="'fam-' + fam" class="space-y-1">
                         <div class="flex items-center justify-between">
                           <div class="flex items-center gap-2">
@@ -454,8 +455,7 @@
                   <template v-else>
                     <ul
                   :class="[
-                    'space-y-2 text-sm pr-1 font-quicksand',
-                    !isIos && 'max-h-48 overflow-y-auto',
+                    'catalog-section-scroll space-y-2 text-sm max-h-48 overflow-y-auto pr-1 font-quicksand',
                     isDarkMode ? 'text-gray-300' : 'text-gray-700'
                   ]"
                 >
@@ -659,8 +659,9 @@
             </div>
             </div>
           </div>
-        </aside>
-        </Transition>
+          </aside>
+          </Transition>
+        </Teleport>
 
         <div class="flex-1 space-y-12 min-w-0">
           <section class="text-center lg:text-left">
@@ -14026,8 +14027,10 @@ function getDisplayConditions(entry: LogEntry): string[] {
   max-width: 100%;
 }
 
-.catalog-drawer-ios-scroll {
+.catalog-drawer-ios-scroll,
+.catalog-section-scroll {
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: auto;
 }
 
 .catalog-drawer-ios input[type='text'] {
