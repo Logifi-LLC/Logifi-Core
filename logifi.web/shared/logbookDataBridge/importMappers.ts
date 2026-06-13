@@ -421,6 +421,3 @@ export function mapRawRowsToLogEntries(
 
   return { entries, skipped }
 }
-
-/** Expose airport token helper for route validation in tests. */
-export { splitAirportCodes }

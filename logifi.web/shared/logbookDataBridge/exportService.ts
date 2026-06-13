@@ -130,5 +130,3 @@ export function buildHeaderRowObject(
   })
   return out
 }
-
-export { escapeCsvValue }
