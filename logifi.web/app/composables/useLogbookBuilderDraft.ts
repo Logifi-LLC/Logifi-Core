@@ -80,36 +80,36 @@ export function resumeDraftAutosave(): void {
   autosaveSuspended = false
 }
 
-export function saveDraftNow(grid: Grid): void {
+export function saveDraftNow(grid: Grid, userId?: string): void {
   const draft = buildDraftFromGrid(grid)
   if (!draftHasContent(draft)) {
-    clearDraftStorage()
+    clearDraftStorage(userId)
     return
   }
-  writeDraftToStorage(draft)
+  writeDraftToStorage(draft, userId)
 }
 
-export function clearBuilderDraft(): void {
-  clearDraftStorage()
+export function clearBuilderDraft(userId?: string): void {
+  clearDraftStorage(userId)
 }
 
-export function getStoredDraft(): LogbookBuilderDraft | null {
-  return readDraftFromStorage()
+export function getStoredDraft(userId?: string): LogbookBuilderDraft | null {
+  return readDraftFromStorage(userId)
 }
 
-export function storedDraftHasContent(): boolean {
-  const draft = readDraftFromStorage()
+export function storedDraftHasContent(userId?: string): boolean {
+  const draft = readDraftFromStorage(userId)
   return draft != null && draftHasContent(draft)
 }
 
 /** Debounced autosave while the user edits the grid. */
-export function setupBuilderDraftAutosave(grid: Grid, debounceMs = 500): () => void {
+export function setupBuilderDraftAutosave(grid: Grid, userId?: string, debounceMs = 500): () => void {
   const scheduleSave = () => {
     if (autosaveSuspended) return
     if (autosaveTimer) clearTimeout(autosaveTimer)
     autosaveTimer = setTimeout(() => {
       autosaveTimer = null
-      saveDraftNow(grid)
+      saveDraftNow(grid, userId)
     }, debounceMs)
   }
 

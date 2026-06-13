@@ -1,10 +1,22 @@
 import { supabase } from '~/lib/supabase'
 import { LOGBOOK_STORAGE_KEY } from '~/utils/logbookTypes'
 import type { LogEntry } from '~/utils/logbookTypes'
+import {
+  ACCOUNT_SCOPED_STORAGE_KEYS,
+  getScopedItem,
+  migrateAllGlobalKeysToScoped,
+  setScopedItem,
+  removeScopedItem,
+} from '~/utils/userScopedStorage'
+const PILOT_PROFILE_STORAGE_KEY = ACCOUNT_SCOPED_STORAGE_KEYS.PILOT_PROFILE
+const CREW_PROFILES_STORAGE_KEY = ACCOUNT_SCOPED_STORAGE_KEYS.CREW_PROFILES
+const MIGRATION_STATUS_KEY = ACCOUNT_SCOPED_STORAGE_KEYS.MIGRATION_STATUS
 
-const PILOT_PROFILE_STORAGE_KEY = 'logifi://pilot-profile'
-const CREW_PROFILES_STORAGE_KEY = 'logifi://crew-profiles'
-const MIGRATION_STATUS_KEY = 'logifi://migration-status'
+function readScopedOrLegacy(baseKey: string, userId: string): string | null {
+  return getScopedItem(baseKey, userId) ?? (
+    typeof window !== 'undefined' ? window.localStorage.getItem(baseKey) : null
+  )
+}
 
 interface MigrationStatus {
   completed: boolean
@@ -43,15 +55,15 @@ interface CrewProfile {
 }
 
 /**
- * Check if migration has already been completed
+ * Check if migration has already been completed for a user
  */
-export const hasMigrationCompleted = (): boolean => {
-  if (typeof window === 'undefined') return false
-  
+export const hasMigrationCompleted = (userId: string): boolean => {
+  if (typeof window === 'undefined' || !userId) return false
+
   try {
-    const status = window.localStorage.getItem(MIGRATION_STATUS_KEY)
+    const status = readScopedOrLegacy(MIGRATION_STATUS_KEY, userId)
     if (!status) return false
-    
+
     const parsed: MigrationStatus = JSON.parse(status)
     return parsed.completed === true
   } catch {
@@ -60,13 +72,13 @@ export const hasMigrationCompleted = (): boolean => {
 }
 
 /**
- * Get migration status
+ * Get migration status for a user
  */
-export const getMigrationStatus = (): MigrationStatus | null => {
-  if (typeof window === 'undefined') return null
-  
+export const getMigrationStatus = (userId: string): MigrationStatus | null => {
+  if (typeof window === 'undefined' || !userId) return null
+
   try {
-    const status = window.localStorage.getItem(MIGRATION_STATUS_KEY)
+    const status = readScopedOrLegacy(MIGRATION_STATUS_KEY, userId)
     if (!status) return null
     return JSON.parse(status)
   } catch {
@@ -75,27 +87,33 @@ export const getMigrationStatus = (): MigrationStatus | null => {
 }
 
 /**
- * Mark migration as completed
+ * Mark migration as completed for a user
  */
-const markMigrationComplete = (entriesCount: number, profileMigrated: boolean, crewProfilesMigrated: boolean) => {
-  if (typeof window === 'undefined') return
-  
+const markMigrationComplete = (
+  userId: string,
+  entriesCount: number,
+  profileMigrated: boolean,
+  crewProfilesMigrated: boolean
+) => {
+  if (typeof window === 'undefined' || !userId) return
+
   const status: MigrationStatus = {
     completed: true,
     migratedAt: new Date().toISOString(),
     entriesCount,
     profileMigrated,
-    crewProfilesMigrated
+    crewProfilesMigrated,
   }
-  
-  window.localStorage.setItem(MIGRATION_STATUS_KEY, JSON.stringify(status))
+
+  setScopedItem(MIGRATION_STATUS_KEY, userId, JSON.stringify(status))
 }
 
 /**
  * Clear migration status (allows re-migration)
  */
-export const clearMigrationStatus = () => {
-  if (typeof window === 'undefined') return
+export const clearMigrationStatus = (userId: string) => {
+  if (typeof window === 'undefined' || !userId) return
+  removeScopedItem(MIGRATION_STATUS_KEY, userId)
   window.localStorage.removeItem(MIGRATION_STATUS_KEY)
   console.log('Migration status cleared. Migration will run again on next login.')
 }
@@ -139,7 +157,7 @@ export const resetMigration = async (userId: string): Promise<{ success: boolean
     }
     
     // Clear migration status
-    clearMigrationStatus()
+    clearMigrationStatus(userId)
     
     console.log('Migration reset complete. Refresh the page to trigger a fresh migration.')
     return { success: true }
@@ -369,11 +387,11 @@ export const remigrateCrewProfiles = async (userId: string): Promise<{ success: 
   }
   
   try {
-    const stored = window.localStorage.getItem(CREW_PROFILES_STORAGE_KEY)
+    const stored = readScopedOrLegacy(CREW_PROFILES_STORAGE_KEY, userId)
     if (!stored) {
       return { success: false, migrated: 0, error: 'No crew profiles in localStorage' }
     }
-    
+
     const crewProfiles: Record<string, CrewProfile> = JSON.parse(stored)
     if (!crewProfiles || typeof crewProfiles !== 'object') {
       return { success: false, migrated: 0, error: 'Invalid crew profiles data' }
@@ -518,7 +536,7 @@ const migrateLogEntries = async (userId: string, onProgress?: (current: number, 
   if (typeof window === 'undefined') return 0
   
   try {
-    const stored = window.localStorage.getItem(LOGBOOK_STORAGE_KEY)
+    const stored = readScopedOrLegacy(LOGBOOK_STORAGE_KEY, userId)
     if (!stored) return 0
     
     const entries: LogEntry[] = JSON.parse(stored)
@@ -582,7 +600,7 @@ const migratePilotProfile = async (userId: string): Promise<boolean> => {
   if (typeof window === 'undefined') return false
   
   try {
-    const stored = window.localStorage.getItem(PILOT_PROFILE_STORAGE_KEY)
+    const stored = readScopedOrLegacy(PILOT_PROFILE_STORAGE_KEY, userId)
     if (!stored) return false
     
     const profile: PilotProfilePrefs = JSON.parse(stored)
@@ -654,7 +672,7 @@ const migrateCrewProfiles = async (userId: string): Promise<number> => {
   if (typeof window === 'undefined') return 0
   
   try {
-    const stored = window.localStorage.getItem(CREW_PROFILES_STORAGE_KEY)
+    const stored = readScopedOrLegacy(CREW_PROFILES_STORAGE_KEY, userId)
     if (!stored) return 0
     
     const crewProfiles: Record<string, CrewProfile> = JSON.parse(stored)
@@ -716,9 +734,11 @@ export const migrateLocalStorageToSupabase = async (
   error?: string
 }> => {
   try {
+    migrateAllGlobalKeysToScoped(userId, false)
+
     // Check if already migrated
-    if (hasMigrationCompleted()) {
-      const status = getMigrationStatus()
+    if (hasMigrationCompleted(userId)) {
+      const status = getMigrationStatus(userId)
       return {
         success: true,
         entriesMigrated: status?.entriesCount || 0,
@@ -744,7 +764,7 @@ export const migrateLocalStorageToSupabase = async (
     onProgress?.('crew', crewCount, crewCount)
     
     // Mark migration as complete
-    markMigrationComplete(entriesCount, profileMigrated, crewCount > 0)
+    markMigrationComplete(userId, entriesCount, profileMigrated, crewCount > 0)
     
     return {
       success: true,

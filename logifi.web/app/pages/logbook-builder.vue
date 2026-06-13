@@ -33,15 +33,16 @@ async function finishPageInit() {
   if (pageInitDone) return
 
   suspendDraftAutosave()
+  const userId = user.value?.id
 
-  if (storedDraftHasContent()) {
-    const draft = getStoredDraft()
+  if (storedDraftHasContent(userId)) {
+    const draft = getStoredDraft(userId)
     if (draft) {
       restoreDraftToGrid(grid, draft)
       pageInitDone = true
       resumeDraftAutosave()
       stopAutosave?.()
-      stopAutosave = setupBuilderDraftAutosave(grid)
+      stopAutosave = setupBuilderDraftAutosave(grid, userId)
       return
     }
   }
@@ -49,7 +50,7 @@ async function finishPageInit() {
   if (!isAuthenticated.value || !user.value) {
     resumeDraftAutosave()
     stopAutosave?.()
-    stopAutosave = setupBuilderDraftAutosave(grid)
+    stopAutosave = setupBuilderDraftAutosave(grid, userId)
     return
   }
 
@@ -57,7 +58,7 @@ async function finishPageInit() {
   pageInitDone = true
   resumeDraftAutosave()
   stopAutosave?.()
-  stopAutosave = setupBuilderDraftAutosave(grid)
+  stopAutosave = setupBuilderDraftAutosave(grid, userId)
 }
 
 onMounted(() => {

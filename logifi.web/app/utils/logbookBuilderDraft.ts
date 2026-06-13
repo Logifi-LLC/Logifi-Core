@@ -4,8 +4,9 @@ import type {
   BuilderRow,
   BuilderTemplateColumn,
 } from './logbookBuilderTypes'
+import { ACCOUNT_SCOPED_STORAGE_KEYS, getScopedItem, removeScopedItem, setScopedItem } from './userScopedStorage'
 
-export const BUILDER_DRAFT_STORAGE_KEY = 'logifi-logbook-builder-draft'
+export const BUILDER_DRAFT_STORAGE_KEY = ACCOUNT_SCOPED_STORAGE_KEYS.BUILDER_DRAFT
 export const BUILDER_LAST_TEMPLATE_STORAGE_KEY = 'logifi-logbook-builder-last-template-id'
 
 export function createBuilderSpreadId(): string {
@@ -41,9 +42,11 @@ export function draftHasContent(draft: LogbookBuilderDraft): boolean {
   return false
 }
 
-export function readDraftFromStorage(): LogbookBuilderDraft | null {
+export function readDraftFromStorage(userId?: string): LogbookBuilderDraft | null {
   try {
-    const raw = localStorage.getItem(BUILDER_DRAFT_STORAGE_KEY)
+    const raw = userId
+      ? getScopedItem(BUILDER_DRAFT_STORAGE_KEY, userId)
+      : localStorage.getItem(BUILDER_DRAFT_STORAGE_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as LogbookBuilderDraft
     if (parsed?.version !== 1 || !Array.isArray(parsed.rows) || !Array.isArray(parsed.columns)) {
@@ -58,15 +61,23 @@ export function readDraftFromStorage(): LogbookBuilderDraft | null {
   }
 }
 
-export function writeDraftToStorage(draft: LogbookBuilderDraft): void {
+export function writeDraftToStorage(draft: LogbookBuilderDraft, userId?: string): void {
   try {
-    localStorage.setItem(BUILDER_DRAFT_STORAGE_KEY, JSON.stringify(draft))
+    if (userId) {
+      setScopedItem(BUILDER_DRAFT_STORAGE_KEY, userId, JSON.stringify(draft))
+    } else {
+      localStorage.setItem(BUILDER_DRAFT_STORAGE_KEY, JSON.stringify(draft))
+    }
   } catch (_) {}
 }
 
-export function clearDraftStorage(): void {
+export function clearDraftStorage(userId?: string): void {
   try {
-    localStorage.removeItem(BUILDER_DRAFT_STORAGE_KEY)
+    if (userId) {
+      removeScopedItem(BUILDER_DRAFT_STORAGE_KEY, userId)
+    } else {
+      localStorage.removeItem(BUILDER_DRAFT_STORAGE_KEY)
+    }
   } catch (_) {}
 }
 

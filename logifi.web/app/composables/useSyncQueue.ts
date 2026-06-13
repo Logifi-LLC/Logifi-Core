@@ -9,13 +9,15 @@ import {
   getSyncQueueLength,
   markEntryAsSynced,
   updateEntryInIndexedDB,
-  deleteEntryFromIndexedDB,
   type SyncQueueEntry
 } from '~/utils/indexedDB'
 import { useOffline } from './useOffline'
 
 const MAX_RETRIES = 3
 const RETRY_DELAY_BASE = 1000 // 1 second base delay
+
+/** Shared across composable instances so dashboard and sync share the same active user. */
+const activeUserId = ref<string | null>(null)
 
 export const useSyncQueue = () => {
   const { isOnline, updateSyncProgress, resetSyncProgress } = useOffline()
@@ -25,6 +27,13 @@ export const useSyncQueue = () => {
 
   let backgroundSyncInterval: ReturnType<typeof setInterval> | null = null
   let isBackgroundSyncActive = false
+
+  const setActiveUserId = (userId: string | null) => {
+    activeUserId.value = userId
+    void refreshQueueLength()
+  }
+
+  const getCurrentUserId = (): string | null => activeUserId.value
 
   /**
    * Calculate exponential backoff delay
@@ -39,13 +48,18 @@ export const useSyncQueue = () => {
   const addToQueue = async (
     operation: 'insert' | 'update' | 'delete',
     entryId: string,
-    entryData?: any
+    entryData?: any,
+    userId?: string
   ): Promise<void> => {
+    const scopedUserId = userId ?? activeUserId.value
+    if (!scopedUserId) {
+      throw new Error('Cannot queue sync operation without an active user')
+    }
+
     try {
-      await addToSyncQueue(operation, entryId, entryData)
+      await addToSyncQueue(operation, entryId, scopedUserId, entryData)
       await refreshQueueLength()
-      
-      // If online, try immediate sync
+
       if (isOnline.value) {
         processQueue()
       }
@@ -56,10 +70,10 @@ export const useSyncQueue = () => {
   }
 
   /**
-   * Refresh queue length
+   * Refresh queue length for active user
    */
   const refreshQueueLength = async (): Promise<void> => {
-    queueLength.value = await getSyncQueueLength()
+    queueLength.value = await getSyncQueueLength(activeUserId.value ?? undefined)
   }
 
   /**
@@ -68,9 +82,8 @@ export const useSyncQueue = () => {
   const processQueueItem = async (item: SyncQueueEntry): Promise<boolean> => {
     try {
       let success = false
-
       let insertedData = null
-      
+
       switch (item.operation) {
         case 'insert':
           insertedData = await syncInsert(item)
@@ -85,57 +98,46 @@ export const useSyncQueue = () => {
       }
 
       if (success) {
-        // For inserts, update IndexedDB with the hash and version returned from Supabase
-        // Since all new entries now have UUIDs, the ID should already match
-        if (item.operation === 'insert' && insertedData && insertedData.id) {
+        const userId = item.userId ?? activeUserId.value
+        if (item.operation === 'insert' && insertedData && insertedData.id && userId) {
           try {
-            // Verify ID matches (should always be true for new UUID entries)
-            if (insertedData.id !== item.entryId) {
-              // This should only happen for old entries with non-UUID IDs
-              console.log('[SyncQueue] ID mismatch - updating IndexedDB entry from', item.entryId, 'to', insertedData.id)
-              const { getAllEntriesFromIndexedDB, updateEntryInIndexedDB } = await import('~/utils/indexedDB')
-              const localEntries = await getAllEntriesFromIndexedDB()
-              const localEntry = localEntries.find(e => e.id === item.entryId)
-              
-              if (localEntry) {
-                // Update the entry with the UUID and hash from Supabase
-                await updateEntryInIndexedDB({
-                  ...localEntry,
-                  id: insertedData.id,
-                  dataHash: insertedData.data_hash || undefined,
-                  version: insertedData.version || undefined
-                })
-                console.log('[SyncQueue] Updated IndexedDB entry with UUID:', insertedData.id, 'Hash:', insertedData.data_hash)
-              }
-            } else {
-              // IDs match - just update hash and version
-              const { getAllEntriesFromIndexedDB, updateEntryInIndexedDB } = await import('~/utils/indexedDB')
-              const localEntries = await getAllEntriesFromIndexedDB()
-              const localEntry = localEntries.find(e => e.id === item.entryId)
-              
-              if (localEntry) {
-                await updateEntryInIndexedDB({
-                  ...localEntry,
-                  dataHash: insertedData.data_hash || undefined,
-                  version: insertedData.version || undefined
-                })
-                console.log('[SyncQueue] Updated IndexedDB entry hash and version for UUID:', insertedData.id)
+            const { getAllEntriesFromIndexedDB, updateEntryInIndexedDB } = await import('~/utils/indexedDB')
+            const localEntries = await getAllEntriesFromIndexedDB(userId)
+            const localEntry = localEntries.find((e) => e.id === item.entryId)
+
+            if (localEntry) {
+              if (insertedData.id !== item.entryId) {
+                await updateEntryInIndexedDB(
+                  {
+                    ...localEntry,
+                    id: insertedData.id,
+                    dataHash: insertedData.data_hash || undefined,
+                    version: insertedData.version || undefined,
+                  },
+                  { userId, synced: true }
+                )
+              } else {
+                await updateEntryInIndexedDB(
+                  {
+                    ...localEntry,
+                    dataHash: insertedData.data_hash || undefined,
+                    version: insertedData.version || undefined,
+                  },
+                  { userId, synced: true }
+                )
               }
             }
           } catch (err) {
             console.warn('[SyncQueue] Failed to update IndexedDB:', err)
           }
         }
-        
-        // Mark entry as synced if it exists
+
         try {
           await markEntryAsSynced(item.entryId)
         } catch (err) {
-          // Entry might not exist (e.g., for deletes), that's okay
           console.warn('Could not mark entry as synced:', err)
         }
-        
-        // Remove from queue
+
         await removeFromSyncQueue(item.id)
         return true
       }
@@ -143,21 +145,18 @@ export const useSyncQueue = () => {
       return false
     } catch (error: any) {
       console.error(`Failed to process queue item ${item.id}:`, error)
-      
-      // Update retry count
+
       const newRetryCount = item.retryCount + 1
       await updateSyncQueueEntry(item.id, {
         retryCount: newRetryCount,
-        lastError: error.message || String(error)
+        lastError: error.message || String(error),
       })
 
-      // If max retries reached, keep in queue but don't retry automatically
       if (newRetryCount >= MAX_RETRIES) {
         syncError.value = `Sync failed after ${MAX_RETRIES} retries: ${error.message || String(error)}`
         return false
       }
 
-      // Schedule retry with exponential backoff
       setTimeout(() => {
         if (isOnline.value) {
           processQueue()
@@ -169,32 +168,36 @@ export const useSyncQueue = () => {
   }
 
   /**
-   * Sync insert operation
+   * Sync insert operation — user_id must match queued item owner
    */
   const syncInsert = async (item: SyncQueueEntry): Promise<any> => {
     if (!item.entryData) {
       throw new Error('Entry data missing for insert operation')
     }
 
-    // All new entries now have UUIDs, so we can always include the ID
-    // The trigger will automatically compute the hash
     const insertData = { ...item.entryData }
 
-    // Ensure user_id is set for RLS (use current session if missing from queued payload)
     if (!insertData.user_id) {
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-      if (authUser?.id) {
-        insertData.user_id = authUser.id
-      } else {
-        throw new Error('Not authenticated – cannot sync insert')
+      if (!item.userId) {
+        throw new Error('Queued insert missing userId – refusing cross-account sync')
       }
+      insertData.user_id = item.userId
     }
 
-    // Safety check: verify ID is a UUID (should always be true for new entries)
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser?.id) {
+      throw new Error('Not authenticated – cannot sync insert')
+    }
+    if (item.userId && authUser.id !== item.userId) {
+      throw new Error('Active session does not match queued item user – skipping cross-account sync')
+    }
+    if (insertData.user_id !== authUser.id) {
+      throw new Error('Queued insert user_id does not match active session')
+    }
+
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (insertData.id && !uuidRegex.test(insertData.id)) {
-      console.warn('[SyncQueue] Warning: Entry ID is not a UUID:', insertData.id, '- This should not happen for new entries')
-      // For backward compatibility with old entries, remove non-UUID ID and let Supabase generate one
+      console.warn('[SyncQueue] Warning: Entry ID is not a UUID:', insertData.id)
       delete insertData.id
     }
 
@@ -212,13 +215,6 @@ export const useSyncQueue = () => {
       throw new Error('Insert returned no row (possible RLS or constraint issue)')
     }
 
-    // Verify that hash was computed by the trigger
-    if (data && !data.data_hash) {
-      console.warn('[SyncQueue] Hash was not computed by trigger for entry:', data.id)
-    } else if (data && data.data_hash) {
-      console.log('[SyncQueue] Hash computed successfully for entry:', data.id, 'Hash:', data.data_hash)
-    }
-
     return data
   }
 
@@ -230,14 +226,19 @@ export const useSyncQueue = () => {
       throw new Error('Entry data missing for update operation')
     }
 
-    // Remove read-only fields (data_hash will be recomputed by trigger)
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser?.id) {
+      throw new Error('Not authenticated – cannot sync update')
+    }
+    if (item.userId && authUser.id !== item.userId) {
+      throw new Error('Active session does not match queued item user – skipping cross-account sync')
+    }
+
     const { id, user_id, created_at, updated_at, data_hash, version, ...updateData } = item.entryData
 
-    // Find the UUID if entryId is not a UUID
     let supabaseId = item.entryId
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
     if (!uuidRegex.test(item.entryId) && item.entryData) {
-      // Try to find the entry by matching fields
       try {
         const { data: matchingEntries } = await supabase
           .from('log_entries')
@@ -247,7 +248,7 @@ export const useSyncQueue = () => {
           .eq('departure', item.entryData.departure)
           .eq('destination', item.entryData.destination)
           .limit(1)
-        
+
         if (matchingEntries && matchingEntries.length > 0) {
           supabaseId = matchingEntries[0].id
         }
@@ -271,11 +272,6 @@ export const useSyncQueue = () => {
       throw new Error('Update returned no row (possible RLS or row not found)')
     }
 
-    // Verify that hash was recomputed by the trigger
-    if (data && !data.data_hash) {
-      console.warn('[SyncQueue] Hash was not recomputed by trigger for entry:', data.id)
-    }
-
     return true
   }
 
@@ -283,6 +279,14 @@ export const useSyncQueue = () => {
    * Sync delete operation
    */
   const syncDelete = async (item: SyncQueueEntry): Promise<boolean> => {
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    if (!authUser?.id) {
+      throw new Error('Not authenticated – cannot sync delete')
+    }
+    if (item.userId && authUser.id !== item.userId) {
+      throw new Error('Active session does not match queued item user – skipping cross-account sync')
+    }
+
     const { error } = await supabase
       .from('log_entries')
       .delete()
@@ -296,10 +300,15 @@ export const useSyncQueue = () => {
   }
 
   /**
-   * Process sync queue
+   * Process sync queue for the active user only
    */
   const processQueue = async (): Promise<void> => {
     if (!isOnline.value || isProcessing.value) {
+      return
+    }
+
+    const userId = activeUserId.value
+    if (!userId) {
       return
     }
 
@@ -307,8 +316,8 @@ export const useSyncQueue = () => {
     syncError.value = null
 
     try {
-      const queue = await getSyncQueue()
-      
+      const queue = await getSyncQueue(userId)
+
       if (queue.length === 0) {
         resetSyncProgress()
         await refreshQueueLength()
@@ -316,7 +325,6 @@ export const useSyncQueue = () => {
         return
       }
 
-      // Sort by timestamp (oldest first) and retry count (fewer retries first)
       queue.sort((a, b) => {
         if (a.retryCount !== b.retryCount) {
           return a.retryCount - b.retryCount
@@ -324,9 +332,8 @@ export const useSyncQueue = () => {
         return a.timestamp - b.timestamp
       })
 
-      // Filter out items that have exceeded max retries
-      const processableItems = queue.filter(item => item.retryCount < MAX_RETRIES)
-      
+      const processableItems = queue.filter((item) => item.retryCount < MAX_RETRIES)
+
       if (processableItems.length === 0) {
         resetSyncProgress()
         await refreshQueueLength()
@@ -336,29 +343,21 @@ export const useSyncQueue = () => {
 
       updateSyncProgress(0, processableItems.length, 'syncing')
 
-      let successCount = 0
       for (let i = 0; i < processableItems.length; i++) {
         const item = processableItems[i]
         updateSyncProgress(i, processableItems.length, 'syncing')
+        await processQueueItem(item)
 
-        const success = await processQueueItem(item)
-        if (success) {
-          successCount++
-        }
-
-        // Small delay between items to avoid overwhelming the server
         if (i < processableItems.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 100))
+          await new Promise((resolve) => setTimeout(resolve, 100))
         }
       }
 
       updateSyncProgress(processableItems.length, processableItems.length, 'complete')
       await refreshQueueLength()
 
-      // If there are still items in queue (failed ones), keep processing
-      const remainingQueue = await getSyncQueue()
+      const remainingQueue = await getSyncQueue(userId)
       if (remainingQueue.length > 0 && isOnline.value) {
-        // Wait a bit before retrying failed items
         setTimeout(() => {
           if (isOnline.value) {
             processQueue()
@@ -374,9 +373,6 @@ export const useSyncQueue = () => {
     }
   }
 
-  /**
-   * Start background sync
-   */
   const startBackgroundSync = () => {
     if (isBackgroundSyncActive) {
       return
@@ -384,12 +380,10 @@ export const useSyncQueue = () => {
 
     isBackgroundSyncActive = true
 
-    // Process queue immediately if online
     if (isOnline.value) {
       processQueue()
     }
 
-    // Set up periodic sync (every 10 seconds when online)
     backgroundSyncInterval = setInterval(() => {
       if (isOnline.value && !isProcessing.value) {
         processQueue()
@@ -397,9 +391,6 @@ export const useSyncQueue = () => {
     }, 10000)
   }
 
-  /**
-   * Stop background sync
-   */
   const stopBackgroundSync = () => {
     isBackgroundSyncActive = false
 
@@ -409,45 +400,34 @@ export const useSyncQueue = () => {
     }
   }
 
-  /**
-   * Retry failed operations
-   */
   const retryFailed = async (): Promise<void> => {
-    const queue = await getSyncQueue()
-    const failedItems = queue.filter(item => item.retryCount >= MAX_RETRIES)
+    const userId = activeUserId.value
+    if (!userId) return
 
-    // Reset retry count for failed items
+    const queue = await getSyncQueue(userId)
+    const failedItems = queue.filter((item) => item.retryCount >= MAX_RETRIES)
+
     for (const item of failedItems) {
       await updateSyncQueueEntry(item.id, {
         retryCount: 0,
-        lastError: undefined
+        lastError: undefined,
       })
     }
 
-    // Process queue
     if (isOnline.value) {
       await processQueue()
     }
   }
 
-  /**
-   * Clear successfully synced operations (already handled by processQueue)
-   */
   const clearQueue = async (): Promise<void> => {
-    // This is handled automatically by processQueue
-    // But we can manually clear if needed
     await refreshQueueLength()
   }
 
-  /**
-   * Get queue length
-   */
   const getQueueLength = async (): Promise<number> => {
     await refreshQueueLength()
     return queueLength.value
   }
 
-  // Initialize queue length
   refreshQueueLength()
 
   return {
@@ -461,7 +441,8 @@ export const useSyncQueue = () => {
     retryFailed,
     clearQueue,
     getQueueLength,
-    refreshQueueLength
+    refreshQueueLength,
+    setActiveUserId,
+    getCurrentUserId,
   }
 }
-

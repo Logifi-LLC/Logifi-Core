@@ -8,7 +8,9 @@ import { ROLE_OPTIONS } from '~/utils/logbookBuilderTypes'
 import { useTheme } from '~/composables/useTheme'
 import { persistLastTemplateId } from '~/composables/useLogbookBuilderLastTemplate'
 
-const DEFAULT_ROLE_STORAGE_KEY = 'logifi-logbook-builder-default-role'
+import { ACCOUNT_SCOPED_STORAGE_KEYS, getScopedItem, setScopedItem } from '~/utils/userScopedStorage'
+
+const DEFAULT_ROLE_STORAGE_KEY = ACCOUNT_SCOPED_STORAGE_KEYS.BUILDER_DEFAULT_ROLE
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
 if (!grid) throw new Error('LogbookBuilderToolbar must be used inside a page that provides logbookBuilderGrid')
@@ -25,7 +27,10 @@ const layoutOptions = [
 
 onMounted(() => {
   try {
-    const stored = localStorage.getItem(DEFAULT_ROLE_STORAGE_KEY)
+    const userId = user.value?.id
+    const stored = userId
+      ? getScopedItem(DEFAULT_ROLE_STORAGE_KEY, userId)
+      : localStorage.getItem(DEFAULT_ROLE_STORAGE_KEY)
     if (stored && ROLE_OPTIONS.some((o) => o.value === stored)) {
       defaultImportRole.value = stored
     }
@@ -36,7 +41,12 @@ function onDefaultRoleChange(e: Event) {
   const value = (e.target as HTMLSelectElement).value
   defaultImportRole.value = value
   try {
-    localStorage.setItem(DEFAULT_ROLE_STORAGE_KEY, value)
+    const userId = user.value?.id
+    if (userId) {
+      setScopedItem(DEFAULT_ROLE_STORAGE_KEY, userId, value)
+    } else {
+      localStorage.setItem(DEFAULT_ROLE_STORAGE_KEY, value)
+    }
   } catch (_) {}
 }
 

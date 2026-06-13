@@ -734,7 +734,7 @@ export async function runValidateAndImport(
       updatedAt: insertedRow?.updated_at ?? entry.updatedAt,
     }
     try {
-      await saveSyncedEntryToIndexedDB(entryToStore)
+      await saveSyncedEntryToIndexedDB(entryToStore, user.value!.id)
     } catch (_) {
       // non-fatal
     }
@@ -764,7 +764,7 @@ export async function runValidateAndImport(
 
   if (result.imported > 0) {
     grid.clearGrid()
-    clearBuilderDraft()
+    clearBuilderDraft(user.value?.id)
   }
   return result
 }

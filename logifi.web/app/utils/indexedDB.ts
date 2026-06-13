@@ -1,12 +1,16 @@
 import type { LogEntry } from './logbookTypes'
 
 const DB_NAME = 'logifi-logbook'
-const DB_VERSION = 1
+const DB_VERSION = 2
+
+export const METADATA_ACTIVE_USER_ID = 'activeUserId'
+export const METADATA_LAST_ACTIVE_USER_ID = 'lastActiveUserId'
 
 export interface IDBLogEntry extends LogEntry {
-  _localId?: string  // Temporary ID for unsynced entries
+  _localId?: string
   _synced: boolean
   _syncTimestamp?: number
+  _userId?: string
 }
 
 export interface SyncQueueEntry {
@@ -17,6 +21,7 @@ export interface SyncQueueEntry {
   timestamp: number
   retryCount: number
   lastError?: string
+  userId?: string
 }
 
 interface IDBMetadata {
@@ -26,6 +31,23 @@ interface IDBMetadata {
 
 let dbInstance: IDBDatabase | null = null
 let initPromise: Promise<IDBDatabase> | null = null
+
+function stripInternalEntryFields(entry: IDBLogEntry): LogEntry {
+  const { _synced, _syncTimestamp, _localId, _userId, ...rest } = entry
+  return rest as LogEntry
+}
+
+function ensureUserIndex(store: IDBObjectStore): void {
+  if (!store.indexNames.contains('userId')) {
+    store.createIndex('userId', '_userId', { unique: false })
+  }
+}
+
+function ensureQueueUserIndex(store: IDBObjectStore): void {
+  if (!store.indexNames.contains('userId')) {
+    store.createIndex('userId', 'userId', { unique: false })
+  }
+}
 
 /**
  * Initialize IndexedDB database
@@ -59,23 +81,33 @@ export function initIndexedDB(): Promise<IDBDatabase> {
 
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result
+      const oldVersion = event.oldVersion
 
-      // Create log_entries store
       if (!db.objectStoreNames.contains('log_entries')) {
         const entriesStore = db.createObjectStore('log_entries', { keyPath: 'id' })
         entriesStore.createIndex('date', 'date', { unique: false })
         entriesStore.createIndex('synced', '_synced', { unique: false })
         entriesStore.createIndex('syncTimestamp', '_syncTimestamp', { unique: false })
+        entriesStore.createIndex('userId', '_userId', { unique: false })
+      } else if (oldVersion < 2) {
+        const tx = (event.target as IDBOpenDBRequest).transaction
+        if (tx) {
+          ensureUserIndex(tx.objectStore('log_entries'))
+        }
       }
 
-      // Create sync_queue store
       if (!db.objectStoreNames.contains('sync_queue')) {
-        const queueStore = db.createObjectStore('sync_queue', { keyPath: 'id', autoIncrement: true })
+        const queueStore = db.createObjectStore('sync_queue', { keyPath: 'id' })
         queueStore.createIndex('timestamp', 'timestamp', { unique: false })
         queueStore.createIndex('retryCount', 'retryCount', { unique: false })
+        queueStore.createIndex('userId', 'userId', { unique: false })
+      } else if (oldVersion < 2) {
+        const tx = (event.target as IDBOpenDBRequest).transaction
+        if (tx) {
+          ensureQueueUserIndex(tx.objectStore('sync_queue'))
+        }
       }
 
-      // Create metadata store
       if (!db.objectStoreNames.contains('metadata')) {
         db.createObjectStore('metadata', { keyPath: 'key' })
       }
@@ -99,17 +131,24 @@ async function getDB(): Promise<IDBDatabase> {
 }
 
 /** Plain copy of entry so IndexedDB structured clone does not fail on Vue reactive arrays. */
-function plainEntryForIDB(entry: LogEntry, syncFields: { _synced: boolean; _syncTimestamp: number }): IDBLogEntry {
+function plainEntryForIDB(
+  entry: LogEntry,
+  syncFields: { _synced: boolean; _syncTimestamp: number; _userId?: string }
+): IDBLogEntry {
   const plain = JSON.parse(JSON.stringify(entry)) as LogEntry
   return { ...plain, ...syncFields }
 }
 
 async function putEntryInIndexedDB(
   entry: LogEntry,
-  syncFields: { _synced: boolean; _syncTimestamp: number }
+  syncFields: { _synced: boolean; _syncTimestamp: number; _userId?: string }
 ): Promise<void> {
   const db = await getDB()
-  const entryWithSync = plainEntryForIDB(entry, syncFields)
+  const existing = await getEntryFromIndexedDB(entry.id)
+  const entryWithSync = plainEntryForIDB(entry, {
+    ...syncFields,
+    _userId: syncFields._userId ?? existing?._userId,
+  })
 
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(['log_entries'], 'readwrite')
@@ -124,15 +163,15 @@ async function putEntryInIndexedDB(
 /**
  * Save log entry to IndexedDB
  */
-export async function saveEntryToIndexedDB(entry: LogEntry): Promise<void> {
-  return putEntryInIndexedDB(entry, { _synced: false, _syncTimestamp: Date.now() })
+export async function saveEntryToIndexedDB(entry: LogEntry, userId: string): Promise<void> {
+  return putEntryInIndexedDB(entry, { _synced: false, _syncTimestamp: Date.now(), _userId: userId })
 }
 
 /**
- * Update log entry in IndexedDB
+ * Save synced log entry to IndexedDB
  */
-export async function saveSyncedEntryToIndexedDB(entry: LogEntry): Promise<void> {
-  return putEntryInIndexedDB(entry, { _synced: true, _syncTimestamp: Date.now() })
+export async function saveSyncedEntryToIndexedDB(entry: LogEntry, userId: string): Promise<void> {
+  return putEntryInIndexedDB(entry, { _synced: true, _syncTimestamp: Date.now(), _userId: userId })
 }
 
 /**
@@ -140,12 +179,13 @@ export async function saveSyncedEntryToIndexedDB(entry: LogEntry): Promise<void>
  */
 export async function updateEntryInIndexedDB(
   entry: LogEntry,
-  options?: { synced?: boolean; syncTimestamp?: number }
+  options?: { synced?: boolean; syncTimestamp?: number; userId?: string }
 ): Promise<void> {
   const existing = await getEntryFromIndexedDB(entry.id)
   return putEntryInIndexedDB(entry, {
     _synced: options?.synced ?? existing?._synced ?? false,
-    _syncTimestamp: options?.syncTimestamp ?? existing?._syncTimestamp ?? Date.now()
+    _syncTimestamp: options?.syncTimestamp ?? existing?._syncTimestamp ?? Date.now(),
+    _userId: options?.userId ?? existing?._userId,
   })
 }
 
@@ -184,9 +224,9 @@ export async function getEntryFromIndexedDB(entryId: string): Promise<IDBLogEntr
 }
 
 /**
- * Get all entries from IndexedDB
+ * Get all entries from IndexedDB for a specific user
  */
-export async function getAllEntriesFromIndexedDB(): Promise<LogEntry[]> {
+export async function getAllEntriesFromIndexedDB(userId: string): Promise<LogEntry[]> {
   const db = await getDB()
 
   return new Promise((resolve, reject) => {
@@ -195,9 +235,10 @@ export async function getAllEntriesFromIndexedDB(): Promise<LogEntry[]> {
     const request = store.getAll()
 
     request.onsuccess = () => {
-      const entries = request.result || []
-      // Remove internal sync fields before returning
-      const cleaned = entries.map(({ _synced, _syncTimestamp, _localId, ...entry }) => entry as LogEntry)
+      const entries: IDBLogEntry[] = request.result || []
+      const cleaned = entries
+        .filter((entry) => entry._userId === userId)
+        .map(stripInternalEntryFields)
       resolve(cleaned)
     }
     request.onerror = () => reject(new Error(`Failed to get entries: ${request.error?.message}`))
@@ -212,13 +253,13 @@ export async function markEntryAsSynced(entryId: string): Promise<void> {
   const entry = await getEntryFromIndexedDB(entryId)
 
   if (!entry) {
-    return // Entry no longer in IndexedDB (e.g. deleted after queue); nothing to mark
+    return
   }
 
   const updated: IDBLogEntry = {
     ...entry,
     _synced: true,
-    _syncTimestamp: Date.now()
+    _syncTimestamp: Date.now(),
   }
 
   return new Promise((resolve, reject) => {
@@ -232,19 +273,20 @@ export async function markEntryAsSynced(entryId: string): Promise<void> {
 }
 
 /**
- * Get unsynced entries
+ * Get unsynced entries for a specific user
  */
-export async function getUnsyncedEntries(): Promise<IDBLogEntry[]> {
+export async function getUnsyncedEntries(userId: string): Promise<IDBLogEntry[]> {
   const db = await getDB()
 
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(['log_entries'], 'readonly')
     const store = transaction.objectStore('log_entries')
     const index = store.index('synced')
-    const request = index.getAll(false) // false = not synced
+    const request = index.getAll(false)
 
     request.onsuccess = () => {
-      resolve(request.result || [])
+      const entries: IDBLogEntry[] = request.result || []
+      resolve(entries.filter((entry) => entry._userId === userId))
     }
     request.onerror = () => reject(new Error(`Failed to get unsynced entries: ${request.error?.message}`))
   })
@@ -255,7 +297,12 @@ export async function getUnsyncedEntries(): Promise<IDBLogEntry[]> {
 /**
  * Add operation to sync queue
  */
-export async function addToSyncQueue(operation: 'insert' | 'update' | 'delete', entryId: string, entryData?: any): Promise<string> {
+export async function addToSyncQueue(
+  operation: 'insert' | 'update' | 'delete',
+  entryId: string,
+  userId: string,
+  entryData?: any
+): Promise<string> {
   const db = await getDB()
   const plainEntryData = entryData != null ? JSON.parse(JSON.stringify(entryData)) : null
   const queueEntry: SyncQueueEntry = {
@@ -264,7 +311,8 @@ export async function addToSyncQueue(operation: 'insert' | 'update' | 'delete', 
     entryId,
     entryData: plainEntryData,
     timestamp: Date.now(),
-    retryCount: 0
+    retryCount: 0,
+    userId,
   }
 
   return new Promise((resolve, reject) => {
@@ -278,29 +326,33 @@ export async function addToSyncQueue(operation: 'insert' | 'update' | 'delete', 
 }
 
 /**
- * Get all sync queue entries
+ * Get sync queue entries, optionally filtered by user
  */
-export async function getSyncQueue(): Promise<SyncQueueEntry[]> {
+export async function getSyncQueue(userId?: string): Promise<SyncQueueEntry[]> {
   const db = await getDB()
 
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(['sync_queue'], 'readonly')
     const store = transaction.objectStore('sync_queue')
     const index = store.index('timestamp')
-    const request = index.getAll() // Get all, sorted by timestamp
+    const request = index.getAll()
 
     request.onsuccess = () => {
-      resolve(request.result || [])
+      let items: SyncQueueEntry[] = request.result || []
+      if (userId) {
+        items = items.filter((item) => item.userId === userId)
+      }
+      resolve(items)
     }
     request.onerror = () => reject(new Error(`Failed to get sync queue: ${request.error?.message}`))
   })
 }
 
 /**
- * Remove all queued operations for a specific entry id.
+ * Remove all queued operations for a specific entry id (optionally scoped to user).
  */
-export async function removeQueuedOperationsForEntry(entryId: string): Promise<number> {
-  const queue = await getSyncQueue()
+export async function removeQueuedOperationsForEntry(entryId: string, userId?: string): Promise<number> {
+  const queue = await getSyncQueue(userId)
   const matches = queue.filter((item) => item.entryId === entryId)
   await Promise.all(matches.map((item) => removeFromSyncQueue(item.id)))
   return matches.length
@@ -352,10 +404,10 @@ export async function updateSyncQueueEntry(queueId: string, updates: Partial<Syn
 }
 
 /**
- * Get sync queue length
+ * Get sync queue length for a user
  */
-export async function getSyncQueueLength(): Promise<number> {
-  const queue = await getSyncQueue()
+export async function getSyncQueueLength(userId?: string): Promise<number> {
+  const queue = await getSyncQueue(userId)
   return queue.length
 }
 
@@ -410,3 +462,52 @@ export async function setLastSyncTimestamp(timestamp: number): Promise<void> {
   return setMetadata('lastSyncTimestamp', timestamp)
 }
 
+/**
+ * Assign legacy unscoped IndexedDB rows to the current user when safe.
+ * Unscoped rows are quarantined when a different user logs in.
+ */
+export async function migrateLegacyLocalData(currentUserId: string): Promise<void> {
+  await initIndexedDB()
+  const db = await getDB()
+  const lastActiveUserId = (await getMetadata(METADATA_LAST_ACTIVE_USER_ID)) as string | null
+  const canClaimLegacy = lastActiveUserId == null || lastActiveUserId === currentUserId
+
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(['log_entries', 'sync_queue', 'metadata'], 'readwrite')
+    const entriesStore = transaction.objectStore('log_entries')
+    const queueStore = transaction.objectStore('sync_queue')
+    const metadataStore = transaction.objectStore('metadata')
+
+    const entriesRequest = entriesStore.getAll()
+    entriesRequest.onsuccess = () => {
+      const entries: IDBLogEntry[] = entriesRequest.result || []
+      for (const entry of entries) {
+        if (!entry._userId && canClaimLegacy) {
+          entriesStore.put({ ...entry, _userId: currentUserId })
+        }
+      }
+    }
+    entriesRequest.onerror = () => reject(new Error('Failed to migrate legacy entries'))
+
+    const queueRequest = queueStore.getAll()
+    queueRequest.onsuccess = () => {
+      const items: SyncQueueEntry[] = queueRequest.result || []
+      for (const item of items) {
+        if (!item.userId && canClaimLegacy) {
+          queueStore.put({ ...item, userId: currentUserId })
+        }
+      }
+    }
+    queueRequest.onerror = () => reject(new Error('Failed to migrate legacy sync queue'))
+
+    metadataStore.put({ key: METADATA_ACTIVE_USER_ID, value: currentUserId })
+    metadataStore.put({ key: METADATA_LAST_ACTIVE_USER_ID, value: currentUserId })
+
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(new Error('Legacy local data migration failed'))
+  })
+}
+
+export async function getActiveUserId(): Promise<string | null> {
+  return (await getMetadata(METADATA_ACTIVE_USER_ID)) as string | null
+}

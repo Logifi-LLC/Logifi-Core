@@ -1,4 +1,5 @@
 import type { DigifiTemplateColumn } from './digifiTypes'
+import { formatRegistrationForExport } from '../../shared/logbookDataBridge/formatters'
 import type { LogbookColumnKey } from './logbookTypes'
 
 export interface DigifiCorrectionFeedbackContext {
@@ -17,8 +18,7 @@ export function normalizeDigifiAircraftText(value: unknown): string {
 }
 
 export function normalizeDigifiRegistrationKey(value: unknown): string {
-  if (typeof value !== 'string') return ''
-  return value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  return formatRegistrationForExport(value)
 }
 
 export function normalizeDigifiFeedbackValue(

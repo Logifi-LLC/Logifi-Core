@@ -3195,6 +3195,21 @@
       @generate-8710="showForm8710Modal = true"
     />
 
+    <input
+      ref="csvFileInput"
+      type="file"
+      accept=".csv,text/csv"
+      class="hidden"
+      @change="handleCSVImport"
+    />
+    <input
+      ref="jsonFileInput"
+      type="file"
+      accept=".json,application/json"
+      class="hidden"
+      @change="handleJSONImport"
+    />
+
 
     <!-- Form 8710 Generator Modal -->
     <div
@@ -5041,6 +5056,30 @@
           </div>
         </div>
 
+        <div class="mb-4">
+          <label :class="['block text-sm font-medium font-quicksand mb-2', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+            Export format
+          </label>
+          <select
+            v-model="exportDestination"
+            :class="['w-full rounded border px-3 py-2 text-sm font-quicksand', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
+          >
+            <option
+              v-for="(label, key) in EXPORT_DESTINATION_LABELS"
+              :key="key"
+              :value="key"
+            >
+              {{ label }}
+            </option>
+          </select>
+          <p
+            v-if="exportDestinationHint"
+            :class="['mt-2 text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+          >
+            {{ exportDestinationHint }}
+          </p>
+        </div>
+
         <!-- Preview -->
         <div v-if="exportPreviewStatistics">
           <h4 :class="['text-lg font-semibold font-quicksand mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
@@ -5175,7 +5214,7 @@
         </button>
         <button
           :disabled="!exportPreviewStatistics || exportFilteredEntries.length === 0"
-          @click="exportToCSV(exportFilteredEntries); closeExportDialog()"
+          @click="handleExportCsv(exportFilteredEntries); closeExportDialog()"
           :class="[
             'px-4 py-2 rounded-lg font-quicksand transition-colors flex items-center gap-2',
             !exportPreviewStatistics || exportFilteredEntries.length === 0
@@ -5184,7 +5223,7 @@
           ]"
         >
           <Icon name="ri:file-excel-2-line" size="18" />
-          Export as CSV
+          Export CSV
         </button>
         <button
           :disabled="!exportPreviewStatistics || exportFilteredEntries.length === 0"
@@ -5313,6 +5352,16 @@ import { useValidation } from '../composables/useValidation'
 import { useOffline } from '../composables/useOffline'
 import { useSyncQueue } from '../composables/useSyncQueue'
 import { useExport } from '../composables/useExport'
+import { logbookDataBridgeService } from '../../shared/logbookDataBridge'
+import { downloadExport } from '../utils/logbookDownload'
+import type { ExportDestination } from '../../shared/logbookDataBridge/types'
+import {
+  EXPORT_DESTINATION_HINTS,
+  EXPORT_DESTINATION_LABELS,
+} from '../../shared/logbookDataBridge/types'
+import { findFieldValue, mapRawRowToLogEntry } from '../../shared/logbookDataBridge/importMappers'
+import { applyLogtenCrewFields } from '../utils/logbookImportEnrichments'
+import { parseBridgeFile } from '../../shared/logbookDataBridge/fileParser'
 import { useCurrency } from '../composables/useCurrency'
 import AuthModal from '../components/AuthModal.vue'
 import AuditTrail from '../components/AuditTrail.vue'
@@ -5327,12 +5376,19 @@ import FcvApiDisclaimers from '../components/fcv/FcvApiDisclaimers.vue'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '../utils/migrateLocalStorage'
 import { findDuplicateEntries, checkDuplicatesInDatabase } from '../utils/duplicateDetection'
 import {
+  ACCOUNT_SCOPED_STORAGE_KEYS,
+  getScopedItem,
+  migrateAllGlobalKeysToScoped,
+  setScopedItem,
+} from '../utils/userScopedStorage'
+import {
   initIndexedDB,
   saveEntryToIndexedDB,
   updateEntryInIndexedDB,
   deleteEntryFromIndexedDB,
   getAllEntriesFromIndexedDB,
   removeQueuedOperationsForEntry,
+  migrateLegacyLocalData,
   type IDBLogEntry
 } from '../utils/indexedDB'
 
@@ -5540,7 +5596,34 @@ const { validateEntry: validateFlightTimeEntry, validationErrors, validationWarn
 
 // Offline support
 const { isOnline, isSyncing, syncProgress, updateSyncProgress } = useOffline()
-const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync, retryFailed } = useSyncQueue()
+const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync, retryFailed, setActiveUserId } = useSyncQueue()
+
+function getStorageUserId(): string | undefined {
+  return user.value?.id
+}
+
+function readUserScopedLocal(baseKey: string, allowGlobalFallback = false): string | null {
+  const userId = getStorageUserId()
+  if (userId) {
+    const scoped = getScopedItem(baseKey, userId)
+    if (scoped != null) return scoped
+  }
+  if (allowGlobalFallback && isBrowser) {
+    return window.localStorage.getItem(baseKey)
+  }
+  return null
+}
+
+function writeUserScopedLocal(baseKey: string, value: string): void {
+  const userId = getStorageUserId()
+  if (userId) {
+    setScopedItem(baseKey, userId, value)
+    return
+  }
+  if (isBrowser) {
+    window.localStorage.setItem(baseKey, value)
+  }
+}
 
 // Currency tracking
 const {
@@ -5622,6 +5705,8 @@ async function refreshDashboardFcvStatus(): Promise<void> {
 }
 
 const handleLogout = async () => {
+  stopBackgroundSync()
+  setActiveUserId(null)
   await authSignOut()
   logEntries.value = []
   showSettingsModal.value = false
@@ -5631,47 +5716,71 @@ const handleLogout = async () => {
   router.push('/?from=app')
 }
 
-// Watch for authentication changes and trigger migration on first login
-watch(isAuthenticated, async (authenticated) => {
-  if (authenticated && user.value) {
-    // Check if migration is needed
-    if (!hasMigrationCompleted()) {
-      isMigrating.value = true
-      try {
-        const result = await migrateLocalStorageToSupabase(
-          user.value.id,
-          (step, current, total) => {
-            migrationProgress.value = { step, current, total }
-          }
-        )
-        
-        if (result.success) {
-          console.log('Migration completed:', result)
-          // Reload entries from Supabase after migration
-          await loadEntries()
-          await fetchEntityTags()
-          await fetchUserTagPresets()
-        } else {
-          console.error('Migration failed:', result.error)
+async function onUserSessionReady(userId: string): Promise<void> {
+  stopBackgroundSync()
+  setActiveUserId(userId)
+  migrateAllGlobalKeysToScoped(userId, false)
+  await migrateLegacyLocalData(userId)
+
+  if (!hasMigrationCompleted(userId)) {
+    isMigrating.value = true
+    try {
+      const result = await migrateLocalStorageToSupabase(
+        userId,
+        (step, current, total) => {
+          migrationProgress.value = { step, current, total }
         }
-      } catch (error) {
-        console.error('Migration error:', error)
-      } finally {
-        isMigrating.value = false
+      )
+
+      if (result.success) {
+        console.log('Migration completed:', result)
+        await loadEntries()
+        await fetchEntityTags()
+        await fetchUserTagPresets()
+      } else {
+        console.error('Migration failed:', result.error)
       }
-    } else {
-      // Migration already completed - load entries directly
-      await loadEntries()
-      await fetchEntityTags()
-      await fetchUserTagPresets()
+    } catch (error) {
+      console.error('Migration error:', error)
+    } finally {
+      isMigrating.value = false
     }
-  } else if (!authenticated) {
-    // Show auth modal when not authenticated
-    showAuthModal.value = true
-    dashboardFcvConnected.value = false
-    showFcvFetchPanel.value = false
+  } else {
+    await loadEntries()
+    await fetchEntityTags()
+    await fetchUserTagPresets()
   }
-}, { immediate: true })
+
+  loadPilotProfilePrefs()
+  await loadPilotProfileFromSupabase()
+  await loadCrewProfiles()
+  loadSelectedTotalsMetrics()
+  loadColumnConfig()
+  loadActiveLogbook()
+  startBackgroundSync()
+}
+
+// Watch for user changes (login, logout, account switch)
+watch(
+  () => user.value?.id,
+  async (newUserId, oldUserId) => {
+    if (newUserId) {
+      if (oldUserId && oldUserId !== newUserId) {
+        logEntries.value = []
+        crewProfiles.value = {}
+      }
+      await onUserSessionReady(newUserId)
+    } else {
+      stopBackgroundSync()
+      setActiveUserId(null)
+      logEntries.value = []
+      showAuthModal.value = true
+      dashboardFcvConnected.value = false
+      showFcvFetchPanel.value = false
+    }
+  },
+  { immediate: true }
+)
 
 watch(
   [isAuthenticated, () => session.value?.access_token],
@@ -5705,25 +5814,15 @@ watch(authLoading, (loading) => {
   }
 })
 
-// Initialize IndexedDB and start background sync on mount
+// Initialize IndexedDB and scroll handlers on mount
 onMounted(async () => {
   if (!isBrowser) return
-  
+
   try {
-    // Initialize IndexedDB
     await initIndexedDB()
     console.log('[App] IndexedDB initialized')
-    
-    // Start background sync if authenticated
-    if (isAuthenticated.value && user.value) {
-      startBackgroundSync()
-    }
-    
-    // Setup sticky header - will be called when table is rendered via watcher
-    
-    // Setup scroll to top button - listen to window scroll
+
     window.addEventListener('scroll', handleScroll, { passive: true })
-    // Check initial scroll position
     handleScroll()
   } catch (error) {
     console.error('[App] Failed to initialize IndexedDB:', error)
@@ -6089,8 +6188,8 @@ const approachTypeOptions = ['ILS', 'LOC', 'VOR', 'GPS', 'RNAV', 'LPV', 'LNAV', 
 
 const fixedTagOptions = ['Checkride', 'Flight Review', 'IPC'] as const
 
-const PILOT_PROFILE_STORAGE_KEY = 'logifi://pilot-profile'
-const CREW_PROFILES_STORAGE_KEY = 'logifi://crew-profiles'
+const PILOT_PROFILE_STORAGE_KEY = ACCOUNT_SCOPED_STORAGE_KEYS.PILOT_PROFILE
+const CREW_PROFILES_STORAGE_KEY = ACCOUNT_SCOPED_STORAGE_KEYS.CREW_PROFILES
 
 // Crew/Instructor profile stored locally
 interface CrewProfile {
@@ -6213,7 +6312,7 @@ const selectedTotalsMetrics = ref<TotalsMetricKey[]>(defaultSelectedMetrics)
 // Load selected metrics from localStorage
 function loadSelectedTotalsMetrics(): void {
   if (!isBrowser) return
-  const saved = window.localStorage.getItem('logifi-totals-metrics')
+  const saved = readUserScopedLocal(ACCOUNT_SCOPED_STORAGE_KEYS.TOTALS_METRICS, true)
   if (saved) {
     try {
       const parsed = JSON.parse(saved) as TotalsMetricKey[]
@@ -6232,7 +6331,7 @@ function loadSelectedTotalsMetrics(): void {
 // Save selected metrics to localStorage
 function saveSelectedTotalsMetrics(): void {
   if (!isBrowser) return
-  window.localStorage.setItem('logifi-totals-metrics', JSON.stringify(selectedTotalsMetrics.value))
+  writeUserScopedLocal(ACCOUNT_SCOPED_STORAGE_KEYS.TOTALS_METRICS, JSON.stringify(selectedTotalsMetrics.value))
 }
 
 // Toggle a metric selection
@@ -6261,13 +6360,13 @@ const summaryFields = computed(() => {
 })
 
 // Column configuration for logbook table
-const COLUMN_CONFIG_STORAGE_KEY = 'logifi-logbook-columns'
+const COLUMN_CONFIG_STORAGE_KEY = ACCOUNT_SCOPED_STORAGE_KEYS.COLUMN_CONFIG
 const columnConfig = ref<LogbookColumnConfig[]>(DEFAULT_COLUMN_CONFIG.map(c => ({ ...c })))
 
 // Load column configuration from localStorage
 function loadColumnConfig(): void {
   if (!isBrowser) return
-  const saved = window.localStorage.getItem(COLUMN_CONFIG_STORAGE_KEY)
+  const saved = readUserScopedLocal(COLUMN_CONFIG_STORAGE_KEY, true)
   if (saved) {
     try {
       const parsed = JSON.parse(saved) as LogbookColumnConfig[]
@@ -6308,7 +6407,7 @@ function loadColumnConfig(): void {
 // Save column configuration to localStorage
 function saveColumnConfig(): void {
   if (!isBrowser) return
-  window.localStorage.setItem(COLUMN_CONFIG_STORAGE_KEY, JSON.stringify(columnConfig.value))
+  writeUserScopedLocal(COLUMN_CONFIG_STORAGE_KEY, JSON.stringify(columnConfig.value))
 }
 
 // Computed: visible columns sorted by order
@@ -6568,19 +6667,19 @@ const catalogSections = [
 // Totals view and active logbook must be declared before createBlankEntry() / newEntry (they are used there)
 type TotalsViewMode = 'flight' | 'sim'
 const totalsViewMode = ref<TotalsViewMode>('flight')
-const ACTIVE_LOGBOOK_KEY = 'logifi-active-logbook'
+const ACTIVE_LOGBOOK_KEY = ACCOUNT_SCOPED_STORAGE_KEYS.ACTIVE_LOGBOOK
 type ActiveLogbook = 'flight' | 'simulator'
 const activeLogbook = ref<ActiveLogbook>('flight')
 function setActiveLogbook(logbook: ActiveLogbook): void {
   activeLogbook.value = logbook
   if (typeof window !== 'undefined' && window.localStorage) {
-    window.localStorage.setItem(ACTIVE_LOGBOOK_KEY, logbook)
+    writeUserScopedLocal(ACTIVE_LOGBOOK_KEY, logbook)
   }
   totalsViewMode.value = logbook === 'simulator' ? 'sim' : 'flight'
 }
 function loadActiveLogbook(): void {
   if (typeof window === 'undefined' || !window.localStorage) return
-  const saved = window.localStorage.getItem(ACTIVE_LOGBOOK_KEY)
+  const saved = readUserScopedLocal(ACTIVE_LOGBOOK_KEY, true)
   if (saved === 'flight' || saved === 'simulator') {
     activeLogbook.value = saved
     totalsViewMode.value = saved === 'simulator' ? 'sim' : 'flight'
@@ -6797,9 +6896,9 @@ async function saveInlineEdit(): Promise<void> {
       // Entry not in Supabase yet (0 rows): persist locally and queue for sync
       if (!oldEntryData) {
         console.log('[SaveInlineEdit] Entry not in Supabase yet, saving to IndexedDB and queueing for sync')
-        await updateEntryInIndexedDB(updatedEntry)
+        await updateEntryInIndexedDB(updatedEntry, { userId: user.value.id })
         const queueEntry = { ...dbEntry, id: targetId, user_id: user.value.id }
-        await addToQueue('insert', targetId, queueEntry)
+        await addToQueue('insert', targetId, queueEntry, user.value.id)
         if (isOnline.value) processQueue()
         logEntries.value = sortEntriesByDateAndOOOI(
           logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
@@ -6827,8 +6926,8 @@ async function saveInlineEdit(): Promise<void> {
       // 0 rows updated (e.g. RLS): persist locally and queue for sync
       if (!updateResult) {
         console.log('[SaveInlineEdit] Update returned 0 rows, saving to IndexedDB and queueing for sync')
-        await updateEntryInIndexedDB(updatedEntry)
-        await addToQueue('update', targetId, dbEntry)
+        await updateEntryInIndexedDB(updatedEntry, { userId: user.value.id })
+        await addToQueue('update', targetId, dbEntry, user.value.id)
         if (isOnline.value) processQueue()
         logEntries.value = sortEntriesByDateAndOOOI(
           logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
@@ -7218,6 +7317,8 @@ interface ImportMetadata {
   fileName: string
   fileType: 'CSV' | 'JSON'
   importedAt: string
+  detectedSource?: string
+  bridgeWarnings?: string[]
 }
 
 interface ExportStatistics {
@@ -7320,6 +7421,11 @@ const exportDateStart = ref('')
 const exportDateEnd = ref('')
 const exportSelectedAircraft = ref<string[]>([])
 const expandedExportPreviewEntries = ref<Set<string>>(new Set())
+const exportDestination = ref<ExportDestination>('logifi-native')
+
+const exportDestinationHint = computed(
+  () => EXPORT_DESTINATION_HINTS[exportDestination.value]
+)
 
 function applyExportScope(
   entries: LogEntry[],
@@ -7405,6 +7511,7 @@ function openExportDialog() {
   exportDateEnd.value = ''
   exportSelectedAircraft.value = []
   expandedExportPreviewEntries.value = new Set()
+  exportDestination.value = 'logifi-native'
   showExportDialog.value = true
 }
 
@@ -7562,185 +7669,34 @@ function loadClockPrefs(): void {
   }
 }
 
-function escapeCSVValue(value: string | null | undefined): string {
-  if (value === null || value === undefined) return ''
-  const str = String(value)
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-    return `"${str.replace(/"/g, '""')}"`
-  }
-  return str
-}
-
-function exportToCSV(entries?: LogEntry[]): void {
+function handleExportCsv(entries?: LogEntry[]): void {
   const list = entries ?? logEntries.value
   if (list.length === 0) return
 
-  const baseDate = new Date().toISOString().split('T')[0]
+  const baseDate = new Date().toISOString().split('T')[0] ?? ''
   const segment = entries != null ? getExportFilenameSegment() : ''
-  const filename = `logifi-logbook-${baseDate}${segment}.csv`
+  const options = { baseDate, filenameSegment: segment }
 
-  const headers = [
-    'Date',
-    'Role',
-    'Aircraft Category/Class',
-    'Aircraft Make/Model',
-    'Registration',
-    'Flight Number',
-    'Departure',
-    'Destination',
-    'Route',
-    'Training Elements',
-    'Training Instructor',
-    'Instructor Certificate',
-    'Flight Conditions',
-    'Remarks',
-    'Tags',
-    'Out',
-    'Off',
-    'On',
-    'In',
-    'Total Flight Time',
-    'PIC',
-    'SIC',
-    'Dual Received',
-    'Solo',
-    'Night',
-    'Actual Instrument',
-    'Simulated Instrument',
-    'Cross Country',
-    'Ground Simulator',
-    'Dual Given',
-    'Day Landings',
-    'Night Landings',
-    'Instrument Approaches',
-    'Approach Type',
-    'Holding Procedures',
-    // Import metadata columns
-    'Is Imported',
-    'Import Source',
-    'Import Batch ID',
-    'Original Entry Date',
-    'Import Metadata',
-    // Compliance columns
-    'Version',
-    'Data Hash',
-    'Created At',
-    'Updated At'
-  ]
-  
-  const formatTimeValue = (value: number | null | undefined): string => {
-    if (value === null || value === undefined || Number.isNaN(value)) {
-      return '0.0'
-    }
-    return Number(value).toFixed(1)
+  let result
+  switch (exportDestination.value) {
+    case 'foreflight':
+      result = logbookDataBridgeService.exportToForeFlight(list, options)
+      break
+    case 'myflightbook':
+      result = logbookDataBridgeService.exportToMyFlightbook(list, options)
+      break
+    case 'logten':
+      result = logbookDataBridgeService.exportToLogTenPro(list, options)
+      break
+    case 'generic':
+      result = logbookDataBridgeService.exportToGenericCSV(list, options)
+      break
+    default:
+      result = logbookDataBridgeService.exportToLogifiNative(list, options)
+      break
   }
 
-  const formatCountValue = (value: number | null | undefined): string => {
-    if (value === null || value === undefined || Number.isNaN(value)) {
-      return '0'
-    }
-    return String(Math.round(Number(value)))
-  }
-
-  const getInstrumentSplit = (entry: LogEntry): [string, string] => {
-    // Returns [Actual Instrument, Simulated Instrument] for CSV export
-    // simulatedInstrument represents hood time (simulated instrument time in actual flight)
-    const actualVal = entry.flightTime.actualInstrument
-    const simulatedVal = entry.flightTime.simulatedInstrument
-    return [
-      actualVal ? formatTimeValue(actualVal) : '',
-      simulatedVal ? formatTimeValue(simulatedVal) : ''
-    ]
-  }
-
-  const formatBoolean = (value: boolean | null | undefined): string => {
-    if (value === null || value === undefined) return ''
-    return value ? 'Yes' : 'No'
-  }
-
-  const formatTimestamp = (value: string | null | undefined): string => {
-    if (!value) return ''
-    try {
-      return new Date(value).toISOString()
-    } catch {
-      return value
-    }
-  }
-
-  const formatJSONMetadata = (value: Record<string, any> | null | undefined): string => {
-    if (!value) return ''
-    try {
-      return JSON.stringify(value)
-    } catch {
-      return ''
-    }
-  }
-
-  const rows = list.map((entry) => {
-    return [
-      formatDisplayDate(entry.date),
-      entry.role || '',
-      entry.aircraftCategoryClass || '',
-      entry.aircraftMakeModel || '',
-      entry.registration || '',
-      entry.flightNumber || '',
-      entry.departure || '',
-      entry.destination || '',
-      entry.route || '',
-      entry.trainingElements || '',
-      entry.trainingInstructor || '',
-      entry.instructorCertificate || '',
-      (entry.flightConditions || []).join('; '),
-      entry.remarks || '',
-      (entry.tags || []).join(', '),
-      entry.oooi?.out || '',
-      entry.oooi?.off || '',
-      entry.oooi?.on || '',
-      entry.oooi?.in || '',
-      formatTimeValue(entry.flightTime.total),
-      formatTimeValue(entry.flightTime.pic),
-      formatTimeValue(entry.flightTime.sic),
-      formatTimeValue(entry.flightTime.dual),
-      formatTimeValue(entry.flightTime.solo),
-      formatTimeValue(entry.flightTime.night),
-      ...getInstrumentSplit(entry),
-      formatTimeValue(entry.flightTime.crossCountry),
-      '0.0', // Ground Simulator - Logifi doesn't track ground simulator time separately
-      formatTimeValue(entry.flightTime.dualGiven),
-      formatCountValue(entry.performance.dayLandings),
-      formatCountValue(entry.performance.nightLandings),
-      String(getTotalApproachCount(entry.performance)),
-      getApproachesFromPerformance(entry.performance).map(a => `${a.type} (${a.count})`).join(', ') || '',
-      formatCountValue(entry.performance.holdingProcedures),
-      // Import metadata
-      formatBoolean(entry.isImported),
-      entry.importSource || '',
-      entry.importBatchId || '',
-      formatTimestamp(entry.originalEntryDate),
-      formatJSONMetadata(entry.importMetadata),
-      // Compliance fields
-      entry.version?.toString() || '',
-      entry.dataHash || '',
-      formatTimestamp(entry.createdAt),
-      formatTimestamp(entry.updatedAt)
-    ].map(val => escapeCSVValue(String(val)))
-  })
-  
-  const csvContent = [
-    headers.map(escapeCSVValue).join(','),
-    ...rows.map(row => row.join(','))
-  ].join('\n')
-  
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-  const link = document.createElement('a')
-  const url = URL.createObjectURL(blob)
-  link.setAttribute('href', url)
-  link.setAttribute('download', filename)
-  link.style.visibility = 'hidden'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
+  downloadExport(result)
 }
 
 async function exportToJSON(entries?: LogEntry[]): Promise<void> {
@@ -8041,84 +7997,7 @@ watch(showForm8710Modal, (isOpen) => {
   }
 })
 
-// Import functions
-function parseCSVLine(line: string, delimiter: string = ','): string[] {
-  const result: string[] = []
-  let current = ''
-  let inQuotes = false
-  
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i]
-    const nextChar = line[i + 1]
-    
-    if (char === '"') {
-      if (inQuotes && nextChar === '"') {
-        current += '"'
-        i++ // Skip next quote
-      } else {
-        inQuotes = !inQuotes
-      }
-    } else if (char === delimiter && !inQuotes) {
-      result.push(current)
-      current = ''
-    } else {
-      current += char
-    }
-  }
-  result.push(current)
-  return result
-}
-
-function parseCSVContent(content: string): Record<string, string>[] {
-  const lines = content.split('\n').filter(line => line.trim())
-  if (lines.length === 0) return []
-  
-  const firstLine = lines[0]
-  if (!firstLine) return []
-  
-  // Detect delimiter: count tabs vs commas in first line
-  const tabCount = (firstLine.match(/\t/g) || []).length
-  const commaCount = (firstLine.match(/,/g) || []).length
-  const delimiter = tabCount > commaCount ? '\t' : ','
-  
-  console.log(`Detected delimiter: ${delimiter === '\t' ? 'TAB' : 'COMMA'} (tabs: ${tabCount}, commas: ${commaCount})`)
-  
-  const headers = parseCSVLine(firstLine, delimiter).map((h: string) => h.trim().replace(/^"|"$/g, ''))
-  const rows: Record<string, string>[] = []
-  
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i]
-    if (!line) continue
-    const values = parseCSVLine(line, delimiter).map((v: string) => v.trim().replace(/^"|"$/g, '').replace(/""/g, '"'))
-    if (values.length === 0 || values.every(v => !v)) continue // Skip empty rows
-    
-    const row: Record<string, string> = {}
-    headers.forEach((header, index) => {
-      row[header] = values[index] || ''
-    })
-    rows.push(row)
-  }
-  
-  return rows
-}
-
-// Helper function to find a field value by trying multiple possible column names
-function findFieldValue(rawEntry: Record<string, any>, possibleNames: string[]): string {
-  for (const name of possibleNames) {
-    // Try exact match first
-    if (rawEntry[name] !== undefined && rawEntry[name] !== null && rawEntry[name] !== '') {
-      return String(rawEntry[name]).trim()
-    }
-    // Try case-insensitive match
-    const lowerName = name.toLowerCase()
-    for (const key in rawEntry) {
-      if (key.toLowerCase() === lowerName && rawEntry[key] !== undefined && rawEntry[key] !== null && rawEntry[key] !== '') {
-        return String(rawEntry[key]).trim()
-      }
-    }
-  }
-  return ''
-}
+// Import functions — CSV parsing delegated to logbookDataBridge
 
 // Convert a name string to proper title case (e.g., "CHASE ALBRIGHT" -> "Chase Albright")
 function toTitleCase(str: string): string {
@@ -8185,504 +8064,20 @@ function extractBaseModelName(model: string): string {
 
 async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<LogEntry | null> {
   try {
-    // Parse date - handle various formats
-    const dateValue = findFieldValue(rawEntry, [
-      'flight_flightDate',  // Logten
-      'Date', 'date', 'DATE', 'Flight Date', 'flight date'
-    ])
-    let dateStr = dateValue
-    if (!dateStr) return null
-    
-    // Normalize to YYYY-MM-DD format
-    // Try ISO format first (YYYY-MM-DD)
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      // Already in correct format
-    } else {
-      // Try MM/DD/YYYY format (from Logifi export)
-      const parts = dateStr.split('/')
-      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
-        dateStr = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`
-      } else {
-        // Try parsing with Date object as fallback
-        const date = new Date(dateStr)
-        if (isNaN(date.getTime())) {
-          return null // Invalid date
-        }
-        const isoString = date.toISOString().split('T')[0]
-        if (isoString) {
-          dateStr = isoString
-        } else {
-          return null
-        }
-      }
+    const entry = mapRawRowToLogEntry(rawEntry, { generateId: generateEntryId })
+    if (!entry) return null
+
+    applyLogtenCrewFields(entry, rawEntry, pilotProfile.name || '')
+
+    // Reset total for LogTen OOOI-derived block time (calculated below)
+    const hasLogtenOOOI = !!(
+      findFieldValue(rawEntry, ['flight_actualDepartureTime']) ||
+      findFieldValue(rawEntry, ['flight_actualArrivalTime'])
+    )
+    if (hasLogtenOOOI) {
+      entry.flightTime.total = null
     }
-    
-    // Validate the final date string
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      return null // Invalid date format
-    }
-    
-    // Required fields - try multiple common column names for registration
-    // Try Logten field names first (they use aircraft_ prefix for registration!)
-    let registration = findFieldValue(rawEntry, [
-      'aircraft_aircraftID',  // Logten uses this for registration!
-      'flight_aircraft', 'flight_aircraftID', 'flight_aircraftRegistration', 'flight_tailNumber', 
-      'flight_aircraftIdentifier', 'flight_aircraftIdentifierID',  // Logten variations
-      'Tail Number', 'tail number', 'TailNumber', 'tailNumber',  // MyFlightBook uses this
-      'Display Tail', 'display tail',  // MyFlightBook also has this
-      'Registration', 'registration', 'REGISTRATION',
-      'N-Number', 'n-number', 'NNumber', 'nNumber',
-      'Aircraft Registration', 'aircraft registration',
-      'Ident', 'ident', 'IDENT',
-      'Aircraft', 'aircraft', 'AIRCRAFT',
-      'Aircraft ID', 'aircraft id', 'AircraftID', 'aircraftID'  // Put this last as fallback
-    ])
-    
-    // Fallback: Search all columns for anything that looks like an aircraft registration
-    // This helps with exports where the column name might be unexpected
-    if (!registration) {
-      for (const key in rawEntry) {
-        const value = String(rawEntry[key] || '').trim().toUpperCase()
-        // Check if value looks like an aircraft registration (N-number pattern)
-        // US registrations: N followed by 1-5 digits, optionally followed by letters
-        if (value && /^N\d{1,5}[A-Z]*$/.test(value)) {
-          registration = value
-          console.log(`Found aircraft registration in column "${key}": ${registration}`)
-          break
-        }
-      }
-    }
-    
-    if (!registration) return null
-    
-    // Map CSV/JSON fields to LogEntry format
-    const entry: LogEntry = {
-      id: generateEntryId(),
-      date: dateStr,
-      role: (() => {
-        // Determine role from PIC/SIC time values
-        const picTime = normalizeNumber(rawEntry.flight_pic || rawEntry.PIC || rawEntry.pic || 0) || 0
-        const sicTime = normalizeNumber(rawEntry.flight_sic || rawEntry.SIC || rawEntry.sic || 0) || 0
-        
-        if (picTime > 0) {
-          return 'PIC'
-        } else if (sicTime > 0) {
-          return 'SIC'
-        }
-        
-        // Fallback to existing role field
-        return findFieldValue(rawEntry, ['Role', 'role', 'ROLE']) || ''
-      })(),
-      aircraftCategoryClass: normalizeCategoryClassLabel(
-        findFieldValue(rawEntry, [
-          'aircraftType_selectedAircraftClass',  // Logten (e.g., "Multi-Engine Land")
-          'aircraftType_selectedCategory',  // Logten (e.g., "Airplane")
-          'Aircraft Category/Class', 'aircraft category/class',
-          'Category/Class', 'category/class', 'Category Class', 'category class',
-          'aircraftCategoryClass'
-        ]) || ''
-      ),
-      categoryClassTime: normalizeNumber(rawEntry.flight_totalTime || rawEntry['Total Flight Time'] || rawEntry.total || rawEntry.flightTime?.total),
-      aircraftMakeModel: extractBaseModelName(
-        findFieldValue(rawEntry, [
-          'aircraftType_model',  // Logten
-          'Aircraft Make/Model', 'aircraft make/model',
-          'Model', 'model', 'MODEL',
-          'aircraftMakeModel'
-        ]) || (() => {
-          // Try combining make and model from Logten
-          const make = findFieldValue(rawEntry, ['aircraftType_make'])
-          const model = findFieldValue(rawEntry, ['aircraftType_model'])
-          if (make && model) {
-            return `${make} ${model}`.trim()
-          }
-          return ''
-        })()
-      ),
-      registration: registration.toUpperCase(),
-      flightNumber: findFieldValue(rawEntry, [
-        'flight_flightNumber',  // Logten
-        'Flight Number', 'flight number', 'FlightNumber', 'flightNumber'
-      ]) || null,
-      departure: '', // Will be set below after route parsing
-      destination: '', // Will be set below after route parsing
-      route: '', // Will be set below
-      trainingElements: (() => {
-        // Collect all possible pilot names from all sources
-        const picCrew = findFieldValue(rawEntry, ['flight_selectedCrewPIC'])
-        const sicCrew = findFieldValue(rawEntry, ['flight_selectedCrewSIC'])
-        const instructorCrew = findFieldValue(rawEntry, ['flight_selectedCrewInstructor'])
-        const studentCrew = findFieldValue(rawEntry, ['flight_selectedCrewStudent'])
-        const picTime = normalizeNumber(rawEntry.flight_pic || rawEntry.PIC || rawEntry.pic || 0) || 0
-        const sicTime = normalizeNumber(rawEntry.flight_sic || rawEntry.SIC || rawEntry.sic || 0) || 0
-        
-        // Get fallback fields
-        const firstOfficerName = findFieldValue(rawEntry, ['First Officer Name', 'first officer name', 'FirstOfficerName', 'firstOfficerName'])
-        const trainingElementsField = findFieldValue(rawEntry, ['Training Elements', 'training elements', 'TrainingElements', 'trainingElements'])
-        const trainingInstructorField = findFieldValue(rawEntry, ['Training Instructor', 'training instructor', 'TrainingInstructor', 'trainingInstructor'])
-        
-        // Extract from Flight Properties field
-        let flightPropertiesPilot = ''
-        const flightProperties = findFieldValue(rawEntry, ['Flight Properties', 'flight properties', 'FlightProperties', 'flightProperties'])
-        if (flightProperties) {
-          // Look for patterns like "First Officer: Name" or "First Officer:Name"
-          const firstOfficerMatch = flightProperties.match(/First\s+Officer\s*:\s*([^;]+)/i)
-          if (firstOfficerMatch && firstOfficerMatch[1]) {
-            flightPropertiesPilot = firstOfficerMatch[1].trim()
-          }
-        }
-        
-        // Get the logged-in user's name from pilot profile
-        const userName = (pilotProfile.name || '').trim()
-        
-        // Determine user's role
-        const userIsPIC = userName && picCrew && isUserName(picCrew)
-        const userIsSIC = userName && sicCrew && isUserName(sicCrew)
-        const userIsInstructor = userName && instructorCrew && isUserName(instructorCrew)
-        const userIsStudent = userName && studentCrew && isUserName(studentCrew)
-        
-        // Collect all non-user pilot names with their roles
-        const candidates: Array<{ name: string; role: 'instructor' | 'student' | 'pic' | 'sic' | 'other'; priority: number }> = []
-        
-        // Add candidates, filtering out user's name
-        if (instructorCrew && !isUserName(instructorCrew)) {
-          candidates.push({ name: instructorCrew, role: 'instructor', priority: 1 })
-        }
-        if (studentCrew && !isUserName(studentCrew)) {
-          candidates.push({ name: studentCrew, role: 'student', priority: 2 })
-        }
-        if (picCrew && !isUserName(picCrew)) {
-          candidates.push({ name: picCrew, role: 'pic', priority: 3 })
-        }
-        if (sicCrew && !isUserName(sicCrew)) {
-          candidates.push({ name: sicCrew, role: 'sic', priority: 4 })
-        }
-        if (firstOfficerName && !isUserName(firstOfficerName)) {
-          candidates.push({ name: firstOfficerName, role: 'other', priority: 5 })
-        }
-        if (flightPropertiesPilot && !isUserName(flightPropertiesPilot)) {
-          candidates.push({ name: flightPropertiesPilot, role: 'other', priority: 6 })
-        }
-        if (trainingElementsField && !isUserName(trainingElementsField)) {
-          candidates.push({ name: trainingElementsField, role: 'other', priority: 7 })
-        }
-        if (trainingInstructorField && !isUserName(trainingInstructorField)) {
-          candidates.push({ name: trainingInstructorField, role: 'other', priority: 8 })
-        }
-        
-        // If no user name available, use first available candidate
-        if (!userName) {
-          // Prioritize by role: Instructor > Student > PIC > SIC > Other
-          candidates.sort((a, b) => {
-            const rolePriority: Record<string, number> = { instructor: 1, student: 2, pic: 3, sic: 4, other: 5 }
-            return (rolePriority[a.role] || 99) - (rolePriority[b.role] || 99) || a.priority - b.priority
-          })
-          return toTitleCase(candidates[0]?.name || '')
-        }
-        
-        // Prioritize based on user's role
-        let selectedPilot = ''
-        
-        if (userIsPIC) {
-          // User is PIC → prefer SIC, then Instructor, then Student
-          selectedPilot = candidates.find(c => c.role === 'sic')?.name ||
-                         candidates.find(c => c.role === 'instructor')?.name ||
-                         candidates.find(c => c.role === 'student')?.name ||
-                         candidates[0]?.name || ''
-        } else if (userIsSIC) {
-          // User is SIC → prefer PIC, then Instructor, then Student
-          selectedPilot = candidates.find(c => c.role === 'pic')?.name ||
-                         candidates.find(c => c.role === 'instructor')?.name ||
-                         candidates.find(c => c.role === 'student')?.name ||
-                         candidates[0]?.name || ''
-        } else if (userIsInstructor) {
-          // User is Instructor → prefer Student, then PIC, then SIC
-          selectedPilot = candidates.find(c => c.role === 'student')?.name ||
-                         candidates.find(c => c.role === 'pic')?.name ||
-                         candidates.find(c => c.role === 'sic')?.name ||
-                         candidates[0]?.name || ''
-        } else if (userIsStudent) {
-          // User is Student → prefer Instructor, then PIC, then SIC
-          selectedPilot = candidates.find(c => c.role === 'instructor')?.name ||
-                         candidates.find(c => c.role === 'pic')?.name ||
-                         candidates.find(c => c.role === 'sic')?.name ||
-                         candidates[0]?.name || ''
-        } else {
-          // User doesn't match any role → prefer Instructor, then Student, then PIC, then SIC
-          candidates.sort((a, b) => {
-            const rolePriority: Record<string, number> = { instructor: 1, student: 2, pic: 3, sic: 4, other: 5 }
-            return (rolePriority[a.role] || 99) - (rolePriority[b.role] || 99) || a.priority - b.priority
-          })
-          selectedPilot = candidates[0]?.name || ''
-        }
-        
-        return toTitleCase(selectedPilot)
-      })(),
-      trainingInstructor: (() => {
-        // First check if there's an explicit Training Instructor field
-        const explicitInstructor = findFieldValue(rawEntry, ['Training Instructor', 'training instructor', 'TrainingInstructor', 'trainingInstructor'])
-        if (explicitInstructor && !isUserName(explicitInstructor)) {
-          // If explicit instructor is found and it's not the user, use it
-          // But we still need to determine the job title based on crew fields
-          const instructorCrew = findFieldValue(rawEntry, ['flight_selectedCrewInstructor'])
-          const studentCrew = findFieldValue(rawEntry, ['flight_selectedCrewStudent'])
-          const picCrew = findFieldValue(rawEntry, ['flight_selectedCrewPIC'])
-          const sicCrew = findFieldValue(rawEntry, ['flight_selectedCrewSIC'])
-          
-          const normalizedName = explicitInstructor.trim().toLowerCase()
-          
-          // Check which crew field this instructor appears in
-          if (instructorCrew && instructorCrew.trim().toLowerCase() === normalizedName) {
-            return 'Instructor'
-          }
-          if (studentCrew && studentCrew.trim().toLowerCase() === normalizedName) {
-            return 'Student'
-          }
-          if (picCrew && picCrew.trim().toLowerCase() === normalizedName) {
-            return 'Captain'
-          }
-          if (sicCrew && sicCrew.trim().toLowerCase() === normalizedName) {
-            return 'First Officer'
-          }
-          // Default to Instructor if found in explicit field but not in crew fields
-          return 'Instructor'
-        }
-        
-        // Get all crew fields
-        const picCrew = findFieldValue(rawEntry, ['flight_selectedCrewPIC'])
-        const sicCrew = findFieldValue(rawEntry, ['flight_selectedCrewSIC'])
-        const instructorCrew = findFieldValue(rawEntry, ['flight_selectedCrewInstructor'])
-        const studentCrew = findFieldValue(rawEntry, ['flight_selectedCrewStudent'])
-        
-        // Get the filtered pilot name from trainingElements (reuse the same logic)
-        // We'll determine which pilot was selected by checking all sources
-        const firstOfficerName = findFieldValue(rawEntry, ['First Officer Name', 'first officer name', 'FirstOfficerName', 'firstOfficerName'])
-        const trainingElementsField = findFieldValue(rawEntry, ['Training Elements', 'training elements', 'TrainingElements', 'trainingElements'])
-        
-        // Extract from Flight Properties
-        let flightPropertiesPilot = ''
-        const flightProperties = findFieldValue(rawEntry, ['Flight Properties', 'flight properties', 'FlightProperties', 'flightProperties'])
-        if (flightProperties) {
-          const firstOfficerMatch = flightProperties.match(/First\s+Officer\s*:\s*([^;]+)/i)
-          if (firstOfficerMatch && firstOfficerMatch[1]) {
-            flightPropertiesPilot = firstOfficerMatch[1].trim()
-          }
-        }
-        
-        // Collect all non-user pilot names
-        const candidates: Array<{ name: string; role: 'instructor' | 'student' | 'pic' | 'sic' | 'other' }> = []
-        
-        if (instructorCrew && !isUserName(instructorCrew)) {
-          candidates.push({ name: instructorCrew, role: 'instructor' })
-        }
-        if (studentCrew && !isUserName(studentCrew)) {
-          candidates.push({ name: studentCrew, role: 'student' })
-        }
-        if (picCrew && !isUserName(picCrew)) {
-          candidates.push({ name: picCrew, role: 'pic' })
-        }
-        if (sicCrew && !isUserName(sicCrew)) {
-          candidates.push({ name: sicCrew, role: 'sic' })
-        }
-        if (firstOfficerName && !isUserName(firstOfficerName)) {
-          candidates.push({ name: firstOfficerName, role: 'other' })
-        }
-        if (flightPropertiesPilot && !isUserName(flightPropertiesPilot)) {
-          candidates.push({ name: flightPropertiesPilot, role: 'other' })
-        }
-        if (trainingElementsField && !isUserName(trainingElementsField)) {
-          candidates.push({ name: trainingElementsField, role: 'other' })
-        }
-        
-        // Get the selected pilot name (same logic as trainingElements)
-        const userName = (pilotProfile.name || '').trim()
-        const userIsPIC = userName && picCrew && isUserName(picCrew)
-        const userIsSIC = userName && sicCrew && isUserName(sicCrew)
-        const userIsInstructor = userName && instructorCrew && isUserName(instructorCrew)
-        const userIsStudent = userName && studentCrew && isUserName(studentCrew)
-        
-        let selectedPilotName = ''
-        
-        if (userIsPIC) {
-          selectedPilotName = candidates.find(c => c.role === 'sic')?.name ||
-                            candidates.find(c => c.role === 'instructor')?.name ||
-                            candidates.find(c => c.role === 'student')?.name ||
-                            candidates[0]?.name || ''
-        } else if (userIsSIC) {
-          selectedPilotName = candidates.find(c => c.role === 'pic')?.name ||
-                            candidates.find(c => c.role === 'instructor')?.name ||
-                            candidates.find(c => c.role === 'student')?.name ||
-                            candidates[0]?.name || ''
-        } else if (userIsInstructor) {
-          selectedPilotName = candidates.find(c => c.role === 'student')?.name ||
-                            candidates.find(c => c.role === 'pic')?.name ||
-                            candidates.find(c => c.role === 'sic')?.name ||
-                            candidates[0]?.name || ''
-        } else if (userIsStudent) {
-          selectedPilotName = candidates.find(c => c.role === 'instructor')?.name ||
-                            candidates.find(c => c.role === 'pic')?.name ||
-                            candidates.find(c => c.role === 'sic')?.name ||
-                            candidates[0]?.name || ''
-        } else {
-          // Prioritize: Instructor > Student > PIC > SIC
-          candidates.sort((a, b) => {
-            const rolePriority: Record<string, number> = { instructor: 1, student: 2, pic: 3, sic: 4, other: 5 }
-            return (rolePriority[a.role] || 99) - (rolePriority[b.role] || 99)
-          })
-          selectedPilotName = candidates[0]?.name || ''
-        }
-        
-        if (!selectedPilotName) return ''
-        
-        // Determine job based on which crew field the selected pilot appears in
-        const normalizedPilotName = selectedPilotName.trim().toLowerCase()
-        
-        if (instructorCrew && instructorCrew.trim().toLowerCase() === normalizedPilotName) {
-          return 'Instructor'
-        }
-        if (studentCrew && studentCrew.trim().toLowerCase() === normalizedPilotName) {
-          return 'Student'
-        }
-        if (picCrew && picCrew.trim().toLowerCase() === normalizedPilotName) {
-          return 'Captain'
-        }
-        if (sicCrew && sicCrew.trim().toLowerCase() === normalizedPilotName) {
-          return 'First Officer'
-        }
-        
-        // If pilot name found but not in crew fields, check if it's in other fields
-        // Default based on context (e.g., if found in "First Officer Name", return "First Officer")
-        if (firstOfficerName && firstOfficerName.trim().toLowerCase() === normalizedPilotName) {
-          return 'First Officer'
-        }
-        
-        // No match found, return empty
-        return ''
-      })(),
-      instructorCertificate: (rawEntry['Instructor Certificate'] || rawEntry.instructorCertificate || '').trim(),
-      flightConditions: [],
-      remarks: findFieldValue(rawEntry, ['Remarks', 'remarks', 'Comments', 'comments', 'COMMENTS']) || '',
-      tags: (() => {
-        const t = findFieldValue(rawEntry, ['Tags', 'tags'])
-        if (Array.isArray(t)) return t.filter(Boolean)
-        if (typeof t === 'string' && t.trim()) return t.split(/[,;]/).map(s => s.trim()).filter(Boolean)
-        return []
-      })(),
-      flightTime: {
-        // For Logten imports, we'll calculate total from OOOI times later, so start with null
-        // For other imports, use the provided total time
-        total: (() => {
-          const hasLogtenOOOI = !!(findFieldValue(rawEntry, ['flight_actualDepartureTime']) || findFieldValue(rawEntry, ['flight_actualArrivalTime']))
-          if (hasLogtenOOOI) {
-            return null // Will be calculated from OOOI times
-          }
-          return normalizeNumber(rawEntry.flight_totalTime || rawEntry['Total Flight Time'] || rawEntry.total || rawEntry.flightTime?.total)
-        })(),
-        pic: normalizeNumber(rawEntry.flight_pic || rawEntry.PIC || rawEntry.pic || rawEntry.flightTime?.pic),
-        sic: normalizeNumber(rawEntry.flight_sic || rawEntry.SIC || rawEntry.sic || rawEntry.flightTime?.sic),
-        dual: normalizeNumber(rawEntry.flight_dualReceived || rawEntry['Dual Received'] || rawEntry.dual || rawEntry.flightTime?.dual),
-        solo: normalizeNumber(rawEntry.flight_solo || rawEntry.Solo || rawEntry['Solo Time'] || rawEntry.solo || rawEntry.flightTime?.solo),
-        night: normalizeNumber(
-          findFieldValue(rawEntry, [
-            'flight_nightTime',  // Logten (with Time suffix)
-            'flight_night',  // Logten
-            'Night Time', 'night time', 'NightTime', 'nightTime',
-            'Night', 'night', 'NIGHT',
-            'flightTime?.night'
-          ]) || rawEntry.flight_night || rawEntry.Night || rawEntry.night || rawEntry.flightTime?.night
-        ),
-        actualInstrument: normalizeNumber(rawEntry.flight_actualInstrument || rawEntry['Actual Instrument'] || rawEntry.IMC || rawEntry.imc || rawEntry.actualInstrument || rawEntry.flightTime?.actualInstrument),
-        dualGiven: normalizeNumber(rawEntry.flight_dualGiven || rawEntry['Dual Given'] || rawEntry.CFI || rawEntry.cfi || rawEntry.dualGiven || rawEntry.flightTime?.dualGiven),
-        crossCountry: normalizeNumber(rawEntry.flight_crossCountry || rawEntry['Cross Country'] || rawEntry['X-Country'] || rawEntry['X-C'] || rawEntry.crossCountry || rawEntry.flightTime?.crossCountry),
-        // IMPORTANT: Map "Simulated Instrument" to simulatedInstrument (hood time)
-        // NOT "Ground Simulator" - that's a different field
-        simulatedInstrument: normalizeNumber(rawEntry.flight_simulatedInstrument || rawEntry['Simulated Instrument'] || rawEntry.simulatedInstrument || rawEntry.hood || rawEntry.flightTime?.simulatedInstrument)
-      },
-      performance: {
-        dayTakeoffs: normalizeNumber(rawEntry['Day Takeoffs'] || rawEntry['FS Day Landings'] || rawEntry.dayTakeoffs || rawEntry.performance?.dayTakeoffs),
-        nightTakeoffs: normalizeNumber(rawEntry['Night Takeoffs'] || rawEntry['FS Night Landings'] || rawEntry.nightTakeoffs || rawEntry.performance?.nightTakeoffs),
-        dayLandings: normalizeNumber(
-          findFieldValue(rawEntry, [
-            'flight_dayLandings',  // Logten
-            'Landings', 'landings', 'LANDINGS',  // MyFlightBook uses this for total landings
-            'Day Landings', 'day landings', 'DayLandings',
-            'FS Day Landings', 'fs day landings',
-            'dayLandings'
-          ]) || rawEntry.flight_dayLandings || rawEntry.performance?.dayLandings
-        ),
-        nightLandings: normalizeNumber(
-          findFieldValue(rawEntry, [
-            'flight_nightLandings',  // Logten
-            'Night Landings', 'night landings', 'NightLandings',
-            'FS Night Landings', 'fs night landings',
-            'nightLandings'
-          ]) || rawEntry.flight_nightLandings || rawEntry.performance?.nightLandings
-        ),
-        approachCount: normalizeNumber(rawEntry['Instrument Approaches'] || rawEntry.Approaches || rawEntry.approachCount || rawEntry.performance?.approachCount),
-        approachType: findFieldValue(rawEntry, ['Approach Type', 'approach type', 'ApproachType', 'approachType']) || null,
-        approaches: (() => {
-          const count = normalizeNumber(rawEntry['Instrument Approaches'] || rawEntry.Approaches || rawEntry.approachCount || rawEntry.performance?.approachCount) ?? 0
-          const type = (findFieldValue(rawEntry, ['Approach Type', 'approach type', 'ApproachType', 'approachType']) || '').trim() || 'Unknown'
-          if (count > 0) return [{ type, count }]
-          if (type !== 'Unknown') return [{ type, count: 1 }]
-          return []
-        })(),
-        holdingProcedures: normalizeNumber(rawEntry['Holding Procedures'] || rawEntry.Hold || rawEntry.holdingProcedures || rawEntry.performance?.holdingProcedures)
-      },
-      oooi: undefined
-    }
-    
-    // Parse route and extract departure/destination if missing
-    let departure = findFieldValue(rawEntry, [
-      'flight_from',  // Logten
-      'Departure', 'departure', 'From', 'from', 'FROM'
-    ]) || ''
-    let destination = findFieldValue(rawEntry, [
-      'flight_to',  // Logten
-      'Destination', 'destination', 'To', 'to', 'TO'
-    ]) || ''
-    let route = findFieldValue(rawEntry, [
-      'flight_route',  // Logten
-      'Route', 'route', 'ROUTE'
-    ]) || ''
-    
-    // Parse route to extract departure/destination if they're missing
-    // Route format is typically space-separated airport codes like "KIND KLAF" or "KIND KMCX KLGA"
-    if ((!departure || departure === 'UNKNOWN') && route) {
-      const routeParts = route.trim().split(/\s+/).filter(part => part.length >= 3)
-      const firstAirport = routeParts[0]
-      const lastAirport = routeParts.length > 1 ? routeParts[routeParts.length - 1] : null
-      
-      if (firstAirport) {
-        departure = firstAirport.toUpperCase()
-      }
-      if (lastAirport) {
-        destination = lastAirport.toUpperCase()  // Last airport is destination
-        
-        // Keep only intermediate airports in route field
-        if (routeParts.length > 2) {
-          // Multiple airports: keep middle ones
-          route = routeParts.slice(1, -1).join(' ')
-        } else {
-          // Only 2 airports: route should be empty
-          route = ''
-        }
-      }
-    }
-    
-    // Only use UNKNOWN as last resort
-    if (!departure.trim()) {
-      departure = 'UNKNOWN'
-    }
-    if (!destination.trim()) {
-      destination = 'UNKNOWN'
-    }
-    
-    // Update entry with parsed values
-    entry.departure = departure
-    entry.destination = destination
-    entry.route = route
-    
+
     // Parse flight conditions
     const conditionsStr = rawEntry['Flight Conditions'] || rawEntry.flightConditions || ''
     if (conditionsStr) {
@@ -9221,55 +8616,58 @@ async function handleCSVImport(event: Event): Promise<void> {
 async function processCSVFile(file: File): Promise<void> {
   try {
     const text = await file.text()
-    const rows = parseCSVContent(text)
-    
-    console.log('Parsed CSV rows:', rows.length)
-    if (rows.length > 0 && rows[0]) {
-      console.log('First row headers:', Object.keys(rows[0]))
-      console.log('First row sample:', rows[0])
+    const parsed = parseBridgeFile(text)
+
+    console.log('Parsed CSV rows:', parsed.rows.length, 'source:', parsed.source)
+    if (parsed.rows.length > 0 && parsed.rows[0]) {
+      console.log('First row headers:', Object.keys(parsed.rows[0]))
+      console.log('First row sample:', parsed.rows[0])
     }
-    
-    if (rows.length === 0) {
+
+    if (parsed.rows.length === 0) {
       alert('CSV file is empty or could not be parsed.')
       return
     }
-    
-    // Normalize entries
+
     const entries: LogEntry[] = []
     const rejectedRows: { row: any; reason: string }[] = []
-    
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i]
+
+    for (let i = 0; i < parsed.rows.length; i++) {
+      const row = parsed.rows[i]
       if (!row) continue
-      
+
       const entry = await normalizeImportedEntry(row)
       if (entry) {
+        entry.importSource = parsed.source
         entries.push(entry)
       } else {
-        // Determine why it was rejected
         let reason = 'Unknown reason'
         const dateValue = findFieldValue(row, [
-          'flight_flightDate',  // Logten
-          'Date', 'date', 'DATE', 'Flight Date', 'flight date'
+          'flight_flightDate',
+          'Flight_Date',
+          'FlightDate',
+          'Date',
+          'date',
+          'DATE',
+          'Flight Date',
+          'flight date',
         ])
         const regValue = findFieldValue(row, [
-          'aircraft_aircraftID',  // Logten uses this for registration!
-          'flight_aircraft', 'flight_aircraftID', 'flight_aircraftRegistration', 'flight_tailNumber',
-          'flight_aircraftIdentifier', 'flight_aircraftIdentifierID',  // Logten variations
-          'Tail Number', 'tail number', 'TailNumber', 'tailNumber',  // MyFlightBook uses this
-          'Display Tail', 'display tail',  // MyFlightBook also has this
-          'Registration', 'registration', 'REGISTRATION',
-          'N-Number', 'n-number', 'NNumber', 'nNumber',
-          'Aircraft Registration', 'aircraft registration',
-          'Ident', 'ident', 'IDENT',
-          'Aircraft', 'aircraft', 'AIRCRAFT',
-          'Aircraft ID', 'aircraft id', 'AircraftID', 'aircraftID'  // Put this last as fallback
+          'aircraft_aircraftID',
+          'Aircraft_Registration',
+          'Aircraft Registration',
+          'flight_aircraft',
+          'Tail Number',
+          'Registration',
+          'AircraftID',
+          'aircraftID',
         ])
-        
+
         if (!dateValue) {
           reason = 'Missing date field'
         } else if (!regValue) {
-          reason = 'Missing registration field (tried: Registration, Aircraft ID, Tail Number, N-Number, Ident, etc.)'
+          reason =
+            'Missing registration field (tried: Registration, Aircraft ID, Tail Number, N-Number, Ident, etc.)'
         } else {
           reason = 'Invalid date format or other validation error'
         }
@@ -9280,13 +8678,13 @@ async function processCSVFile(file: File): Promise<void> {
         }
       }
     }
-    
-    console.log(`Processed ${rows.length} rows: ${entries.length} valid, ${rejectedRows.length} rejected`)
-    
+
+    console.log(`Processed ${parsed.rows.length} rows: ${entries.length} valid, ${rejectedRows.length} rejected`)
+
     if (entries.length === 0) {
       let errorMsg = 'No valid entries found in CSV file.\n\n'
       if (rejectedRows.length > 0) {
-        errorMsg += `Reasons:\n${rejectedRows.slice(0, 3).map(r => `- ${r.reason}`).join('\n')}`
+        errorMsg += `Reasons:\n${rejectedRows.slice(0, 3).map((r) => `- ${r.reason}`).join('\n')}`
         if (rejectedRows.length > 3) {
           errorMsg += `\n... and ${rejectedRows.length - 3} more`
         }
@@ -9295,16 +8693,20 @@ async function processCSVFile(file: File): Promise<void> {
       alert(errorMsg)
       return
     }
-    
-    // Calculate statistics and show preview
+
     const { statistics, validEntries, errors } = await calculateImportStatistics(entries)
-    // Include all entries (valid + errors) so error entries can be imported if checkbox is checked
-    importPreviewEntries.value = [...validEntries, ...errors.map(e => e.entry)]
+    importPreviewEntries.value = [...validEntries, ...errors.map((e) => e.entry)]
     importPreviewStatistics.value = statistics
     importPreviewMetadata.value = {
       fileName: file.name,
       fileType: 'CSV',
-      importedAt: new Date().toISOString()
+      importedAt: new Date().toISOString(),
+      detectedSource: parsed.source,
+      bridgeWarnings: [
+        ...(parsed.skippedAircraftRows > 0
+          ? [`Skipped ${parsed.skippedAircraftRows} aircraft table row(s)`]
+          : []),
+      ],
     }
     showImportPreview.value = true
   } catch (error) {
@@ -9455,7 +8857,7 @@ async function handleImportDrop(event: DragEvent): Promise<void> {
 function loadPilotProfilePrefs(): void {
   if (!isBrowser) return
   try {
-    const stored = window.localStorage.getItem(PILOT_PROFILE_STORAGE_KEY)
+    const stored = readUserScopedLocal(PILOT_PROFILE_STORAGE_KEY, true)
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<PilotProfilePrefs>
       Object.assign(pilotProfile, pilotProfileDefaults, parsed)
@@ -9473,7 +8875,7 @@ function loadPilotProfilePrefs(): void {
 function savePilotProfilePrefs(): void {
   if (!isBrowser || !pilotProfileLoaded.value) return
   const payload: PilotProfilePrefs = { ...pilotProfile }
-  window.localStorage.setItem(PILOT_PROFILE_STORAGE_KEY, JSON.stringify(payload))
+  writeUserScopedLocal(PILOT_PROFILE_STORAGE_KEY, JSON.stringify(payload))
 }
 
 /** Load pilot profile from Supabase user_profiles and merge into pilotProfile (Supabase wins when present). */
@@ -9693,7 +9095,7 @@ async function loadCrewProfiles(): Promise<void> {
 function loadCrewProfilesFromLocalStorage(): void {
   if (!isBrowser) return
   try {
-    const stored = window.localStorage.getItem(CREW_PROFILES_STORAGE_KEY)
+    const stored = readUserScopedLocal(CREW_PROFILES_STORAGE_KEY, true)
     if (stored) {
       crewProfiles.value = JSON.parse(stored)
     }
@@ -9748,7 +9150,7 @@ async function saveCrewProfiles(): Promise<void> {
 function saveCrewProfilesToLocalStorage(): void {
   if (!isBrowser) return
   try {
-    window.localStorage.setItem(CREW_PROFILES_STORAGE_KEY, JSON.stringify(crewProfiles.value))
+    writeUserScopedLocal(CREW_PROFILES_STORAGE_KEY, JSON.stringify(crewProfiles.value))
   } catch {
     // Ignore save errors
   }
@@ -10642,7 +10044,7 @@ async function renameAircraftFamily(oldFamilyName: string, newFamilyName: string
   for (const entry of logEntries.value) {
     if (idSet.has(entry.id)) {
       try {
-        await updateEntryInIndexedDB(entry)
+        await updateEntryInIndexedDB(entry, { userId: getStorageUserId() })
       } catch (e) {
         console.warn('[renameAircraftFamily] IndexedDB update failed for', entry.id, e)
       }
@@ -12198,11 +11600,16 @@ async function submitEntry(): Promise<void> {
       isImported: false
     }
 
+    const userId = user.value?.id
+    if (!userId) {
+      throw new Error('Cannot save entry without an authenticated user')
+    }
+
     // Save to IndexedDB first (immediate, works offline)
     if (editingEntryId.value) {
-      await updateEntryInIndexedDB(entryToSave)
+      await updateEntryInIndexedDB(entryToSave, { userId })
     } else {
-      await saveEntryToIndexedDB(entryToSave)
+      await saveEntryToIndexedDB(entryToSave, userId)
     }
 
     // Update local state immediately from IndexedDB
@@ -12246,10 +11653,10 @@ async function submitEntry(): Promise<void> {
     if (isAuthenticated.value && user.value) {
       if (editingEntryId.value) {
         // For updates, the ID is already included above
-        await addToQueue('update', entryId, dbEntry)
+        await addToQueue('update', entryId, dbEntry, userId)
       } else {
         // For inserts, include the UUID so Supabase uses it
-        await addToQueue('insert', entryId, dbEntry)
+        await addToQueue('insert', entryId, dbEntry, userId)
       }
 
       // If online, try immediate sync
@@ -12492,12 +11899,12 @@ async function loadEntries(): Promise<void> {
     // Continue with fallback loading
   }
   
-  // LOCAL-FIRST: Load from IndexedDB first (fast, always available)
+  // LOCAL-FIRST: Load from IndexedDB first (scoped to current user when authenticated)
+  const scopedUserId = user.value?.id
   try {
-    const indexedDBEntries = await getAllEntriesFromIndexedDB()
-    
-    if (indexedDBEntries && indexedDBEntries.length > 0) {
-      // Normalize entries from IndexedDB
+    if (scopedUserId) {
+      const indexedDBEntries = await getAllEntriesFromIndexedDB(scopedUserId)
+
       logEntries.value = indexedDBEntries.map((entry) => {
         // Normalize flight time values
         const normalizedFlightTime: FlightTimeBreakdown = {
@@ -12526,7 +11933,7 @@ async function loadEntries(): Promise<void> {
         if (entry.logbookType === undefined) entry.logbookType = getEntryLogbookType(entry)
         return entry
       })
-      
+
       console.log('[LoadEntries] Loaded', logEntries.value.length, 'entries from IndexedDB')
     }
   } catch (error) {
@@ -12636,7 +12043,8 @@ async function loadEntries(): Promise<void> {
             // Update IndexedDB with synced entry
             updateEntryInIndexedDB(supabaseEntry, {
               synced: true,
-              syncTimestamp: Date.now()
+              syncTimestamp: Date.now(),
+              userId: user.value!.id,
             }).catch(err => {
               console.warn('[LoadEntries] Failed to update IndexedDB with synced entry:', err)
             })
@@ -12753,7 +12161,7 @@ function loadPersistedEntries(): void {
   if (!isBrowser) {
     return
   }
-  const stored = window.localStorage.getItem(LOGBOOK_STORAGE_KEY)
+  const stored = readUserScopedLocal(LOGBOOK_STORAGE_KEY, true)
   if (!stored) {
     return
   }
@@ -12982,32 +12390,9 @@ if (typeof window !== 'undefined') {
 }
 
 onMounted(async () => {
-  // Initialize IndexedDB first
-  try {
-    await initIndexedDB()
-    console.log('[App] IndexedDB initialized')
-  } catch (error) {
-    console.error('[App] Failed to initialize IndexedDB:', error)
-  }
-  
-  // Wait for auth to initialize, then load entries (loadEntries will use IndexedDB)
-  await loadEntries()
   loadClockPrefs()
-  loadSelectedTotalsMetrics()
-  loadColumnConfig()
-  loadActiveLogbook()
-  loadPilotProfilePrefs()
-  if (isAuthenticated.value && user.value) {
-    await loadPilotProfileFromSupabase()
-  }
-  await loadCrewProfiles()
-  // Normalize and autofill aircraft category/class labels on load
   normalizeAndAutofillCategories()
-  
-  // Start background sync if authenticated
-  if (isAuthenticated.value && user.value) {
-    startBackgroundSync()
-  }
+
   if (logEntries.value.length === 0 && isAuthenticated.value) {
     // Ensure inline edit is closed when auto-opening Add Entry form
     expandedEntryId.value = null
@@ -13067,7 +12452,11 @@ watch(
     if (!isBrowser) {
       return
     }
-    window.localStorage.setItem(LOGBOOK_STORAGE_KEY, JSON.stringify(entries))
+    if (isAuthenticated.value && user.value?.id) {
+      writeUserScopedLocal(LOGBOOK_STORAGE_KEY, JSON.stringify(entries))
+    } else if (!isAuthenticated.value) {
+      window.localStorage.setItem(LOGBOOK_STORAGE_KEY, JSON.stringify(entries))
+    }
     // Calculate currency when entries change
     if (entries.length > 0) {
       calculateAllCurrency(entries)
