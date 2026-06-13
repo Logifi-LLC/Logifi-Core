@@ -71,7 +71,7 @@ export const EXPORT_DESTINATION_HINTS: Record<
   foreflight:
     'ForeFlight template with Aircraft Table and Flights Table. Add matching aircraft to your ForeFlight hangar before import.',
   myflightbook:
-    'UTF-8 CSV with exact MyFlightbook headers. Ensure tail numbers exist in your MyFlightbook hangar.',
+    'UTF-8 CSV with exact MyFlightbook headers, including Role, Flight Number, Solo Time, and crew name columns. Ensure tail numbers exist in your MyFlightbook hangar.',
   logten:
     'Flat LogTen Pro column keys (flight_*, aircraft_*) for manual import mapping.',
 }

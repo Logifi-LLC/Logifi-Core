@@ -199,6 +199,60 @@ describe('logbookDataBridge export', () => {
     expect(obj['Tail Number']).toBe('N172P')
     expect(obj['Total Flight Time']).toBe('1.5')
     expect(obj['Route']).toBe('KIND KORD')
+    expect(obj['Role']).toBe('PIC')
+  })
+
+  it('maps MyFlightbook extended fields for solo, flight number, and crew', () => {
+    const row = mapEntryToMyFlightbookRow(
+      createTestEntry({
+        role: 'Dual Received',
+        flightNumber: '0002',
+        flightTime: {
+          total: 9.1,
+          pic: 9.1,
+          sic: null,
+          dual: 9.1,
+          solo: 9.1,
+          night: 9.1,
+          actualInstrument: 9.1,
+          simulatedInstrument: 9.1,
+          crossCountry: 9.1,
+          dualGiven: 9.1,
+        },
+        trainingElements: 'Harry Potter',
+        trainingInstructor: 'First Officer',
+      })
+    )
+    const obj = buildHeaderRowObject(MYFLIGHTBOOK_HEADERS, row)
+    expect(obj['Role']).toBe('Dual Received')
+    expect(obj['Flight Number']).toBe('0002')
+    expect(obj['Solo Time']).toBe('9.1')
+    expect(obj['First Officer Name']).toBe('Harry Potter')
+    expect(obj['Instructor Name']).toBe('')
+    expect(obj['Name of SIC']).toBe('')
+  })
+
+  it('maps MyFlightbook crew job to the matching name column', () => {
+    const row = mapEntryToMyFlightbookRow(
+      createTestEntry({
+        trainingElements: 'Abigail Hensley',
+        trainingInstructor: 'Captain',
+      })
+    )
+    const obj = buildHeaderRowObject(MYFLIGHTBOOK_HEADERS, row)
+    expect(obj['Captain Name']).toBe('Abigail Hensley')
+    expect(obj['First Officer Name']).toBe('')
+  })
+
+  it('falls back to Name of SIC when crew job is unknown', () => {
+    const row = mapEntryToMyFlightbookRow(
+      createTestEntry({
+        trainingElements: 'Alex Pilot',
+        trainingInstructor: '',
+      })
+    )
+    const obj = buildHeaderRowObject(MYFLIGHTBOOK_HEADERS, row)
+    expect(obj['Name of SIC']).toBe('Alex Pilot')
   })
 
   it('maps ForeFlight flight row', () => {

@@ -71,8 +71,46 @@ export const MYFLIGHTBOOK_HEADERS = [
   'CFI',
   'Approaches',
   'Hold',
+  'Role',
+  'Flight Number',
+  'Solo Time',
+  'Instructor Name',
+  'Student Name',
+  'Safety-Pilot Name',
+  'Captain Name',
+  'First Officer Name',
+  'Name of SIC',
   'Comments',
 ] as const
+
+const MYFLIGHTBOOK_CREW_JOB_TO_COLUMN: Record<string, (typeof MYFLIGHTBOOK_HEADERS)[number]> = {
+  Instructor: 'Instructor Name',
+  Student: 'Student Name',
+  'Safety Pilot': 'Safety-Pilot Name',
+  Captain: 'Captain Name',
+  'First Officer': 'First Officer Name',
+}
+
+function buildMyFlightbookCrewNameCells(entry: LogEntry): string[] {
+  const crewColumns = [
+    'Instructor Name',
+    'Student Name',
+    'Safety-Pilot Name',
+    'Captain Name',
+    'First Officer Name',
+    'Name of SIC',
+  ] as const
+
+  const name = entry.trainingElements?.trim() ?? ''
+  if (!name) {
+    return crewColumns.map(() => '')
+  }
+
+  const job = entry.trainingInstructor?.trim() ?? ''
+  const targetColumn = MYFLIGHTBOOK_CREW_JOB_TO_COLUMN[job] ?? 'Name of SIC'
+
+  return crewColumns.map((column) => (column === targetColumn ? name : ''))
+}
 
 export const LOGTEN_HEADERS = [
   'flight_flightDate',
@@ -279,6 +317,10 @@ export function mapEntryToMyFlightbookRow(entry: LogEntry): string[] {
     formatDecimalHours(entry.flightTime.dualGiven, { emptyWhenZero: true }),
     formatWholeNumber(getTotalApproachCount(entry.performance)),
     hold,
+    entry.role || '',
+    entry.flightNumber?.trim() || '',
+    formatDecimalHours(entry.flightTime.solo, { emptyWhenZero: true }),
+    ...buildMyFlightbookCrewNameCells(entry),
     entry.remarks || '',
   ]
 }
