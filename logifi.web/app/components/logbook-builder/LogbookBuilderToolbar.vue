@@ -324,7 +324,7 @@ function onRowCountInput(e: Event) {
   <Teleport to="body">
     <div
       v-if="showSaveModal"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+      class="app-modal-overlay flex items-center justify-center p-4 bg-black/50"
       @click.self="showSaveModal = false"
     >
       <div
@@ -380,7 +380,7 @@ function onRowCountInput(e: Event) {
   <Teleport to="body">
     <div
       v-if="showLoadModal"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+      class="app-modal-overlay flex items-center justify-center p-4 bg-black/50"
       @click.self="showLoadModal = false"
     >
       <div
@@ -456,7 +456,7 @@ function onRowCountInput(e: Event) {
   <Teleport to="body">
     <div
       v-if="templateToDelete"
-      class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50"
+      class="app-modal-overlay flex items-center justify-center p-4 bg-black/50"
       @click.self="clearDeleteConfirm"
     >
       <div

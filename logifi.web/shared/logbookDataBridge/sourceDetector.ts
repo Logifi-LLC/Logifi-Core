@@ -17,6 +17,14 @@ function scoreSource(headers: string[], source: BridgeSource): number {
       if (set.has('pilotcomments')) score += 1
       break
     case 'logten':
+      // LogTen Dynamic Export (Tab) — human-readable airline template
+      if (set.has('flight #')) score += 4
+      if (set.has('aircraft id')) score += 2
+      if (set.has('aircraft type')) score += 2
+      if (set.has('pic/p1 crew') || set.has('sic/p2 crew')) score += 4
+      if (set.has('multi-engine land')) score += 3
+      if (set.has('approach 1')) score += 2
+      // Internal-key LogTen exports
       if (set.has('flight_flightdate')) score += 3
       if (set.has('flight_date')) score += 3
       if (set.has('aircraft_aircraftid')) score += 2

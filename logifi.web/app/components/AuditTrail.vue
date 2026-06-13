@@ -1,8 +1,9 @@
 <template>
   <!-- Modal version -->
+  <Teleport to="body">
   <div
     v-if="isOpen && !isSidebar"
-    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    class="app-modal-overlay flex items-center justify-center bg-black/50"
     @click.self="close"
   >
     <div
@@ -457,11 +458,13 @@
       </div>
     </div>
   </div>
+  </Teleport>
 
   <!-- Restore confirmation dialog -->
+  <Teleport to="body">
   <div
     v-if="showRestoreConfirm"
-    class="fixed inset-0 z-[60] flex items-center justify-center bg-black/70"
+    class="app-modal-overlay flex items-center justify-center bg-black/70"
     @click.self="showRestoreConfirm = false"
   >
       <div
@@ -502,6 +505,7 @@
         </div>
       </div>
     </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">

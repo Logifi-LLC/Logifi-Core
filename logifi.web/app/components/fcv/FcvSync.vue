@@ -906,9 +906,10 @@ const inputClass = computed(() =>
     </template>
 
     <!-- Preview modal -->
+    <Teleport to="body">
     <div
       v-if="showPreviewModal"
-      class="fixed inset-0 z-[70] flex items-center justify-center p-4"
+      class="app-modal-overlay flex items-center justify-center p-4"
     >
       <div
         class="absolute inset-0 bg-black/60 backdrop-blur-sm"
@@ -1348,5 +1349,6 @@ const inputClass = computed(() =>
         </div>
       </div>
     </div>
+    </Teleport>
   </div>
 </template>

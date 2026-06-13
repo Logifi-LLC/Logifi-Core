@@ -52,7 +52,7 @@
       >
         <SettingsListRow
           label="Import file"
-          subtitle="CSV or JSON"
+          subtitle="CSV, TSV, or JSON"
           icon="ri:upload-cloud-2-line"
           :is-dark-mode="isDarkMode"
           :show-chevron="false"
@@ -61,7 +61,7 @@
         <input
           ref="fileInputRef"
           type="file"
-          accept=".csv,.json,text/csv,application/json"
+          accept=".csv,.txt,.tsv,.json,text/csv,text/plain,application/json"
           class="hidden"
           @change="onFileSelected"
         />

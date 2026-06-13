@@ -22,7 +22,97 @@ import {
 } from '../logbookDataBridge/exportService'
 import { ingestBridgeFile } from '../logbookDataBridge/importService'
 import { detectBridgeSource } from '../logbookDataBridge/sourceDetector'
+import { parseBridgeFile } from '../logbookDataBridge/fileParser'
+import {
+  enrichLogtenDynamicExportRow,
+  applyLogtenDynamicRoleAndTime,
+  isLogtenDynamicExportHeaders,
+  namesMatchFlexible,
+  parseLogtenApproach1,
+} from '../logbookDataBridge/logtenDynamicExport'
+import { validatePart61RequiredFields } from '../../app/utils/validation'
+import { applyLogtenCrewFields, inferImporterSeat } from '../../app/utils/logbookImportEnrichments'
 import type { LogEntry } from '../../app/utils/logbookTypes'
+import {
+  catalogAircraftFamilyKey,
+  UNKNOWN_AIRCRAFT_FAMILY,
+} from '../catalogAircraftFamily'
+
+const LOGTEN_NATIVE_SAMPLE_ROW = {
+  flight_flightDate: '2025-11-11',
+  flight_flightNumber: '4487',
+  flight_from: 'KLGA',
+  flight_to: 'KDCA',
+  flight_selectedCrewPIC: 'Derek Farmer',
+  flight_selectedCrewSIC: 'WILLIAM RIDDLE',
+  flight_actualDepartureTime: '12:16',
+  flight_actualArrivalTime: '13:21',
+  flight_takeoffTime: '12:29',
+  flight_landingTime: '13:14',
+  flight_totalTime: '1.08',
+  flight_pic: '1.08',
+  flight_selectedApproach1: '1;01;KDCA',
+  flight_dayLandings: '1',
+  aircraft_aircraftID: 'N430YX',
+  aircraftType_make: 'EMBRAER (Brazil)',
+  aircraftType_model: 'EMB-170/175',
+  aircraftType_selectedAircraftClass: 'Multi-Engine Land',
+}
+
+const LOGTEN_NATIVE_SIC_TIME_ROW = {
+  flight_flightDate: '2026-06-13',
+  flight_flightNumber: '0003',
+  flight_from: 'KBDL',
+  flight_to: 'KBUF',
+  flight_selectedCrewPIC: 'Derek Farmer',
+  flight_selectedCrewSIC: 'Ron Weasley',
+  flight_totalTime: '3.00',
+  flight_sic: '3.00',
+  flight_pic: '',
+  aircraft_aircraftID: 'N855RW',
+  aircraftType_model: 'EMB-170/175',
+  aircraftType_selectedAircraftClass: 'Multi-Engine Land',
+}
+
+const LOGTEN_DYNAMIC_HEADERS = [
+  'Date',
+  'Flight #',
+  'Aircraft ID',
+  'Aircraft Type',
+  'From',
+  'To',
+  'Out',
+  'Off',
+  'On',
+  'In',
+  'Total Time',
+  'PIC/P1 Crew',
+  'SIC/P2 Crew',
+  'Day Ldg',
+  'Approach 1',
+  'Multi-Engine Land',
+  'Jet',
+  'Pilot Flying',
+]
+
+const LOGTEN_DYNAMIC_SAMPLE_ROW = {
+  Date: '2025-11-11',
+  'Flight #': '4487',
+  'Aircraft ID': 'N430YX',
+  'Aircraft Type': 'E170',
+  From: 'KLGA',
+  To: 'KDCA',
+  Out: '1216',
+  In: '1321',
+  'Total Time': '1.08',
+  'PIC/P1 Crew': 'Derek Farmer',
+  'SIC/P2 Crew': 'WILLIAM RIDDLE',
+  'Pilot Flying': '1',
+  'Day Ldg': '1',
+  'Approach 1': '1;01;KDCA',
+  'Multi-Engine Land': '1.08',
+  Jet: '1.08',
+}
 
 function createTestEntry(overrides: Partial<LogEntry> = {}): LogEntry {
   return {
@@ -104,6 +194,33 @@ describe('logbookDataBridge sourceDetector', () => {
     expect(detectBridgeSource(['Date', 'Tail Number', 'Total Flight Time'])).toBe(
       'myflightbook'
     )
+  })
+
+  it('detects LogTen native export headers', () => {
+    expect(
+      detectBridgeSource(['flight_flightDate', 'aircraft_aircraftID', 'flight_pic', 'flight_from'])
+    ).toBe('logten')
+  })
+
+  it('detects LogTen Dynamic Export headers over ForeFlight', () => {
+    expect(detectBridgeSource(LOGTEN_DYNAMIC_HEADERS)).toBe('logten')
+    expect(
+      detectBridgeSource([
+        'Date',
+        'Aircraft ID',
+        'From',
+        'To',
+        'Total Time',
+        'Flight #',
+        'PIC/P1 Crew',
+        'Multi-Engine Land',
+      ])
+    ).toBe('logten')
+  })
+
+  it('identifies LogTen Dynamic Export header signature', () => {
+    expect(isLogtenDynamicExportHeaders(LOGTEN_DYNAMIC_HEADERS)).toBe(true)
+    expect(isLogtenDynamicExportHeaders(['Date', 'Aircraft ID', 'From', 'To'])).toBe(false)
   })
 })
 
@@ -188,6 +305,120 @@ describe('logbookDataBridge importMappers', () => {
       { source: 'foreflight' }
     )
     expect(entry?.performance.holdingProcedures).toBe(2)
+  })
+
+  it('maps LogTen Dynamic Export row with Flight # and Aircraft Type', () => {
+    const entry = mapRawRowToLogEntry(LOGTEN_DYNAMIC_SAMPLE_ROW, { source: 'logten' })
+    expect(entry?.date).toBe('2025-11-11')
+    expect(entry?.registration).toBe('N430YX')
+    expect(entry?.flightNumber).toBe('4487')
+    expect(entry?.aircraftMakeModel).toBe('E170')
+    expect(entry?.departure).toBe('KLGA')
+    expect(entry?.destination).toBe('KDCA')
+    expect(entry?.flightTime.total).toBe(1.08)
+    expect(entry?.performance.dayLandings).toBe(1)
+  })
+
+  it('enriches LogTen Dynamic Export row for PIC role and validation', () => {
+    const entry = mapRawRowToLogEntry(LOGTEN_DYNAMIC_SAMPLE_ROW, { source: 'logten' })
+    expect(entry).not.toBeNull()
+    enrichLogtenDynamicExportRow(entry!, LOGTEN_DYNAMIC_SAMPLE_ROW, 'Derek Farmer')
+    applyLogtenDynamicRoleAndTime(entry!, LOGTEN_DYNAMIC_SAMPLE_ROW, 'Derek Farmer')
+
+    expect(entry?.role).toBe('PIC')
+    expect(entry?.flightTime.pic).toBe(1.08)
+    expect(entry?.aircraftCategoryClass).toBe('AMEL')
+    expect(entry?.performance.approaches).toEqual([{ type: '01', count: 1 }])
+
+    const errors = validatePart61RequiredFields(entry!).filter((r) => r.type === 'error')
+    expect(errors).toHaveLength(0)
+  })
+
+  it('prefers full Aircraft Type over shorthand from mapRawRowToLogEntry on dynamic export', () => {
+    const row = {
+      ...LOGTEN_DYNAMIC_SAMPLE_ROW,
+      'Aircraft Type': 'EMBRAER (Brazil) EMB-170/175',
+    }
+    const entry = mapRawRowToLogEntry(row, { source: 'logten' })
+    expect(entry?.aircraftMakeModel).toBe('E170')
+    enrichLogtenDynamicExportRow(entry!, row, 'Derek Farmer')
+    expect(entry?.aircraftMakeModel).toBe('EMBRAER (Brazil) EMB-170/175')
+  })
+
+  it('assigns PIC time for LogTen Dynamic Export without pilot profile name', () => {
+    const rowWithoutPilotFlying = {
+      ...LOGTEN_DYNAMIC_SAMPLE_ROW,
+      'Pilot Flying': '',
+    }
+    const entry = mapRawRowToLogEntry(rowWithoutPilotFlying, { source: 'logten' })
+    expect(entry).not.toBeNull()
+    enrichLogtenDynamicExportRow(entry!, rowWithoutPilotFlying, '')
+    applyLogtenDynamicRoleAndTime(entry!, rowWithoutPilotFlying, '')
+
+    expect(entry?.role).toBe('PIC')
+    expect(entry?.flightTime.pic).toBe(1.08)
+  })
+
+  it('matches crew names flexibly by last name and first initial', () => {
+    expect(namesMatchFlexible('Derek Farmer', 'DEREK FARMER')).toBe(true)
+    expect(namesMatchFlexible('Derek Farmer', 'Farmer, Derek')).toBe(false)
+    expect(namesMatchFlexible('D Farmer', 'Derek Farmer')).toBe(true)
+    expect(namesMatchFlexible('Derek', 'Derek Farmer')).toBe(true)
+    expect(namesMatchFlexible('Derek Farmer', 'Derek')).toBe(true)
+  })
+
+  it('parses LogTen Approach 1 semicolon format', () => {
+    expect(parseLogtenApproach1('1;01;KDCA')).toEqual({ count: 1, type: '01' })
+    expect(parseLogtenApproach1('1;30R;KSTL')).toEqual({ count: 1, type: '30R' })
+    expect(parseLogtenApproach1('')).toBeNull()
+  })
+
+  it('maps LogTen native export row with flight_pic and approach', () => {
+    const entry = mapRawRowToLogEntry(LOGTEN_NATIVE_SAMPLE_ROW, { source: 'logten' })
+    expect(entry?.date).toBe('2025-11-11')
+    expect(entry?.registration).toBe('N430YX')
+    expect(entry?.flightNumber).toBe('4487')
+    expect(entry?.role).toBe('PIC')
+    expect(entry?.flightTime.pic).toBe(1.08)
+    expect(entry?.flightTime.total).toBe(1.08)
+    expect(entry?.aircraftCategoryClass).toBe('AMEL')
+    expect(entry?.performance.approaches).toEqual([{ type: '01', count: 1 }])
+  })
+
+  it('assigns other crew member for LogTen native PIC import', () => {
+    const entry = mapRawRowToLogEntry(LOGTEN_NATIVE_SAMPLE_ROW, { source: 'logten' })
+    expect(entry).not.toBeNull()
+    applyLogtenCrewFields(entry!, LOGTEN_NATIVE_SAMPLE_ROW, 'Derek Farmer')
+
+    expect(entry?.trainingElements).toBe('William Riddle')
+    expect(entry?.trainingInstructor).toBe('First Officer')
+
+    const errors = validatePart61RequiredFields(entry!).filter((r) => r.type === 'error')
+    expect(errors).toHaveLength(0)
+  })
+
+  it('infers PIC seat when only SIC time logged but both crew columns populated', () => {
+    const entry = mapRawRowToLogEntry(LOGTEN_NATIVE_SIC_TIME_ROW, { source: 'logten' })
+    expect(entry).not.toBeNull()
+    expect(entry?.role).toBe('SIC')
+    expect(entry?.flightTime.sic).toBe(3)
+
+    const seat = inferImporterSeat(
+      entry!,
+      'Derek Farmer',
+      'Ron Weasley',
+      'Test Test'
+    )
+    expect(seat).toBe('PIC')
+  })
+
+  it('assigns Ron Weasley for SIC-only time row with non-matching profile', () => {
+    const entry = mapRawRowToLogEntry(LOGTEN_NATIVE_SIC_TIME_ROW, { source: 'logten' })
+    expect(entry).not.toBeNull()
+    applyLogtenCrewFields(entry!, LOGTEN_NATIVE_SIC_TIME_ROW, 'Test Test')
+
+    expect(entry?.trainingElements).toBe('Ron Weasley')
+    expect(entry?.trainingInstructor).toBe('First Officer')
   })
 })
 
@@ -307,5 +538,92 @@ describe('logbookDataBridge ingest', () => {
     expect(ingested.entries[0]?.registration).toBe('N172P')
     expect(ingested.entries[0]?.departure).toBe('KIND')
     expect(ingested.entries[0]?.destination).toBe('KORD')
+  })
+
+  it('parses LogTen Dynamic Export tab file with blank separator rows', () => {
+    const tsv = [
+      LOGTEN_DYNAMIC_HEADERS.join('\t'),
+      [
+        '2025-11-11',
+        '4487',
+        'N430YX',
+        'E170',
+        'KLGA',
+        'KDCA',
+        '1216',
+        '',
+        '',
+        '1321',
+        '1.08',
+        'Derek Farmer',
+        'WILLIAM RIDDLE',
+        '1',
+        '1;01;KDCA',
+        '1.08',
+        '1.08',
+      ].join('\t'),
+      [
+        '2025-11-12',
+        '4486',
+        'N109HQ',
+        'E170',
+        'KSTL',
+        'KLGA',
+        '1255',
+        '',
+        '',
+        '1519',
+        '2.40',
+        'Derek Farmer',
+        'WILLIAM RIDDLE',
+        '1',
+        '1;22;KLGA',
+        '2.40',
+        '2.40',
+      ].join('\t'),
+      '',
+      [
+        '2025-11-13',
+        '9999',
+        'N999YX',
+        'E170',
+        'KORD',
+        'KMDW',
+        '0800',
+        '',
+        '',
+        '0900',
+        '1.0',
+        'Derek Farmer',
+        'OTHER PILOT',
+        '',
+        '',
+        '1.0',
+        '1.0',
+      ].join('\t'),
+    ].join('\n')
+
+    const parsed = parseBridgeFile(tsv)
+    expect(parsed.source).toBe('logten')
+    expect(parsed.delimiter).toBe('\t')
+    expect(parsed.rows).toHaveLength(3)
+  })
+})
+
+describe('catalogAircraftFamilyKey', () => {
+  it('keeps distinct Embraer make/model strings as separate catalog families', () => {
+    expect(catalogAircraftFamilyKey('ERJ-170')).toBe('ERJ-170')
+    expect(catalogAircraftFamilyKey('EMBRAER (Brazil) EMB-170/175')).toBe(
+      'EMBRAER (Brazil) EMB-170/175'
+    )
+    expect(catalogAircraftFamilyKey('ERJ-170')).not.toBe(
+      catalogAircraftFamilyKey('EMBRAER (Brazil) EMB-170/175')
+    )
+  })
+
+  it('groups registration-only entries under Unknown aircraft', () => {
+    expect(catalogAircraftFamilyKey('', 'N855RW')).toBe(UNKNOWN_AIRCRAFT_FAMILY)
+    expect(catalogAircraftFamilyKey('Unknown', 'N855RW')).toBe(UNKNOWN_AIRCRAFT_FAMILY)
+    expect(catalogAircraftFamilyKey('ERJ-170', 'N432YX')).toBe('ERJ-170')
   })
 })

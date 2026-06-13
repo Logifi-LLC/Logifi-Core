@@ -6,3 +6,9 @@
 .font-quicksand {
   font-family: 'Quicksand', sans-serif;
 }
+
+.app-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+}

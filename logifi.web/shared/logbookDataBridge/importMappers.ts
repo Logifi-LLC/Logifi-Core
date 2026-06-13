@@ -11,6 +11,7 @@ import {
   parseImportDate,
   splitAirportCodes,
 } from './formatters'
+import { parseLogtenApproach1 } from './logtenDynamicExport'
 
 export function findFieldValue(
   rawEntry: Record<string, unknown>,
@@ -105,7 +106,13 @@ function normalizeCategoryClassLabel(value: string): string {
   if (!value) return ''
   const v = value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
   if (/(^| )asel( |$)/.test(v) || v.includes('airplane sel')) return 'ASEL'
-  if (/(^| )amel( |$)/.test(v) || v.includes('airplane mel')) return 'AMEL'
+  if (
+    /(^| )amel( |$)/.test(v) ||
+    v.includes('airplane mel') ||
+    v.includes('multi engine land')
+  ) {
+    return 'AMEL'
+  }
   if (/(^| )ases( |$)/.test(v)) return 'ASES'
   if (/(^| )ames( |$)/.test(v)) return 'AMES'
   if (v.includes('rotor') || v.includes('helicopter')) return 'HELI'
@@ -213,21 +220,32 @@ export function mapRawRowToLogEntry(
     'Model',
     'model',
     'Aircraft Make/Model',
+    'Aircraft Type',
+    'aircraft type',
   ])
   const combinedModel = make && model ? `${make} ${model}`.trim() : model
 
   const simulatedFlight = findFieldValue(rawEntry, ['SimulatedFlight', 'simulatedflight'])
   const logbookType = simulatedFlight ? ('simulator' as const) : undefined
 
-  const approachCount = normalizeImportNumber(
-    findFieldValue(rawEntry, [
-      'Instrument Approaches',
-      'Approaches',
-      'approachCount',
-    ])
-  )
+  const approachRaw = findFieldValue(rawEntry, [
+    'flight_selectedApproach1',
+    'flight_selectedApproach2',
+    'Approach 1',
+    'approach 1',
+    'Instrument Approaches',
+    'Approaches',
+    'approachCount',
+  ])
+  const parsedApproach = parseLogtenApproach1(approachRaw)
+  const approachCount =
+    parsedApproach?.count ??
+    normalizeImportNumber(approachRaw) ??
+    null
   const approachType =
-    findFieldValue(rawEntry, ['Approach Type', 'approachType', 'ApproachType']) || null
+    findFieldValue(rawEntry, ['Approach Type', 'approachType', 'ApproachType']) ||
+    parsedApproach?.type ||
+    null
 
   const entry: LogEntry = {
     id: (options?.generateId ?? defaultGenerateId)(),
@@ -263,6 +281,8 @@ export function mapRawRowToLogEntry(
         'flight_flightNumber',
         'Flight Number',
         'flightNumber',
+        'Flight #',
+        'flight #',
       ]) || null,
     departure,
     destination,
@@ -282,6 +302,7 @@ export function mapRawRowToLogEntry(
     flightConditions: [],
     remarks:
       findFieldValue(rawEntry, [
+        'flight_remarks',
         'Remarks',
         'remarks',
         'Comments',
@@ -338,6 +359,8 @@ export function mapRawRowToLogEntry(
           'flight_actualInstrument',
           'ActualInstrument',
           'Actual Instrument',
+          'Actual Inst',
+          'actual inst',
           'IMC',
           'imc',
         ])
@@ -375,6 +398,8 @@ export function mapRawRowToLogEntry(
           'flight_dayLandings',
           'DayLandingsFullStop',
           'Day Landings',
+          'Day Ldg',
+          'day ldg',
           'Landings',
           'landings',
         ])
@@ -384,6 +409,8 @@ export function mapRawRowToLogEntry(
           'flight_nightLandings',
           'NightLandingsFullStop',
           'Night Landings',
+          'Night Ldg',
+          'night ldg',
         ])
       ),
       approachCount,

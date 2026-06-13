@@ -23,8 +23,12 @@ export type ProcessQueueOptions = {
   silent?: boolean
 }
 
+function browserReportsOnline(): boolean {
+  return typeof navigator !== 'undefined' ? navigator.onLine : true
+}
+
 export const useSyncQueue = () => {
-  const { isOnline, updateSyncProgress, resetSyncProgress } = useOffline()
+  const { isOnline, updateSyncProgress, resetSyncProgress, checkOnlineStatus } = useOffline()
   const queueLength = ref<number>(0)
   const isProcessing = ref<boolean>(false)
   const syncError = ref<string | null>(null)
@@ -173,6 +177,51 @@ export const useSyncQueue = () => {
   }
 
   /**
+   * Find an existing log_entries row when a queued insert already landed (e.g. via import).
+   */
+  const findExistingInsertRow = async (
+    insertData: Record<string, unknown>,
+    item: SyncQueueEntry
+  ): Promise<any | null> => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    const candidateId =
+      typeof insertData.id === 'string' && uuidRegex.test(insertData.id)
+        ? insertData.id
+        : uuidRegex.test(item.entryId)
+          ? item.entryId
+          : null
+
+    if (candidateId) {
+      const { data } = await supabase
+        .from('log_entries')
+        .select('*')
+        .eq('id', candidateId)
+        .maybeSingle()
+      if (data) return data
+    }
+
+    if (
+      insertData.date &&
+      insertData.registration &&
+      insertData.departure &&
+      insertData.destination
+    ) {
+      const { data } = await supabase
+        .from('log_entries')
+        .select('*')
+        .eq('date', insertData.date as string)
+        .eq('registration', insertData.registration as string)
+        .eq('departure', insertData.departure as string)
+        .eq('destination', insertData.destination as string)
+        .limit(1)
+        .maybeSingle()
+      if (data) return data
+    }
+
+    return null
+  }
+
+  /**
    * Sync insert operation — user_id must match queued item owner
    */
   const syncInsert = async (item: SyncQueueEntry): Promise<any> => {
@@ -213,10 +262,22 @@ export const useSyncQueue = () => {
       .maybeSingle()
 
     if (error) {
+      if (error.code === '23505') {
+        const existing = await findExistingInsertRow(insertData, item)
+        if (existing) {
+          console.warn('[SyncQueue] Insert duplicate — treating as already synced:', item.entryId)
+          return existing
+        }
+      }
       console.error('[SyncQueue] Insert error:', error.code, error.message, error.details)
       throw error
     }
     if (!data) {
+      const existing = await findExistingInsertRow(insertData, item)
+      if (existing) {
+        console.warn('[SyncQueue] Insert returned no row — matched existing entry:', item.entryId)
+        return existing
+      }
       throw new Error('Insert returned no row (possible RLS or constraint issue)')
     }
 
@@ -274,10 +335,57 @@ export const useSyncQueue = () => {
       throw error
     }
     if (!data) {
+      const existing = await findExistingInsertRow(
+        (item.entryData ?? {}) as Record<string, unknown>,
+        item
+      )
+      if (existing) {
+        console.warn('[SyncQueue] Update target missing — row already exists elsewhere:', item.entryId)
+        return true
+      }
       throw new Error('Update returned no row (possible RLS or row not found)')
     }
 
     return true
+  }
+
+  /**
+   * Remove queue items whose inserts already exist in Supabase (e.g. after file import).
+   */
+  const reconcileSyncQueue = async (userId?: string): Promise<number> => {
+    const scopedUserId = userId ?? activeUserId.value
+    if (!scopedUserId) return 0
+
+    const queue = await getSyncQueue(scopedUserId)
+    let removed = 0
+
+    for (const item of queue) {
+      let shouldRemove = false
+
+      if (item.operation === 'insert' && item.entryData) {
+        const existing = await findExistingInsertRow(
+          item.entryData as Record<string, unknown>,
+          item
+        )
+        if (existing) shouldRemove = true
+      }
+
+      if (shouldRemove) {
+        try {
+          await markEntryAsSynced(item.entryId)
+        } catch {
+          // non-fatal
+        }
+        await removeFromSyncQueue(item.id)
+        removed++
+      }
+    }
+
+    if (removed > 0) {
+      console.log(`[SyncQueue] Reconciled ${removed} stale queue item(s)`)
+    }
+    await refreshQueueLength()
+    return removed
   }
 
   /**
@@ -310,7 +418,12 @@ export const useSyncQueue = () => {
   const processQueue = async (options?: ProcessQueueOptions): Promise<void> => {
     const silent = options?.silent ?? false
 
-    if (!isOnline.value || isProcessing.value) {
+    if (isProcessing.value) {
+      return
+    }
+
+    await checkOnlineStatus()
+    if (!isOnline.value && !browserReportsOnline()) {
       return
     }
 
@@ -323,6 +436,7 @@ export const useSyncQueue = () => {
     syncError.value = null
 
     try {
+      await reconcileSyncQueue(userId)
       const queue = await getSyncQueue(userId)
 
       if (queue.length === 0) {
@@ -403,9 +517,16 @@ export const useSyncQueue = () => {
 
     hasDrainedOnOpen = true
 
-    if (isOnline.value) {
-      processQueue({ silent: true })
-    }
+    void (async () => {
+      await checkOnlineStatus()
+      const userId = activeUserId.value
+      if (userId) {
+        await reconcileSyncQueue(userId)
+      }
+      if (isOnline.value || browserReportsOnline()) {
+        await processQueue({ silent: true })
+      }
+    })()
   }
 
   /**
@@ -419,6 +540,9 @@ export const useSyncQueue = () => {
     const userId = activeUserId.value
     if (!userId) return
 
+    await checkOnlineStatus()
+    await reconcileSyncQueue(userId)
+
     const queue = await getSyncQueue(userId)
     const failedItems = queue.filter((item) => item.retryCount >= MAX_RETRIES)
 
@@ -429,7 +553,7 @@ export const useSyncQueue = () => {
       })
     }
 
-    if (isOnline.value) {
+    if (isOnline.value || browserReportsOnline()) {
       await processQueue()
     }
   }
@@ -454,6 +578,7 @@ export const useSyncQueue = () => {
     startBackgroundSync,
     stopBackgroundSync,
     retryFailed,
+    reconcileSyncQueue,
     clearQueue,
     getQueueLength,
     refreshQueueLength,

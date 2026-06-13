@@ -363,7 +363,7 @@
               </div>
           <div class="flex items-center gap-3">
                   <span :class="['text-xs uppercase tracking-wider font-quicksand', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
-                      {{ section.key === 'aircraft' ? (catalogs.families?.length || catalogs[section.key].length) : catalogs[section.key].length }}
+                      {{ section.key === 'aircraft' ? (catalogs.totalAircraftItems || catalogs.families?.length || catalogs[section.key].length) : catalogs[section.key].length }}
                   </span>
                   <Icon
                     name="ri:arrow-down-s-line"
@@ -414,12 +414,21 @@
                               type="button"
                               :aria-expanded="familyOpenState[fam]"
                               @click="familyOpenState[fam] = !familyOpenState[fam]"
-                              @contextmenu.prevent="showRenameFamilyContextMenu($event, catalogs.familyDisplayName?.[fam] ?? fam)"
+                              @contextmenu.prevent="showRenameFamilyContextMenu($event, fam)"
                               :class="[
-                                'px-1 py-0.5 rounded',
+                                'inline-flex items-center gap-1 px-1 py-0.5 rounded',
                                 isDarkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-300'
                               ]"
                             >
+                              <Icon
+                                name="ri:arrow-down-s-line"
+                                :size="14"
+                                :class="[
+                                  'shrink-0 transition-transform',
+                                  isDarkMode ? 'text-gray-400' : 'text-gray-500',
+                                  familyOpenState[fam] ? 'rotate-180' : ''
+                                ]"
+                              />
                               <span class="font-medium">{{ catalogs.familyDisplayName?.[fam] ?? fam }}</span>
                             </button>
                             <span :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
@@ -1500,7 +1509,7 @@
                         if (!sel) return;
                         const input = e.target as HTMLInputElement;
                         const val = inlineEditEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'];
-                        if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                        if (val === null || val === undefined) { input.value = ''; } else { input.value = formatEntryTimeDisplay(val); }
                       }"
                     />
                   </div>
@@ -1514,7 +1523,7 @@
                 <div class="mt-4 pt-3 border-t" :class="isDarkMode ? 'border-gray-600' : 'border-gray-200'">
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Simulated instrument (hrs)</label>
                   <input
-                    :value="inlineEditEntry?.flightTime.simulatedInstrument === null || inlineEditEntry?.flightTime.simulatedInstrument === undefined || inlineEditEntry?.flightTime.simulatedInstrument === 0 ? '' : String(inlineEditEntry?.flightTime.simulatedInstrument ?? '')"
+                    :value="formatEntryTimeDisplay(inlineEditEntry?.flightTime.simulatedInstrument)"
                     type="text"
                     inputmode="decimal"
                     placeholder="0.0"
@@ -1531,7 +1540,7 @@
                       if (!inlineEditEntry) return;
                       const input = e.target as HTMLInputElement;
                       const val = inlineEditEntry.flightTime.simulatedInstrument;
-                      if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                      if (val === null || val === undefined) { input.value = ''; } else { input.value = formatEntryTimeDisplay(val); }
                     }"
                   />
                 </div>
@@ -1795,7 +1804,7 @@
               </div>
             </div>
 
-            <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4']">
+            <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'entry-grid-route-row']">
               <div class="relative">
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">From</label>
                 <input 
@@ -1866,25 +1875,39 @@
                   </button>
                 </div>
               </div>
-              <div :class="isIos ? 'col-span-2' : ''">
-                <!-- Category/Class row (aircraft only) -->
-                <div :class="['gap-2', isIos ? 'grid entry-grid-ios-cat-time' : 'flex flex-col sm:flex-row']">
-                  <div :class="isIos ? '' : 'flex-1 sm:flex-[0.6]'">
-                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class</label>
-                    <select
-                      :value="categoryClassAircraftOptions.includes(inlineEditEntry.aircraftCategoryClass as any) ? inlineEditEntry.aircraftCategoryClass : ''"
-                      :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
-                      @change="inlineEditEntry.aircraftCategoryClass = ($event.target as HTMLSelectElement).value"
-                    >
-                      <option value="">—</option>
-                      <option v-for="opt in categoryClassAircraftOptions" :key="opt" :value="opt">{{ opt }}</option>
-                    </select>
-                  </div>
-                  <div :class="isIos ? '' : 'flex-1 sm:flex-[1.4]'">
-                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
-                    <input v-model.number="inlineEditEntry.categoryClassTime" type="number" step="0.1" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="0.0" />
-                  </div>
-                </div>
+              <div class="min-w-0">
+                <label :class="['block text-[10px] uppercase font-bold mb-1 truncate', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class</label>
+                <select
+                  :value="categoryClassAircraftOptions.includes(inlineEditEntry.aircraftCategoryClass as any) ? inlineEditEntry.aircraftCategoryClass : ''"
+                  :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
+                  @change="inlineEditEntry.aircraftCategoryClass = ($event.target as HTMLSelectElement).value"
+                >
+                  <option value="">—</option>
+                  <option v-for="opt in categoryClassAircraftOptions" :key="opt" :value="opt">{{ opt }}</option>
+                </select>
+              </div>
+              <div class="entry-grid-time-col">
+                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
+                <input
+                  :value="formatEntryTimeDisplay(inlineEditEntry.categoryClassTime)"
+                  type="text"
+                  inputmode="decimal"
+                  placeholder="0.0"
+                  :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
+                  @input="(e) => {
+                    const input = e.target as HTMLInputElement;
+                    const val = input.value.trim();
+                    if (val === '' || val === '-') {
+                      inlineEditEntry.categoryClassTime = null;
+                      return;
+                    }
+                    const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+                    inlineEditEntry.categoryClassTime = !isNaN(num) && isFinite(num) ? num : null;
+                  }"
+                  @blur="(e) => {
+                    (e.target as HTMLInputElement).value = formatEntryTimeDisplay(inlineEditEntry.categoryClassTime);
+                  }"
+                />
               </div>
               <div :class="isIos ? 'col-span-2' : ''">
                 <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
@@ -1901,7 +1924,7 @@
                     {{ mainTimeShortLabels[field.key] ?? field.label }}
                   </div>
                   <input
-                    :value="inlineEditEntry.flightTime[field.key] === null || inlineEditEntry.flightTime[field.key] === undefined || inlineEditEntry.flightTime[field.key] === 0 ? '' : String(inlineEditEntry.flightTime[field.key])"
+                    :value="formatEntryTimeDisplay(inlineEditEntry.flightTime[field.key])"
                     type="text"
                     inputmode="decimal"
                     placeholder="0.0"
@@ -1930,7 +1953,7 @@
                       if (!inlineEditEntry) return;
                       const input = e.target as HTMLInputElement;
                       const val = inlineEditEntry.flightTime[field.key];
-                      if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                      if (val === null || val === undefined) { input.value = ''; } else { input.value = formatEntryTimeDisplay(val); }
                     }"
                   />
                 </div>
@@ -2295,7 +2318,7 @@
                             if (!sel) return;
                             const input = e.target as HTMLInputElement;
                             const val = newEntry.flightTime[sel.toLowerCase() as 'ffs'|'ftd'|'atd'];
-                            if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                            if (val === null || val === undefined) { input.value = ''; } else { input.value = formatEntryTimeDisplay(val); }
                           }"
                         />
                       </div>
@@ -2309,7 +2332,7 @@
                     <div class="mt-4 pt-3 border-t" :class="isDarkMode ? 'border-gray-600' : 'border-gray-200'">
                       <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Simulated instrument (hrs)</label>
                       <input
-                        :value="newEntry.flightTime.simulatedInstrument === null || newEntry.flightTime.simulatedInstrument === undefined || newEntry.flightTime.simulatedInstrument === 0 ? '' : String(newEntry.flightTime.simulatedInstrument)"
+                        :value="formatEntryTimeDisplay(newEntry.flightTime.simulatedInstrument)"
                         type="text"
                         inputmode="decimal"
                         placeholder="0.0"
@@ -2324,7 +2347,7 @@
                         @blur="(e) => {
                           const input = e.target as HTMLInputElement;
                           const val = newEntry.flightTime.simulatedInstrument;
-                          if (val === null || val === undefined) { input.value = ''; } else if (val === 0) { input.value = '0.0'; } else { input.value = Number(val).toFixed(1); }
+                          if (val === null || val === undefined) { input.value = ''; } else { input.value = formatEntryTimeDisplay(val); }
                         }"
                       />
                     </div>
@@ -2625,7 +2648,7 @@
                 </div>
               </div>
 
-              <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4']">
+              <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'entry-grid-route-row']">
                 <div class="relative">
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">From</label>
                   <input 
@@ -2706,25 +2729,39 @@
                     </button>
                   </div>
                 </div>
-                <div :class="isIos ? 'col-span-2' : ''">
-                  <!-- Category/Class row (aircraft only) -->
-                  <div :class="['gap-2', isIos ? 'grid entry-grid-ios-cat-time' : 'flex flex-col sm:flex-row']">
-                    <div :class="isIos ? '' : 'flex-1 sm:flex-[0.6]'">
-                      <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class</label>
-                      <select
-                        :value="categoryClassAircraftOptions.includes(newEntry.aircraftCategoryClass as any) ? newEntry.aircraftCategoryClass : ''"
-                        :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
-                        @change="newEntry.aircraftCategoryClass = ($event.target as HTMLSelectElement).value"
-                      >
-                        <option value="">—</option>
-                        <option v-for="opt in categoryClassAircraftOptions" :key="opt" :value="opt">{{ opt }}</option>
-                      </select>
-                    </div>
-                    <div :class="isIos ? '' : 'flex-1 sm:flex-[1.4]'">
-                      <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
-                      <input v-model.number="newEntry.categoryClassTime" type="number" step="0.1" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="0.0" />
-                    </div>
-                  </div>
+                <div class="min-w-0">
+                  <label :class="['block text-[10px] uppercase font-bold mb-1 truncate', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class</label>
+                  <select
+                    :value="categoryClassAircraftOptions.includes(newEntry.aircraftCategoryClass as any) ? newEntry.aircraftCategoryClass : ''"
+                    :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
+                    @change="newEntry.aircraftCategoryClass = ($event.target as HTMLSelectElement).value"
+                  >
+                    <option value="">—</option>
+                    <option v-for="opt in categoryClassAircraftOptions" :key="opt" :value="opt">{{ opt }}</option>
+                  </select>
+                </div>
+                <div class="entry-grid-time-col">
+                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
+                  <input
+                    :value="formatEntryTimeDisplay(newEntry.categoryClassTime)"
+                    type="text"
+                    inputmode="decimal"
+                    placeholder="0.0"
+                    :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
+                    @input="(e) => {
+                      const input = e.target as HTMLInputElement;
+                      const val = input.value.trim();
+                      if (val === '' || val === '-') {
+                        newEntry.categoryClassTime = null;
+                        return;
+                      }
+                      const num = parseFloat(val.replace(/[^\d.-]/g, ''));
+                      newEntry.categoryClassTime = !isNaN(num) && isFinite(num) ? num : null;
+                    }"
+                    @blur="(e) => {
+                      (e.target as HTMLInputElement).value = formatEntryTimeDisplay(newEntry.categoryClassTime);
+                    }"
+                  />
                 </div>
                 <div :class="isIos ? 'col-span-2' : ''">
                   <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
@@ -2741,7 +2778,7 @@
                       {{ mainTimeShortLabels[field.key] ?? field.label }}
                     </div>
                     <input
-                      :value="newEntry.flightTime[field.key] === null || newEntry.flightTime[field.key] === undefined || newEntry.flightTime[field.key] === 0 ? '' : String(newEntry.flightTime[field.key])"
+                      :value="formatEntryTimeDisplay(newEntry.flightTime[field.key])"
                       type="text"
                       inputmode="decimal"
                       :placeholder="'0.0'"
@@ -2792,16 +2829,7 @@
                       @blur="(e) => {
                         const input = e.target as HTMLInputElement;
                         const val = newEntry.flightTime[field.key];
-                        
-                        // Format display on blur
-                        if (val === null || val === undefined) {
-                          input.value = '';
-                        } else if (val === 0) {
-                          input.value = '0.0';
-                        } else {
-                          // Format to 1 decimal place
-                          input.value = Number(val).toFixed(1);
-                        }
+                        input.value = formatEntryTimeDisplay(val);
                       }"
                     />
                   </div>
@@ -3240,7 +3268,7 @@
     <input
       ref="csvFileInput"
       type="file"
-      accept=".csv,text/csv"
+      accept=".csv,.txt,.tsv,text/csv,text/plain"
       class="hidden"
       @change="handleCSVImport"
     />
@@ -3254,9 +3282,10 @@
 
 
     <!-- Form 8710 Generator Modal -->
+    <Teleport to="body">
     <div
       v-if="showForm8710Modal"
-      class="fixed inset-0 z-40 flex items-start justify-center px-4 py-8"
+      class="app-modal-overlay flex items-start justify-center px-4 py-8"
     >
       <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showForm8710Modal = false"></div>
       <div
@@ -3455,11 +3484,13 @@
         </div>
       </div>
     </div>
+    </Teleport>
 
     <!-- Form 8710 Full View -->
+    <Teleport to="body">
     <div
       v-if="showForm8710View"
-      class="fixed inset-0 z-50 overflow-y-auto"
+      class="app-modal-overlay overflow-y-auto"
       :class="isDarkMode ? 'bg-gray-900' : 'bg-gray-100'"
     >
       <div class="min-h-screen p-4 sm:p-6 lg:p-8">
@@ -3803,11 +3834,13 @@
         </div>
       </div>
     </div>
+    </Teleport>
 
     <!-- Aircraft Information Modal -->
+    <Teleport to="body">
     <div
       v-if="showAircraftModal"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      class="app-modal-overlay flex items-center justify-center p-4"
       @click.self="closeAircraftModal"
     >
       <div
@@ -3970,11 +4003,13 @@
         </div>
       </div>
     </div>
+    </Teleport>
 
     <!-- Airport Information Modal -->
+    <Teleport to="body">
     <div
       v-if="showAirportModal"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      class="app-modal-overlay flex items-center justify-center p-4"
       @click.self="closeAirportModal"
     >
       <div
@@ -4111,12 +4146,14 @@
         </div>
       </div>
     </div>
+    </Teleport>
 
     <!-- Crew/Instructor Profile Modal -->
+    <Teleport to="body">
     <div
       v-if="showCrewProfileModal && currentCrewName"
       :class="[
-        'fixed inset-0 z-[60] flex items-center justify-center p-4 overflow-x-hidden',
+        'app-modal-overlay flex items-center justify-center p-4 overflow-x-hidden',
         isIos ? 'catalog-modal-ios' : ''
       ]"
       @click.self="closeCrewProfileModal"
@@ -4312,6 +4349,7 @@
         </div>
       </div>
     </div>
+    </Teleport>
 
     <!-- Context Menu for Aircraft Family Rename -->
     <div
@@ -4344,9 +4382,10 @@
     </div>
 
     <!-- Rename Aircraft Family Modal -->
+    <Teleport to="body">
     <div
       v-if="showRenameFamilyModal"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      class="app-modal-overlay flex items-center justify-center p-4"
       @click.self="closeRenameFamilyModal"
     >
       <div
@@ -4412,11 +4451,11 @@
           <div v-if="renameFamilyNewName.trim()" class="rounded-lg p-3" :class="[isDarkMode ? 'bg-gray-700/50' : 'bg-gray-100']">
             <div :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
               <span class="font-semibold">Note:</span>
-              <span v-if="normalizeAircraftFamily(renameFamilyNewName.trim()) === normalizeAircraftFamily(renameFamilyOldName)">
+              <span v-if="renameFamilyNewName.trim() === (renameFamilyCanonicalKey || renameFamilyOldName).trim()">
                 Display name will update; same family and tags.
               </span>
-              <span v-else-if="catalogs.families?.includes(normalizeAircraftFamily(renameFamilyNewName.trim()))">
-                This will merge with the existing "{{ normalizeAircraftFamily(renameFamilyNewName.trim()) }}" family.
+              <span v-else-if="catalogs.families?.includes(renameFamilyNewName.trim())">
+                This will merge with the existing "{{ renameFamilyNewName.trim() }}" family.
               </span>
               <span v-else>
                 This will create a new family group.
@@ -4432,18 +4471,18 @@
               {{ editFamilyLastTagEntryCount === 0 ? 'Tag added to this family.' : `Tag added to this family and to ${editFamilyLastTagEntryCount} log entry${editFamilyLastTagEntryCount === 1 ? '' : 's'}.` }}
             </div>
             <div class="flex flex-wrap gap-2 items-center">
-              <span v-for="tag in getEntityTags('family', renameFamilyOldName)" :key="tag" class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm" :class="[isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-300 text-gray-800']">
+              <span v-for="tag in getEntityTags('family', renameFamilyCanonicalKey)" :key="tag" class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm" :class="[isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-300 text-gray-800']">
                 {{ tag }}
-                <button type="button" aria-label="Remove tag" @click="removeEntityTag('family', renameFamilyOldName, tag); editFamilyNewTagInput = ''" :class="['rounded p-0.5', isDarkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-400']"><Icon name="ri:close-line" size="14" /></button>
+                <button type="button" aria-label="Remove tag" @click="removeEntityTag('family', renameFamilyCanonicalKey, tag); editFamilyNewTagInput = ''" :class="['rounded p-0.5', isDarkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-400']"><Icon name="ri:close-line" size="14" /></button>
               </span>
               <template v-if="!editFamilyShowAddTag">
                 <button type="button" @click="editFamilyShowAddTag = true" :class="['inline-flex items-center justify-center rounded-lg border px-2.5 py-1 text-sm font-quicksand', isDarkMode ? 'border-gray-600 text-gray-400 hover:bg-gray-700' : 'border-gray-400 text-gray-600 hover:bg-gray-200']">+ Add tag</button>
               </template>
               <template v-else>
                 <div class="flex flex-col gap-2">
-                  <div v-if="[...fixedTagOptions, ...presetsInUse].filter(t => !getEntityTags('family', renameFamilyOldName).includes(t)).length" class="flex flex-wrap gap-1">
+                  <div v-if="[...fixedTagOptions, ...presetsInUse].filter(t => !getEntityTags('family', renameFamilyCanonicalKey).includes(t)).length" class="flex flex-wrap gap-1">
                     <span :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">Presets: </span>
-                    <button v-for="tag in [...fixedTagOptions, ...presetsInUse].filter(t => !getEntityTags('family', renameFamilyOldName).includes(t))" :key="'preset-' + tag" type="button" @click="addEntityTag('family', renameFamilyOldName, tag); editFamilyShowAddTag = false" :class="['rounded-full px-2 py-0.5 text-xs font-quicksand', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']">{{ tag }}</button>
+                    <button v-for="tag in [...fixedTagOptions, ...presetsInUse].filter(t => !getEntityTags('family', renameFamilyCanonicalKey).includes(t))" :key="'preset-' + tag" type="button" @click="addEntityTag('family', renameFamilyCanonicalKey, tag); editFamilyShowAddTag = false" :class="['rounded-full px-2 py-0.5 text-xs font-quicksand', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-700 hover:bg-gray-300']">{{ tag }}</button>
                   </div>
                   <div v-if="presetsUnused.length" class="flex flex-wrap gap-1 items-center">
                     <span :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">Unused (remove): </span>
@@ -4453,8 +4492,8 @@
                     </span>
                   </div>
                   <div class="inline-flex gap-1 items-center">
-                    <input v-model="editFamilyNewTagInput" type="text" placeholder="Or type new tag" :class="['w-32 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addEntityTag('family', renameFamilyOldName, editFamilyNewTagInput); editFamilyNewTagInput = ''; editFamilyShowAddTag = false" />
-                    <button type="button" @click="addEntityTag('family', renameFamilyOldName, editFamilyNewTagInput); editFamilyNewTagInput = ''; editFamilyShowAddTag = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
+                    <input v-model="editFamilyNewTagInput" type="text" placeholder="Or type new tag" :class="['w-32 rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @keydown.enter.prevent="addEntityTag('family', renameFamilyCanonicalKey, editFamilyNewTagInput); editFamilyNewTagInput = ''; editFamilyShowAddTag = false" />
+                    <button type="button" @click="addEntityTag('family', renameFamilyCanonicalKey, editFamilyNewTagInput); editFamilyNewTagInput = ''; editFamilyShowAddTag = false" :class="['rounded px-2 py-1 text-xs', isDarkMode ? 'bg-gray-600 text-gray-200 hover:bg-gray-500' : 'bg-gray-200 text-gray-800 hover:bg-gray-300']">Add</button>
                     <button type="button" @click="editFamilyShowAddTag = false; editFamilyNewTagInput = ''" :class="['rounded p-1', isDarkMode ? 'text-gray-400 hover:bg-gray-600' : 'text-gray-600 hover:bg-gray-200']" aria-label="Cancel"><Icon name="ri:close-line" size="16" /></button>
                   </div>
                 </div>
@@ -4490,11 +4529,13 @@
         </div>
       </div>
     </div>
+    </Teleport>
 
     <!-- Import Preview Modal -->
+    <Teleport to="body">
     <div
       v-if="showImportPreview && importPreviewStatistics && importPreviewMetadata"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+      class="app-modal-overlay flex items-center justify-center p-4"
       @click.self="cancelImport"
     >
       <div
@@ -4812,12 +4853,28 @@
         </div>
       </div>
     </div>
+    </Teleport>
+  </div>
+
+  <!-- End Main Content -->
+  
+  <!-- Loading State -->
+  <div
+    v-else-if="authLoading"
+    class="flex items-center justify-center min-h-screen"
+    :class="isDarkMode ? 'bg-gray-900' : 'bg-gray-300'"
+  >
+    <div class="text-center">
+      <Icon name="ri:loader-4-line" size="48" class="animate-spin mx-auto mb-4" :class="isDarkMode ? 'text-gray-400' : 'text-gray-600'" />
+      <p :class="['text-lg font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Loading...</p>
+    </div>
   </div>
 
   <!-- Duplicate Confirmation Dialog -->
+  <Teleport to="body">
   <div
     v-if="showDuplicateConfirmDialog && importPreviewStatistics"
-    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    class="app-modal-overlay flex items-center justify-center p-4"
     @click.self="handleDuplicateConfirm(false)"
   >
     <div
@@ -4900,11 +4957,13 @@
       </div>
     </div>
   </div>
+  </Teleport>
 
   <!-- Duplicate Override Confirmation Dialog (for individual entry saves) -->
+  <Teleport to="body">
   <div
     v-if="showDuplicateOverrideDialog && duplicateWarning"
-    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    class="app-modal-overlay flex items-center justify-center p-4"
     @click.self="showDuplicateOverrideDialog = false"
   >
     <div
@@ -4987,11 +5046,13 @@
       </div>
     </div>
   </div>
+  </Teleport>
 
   <!-- Export Dialog (trust-first: scope + preview) -->
+  <Teleport to="body">
   <div
     v-if="showExportDialog"
-    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    class="app-modal-overlay flex items-center justify-center p-4"
     @click.self="closeExportDialog"
   >
     <div
@@ -5278,21 +5339,8 @@
       </div>
     </div>
   </div>
+  </Teleport>
 
-  <!-- End Main Content -->
-  
-  <!-- Loading State -->
-  <div
-    v-else-if="authLoading"
-    class="flex items-center justify-center min-h-screen"
-    :class="isDarkMode ? 'bg-gray-900' : 'bg-gray-300'"
-  >
-    <div class="text-center">
-      <Icon name="ri:loader-4-line" size="48" class="animate-spin mx-auto mb-4" :class="isDarkMode ? 'text-gray-400' : 'text-gray-600'" />
-      <p :class="['text-lg font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Loading...</p>
-    </div>
-  </div>
-  
   <!-- Scroll to Top Button -->
   <Transition
     enter-active-class="transition-opacity duration-300"
@@ -5403,6 +5451,15 @@ import {
 import { findFieldValue, mapRawRowToLogEntry } from '../../shared/logbookDataBridge/importMappers'
 import { applyLogtenCrewFields } from '../utils/logbookImportEnrichments'
 import { parseBridgeFile } from '../../shared/logbookDataBridge/fileParser'
+import {
+  enrichLogtenDynamicExportRow,
+  applyLogtenDynamicRoleAndTime,
+  isLogtenDynamicExportHeaders,
+} from '../../shared/logbookDataBridge/logtenDynamicExport'
+import {
+  catalogAircraftFamilyKey,
+  UNKNOWN_AIRCRAFT_FAMILY,
+} from '../../shared/catalogAircraftFamily'
 import { useCurrency } from '../composables/useCurrency'
 import { useCapacitorPlatform } from '../composables/useCapacitorPlatform'
 import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGestures'
@@ -5430,6 +5487,7 @@ import {
 import {
   initIndexedDB,
   saveEntryToIndexedDB,
+  saveSyncedEntryToIndexedDB,
   updateEntryInIndexedDB,
   deleteEntryFromIndexedDB,
   getAllEntriesFromIndexedDB,
@@ -5643,7 +5701,7 @@ const { validateEntry: validateFlightTimeEntry, validationErrors, validationWarn
 // Offline support
 const { isOnline, isSyncing, syncProgress, updateSyncProgress, checkOnlineStatus } = useOffline()
 const { showToast } = useToast()
-const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync, retryFailed, setActiveUserId, refreshQueueLength } = useSyncQueue()
+const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync, retryFailed, reconcileSyncQueue, setActiveUserId, refreshQueueLength } = useSyncQueue()
 
 function getStorageUserId(): string | undefined {
   return user.value?.id
@@ -5860,9 +5918,14 @@ watch(
 
 watch(
   [isAuthenticated, () => session.value?.access_token],
-  ([authed, token]) => {
+  ([authed, token], [, prevToken]) => {
     if (authed && token) {
       void refreshDashboardFcvStatus()
+    }
+    if (authed && token && token !== prevToken && user.value?.id && !isMigrating.value) {
+      void loadEntries()
+      void reconcileSyncQueue(user.value.id)
+      void processQueue({ silent: true })
     }
   },
   { immediate: true }
@@ -5925,10 +5988,14 @@ onUnmounted(() => {
   }
 })
 
-// Reconnect: drain outbound queue only (no full reload)
+// Reconnect: drain outbound queue and reload from Supabase when back online
 watch(isOnline, (online, wasOnline) => {
   if (online && !wasOnline && isAuthenticated.value && user.value) {
+    void reconcileSyncQueue(user.value.id)
     void processQueue({ silent: true })
+    if (!isMigrating.value) {
+      void loadEntries()
+    }
   }
 })
 
@@ -6044,7 +6111,7 @@ async function addEntityTag(entityType: EntityType, entityId: string, tag: strin
   const t = (tag || '').trim()
   if (!t) return
   if (!isAuthenticated.value || !user.value) return
-  const eid = entityType === 'family' ? normalizeAircraftFamily(entityId) : entityType === 'person' ? entityId.trim().toLowerCase() : entityId.trim().toUpperCase()
+  const eid = entityType === 'family' ? entityId.trim() : entityType === 'person' ? entityId.trim().toLowerCase() : entityId.trim().toUpperCase()
   if (!eid) return
   try {
     const { error } = await (supabase.from('catalog_entity_tags') as any).insert({
@@ -6078,7 +6145,7 @@ async function addEntityTag(entityType: EntityType, entityId: string, tag: strin
 async function removeEntityTagFromEntries(entityType: EntityType, entityId: string, tag: string): Promise<void> {
   const matches = logEntries.value.filter((entry) => {
     if (entityType === 'family') {
-      return normalizeAircraftFamily(entry.aircraftMakeModel || '') === normalizeAircraftFamily(entityId)
+      return catalogAircraftFamilyKey(entry.aircraftMakeModel || '', entry.registration) === entityId
     }
     if (entityType === 'aircraft') {
       return (entry.registration || '').trim().toUpperCase() === entityId
@@ -6113,7 +6180,7 @@ async function removeEntityTag(entityType: EntityType, entityId: string, tag: st
   const t = (tag || '').trim()
   if (!t) return
   if (!isAuthenticated.value || !user.value) return
-  const eid = entityType === 'family' ? normalizeAircraftFamily(entityId) : entityType === 'person' ? entityId.trim().toLowerCase() : entityId.trim().toUpperCase()
+  const eid = entityType === 'family' ? entityId.trim() : entityType === 'person' ? entityId.trim().toLowerCase() : entityId.trim().toUpperCase()
   if (!eid) return
   try {
     const entityIdsToRemove = [eid]
@@ -6137,7 +6204,7 @@ async function removeEntityTag(entityType: EntityType, entityId: string, tag: st
 async function backfillEntityTagToEntries(entityType: EntityType, entityId: string, tag: string): Promise<number> {
   const matches = logEntries.value.filter((entry) => {
     if (entityType === 'family') {
-      return normalizeAircraftFamily(entry.aircraftMakeModel || '') === normalizeAircraftFamily(entityId)
+      return catalogAircraftFamilyKey(entry.aircraftMakeModel || '', entry.registration) === entityId
     }
     if (entityType === 'aircraft') {
       return (entry.registration || '').trim().toUpperCase() === entityId
@@ -6168,7 +6235,7 @@ async function backfillEntityTagToEntries(entityType: EntityType, entityId: stri
 
 function normalizeEntityIdForLookup(entityType: 'family' | 'aircraft' | 'person', entityId: string): string {
   const s = (entityId || '').trim()
-  if (entityType === 'family') return normalizeAircraftFamily(s)
+  if (entityType === 'family') return s
   if (entityType === 'aircraft') return s.toUpperCase()
   if (entityType === 'person') return s.toLowerCase()
   return s
@@ -6182,27 +6249,24 @@ function getEntityTags(entityType: 'family' | 'aircraft' | 'person', entityId: s
     .map((r) => r.tag)
 }
 
-/** Consolidation groups for rename: same logical family + typos (e.g. FMB-170). Used only for rename and tag migration. */
-const FAMILY_RENAME_GROUPS: string[][] = [
-  ['EMB-170', 'ERJ-170', 'FMB-170'],
-  ['EMB-175', 'ERJ-175'],
-  ['EMB-190', 'ERJ-190']
-]
-
 function getFamilyRenameGroup(familyName: string): string[] {
-  const key = (familyName || '').trim().toUpperCase()
-  if (!key) return [key]
-  for (const group of FAMILY_RENAME_GROUPS) {
-    if (group.some((s) => s.toUpperCase() === key)) return group
-  }
-  return [key]
+  const key = (familyName || '').trim()
+  return key ? [key] : []
+}
+
+function getLogEntriesInFamily(canonicalKey: string): LogEntry[] {
+  const key = (canonicalKey || '').trim()
+  if (!key) return []
+  return logEntries.value.filter((entry) => {
+    return catalogAircraftFamilyKey(entry.aircraftMakeModel || '', entry.registration) === key
+  })
 }
 
 /** Merge entity-level tags (aircraft, family, person) into entry.tags for autofill. */
 function mergeEntityTagsIntoEntry(entry: { tags?: string[]; registration?: string; aircraftMakeModel?: string; trainingElements?: string }): void {
   if (!entry) return
   const reg = (entry.registration || '').trim().toUpperCase()
-  const family = normalizeAircraftFamily(entry.aircraftMakeModel || '')
+  const family = catalogAircraftFamilyKey(entry.aircraftMakeModel || '', entry.registration)
   const person = (entry.trainingElements || '').trim()
   const aircraftTags = getEntityTags('aircraft', reg)
   const familyTags = family ? getEntityTags('family', family) : []
@@ -8118,14 +8182,31 @@ function extractBaseModelName(model: string): string {
   return trimmed
 }
 
+function getImporterPilotName(): string {
+  const fromProfile = (pilotProfile.name || '').trim()
+  if (fromProfile) return fromProfile
+  const meta = user.value?.user_metadata as Record<string, unknown> | undefined
+  const fromMeta = typeof meta?.full_name === 'string' ? meta.full_name.trim() : ''
+  return fromMeta
+}
+
 async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<LogEntry | null> {
   try {
     const entry = mapRawRowToLogEntry(rawEntry, { generateId: generateEntryId })
     if (!entry) return null
 
-    applyLogtenCrewFields(entry, rawEntry, pilotProfile.name || '')
+    const isLogtenDynamic = isLogtenDynamicExportHeaders(Object.keys(rawEntry))
+    const importerName = getImporterPilotName()
+
+    if (isLogtenDynamic) {
+      enrichLogtenDynamicExportRow(entry, rawEntry, importerName)
+    }
 
     // Reset total for LogTen OOOI-derived block time (calculated below)
+    const hasLogtenNativeKeys = !!findFieldValue(rawEntry, [
+      'flight_flightDate',
+      'flight_flightdate',
+    ])
     const hasLogtenOOOI = !!(
       findFieldValue(rawEntry, ['flight_actualDepartureTime']) ||
       findFieldValue(rawEntry, ['flight_actualArrivalTime'])
@@ -8142,18 +8223,45 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
       )
     }
     
-    // Parse OOOI times if present - check Logten fields first
-    // Logten exports: Scheduled Departure, Actual Departure (OUT), Scheduled Arrival, Actual Arrival (IN)
-    // Map Actual Departure → OUT and Actual Arrival → IN, leave OFF and ON blank
-    // Note: LogTen exports times in Zulu/UTC by default (see isZulu handling below)
+    // Parse OOOI times — native LogTen keys, Dynamic Export columns, or generic Out/In
     const logtenOut = findFieldValue(rawEntry, ['flight_actualDepartureTime'])
     const logtenIn = findFieldValue(rawEntry, ['flight_actualArrivalTime'])
-    const isLogtenImport = !!(logtenOut || logtenIn)
+    const isLogtenImport = !!(logtenOut || logtenIn || hasLogtenNativeKeys)
     
-    const out = logtenOut || rawEntry.Out || rawEntry.oooi?.out || null
-    const off = null // Always blank for Logten imports
-    const on = null // Always blank for Logten imports
-    const inTime = logtenIn || rawEntry.In || rawEntry.oooi?.in || null
+    const out =
+      logtenOut ||
+      findFieldValue(rawEntry, ['Out', 'out']) ||
+      rawEntry.Out ||
+      rawEntry.oooi?.out ||
+      null
+
+    let off: string | null = null
+    let on: string | null = null
+    if (isLogtenDynamic) {
+      off = findFieldValue(rawEntry, ['Off', 'off']) || null
+      on = findFieldValue(rawEntry, ['On', 'on']) || null
+    } else if (isLogtenImport) {
+      off =
+        findFieldValue(rawEntry, ['flight_takeoffTime', 'flight_taxiOutTime']) ||
+        rawEntry.Off ||
+        rawEntry.oooi?.off ||
+        null
+      on =
+        findFieldValue(rawEntry, ['flight_landingTime', 'flight_taxiInTime']) ||
+        rawEntry.On ||
+        rawEntry.oooi?.on ||
+        null
+    } else {
+      off = rawEntry.Off || rawEntry.oooi?.off || null
+      on = rawEntry.On || rawEntry.oooi?.on || null
+    }
+
+    const inTime =
+      logtenIn ||
+      findFieldValue(rawEntry, ['In', 'in']) ||
+      rawEntry.In ||
+      rawEntry.oooi?.in ||
+      null
     
     // Determine if times are in Zulu (UTC)
     // LogTen exports times in Zulu/UTC by default
@@ -8244,16 +8352,11 @@ async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<Lo
       entry.flightConditions = Array.from(conditionSet)
     }
     
-    // Set PIC time = total time if user is PIC
-    const userName = (pilotProfile.name || '').trim()
-    if (userName) {
-      const picCrew = findFieldValue(rawEntry, ['flight_selectedCrewPIC'])
-      const userIsPIC = picCrew && picCrew.trim().toLowerCase() === userName.toLowerCase()
-      
-      if (userIsPIC && entry.flightTime.total) {
-        entry.flightTime.pic = entry.flightTime.total
-      }
+    if (isLogtenDynamic) {
+      applyLogtenDynamicRoleAndTime(entry, rawEntry, importerName)
     }
+
+    applyLogtenCrewFields(entry, rawEntry, importerName)
     
     // Auto-check flight conditions based on time entries
     entry.flightConditions = autoCheckFlightConditions(
@@ -8542,7 +8645,16 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
             fileName,
             fileType: importPreviewMetadata.value?.fileType,
             importedAt: new Date().toISOString()
-          }
+          },
+          version: (data as any).version ?? entry.version,
+          dataHash: (data as any).data_hash ?? entry.dataHash,
+          createdAt: (data as any).created_at ?? entry.createdAt,
+          updatedAt: (data as any).updated_at ?? entry.updatedAt,
+        }
+        try {
+          await saveSyncedEntryToIndexedDB(entryToStore, user.value!.id)
+        } catch (idbErr) {
+          console.warn('[importEntries] IndexedDB save failed:', idbErr)
         }
         logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
         result.imported++
@@ -8681,7 +8793,7 @@ async function processCSVFile(file: File): Promise<void> {
     }
 
     if (parsed.rows.length === 0) {
-      alert('CSV file is empty or could not be parsed.')
+      alert('Import file is empty or could not be parsed.')
       return
     }
 
@@ -8738,7 +8850,7 @@ async function processCSVFile(file: File): Promise<void> {
     console.log(`Processed ${parsed.rows.length} rows: ${entries.length} valid, ${rejectedRows.length} rejected`)
 
     if (entries.length === 0) {
-      let errorMsg = 'No valid entries found in CSV file.\n\n'
+      let errorMsg = 'No valid entries found in import file.\n\n'
       if (rejectedRows.length > 0) {
         errorMsg += `Reasons:\n${rejectedRows.slice(0, 3).map((r) => `- ${r.reason}`).join('\n')}`
         if (rejectedRows.length > 3) {
@@ -8755,7 +8867,7 @@ async function processCSVFile(file: File): Promise<void> {
     importPreviewStatistics.value = statistics
     importPreviewMetadata.value = {
       fileName: file.name,
-      fileType: 'CSV',
+      fileType: parsed.delimiter === '\t' ? 'TSV' : 'CSV',
       importedAt: new Date().toISOString(),
       detectedSource: parsed.source,
       bridgeWarnings: [
@@ -8766,8 +8878,8 @@ async function processCSVFile(file: File): Promise<void> {
     }
     showImportPreview.value = true
   } catch (error) {
-    console.error('Error importing CSV:', error)
-    alert(`Error importing CSV file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    console.error('Error importing file:', error)
+    alert(`Error importing file: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
 
@@ -8906,7 +9018,7 @@ async function handleImportDrop(event: DragEvent): Promise<void> {
     console.log('Processing as JSON')
     await processJSONFile(file)
   } else {
-    alert(`Please drop a CSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`)
+    alert(`Please drop a CSV, TSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`)
   }
 }
 
@@ -8918,7 +9030,7 @@ async function handleSettingsImportFile(file: File): Promise<void> {
   } else if (fileName.endsWith('.json') || file.type === 'application/json') {
     await processJSONFile(file)
   } else {
-    alert(`Please choose a CSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`)
+    alert(`Please choose a CSV, TSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`)
   }
 }
 
@@ -9060,10 +9172,10 @@ const currentAircraftFamilyName = computed(() => {
       (e) => (e.registration || '').trim().toUpperCase() === reg
     )
     if (entryWithReg?.aircraftMakeModel)
-      return normalizeAircraftFamily(entryWithReg.aircraftMakeModel)
+      return catalogAircraftFamilyKey(entryWithReg.aircraftMakeModel, entryWithReg.registration)
   }
   const makeModel = [info.make, info.model].filter(Boolean).join(' ')
-  return normalizeAircraftFamily(makeModel)
+  return catalogAircraftFamilyKey(makeModel)
 })
 
 // Airport lookup
@@ -9099,6 +9211,7 @@ const crewModalLastTagEntryCount = ref<number | null>(null)
 // Aircraft family rename modal
 const showRenameFamilyModal = ref(false)
 const renameFamilyOldName = ref<string>('')
+const renameFamilyCanonicalKey = ref<string>('')
 const renameFamilyNewName = ref<string>('')
 const editFamilyNewTagInput = ref('')
 const editFamilyShowAddTag = ref(false)
@@ -9583,11 +9696,16 @@ function setSimType(entry: { flightTime: { ffs?: number | null; ftd?: number | n
   }
 }
 
+function formatEntryTimeDisplay(value: number | null | undefined): string {
+  if (value === null || value === undefined) return ''
+  return Number(value).toFixed(1)
+}
+
 function getSimTimeDisplayValue(entry: { flightTime: { ffs?: number | null; ftd?: number | null; atd?: number | null } }): string {
   const sel = getSelectedSimType(entry)
   if (!sel) return ''
   const v = entry.flightTime[sel.toLowerCase() as 'ffs' | 'ftd' | 'atd']
-  return v === null || v === undefined || v === 0 ? '' : String(v)
+  return formatEntryTimeDisplay(v)
 }
 
 function toggleFixedTag(entry: { tags?: string[] }, tag: string): void {
@@ -9955,9 +10073,8 @@ function extractTailFromCatalogItem(item: string): string | null {
       }
     }
   }
-  // No separator: fall back to N-number pattern for backwards compatibility
-  const m = text.match(/N[A-Z0-9]+/i)
-  return m ? m[0].toUpperCase() : null
+  // No separator: catalog child items are tail-only
+  return text ? text.toUpperCase() : null
 }
 
 function getActiveFilterKeys<T extends string>(record: Record<T, boolean>): T[] {
@@ -10102,8 +10219,10 @@ function closeContextMenu(): void {
 }
 
 function openRenameFamilyModal(): void {
-  renameFamilyOldName.value = contextMenuFamilyName.value
-  renameFamilyNewName.value = contextMenuFamilyName.value
+  const canonicalKey = contextMenuFamilyName.value
+  renameFamilyCanonicalKey.value = canonicalKey
+  renameFamilyOldName.value = catalogs.value.familyDisplayName?.[canonicalKey] ?? canonicalKey
+  renameFamilyNewName.value = renameFamilyOldName.value
   closeContextMenu()
   showRenameFamilyModal.value = true
 }
@@ -10111,74 +10230,126 @@ function openRenameFamilyModal(): void {
 function closeRenameFamilyModal(): void {
   showRenameFamilyModal.value = false
   renameFamilyOldName.value = ''
+  renameFamilyCanonicalKey.value = ''
   renameFamilyNewName.value = ''
   editFamilyShowAddTag.value = false
   editFamilyNewTagInput.value = ''
   editFamilyLastTagEntryCount.value = null
 }
 
-async function renameAircraftFamily(oldFamilyName: string, newFamilyName: string): Promise<void> {
-  if (!oldFamilyName || !newFamilyName || oldFamilyName.trim() === newFamilyName.trim()) {
-    return
-  }
-
+async function renameAircraftFamily(canonicalFamilyKey: string, newFamilyName: string): Promise<void> {
   const trimmedNewName = newFamilyName.trim()
-  if (!trimmedNewName) {
+  if (!canonicalFamilyKey.trim() || !trimmedNewName) {
+    showToast('Enter a new family name')
     return
   }
 
-  const group = getFamilyRenameGroup(oldFamilyName)
-  const groupSet = new Set(group.map((s) => s.toUpperCase()))
+  const group = getFamilyRenameGroup(canonicalFamilyKey)
+  const entriesToUpdate = getLogEntriesInFamily(canonicalFamilyKey)
 
-  // All entries in this logical family (including typos like FMB-170) — in memory
-  const entriesToUpdate = logEntries.value.filter((entry) => {
-    const normalized = normalizeAircraftFamily(entry.aircraftMakeModel)
-    return normalized && groupSet.has(normalized.toUpperCase())
-  })
-
-  // Persist to Supabase: update ALL matching rows (not just in-memory) so rename works even when list is filtered
-  if (isAuthenticated.value && user.value) {
-    try {
-      const { error } = await (supabase.from('log_entries') as any)
-        .update({ aircraft_make_model: trimmedNewName })
-        .eq('user_id', user.value.id)
-        .in('aircraft_make_model', group)
-      if (error) console.error('[renameAircraftFamily] log_entries', error)
-    } catch (e) {
-      console.error('[renameAircraftFamily] log_entries', e)
-    }
+  if (entriesToUpdate.length === 0) {
+    showToast('No log entries found for this family')
+    return
   }
 
-  // Update all matching entries in memory so UI updates immediately
+  const entryIds = entriesToUpdate.map((e) => e.id).filter(Boolean)
+
+  // Immediate UI update
   logEntries.value = logEntries.value.map((entry) => {
-    const normalized = normalizeAircraftFamily(entry.aircraftMakeModel)
-    if (normalized && groupSet.has(normalized.toUpperCase())) {
-      return {
-        ...entry,
-        aircraftMakeModel: trimmedNewName
-      }
+    if (catalogAircraftFamilyKey(entry.aircraftMakeModel, entry.registration) === canonicalFamilyKey) {
+      return { ...entry, aircraftMakeModel: trimmedNewName }
     }
     return entry
   })
 
-  // Write renamed entries to IndexedDB so local-first load shows new name after refresh
-  const idSet = new Set(entriesToUpdate.map((e) => e.id))
-  for (const entry of logEntries.value) {
-    if (idSet.has(entry.id)) {
-      try {
-        await updateEntryInIndexedDB(entry, { userId: getStorageUserId() })
-      } catch (e) {
-        console.warn('[renameAircraftFamily] IndexedDB update failed for', entry.id, e)
+  let supabaseOk = true
+
+  // Persist to Supabase by entry id (make/model strings vary; canonical group keys do not match DB values)
+  if (isAuthenticated.value && user.value && entryIds.length > 0) {
+    try {
+      const BATCH_SIZE = 100
+      for (let i = 0; i < entryIds.length; i += BATCH_SIZE) {
+        const batchIds = entryIds.slice(i, i + BATCH_SIZE)
+        const { error } = await (supabase.from('log_entries') as any)
+          .update({ aircraft_make_model: trimmedNewName })
+          .eq('user_id', user.value.id)
+          .in('id', batchIds)
+        if (error) {
+          console.error('[renameAircraftFamily] log_entries', error)
+          supabaseOk = false
+        }
+      }
+
+      const { data: updatedRows, error: fetchError } = await (supabase.from('log_entries') as any)
+        .select('id, version, data_hash, updated_at, created_at, aircraft_make_model')
+        .eq('user_id', user.value.id)
+        .in('id', entryIds)
+      if (fetchError) {
+        console.error('[renameAircraftFamily] fetch updated rows', fetchError)
+      } else if (updatedRows?.length) {
+        const rowById = new Map(
+          (updatedRows as Array<Record<string, unknown>>).map((row) => [String(row.id), row])
+        )
+        const idSet = new Set(entryIds)
+        logEntries.value = logEntries.value.map((entry) => {
+          if (!idSet.has(entry.id)) return entry
+          const row = rowById.get(entry.id)
+          return {
+            ...entry,
+            aircraftMakeModel: trimmedNewName,
+            version: (row?.version as number | undefined) ?? entry.version,
+            dataHash: (row?.data_hash as string | undefined) ?? entry.dataHash,
+            updatedAt: (row?.updated_at as string | undefined) ?? entry.updatedAt,
+            createdAt: (row?.created_at as string | undefined) ?? entry.createdAt,
+          }
+        })
+        for (const entry of logEntries.value) {
+          if (idSet.has(entry.id)) {
+            try {
+              await saveSyncedEntryToIndexedDB(entry, user.value.id)
+            } catch (e) {
+              console.warn('[renameAircraftFamily] IndexedDB save failed for', entry.id, e)
+            }
+          }
+        }
+      } else if (!fetchError) {
+        const idSet = new Set(entryIds)
+        for (const entry of logEntries.value) {
+          if (idSet.has(entry.id)) {
+            try {
+              await saveSyncedEntryToIndexedDB(entry, user.value.id)
+            } catch (e) {
+              console.warn('[renameAircraftFamily] IndexedDB save failed for', entry.id, e)
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[renameAircraftFamily] log_entries', e)
+      supabaseOk = false
+    }
+  }
+
+  // Fallback IndexedDB write when offline / unauthenticated
+  if (!isAuthenticated.value || !user.value) {
+    const idSet = new Set(entriesToUpdate.map((e) => e.id))
+    for (const entry of logEntries.value) {
+      if (idSet.has(entry.id)) {
+        try {
+          await updateEntryInIndexedDB(entry, { userId: getStorageUserId() })
+        } catch (e) {
+          console.warn('[renameAircraftFamily] IndexedDB update failed for', entry.id, e)
+        }
       }
     }
   }
 
-  // Migrate all family tags (every entity_id in group) to the new name, then dedupe
-  const newId = (trimmedNewName || '').trim().toUpperCase()
+  // Migrate all family tags (every entity_id in group) to the new canonical key, then dedupe
+  const newId = trimmedNewName.trim()
   if (isAuthenticated.value && user.value && newId) {
     try {
       for (const oldId of group) {
-        const id = (oldId || '').trim().toUpperCase()
+        const id = (oldId || '').trim()
         if (!id || id === newId) continue
         const { error } = await (supabase.from('catalog_entity_tags') as any)
           .update({ entity_id: newId })
@@ -10217,6 +10388,14 @@ async function renameAircraftFamily(oldFamilyName: string, newFamilyName: string
   }
 
   closeRenameFamilyModal()
+
+  if (!isAuthenticated.value || !user.value) {
+    showToast(`Updated ${entriesToUpdate.length} ${entriesToUpdate.length === 1 ? 'entry' : 'entries'} locally`)
+  } else if (!supabaseOk) {
+    showToast('Name updated locally — sync may be needed')
+  } else {
+    showToast(`Renamed family on ${entriesToUpdate.length} ${entriesToUpdate.length === 1 ? 'entry' : 'entries'}`)
+  }
 }
 
 async function confirmRenameFamily(): Promise<void> {
@@ -10234,25 +10413,24 @@ async function confirmRenameFamily(): Promise<void> {
     return
   }
 
-  const newCanonical = normalizeAircraftFamily(trimmedNewName)
-  const oldCanonical = normalizeAircraftFamily(renameFamilyOldName.value)
-  const wouldCreateNewFamily = newCanonical !== oldCanonical && !catalogs.value.families?.includes(newCanonical)
+  const oldKey = (renameFamilyCanonicalKey.value || renameFamilyOldName.value).trim()
+  const wouldCreateNewFamily = trimmedNewName !== oldKey && !catalogs.value.families?.includes(trimmedNewName)
   if (wouldCreateNewFamily && !window.confirm('This will create a new family group. Continue?')) {
     return
   }
 
-  await renameAircraftFamily(renameFamilyOldName.value, trimmedNewName)
+  if (!renameFamilyCanonicalKey.value) {
+    showToast('Could not determine aircraft family — close and try again')
+    return
+  }
+
+  await renameAircraftFamily(renameFamilyCanonicalKey.value, trimmedNewName)
 }
 
 // Computed: count of entries that will be renamed (full consolidation group, including typos)
 const entriesToRenameCount = computed(() => {
-  if (!renameFamilyOldName.value) return 0
-  const group = getFamilyRenameGroup(renameFamilyOldName.value)
-  const groupSet = new Set(group.map((s) => s.toUpperCase()))
-  return logEntries.value.filter((e) => {
-    const norm = normalizeAircraftFamily(e.aircraftMakeModel)
-    return norm && groupSet.has(norm.toUpperCase())
-  }).length
+  if (!renameFamilyCanonicalKey.value) return 0
+  return getLogEntriesInFamily(renameFamilyCanonicalKey.value).length
 })
 
 async function showAirportInfo(airportCode: string): Promise<void> {
@@ -12052,8 +12230,12 @@ async function loadEntries(): Promise<void> {
     console.error('[LoadEntries] Error loading from IndexedDB:', error)
   }
   
-  // If authenticated and online, sync with Supabase (merge using last-write-wins)
-  if (isAuthenticated.value && user.value && isOnline.value) {
+  // If authenticated, sync with Supabase (merge using last-write-wins)
+  if (isAuthenticated.value && user.value) {
+    await checkOnlineStatus()
+    const hasSession = await waitForSupabaseSession()
+    const browserOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
+    if (hasSession && (isOnline.value || browserOnline)) {
     try {
       await withTimeout((async () => {
       // Paginate in batches of 1000 (Supabase default max per request)
@@ -12066,6 +12248,7 @@ async function loadEntries(): Promise<void> {
         const { data: batch, error } = await (supabase
           .from('log_entries') as any)
           .select('*')
+          .eq('user_id', user.value!.id)
           .order('date', { ascending: false })
           .range(from, to)
         if (error) {
@@ -12150,8 +12333,7 @@ async function loadEntries(): Promise<void> {
         // Then merge Supabase entries (last-write-wins based on version or updated_at)
         supabaseEntries.forEach(supabaseEntry => {
           const existing = entryMap.get(supabaseEntry.id)
-          if (!existing || !existing.version || (supabaseEntry.version && supabaseEntry.version > existing.version)) {
-            // Supabase entry is newer or doesn't exist locally
+          if (shouldPreferSupabaseEntry(existing, supabaseEntry)) {
             entryMap.set(supabaseEntry.id, supabaseEntry)
             // Update IndexedDB with synced entry
             updateEntryInIndexedDB(supabaseEntry, {
@@ -12161,9 +12343,6 @@ async function loadEntries(): Promise<void> {
             }).catch(err => {
               console.warn('[LoadEntries] Failed to update IndexedDB with synced entry:', err)
             })
-          } else {
-            // Local entry is newer, keep it and queue for sync
-            // (sync queue will handle this)
           }
         })
         
@@ -12178,6 +12357,7 @@ async function loadEntries(): Promise<void> {
       console.error('[LoadEntries] Error syncing with Supabase:', err)
       // Continue with IndexedDB entries
     }
+    }
   } else if (!isAuthenticated.value) {
     // Not authenticated - fallback to localStorage
     loadPersistedEntries()
@@ -12190,6 +12370,33 @@ async function loadEntries(): Promise<void> {
 
   // FC View rows may arrive without persisted night values; derive from OOOI for display consistency.
   void enrichFcvNightDataForDisplay()
+}
+
+async function waitForSupabaseSession(maxWaitMs = 8000): Promise<boolean> {
+  const deadline = Date.now() + maxWaitMs
+  while (Date.now() < deadline) {
+    const { data: { session: sbSession } } = await supabase.auth.getSession()
+    if (sbSession?.access_token && user.value?.id) return true
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
+  console.warn('[LoadEntries] Timed out waiting for Supabase session')
+  return false
+}
+
+function entryUpdatedAtMs(entry: LogEntry): number {
+  if (!entry.updatedAt) return 0
+  const ms = new Date(entry.updatedAt).getTime()
+  return Number.isNaN(ms) ? 0 : ms
+}
+
+/** True when the Supabase copy should win during merge. */
+function shouldPreferSupabaseEntry(local: LogEntry | undefined, remote: LogEntry): boolean {
+  if (!local) return true
+  const localVer = local.version ?? 0
+  const remoteVer = remote.version ?? 0
+  if (remoteVer > localVer) return true
+  if (localVer > remoteVer) return false
+  return entryUpdatedAtMs(remote) >= entryUpdatedAtMs(local)
 }
 
 async function refreshDashboardData(): Promise<void> {
@@ -12214,6 +12421,7 @@ async function refreshDashboardData(): Promise<void> {
     const countBefore = logEntries.value.length
 
     await loadEntries()
+    await reconcileSyncQueue(user.value.id)
     await processQueue()
     await refreshQueueLength()
     await fetchEntityTags()
@@ -12719,7 +12927,7 @@ function passesCatalogAndSearchFilters(entry: LogEntry): boolean {
   }
 
   if (activeFamilies.size > 0) {
-    const fam = normalizeAircraftFamily(entry.aircraftMakeModel || '')
+    const fam = catalogAircraftFamilyKey(entry.aircraftMakeModel || '', entry.registration)
     if (!fam || !activeFamilies.has(fam)) return false
   }
 
@@ -12845,6 +13053,7 @@ interface CatalogsValue {
   families: string[]
   familyToItems: Record<string, string[]>
   familyDisplayName: Record<string, string>
+  totalAircraftItems: number
 }
 const catalogs = computed<CatalogsValue>(() => {
   const aircraft = new Set<string>()
@@ -12852,7 +13061,6 @@ const catalogs = computed<CatalogsValue>(() => {
   const pilots = new Set<string>()
   const categoryClass = new Set<string>()
   const familiesSet = new Set<string>()
-  const familyMakeModelCounts: Record<string, Record<string, number>> = {}
   const familyToItemsMap: Record<string, Set<string>> = {}
   const entriesForActiveCatalog = logEntries.value.filter(
     (entry) => getEntryLogbookType(entry) === activeLogbook.value
@@ -12861,16 +13069,17 @@ const catalogs = computed<CatalogsValue>(() => {
   entriesForActiveCatalog.forEach((entry) => {
     const makeModel = entry.aircraftMakeModel.trim()
     const tail = entry.registration.trim().toUpperCase()
+    const fam = catalogAircraftFamilyKey(makeModel, entry.registration)
     if (makeModel || tail) {
       aircraft.add(tail ? `${makeModel || 'Airframe'} · ${tail}` : makeModel)
     }
-    if (makeModel) {
-      const fam = normalizeAircraftFamily(makeModel)
-      if (fam) {
-        familiesSet.add(fam)
-        if (!familyMakeModelCounts[fam]) familyMakeModelCounts[fam] = {}
-        familyMakeModelCounts[fam][makeModel] = (familyMakeModelCounts[fam][makeModel] || 0) + 1
-        if (!familyToItemsMap[fam]) familyToItemsMap[fam] = new Set<string>()
+    if (fam) {
+      familiesSet.add(fam)
+      if (!familyToItemsMap[fam]) familyToItemsMap[fam] = new Set<string>()
+      if (tail) {
+        familyToItemsMap[fam]!.add(tail)
+      } else if (makeModel) {
+        familyToItemsMap[fam]!.add(makeModel)
       }
     }
     if (entry.departure.trim()) {
@@ -12887,50 +13096,35 @@ const catalogs = computed<CatalogsValue>(() => {
     }
   })
 
-  // Display name per family = most common makeModel so rename is visible
   const familyDisplayName: Record<string, string> = {}
-  for (const fam of Object.keys(familyMakeModelCounts)) {
-    const counts = familyMakeModelCounts[fam] ?? {}
-    const entries = Object.entries(counts as Record<string, number>)
-    const mode = entries.length ? entries.sort((a, b) => b[1] - a[1])[0]![0] : fam
-    familyDisplayName[fam] = mode
+  for (const fam of familiesSet) {
+    familyDisplayName[fam] = fam
   }
 
-  // Build items using display name so parent and children match and renames show up
-  entriesForActiveCatalog.forEach((entry) => {
-    const makeModel = entry.aircraftMakeModel.trim()
-    const tail = entry.registration.trim().toUpperCase()
-    if (makeModel) {
-      const fam = normalizeAircraftFamily(makeModel)
-      if (fam) {
-        const displayName = familyDisplayName[fam] ?? fam
-        const item = tail ? `${displayName} · ${tail}` : displayName
-        familyToItemsMap[fam] = familyToItemsMap[fam] || new Set<string>()
-        familyToItemsMap[fam]!.add(item)
-      }
+  const familyToItems: Record<string, string[]> = {}
+  const families = Array.from(familiesSet).sort((a, b) => a.localeCompare(b))
+  const defaultExpandFamilies = families.length <= 3
+  families.forEach((fam) => {
+    familyToItems[fam] = Array.from(familyToItemsMap[fam] || []).sort((a, b) => a.localeCompare(b))
+    if (familyOpenState[fam] === undefined) {
+      familyOpenState[fam] = defaultExpandFamilies
     }
   })
 
-  // Convert family map to ordered arrays
-  const familyToItems: Record<string, string[]> = {}
-  Array.from(familiesSet)
-    .sort((a, b) => a.localeCompare(b))
-    .forEach((fam) => {
-      familyToItems[fam] = Array.from(familyToItemsMap[fam] || []).sort((a, b) => a.localeCompare(b))
-      // initialize open state if unset
-      if (familyOpenState[fam] === undefined) {
-        familyOpenState[fam] = false
-    }
-  })
+  const totalAircraftItems = families.reduce(
+    (sum, fam) => sum + (familyToItems[fam]?.length || 0),
+    0
+  )
 
   return {
     aircraft: Array.from(aircraft).sort((a, b) => a.localeCompare(b)),
     airports: Array.from(airports).sort((a, b) => a.localeCompare(b)),
     pilots: Array.from(pilots).sort((a, b) => a.localeCompare(b)),
     categoryClass: Array.from(categoryClass).sort((a, b) => a.localeCompare(b)),
-    families: Array.from(familiesSet).sort((a, b) => a.localeCompare(b)),
+    families,
     familyToItems,
-    familyDisplayName
+    familyDisplayName,
+    totalAircraftItems,
   }
 })
 
@@ -13862,8 +14056,12 @@ function getDisplayConditions(entry: LogEntry): string[] {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.entry-panel-ios .entry-grid-ios-cat-time {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 5.5rem);
+.entry-grid-route-row {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(5.5rem, 6rem) minmax(0, 1.3fr);
+}
+
+.entry-grid-route-row .entry-grid-time-col {
+  min-width: 5.5rem;
 }
 
 .entry-panel-ios label.block.uppercase.font-bold {

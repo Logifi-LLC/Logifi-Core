@@ -73,7 +73,7 @@ export const EXPORT_DESTINATION_HINTS: Record<
   myflightbook:
     'UTF-8 CSV with exact MyFlightbook headers, including Role, Flight Number, Solo Time, and crew name columns. Ensure tail numbers exist in your MyFlightbook hangar.',
   logten:
-    'Flat LogTen Pro column keys (flight_*, aircraft_*) for manual import mapping.',
+    'LogTen Pro export: internal keys (flight_*, aircraft_*) or Dynamic Export tab-delimited files.',
 }
 
 export type ExportDateFormat = 'iso' | 'mdy' | 'logten'

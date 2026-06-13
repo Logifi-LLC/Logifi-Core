@@ -1,5 +1,6 @@
 import type { BridgeSource, ParsedBridgeFile } from './types'
 import { detectBridgeSource } from './sourceDetector'
+import { isLogtenDynamicExportHeaders } from './logtenDynamicExport'
 
 export function parseCSVLine(line: string, delimiter: string = ','): string[] {
   const result: string[] = []
@@ -78,7 +79,7 @@ function rowsFromSection(
   let i = startIndex + 1
   for (; i < lines.length; i++) {
     const line = lines[i]
-    if (!line?.trim()) break
+    if (!line?.trim()) continue
 
     const values = parseCSVLine(line, delimiter).map(normalizeCell)
     if (values.every((v) => !v)) continue
@@ -109,7 +110,7 @@ function findForeFlightSections(lines: string[]): {
     const delimiter = detectDelimiter(line)
     const headers = parseCSVLine(line, delimiter).map(normalizeHeader)
 
-    if (isForeFlightFlightsHeader(headers)) {
+    if (isForeFlightFlightsHeader(headers) && !isLogtenDynamicExportHeaders(headers)) {
       const parsed = rowsFromSection(lines, i, delimiter)
       if (parsed) {
         flightsSection = {
