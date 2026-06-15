@@ -250,6 +250,8 @@
           <FcvSync
             mode="fetch"
             :is-dark-mode="isDarkMode"
+            :before-duplicate-check="prepareLogbookForFcvImport"
+            :pending-sync-count="queueLength"
             @imported="handleFcvImported"
           />
           <p
@@ -12450,20 +12452,36 @@ async function refreshDashboardData(): Promise<void> {
   }
 }
 
+async function prepareLogbookForFcvImport(): Promise<void> {
+  if (isAuthenticated.value && user.value) {
+    await processQueue({ silent: true })
+  }
+  await loadEntries()
+}
+
 async function handleFcvImported(payload: {
   imported: number
+  linked: number
   skipped: number
   importBatchId?: string
 }): Promise<void> {
   // Auto-close the dashboard fetch panel once FC View import completes.
   showFcvFetchPanel.value = false
   await loadEntries()
-  const importedLabel = payload.imported === 1 ? 'entry' : 'entries'
-  const skippedLabel = payload.skipped === 1 ? 'entry' : 'entries'
+  const parts: string[] = []
+  if (payload.imported > 0) {
+    parts.push(`${payload.imported} ${payload.imported === 1 ? 'entry' : 'entries'} added`)
+  }
+  if (payload.linked > 0) {
+    parts.push(`${payload.linked} ${payload.linked === 1 ? 'entry' : 'entries'} linked`)
+  }
+  if (payload.skipped > 0) {
+    parts.push(`${payload.skipped} ${payload.skipped === 1 ? 'entry' : 'entries'} skipped`)
+  }
   fcvImportMessage.value =
-    payload.skipped > 0
-      ? `FC View import complete: ${payload.imported} ${importedLabel} added, ${payload.skipped} ${skippedLabel} skipped.`
-      : `FC View import complete: ${payload.imported} ${importedLabel} added.`
+    parts.length > 0
+      ? `FC View import complete: ${parts.join(', ')}.`
+      : 'FC View import complete.'
 }
 
 async function enrichFcvNightDataForDisplay(): Promise<void> {

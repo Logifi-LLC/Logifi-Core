@@ -397,7 +397,7 @@ describe('logbookDataBridge importMappers', () => {
     expect(errors).toHaveLength(0)
   })
 
-  it('infers PIC seat when only SIC time logged but both crew columns populated', () => {
+  it('infers SIC seat when only SIC time logged but both crew columns populated', () => {
     const entry = mapRawRowToLogEntry(LOGTEN_NATIVE_SIC_TIME_ROW, { source: 'logten' })
     expect(entry).not.toBeNull()
     expect(entry?.role).toBe('SIC')
@@ -409,16 +409,27 @@ describe('logbookDataBridge importMappers', () => {
       'Ron Weasley',
       'Test Test'
     )
-    expect(seat).toBe('PIC')
+    expect(seat).toBe('SIC')
   })
 
-  it('assigns Ron Weasley for SIC-only time row with non-matching profile', () => {
+  it('assigns Ron Weasley as Captain for SIC-only time row with non-matching profile', () => {
     const entry = mapRawRowToLogEntry(LOGTEN_NATIVE_SIC_TIME_ROW, { source: 'logten' })
     expect(entry).not.toBeNull()
     applyLogtenCrewFields(entry!, LOGTEN_NATIVE_SIC_TIME_ROW, 'Test Test')
 
     expect(entry?.trainingElements).toBe('Ron Weasley')
-    expect(entry?.trainingInstructor).toBe('First Officer')
+    expect(entry?.trainingInstructor).toBe('Captain')
+    expect(entry?.role).toBe('SIC')
+  })
+
+  it('assigns Ron Weasley as Captain when profile is in PIC column but SIC time logged', () => {
+    const entry = mapRawRowToLogEntry(LOGTEN_NATIVE_SIC_TIME_ROW, { source: 'logten' })
+    expect(entry).not.toBeNull()
+    applyLogtenCrewFields(entry!, LOGTEN_NATIVE_SIC_TIME_ROW, 'Derek Farmer')
+
+    expect(entry?.trainingElements).toBe('Ron Weasley')
+    expect(entry?.trainingInstructor).toBe('Captain')
+    expect(entry?.role).toBe('SIC')
   })
 })
 

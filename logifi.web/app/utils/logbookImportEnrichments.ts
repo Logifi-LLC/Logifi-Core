@@ -37,21 +37,19 @@ export function inferImporterSeat(
   instructorCrew = '',
   studentCrew = ''
 ): ImporterSeat {
-  if (userName && picCrew && namesMatchFlexible(picCrew, userName)) return 'PIC'
-  if (userName && sicCrew && namesMatchFlexible(sicCrew, userName)) return 'SIC'
+  const picTime = entry.flightTime.pic ?? 0
+  const sicTime = entry.flightTime.sic ?? 0
+
+  // Logged time is the strongest signal for PIC/SIC airline seats.
+  if (picTime > 0 && sicTime <= 0) return 'PIC'
+  if (sicTime > 0 && picTime <= 0) return 'SIC'
+
   if (userName && instructorCrew && namesMatchFlexible(instructorCrew, userName)) {
     return 'Instructor'
   }
   if (userName && studentCrew && namesMatchFlexible(studentCrew, userName)) return 'Student'
-
-  const picTime = entry.flightTime.pic ?? 0
-  const sicTime = entry.flightTime.sic ?? 0
-
-  if (picTime > 0 && sicTime <= 0) return 'PIC'
-  if (sicTime > 0 && picTime <= 0) {
-    if (picCrew && sicCrew) return 'PIC'
-    return 'SIC'
-  }
+  if (userName && picCrew && namesMatchFlexible(picCrew, userName)) return 'PIC'
+  if (userName && sicCrew && namesMatchFlexible(sicCrew, userName)) return 'SIC'
 
   if (entry.role === 'PIC') return 'PIC'
   if (entry.role === 'SIC') return 'SIC'
@@ -112,13 +110,12 @@ function pickOtherCrewName(seat: ImporterSeat, candidates: CrewCandidate[]): str
   return sorted[0]?.name || ''
 }
 
-function roleLabelForCrewName(
+/** Assign other pilot's job from importer seat (FCV-style inversion for Captain/FO). */
+function jobLabelForOtherPilot(
   selectedName: string,
-  picCrew: string,
-  sicCrew: string,
+  seat: ImporterSeat,
   instructorCrew: string,
-  studentCrew: string,
-  firstOfficerName: string
+  studentCrew: string
 ): string {
   const normalized = selectedName.trim().toLowerCase()
   if (instructorCrew && instructorCrew.trim().toLowerCase() === normalized) {
@@ -127,15 +124,10 @@ function roleLabelForCrewName(
   if (studentCrew && studentCrew.trim().toLowerCase() === normalized) {
     return 'Student'
   }
-  if (picCrew && picCrew.trim().toLowerCase() === normalized) {
-    return 'Captain'
-  }
-  if (sicCrew && sicCrew.trim().toLowerCase() === normalized) {
-    return 'First Officer'
-  }
-  if (firstOfficerName && firstOfficerName.trim().toLowerCase() === normalized) {
-    return 'First Officer'
-  }
+  if (seat === 'Instructor') return 'Student'
+  if (seat === 'Student') return 'Instructor'
+  if (seat === 'PIC') return 'First Officer'
+  if (seat === 'SIC') return 'Captain'
   return ''
 }
 
@@ -240,6 +232,10 @@ export function applyLogtenCrewFields(
     crew.studentCrew
   )
 
+  if (seat === 'PIC' || seat === 'SIC') {
+    entry.role = seat
+  }
+
   const selectedPilot = pickOtherCrewName(seat, crew.candidates)
   entry.trainingElements = toTitleCase(selectedPilot)
 
@@ -272,13 +268,11 @@ export function applyLogtenCrewFields(
   }
 
   entry.trainingInstructor = selectedPilot
-    ? roleLabelForCrewName(
+    ? jobLabelForOtherPilot(
         selectedPilot,
-        crew.picCrew,
-        crew.sicCrew,
+        seat,
         crew.instructorCrew,
-        crew.studentCrew,
-        crew.firstOfficerName
+        crew.studentCrew
       )
     : ''
 }

@@ -2,8 +2,8 @@ import { defineEventHandler, readBody, createError } from 'h3'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import type { FcvMappedEntry } from '../../utils/fcvMap'
 import {
-  logEntryRowToMatchShape,
-  partitionFcvPreviewDuplicates,
+  logEntryRowToExistingForDedup,
+  findHeuristicMatchForFcvFlight,
 } from '../../utils/fcvPreviewDuplicates'
 
 interface Body {
@@ -47,6 +47,18 @@ function emptyResponse() {
     alreadyImportedIndices: [] as number[],
     heuristicDuplicateIndices: [] as number[],
     alreadyImportedFcvFlightIds: [] as string[],
+    heuristicMatches: [] as Array<{
+      index: number
+      fcvFlightId: string
+      existingEntryId: string
+      date: string
+      registration: string
+      departure: string
+      destination: string
+      flightTimeTotal: number | null
+      isImported: boolean
+      importSource: string | null
+    }>,
   }
 }
 
@@ -84,11 +96,13 @@ export default defineEventHandler(async (event) => {
 
   const existingFcvIds = await loadExistingFcvIds(supabase, userId, previewFcvIds)
 
-  let existingShapes: ReturnType<typeof logEntryRowToMatchShape>[] = []
+  let existingEntries: ReturnType<typeof logEntryRowToExistingForDedup>[] = []
   if (dates.length > 0) {
     const { data: rows, error } = await supabase
       .from('log_entries')
-      .select('date, registration, departure, destination, flight_time, oooi')
+      .select(
+        'id, date, registration, departure, destination, flight_time, oooi, is_imported, import_source, fcv_flight_id'
+      )
       .eq('user_id', userId)
       .in('date', dates)
 
@@ -96,10 +110,10 @@ export default defineEventHandler(async (event) => {
       console.error('check-duplicates log_entries query:', error)
       throw createError({ statusCode: 500, statusMessage: 'Failed to load logbook' })
     }
-    existingShapes = (rows ?? []).map(logEntryRowToMatchShape)
+    existingEntries = (rows ?? []).map((row) => logEntryRowToExistingForDedup(row))
   }
 
-  const part = partitionFcvPreviewDuplicates(flights, existingShapes, existingFcvIds)
+  const part = partitionFcvPreviewDuplicates(flights, existingEntries, existingFcvIds)
 
   return {
     duplicateFcvFlightIds: part.duplicateFcvFlightIds,
@@ -107,5 +121,6 @@ export default defineEventHandler(async (event) => {
     alreadyImportedIndices: part.alreadyImportedIndices,
     heuristicDuplicateIndices: part.heuristicDuplicateIndices,
     alreadyImportedFcvFlightIds: part.alreadyImportedFcvFlightIds,
+    heuristicMatches: part.heuristicMatches,
   }
 })

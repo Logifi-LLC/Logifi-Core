@@ -14,14 +14,23 @@ import {
   mergeEntryTagsWithFamilyTags,
   normalizeAircraftFamily,
 } from '../../utils/aircraftFamily'
+import {
+  findHeuristicMatchForFcvFlight,
+  logEntryRowToExistingForDedup,
+} from '../../utils/fcvPreviewDuplicates'
 
 type CrewOverrideMode = 'pick' | 'rename' | 'asis'
+type FcvFlightAction = 'import' | 'link' | 'skip'
 
 interface ImportBody {
   flights: FcvMappedEntry[]
   crewNameOverrides?: Record<string, string>
   /** Set for flights that went through crew review; drives person catalog bootstrap on `rename`. */
   crewOverrideModes?: Record<string, CrewOverrideMode>
+  /** When true, insert rows even when they heuristically match an existing logbook entry. */
+  allowDuplicates?: boolean
+  /** Per-flight resolution for heuristic duplicates (`import`, `link`, or `skip`). */
+  flightActions?: Record<string, FcvFlightAction>
 }
 
 function normalizePersonEntityIdForCatalog(displayName: string): string {
@@ -75,6 +84,135 @@ interface CrewReviewCandidate {
   strategy: 'ambiguous' | 'unresolved'
 }
 
+function buildFcvInsertEntry(
+  userId: string,
+  aligned: FcvMappedEntry,
+  batchId: string,
+  fcvId: string,
+  familyTagsById: Map<string, string[]>
+): Database['public']['Tables']['log_entries']['Insert'] {
+  return {
+    user_id: userId,
+    date: aligned.date,
+    role: aligned.role,
+    aircraft_category_class: aligned.aircraft_category_class,
+    category_class_time: aligned.category_class_time,
+    aircraft_make_model: aligned.aircraft_make_model,
+    registration: aligned.registration,
+    flight_number: aligned.flight_number,
+    departure: aligned.departure,
+    destination: aligned.destination,
+    route: aligned.route,
+    training_elements: aligned.training_elements ?? null,
+    training_instructor: aligned.training_instructor ?? null,
+    flight_time: aligned.flight_time,
+    performance: aligned.performance,
+    oooi: aligned.oooi,
+    remarks: aligned.remarks ?? null,
+    flight_conditions:
+      Array.isArray(aligned.flight_conditions) && aligned.flight_conditions.length > 0
+        ? aligned.flight_conditions
+        : ['ifr'],
+    tags: (() => {
+      const ownTags = Array.isArray(aligned.tags) ? aligned.tags : []
+      const mergedTags = mergeEntryTagsWithFamilyTags(
+        ownTags,
+        aligned.aircraft_make_model ?? '',
+        familyTagsById
+      )
+      return mergedTags.length > 0 ? mergedTags : undefined
+    })(),
+    is_imported: true,
+    import_source: 'fc_view',
+    import_batch_id: batchId,
+    original_entry_date: aligned.original_entry_date,
+    import_metadata: aligned.import_metadata,
+    fcv_flight_id: fcvId,
+  }
+}
+
+async function linkFcvFlightToExistingEntry(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  existingId: string,
+  aligned: FcvMappedEntry,
+  fcvId: string,
+  batchId: string,
+  familyTagsById: Map<string, string[]>
+): Promise<boolean> {
+  const { data: existing, error } = await supabase
+    .from('log_entries')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('id', existingId)
+    .maybeSingle()
+
+  if (error || !existing) {
+    if (error) console.error('linkFcvFlightToExistingEntry load failed:', error)
+    return false
+  }
+  if (existing.fcv_flight_id) return false
+
+  const manualRemarks =
+    typeof existing.remarks === 'string' && existing.remarks.trim()
+      ? existing.remarks.trim()
+      : null
+  const fcvRemarks =
+    typeof aligned.remarks === 'string' && aligned.remarks.trim()
+      ? aligned.remarks.trim()
+      : null
+  const mergedRemarks = manualRemarks ?? fcvRemarks
+
+  const ownTags = Array.isArray(aligned.tags) ? aligned.tags : []
+  const mergedTags = mergeEntryTagsWithFamilyTags(
+    ownTags,
+    aligned.aircraft_make_model ?? '',
+    familyTagsById
+  )
+  const existingTags = Array.isArray(existing.tags) ? existing.tags : []
+
+  const update: Database['public']['Tables']['log_entries']['Update'] = {
+    role: aligned.role,
+    aircraft_category_class: aligned.aircraft_category_class,
+    category_class_time: aligned.category_class_time,
+    aircraft_make_model: aligned.aircraft_make_model,
+    registration: aligned.registration,
+    flight_number: aligned.flight_number,
+    departure: aligned.departure,
+    destination: aligned.destination,
+    route: aligned.route,
+    training_elements: aligned.training_elements ?? existing.training_elements,
+    training_instructor: aligned.training_instructor ?? existing.training_instructor,
+    flight_time: aligned.flight_time,
+    performance: aligned.performance,
+    oooi: aligned.oooi,
+    remarks: mergedRemarks,
+    flight_conditions:
+      Array.isArray(aligned.flight_conditions) && aligned.flight_conditions.length > 0
+        ? aligned.flight_conditions
+        : existing.flight_conditions ?? ['ifr'],
+    tags: mergedTags.length > 0 ? mergedTags : existingTags.length > 0 ? existingTags : undefined,
+    is_imported: true,
+    import_source: 'fc_view',
+    import_batch_id: batchId,
+    original_entry_date: aligned.original_entry_date,
+    import_metadata: aligned.import_metadata,
+    fcv_flight_id: fcvId,
+  }
+
+  const { error: updateErr } = await supabase
+    .from('log_entries')
+    .update(update)
+    .eq('user_id', userId)
+    .eq('id', existingId)
+
+  if (updateErr) {
+    console.error('linkFcvFlightToExistingEntry update failed:', updateErr)
+    return false
+  }
+  return true
+}
+
 /**
  * Import FC View flights into log_entries. Deduplicates by fcv_flight_id; creates an import_batch.
  * Client must send Authorization: Bearer <supabase_access_token>.
@@ -108,6 +246,8 @@ export default defineEventHandler(async (event) => {
 
   const crewNameOverrides = body?.crewNameOverrides ?? {}
   const crewOverrideModes = body?.crewOverrideModes ?? {}
+  const allowDuplicates = body?.allowDuplicates === true
+  const flightActions = body?.flightActions ?? {}
   const supabase = getSupabaseClient(event)
   const { data: existingRows, error: existingRowsError } = await supabase
     .from('log_entries')
@@ -227,7 +367,31 @@ export default defineEventHandler(async (event) => {
 
   const batchId = batch.id
   let inserted = 0
+  let linked = 0
   let skipped = 0
+
+  const importDates = [
+    ...new Set(flights.map((f) => f.date).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))),
+  ]
+  let existingForDedup: ReturnType<typeof logEntryRowToExistingForDedup>[] = []
+  if (importDates.length > 0) {
+    const { data: dedupRows, error: dedupError } = await supabase
+      .from('log_entries')
+      .select(
+        'id, date, registration, departure, destination, flight_time, oooi, is_imported, import_source, fcv_flight_id'
+      )
+      .eq('user_id', userId)
+      .in('date', importDates)
+
+    if (dedupError) {
+      console.error('failed loading log_entries for FCV import dedup:', dedupError)
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Failed to load existing logbook entries for import',
+      })
+    }
+    existingForDedup = (dedupRows ?? []).map((row) => logEntryRowToExistingForDedup(row))
+  }
 
   for (const f of flights) {
     const fcvId = f.fcv_flight_id
@@ -253,44 +417,51 @@ export default defineEventHandler(async (event) => {
       continue
     }
 
-    const entry: Database['public']['Tables']['log_entries']['Insert'] = {
-      user_id: userId,
-      date: aligned.date,
-      role: aligned.role,
-      aircraft_category_class: aligned.aircraft_category_class,
-      category_class_time: aligned.category_class_time,
-      aircraft_make_model: aligned.aircraft_make_model,
-      registration: aligned.registration,
-      flight_number: aligned.flight_number,
-      departure: aligned.departure,
-      destination: aligned.destination,
-      route: aligned.route,
-      training_elements: aligned.training_elements ?? null,
-      training_instructor: aligned.training_instructor ?? null,
-      flight_time: aligned.flight_time,
-      performance: aligned.performance,
-      oooi: aligned.oooi,
-      remarks: aligned.remarks ?? null,
-      flight_conditions:
-        Array.isArray(aligned.flight_conditions) && aligned.flight_conditions.length > 0
-          ? aligned.flight_conditions
-          : ['ifr'],
-      tags: (() => {
-        const ownTags = Array.isArray(aligned.tags) ? aligned.tags : []
-        const mergedTags = mergeEntryTagsWithFamilyTags(
-          ownTags,
-          aligned.aircraft_make_model ?? '',
+    const heuristicMatch = findHeuristicMatchForFcvFlight(f, existingForDedup)
+    const action =
+      typeof flightActions[fcvId] === 'string'
+        ? (flightActions[fcvId] as FcvFlightAction)
+        : undefined
+
+    if (action === 'skip') {
+      skipped++
+      continue
+    }
+
+    if (heuristicMatch) {
+      if (action === 'link') {
+        const didLink = await linkFcvFlightToExistingEntry(
+          supabase,
+          userId,
+          heuristicMatch.id,
+          aligned,
+          fcvId,
+          batchId,
           familyTagsById
         )
-        return mergedTags.length > 0 ? mergedTags : undefined
-      })(),
-      is_imported: true,
-      import_source: 'fc_view',
-      import_batch_id: batchId,
-      original_entry_date: aligned.original_entry_date,
-      import_metadata: aligned.import_metadata,
-      fcv_flight_id: fcvId,
+        if (didLink) {
+          linked++
+          const mode = crewOverrideModes[fcvId]
+          if (mode === 'rename') {
+            const resolved =
+              typeof crewNameOverrides[fcvId] === 'string' ? crewNameOverrides[fcvId].trim() : ''
+            if (resolved) {
+              await bootstrapPersonCatalogFromRename(supabase, userId, resolved)
+            }
+          }
+        } else {
+          skipped++
+        }
+        continue
+      }
+
+      if (!allowDuplicates && action !== 'import') {
+        skipped++
+        continue
+      }
     }
+
+    const entry = buildFcvInsertEntry(userId, aligned, batchId, fcvId, familyTagsById)
 
     const { error: insertErr } = await supabase.from('log_entries').insert(entry)
     if (insertErr) {
@@ -313,9 +484,9 @@ export default defineEventHandler(async (event) => {
   await supabase
     .from('import_batches')
     .update({
-      successful_imports: inserted,
+      successful_imports: inserted + linked,
       duplicates_skipped: skipped,
-      errors: flights.length - inserted - skipped,
+      errors: flights.length - inserted - linked - skipped,
     })
     .eq('id', batchId)
 
@@ -323,6 +494,7 @@ export default defineEventHandler(async (event) => {
     success: true,
     import_batch_id: batchId,
     imported: inserted,
+    linked,
     skipped,
   }
 })

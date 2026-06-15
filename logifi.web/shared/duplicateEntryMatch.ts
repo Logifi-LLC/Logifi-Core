@@ -30,6 +30,43 @@ function totalsMatchApproximately(a: number, b: number): boolean {
   return Math.abs(a - b) <= FLIGHT_TOTAL_HOURS_EPSILON
 }
 
+/** Parse OOOI out to minutes since midnight; accepts `HHMM`, `HH:MM`, etc. */
+export function normalizeOooiOutForMatch(value: string | null | undefined): number | null {
+  if (!value || typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  let digits = trimmed.replace(/\D/g, '')
+  if (digits.length === 3) digits = `0${digits}`
+  digits = digits.padStart(4, '0')
+  if (digits.length !== 4) return null
+
+  const hours = parseInt(digits.slice(0, 2), 10)
+  const minutes = parseInt(digits.slice(2, 4), 10)
+  if (
+    Number.isNaN(hours) ||
+    Number.isNaN(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null
+  }
+  return hours * 60 + minutes
+}
+
+function oooiOutMatches(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  const aNorm = normalizeOooiOutForMatch(a)
+  const bNorm = normalizeOooiOutForMatch(b)
+  if (aNorm !== null && bNorm !== null) return aNorm === bNorm
+  if (a && b) return String(a).trim() === String(b).trim()
+  return false
+}
+
 /** Same UNKNOWN / empty rules as legacy duplicate check, then IATA/ICAO canonicalization. */
 function airportFieldForMatch(value: string | undefined): string {
   const raw = (value || 'UNKNOWN').trim().toUpperCase()
@@ -75,7 +112,7 @@ export function entriesDuplicateMatch(
   const existingOut = existing.oooiOut
   const entryOut = entry.oooiOut
   if (existingOut && entryOut) {
-    return existingOut === entryOut
+    return oooiOutMatches(existingOut, entryOut)
   }
 
   if (mode === 'importLeg') {

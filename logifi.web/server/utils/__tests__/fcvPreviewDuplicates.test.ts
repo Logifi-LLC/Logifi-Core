@@ -2,9 +2,34 @@ import { describe, expect, it } from 'vitest'
 import type { FcvMappedEntry } from '../fcvMap'
 import {
   fcvMappedToMatchShape,
+  logEntryRowToExistingForDedup,
   logEntryRowToMatchShape,
   partitionFcvPreviewDuplicates,
 } from '../fcvPreviewDuplicates'
+
+function existingRow(
+  overrides: {
+    id: string
+    date: string
+    registration?: string
+    departure?: string
+    destination?: string
+    flight_time?: unknown
+    oooi?: unknown
+    is_imported?: boolean
+    import_source?: string | null
+    fcv_flight_id?: string | null
+  }
+) {
+  return logEntryRowToExistingForDedup({
+    registration: 'N12345',
+    departure: 'KSEA',
+    destination: 'KPDX',
+    flight_time: { total: 1 },
+    oooi: { out: '1000' },
+    ...overrides,
+  })
+}
 
 function flight(
   overrides: Partial<FcvMappedEntry> & Pick<FcvMappedEntry, 'fcv_flight_id' | 'date'>
@@ -28,13 +53,10 @@ describe('partitionFcvPreviewDuplicates', () => {
   it('returns empty partition when nothing matches', () => {
     const flights = [flight({ fcv_flight_id: 'new-1', date: '2026-04-17' })]
     const existingShapes = [
-      logEntryRowToMatchShape({
+      existingRow({
+        id: 'ex-1',
         date: '2026-04-16',
         registration: 'N99999',
-        departure: 'KSEA',
-        destination: 'KPDX',
-        flight_time: { total: 1 },
-        oooi: { out: '1000' },
       }),
     ]
     const part = partitionFcvPreviewDuplicates(flights, existingShapes, new Set())
@@ -54,13 +76,9 @@ describe('partitionFcvPreviewDuplicates', () => {
       }),
     ]
     const existingShapes = [
-      logEntryRowToMatchShape({
+      existingRow({
+        id: 'ex-2',
         date: '2026-04-16',
-        registration: 'N12345',
-        departure: 'KSEA',
-        destination: 'KPDX',
-        flight_time: { total: 1 },
-        oooi: { out: '1000' },
       }),
     ]
     const part = partitionFcvPreviewDuplicates(
@@ -86,13 +104,9 @@ describe('partitionFcvPreviewDuplicates', () => {
       }),
     ]
     const existingShapes = [
-      logEntryRowToMatchShape({
+      existingRow({
+        id: 'ex-2',
         date: '2026-04-16',
-        registration: 'N12345',
-        departure: 'KSEA',
-        destination: 'KPDX',
-        flight_time: { total: 1 },
-        oooi: { out: '1000' },
       }),
     ]
     const part = partitionFcvPreviewDuplicates(flights, existingShapes, new Set())
@@ -108,19 +122,37 @@ describe('partitionFcvPreviewDuplicates', () => {
       flight({ fcv_flight_id: 'c', date: '2026-04-16', departure: 'KSEA', destination: 'KPDX' }),
     ]
     const existingShapes = [
-      logEntryRowToMatchShape({
+      existingRow({
+        id: 'ex-2',
         date: '2026-04-16',
-        registration: 'N12345',
-        departure: 'KSEA',
-        destination: 'KPDX',
-        flight_time: { total: 1 },
-        oooi: { out: '1000' },
       }),
     ]
     const part = partitionFcvPreviewDuplicates(flights, existingShapes, new Set(['b']))
     expect(part.alreadyImportedIndices).toEqual([1])
     expect(part.heuristicDuplicateIndices).toEqual([2])
     expect(part.duplicateIndices).toEqual([1, 2])
+  })
+
+  it('detects heuristic match when manual OOOI uses HH:MM and FC View uses HHMM', () => {
+    const flights = [
+      flight({
+        fcv_flight_id: 'fcv-1',
+        date: '2026-04-16',
+        oooi: { out: '1430' },
+      }),
+    ]
+    const existingShapes = [
+      existingRow({
+        id: 'manual-1',
+        date: '2026-04-16',
+        oooi: { out: '14:30' },
+        is_imported: false,
+      }),
+    ]
+    const part = partitionFcvPreviewDuplicates(flights, existingShapes, new Set())
+    expect(part.heuristicDuplicateIndices).toEqual([0])
+    expect(part.heuristicMatches[0]?.existingEntryId).toBe('manual-1')
+    expect(part.heuristicMatches[0]?.isImported).toBe(false)
   })
 })
 

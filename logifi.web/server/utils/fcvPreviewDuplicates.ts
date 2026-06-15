@@ -4,6 +4,27 @@ import {
   type DuplicateEntryMatchShape,
 } from '../../shared/duplicateEntryMatch'
 
+export interface ExistingLogEntryForDedup {
+  id: string
+  shape: DuplicateEntryMatchShape
+  isImported: boolean
+  importSource: string | null
+  fcvFlightId: string | null
+}
+
+export interface HeuristicMatchInfo {
+  index: number
+  fcvFlightId: string
+  existingEntryId: string
+  date: string
+  registration: string
+  departure: string
+  destination: string
+  flightTimeTotal: number | null
+  isImported: boolean
+  importSource: string | null
+}
+
 export function fcvMappedToMatchShape(f: FcvMappedEntry): DuplicateEntryMatchShape {
   const ft = f.flight_time as { total?: unknown } | undefined
   const total =
@@ -52,6 +73,40 @@ export function logEntryRowToMatchShape(row: {
   }
 }
 
+export function logEntryRowToExistingForDedup(row: {
+  id: string
+  date: string
+  registration: string
+  departure: string
+  destination: string
+  flight_time: unknown
+  oooi: unknown
+  is_imported?: boolean | null
+  import_source?: string | null
+  fcv_flight_id?: string | null
+}): ExistingLogEntryForDedup {
+  return {
+    id: row.id,
+    shape: logEntryRowToMatchShape(row),
+    isImported: row.is_imported === true,
+    importSource: typeof row.import_source === 'string' ? row.import_source : null,
+    fcvFlightId:
+      typeof row.fcv_flight_id === 'string' && row.fcv_flight_id.trim()
+        ? row.fcv_flight_id.trim()
+        : null,
+  }
+}
+
+export function findHeuristicMatchForFcvFlight(
+  f: FcvMappedEntry,
+  existing: ExistingLogEntryForDedup[]
+): ExistingLogEntryForDedup | null {
+  const previewShape = fcvMappedToMatchShape(f)
+  return (
+    existing.find((ex) => entriesDuplicateMatch(previewShape, ex.shape, 'importLeg')) ?? null
+  )
+}
+
 export interface FcvPreviewDuplicatePartition {
   alreadyImportedIndices: number[]
   heuristicDuplicateIndices: number[]
@@ -59,6 +114,7 @@ export interface FcvPreviewDuplicatePartition {
   duplicateIndices: number[]
   duplicateFcvFlightIds: string[]
   alreadyImportedFcvFlightIds: string[]
+  heuristicMatches: HeuristicMatchInfo[]
 }
 
 /**
@@ -67,7 +123,7 @@ export interface FcvPreviewDuplicatePartition {
  */
 export function partitionFcvPreviewDuplicates(
   flights: FcvMappedEntry[],
-  existingShapes: DuplicateEntryMatchShape[],
+  existing: ExistingLogEntryForDedup[],
   existingFcvIds: Set<string>
 ): FcvPreviewDuplicatePartition {
   const alreadyImportedIndices: number[] = []
@@ -85,17 +141,27 @@ export function partitionFcvPreviewDuplicates(
 
   const heuristicDuplicateIndices: number[] = []
   const duplicateFcvFlightIds: string[] = []
+  const heuristicMatches: HeuristicMatchInfo[] = []
 
   flights.forEach((f, index) => {
     if (alreadyImportedIndexSet.has(index)) return
-    const previewShape = fcvMappedToMatchShape(f)
-    const hit = existingShapes.some((ex) =>
-      entriesDuplicateMatch(previewShape, ex, 'importLeg')
-    )
+    const hit = findHeuristicMatchForFcvFlight(f, existing)
     if (hit) {
       heuristicDuplicateIndices.push(index)
       const id = String(f.fcv_flight_id ?? '').trim()
       if (id) duplicateFcvFlightIds.push(id)
+      heuristicMatches.push({
+        index,
+        fcvFlightId: id,
+        existingEntryId: hit.id,
+        date: hit.shape.date,
+        registration: hit.shape.registration,
+        departure: hit.shape.departure,
+        destination: hit.shape.destination,
+        flightTimeTotal: hit.shape.flightTimeTotal ?? null,
+        isImported: hit.isImported,
+        importSource: hit.importSource,
+      })
     }
   })
 
@@ -109,5 +175,6 @@ export function partitionFcvPreviewDuplicates(
     duplicateIndices,
     duplicateFcvFlightIds,
     alreadyImportedFcvFlightIds,
+    heuristicMatches,
   }
 }

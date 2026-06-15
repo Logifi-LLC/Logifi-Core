@@ -52,4 +52,31 @@ describe('entriesDuplicateMatch', () => {
     const b = { ...a, oooiOut: '18:00', flightTimeTotal: 1.25 }
     expect(entriesDuplicateMatch(a, b, 'importLeg')).toBe(false)
   })
+
+  it('matches same leg when OOOI out differs only by formatting (14:30 vs 1430)', () => {
+    const fcv = {
+      date: '2026-04-01',
+      registration: 'N131HQ',
+      departure: 'KBUF',
+      destination: 'KLGA',
+      oooiOut: '1430',
+      flightTimeTotal: 1.2 as number | null,
+    }
+    const manual = { ...fcv, oooiOut: '14:30' }
+    expect(entriesDuplicateMatch(fcv, manual, 'importLeg')).toBe(true)
+    expect(entriesDuplicateMatch(fcv, manual, 'standard')).toBe(true)
+  })
+
+  it('still splits different OOOI out times after normalization', () => {
+    const a = {
+      date: '2026-04-01',
+      registration: 'N131HQ',
+      departure: 'KBUF',
+      destination: 'KLGA',
+      oooiOut: '08:00',
+      flightTimeTotal: 1.2 as number | null,
+    }
+    const b = { ...a, oooiOut: '18:00' }
+    expect(entriesDuplicateMatch(a, b, 'importLeg')).toBe(false)
+  })
 })
