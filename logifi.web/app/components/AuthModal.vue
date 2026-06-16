@@ -14,7 +14,7 @@
     >
       <!-- Top Branding Section -->
       <div class="pt-10 pb-6 flex flex-col items-center border-b" :class="[isDarkMode ? 'border-gray-800 bg-gray-900/50' : 'border-gray-50 bg-gray-50/50']">
-        <img src="/images/logifi-logo.png" alt="Logifi" class="h-12 w-auto mb-4" />
+        <LogifiAppLogo class="mb-4" />
         <h3 :class="['text-2xl font-bold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
           {{ activeTab === 'signin' ? 'Welcome Back' : 'Create Account' }}
         </h3>
@@ -155,7 +155,7 @@
               autocomplete="email"
               :disabled="isLoading"
               :class="[
-                'w-full pl-11 pr-4 py-3 rounded-xl border text-sm font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
+                'w-full pl-11 pr-4 py-3 rounded-xl border text-base font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
                 isDarkMode 
                   ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' 
                   : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400',
@@ -197,7 +197,7 @@
               autocomplete="current-password"
               :disabled="isLoading"
               :class="[
-                'w-full pl-11 pr-4 py-3 rounded-xl border text-sm font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
+                'w-full pl-11 pr-4 py-3 rounded-xl border text-base font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
                 isDarkMode 
                   ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' 
                   : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400',
@@ -251,6 +251,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useAuth } from '~/composables/useAuth'
+import { resetIosInputZoom } from '~/composables/useCapacitorPlatform'
 
 const props = withDefaults(
   defineProps<{
@@ -296,6 +297,14 @@ const isFormValid = computed(() => {
   return emailValid && passwordValid
 })
 
+function completeAuthSuccess(delayMs: number) {
+  setTimeout(() => {
+    resetIosInputZoom()
+    emit('success')
+    emit('close')
+  }, delayMs)
+}
+
 // Handle form submission
 const handleSubmit = async () => {
   if (!isFormValid.value || isLoading.value) return
@@ -314,11 +323,7 @@ const handleSubmit = async () => {
           password.value = ''
         } else {
           successMessage.value = 'Account created successfully! You are now signed in.'
-          // Wait a moment to show success message, then close
-          setTimeout(() => {
-            emit('success')
-            emit('close')
-          }, 1500)
+          completeAuthSuccess(1500)
         }
       } else if (result.error) {
         authError.value = result.error
@@ -327,11 +332,7 @@ const handleSubmit = async () => {
       const result = await signIn(email.value, password.value)
       if (result.success) {
         successMessage.value = 'Signed in successfully!'
-        // Wait a moment to show success message, then close
-        setTimeout(() => {
-          emit('success')
-          emit('close')
-        }, 1000)
+        completeAuthSuccess(1000)
       } else if (result.error) {
         authError.value = result.error
       }

@@ -19,6 +19,17 @@ export function isCapacitorNative(): boolean {
   return Capacitor.isNativePlatform()
 }
 
+/** Clears iOS WebView input-focus zoom after auth forms (inputs must be ≥16px to avoid re-zoom). */
+export function resetIosInputZoom(): void {
+  if (!isCapacitorIos() || typeof document === 'undefined') return
+  ;(document.activeElement as HTMLElement | null)?.blur?.()
+  const meta = document.querySelector('meta[name="viewport"]')
+  if (!meta) return
+  const content = meta.getAttribute('content') ?? ''
+  meta.setAttribute('content', `${content}, maximum-scale=1.0`)
+  requestAnimationFrame(() => meta.setAttribute('content', content))
+}
+
 const platform = computed<CapacitorPlatform>(() => getCapacitorPlatform())
 const isNative = computed(() => isCapacitorNative())
 const isIos = computed(() => platform.value === 'ios')

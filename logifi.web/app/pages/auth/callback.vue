@@ -50,6 +50,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useAuth } from '~/composables/useAuth'
+import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
 
 type CallbackKind = 'signup' | 'recovery' | 'signin'
 

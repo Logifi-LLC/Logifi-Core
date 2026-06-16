@@ -33,7 +33,7 @@
         <!-- Form -->
         <div v-else class="space-y-6">
           <div class="text-center space-y-4">
-            <img src="/images/logifi-logo.png" alt="Logifi" class="h-12 w-auto mx-auto" />
+            <LogifiAppLogo class="mx-auto" />
             <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Set a new password</h1>
             <p class="text-sm text-gray-500 dark:text-gray-400">Choose a strong password for your account.</p>
           </div>
@@ -56,7 +56,7 @@
                   autocomplete="new-password"
                   required
                   minlength="6"
-                  class="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  class="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-base text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="••••••••"
                 />
               </div>
@@ -78,7 +78,7 @@
                   autocomplete="new-password"
                   required
                   minlength="6"
-                  class="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  class="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-base text-gray-900 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="••••••••"
                 />
               </div>

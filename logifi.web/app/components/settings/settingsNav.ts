@@ -1,4 +1,4 @@
-export type SettingsTabId = 'profile' | 'account' | 'preferences' | 'updates' | 'data' | 'compliance'
+export type SettingsTabId = 'profile' | 'account' | 'preferences' | 'digifi' | 'updates' | 'data' | 'compliance'
 
 export type SettingsStackFrame = 'root' | SettingsTabId | 'account-email' | 'account-password'
 
@@ -31,6 +31,13 @@ export const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     icon: 'ri:settings-4-line',
     group: 'Logbook',
     subtitle: 'Display, totals, entry cards',
+  },
+  {
+    id: 'digifi',
+    label: 'Digifi',
+    icon: 'ri:scan-line',
+    group: 'Logbook',
+    subtitle: 'Paper logbook scanning',
   },
   {
     id: 'data',

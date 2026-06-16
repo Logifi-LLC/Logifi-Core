@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, provide, watchEffect, onMounted, onUnmounted } from 'vue'
+import { ref, computed, provide, watchEffect, onMounted, onUnmounted, nextTick } from 'vue'
 import LogbookBuilderGrid from '~/components/logbook-builder/LogbookBuilderGrid.vue'
 import LogbookBuilderToolbar from '~/components/logbook-builder/LogbookBuilderToolbar.vue'
 import LogbookBuilderValidateBar from '~/components/logbook-builder/LogbookBuilderValidateBar.vue'
@@ -21,7 +21,9 @@ import { supabase } from '~/lib/supabase'
 
 definePageMeta({ layout: 'default' })
 
+const route = useRoute()
 const gridRef = ref<InstanceType<typeof LogbookBuilderGrid> | null>(null)
+const digifiSectionRef = ref<HTMLElement | null>(null)
 const grid = useLogbookBuilderGrid()
 provide('logbookBuilderGrid', grid)
 const { user, isAuthenticated } = useAuth()
@@ -63,6 +65,13 @@ async function finishPageInit() {
 
 onMounted(() => {
   finishPageInit()
+
+  if (route.query.digifi === 'open') {
+    showDigifiPanel.value = true
+    nextTick(() => {
+      digifiSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
 })
 
 watchEffect(() => {
@@ -270,6 +279,7 @@ const showDigifiCommonMistakes = ref(false)
       <LogbookBuilderToolbar />
 
       <section
+        ref="digifiSectionRef"
         class="rounded-3xl p-4 sm:p-6 font-quicksand border shadow-[0_20px_50px_rgba(0,0,0,0.08)]"
         :class="theme === 'dark' ? 'border-white/10 bg-gray-900' : 'border-gray-200 bg-white'"
       >

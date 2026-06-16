@@ -63,6 +63,12 @@
       @submit="$emit('update-password')"
     />
 
+    <SettingsDigifiTab
+      v-else-if="currentFrame === 'digifi'"
+      :is-dark-mode="isDarkMode"
+      @close="$emit('close')"
+    />
+
     <SettingsPreferencesTab
       v-else-if="currentFrame === 'preferences'"
       :is-dark-mode="isDarkMode"
@@ -128,6 +134,7 @@ import SettingsChangeEmailView from './SettingsChangeEmailView.vue'
 import SettingsChangePasswordView from './SettingsChangePasswordView.vue'
 import SettingsProfileTab, { type PilotProfileForm } from './tabs/SettingsProfileTab.vue'
 import SettingsAccountTab from './tabs/SettingsAccountTab.vue'
+import SettingsDigifiTab from './tabs/SettingsDigifiTab.vue'
 import SettingsPreferencesTab from './tabs/SettingsPreferencesTab.vue'
 import SettingsUpdatesTab from './tabs/SettingsUpdatesTab.vue'
 import SettingsDataTab from './tabs/SettingsDataTab.vue'
