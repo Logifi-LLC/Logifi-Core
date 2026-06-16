@@ -1,11 +1,8 @@
+import type { DigifiScanRow } from '../../app/utils/digifiTypes'
 import {
-  buildDigifiThinkingConfig,
   computeDigifiMaxOutputTokens,
   getDigifiEnv,
-  resolveDigifiMediaResolution,
-  resolveDigifiThinkingLevel,
   shouldTryNextDigifiModel,
-  type DigifiGeminiThinkingLevel,
 } from './digifiEnv'
 import {
   DigifiExtractorError,
@@ -16,100 +13,170 @@ import {
 } from './digifiExtractorTypes'
 import { compressDigifiImage } from './digifiImagePrep'
 import { logDigifiRawExtractResponse } from './digifiLogResponse'
-import { buildTargetColumns, buildRowBandLabel, targetColumnsIncludeRemarks } from './digifiPrompt'
+import { buildTargetColumns, buildRowBandLabel, targetColumnsIncludeRemarks, DIGIFI_SYSTEM_PROMPT } from './digifiPrompt'
 import { parseExtractResponse } from './digifiResponseParser'
 import { runDigifiScanOrchestration } from './digifiScanOrchestrator'
 import { isScanResponseIncomplete } from './digifiScanValidation'
-import type { DigifiScanRow } from '../../app/utils/digifiTypes'
+import { buildVisionContentSequence } from './digifiVisionPayload'
 
-interface DigifiGeminiGenerationOptions {
-  maxOutputTokens: number
-  mediaResolution: string
-  thinkingLevel: DigifiGeminiThinkingLevel
+const CLAUDE_MAX_ATTEMPTS = 2
+const CLAUDE_RETRY_DELAY_MS = 2500
+
+type ClaudeImageMediaType = 'image/jpeg' | 'image/png' | 'image/webp'
+
+interface ClaudeTextBlock {
+  type: 'text'
+  text: string
 }
 
-/** @deprecated Use DigifiCallStats */
-export interface DigifiGeminiCallStats {
-  generateContentRequests: number
+interface ClaudeImageBlock {
+  type: 'image'
+  source: {
+    type: 'base64'
+    media_type: ClaudeImageMediaType
+    data: string
+  }
 }
 
-/** Initial request + one backoff retry per model (avoids triple-billing the same call). */
-const GEMINI_MAX_ATTEMPTS = 2
-const GEMINI_RETRY_DELAY_MS = 2500
+export type ClaudeContentBlock = ClaudeTextBlock | ClaudeImageBlock
 
-function collectGeminiResponseText(
-  parts: Array<{ text?: string }> | undefined
+export interface ClaudeMessagesRequestBody {
+  model: string
+  max_tokens: number
+  temperature: number
+  system: string
+  messages: Array<{ role: 'user'; content: ClaudeContentBlock[] }>
+  thinking?: { type: 'enabled'; budget_tokens: number }
+}
+
+function toClaudeMediaType(mimeType: string): ClaudeImageMediaType {
+  if (mimeType === 'image/png') return 'image/png'
+  if (mimeType === 'image/webp') return 'image/webp'
+  return 'image/jpeg'
+}
+
+/** Short role-only system prompt — TSV rules live in user prompt (Gemini parity). */
+export function buildClaudeSystemPrompt(): string {
+  return DIGIFI_SYSTEM_PROMPT
+}
+
+function visionSequenceToClaudeBlocks(
+  userPrompt: string,
+  overviewImage: DigifiImagePart,
+  chunkImages: DigifiImagePart[]
+): ClaudeContentBlock[] {
+  return buildVisionContentSequence(userPrompt, overviewImage, chunkImages).map((item) => {
+    if (item.kind === 'text') {
+      return { type: 'text' as const, text: item.text }
+    }
+    return {
+      type: 'image' as const,
+      source: {
+        type: 'base64' as const,
+        media_type: toClaudeMediaType(item.part.mimeType),
+        data: item.part.imageBase64,
+      },
+    }
+  })
+}
+
+export interface BuildClaudeMessagesOptions {
+  temperature: number
+  enableThinking: boolean
+  thinkingBudgetTokens: number
+}
+
+export function buildClaudeMessages(
+  model: string,
+  userPrompt: string,
+  overviewImage: DigifiImagePart,
+  chunkImages: DigifiImagePart[],
+  maxOutputTokens: number,
+  options: BuildClaudeMessagesOptions
+): ClaudeMessagesRequestBody {
+  const body: ClaudeMessagesRequestBody = {
+    model,
+    max_tokens: maxOutputTokens,
+    temperature: options.temperature,
+    system: buildClaudeSystemPrompt(),
+    messages: [
+      {
+        role: 'user',
+        content: visionSequenceToClaudeBlocks(userPrompt, overviewImage, chunkImages),
+      },
+    ],
+  }
+
+  if (options.enableThinking) {
+    body.thinking = {
+      type: 'enabled',
+      budget_tokens: options.thinkingBudgetTokens,
+    }
+  }
+
+  return body
+}
+
+function collectClaudeResponseText(
+  content: Array<{ type: string; text?: string }> | undefined
 ): string {
-  return (parts ?? []).map((part) => part.text ?? '').join('').trim()
+  return (content ?? [])
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text ?? '')
+    .join('')
+    .trim()
 }
 
 function isRetryableHttpStatus(status: number): boolean {
-  return status === 429 || status === 502 || status === 503 || status === 504
+  return status === 429 || status === 502 || status === 503 || status === 504 || status === 529
 }
 
 function isCapacityHttpStatus(status: number): boolean {
-  return status === 429 || status === 503 || status === 504
+  return status === 429 || status === 503 || status === 504 || status === 529
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function callGeminiRowsOnModel(
+async function callClaudeRowsOnModel(
   model: string,
-  prompt: string,
+  userPrompt: string,
   overviewImage: DigifiImagePart,
   chunkImages: DigifiImagePart[],
   allowedColumnIds: Set<string>,
   maxRowCount: number,
   focusRows: Set<number> | undefined,
   modelsAttempted: string[],
-  generation: DigifiGeminiGenerationOptions,
+  maxOutputTokens: number,
   callStats?: DigifiCallStats
 ): Promise<DigifiScanRow[]> {
   const env = getDigifiEnv()
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.geminiApiKey)}`
-  const parts: Array<{ text?: string; inline_data?: { mime_type: string; data: string } }> = [
-    { text: prompt },
-    { text: overviewImage.label },
+  const body = buildClaudeMessages(
+    model,
+    userPrompt,
+    overviewImage,
+    chunkImages,
+    maxOutputTokens,
     {
-      inline_data: {
-        mime_type: overviewImage.mimeType,
-        data: overviewImage.imageBase64,
-      },
-    },
-  ]
-
-  for (const chunk of chunkImages) {
-    parts.push({ text: chunk.label })
-    parts.push({
-      inline_data: {
-        mime_type: chunk.mimeType,
-        data: chunk.imageBase64,
-      },
-    })
-  }
-
-  const thinkingConfig = buildDigifiThinkingConfig(model, generation.thinkingLevel)
-
-  const body = {
-    contents: [{ parts }],
-    generationConfig: {
-      temperature: 0.1,
-      maxOutputTokens: generation.maxOutputTokens,
-      mediaResolution: generation.mediaResolution,
-      thinkingConfig,
-    },
-  }
+      temperature: env.claudeTemperature,
+      enableThinking: env.claudeEnableThinking,
+      thinkingBudgetTokens: env.claudeThinkingBudgetTokens,
+    }
+  )
 
   let lastError: DigifiExtractorError | null = null
-  for (let attempt = 0; attempt < GEMINI_MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < CLAUDE_MAX_ATTEMPTS; attempt++) {
     let res: Response
     try {
       if (callStats) callStats.apiRequests += 1
-      res = await fetch(url, {
+      res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': env.anthropicApiKey,
+          'anthropic-version': env.claudeApiVersion,
+        },
         body: JSON.stringify(body),
       })
     } catch (error) {
@@ -118,79 +185,72 @@ async function callGeminiRowsOnModel(
           ? error.message
           : 'Network request failed'
       lastError = new DigifiExtractorError(
-        `Gemini network error: ${message}`,
+        `Claude network error: ${message}`,
         'CAPACITY',
         [...modelsAttempted, model]
       )
-      if (attempt < GEMINI_MAX_ATTEMPTS - 1) {
-        await sleep(GEMINI_RETRY_DELAY_MS)
+      if (attempt < CLAUDE_MAX_ATTEMPTS - 1) {
+        await sleep(CLAUDE_RETRY_DELAY_MS)
         continue
       }
       throw lastError
     }
+
     if (!res.ok) {
       const errText = await res.text().catch(() => '')
       const code =
         res.status === 404
           ? 'CONFIG'
-          : isCapacityHttpStatus(res.status)
-            ? 'CAPACITY'
-            : 'UNKNOWN'
+          : res.status === 401 || res.status === 403
+            ? 'CONFIG'
+            : isCapacityHttpStatus(res.status)
+              ? 'CAPACITY'
+              : 'UNKNOWN'
       lastError = new DigifiExtractorError(
-        `Gemini API ${res.status}: ${errText.slice(0, 200)}`,
+        `Claude API ${res.status}: ${errText.slice(0, 200)}`,
         code,
         [...modelsAttempted, model]
       )
-      if (isRetryableHttpStatus(res.status) && attempt < GEMINI_MAX_ATTEMPTS - 1) {
-        await sleep(GEMINI_RETRY_DELAY_MS)
+      if (isRetryableHttpStatus(res.status) && attempt < CLAUDE_MAX_ATTEMPTS - 1) {
+        await sleep(CLAUDE_RETRY_DELAY_MS)
         continue
       }
       throw lastError
     }
 
     const data = (await res.json()) as {
-      candidates?: Array<{
-        content?: { parts?: Array<{ text?: string }> }
-        finishReason?: string
-      }>
-      usageMetadata?: {
-        totalTokenCount?: number
-        promptTokenCount?: number
-        candidatesTokenCount?: number
-        thoughtsTokenCount?: number
-      }
+      content?: Array<{ type: string; text?: string }>
+      stop_reason?: string
+      usage?: { input_tokens?: number; output_tokens?: number }
     }
-    const candidate = data.candidates?.[0]
-    const text = collectGeminiResponseText(candidate?.content?.parts)
+    const text = collectClaudeResponseText(data.content)
     if (!text) {
       throw new DigifiExtractorError(
-        'Gemini returned empty response',
+        'Claude returned empty response',
         'INVALID_RESPONSE',
         [...modelsAttempted, model]
       )
     }
 
-    const usage = data.usageMetadata
-    if (usage?.totalTokenCount != null) {
-      console.info('[digifi] scan tokens:', {
-        total: usage.totalTokenCount,
-        prompt: usage.promptTokenCount,
-        output: usage.candidatesTokenCount,
-        thinking: usage.thoughtsTokenCount ?? 0,
-        thinkingConfig,
+    if (data.usage?.output_tokens != null) {
+      console.info('[digifi] claude scan tokens:', {
+        input: data.usage.input_tokens,
+        output: data.usage.output_tokens,
         model,
         imageParts: 1 + chunkImages.length,
-        maxOutputTokens: generation.maxOutputTokens,
+        maxOutputTokens,
+        temperature: env.claudeTemperature,
+        thinking: env.claudeEnableThinking,
       })
     }
 
-    const finishReason = candidate?.finishReason
-    if (finishReason === 'MAX_TOKENS') {
+    const stopReason = data.stop_reason
+    if (stopReason === 'max_tokens') {
       console.warn(
-        `[digifi] model ${model} hit output token limit (${text.length} chars, thinking=${usage?.thoughtsTokenCount ?? '?'}); response truncated`
+        `[digifi] model ${model} hit output token limit (${text.length} chars); response truncated`
       )
       throw new DigifiExtractorError(
-        'Gemini response was truncated',
+        'Claude response was truncated',
         'INVALID_RESPONSE',
         [...modelsAttempted, model]
       )
@@ -198,8 +258,8 @@ async function callGeminiRowsOnModel(
 
     try {
       const rows = parseExtractResponse(text, allowedColumnIds, maxRowCount, focusRows)
-      logDigifiRawExtractResponse('gemini', model, text, maxRowCount, rows.length)
-      if (rows.length === 0 && finishReason !== 'STOP') {
+      logDigifiRawExtractResponse('anthropic', model, text, maxRowCount, rows.length)
+      if (rows.length === 0 && stopReason !== 'end_turn') {
         throw new Error('no rows parsed')
       }
       if (!focusRows && isScanResponseIncomplete(rows, maxRowCount)) {
@@ -208,24 +268,24 @@ async function callGeminiRowsOnModel(
       return rows
     } catch (error) {
       if (error instanceof DigifiExtractorError) throw error
-      logDigifiRawExtractResponse('gemini', model, text, maxRowCount, 0)
+      logDigifiRawExtractResponse('anthropic', model, text, maxRowCount, 0)
       console.warn(
-        `[digifi] invalid TSV from ${model}: ${text.length} chars, finishReason=${finishReason ?? 'unknown'}, tail=${JSON.stringify(text.slice(-120))}`
+        `[digifi] invalid TSV from ${model}: ${text.length} chars, stopReason=${stopReason ?? 'unknown'}, tail=${JSON.stringify(text.slice(-120))}`
       )
       throw new DigifiExtractorError(
-        finishReason === 'MAX_TOKENS'
-          ? 'Gemini response was truncated'
-          : 'Gemini returned unparseable text',
+        stopReason === 'max_tokens'
+          ? 'Claude response was truncated'
+          : 'Claude returned unparseable text',
         'INVALID_RESPONSE',
         [...modelsAttempted, model]
       )
     }
   }
 
-  throw lastError ?? new DigifiExtractorError('Gemini request failed', 'UNKNOWN', modelsAttempted)
+  throw lastError ?? new DigifiExtractorError('Claude request failed', 'UNKNOWN', modelsAttempted)
 }
 
-async function callGeminiRows(
+async function callClaudeRows(
   models: string[],
   prompt: string,
   overviewImage: DigifiImagePart,
@@ -233,7 +293,7 @@ async function callGeminiRows(
   allowedColumnIds: Set<string>,
   maxRowCount: number,
   focusRows: Set<number> | undefined,
-  generation: DigifiGeminiGenerationOptions,
+  maxOutputTokens: number,
   options?: { allowFallbackOnInvalidResponse?: boolean; callStats?: DigifiCallStats }
 ): Promise<{ rows: DigifiScanRow[]; modelUsed: string }> {
   const attempted: string[] = []
@@ -242,7 +302,7 @@ async function callGeminiRows(
   for (const model of models) {
     attempted.push(model)
     try {
-      const rows = await callGeminiRowsOnModel(
+      const rows = await callClaudeRowsOnModel(
         model,
         prompt,
         overviewImage,
@@ -251,7 +311,7 @@ async function callGeminiRows(
         maxRowCount,
         focusRows,
         attempted.slice(0, -1),
-        generation,
+        maxOutputTokens,
         options?.callStats
       )
       if (attempted.length > 1) {
@@ -285,7 +345,7 @@ async function callGeminiRows(
 
   throw (
     lastCapacityError ??
-    new DigifiExtractorError('Gemini request failed', 'UNKNOWN', attempted)
+    new DigifiExtractorError('Claude request failed', 'UNKNOWN', attempted)
   )
 }
 
@@ -298,11 +358,11 @@ async function prepareScanImage(base64: string, mimeType: string): Promise<Digif
   }
 }
 
-export async function scanLogbookImageWithGemini(
+export async function scanLogbookImageWithClaude(
   options: ScanLogbookImageOptions
 ): Promise<DigifiScanResult> {
   const env = getDigifiEnv()
-  if (!env.geminiApiKey) {
+  if (!env.anthropicApiKey) {
     throw new Error('DIGIFI_NOT_CONFIGURED')
   }
 
@@ -310,16 +370,11 @@ export async function scanLogbookImageWithGemini(
   const targetColumns = buildTargetColumns(meta)
   const sendRowBands = chunkImages.length > 0 && !env.disableRowBandsToGemini
   const hasRemarksFocus = targetColumnsIncludeRemarks(targetColumns)
-  const thinkingLevel = resolveDigifiThinkingLevel(env.geminiThinkingLevel)
-  const generation: DigifiGeminiGenerationOptions = {
-    maxOutputTokens: computeDigifiMaxOutputTokens(
-      meta.rowCount,
-      targetColumns.length,
-      env.geminiMaxOutputTokensCap
-    ),
-    mediaResolution: resolveDigifiMediaResolution(env.geminiMediaResolution),
-    thinkingLevel,
-  }
+  const maxOutputTokens = computeDigifiMaxOutputTokens(
+    meta.rowCount,
+    targetColumns.length,
+    env.claudeMaxOutputTokensCap
+  )
 
   const overviewImage = await prepareScanImage(imageBase64, mimeType)
   const labeledChunks = sendRowBands
@@ -346,10 +401,10 @@ export async function scanLogbookImageWithGemini(
     chunkImages,
     overviewImage,
     labeledChunks,
-    providerUsed: 'gemini',
-    logLabel: 'gemini generateContent',
+    providerUsed: 'anthropic',
+    logLabel: 'claude messages',
     callRows: (models, prompt, overview, chunks, allowedColumnIds, maxRowCount, focusRows, opts) =>
-      callGeminiRows(
+      callClaudeRows(
         models,
         prompt,
         overview,
@@ -357,7 +412,7 @@ export async function scanLogbookImageWithGemini(
         allowedColumnIds,
         maxRowCount,
         focusRows,
-        generation,
+        maxOutputTokens,
         opts
       ),
   })

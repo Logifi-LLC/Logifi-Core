@@ -10,6 +10,7 @@ export type DigifiPersonalizationStrategy =
   | 'history_clear_winner'
   | 'feedback_clear_winner'
   | 'ambiguous'
+  | 'tail_match'
 export type DigifiPersonalizationConfidence = 'low' | 'medium' | 'high'
 
 /** Column snapshot sent to the scan API (matches builder grid). */
@@ -85,13 +86,16 @@ export interface DigifiScanResponse {
   rows: DigifiScanRow[]
   filledCellCount: number
   modelUsed: string
+  providerUsed?: 'gemini' | 'anthropic'
   strategyUsed: DigifiScanStrategy
   chunkCount: number
   rescueAttempted: boolean
   rescueRecoveredCount: number
   fallbackUsed?: boolean
   modelsAttempted?: string[]
-  /** generateContent HTTP requests for this page (1 expected with default settings). */
+  /** Vision API HTTP requests for this page (1 expected with default settings). */
+  apiCallCount?: number
+  /** @deprecated Use apiCallCount */
   geminiApiCallCount?: number
   scanTimings?: {
     primaryMs: number
@@ -108,6 +112,8 @@ export interface DigifiScanResponse {
   duplicateRowIndices: number[]
   emptyRowIndices: number[]
   hasGaps: boolean
+  /** Summary/totals rows removed by server sanitizer before grid fill. */
+  strippedRowIndices?: number[]
   reviewMessages?: string[]
   reviewRequiredCount?: number
 }

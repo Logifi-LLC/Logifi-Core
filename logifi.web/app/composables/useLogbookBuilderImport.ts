@@ -20,8 +20,14 @@ import { supabase } from '~/lib/supabase'
 import {
   saveSyncedEntryToIndexedDB,
   initIndexedDB,
+  getAllEntriesFromIndexedDB,
 } from '~/utils/indexedDB'
 import { clearBuilderDraft } from '~/composables/useLogbookBuilderDraft'
+import {
+  buildAircraftTailIndex,
+  type AircraftTailIndex,
+  resolveAircraftByTail,
+} from '../../shared/aircraftTailIndex'
 
 /** Mirror of sanitizeFlightConditions from index.vue for builder import. */
 function sanitizeFlightConditions(conditions: string[]): string[] {
@@ -65,6 +71,14 @@ export interface GridToEntriesOptions {
   defaultRole?: string
   /** Default year when date is partial (e.g. MM/DD). Null = use current year. */
   defaultYear?: number | null
+  /** Known tail → make/model index from existing logbook entries. */
+  tailIndex?: AircraftTailIndex
+}
+
+async function loadTailIndexForImport(userId: string): Promise<AircraftTailIndex> {
+  await initIndexedDB()
+  const entries = await getAllEntriesFromIndexedDB(userId)
+  return buildAircraftTailIndex(entries)
 }
 
 /** Parse YYYY-MM-DD to { y, m, d } or null. */
@@ -143,7 +157,7 @@ function normalizeRoleFromCell(val: string): string {
 
 /** Build LogEntry[] from grid rows using column mapping. Only includes rows that have at least one non-empty cell. */
 export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
-  const { columns, rows, defaultRole = 'PIC', defaultYear } = options
+  const { columns, rows, defaultRole = 'PIC', defaultYear, tailIndex } = options
   const sortedCols = [...columns].sort((a, b) => a.order - b.order)
   const entries: LogEntry[] = []
   let lastDateIso: string | null = null
@@ -316,6 +330,14 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
     }
     flightConditions = sanitizeFlightConditions(flightConditions)
 
+    if (tailIndex && registration.trim()) {
+      const resolved = resolveAircraftByTail(registration, aircraftMakeModel, tailIndex)
+      aircraftMakeModel = resolved.aircraftMakeModel
+      if (resolved.aircraftCategoryClass && !aircraftCategoryClass.trim()) {
+        aircraftCategoryClass = resolved.aircraftCategoryClass
+      }
+    }
+
     // Ensure structured approaches array is populated for imported entries.
     if (!performance.approaches || performance.approaches.length === 0) {
       performance.approaches = getApproachesFromPerformance(performance)
@@ -403,11 +425,17 @@ export async function validateOnly(
   const { validateEntry } = useValidation()
   const { isAuthenticated, user } = useAuth()
 
+  const tailIndex =
+    isAuthenticated.value && user.value
+      ? await loadTailIndexForImport(user.value.id)
+      : undefined
+
   const entries = gridToEntries({
     columns: grid.columns.value,
     rows: grid.rows.value,
     defaultRole: grid.defaultImportRole?.value ?? 'PIC',
     defaultYear: unref((grid as { defaultYear?: { value: number | null } }).defaultYear) ?? null,
+    tailIndex,
   })
 
   if (entries.length === 0) {
@@ -605,11 +633,17 @@ export async function runValidateAndImport(
   const { validateEntry } = useValidation()
   const { isAuthenticated, user } = useAuth()
 
+  const tailIndex =
+    isAuthenticated.value && user.value
+      ? await loadTailIndexForImport(user.value.id)
+      : undefined
+
   const entries = gridToEntries({
     columns: grid.columns.value,
     rows: grid.rows.value,
     defaultRole: grid.defaultImportRole?.value ?? 'PIC',
     defaultYear: unref((grid as { defaultYear?: { value: number | null } }).defaultYear) ?? null,
+    tailIndex,
   })
 
   if (entries.length === 0) {

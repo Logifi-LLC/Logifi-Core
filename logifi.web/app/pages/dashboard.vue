@@ -5462,6 +5462,12 @@ import {
   catalogAircraftFamilyKey,
   UNKNOWN_AIRCRAFT_FAMILY,
 } from '../../shared/catalogAircraftFamily'
+import {
+  buildAircraftTailIndex,
+  consolidateAircraftMakeModelByTail,
+  normalizeAircraftTailKey,
+  resolveAircraftByTail,
+} from '../../shared/aircraftTailIndex'
 import { useCurrency } from '../composables/useCurrency'
 import { useCapacitorPlatform } from '../composables/useCapacitorPlatform'
 import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGestures'
@@ -6890,6 +6896,8 @@ async function saveInlineEdit(): Promise<void> {
     alert('Aircraft Identification is required for flight entries.')
     return
   }
+
+  applyTailResolutionToEntry(inlineEditEntry.value)
 
   // Debug logging for night time
   console.log('[SaveInlineEdit] Saving entry with night time:', {
@@ -11744,6 +11752,7 @@ async function submitEntry(): Promise<void> {
   validationError.value = null
   successMessage.value = null
   duplicateWarning.value = null
+  applyTailResolutionToEntry(newEntry)
   // Don't reset validationWarning or saveAnywayValidation here - they need to persist
   // so that "Save Anyway" can work. They'll be cleared after successful save.
   
@@ -12372,6 +12381,46 @@ async function loadEntries(): Promise<void> {
 
   // FC View rows may arrive without persisted night values; derive from OOOI for display consistency.
   void enrichFcvNightDataForDisplay()
+  await maybeConsolidateAircraftByTail()
+}
+
+async function maybeConsolidateAircraftByTail(): Promise<void> {
+  const userId = user.value?.id ?? getStorageUserId()
+  if (!userId || logEntries.value.length === 0) return
+  if (getScopedItem(ACCOUNT_SCOPED_STORAGE_KEYS.AIRCRAFT_TAIL_CONSOLIDATION, userId)) return
+
+  const before = new Map(logEntries.value.map((entry) => [entry.id, entry.aircraftMakeModel]))
+  const { entries: consolidated, updatedCount } = consolidateAircraftMakeModelByTail(logEntries.value)
+  setScopedItem(ACCOUNT_SCOPED_STORAGE_KEYS.AIRCRAFT_TAIL_CONSOLIDATION, userId, 'done')
+
+  if (updatedCount === 0) return
+
+  logEntries.value = consolidated
+  const changedEntries = consolidated.filter((entry) => before.get(entry.id) !== entry.aircraftMakeModel)
+  console.log('[ConsolidateAircraft] Updated', updatedCount, 'entries across', changedEntries.length, 'rows')
+
+  for (const entry of changedEntries) {
+    try {
+      if (isAuthenticated.value && user.value) {
+        const { error } = await (supabase.from('log_entries') as any)
+          .update({
+            aircraft_make_model: entry.aircraftMakeModel,
+            aircraft_category_class: entry.aircraftCategoryClass || null,
+          })
+          .eq('user_id', user.value.id)
+          .eq('id', entry.id)
+        if (error) {
+          console.warn('[ConsolidateAircraft] Supabase update failed for', entry.id, error)
+          continue
+        }
+        await saveSyncedEntryToIndexedDB(entry, user.value.id)
+      } else {
+        await updateEntryInIndexedDB(entry, { userId })
+      }
+    } catch (error) {
+      console.warn('[ConsolidateAircraft] Persist failed for', entry.id, error)
+    }
+  }
 }
 
 async function waitForSupabaseSession(maxWaitMs = 8000): Promise<boolean> {
@@ -13179,16 +13228,43 @@ watchEffect(() => {
 })
 
 // Aircraft registry for Ident dropdown - unique registrations with their make/model
+const aircraftTailIndex = computed(() => buildAircraftTailIndex(logEntries.value))
+
+function applyTailResolutionToEntry(entry: {
+  registration?: string
+  aircraftMakeModel?: string
+  aircraftCategoryClass?: string
+}): void {
+  const tail = (entry.registration || '').trim()
+  if (!tail) return
+  const resolved = resolveAircraftByTail(tail, entry.aircraftMakeModel || '', aircraftTailIndex.value)
+  if (!resolved.fromTail) return
+  entry.aircraftMakeModel = resolved.aircraftMakeModel
+  if (resolved.aircraftCategoryClass && !(entry.aircraftCategoryClass || '').trim()) {
+    entry.aircraftCategoryClass = resolved.aircraftCategoryClass
+  }
+}
+
 const aircraftRegistry = computed(() => {
-  const registry: { registration: string; makeModel: string }[] = []
-  const seen = new Set<string>()
-  logEntries.value.forEach((entry) => {
-    const reg = entry.registration.trim().toUpperCase()
-    if (reg && !seen.has(reg)) {
-      seen.add(reg)
-      registry.push({ registration: reg, makeModel: entry.aircraftMakeModel.trim() })
+  const index = aircraftTailIndex.value
+  const sortedEntries = [...logEntries.value].sort((a, b) =>
+    (b.updatedAt ?? '').localeCompare(a.updatedAt ?? '')
+  )
+  const displayRegByKey = new Map<string, string>()
+  for (const entry of sortedEntries) {
+    const key = normalizeAircraftTailKey(entry.registration)
+    if (key && !displayRegByKey.has(key)) {
+      displayRegByKey.set(key, entry.registration.trim().toUpperCase())
     }
-  })
+  }
+
+  const registry: { registration: string; makeModel: string }[] = []
+  for (const [key, identity] of index) {
+    registry.push({
+      registration: displayRegByKey.get(key) || key,
+      makeModel: identity.aircraftMakeModel?.trim() || '',
+    })
+  }
   return registry.sort((a, b) => a.registration.localeCompare(b.registration))
 })
 
@@ -13316,6 +13392,7 @@ function handleIdentBlur(): void {
     if (!(newEntry.aircraftCategoryClass || '').trim() && (newEntry.registration || '').trim()) {
       tryPopulateAircraftCategory(newEntry.registration)
     }
+    applyTailResolutionToEntry(newEntry)
   }, 150)
 }
 
@@ -13325,6 +13402,9 @@ function handleInlineIdentBlur(): void {
     highlightedInlineIdentIndex.value = -1
     if (inlineEditEntry.value && !(inlineEditEntry.value.aircraftCategoryClass || '').trim() && (inlineEditEntry.value.registration || '').trim()) {
       tryPopulateAircraftCategoryForInline(inlineEditEntry.value.registration)
+    }
+    if (inlineEditEntry.value) {
+      applyTailResolutionToEntry(inlineEditEntry.value)
     }
   }, 150)
 }

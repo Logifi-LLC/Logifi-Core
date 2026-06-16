@@ -3,9 +3,12 @@ import { randomUUID } from 'node:crypto'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import { getSupabaseServiceClient } from '../../utils/supabaseService'
 import { digifiScanMetaSchema } from '../../utils/digifiSchema'
-import { DigifiGeminiError, getDigifiEnv } from '../../utils/digifiEnv'
-import { scanLogbookImageWithGemini } from '../../utils/digifiGemini'
+import { digifiModelUnavailableMessage, getDigifiEnv, isDigifiConfigured } from '../../utils/digifiEnv'
+import { DigifiExtractorError } from '../../utils/digifiExtractorTypes'
+import { scanLogbookImage } from '../../utils/digifiExtractor'
+import { buildTargetColumns } from '../../utils/digifiPrompt'
 import { normalizeScanRows } from '../../utils/digifiNormalize'
+import { sanitizeDigifiScanRows } from '../../utils/digifiScanSanitize'
 import { personalizeDigifiScanRows } from '../../utils/digifiPersonalization'
 import { analyzeDigifiScanRows } from '../../../app/utils/digifiScanDiagnostics'
 import { consumeCreditForSpread, linkSpreadChargeToScanSession } from '../../utils/creditsBalance'
@@ -35,13 +38,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
 
-  const env = getDigifiEnv()
-  if (!env.geminiApiKey) {
+  if (!isDigifiConfigured()) {
     throw createError({
       statusCode: 503,
       statusMessage: 'Digifi scanning is not configured on this server',
     })
   }
+
+  const env = getDigifiEnv()
 
   const supabase = getSupabaseClient(event)
   const service = getSupabaseServiceClient()
@@ -177,23 +181,23 @@ export default defineEventHandler(async (event) => {
 
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
 
-  let geminiResult
+  let scanResult
   try {
-    mark('geminiStart')
-    geminiResult = await scanLogbookImageWithGemini({
+    mark('extractStart')
+    scanResult = await scanLogbookImage({
       imageBase64: imageBuffer.toString('base64'),
       mimeType: imageMime,
       meta,
       chunkImages,
     })
-    mark('afterGemini')
+    mark('afterExtract')
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Scan failed'
     if (msg === 'DIGIFI_NOT_CONFIGURED') {
       throw createError({ statusCode: 503, statusMessage: 'Digifi scanning is not configured' })
     }
-    if (e instanceof DigifiGeminiError && e.code === 'CAPACITY') {
-      console.error('[digifi] gemini capacity error:', msg, 'models:', e.modelsAttempted.join(' → '))
+    if (e instanceof DigifiExtractorError && e.code === 'CAPACITY') {
+      console.error('[digifi] capacity error:', msg, 'models:', e.modelsAttempted.join(' → '))
       throw createError({
         statusCode: 503,
         statusMessage:
@@ -201,31 +205,40 @@ export default defineEventHandler(async (event) => {
       })
     }
     if (
-      e instanceof DigifiGeminiError &&
+      e instanceof DigifiExtractorError &&
       (e.code === 'CONFIG' || msg.includes('404'))
     ) {
-      console.error('[digifi] gemini model error:', msg, 'models:', e.modelsAttempted.join(' → '))
+      console.error('[digifi] model error:', msg, 'models:', e.modelsAttempted.join(' → '))
       throw createError({
         statusCode: 503,
-        statusMessage:
-          'The AI scan model is not available on this API key. Restart the dev server after pulling latest config, or set NUXT_DIGIFI_MODEL=gemini-3.5-flash in .env.',
+        statusMessage: digifiModelUnavailableMessage(getDigifiEnv()),
       })
     }
     if (msg.toLowerCase().includes('fetch failed') || msg.toLowerCase().includes('network error')) {
-      console.error('[digifi] gemini network error:', msg)
+      console.error('[digifi] network error:', msg)
       throw createError({
         statusCode: 503,
         statusMessage: 'Could not reach the AI scan service. Check connectivity and try again.',
       })
     }
-    console.error('[digifi] gemini error:', msg)
+    console.error('[digifi] scan error:', msg)
     throw createError({
       statusCode: 502,
       statusMessage: 'Could not read the logbook page. Try a clearer photo or different lighting.',
     })
   }
 
-  const normalizedRows = normalizeScanRows(geminiResult.rows, meta.columns, meta.defaultYear)
+  const targetColumns = buildTargetColumns(meta)
+  const { rows: sanitizedRows, strippedRowIndices } = sanitizeDigifiScanRows(
+    scanResult.rows,
+    targetColumns,
+    meta.rowCount
+  )
+  if (strippedRowIndices.length > 0) {
+    console.info('[digifi] stripped summary rows:', strippedRowIndices)
+  }
+
+  const normalizedRows = normalizeScanRows(sanitizedRows, meta.columns, meta.defaultYear)
   mark('afterNormalize')
   let personalizedRows = normalizedRows
   let reviewMessages: string[] = []
@@ -235,7 +248,7 @@ export default defineEventHandler(async (event) => {
     const personalized = await personalizeDigifiScanRows({
       userId,
       supabase,
-      rows: geminiResult.rows,
+      rows: sanitizedRows,
       normalizedRows,
       columns: meta.columns,
     })
@@ -256,7 +269,7 @@ export default defineEventHandler(async (event) => {
     template_name: meta.templateName ?? null,
     layout: meta.layout,
     row_count: meta.rowCount,
-    model_used: geminiResult.modelUsed,
+    model_used: scanResult.modelUsed,
     expires_at: expiresAt,
   })
 
@@ -275,16 +288,17 @@ export default defineEventHandler(async (event) => {
 
   const rowDiagnostics = analyzeDigifiScanRows(personalizedRows, meta.rowCount)
   const totalMs = Date.now() - requestStartedAt
-  const geminiMs = t.afterGemini && t.geminiStart ? t.afterGemini - t.geminiStart : undefined
-  const normalizeMs = t.afterNormalize && t.afterGemini ? t.afterNormalize - t.afterGemini : undefined
+  const extractMs = t.afterExtract && t.extractStart ? t.afterExtract - t.extractStart : undefined
+  const normalizeMs = t.afterNormalize && t.afterExtract ? t.afterNormalize - t.afterExtract : undefined
   console.info('[digifi] scan timing', {
     totalMs,
-    geminiMs: geminiMs ?? null,
+    extractMs: extractMs ?? null,
     normalizeMs: normalizeMs ?? null,
     personalizationMs: t.personalizationMs ?? null,
-    fallbackUsed: geminiResult.fallbackUsed,
-    modelsAttempted: geminiResult.modelsAttempted,
-    geminiApiCallCount: geminiResult.geminiApiCallCount,
+    providerUsed: scanResult.providerUsed,
+    fallbackUsed: scanResult.fallbackUsed,
+    modelsAttempted: scanResult.modelsAttempted,
+    apiCallCount: scanResult.apiCallCount,
   })
 
   return {
@@ -294,27 +308,30 @@ export default defineEventHandler(async (event) => {
     creditCharged: creditResult.charged,
     rows: personalizedRows,
     filledCellCount,
-    modelUsed: geminiResult.modelUsed,
-    strategyUsed: geminiResult.strategyUsed,
-    chunkCount: geminiResult.chunkCount,
-    rescueAttempted: geminiResult.rescueAttempted,
-    rescueRecoveredCount: geminiResult.rescueRecoveredCount,
-    fallbackUsed: geminiResult.fallbackUsed,
-    modelsAttempted: geminiResult.modelsAttempted,
-    geminiApiCallCount: geminiResult.geminiApiCallCount,
+    modelUsed: scanResult.modelUsed,
+    providerUsed: scanResult.providerUsed,
+    strategyUsed: scanResult.strategyUsed,
+    chunkCount: scanResult.chunkCount,
+    rescueAttempted: scanResult.rescueAttempted,
+    rescueRecoveredCount: scanResult.rescueRecoveredCount,
+    fallbackUsed: scanResult.fallbackUsed,
+    modelsAttempted: scanResult.modelsAttempted,
+    apiCallCount: scanResult.apiCallCount,
+    geminiApiCallCount: scanResult.apiCallCount,
     scanTimings: {
-      ...geminiResult.timings,
+      ...scanResult.timings,
       totalRequestMs: totalMs,
-      geminiMs: geminiMs ?? geminiResult.timings.primaryMs + geminiResult.timings.rescueMs,
+      geminiMs: extractMs ?? scanResult.timings.primaryMs + scanResult.timings.rescueMs,
       normalizeMs: normalizeMs ?? 0,
       personalizationMs: t.personalizationMs ?? 0,
     },
     rowsReturned: rowDiagnostics.rowsReturned,
     distinctRowIndices: rowDiagnostics.distinctRowIndices,
     missingRowIndices: rowDiagnostics.missingRowIndices,
-    duplicateRowIndices: geminiResult.duplicateRowIndices.length > 0
-      ? geminiResult.duplicateRowIndices
+    duplicateRowIndices: scanResult.duplicateRowIndices.length > 0
+      ? scanResult.duplicateRowIndices
       : rowDiagnostics.duplicateRowIndices,
+    strippedRowIndices,
     emptyRowIndices: rowDiagnostics.emptyRowIndices,
     hasGaps: rowDiagnostics.hasGaps,
     reviewMessages,

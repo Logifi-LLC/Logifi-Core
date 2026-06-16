@@ -12,9 +12,9 @@ export interface DigifiCompressedImage {
 }
 
 /**
- * Resize and JPEG-compress logbook photos before Gemini to cut vision token usage.
+ * Resize and JPEG-compress logbook photos before vision API calls to cut token usage.
  */
-export async function compressDigifiImageForGemini(
+export async function compressDigifiImage(
   buffer: Buffer,
   _mimeType?: string
 ): Promise<DigifiCompressedImage> {
@@ -34,3 +34,6 @@ export async function compressDigifiImageForGemini(
     byteLength: out.length,
   }
 }
+
+/** @deprecated Use compressDigifiImage */
+export const compressDigifiImageForGemini = compressDigifiImage

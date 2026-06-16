@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildColumnList, filterDigifiScanColumns } from '../../server/utils/digifiGemini'
+import { buildColumnList, filterDigifiScanColumns } from '../../server/utils/digifiPrompt'
 import type { DigifiTemplateColumn } from '../../app/utils/digifiTypes'
 
 function col(id: string, fieldKey: DigifiTemplateColumn['fieldKey'], order: number): DigifiTemplateColumn {

@@ -6,6 +6,11 @@ import {
   normalizeDigifiRegistrationKey,
   type DigifiCorrectionFeedbackContext,
 } from '../../app/utils/digifiFeedback'
+import {
+  buildAircraftTailIndex,
+  type AircraftTailIndex,
+  resolveAircraftByTail,
+} from '../../shared/aircraftTailIndex'
 import type {
   DigifiScanCellCandidate,
   DigifiScanCellMeta,
@@ -250,14 +255,21 @@ export function buildDigifiRegistrationIndex(options: {
     const existing = registrationMap.get(key)
     if (existing) {
       existing.historyCount += 1
-      if (!existing.aircraftMakeModel && row.aircraft_make_model) {
-        existing.aircraftMakeModel = row.aircraft_make_model
-      }
-      if (!existing.aircraftCategoryClass && row.aircraft_category_class) {
-        existing.aircraftCategoryClass = row.aircraft_category_class
-      }
       if ((row.updated_at ?? '') > (existing.lastSeenAt ?? '')) {
         existing.lastSeenAt = row.updated_at ?? existing.lastSeenAt
+        if (row.aircraft_make_model?.trim()) {
+          existing.aircraftMakeModel = row.aircraft_make_model.trim()
+        }
+        if (row.aircraft_category_class?.trim()) {
+          existing.aircraftCategoryClass = row.aircraft_category_class.trim()
+        }
+      } else {
+        if (!existing.aircraftMakeModel && row.aircraft_make_model?.trim()) {
+          existing.aircraftMakeModel = row.aircraft_make_model.trim()
+        }
+        if (!existing.aircraftCategoryClass && row.aircraft_category_class?.trim()) {
+          existing.aircraftCategoryClass = row.aircraft_category_class.trim()
+        }
       }
       continue
     }
@@ -550,6 +562,43 @@ export function resolveDigifiRegistration(
   }
 }
 
+export function backfillDigifiAircraftFromTail(
+  row: DigifiScanRow,
+  resolvedTail: string,
+  tailIndex: AircraftTailIndex,
+  columns: DigifiTemplateColumn[]
+): void {
+  const aircraftColumn = columns.find((column) => column.fieldKey === 'aircraft')
+  if (!aircraftColumn) return
+
+  const categoryClassColumn = columns.find((column) => column.fieldKey === 'categoryClass')
+  const currentAircraft = (row.cells[aircraftColumn.id] ?? '').trim()
+  const resolved = resolveAircraftByTail(resolvedTail, currentAircraft, tailIndex)
+  if (!resolved.fromTail) return
+
+  row.cells[aircraftColumn.id] = resolved.aircraftMakeModel
+  const existingMeta = row.cellMeta?.[aircraftColumn.id]
+  row.cellMeta = {
+    ...(row.cellMeta ?? {}),
+    [aircraftColumn.id]: {
+      fieldKey: 'aircraft',
+      rawValue: existingMeta?.rawValue ?? currentAircraft,
+      resolvedValue: resolved.aircraftMakeModel,
+      strategy: 'tail_match',
+      confidence: 'high',
+      autoApplied: true,
+      needsReview: false,
+    },
+  }
+
+  if (categoryClassColumn && resolved.aircraftCategoryClass) {
+    const currentCategory = (row.cells[categoryClassColumn.id] ?? '').trim()
+    if (!currentCategory) {
+      row.cells[categoryClassColumn.id] = resolved.aircraftCategoryClass
+    }
+  }
+}
+
 export async function personalizeDigifiScanRows(options: {
   userId: string
   supabase: any
@@ -577,6 +626,7 @@ export async function personalizeDigifiScanRows(options: {
     catalogRows,
     feedbackRows,
   })
+  const tailIndex = buildAircraftTailIndex(historyRows)
 
   const reviewMessages: string[] = []
   let reviewRequiredCount = 0
@@ -597,6 +647,10 @@ export async function personalizeDigifiScanRows(options: {
     row.cellMeta = {
       ...(row.cellMeta ?? {}),
       [identificationColumn.id]: meta,
+    }
+
+    if (meta.resolvedValue.trim()) {
+      backfillDigifiAircraftFromTail(row, meta.resolvedValue, tailIndex, options.columns)
     }
 
     if (meta.needsReview) {

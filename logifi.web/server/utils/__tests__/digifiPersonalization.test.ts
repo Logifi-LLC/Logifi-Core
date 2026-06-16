@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  backfillDigifiAircraftFromTail,
   buildDigifiRegistrationIndex,
   resolveDigifiRegistration,
   type DigifiCorrectionFeedbackRow,
 } from '../digifiPersonalization'
+import { buildAircraftTailIndex } from '../../../shared/aircraftTailIndex'
+import type { DigifiScanRow, DigifiTemplateColumn } from '../../../app/utils/digifiTypes'
 
 function buildHistoryRow(
   registration: string,
@@ -154,5 +157,52 @@ describe('Digifi registration personalization', () => {
     expect(result.strategy).toBe('ambiguous')
     expect(result.autoApplied).toBe(false)
     expect(result.needsReview).toBe(true)
+  })
+
+  it('prefers the most recent history make/model for a tail', () => {
+    const index = buildDigifiRegistrationIndex({
+      historyRows: [
+        {
+          ...buildHistoryRow('N123AB', 'DA-20-C1'),
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+        {
+          ...buildHistoryRow('N123AB', 'DA20-C1'),
+          updated_at: '2026-06-01T00:00:00Z',
+        },
+      ],
+      catalogRows: [],
+      feedbackRows: [],
+    })
+
+    const candidate = index.registrations.find((row) => row.key === 'N123AB')
+    expect(candidate?.aircraftMakeModel).toBe('DA20-C1')
+  })
+
+  it('backfills aircraft make/model from known tail history', () => {
+    const columns: DigifiTemplateColumn[] = [
+      { id: 'aircraft-col', fieldKey: 'aircraft', label: 'Aircraft', order: 0 },
+      { id: 'ident-col', fieldKey: 'identification', label: 'Ident', order: 1 },
+    ]
+    const tailIndex = buildAircraftTailIndex([
+      {
+        registration: 'N123AB',
+        aircraft_make_model: 'DA20-C1',
+        aircraft_category_class: 'ASEL',
+        updated_at: '2026-06-01T00:00:00Z',
+      },
+    ])
+    const row: DigifiScanRow = {
+      rowIndex: 0,
+      cells: {
+        'aircraft-col': 'DA-20-C1',
+        'ident-col': 'N123AB',
+      },
+    }
+
+    backfillDigifiAircraftFromTail(row, 'N123AB', tailIndex, columns)
+
+    expect(row.cells['aircraft-col']).toBe('DA20-C1')
+    expect(row.cellMeta?.['aircraft-col']?.strategy).toBe('tail_match')
   })
 })

@@ -1,7 +1,9 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   buildDigifiModelChain,
   buildDigifiThinkingConfig,
+  inferDigifiProvider,
+  isDigifiConfigured,
   normalizeDigifiModelId,
   resolveDigifiThinkingLevel,
   shouldTryNextDigifiModel,
@@ -34,6 +36,25 @@ describe('buildDigifiModelChain', () => {
     expect(normalizeDigifiModelId('gemini-3.1-pro')).toBe('gemini-3.5-flash')
     expect(normalizeDigifiModelId('gemini-3.1-pro-preview')).toBe('gemini-3.5-flash')
     expect(normalizeDigifiModelId('gemini-3.5-flash')).toBe('gemini-3.5-flash')
+  })
+})
+
+describe('inferDigifiProvider', () => {
+  it('detects anthropic from claude model ids', () => {
+    expect(inferDigifiProvider('claude-3-5-sonnet-20241022')).toBe('anthropic')
+    expect(inferDigifiProvider('claude-3.5-sonnet')).toBe('anthropic')
+  })
+
+  it('defaults to gemini for non-claude models', () => {
+    expect(inferDigifiProvider('gemini-3.5-flash')).toBe('gemini')
+  })
+})
+
+describe('normalizeDigifiModelId for Claude', () => {
+  it('maps retired 3.5 Sonnet ids to current Sonnet', () => {
+    expect(normalizeDigifiModelId('claude-3.5-sonnet')).toBe('claude-sonnet-4-6')
+    expect(normalizeDigifiModelId('claude-3-5-sonnet')).toBe('claude-sonnet-4-6')
+    expect(normalizeDigifiModelId('claude-3-5-sonnet-20241022')).toBe('claude-sonnet-4-6')
   })
 })
 
@@ -71,5 +92,45 @@ describe('buildDigifiThinkingConfig', () => {
     expect(buildDigifiThinkingConfig('gemini-2.5-flash', 'low')).toEqual({
       thinkingBudget: 0,
     })
+  })
+})
+
+describe('isDigifiConfigured', () => {
+  const originalEnv = { ...process.env }
+
+  beforeEach(() => {
+    vi.stubGlobal('useRuntimeConfig', () => ({
+      geminiApiKey: '',
+      anthropicApiKey: '',
+      digifiModel: 'gemini-3.5-flash',
+      digifiModelFallbacks: '',
+      digifiEnableCapacityModelFallback: '',
+      digifiMaxScansPerDay: 10,
+    }))
+  })
+
+  afterEach(() => {
+    process.env = { ...originalEnv }
+    vi.unstubAllGlobals()
+  })
+
+  it('requires gemini key for gemini models', () => {
+    process.env.NUXT_DIGIFI_MODEL = 'gemini-3.5-flash'
+    process.env.GEMINI_API_KEY = 'test-gemini'
+    delete process.env.ANTHROPIC_API_KEY
+    expect(isDigifiConfigured()).toBe(true)
+
+    delete process.env.GEMINI_API_KEY
+    expect(isDigifiConfigured()).toBe(false)
+  })
+
+  it('requires anthropic key for claude models', () => {
+    process.env.NUXT_DIGIFI_MODEL = 'claude-3-5-sonnet-20241022'
+    process.env.ANTHROPIC_API_KEY = 'test-anthropic'
+    delete process.env.GEMINI_API_KEY
+    expect(isDigifiConfigured()).toBe(true)
+
+    delete process.env.ANTHROPIC_API_KEY
+    expect(isDigifiConfigured()).toBe(false)
   })
 })

@@ -6,6 +6,18 @@ export interface DigifiCommonMistakeChecklistItem {
 
 export const DIGIFI_COMMON_MISTAKE_CHECKLIST: DigifiCommonMistakeChecklistItem[] = [
   {
+    id: 'totals',
+    title: 'Totals / footer row',
+    hint:
+      'The bottom totals or carry-forward row is not a flight line. If it appears in the grid, delete those cells or re-scan with Rows set to flight lines only.',
+  },
+  {
+    id: 'remarks',
+    title: 'Remarks boundaries',
+    hint:
+      'Remarks should stay within one flight line. If text from two rows merged or split across lines, check the ruled lines on the photo and re-scan or fix manually.',
+  },
+  {
     id: 'route',
     title: 'From / To / Route',
     hint:
@@ -39,4 +51,6 @@ export const DIGIFI_COMMON_MISTAKE_PROMPT_RULES = [
   'Landings (day/night) are integer counts, not decimal flight times.',
   'Do not swap adjacent narrow columns: night, actual instrument, simulated (hood), approach count, approach type.',
   'When both Dual Given and Dual Received columns exist, read each value under its printed column header — do not shift into the neighbor cell.',
+  'Never transcribe the bottom totals, brought forward, or carried forward summary row as a flight line.',
+  'Remarks: one rowIndex per flight line — use horizontal ruled lines as boundaries; never merge remarks from adjacent rows.',
 ].join(' ')

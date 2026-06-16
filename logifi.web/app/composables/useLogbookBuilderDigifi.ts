@@ -13,6 +13,12 @@ import {
   analyzeDigifiScanRows,
   formatDigifiScanWarning,
 } from '~/utils/digifiScanDiagnostics'
+import {
+  computeRemarksColumnCrop,
+  computeRowBandRect,
+  pageColumnsIncludeRemarks,
+  type RemarksCropContext,
+} from '~/utils/digifiRowBandGeometry'
 
 /** Match server Gemini prep (digifiImagePrep) to avoid uploading oversized photos. */
 const MAX_EDGE_PX = 1536
@@ -20,6 +26,8 @@ const JPEG_QUALITY = 0.92
 const MAX_PRIMARY_IMAGE_BYTES = 7_500_000
 const ROW_BAND_SIZE = 5
 const ROW_BAND_OVERLAP = 1
+/** Exclude bottom strip from row-band math (totals/carry-forward — not in rowCount). */
+const ROW_BAND_FOOTER_LINES_EXCLUDED = 1
 const PAGE_HORIZONTAL_MARGIN_RATIO = 0.03
 const PAGE_VERTICAL_MARGIN_RATIO = 0.06
 
@@ -62,7 +70,11 @@ function buildChunkRanges(rowCount: number): Array<{ rowStart: number; rowEnd: n
   return ranges
 }
 
-async function prepareScanAssets(file: File, rowCount: number): Promise<PreparedScanAssets> {
+async function prepareScanAssets(
+  file: File,
+  rowCount: number,
+  remarksContext: RemarksCropContext
+): Promise<PreparedScanAssets> {
   const preferredMimeType =
     file.type === 'image/png'
       ? 'image/png'
@@ -108,23 +120,46 @@ async function prepareScanAssets(file: File, rowCount: number): Promise<Prepared
   const cropX = Math.min(insetX, Math.max(0, w - 1))
   const cropY = Math.min(insetY, Math.max(0, h - 1))
   const cropWidth = Math.max(1, w - cropX * 2)
-  const usableHeight = Math.max(1, h - cropY * 2)
+  const fullUsableHeight = Math.max(1, h - cropY * 2)
+  const preliminaryRowHeight = fullUsableHeight / Math.max(1, rowCount)
+  const footerReservePx = preliminaryRowHeight * ROW_BAND_FOOTER_LINES_EXCLUDED
+  const usableHeight = Math.max(preliminaryRowHeight, fullUsableHeight - footerReservePx)
   const rowHeight = usableHeight / Math.max(1, rowCount)
+  const flightAreaBottom = cropY + usableHeight
+  const remarksCrop = pageColumnsIncludeRemarks(remarksContext)
+    ? computeRemarksColumnCrop(cropX, cropWidth, remarksContext)
+    : null
 
   const chunkMeta: DigifiScanChunkMeta[] = []
   const chunkFiles: PreparedChunkImage[] = []
-  const extraContextPx = Math.max(12, Math.round(rowHeight * 0.35))
 
   for (const range of buildChunkRanges(rowCount)) {
-    const startY = Math.max(0, Math.floor(cropY + range.rowStart * rowHeight - extraContextPx))
-    const endY = Math.min(h, Math.ceil(cropY + (range.rowEnd + 1) * rowHeight + extraContextPx))
-    const chunkHeight = Math.max(1, endY - startY)
+    const bandRect = computeRowBandRect({
+      cropX,
+      cropY,
+      cropWidth,
+      rowHeight,
+      flightAreaBottom,
+      rowStart: range.rowStart,
+      rowEnd: range.rowEnd,
+      remarksCrop,
+    })
     const chunkCanvas = document.createElement('canvas')
-    chunkCanvas.width = cropWidth
-    chunkCanvas.height = chunkHeight
+    chunkCanvas.width = bandRect.chunkWidth
+    chunkCanvas.height = bandRect.chunkHeight
     const chunkCtx = chunkCanvas.getContext('2d')
     if (!chunkCtx) continue
-    chunkCtx.drawImage(canvas, cropX, startY, cropWidth, chunkHeight, 0, 0, cropWidth, chunkHeight)
+    chunkCtx.drawImage(
+      canvas,
+      bandRect.sourceX,
+      bandRect.startY,
+      bandRect.sourceWidth,
+      bandRect.chunkHeight,
+      0,
+      0,
+      bandRect.chunkWidth,
+      bandRect.chunkHeight
+    )
     const chunkBlob = await canvasToBlob(chunkCanvas, 'image/jpeg', 0.9)
     const partName = `chunk-${range.rowStart}-${range.rowEnd}`
     chunkMeta.push({ partName, rowStart: range.rowStart, rowEnd: range.rowEnd })
@@ -245,7 +280,18 @@ export function useLogbookBuilderDigifi() {
     lastScanSummary.value = null
 
     try {
-      const prepared = await prepareScanAssets(file, rowCount.value)
+      const prepared = await prepareScanAssets(file, rowCount.value, {
+        pageSide,
+        layout: layout.value,
+        twoPageSplitIndex: effectiveSplitIndex.value,
+        columns: visibleColumns.value.map((c) => ({
+          id: c.id,
+          label: c.label,
+          fieldKey: c.fieldKey,
+          order: c.order,
+          categoryClassValue: c.categoryClassValue,
+        })),
+      })
       scanPhase.value = 'Reading page'
 
       const form = new FormData()
@@ -324,11 +370,13 @@ export function useLogbookBuilderDigifi() {
           : null
       scanDetail.value = [
         result.scanTimings != null
-          ? `Scan completed in ${Math.round(result.scanTimings.totalRequestMs)}ms (Gemini ${Math.round(result.scanTimings.geminiMs)}ms).`
+          ? `Scan completed in ${Math.round(result.scanTimings.totalRequestMs)}ms (AI ${Math.round(result.scanTimings.geminiMs)}ms).`
           : null,
-        result.geminiApiCallCount != null
-          ? `Gemini API calls for this page: ${result.geminiApiCallCount}.`
-          : null,
+        result.apiCallCount != null
+          ? `AI API calls for this page: ${result.apiCallCount}.`
+          : result.geminiApiCallCount != null
+            ? `AI API calls for this page: ${result.geminiApiCallCount}.`
+            : null,
         creditNote,
       ]
         .filter(Boolean)

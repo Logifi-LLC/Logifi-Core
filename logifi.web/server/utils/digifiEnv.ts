@@ -8,27 +8,26 @@ const pick = (...candidates: unknown[]) => {
   return ''
 }
 
-export type DigifiGeminiErrorCode = 'CAPACITY' | 'CONFIG' | 'INVALID_RESPONSE' | 'UNKNOWN'
-
-export class DigifiGeminiError extends Error {
-  readonly code: DigifiGeminiErrorCode
-  readonly modelsAttempted: string[]
-
-  constructor(
-    message: string,
-    code: DigifiGeminiErrorCode,
-    modelsAttempted: string[] = []
-  ) {
-    super(message)
-    this.name = 'DigifiGeminiError'
-    this.code = code
-    this.modelsAttempted = modelsAttempted
-  }
-}
+import type { DigifiExtractorErrorCode, DigifiProvider } from './digifiExtractorTypes'
 
 /** Stay in the Gemini 3.x line — avoid silent downgrade to 2.x (much weaker for logbook OCR). */
 /** Used only when 3.5 Flash hits capacity/outage (429/503/etc.), not for weak OCR. */
 const DEFAULT_MODEL_FALLBACKS = ['gemini-3-flash-preview']
+
+/** Current Anthropic Sonnet with vision — retired 3.5 snapshots map here. */
+export const DEFAULT_CLAUDE_DIGIFI_MODEL = 'claude-sonnet-4-6'
+
+const CLAUDE_MODEL_ALIASES: Record<string, string> = {
+  'claude-3.5-sonnet': DEFAULT_CLAUDE_DIGIFI_MODEL,
+  'claude-3-5-sonnet': DEFAULT_CLAUDE_DIGIFI_MODEL,
+  'claude-3-5-sonnet-20241022': DEFAULT_CLAUDE_DIGIFI_MODEL,
+  'claude-3-5-sonnet-20240620': DEFAULT_CLAUDE_DIGIFI_MODEL,
+}
+
+export function inferDigifiProvider(modelId: string): DigifiProvider {
+  if (/^claude/i.test(modelId.trim())) return 'anthropic'
+  return 'gemini'
+}
 
 /** Paid-tier default is gemini-3.5-flash; map legacy Pro ids to 3.5 Flash. */
 export function normalizeDigifiModelId(model: string): string {
@@ -39,6 +38,8 @@ export function normalizeDigifiModelId(model: string): string {
   ) {
     return 'gemini-3.5-flash'
   }
+  const claudeAlias = CLAUDE_MODEL_ALIASES[trimmed.toLowerCase()]
+  if (claudeAlias) return claudeAlias
   return trimmed
 }
 
@@ -75,13 +76,16 @@ export function buildDigifiModelChain(
 /** Primary gemini-3.5-flash; optional fallbacks when enableCapacityModelFallback is true. */
 export function getDigifiModelChain(): string[] {
   const env = getDigifiEnv()
+  if (inferDigifiProvider(env.model) === 'anthropic') {
+    return [env.model]
+  }
   const configuredFallbacks = env.enableCapacityModelFallback ? env.modelFallbacks : []
   const defaultFallbacks = env.enableCapacityModelFallback ? DEFAULT_MODEL_FALLBACKS : []
   return buildDigifiModelChain(env.model, configuredFallbacks, defaultFallbacks)
 }
 
 /** Advance model chain only on outage / rate limit — not on truncation or bad OCR. */
-export function shouldTryNextDigifiModel(errorCode: DigifiGeminiErrorCode): boolean {
+export function shouldTryNextDigifiModel(errorCode: DigifiExtractorErrorCode): boolean {
   return errorCode === 'CAPACITY' || errorCode === 'CONFIG'
 }
 
@@ -113,6 +117,11 @@ export function getDigifiEnv() {
       process.env.GEMINI_API_KEY,
       process.env.NUXT_GEMINI_API_KEY,
       config.geminiApiKey
+    ),
+    anthropicApiKey: pick(
+      process.env.ANTHROPIC_API_KEY,
+      process.env.NUXT_ANTHROPIC_API_KEY,
+      config.anthropicApiKey
     ),
     model: normalizeDigifiModelId(
       pick(
@@ -185,7 +194,79 @@ export function getDigifiEnv() {
         'low'
       ) || 'low'
     ),
+    /** Claude-only OCR tuning (ignored by Gemini path). */
+    claudeApiVersion:
+      pick(
+        process.env.NUXT_DIGIFI_CLAUDE_API_VERSION,
+        process.env.DIGIFI_CLAUDE_API_VERSION,
+        '2023-06-01'
+      ) || '2023-06-01',
+    claudeTemperature: parseClaudeTemperature(
+      pick(
+        process.env.NUXT_DIGIFI_CLAUDE_TEMPERATURE,
+        process.env.DIGIFI_CLAUDE_TEMPERATURE,
+        '0'
+      ) || '0'
+    ),
+    claudeEnableThinking:
+      pick(
+        process.env.NUXT_DIGIFI_CLAUDE_ENABLE_THINKING,
+        process.env.DIGIFI_CLAUDE_ENABLE_THINKING,
+        'false'
+      ).toLowerCase() === 'true',
+    claudeThinkingBudgetTokens: Math.min(
+      8192,
+      Math.max(
+        1024,
+        parseInt(
+          pick(
+            process.env.NUXT_DIGIFI_CLAUDE_THINKING_BUDGET,
+            process.env.DIGIFI_CLAUDE_THINKING_BUDGET,
+            '2048'
+          ) || '2048',
+          10
+        )
+      )
+    ),
+    claudeMaxOutputTokensCap: Math.min(
+      20_000,
+      Math.max(
+        8192,
+        parseInt(
+          pick(
+            process.env.NUXT_DIGIFI_CLAUDE_MAX_OUTPUT_TOKENS,
+            process.env.DIGIFI_CLAUDE_MAX_OUTPUT_TOKENS,
+            pick(
+              process.env.NUXT_DIGIFI_GEMINI_MAX_OUTPUT_TOKENS,
+              process.env.DIGIFI_GEMINI_MAX_OUTPUT_TOKENS,
+              '20000'
+            ) || '20000'
+          ) || '20000',
+          10
+        )
+      )
+    ),
+    logRawResponse:
+      pick(
+        process.env.NUXT_DIGIFI_LOG_RAW_RESPONSE,
+        process.env.DIGIFI_LOG_RAW_RESPONSE,
+        'false'
+      ).toLowerCase() === 'true',
   }
+}
+
+export function isDigifiConfigured(env = getDigifiEnv()): boolean {
+  const provider = inferDigifiProvider(env.model)
+  return provider === 'anthropic' ? !!env.anthropicApiKey : !!env.geminiApiKey
+}
+
+/** User-facing hint when the configured model id is invalid or inaccessible. */
+export function digifiModelUnavailableMessage(env = getDigifiEnv()): string {
+  const provider = inferDigifiProvider(env.model)
+  if (provider === 'anthropic') {
+    return `The Claude scan model (${env.model}) is not available on this API key. Set NUXT_DIGIFI_MODEL=${DEFAULT_CLAUDE_DIGIFI_MODEL} in .env and restart the dev server.`
+  }
+  return 'The AI scan model is not available on this API key. Restart the dev server after pulling latest config, or set NUXT_DIGIFI_MODEL=gemini-3.5-flash in .env.'
 }
 
 const GEMINI_THINKING_LEVELS = ['minimal', 'low', 'medium', 'high'] as const
@@ -197,6 +278,12 @@ function normalizeGeminiThinkingLevel(value: string): DigifiGeminiThinkingLevel 
     return normalized as DigifiGeminiThinkingLevel
   }
   return 'low'
+}
+
+function parseClaudeTemperature(value: string): number {
+  const parsed = Number.parseFloat(value)
+  if (!Number.isFinite(parsed)) return 0
+  return Math.min(1, Math.max(0, parsed))
 }
 
 /**
