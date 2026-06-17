@@ -1,5 +1,6 @@
 {
   "appId": "io.logifi.app",
   "appName": "Logifi",
-  "webDir": "logifi.web/.output/public"
+  "webDir": "logifi.web/.output/public",
+  "backgroundColor": "#030712"
 }
