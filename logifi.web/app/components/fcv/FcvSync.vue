@@ -292,7 +292,7 @@ async function connectFcv() {
         : undefined
     if (status === 503) {
       error.value =
-        'FC View connection isn’t available on this app right now. Please try again later.'
+        'FC View connection isn’t available right now. Please try again later.'
       return
     }
     error.value = e instanceof Error ? e.message : 'Failed to start FC View connection'
