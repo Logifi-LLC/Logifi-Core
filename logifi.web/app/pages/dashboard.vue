@@ -5465,7 +5465,9 @@ import {
 } from '../../shared/catalogAircraftFamily'
 import {
   buildAircraftTailIndex,
+  buildTailCatalogFamilyMap,
   consolidateAircraftMakeModelByTail,
+  effectiveCatalogFamilyKey,
   normalizeAircraftTailKey,
   resolveAircraftByTail,
 } from '../../shared/aircraftTailIndex'
@@ -5809,6 +5811,17 @@ const isDashboardRefreshing = ref(false)
 
 // Log entries - must be declared before any functions that use it
 const logEntries = ref<LogEntry[]>([])
+
+const aircraftTailIndex = computed(() => buildAircraftTailIndex(logEntries.value))
+
+const tailCatalogFamilyMap = computed(() => buildTailCatalogFamilyMap(logEntries.value))
+
+function effectiveFamilyKeyForEntry(entry: {
+  aircraftMakeModel?: string
+  registration?: string
+}): string {
+  return effectiveCatalogFamilyKey(entry, tailCatalogFamilyMap.value)
+}
 
 // Logout function
 const router = useRouter()
@@ -6154,7 +6167,7 @@ async function addEntityTag(entityType: EntityType, entityId: string, tag: strin
 async function removeEntityTagFromEntries(entityType: EntityType, entityId: string, tag: string): Promise<void> {
   const matches = logEntries.value.filter((entry) => {
     if (entityType === 'family') {
-      return catalogAircraftFamilyKey(entry.aircraftMakeModel || '', entry.registration) === entityId
+      return effectiveFamilyKeyForEntry(entry) === entityId
     }
     if (entityType === 'aircraft') {
       return (entry.registration || '').trim().toUpperCase() === entityId
@@ -6213,7 +6226,7 @@ async function removeEntityTag(entityType: EntityType, entityId: string, tag: st
 async function backfillEntityTagToEntries(entityType: EntityType, entityId: string, tag: string): Promise<number> {
   const matches = logEntries.value.filter((entry) => {
     if (entityType === 'family') {
-      return catalogAircraftFamilyKey(entry.aircraftMakeModel || '', entry.registration) === entityId
+      return effectiveFamilyKeyForEntry(entry) === entityId
     }
     if (entityType === 'aircraft') {
       return (entry.registration || '').trim().toUpperCase() === entityId
@@ -6258,24 +6271,33 @@ function getEntityTags(entityType: 'family' | 'aircraft' | 'person', entityId: s
     .map((r) => r.tag)
 }
 
+/** Consolidation groups for rename: same logical family + typos (e.g. FMB-170). Used for rename and tag migration. */
+const FAMILY_RENAME_GROUPS: string[][] = [
+  ['EMB-170', 'ERJ-170', 'FMB-170'],
+  ['EMB-175', 'ERJ-175'],
+  ['EMB-190', 'ERJ-190'],
+]
+
 function getFamilyRenameGroup(familyName: string): string[] {
-  const key = (familyName || '').trim()
-  return key ? [key] : []
+  const key = (familyName || '').trim().toUpperCase()
+  if (!key) return []
+  for (const group of FAMILY_RENAME_GROUPS) {
+    if (group.some((s) => s.toUpperCase() === key)) return group
+  }
+  return [familyName.trim()]
 }
 
 function getLogEntriesInFamily(canonicalKey: string): LogEntry[] {
   const key = (canonicalKey || '').trim()
   if (!key) return []
-  return logEntries.value.filter((entry) => {
-    return catalogAircraftFamilyKey(entry.aircraftMakeModel || '', entry.registration) === key
-  })
+  return logEntries.value.filter((entry) => effectiveFamilyKeyForEntry(entry) === key)
 }
 
 /** Merge entity-level tags (aircraft, family, person) into entry.tags for autofill. */
 function mergeEntityTagsIntoEntry(entry: { tags?: string[]; registration?: string; aircraftMakeModel?: string; trainingElements?: string }): void {
   if (!entry) return
   const reg = (entry.registration || '').trim().toUpperCase()
-  const family = catalogAircraftFamilyKey(entry.aircraftMakeModel || '', entry.registration)
+  const family = effectiveFamilyKeyForEntry(entry)
   const person = (entry.trainingElements || '').trim()
   const aircraftTags = getEntityTags('aircraft', reg)
   const familyTags = family ? getEntityTags('family', family) : []
@@ -9183,7 +9205,7 @@ const currentAircraftFamilyName = computed(() => {
       (e) => (e.registration || '').trim().toUpperCase() === reg
     )
     if (entryWithReg?.aircraftMakeModel)
-      return catalogAircraftFamilyKey(entryWithReg.aircraftMakeModel, entryWithReg.registration)
+      return effectiveFamilyKeyForEntry(entryWithReg)
   }
   const makeModel = [info.make, info.model].filter(Boolean).join(' ')
   return catalogAircraftFamilyKey(makeModel)
@@ -10227,11 +10249,12 @@ async function renameAircraftFamily(canonicalFamilyKey: string, newFamilyName: s
     return
   }
 
-  const entryIds = entriesToUpdate.map((e) => e.id).filter(Boolean)
+  const entryIdList = entriesToUpdate.map((e) => e.id).filter(Boolean)
+  const entryIds = new Set(entryIdList)
 
   // Immediate UI update
   logEntries.value = logEntries.value.map((entry) => {
-    if (catalogAircraftFamilyKey(entry.aircraftMakeModel, entry.registration) === canonicalFamilyKey) {
+    if (entryIds.has(entry.id)) {
       return { ...entry, aircraftMakeModel: trimmedNewName }
     }
     return entry
@@ -10240,11 +10263,11 @@ async function renameAircraftFamily(canonicalFamilyKey: string, newFamilyName: s
   let supabaseOk = true
 
   // Persist to Supabase by entry id (make/model strings vary; canonical group keys do not match DB values)
-  if (isAuthenticated.value && user.value && entryIds.length > 0) {
+  if (isAuthenticated.value && user.value && entryIdList.length > 0) {
     try {
       const BATCH_SIZE = 100
-      for (let i = 0; i < entryIds.length; i += BATCH_SIZE) {
-        const batchIds = entryIds.slice(i, i + BATCH_SIZE)
+      for (let i = 0; i < entryIdList.length; i += BATCH_SIZE) {
+        const batchIds = entryIdList.slice(i, i + BATCH_SIZE)
         const { error } = await (supabase.from('log_entries') as any)
           .update({ aircraft_make_model: trimmedNewName })
           .eq('user_id', user.value.id)
@@ -10258,7 +10281,7 @@ async function renameAircraftFamily(canonicalFamilyKey: string, newFamilyName: s
       const { data: updatedRows, error: fetchError } = await (supabase.from('log_entries') as any)
         .select('id, version, data_hash, updated_at, created_at, aircraft_make_model')
         .eq('user_id', user.value.id)
-        .in('id', entryIds)
+        .in('id', entryIdList)
       if (fetchError) {
         console.error('[renameAircraftFamily] fetch updated rows', fetchError)
       } else if (updatedRows?.length) {
@@ -12959,7 +12982,7 @@ function passesCatalogAndSearchFilters(entry: LogEntry): boolean {
   }
 
   if (activeFamilies.size > 0) {
-    const fam = catalogAircraftFamilyKey(entry.aircraftMakeModel || '', entry.registration)
+    const fam = effectiveFamilyKeyForEntry(entry)
     if (!fam || !activeFamilies.has(fam)) return false
   }
 
@@ -13093,7 +13116,9 @@ const catalogs = computed<CatalogsValue>(() => {
   const pilots = new Set<string>()
   const categoryClass = new Set<string>()
   const familiesSet = new Set<string>()
+  const familyMakeModelCounts: Record<string, Record<string, number>> = {}
   const familyToItemsMap: Record<string, Set<string>> = {}
+  const tailFamilyMap = tailCatalogFamilyMap.value
   const entriesForActiveCatalog = logEntries.value.filter(
     (entry) => getEntryLogbookType(entry) === activeLogbook.value
   )
@@ -13101,18 +13126,13 @@ const catalogs = computed<CatalogsValue>(() => {
   entriesForActiveCatalog.forEach((entry) => {
     const makeModel = entry.aircraftMakeModel.trim()
     const tail = entry.registration.trim().toUpperCase()
-    const fam = catalogAircraftFamilyKey(makeModel, entry.registration)
+    const fam = effectiveCatalogFamilyKey(entry, tailFamilyMap)
     if (makeModel || tail) {
       aircraft.add(tail ? `${makeModel || 'Airframe'} · ${tail}` : makeModel)
     }
-    if (fam) {
-      familiesSet.add(fam)
-      if (!familyToItemsMap[fam]) familyToItemsMap[fam] = new Set<string>()
-      if (tail) {
-        familyToItemsMap[fam]!.add(tail)
-      } else if (makeModel) {
-        familyToItemsMap[fam]!.add(makeModel)
-      }
+    if (fam && makeModel) {
+      if (!familyMakeModelCounts[fam]) familyMakeModelCounts[fam] = {}
+      familyMakeModelCounts[fam][makeModel] = (familyMakeModelCounts[fam][makeModel] || 0) + 1
     }
     if (entry.departure.trim()) {
       airports.add(entry.departure.trim().toUpperCase())
@@ -13129,8 +13149,32 @@ const catalogs = computed<CatalogsValue>(() => {
   })
 
   const familyDisplayName: Record<string, string> = {}
+  const seenTails = new Set<string>()
+  entriesForActiveCatalog.forEach((entry) => {
+    const makeModel = entry.aircraftMakeModel.trim()
+    const tailKey = normalizeAircraftTailKey(entry.registration)
+    const tailDisplay = entry.registration.trim().toUpperCase()
+    const fam = effectiveCatalogFamilyKey(entry, tailFamilyMap)
+    if (!fam) return
+
+    if (tailKey) {
+      if (seenTails.has(tailKey)) return
+      seenTails.add(tailKey)
+      familiesSet.add(fam)
+      if (!familyToItemsMap[fam]) familyToItemsMap[fam] = new Set<string>()
+      familyToItemsMap[fam]!.add(tailDisplay)
+    } else if (makeModel) {
+      familiesSet.add(fam)
+      if (!familyToItemsMap[fam]) familyToItemsMap[fam] = new Set<string>()
+      familyToItemsMap[fam]!.add(makeModel)
+    }
+  })
+
   for (const fam of familiesSet) {
-    familyDisplayName[fam] = fam
+    const counts = familyMakeModelCounts[fam] ?? {}
+    const entries = Object.entries(counts)
+    const mode = entries.length ? entries.sort((a, b) => b[1] - a[1])[0]![0] : fam
+    familyDisplayName[fam] = mode
   }
 
   const familyToItems: Record<string, string[]> = {}
@@ -13193,8 +13237,6 @@ watchEffect(() => {
 })
 
 // Aircraft registry for Ident dropdown - unique registrations with their make/model
-const aircraftTailIndex = computed(() => buildAircraftTailIndex(logEntries.value))
-
 function applyTailResolutionToEntry(entry: {
   registration?: string
   aircraftMakeModel?: string

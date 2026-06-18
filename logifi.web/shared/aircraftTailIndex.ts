@@ -1,3 +1,4 @@
+import { catalogAircraftFamilyKey } from './catalogAircraftFamily'
 import { normalizeRegistrationKey } from './logbookDataBridge/formatters'
 
 export interface AircraftTailIdentity {
@@ -49,7 +50,31 @@ function rowCategoryClass(row: AircraftTailIndexSourceRow): string | null {
   return trimmed || null
 }
 
+/** Most common stored make/model per tail — stable catalog family for known aircraft. */
+export function buildTailCatalogFamilyMap(rows: AircraftTailIndexSourceRow[]): Map<string, string> {
+  const byTail = new Map<string, Record<string, number>>()
+
+  for (const row of rows) {
+    const tailKey = normalizeAircraftTailKey(row.registration ?? '')
+    if (!tailKey) continue
+    const mm = rowMakeModel(row)
+    if (!mm || mm.toLowerCase() === 'unknown') continue
+    if (!byTail.has(tailKey)) byTail.set(tailKey, {})
+    const counts = byTail.get(tailKey)!
+    counts[mm] = (counts[mm] || 0) + 1
+  }
+
+  const result = new Map<string, string>()
+  for (const [tailKey, counts] of byTail) {
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    const mode = sorted[0]?.[0]
+    if (mode) result.set(tailKey, mode)
+  }
+  return result
+}
+
 export function buildAircraftTailIndex(rows: AircraftTailIndexSourceRow[]): AircraftTailIndex {
+  const familyMap = buildTailCatalogFamilyMap(rows)
   const index: AircraftTailIndex = new Map()
 
   for (const row of rows) {
@@ -57,13 +82,13 @@ export function buildAircraftTailIndex(rows: AircraftTailIndexSourceRow[]): Airc
     if (!key) continue
 
     const updatedAt = rowUpdatedAt(row)
-    const makeModel = rowMakeModel(row)
     const categoryClass = rowCategoryClass(row)
+    const canonicalMakeModel = familyMap.get(key) ?? rowMakeModel(row)
     const existing = index.get(key)
 
     if (!existing) {
       index.set(key, {
-        aircraftMakeModel: makeModel,
+        aircraftMakeModel: canonicalMakeModel,
         aircraftCategoryClass: categoryClass,
         updatedAt: updatedAt || null,
       })
@@ -72,18 +97,18 @@ export function buildAircraftTailIndex(rows: AircraftTailIndexSourceRow[]): Airc
 
     if ((updatedAt || '') > (existing.updatedAt || '')) {
       index.set(key, {
-        aircraftMakeModel: makeModel || existing.aircraftMakeModel,
+        aircraftMakeModel: canonicalMakeModel || existing.aircraftMakeModel,
         aircraftCategoryClass: categoryClass || existing.aircraftCategoryClass,
         updatedAt: updatedAt || existing.updatedAt,
       })
       continue
     }
 
-    if (!existing.aircraftMakeModel && makeModel) {
-      existing.aircraftMakeModel = makeModel
-    }
     if (!existing.aircraftCategoryClass && categoryClass) {
       existing.aircraftCategoryClass = categoryClass
+    }
+    if (canonicalMakeModel) {
+      existing.aircraftMakeModel = canonicalMakeModel
     }
   }
 
@@ -146,6 +171,21 @@ export function resolveAircraftByTail(
     aircraftCategoryClass: identity?.aircraftCategoryClass ?? null,
     fromTail: false,
   }
+}
+
+/** Catalog family for an entry: mode make/model for known tails, else exact make/model. */
+export function effectiveCatalogFamilyKey(
+  entry: { aircraftMakeModel?: string | null; registration?: string | null },
+  tailFamilyMap: Map<string, string>
+): string {
+  const tail = normalizeAircraftTailKey(entry.registration ?? '')
+  if (tail) {
+    const fam = tailFamilyMap.get(tail)
+    if (fam && fam.toLowerCase() !== 'unknown') {
+      return fam
+    }
+  }
+  return catalogAircraftFamilyKey(entry.aircraftMakeModel ?? '', entry.registration ?? undefined)
 }
 
 export function consolidateAircraftMakeModelByTail<T extends AircraftTailIndexSourceRow>(

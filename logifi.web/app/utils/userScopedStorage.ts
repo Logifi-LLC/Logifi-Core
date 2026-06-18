@@ -13,7 +13,7 @@ export const ACCOUNT_SCOPED_STORAGE_KEYS = {
   TOTALS_METRICS: 'logifi-totals-metrics',
   BUILDER_DRAFT: 'logifi-logbook-builder-draft',
   BUILDER_DEFAULT_ROLE: 'logifi-logbook-builder-default-role',
-  AIRCRAFT_TAIL_CONSOLIDATION: 'logifi://aircraft-tail-consolidation-v1',
+  AIRCRAFT_TAIL_CONSOLIDATION: 'logifi://aircraft-tail-consolidation-v3',
 } as const
 
 export type AccountScopedStorageKey =

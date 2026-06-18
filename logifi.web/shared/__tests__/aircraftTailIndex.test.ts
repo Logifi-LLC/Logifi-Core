@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildAircraftTailIndex,
+  buildTailCatalogFamilyMap,
   consolidateAircraftMakeModelByTail,
+  effectiveCatalogFamilyKey,
   isMakeModelSpellingVariant,
   normalizeAircraftTailKey,
   resolveAircraftByTail,
 } from '../aircraftTailIndex'
+import { UNKNOWN_AIRCRAFT_FAMILY } from '../catalogAircraftFamily'
 
 describe('normalizeAircraftTailKey', () => {
   it('strips spaces and hyphens from registration keys', () => {
@@ -14,22 +17,51 @@ describe('normalizeAircraftTailKey', () => {
   })
 })
 
-describe('buildAircraftTailIndex', () => {
-  it('keeps the most recently updated make/model per tail', () => {
-    const index = buildAircraftTailIndex([
+describe('buildTailCatalogFamilyMap', () => {
+  it('uses the most common make/model per tail, not the most recent', () => {
+    const map = buildTailCatalogFamilyMap([
       {
         registration: 'N123AB',
-        aircraft_make_model: 'DA20-C1',
+        aircraft_make_model: 'C172',
         updated_at: '2026-01-01T00:00:00Z',
       },
       {
         registration: 'N123AB',
-        aircraft_make_model: 'DA20C1',
+        aircraft_make_model: 'C172N',
         updated_at: '2026-06-01T00:00:00Z',
+      },
+      {
+        registration: 'N123AB',
+        aircraft_make_model: 'C172',
+        updated_at: '2026-03-01T00:00:00Z',
       },
     ])
 
-    expect(index.get('N123AB')?.aircraftMakeModel).toBe('DA20C1')
+    expect(map.get('N123AB')).toBe('C172')
+  })
+})
+
+describe('buildAircraftTailIndex', () => {
+  it('uses mode make/model per tail for canonical identity', () => {
+    const index = buildAircraftTailIndex([
+      {
+        registration: 'N123AB',
+        aircraft_make_model: 'DA20-C1',
+        updated_at: '2026-06-01T00:00:00Z',
+      },
+      {
+        registration: 'N123AB',
+        aircraft_make_model: 'DA20C1',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+      {
+        registration: 'N123AB',
+        aircraft_make_model: 'DA20-C1',
+        updated_at: '2026-03-01T00:00:00Z',
+      },
+    ])
+
+    expect(index.get('N123AB')?.aircraftMakeModel).toBe('DA20-C1')
   })
 })
 
@@ -80,10 +112,104 @@ describe('consolidateAircraftMakeModelByTail', () => {
         aircraftMakeModel: 'DA-20-C1',
         updatedAt: '2026-01-01T00:00:00Z',
       },
+      {
+        id: '3',
+        registration: 'N123AB',
+        aircraftMakeModel: 'DA20-C1',
+        updatedAt: '2026-02-01T00:00:00Z',
+      },
     ]
 
     const { entries: consolidated, updatedCount } = consolidateAircraftMakeModelByTail(entries)
-    expect(updatedCount).toBe(1)
-    expect(consolidated[1]?.aircraftMakeModel).toBe('DA20-C1')
+    expect(updatedCount).toBeGreaterThanOrEqual(1)
+    expect(consolidated.every((e) => e.aircraftMakeModel === 'DA20-C1')).toBe(true)
+  })
+})
+
+describe('effectiveCatalogFamilyKey', () => {
+  it('maps mixed C172 variant entries for the same tail to one catalog family', () => {
+    const tailFamilyMap = buildTailCatalogFamilyMap([
+      {
+        registration: 'N123AB',
+        aircraftMakeModel: 'C172',
+        updatedAt: '2026-06-01T00:00:00Z',
+      },
+      {
+        registration: 'N123AB',
+        aircraftMakeModel: 'C172N',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+      {
+        registration: 'N123AB',
+        aircraftMakeModel: 'C172',
+        updatedAt: '2026-03-01T00:00:00Z',
+      },
+    ])
+
+    expect(
+      effectiveCatalogFamilyKey(
+        { registration: 'N123AB', aircraftMakeModel: 'C172N' },
+        tailFamilyMap
+      )
+    ).toBe('C172')
+    expect(
+      effectiveCatalogFamilyKey(
+        { registration: 'N123AB', aircraftMakeModel: 'C172' },
+        tailFamilyMap
+      )
+    ).toBe('C172')
+  })
+
+  it('merges multiple tails into one family when each tail mode is C172', () => {
+    const tailFamilyMap = buildTailCatalogFamilyMap([
+      { registration: 'N111AA', aircraftMakeModel: 'C172' },
+      { registration: 'N222BB', aircraftMakeModel: 'C172' },
+      { registration: 'N333CC', aircraftMakeModel: 'C172N' },
+      { registration: 'N333CC', aircraftMakeModel: 'C172' },
+      { registration: 'N333CC', aircraftMakeModel: 'C172' },
+    ])
+
+    const families = new Set([
+      effectiveCatalogFamilyKey({ registration: 'N111AA', aircraftMakeModel: 'C172' }, tailFamilyMap),
+      effectiveCatalogFamilyKey({ registration: 'N222BB', aircraftMakeModel: 'C172' }, tailFamilyMap),
+      effectiveCatalogFamilyKey({ registration: 'N333CC', aircraftMakeModel: 'C172N' }, tailFamilyMap),
+    ])
+
+    expect(families.size).toBe(1)
+    expect(families.has('C172')).toBe(true)
+  })
+
+  it('keeps a new tail in its own family when only C172N is known', () => {
+    const tailFamilyMap = buildTailCatalogFamilyMap([
+      {
+        registration: 'N999ZZ',
+        aircraftMakeModel: 'C172N',
+        updatedAt: '2026-06-01T00:00:00Z',
+      },
+    ])
+
+    expect(
+      effectiveCatalogFamilyKey(
+        { registration: 'N999ZZ', aircraftMakeModel: 'C172N' },
+        tailFamilyMap
+      )
+    ).toBe('C172N')
+  })
+
+  it('groups registration-only entries under Unknown aircraft', () => {
+    const tailFamilyMap = buildTailCatalogFamilyMap([
+      {
+        registration: 'N855RW',
+        aircraftMakeModel: '',
+        updatedAt: '2026-06-01T00:00:00Z',
+      },
+    ])
+
+    expect(
+      effectiveCatalogFamilyKey(
+        { registration: 'N855RW', aircraftMakeModel: '' },
+        tailFamilyMap
+      )
+    ).toBe(UNKNOWN_AIRCRAFT_FAMILY)
   })
 })
