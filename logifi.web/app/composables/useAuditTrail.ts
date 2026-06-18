@@ -331,7 +331,7 @@ export const useAuditTrail = () => {
     isZulu: 'Zulu (UTC)'
   }
 
-  const OOOI_FIELD_ORDER = ['out', 'off', 'on', 'in', 'isZulu'] as const
+  const OOOI_FIELD_ORDER = ['out', 'off', 'in', 'on', 'isZulu'] as const
 
   const getFieldDiff = (oldData: any, newData: any, changedFields: string[]) => {
     const diffs: Array<{ field: string; oldValue: any; newValue: any }> = []

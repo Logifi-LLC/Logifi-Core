@@ -800,7 +800,7 @@ function formatOooiPreview(f: FcvMappedEntry): string {
   const off = toDisp(o.off)
   const on = toDisp(o.on)
   const inn = toDisp(o.in)
-  const parts = [out, off, on, inn].filter(Boolean)
+  const parts = [out, off, inn, on].filter(Boolean)
   return parts.length ? `OOOI ${parts.join(' · ')}` : ''
 }
 

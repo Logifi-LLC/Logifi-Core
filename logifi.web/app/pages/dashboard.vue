@@ -5431,6 +5431,7 @@ import { validateCrossCountry, calculateDistanceNM } from '../utils/validation'
 import { calculateNightTime } from '../utils/nightTimeCalculator'
 import { DateTime } from 'luxon'
 import { getAirportIanaTimezone, normalizeTimezoneToIANA } from '../../shared/airportTimezone'
+import { sortEntriesByDateAndOOOI } from '../../shared/oooiSort'
 import { calculateSectionII, calculateSectionIII } from '../utils/form8710Calculator'
 import type { Form8710Data, AircraftCategory8710, ComplianceMetadata } from '../utils/form8710Types'
 import { mapCategoryTo8710, isTrainingDevice } from '../utils/form8710Types'
@@ -6291,7 +6292,7 @@ const roleOptions = ['PIC', 'SIC', 'Dual Received', 'Solo', 'Safety Pilot', 'Exa
 function roleDisplayLabel(role: string): string {
   return role === 'Dual Received' ? 'Student' : role
 }
-const oooiFields: (keyof OOOITimes)[] = ['out', 'off', 'on', 'in']
+const oooiFields: (keyof OOOITimes)[] = ['out', 'off', 'in', 'on']
 const oooiFieldLabels: Record<keyof OOOITimes, string> = {
   out: 'Out',
   off: 'Off',
@@ -9875,19 +9876,6 @@ function formatOOOIInput(value: string): string {
   return value.replace(/\D/g, '').slice(0, 4)
 }
 
-function parseOOOITime(time: string | null): number | null {
-  if (!time || time.length === 0) return null
-  // Parse 4-digit time string (HHMM) to minutes since midnight
-  const digits = time.replace(/\D/g, '').padStart(4, '0')
-  if (digits.length !== 4) return null
-  const hours = parseInt(digits.slice(0, 2), 10)
-  const minutes = parseInt(digits.slice(2, 4), 10)
-  if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-    return null
-  }
-  return hours * 60 + minutes
-}
-
 /**
  * Convert OOOI time format from "HHMM" to "HH:MM"
  * @param time Time string in HHMM format (e.g., "1430") or null
@@ -9919,29 +9907,6 @@ function convertOOOITimeToHHMM(time: string | null): string | null {
   
   // Format as HH:MM
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
-}
-
-function sortEntriesByDateAndOOOI(entries: LogEntry[]): LogEntry[] {
-  return [...entries].sort((a, b) => {
-    // Primary sort: date (descending - most recent first)
-    const dateA = new Date(a.date).getTime()
-    const dateB = new Date(b.date).getTime()
-    const dateDiff = dateB - dateA
-    
-    if (dateDiff !== 0) {
-      return dateDiff
-    }
-    
-    // Secondary sort: OOOI "out" time (descending - latest first)
-    // Entries without OOOI "out" time come after entries with OOOI times
-    const timeA = parseOOOITime(a.oooi?.out ?? null)
-    const timeB = parseOOOITime(b.oooi?.out ?? null)
-    
-    if (timeA === null && timeB === null) return 0
-    if (timeA === null) return 1 // a comes after b
-    if (timeB === null) return -1 // a comes before b
-    return timeB - timeA // descending order (latest first)
-  })
 }
 
 function autoCheckFlightConditions(

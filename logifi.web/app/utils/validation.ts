@@ -1,4 +1,5 @@
 import type { LogEntry, FlightTimeBreakdown } from './logbookTypes'
+import { sortEntriesByDateAndOOOI } from '../../shared/oooiSort'
 
 export interface ValidationResult {
   type: 'error' | 'warning'
@@ -40,22 +41,6 @@ function isProvided(value: number | null | undefined): boolean {
  */
 function approximatelyEqual(a: number, b: number, tolerance: number = FLOATING_POINT_TOLERANCE): boolean {
   return Math.abs(a - b) <= tolerance
-}
-
-/**
- * Parse OOOI time string (HHMM format) to minutes since midnight for comparison
- */
-function parseOOOITimeForValidation(time: string | null | undefined): number | null {
-  if (!time || time.length === 0) return null
-  // Parse 4-digit time string (HHMM) to minutes since midnight
-  const digits = time.replace(/\D/g, '').padStart(4, '0')
-  if (digits.length !== 4) return null
-  const hours = parseInt(digits.slice(0, 2), 10)
-  const minutes = parseInt(digits.slice(2, 4), 10)
-  if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-    return null
-  }
-  return hours * 60 + minutes
 }
 
 /**
@@ -140,26 +125,7 @@ export function validateDate(entry: LogEntry, allEntries?: LogEntry[]): Validati
       const otherEntries = allEntries.filter(e => e.id !== entry.id)
       
       if (otherEntries.length > 0) {
-        // Sort entries by date and OOOI times (same logic as sortEntriesByDateAndOOOI)
-        const sortedEntries = [...otherEntries].sort((a, b) => {
-          // Primary sort: date (descending - most recent first)
-          const dateA = new Date(a.date).getTime()
-          const dateB = new Date(b.date).getTime()
-          const dateDiff = dateB - dateA
-          
-          if (dateDiff !== 0) {
-            return dateDiff
-          }
-          
-          // Secondary sort: OOOI "out" time (descending - latest first)
-          const timeA = parseOOOITimeForValidation(a.oooi?.out ?? null)
-          const timeB = parseOOOITimeForValidation(b.oooi?.out ?? null)
-          
-          if (timeA === null && timeB === null) return 0
-          if (timeA === null) return 1 // a comes after b
-          if (timeB === null) return -1 // a comes before b
-          return timeB - timeA // descending order (latest first)
-        })
+        const sortedEntries = sortEntriesByDateAndOOOI(otherEntries)
 
         // Check if current entry date is before the most recent entry
         const mostRecentEntry = sortedEntries[0]
