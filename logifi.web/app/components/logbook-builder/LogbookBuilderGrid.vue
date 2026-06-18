@@ -18,6 +18,7 @@ import {
   type ActiveCell,
   type SelectionRange,
 } from '~/utils/logbookBuilderCommands'
+import type { LogbookColumnConfig } from '~/utils/logbookTypes'
 import LogbookBuilderCell from './LogbookBuilderCell.vue'
 import LogbookBuilderHeader from './LogbookBuilderHeader.vue'
 import LogbookBuilderRowTags from './LogbookBuilderRowTags.vue'
@@ -359,12 +360,6 @@ function focusGridContainer() {
   gridContainerRef.value?.focus()
 }
 
-function eventTargetIsSelectControl(target: EventTarget | null): boolean {
-  if (!target || !(target instanceof HTMLElement)) return false
-  const tag = target.tagName
-  return tag === 'SELECT' || tag === 'OPTION'
-}
-
 function isSelectColumn(colIdx: number): boolean {
   const col = visibleColumns.value[colIdx]
   return col ? isBuilderSelectField(col) : false
@@ -373,6 +368,56 @@ function isSelectColumn(colIdx: number): boolean {
 function isActiveSelectColumn(): boolean {
   const focus = activeCell.value
   return focus != null && isSelectColumn(focus.colIndex)
+}
+
+function isPlainTextColumn(col: LogbookColumnConfig | undefined): boolean {
+  if (!col) return false
+  if (isBuilderSelectField(col)) return false
+  if (col.fieldKey === 'pilots') return false
+  return true
+}
+
+function isClickToEditColumn(col: LogbookColumnConfig | undefined): boolean {
+  if (!col) return false
+  if (isBuilderSelectField(col)) return true
+  if (col.fieldKey === 'pilots') return true
+  return isPlainTextColumn(col)
+}
+
+function isGridChromeMouseTarget(target: EventTarget | null): boolean {
+  if (!target || !(target instanceof HTMLElement)) return false
+  return (
+    target.closest('thead') != null ||
+    target.closest('[aria-label="Drag to fill"]') != null ||
+    target.closest('.cursor-col-resize') != null
+  )
+}
+
+function scrollActiveCellIntoView() {
+  void nextTick(() => {
+    const cell = activeCell.value
+    const container = gridContainerRef.value
+    if (!cell || !container) return
+    const el = container.querySelector(
+      `[data-builder-row="${cell.rowIndex}"][data-builder-col="${cell.colIndex}"]`,
+    )
+    const td = el?.closest('td')
+    td?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  })
+}
+
+function editingCellDefersKeydown(e: KeyboardEvent): boolean {
+  const ec = editingCell.value
+  if (!ec) return false
+  const col = visibleColumns.value[ec.colIndex]
+  if (!col) return false
+  const cellEl = cellRefs.value.get(cellKey(ec.rowIndex, col.id))
+  return cellEl?.shouldDeferGridKeydown?.(e) ?? false
+}
+
+function onCellDropdownCommit() {
+  commitAndExitEdit()
+  moveEnter(false)
 }
 
 async function startEdit(
@@ -395,6 +440,7 @@ async function startEdit(
   activeCell.value = cell
   setSelectionFromAnchor(cell, cell)
   setActiveRowIndex(cell.rowIndex)
+  scrollActiveCellIntoView()
   await nextTick()
   const el = cellRefs.value.get(cellKey(cell.rowIndex, col.id))
   const beginOverwrite =
@@ -442,6 +488,7 @@ function navigateToCell(rowIdx: number, colIdx: number, extend = false) {
   if (gridMode.value === 'navigate') {
     focusGridContainer()
   }
+  scrollActiveCellIntoView()
 }
 
 function moveSelectionByDelta(deltaRow: number, deltaCol: number, extend: boolean) {
@@ -599,21 +646,15 @@ function getCellFromEvent(event: MouseEvent): ActiveCell | null {
 
 function onGridMouseDown(event: MouseEvent) {
   if (event.button !== 0) return
+  if (isGridChromeMouseTarget(event.target)) return
 
   const cellFromEvent = getCellFromEvent(event)
   const cell = cellFromEvent ?? findCellFromPoint(event.clientX, event.clientY)
   if (!cell) return
 
   const col = visibleColumns.value[cell.colIndex]
-  const isPilotInputCell =
-    col?.fieldKey === 'pilots' &&
-    (event.target instanceof HTMLInputElement ||
-      (event.target instanceof HTMLElement && event.target.closest('input[data-builder-row]')))
-  const isSelectCell =
-    eventTargetIsSelectControl(event.target) ||
-    (col != null && isBuilderSelectField(col))
 
-  if ((isSelectCell || isPilotInputCell) && col) {
+  if (isClickToEditColumn(col)) {
     if (
       gridMode.value === 'edit' &&
       editingCell.value &&
@@ -855,6 +896,10 @@ function handleKeyDown(e: KeyboardEvent) {
       e.preventDefault()
       cancelEdit()
       focusGridContainer()
+      return
+    }
+
+    if (editingCellDefersKeydown(e)) {
       return
     }
 
@@ -1172,6 +1217,7 @@ type CellRefHandle = {
   cancelEdit?: (restoreValue: string) => void
   getInputElement?: () => HTMLInputElement | HTMLTextAreaElement | null
   getSelectElement?: () => HTMLSelectElement | null
+  shouldDeferGridKeydown?: (e: KeyboardEvent) => boolean
 }
 const cellRefs = ref<Map<string, CellRefHandle>>(new Map())
 
@@ -1248,10 +1294,12 @@ function focusCellByIndex(rowIdx: number, colIdx: number) {
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeyDown, true)
+  gridContainerRef.value?.addEventListener('mousedown', onGridMouseDown, true)
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyDown, true)
+  gridContainerRef.value?.removeEventListener('mousedown', onGridMouseDown, true)
 })
 
 defineExpose({
@@ -1389,7 +1437,7 @@ defineExpose({
           </th>
         </tr>
       </thead>
-      <tbody @mousedown="onGridMouseDown">
+      <tbody>
         <tr
           v-for="(row, rowIdx) in rows"
           :key="rowIdx"
@@ -1409,7 +1457,7 @@ defineExpose({
                 digifiCellState(rowIdx, col.id) === 'auto' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50/70') : '',
                 digifiCellState(rowIdx, col.id) === 'confirmed' ? (isDark ? 'bg-sky-500/10' : 'bg-sky-50/70') : '',
                 isCellInSelection(rowIdx, colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
-                isActiveCell(rowIdx, colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400 shadow-inner' : 'ring-1 ring-inset ring-blue-500') : '',
+                isActiveCell(rowIdx, colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400' : 'ring-1 ring-inset ring-blue-500') : '',
                 isSelectionTopEdge(rowIdx, colIdx) ? 'border-t-2 border-t-blue-500' : '',
                 isSelectionBottomEdge(rowIdx, colIdx) ? 'border-b-2 border-b-blue-500' : '',
                 isSelectionLeftEdge(rowIdx, colIdx) ? 'border-l-2 border-l-blue-500' : '',
@@ -1434,6 +1482,7 @@ defineExpose({
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
                 @focus="onCellFocus(rowIdx, colIdx)"
                 @blur="onCellBlur"
+                @dropdown-commit="onCellDropdownCommit"
               />
               <span
                 v-if="digifiCellState(rowIdx, col.id)"
@@ -1473,7 +1522,7 @@ defineExpose({
                 digifiCellState(rowIdx, col.id) === 'auto' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50/70') : '',
                 digifiCellState(rowIdx, col.id) === 'confirmed' ? (isDark ? 'bg-sky-500/10' : 'bg-sky-50/70') : '',
                 isCellInSelection(rowIdx, splitIndex + colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
-                isActiveCell(rowIdx, splitIndex + colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400 shadow-inner' : 'ring-1 ring-inset ring-blue-500') : '',
+                isActiveCell(rowIdx, splitIndex + colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400' : 'ring-1 ring-inset ring-blue-500') : '',
                 isSelectionTopEdge(rowIdx, splitIndex + colIdx) ? 'border-t-2 border-t-blue-500' : '',
                 isSelectionBottomEdge(rowIdx, splitIndex + colIdx) ? 'border-b-2 border-b-blue-500' : '',
                 isSelectionLeftEdge(rowIdx, splitIndex + colIdx) ? 'border-l-2 border-l-blue-500' : '',
@@ -1498,6 +1547,7 @@ defineExpose({
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
                 @focus="onCellFocus(rowIdx, splitIndex + colIdx)"
                 @blur="onCellBlur"
+                @dropdown-commit="onCellDropdownCommit"
               />
               <span
                 v-if="digifiCellState(rowIdx, col.id)"
@@ -1532,7 +1582,7 @@ defineExpose({
                 digifiCellState(rowIdx, col.id) === 'auto' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50/70') : '',
                 digifiCellState(rowIdx, col.id) === 'confirmed' ? (isDark ? 'bg-sky-500/10' : 'bg-sky-50/70') : '',
                 isCellInSelection(rowIdx, colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
-                isActiveCell(rowIdx, colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400 shadow-inner' : 'ring-1 ring-inset ring-blue-500') : '',
+                isActiveCell(rowIdx, colIdx) ? (isDark ? 'ring-1 ring-inset ring-blue-400' : 'ring-1 ring-inset ring-blue-500') : '',
                 isSelectionTopEdge(rowIdx, colIdx) ? 'border-t-2 border-t-blue-500' : '',
                 isSelectionBottomEdge(rowIdx, colIdx) ? 'border-b-2 border-b-blue-500' : '',
                 isSelectionLeftEdge(rowIdx, colIdx) ? 'border-l-2 border-l-blue-500' : '',
@@ -1557,6 +1607,7 @@ defineExpose({
                 @update:model-value="(v) => onCellInput(rowIdx, col.id, v)"
                 @focus="onCellFocus(rowIdx, colIdx)"
                 @blur="onCellBlur"
+                @dropdown-commit="onCellDropdownCommit"
               />
               <span
                 v-if="digifiCellState(rowIdx, col.id)"

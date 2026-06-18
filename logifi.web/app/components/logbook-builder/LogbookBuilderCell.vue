@@ -8,6 +8,7 @@ import {
   PILOT_ROLE_OPTIONS,
 } from '~/utils/logbookBuilderTypes'
 import { filterPilotSuggestions, handlePilotSuggestKeydown } from '~/utils/pilotNameSuggest'
+import { shouldDeferGridKeydown as shouldDeferGridKeydownUtil } from '~/utils/logbookBuilderGridKeys'
 import { useTheme } from '~/composables/useTheme'
 
 const numericKeys: LogbookColumnKey[] = [
@@ -28,7 +29,7 @@ export default defineComponent({
     builderCol: { type: Number, default: undefined },
     isEditing: { type: Boolean, default: false },
   },
-  emits: ['update:modelValue', 'focus', 'blur'],
+  emits: ['update:modelValue', 'focus', 'blur', 'dropdown-commit'],
   setup(props, { emit }) {
     const inputRef = ref<HTMLInputElement | null>(null)
     const textareaRef = ref<HTMLTextAreaElement | null>(null)
@@ -98,19 +99,17 @@ export default defineComponent({
 
     const inputClass = computed(() => {
       const colors = isDark.value
-        ? 'text-gray-100 placeholder-gray-500 focus:bg-white/5 focus:shadow-inner'
-        : 'text-gray-900 placeholder-gray-400 focus:bg-blue-50'
+        ? 'text-gray-100 placeholder-gray-500'
+        : 'text-gray-900 placeholder-gray-400'
       const align = isRemarks.value ? 'text-left whitespace-pre-wrap resize-none' : 'text-center'
       const minH = isRemarks.value ? 'min-h-[2.75rem]' : 'min-h-[1.75rem]'
-      const base = `w-full min-w-0 border-0 bg-transparent px-1.5 py-0.5 text-sm font-quicksand outline-none ${minH} focus:ring-1 focus:ring-inset focus:ring-blue-500 ${align} ${colors}`
+      const base = `block h-full w-full min-w-0 border-0 bg-transparent px-1.5 py-0.5 text-sm font-quicksand outline-none ${minH} ${align} ${colors}`
       const mono = (isNumeric.value || isCategoryClassTimeColumn.value) ? 'font-mono' : ''
       return `${base} ${mono}`
     })
     const selectClass = computed(() => {
-      const colors = isDark.value
-        ? 'text-gray-100 focus:bg-white/5 focus:shadow-inner bg-transparent'
-        : 'text-gray-900 focus:bg-blue-50'
-      return `w-full min-w-0 border-0 bg-transparent px-1.5 py-0.5 text-center text-sm font-quicksand outline-none min-h-[1.75rem] focus:ring-1 focus:ring-inset focus:ring-blue-500 ${colors}`
+      const colors = isDark.value ? 'text-gray-100' : 'text-gray-900'
+      return `block h-full w-full min-w-0 border-0 bg-transparent px-1.5 py-0.5 text-center text-sm font-quicksand outline-none min-h-[1.75rem] ${colors}`
     })
 
     const listId = computed(() => {
@@ -237,6 +236,7 @@ export default defineComponent({
         if (result.type === 'select') {
           e.preventDefault()
           selectPilotName(result.value)
+          emit('dropdown-commit')
           return
         }
         if (result.type === 'close') {
@@ -273,6 +273,18 @@ export default defineComponent({
       emit('update:modelValue', (e.target as HTMLSelectElement).value)
     }
 
+    function shouldDeferGridKeydown(e: KeyboardEvent): boolean {
+      const sel = getSelectElement()
+      const isSelectFocused = sel != null && document.activeElement === sel
+      return shouldDeferGridKeydownUtil({
+        fieldKey: props.fieldKey,
+        key: e.key,
+        isSelectFocused,
+        pilotMenuOpen: showPilotDropdown.value,
+        pilotHighlightIndex: highlightedPilotIndex.value,
+      })
+    }
+
     return {
       inputRef,
       selectRef,
@@ -305,6 +317,7 @@ export default defineComponent({
       cancelEdit,
       getInputElement,
       getSelectElement,
+      shouldDeferGridKeydown,
       onInput,
       onSelectChange,
       onInputKeydown,
@@ -329,7 +342,6 @@ export default defineComponent({
     :tabindex="isEditing ? 0 : -1"
     :data-builder-row="builderRow"
     :data-builder-col="builderCol"
-    @mousedown.stop
     @focus="$emit('focus')"
     @blur="$emit('blur')"
     @change="onSelectChange($event)"
@@ -345,7 +357,6 @@ export default defineComponent({
     :tabindex="isEditing ? 0 : -1"
     :data-builder-row="builderRow"
     :data-builder-col="builderCol"
-    @mousedown.stop
     @focus="$emit('focus')"
     @blur="$emit('blur')"
     @change="onSelectChange($event)"
@@ -362,7 +373,6 @@ export default defineComponent({
     :tabindex="isEditing ? 0 : -1"
     :data-builder-row="builderRow"
     :data-builder-col="builderCol"
-    @mousedown.stop
     @focus="$emit('focus')"
     @blur="$emit('blur')"
     @change="onSelectChange($event)"
@@ -379,7 +389,6 @@ export default defineComponent({
     :tabindex="isEditing ? 0 : -1"
     :data-builder-row="builderRow"
     :data-builder-col="builderCol"
-    @mousedown.stop
     @focus="$emit('focus')"
     @blur="$emit('blur')"
     @change="onSelectChange($event)"
@@ -388,8 +397,7 @@ export default defineComponent({
   </select>
   <div
     v-else-if="isPilots"
-    class="relative w-full min-w-0"
-    @mousedown.stop
+    class="relative h-full w-full min-w-0"
   >
     <input
       ref="inputRef"
