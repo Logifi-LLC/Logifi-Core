@@ -5,12 +5,17 @@
         <div class="min-w-0">
           <p class="text-sm font-medium" :class="isDarkMode ? 'text-gray-100' : 'text-gray-900'">Status</p>
           <div class="mt-1 flex flex-wrap items-center gap-2">
-            <span class="inline-flex items-center gap-1.5 text-xs font-medium font-quicksand" :class="syncBadgeClass">
+            <span
+              class="inline-flex items-center gap-1.5 text-xs font-medium font-quicksand online-status"
+              data-testid="online-status"
+              :class="syncBadgeClass"
+            >
               <Icon :name="syncStatusIcon" :class="{ 'animate-spin': isSyncing }" size="14" />
               {{ syncStatusText }}
             </span>
             <span
               v-if="queueLength > 0"
+              data-testid="sync-queue-status"
               class="inline-flex items-center gap-1.5 text-xs font-medium font-quicksand"
               :class="isDarkMode ? 'text-orange-400' : 'text-orange-700'"
             >

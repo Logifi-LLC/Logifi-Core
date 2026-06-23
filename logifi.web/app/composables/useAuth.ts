@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase, isSupabaseAvailable } from '~/lib/supabase'
+import { readCachedSupabaseSession } from '~/utils/cachedSupabaseSession'
 import { withTimeout } from '~/utils/promiseTimeout'
 
 // Shared state across all instances of useAuth
@@ -11,6 +12,19 @@ const globalError = ref<string | null>(null)
 const isPasswordRecoverySession = ref(false)
 let authInitialized = false
 let authStateSubscription: { unsubscribe: () => void } | null = null
+
+if (typeof window !== 'undefined') {
+  try {
+    const cachedSession = readCachedSupabaseSession()
+    if (cachedSession) {
+      globalSession.value = cachedSession
+      globalUser.value = cachedSession.user ?? null
+      globalIsLoading.value = false
+    }
+  } catch (err) {
+    console.warn('[useAuth] Failed to hydrate cached session at startup:', err)
+  }
+}
 
 export const useAuth = () => {
   const user = globalUser
@@ -35,8 +49,16 @@ export const useAuth = () => {
     }
 
     try {
-      isLoading.value = true
       error.value = null
+
+      const cachedSession = readCachedSupabaseSession()
+      if (cachedSession) {
+        session.value = cachedSession
+        user.value = cachedSession.user ?? null
+        isLoading.value = false
+      } else {
+        isLoading.value = true
+      }
 
       // Subscribe before getSession() so PASSWORD_RECOVERY (fired after URL parse) is never missed.
       if (isSupabaseAvailable() && !authStateSubscription) {
@@ -86,10 +108,20 @@ export const useAuth = () => {
 
       authInitialized = true
     } catch (err) {
-      console.error('Error initializing auth:', err)
+      console.warn('Auth getSession failed; keeping cached session if available:', err)
       error.value = err instanceof Error ? err.message : 'Failed to initialize authentication'
-      user.value = null
-      session.value = null
+
+      if (!session.value) {
+        const cachedSession = readCachedSupabaseSession()
+        if (cachedSession) {
+          session.value = cachedSession
+          user.value = cachedSession.user ?? null
+        } else {
+          user.value = null
+          session.value = null
+        }
+      }
+
       authInitialized = true
     } finally {
       isLoading.value = false

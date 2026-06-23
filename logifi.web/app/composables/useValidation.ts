@@ -12,6 +12,8 @@ import {
   type ValidationResult, 
   type AirportCoordinates 
 } from '~/utils/validation'
+import { lookupAirportLocal } from '../../shared/airportLookup'
+import { isCapacitorNative } from '~/composables/useCapacitorPlatform'
 import { useAirportLookup } from '~/composables/useAirportLookup'
 
 export const useValidation = () => {
@@ -19,6 +21,27 @@ export const useValidation = () => {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const { lookupAirport } = useAirportLookup()
+
+  const resolveAirportCoordinates = async (
+    code: string
+  ): Promise<{ latitude?: number; longitude?: number } | null> => {
+    const normalizedCode = code.trim().toUpperCase().replace(/\s+/g, '')
+    if (!normalizedCode) return null
+
+    if (isCapacitorNative()) {
+      const info = lookupAirportLocal(normalizedCode)
+      if (info?.latitude !== undefined && info?.longitude !== undefined) {
+        return { latitude: info.latitude, longitude: info.longitude }
+      }
+      return null
+    }
+
+    const info = await lookupAirport(normalizedCode)
+    if (info?.latitude !== undefined && info?.longitude !== undefined) {
+      return { latitude: info.latitude, longitude: info.longitude }
+    }
+    return null
+  }
 
   // Separate errors and warnings
   const validationErrors = computed(() => 
@@ -64,10 +87,9 @@ export const useValidation = () => {
       
       if (departure && destination && departure !== 'UNKNOWN' && destination !== 'UNKNOWN') {
         try {
-          // Lookup airport coordinates for distance calculation
           const [depInfo, destInfo] = await Promise.all([
-            lookupAirport(departure),
-            lookupAirport(destination)
+            resolveAirportCoordinates(departure),
+            resolveAirportCoordinates(destination),
           ])
           
           const airportCoords: { departure?: AirportCoordinates; destination?: AirportCoordinates } = {}

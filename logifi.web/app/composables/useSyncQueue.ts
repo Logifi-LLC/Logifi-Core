@@ -351,13 +351,18 @@ export const useSyncQueue = () => {
 
   /**
    * Remove queue items whose inserts already exist in Supabase (e.g. after file import).
+   * When remoteEntryIds is provided, drop stale insert/update ops for synced entries deleted remotely.
    */
-  const reconcileSyncQueue = async (userId?: string): Promise<number> => {
+  const reconcileSyncQueue = async (
+    userId?: string,
+    options?: { remoteEntryIds?: string[] }
+  ): Promise<number> => {
     const scopedUserId = userId ?? activeUserId.value
     if (!scopedUserId) return 0
 
     const queue = await getSyncQueue(scopedUserId)
     let removed = 0
+    const remoteSet = options?.remoteEntryIds ? new Set(options.remoteEntryIds) : null
 
     for (const item of queue) {
       let shouldRemove = false
@@ -368,6 +373,18 @@ export const useSyncQueue = () => {
           item
         )
         if (existing) shouldRemove = true
+      }
+
+      if (
+        remoteSet &&
+        (item.operation === 'insert' || item.operation === 'update') &&
+        !remoteSet.has(item.entryId)
+      ) {
+        const { getEntryFromIndexedDB } = await import('~/utils/indexedDB')
+        const localEntry = await getEntryFromIndexedDB(item.entryId)
+        if (localEntry?._synced) {
+          shouldRemove = true
+        }
       }
 
       if (shouldRemove) {
@@ -406,6 +423,9 @@ export const useSyncQueue = () => {
       .eq('id', item.entryId)
 
     if (error) {
+      if (error.code === 'PGRST116') {
+        return true
+      }
       throw error
     }
 

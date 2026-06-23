@@ -1,27 +1,33 @@
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 import { supabase, isSupabaseAvailable } from '~/lib/supabase'
 import { withTimeout } from '~/utils/promiseTimeout'
 
+const globalIsOnline = ref(false)
+const globalConnectivityReady = ref(false)
+const globalIsSyncing = ref(false)
+const globalSyncProgress = ref<{
+  current: number
+  total: number
+  status: 'idle' | 'syncing' | 'error' | 'complete'
+  error?: string
+}>({
+  current: 0,
+  total: 0,
+  status: 'idle',
+})
+
+let connectivityCheckInterval: ReturnType<typeof setInterval> | null = null
+let monitoringStarted = false
+let monitoringRefCount = 0
+let handleOnline: (() => void) | null = null
+let handleOffline: (() => void) | null = null
+
 export const useOffline = () => {
-  const isOnline = ref(false)
-  const connectivityReady = ref(false)
-  const isSyncing = ref<boolean>(false)
-  const syncProgress = ref<{
-    current: number
-    total: number
-    status: 'idle' | 'syncing' | 'error' | 'complete'
-    error?: string
-  }>({
-    current: 0,
-    total: 0,
-    status: 'idle'
-  })
+  const isOnline = globalIsOnline
+  const connectivityReady = globalConnectivityReady
+  const isSyncing = globalIsSyncing
+  const syncProgress = globalSyncProgress
 
-  let connectivityCheckInterval: ReturnType<typeof setInterval> | null = null
-
-  /**
-   * Check if Supabase is actually reachable (not just browser online status)
-   */
   const checkSupabaseConnectivity = async (): Promise<boolean> => {
     if (!isSupabaseAvailable()) {
       return false
@@ -39,9 +45,6 @@ export const useOffline = () => {
     }
   }
 
-  /**
-   * Update online status
-   */
   const updateOnlineStatus = async () => {
     const browserOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
 
@@ -56,67 +59,72 @@ export const useOffline = () => {
     connectivityReady.value = true
   }
 
-  /**
-   * Start connectivity monitoring
-   */
   const startMonitoring = () => {
     if (typeof window === 'undefined') return
 
-    window.addEventListener('online', updateOnlineStatus)
-    window.addEventListener('offline', () => {
+    monitoringRefCount += 1
+    if (monitoringStarted) return
+    monitoringStarted = true
+
+    handleOnline = () => {
+      void updateOnlineStatus()
+    }
+    handleOffline = () => {
       isOnline.value = false
       connectivityReady.value = true
-    })
+    }
 
-    connectivityCheckInterval = setInterval(updateOnlineStatus, 90000)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    connectivityCheckInterval = setInterval(() => {
+      void updateOnlineStatus()
+    }, 90000)
 
-    updateOnlineStatus()
+    void updateOnlineStatus()
   }
 
-  /**
-   * Stop connectivity monitoring
-   */
   const stopMonitoring = () => {
     if (typeof window === 'undefined') return
+    if (monitoringRefCount > 0) {
+      monitoringRefCount -= 1
+    }
+    if (monitoringRefCount > 0) return
 
-    window.removeEventListener('online', updateOnlineStatus)
-    window.removeEventListener('offline', () => {
-      isOnline.value = false
-    })
+    if (handleOnline) {
+      window.removeEventListener('online', handleOnline)
+      handleOnline = null
+    }
+    if (handleOffline) {
+      window.removeEventListener('offline', handleOffline)
+      handleOffline = null
+    }
 
     if (connectivityCheckInterval) {
       clearInterval(connectivityCheckInterval)
       connectivityCheckInterval = null
     }
+
+    monitoringStarted = false
   }
 
-  /**
-   * Update sync progress
-   */
-  const updateSyncProgress = (current: number, total: number, status: 'idle' | 'syncing' | 'error' | 'complete', error?: string) => {
+  const updateSyncProgress = (
+    current: number,
+    total: number,
+    status: 'idle' | 'syncing' | 'error' | 'complete',
+    error?: string
+  ) => {
     syncProgress.value = { current, total, status, error }
     isSyncing.value = status === 'syncing'
   }
 
-  /**
-   * Reset sync progress
-   */
   const resetSyncProgress = () => {
     syncProgress.value = {
       current: 0,
       total: 0,
-      status: 'idle'
+      status: 'idle',
     }
     isSyncing.value = false
   }
-
-  onMounted(() => {
-    startMonitoring()
-  })
-
-  onUnmounted(() => {
-    stopMonitoring()
-  })
 
   return {
     isOnline: computed(() => isOnline.value),
@@ -127,6 +135,6 @@ export const useOffline = () => {
     updateSyncProgress,
     resetSyncProgress,
     startMonitoring,
-    stopMonitoring
+    stopMonitoring,
   }
 }

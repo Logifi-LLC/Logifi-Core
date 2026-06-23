@@ -135,3 +135,28 @@ export interface DigifiCapturePhoto {
   signedUrl: string | null
   pageSide: DigifiPageSide | null
 }
+
+export interface DigifiCaptureSessionListItem {
+  sessionId: string
+  token: string
+  expiresAt: string
+  createdAt: string
+  photoCount: number
+}
+
+export function parseDigifiCaptureTokenFromUrl(input: string): string | null {
+  const value = input.trim()
+  if (!value) return null
+  if (/^[A-Za-z0-9_-]{16,}$/.test(value)) return value
+
+  try {
+    const url = new URL(value)
+    const parts = url.pathname.split('/').filter(Boolean)
+    if (parts.length < 2) return null
+    if (parts[parts.length - 2] !== 'digifi-capture') return null
+    const token = parts[parts.length - 1] ?? ''
+    return /^[A-Za-z0-9_-]{16,}$/.test(token) ? token : null
+  } catch {
+    return null
+  }
+}

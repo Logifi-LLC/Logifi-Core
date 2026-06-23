@@ -21,8 +21,10 @@
     "test:e2e:headed": "playwright test --headed"
   },
   "dependencies": {
+    "@capacitor/barcode-scanner": "^3.0.2",
     "@capacitor/cli": "^8.4.0",
     "@capacitor/core": "^8.4.0",
+    "@capacitor/splash-screen": "^8.0.1",
     "@nuxt/icon": "2.2.0",
     "@nwpr/airport-codes": "^3.0.3",
     "@supabase/supabase-js": "^2.90.1",

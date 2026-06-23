@@ -2,5 +2,12 @@
   "appId": "io.logifi.app",
   "appName": "Logifi",
   "webDir": "logifi.web/.output/public",
-  "backgroundColor": "#030712"
+  "backgroundColor": "#030712",
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "backgroundColor": "#030712",
+      "showSpinner": false
+    }
+  }
 }

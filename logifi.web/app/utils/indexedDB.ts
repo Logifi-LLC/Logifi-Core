@@ -227,6 +227,14 @@ export async function getEntryFromIndexedDB(entryId: string): Promise<IDBLogEntr
  * Get all entries from IndexedDB for a specific user
  */
 export async function getAllEntriesFromIndexedDB(userId: string): Promise<LogEntry[]> {
+  const entries = await getAllIDBLogEntriesForUser(userId)
+  return entries.map(stripInternalEntryFields)
+}
+
+/**
+ * Get all IndexedDB entries for a user including sync metadata.
+ */
+export async function getAllIDBLogEntriesForUser(userId: string): Promise<IDBLogEntry[]> {
   const db = await getDB()
 
   return new Promise((resolve, reject) => {
@@ -236,10 +244,7 @@ export async function getAllEntriesFromIndexedDB(userId: string): Promise<LogEnt
 
     request.onsuccess = () => {
       const entries: IDBLogEntry[] = request.result || []
-      const cleaned = entries
-        .filter((entry) => entry._userId === userId)
-        .map(stripInternalEntryFields)
-      resolve(cleaned)
+      resolve(entries.filter((entry) => entry._userId === userId))
     }
     request.onerror = () => reject(new Error(`Failed to get entries: ${request.error?.message}`))
   })
@@ -460,6 +465,16 @@ export async function getLastSyncTimestamp(): Promise<number | null> {
  */
 export async function setLastSyncTimestamp(timestamp: number): Promise<void> {
   return setMetadata('lastSyncTimestamp', timestamp)
+}
+
+export const METADATA_LAST_SUCCESSFUL_REMOTE_SYNC = 'lastSuccessfulRemoteSyncAt'
+
+export async function getLastSuccessfulRemoteSyncAt(): Promise<number | null> {
+  return getMetadata(METADATA_LAST_SUCCESSFUL_REMOTE_SYNC)
+}
+
+export async function setLastSuccessfulRemoteSyncAt(timestamp: number): Promise<void> {
+  return setMetadata(METADATA_LAST_SUCCESSFUL_REMOTE_SYNC, timestamp)
 }
 
 /**

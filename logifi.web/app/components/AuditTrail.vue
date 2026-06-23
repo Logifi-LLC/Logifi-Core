@@ -3,12 +3,12 @@
   <Teleport to="body">
   <div
     v-if="isOpen && !isSidebar"
-    class="app-modal-overlay flex items-center justify-center bg-black/50"
+    class="app-modal-overlay flex items-center justify-center bg-black/50 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] px-4"
     @click.self="close"
   >
     <div
       :class="[
-        'relative w-full max-w-4xl max-h-[90vh] rounded-xl border shadow-2xl flex flex-col',
+        'relative w-full max-w-4xl max-h-[90vh] rounded-xl border shadow-2xl flex flex-col min-h-0',
         isDarkMode 
           ? 'bg-gray-800 border-gray-700' 
           : 'bg-white border-gray-300'
@@ -84,7 +84,7 @@
             <div
               v-for="(log, index) in auditLogs"
               :key="log.id"
-              class="relative pl-16 pb-6"
+              class="relative pl-12 sm:pl-16 pb-6"
             >
               <!-- Timeline dot -->
               <div
@@ -103,8 +103,8 @@
                 ]"
               >
                 <!-- Header -->
-                <div class="flex items-start justify-between mb-3">
-                  <div class="flex items-center gap-2">
+                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
+                  <div class="flex items-center gap-2 flex-wrap">
                     <span
                       :class="[
                         'px-2 py-1 rounded text-xs font-semibold font-quicksand uppercase',
@@ -121,7 +121,7 @@
                     v-if="canRestoreVersion(log, index)"
                     @click="handleRestore(log)"
                     :class="[
-                      'px-3 py-1 text-xs rounded-lg font-quicksand transition-colors',
+                      'px-3 py-1 text-xs rounded-lg font-quicksand transition-colors self-start shrink-0',
                       isDarkMode
                         ? 'bg-blue-600 hover:bg-blue-700 text-white'
                         : 'bg-blue-500 hover:bg-blue-600 text-white'
@@ -208,14 +208,13 @@
       </div>
     </div>
   </div>
+  </Teleport>
 
-  <!-- Sidebar version -->
+  <!-- Sidebar version (inline — parent provides scroll container) -->
   <div
     v-if="isOpen && isSidebar"
-    class="h-full flex flex-col"
+    class="min-w-0 max-w-full"
   >
-    <!-- Content -->
-    <div class="flex-1 overflow-y-auto p-4">
       <!-- Entry Metadata (Import Info & Integrity) -->
       <div v-if="entryMetadata" class="mb-4 space-y-3">
         <!-- Import Source Info -->
@@ -294,7 +293,7 @@
           <div
             v-for="(log, index) in filteredAuditLogs"
             :key="log.id"
-            class="relative pl-16 pb-6"
+            class="relative pl-12 sm:pl-16 pb-6"
           >
             <!-- Timeline dot -->
             <div
@@ -313,8 +312,8 @@
               ]"
             >
               <!-- Header -->
-              <div class="flex items-start justify-between mb-3">
-                <div class="flex items-center gap-2">
+              <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
+                <div class="flex items-center gap-2 flex-wrap">
                   <span
                     :class="[
                       'px-2 py-1 rounded text-xs font-semibold font-quicksand uppercase',
@@ -331,7 +330,7 @@
                   v-if="canRestoreVersion(log, index)"
                   @click="handleRestore(log)"
                   :class="[
-                    'px-3 py-1 text-xs rounded-lg font-quicksand transition-colors',
+                    'px-3 py-1 text-xs rounded-lg font-quicksand transition-colors self-start shrink-0',
                     isDarkMode
                       ? 'bg-blue-600 hover:bg-blue-700 text-white'
                       : 'bg-blue-500 hover:bg-blue-600 text-white'
@@ -456,15 +455,13 @@
           </div>
         </div>
       </div>
-    </div>
   </div>
-  </Teleport>
 
   <!-- Restore confirmation dialog -->
   <Teleport to="body">
   <div
     v-if="showRestoreConfirm"
-    class="app-modal-overlay flex items-center justify-center bg-black/70"
+    class="app-modal-overlay flex items-center justify-center bg-black/70 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] px-4"
     @click.self="showRestoreConfirm = false"
   >
       <div

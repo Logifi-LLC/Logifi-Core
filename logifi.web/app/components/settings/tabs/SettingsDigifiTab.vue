@@ -3,18 +3,24 @@
     <SettingsListGroup title="About Digifi" :is-dark-mode="isDarkMode">
       <div class="px-4 py-3">
         <p class="text-sm" :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">
-          Digifi uses AI to pre-fill rows from photos of your paper logbook pages on Add Pages.
-          You are responsible for verifying every entry before importing into your logbook.
+          <template v-if="isIos">
+            Set up and review on your computer. Use Digifi Eye to photograph logbook pages from the iOS app.
+          </template>
+          <template v-else>
+            Digifi uses AI to pre-fill rows from photos of your paper logbook pages on Add Pages.
+            You are responsible for verifying every entry before importing into your logbook.
+          </template>
         </p>
       </div>
     </SettingsListGroup>
 
     <SettingsListGroup title="Scanner" :is-dark-mode="isDarkMode">
       <SettingsListRow
-        label="Open Digifi scanner"
-        subtitle="Add Pages — upload page photos"
+        :label="isIos ? 'Digifi Eye' : 'Open Digifi scanner'"
+        :subtitle="isIos ? 'Camera for desktop Add Pages' : 'Add Pages — upload page photos'"
         icon="ri:scan-line"
-        to="/logbook-builder?digifi=open"
+        :badge="isIos ? 'Beta' : undefined"
+        :to="isIos ? '/digifi-eye' : '/logbook-builder?digifi=open'"
         :is-dark-mode="isDarkMode"
         @click="$emit('close')"
       />
@@ -39,6 +45,7 @@
 import { ref } from 'vue'
 import SettingsListGroup from '../SettingsListGroup.vue'
 import SettingsListRow from '../SettingsListRow.vue'
+import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
 import DigifiCreditsIndicator from '~/components/digifi/DigifiCreditsIndicator.vue'
 import DigifiCreditHistory from '~/components/digifi/DigifiCreditHistory.vue'
 import DigifiAddCreditsModal from '~/components/digifi/DigifiAddCreditsModal.vue'
@@ -53,4 +60,5 @@ defineEmits<{
 }>()
 
 const showAddCreditsModal = ref(false)
+const { isIos } = useCapacitorPlatform()
 </script>

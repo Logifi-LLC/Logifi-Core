@@ -25,6 +25,81 @@
     @restored="handleEntryRestored"
   />
 
+  <!-- Audit Trail Sidebar (inline edit + entry form drawer) -->
+  <Teleport to="body" :disabled="!isIos">
+    <Transition name="fade">
+      <div
+        v-if="isIos && showAuditTrailSidebar && activeAuditTrailEntryId"
+        class="fixed inset-0 z-[65] bg-black/50"
+        aria-hidden="true"
+        @click="closeAuditTrailSidebar"
+      />
+    </Transition>
+    <Transition name="slide-left">
+      <div
+        v-if="showAuditTrailSidebar && activeAuditTrailEntryId"
+        :class="[
+          isIos
+            ? 'fixed inset-0 z-[70] h-[100dvh] w-full pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-2xl overflow-hidden flex flex-col'
+            : 'fixed left-0 top-0 h-full w-full max-w-[400px] z-[60] shadow-2xl',
+          isDarkMode
+            ? 'bg-gray-900 border-r border-white/10 shadow-md shadow-black/40'
+            : 'bg-white border-r border-gray-200 shadow-sm'
+        ]"
+      >
+        <div class="h-full flex flex-col min-h-0 min-w-0">
+          <!-- Sidebar Header -->
+          <div
+            :class="[
+              'flex items-center justify-between p-4 border-b flex-shrink-0',
+              isDarkMode ? 'border-gray-700' : 'border-gray-300'
+            ]"
+          >
+            <div>
+              <h2 :class="['text-lg font-bold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+                Audit Trail
+              </h2>
+              <p :class="['text-xs mt-1 font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                History of changes
+              </p>
+            </div>
+            <button
+              @click="closeAuditTrailSidebar"
+              :class="[
+                'p-2 rounded-lg transition-colors',
+                isDarkMode
+                  ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700'
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+              ]"
+              aria-label="Close audit trail"
+            >
+              <Icon name="ri:close-line" size="20" />
+            </button>
+          </div>
+
+          <!-- Sidebar Content -->
+          <div
+            :class="[
+              'flex-1 min-h-0 overflow-y-auto p-4',
+              isIos ? 'audit-trail-ios-scroll' : ''
+            ]"
+          >
+            <AuditTrail
+              :key="`${activeAuditTrailEntryId}-${auditTrailRefreshKey}`"
+              :is-open="true"
+              :entry-id="activeAuditTrailEntryId"
+              :is-dark-mode="isDarkMode"
+              :local-entry="activeAuditTrailLocalEntry"
+              :is-sidebar="true"
+              @close="closeAuditTrailSidebar"
+              @restored="handleEntryRestored"
+            />
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
   <!-- Currency Dashboard Modal -->
   <CurrencyDashboard
     :is-open="showCurrencyDashboard"
@@ -1331,59 +1406,6 @@
             isDarkMode ? 'bg-gray-900 border-l border-gray-700' : 'bg-gray-50 border-l border-gray-200'
           ]"
         >
-          <!-- Audit Trail Sidebar -->
-          <Transition name="slide-left">
-            <div
-              v-if="showAuditTrailSidebar && expandedEntryId"
-              class="fixed left-0 top-0 h-full w-[400px] z-[60] shadow-2xl"
-              :class="isDarkMode ? 'bg-gray-900 border-r border-white/10 shadow-md shadow-black/40' : 'bg-white border-r border-gray-200 shadow-sm'"
-            >
-              <div class="h-full flex flex-col">
-                <!-- Sidebar Header -->
-                <div
-                  :class="[
-                    'flex items-center justify-between p-4 border-b',
-                    isDarkMode ? 'border-gray-700' : 'border-gray-300'
-                  ]"
-                >
-                  <div>
-                    <h2 :class="['text-lg font-bold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
-                      Audit Trail
-                    </h2>
-                    <p :class="['text-xs mt-1 font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                      History of changes
-                    </p>
-                  </div>
-                  <button
-                    @click="showAuditTrailSidebar = false"
-                    :class="[
-                      'p-2 rounded-lg transition-colors',
-                      isDarkMode 
-                        ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
-                    ]"
-                    aria-label="Close sidebar"
-                  >
-                    <Icon name="ri:close-line" size="20" />
-                  </button>
-                </div>
-
-                <!-- Sidebar Content -->
-                <div class="flex-1 overflow-y-auto p-4">
-                  <AuditTrail
-                    :is-open="true"
-                    :entry-id="expandedEntryId"
-                    :is-dark-mode="isDarkMode"
-                    :local-entry="inlineEditEntry"
-                    :is-sidebar="true"
-                    @close="showAuditTrailSidebar = false"
-                    @restored="handleEntryRestored"
-                  />
-                </div>
-              </div>
-            </div>
-          </Transition>
-
           <!-- Panel Header -->
         <div 
           class="flex items-center justify-between p-4 border-b"
@@ -1395,7 +1417,7 @@
             <button
               v-if="expandedEntryId"
               type="button"
-              @click="showAuditTrailSidebar = !showAuditTrailSidebar"
+              @click="toggleAuditTrailSidebar"
               :class="[
                 'p-2 rounded-lg transition-colors',
                 showAuditTrailSidebar
@@ -2139,7 +2161,7 @@
                 <button
                   v-if="expandedEntryId"
                   type="button"
-                  @click.stop="showAuditTrailSidebar = !showAuditTrailSidebar"
+                  @click.stop="toggleAuditTrailSidebar"
                   :class="[
                     'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold font-quicksand transition-colors',
                     showAuditTrailSidebar
@@ -3113,7 +3135,7 @@
                           ? 'border border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' 
                           : 'border border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')
                     ]"
-                    @click="showAuditTrailSidebar = !showAuditTrailSidebar"
+                    @click="toggleAuditTrailSidebar"
                   >
                     <Icon name="ri:history-line" size="16" />
                     {{ showAuditTrailSidebar ? 'Hide History' : 'View History' }}
@@ -5488,7 +5510,7 @@ import { useProductUpdates } from '../composables/useProductUpdates'
 import type { SettingsStackFrame, SettingsTabId } from '../components/settings/settingsNav'
 import FcvApiDisclaimers from '../components/fcv/FcvApiDisclaimers.vue'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '../utils/migrateLocalStorage'
-import { findDuplicateEntries, checkDuplicatesInDatabase } from '../utils/duplicateDetection'
+import { findDuplicateEntries, checkDuplicatesWithLocalFallback } from '../utils/duplicateDetection'
 import {
   ACCOUNT_SCOPED_STORAGE_KEYS,
   getScopedItem,
@@ -5501,11 +5523,13 @@ import {
   saveSyncedEntryToIndexedDB,
   updateEntryInIndexedDB,
   deleteEntryFromIndexedDB,
-  getAllEntriesFromIndexedDB,
+  getAllIDBLogEntriesForUser,
+  getSyncQueue,
   removeQueuedOperationsForEntry,
   migrateLegacyLocalData,
-  type IDBLogEntry
+  setLastSuccessfulRemoteSyncAt,
 } from '../utils/indexedDB'
+import { mergeRemoteLogEntries } from '../../shared/logEntryMerge'
 
 // Browser check (must be defined early for watchers with immediate: true)
 const isBrowser = typeof window !== 'undefined'
@@ -5889,8 +5913,6 @@ async function onUserSessionReady(userId: string): Promise<void> {
       if (result.success) {
         console.log('Migration completed:', result)
         await loadEntries()
-        await fetchEntityTags()
-        await fetchUserTagPresets()
       } else {
         console.error('Migration failed:', result.error)
       }
@@ -5901,19 +5923,28 @@ async function onUserSessionReady(userId: string): Promise<void> {
     }
   } else {
     await loadEntries()
-    await fetchEntityTags()
-    await fetchUserTagPresets()
   }
 
   loadPilotProfilePrefs()
-  await loadPilotProfileFromSupabase()
-  await loadCrewProfiles()
   loadSelectedTotalsMetrics()
   loadColumnConfig()
   loadEntryCardConfig()
   loadActiveLogbook()
   maybeAutoOpenEntryFormForEmptyLogbook()
   startBackgroundSync()
+
+  void loadDeferredUserData()
+}
+
+async function loadDeferredUserData(): Promise<void> {
+  try {
+    await fetchEntityTags()
+    await fetchUserTagPresets()
+    await loadPilotProfileFromSupabase()
+    await loadCrewProfiles()
+  } catch (error) {
+    console.error('[loadDeferredUserData]', error)
+  }
 }
 
 // Watch for user changes (login, logout, account switch)
@@ -5994,8 +6025,12 @@ onMounted(async () => {
 
 function handleAppResume(): void {
   if (document.visibilityState !== 'visible') return
-  if (!isAuthenticated.value || !user.value || isProcessing.value || !isOnline.value) return
+  if (!isAuthenticated.value || !user.value || isProcessing.value) return
   void processQueue({ silent: true })
+  if (!isOnline.value) return
+  if (!isMigrating.value) {
+    void loadEntries()
+  }
 }
 
 // Cleanup scroll event listener on unmount
@@ -6866,6 +6901,7 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
   } else {
     // Close Add Entry form when opening inline edit
     isEntryFormOpen.value = false
+    closeAuditTrailSidebar()
     expandedEntryId.value = entry.id
     // Deep copy for inline editing
     const copy = JSON.parse(JSON.stringify(entry))
@@ -7093,12 +7129,8 @@ async function saveInlineEdit(): Promise<void> {
           }
           
           // Refresh audit trail if it's open for this entry
-          if (showAuditTrailSidebar.value && expandedEntryId.value === targetId) {
-            // Trigger a refresh by slightly modifying and restoring the entryId
-            const currentId = expandedEntryId.value
-            expandedEntryId.value = null
-            await nextTick()
-            expandedEntryId.value = currentId
+          if (showAuditTrailSidebar.value && activeAuditTrailEntryId.value === targetId) {
+            auditTrailRefreshKey.value++
           }
         } catch (validationErr) {
           // Ignore validation errors - don't fail the save
@@ -7268,13 +7300,14 @@ async function saveInlineEdit(): Promise<void> {
   inlineEditEntry.value = null
   isInlineCommercialMode.value = false
   showAuditTrailSidebar.value = false
+  auditTrailRefreshKey.value = 0
   } finally {
     isSavingInlineEdit.value = false
   }
 }
 
 function cancelInlineEdit(): void {
-  showAuditTrailSidebar.value = false
+  closeAuditTrailSidebar()
   expandedEntryId.value = null
   inlineEditEntry.value = null
   isInlineCommercialMode.value = false
@@ -7320,6 +7353,31 @@ const showInlineIdentDropdown = ref(false)
 const showAuditTrail = ref(false)
 const auditTrailEntryId = ref<string | null>(null)
 const showAuditTrailSidebar = ref(false)
+const auditTrailRefreshKey = ref(0)
+
+const activeAuditTrailEntryId = computed(() => {
+  if (expandedEntryId.value) return expandedEntryId.value
+  if (isEntryFormOpen.value && editingEntryId.value) return editingEntryId.value
+  return null
+})
+
+const activeAuditTrailLocalEntry = computed(() => {
+  const id = activeAuditTrailEntryId.value
+  if (!id) return undefined
+  if (expandedEntryId.value === id && inlineEditEntry.value) {
+    return inlineEditEntry.value
+  }
+  return logEntries.value.find(e => e.id === id)
+})
+
+function closeAuditTrailSidebar(): void {
+  showAuditTrailSidebar.value = false
+}
+
+function toggleAuditTrailSidebar(): void {
+  if (!activeAuditTrailEntryId.value) return
+  showAuditTrailSidebar.value = !showAuditTrailSidebar.value
+}
 const showFromDropdown = ref(false)
 const showInlineFromDropdown = ref(false)
 const showToDropdown = ref(false)
@@ -9837,6 +9895,7 @@ function toggleEntryForm(): void {
 
   // If opening the Add Entry form, close any open inline edit and clear post-save state
   if (willBeOpen) {
+    closeAuditTrailSidebar()
     expandedEntryId.value = null
     inlineEditEntry.value = null
     isInlineCommercialMode.value = false
@@ -9845,6 +9904,7 @@ function toggleEntryForm(): void {
     Object.assign(newEntry, createBlankEntry())
     showSimSection.value = activeLogbook.value === 'simulator'
   } else {
+    closeAuditTrailSidebar()
     // If closing, reset form if needed
     if (!editingEntryId.value) {
       resetForm()
@@ -11816,41 +11876,42 @@ async function submitEntry(): Promise<void> {
   }
   console.log('[SaveEntry] Payload summary:', savePayloadSummary)
 
-  // Check for duplicates before saving (always check, but exclude current entry if editing)
-  if (isAuthenticated.value && user.value) {
-    const entryToCheck: LogEntry = {
-      ...baseEntry,
-      id: editingEntryId.value || 'temp'
-    }
-    
-    // Always check for duplicates, but exclude the current entry if editing
-    const duplicates = await checkDuplicatesInDatabase(entryToCheck, user.value.id, editingEntryId.value || undefined)
-    if (duplicates.length > 0 && !saveAnyway.value) {
-      duplicateWarning.value = { matches: duplicates }
-      return
-    }
-  } else {
-    // For localStorage, check against local entries (excluding current entry if editing)
-    const entryToCheck: LogEntry = {
-      ...baseEntry,
-      id: editingEntryId.value || 'temp'
-    }
-    
-    // Always check for duplicates, but exclude the current entry if editing
-    const matches = findDuplicateEntries(entryToCheck, logEntries.value.filter(e => e.id !== editingEntryId.value))
-    if (matches.length > 0 && !saveAnyway.value) {
-      duplicateWarning.value = { matches }
-      return
-    }
+  // Check for duplicates and validate in parallel (local-first duplicate detection)
+  const entryToCheck: LogEntry = {
+    ...baseEntry,
+    id: editingEntryId.value || 'temp',
   }
 
-  // Validate flight time before saving
   const entryToValidate: LogEntry = {
     ...baseEntry,
-    id: editingEntryId.value || 'temp'
+    id: editingEntryId.value || 'temp',
   }
-  const validationResults = await validateFlightTimeEntry(entryToValidate, logEntries.value)
-  
+
+  const duplicatePromise =
+    isAuthenticated.value && user.value
+      ? checkDuplicatesWithLocalFallback(
+          entryToCheck,
+          user.value.id,
+          logEntries.value,
+          editingEntryId.value || undefined
+        )
+      : Promise.resolve(
+          findDuplicateEntries(
+            entryToCheck,
+            logEntries.value.filter((e) => e.id !== editingEntryId.value)
+          )
+        )
+
+  const [duplicates] = await Promise.all([
+    duplicatePromise,
+    validateFlightTimeEntry(entryToValidate, logEntries.value),
+  ])
+
+  if (duplicates.length > 0 && !saveAnyway.value) {
+    duplicateWarning.value = { matches: duplicates }
+    return
+  }
+
   // Check if validation now passes (user may have fixed errors)
   const validationNowPasses = !hasErrors.value && !hasWarnings.value
   
@@ -11996,132 +12057,115 @@ function isValidUUID(id: string): boolean {
 }
 
 async function removeEntry(id: string): Promise<void> {
+  const userId = user.value?.id
+  const localEntry = logEntries.value.find((entry) => entry.id === id)
+
   const clearQueuedOps = async (...entryIds: string[]): Promise<void> => {
     for (const entryId of new Set(entryIds.filter(Boolean))) {
-      await removeQueuedOperationsForEntry(entryId)
+      await removeQueuedOperationsForEntry(entryId, userId)
     }
   }
 
-  // Delete from Supabase if authenticated
-  if (isAuthenticated.value && user.value) {
-    try {
-      let supabaseId = id
-      let entryData: { date?: string } | null = null
-      
-      // If ID is not a UUID, try to find the entry in Supabase by matching other fields
-      if (!isValidUUID(id)) {
-        // Get the entry from local state to use for matching
-        const localEntry = logEntries.value.find(e => e.id === id)
-        
-        if (localEntry) {
-          // Try to find the entry in Supabase by matching date, registration, departure, destination
-          const { data: matchingEntries, error: findError } = await (supabase
-            .from('log_entries') as any)
-            .select('id, date, registration, departure, destination')
-            .eq('date', localEntry.date)
-            .eq('registration', localEntry.registration)
-            .eq('departure', localEntry.departure)
-            .eq('destination', localEntry.destination)
-            .limit(1)
-          
-          if (!findError && matchingEntries && matchingEntries.length > 0) {
-            // Found matching entry in Supabase, use its UUID
-            supabaseId = matchingEntries[0].id
-            // Fetch full entry data for audit log
-            try {
-              const { data } = await (supabase
-                .from('log_entries') as any)
-                .select('*')
-                .eq('id', supabaseId)
-                .single()
-              entryData = data
-            } catch (err) {
-              console.warn('Could not fetch entry data for audit log:', err)
-            }
-          } else {
-            // Entry doesn't exist in Supabase (hasn't synced yet), just delete from IndexedDB
-            console.log('[RemoveEntry] Entry not found in Supabase, deleting from IndexedDB only')
-            await clearQueuedOps(id, supabaseId)
-            await deleteEntryFromIndexedDB(id)
-            logEntries.value = logEntries.value.filter((entry) => entry.id !== id)
-            return
-          }
-        } else {
-          // Entry not found locally either, just try to delete from Supabase with the ID
-          // (will fail if not UUID, but that's okay - we'll handle the error)
-        }
-      } else {
-        // ID is a valid UUID, fetch entry data for audit log
-        try {
-          const { data } = await (supabase
-            .from('log_entries') as any)
-            .select('*')
-            .eq('id', supabaseId)
-            .single()
-          entryData = data
-        } catch (err) {
-          console.warn('Could not fetch entry data for audit log:', err)
-        }
-      }
-      
-      // Delete from Supabase using the UUID
-      const { error } = await (supabase
-        .from('log_entries') as any)
-        .delete()
-        .eq('id', supabaseId)
-      
-      if (error) {
-        // If error is about invalid UUID and we have a non-UUID ID, 
-        // the entry probably doesn't exist in Supabase yet
-        if (error.message?.includes('invalid input syntax for type uuid') && !isValidUUID(id)) {
-          console.log('[RemoveEntry] Entry not in Supabase (invalid UUID), deleting from IndexedDB only')
-          await clearQueuedOps(id, supabaseId)
-          await deleteEntryFromIndexedDB(id)
-          logEntries.value = logEntries.value.filter((entry) => entry.id !== id)
-          return
-        }
-        
-        console.error('Error deleting entry from Supabase:', error)
-        alert(`Failed to delete entry: ${error.message}`)
-        return
-      }
-      
-      // Create audit log entry for deletion
-      if (entryData) {
-        try {
-          await (supabase
-            .from('audit_logs') as any)
-            .insert({
-              entry_id: supabaseId,
-              user_id: user.value.id,
-              action: 'delete',
-              old_data: entryData,
-              new_data: null,
-              changed_fields: [],
-              change_summary: `Deleted log entry for ${entryData.date}`,
-              is_compliance_event: false
-            })
-        } catch (auditError) {
-          console.warn('Failed to create audit log for deletion:', auditError)
-        }
-      }
-      
-      // Also delete from IndexedDB
-      await clearQueuedOps(id, supabaseId)
-      await deleteEntryFromIndexedDB(id)
-    } catch (error) {
-      console.error('Error deleting entry:', error)
-      alert(`Failed to delete entry: ${error instanceof Error ? error.message : 'Unknown error'}`)
-      return
-    }
-  } else {
-    // Not authenticated, just delete from IndexedDB
+  const removeLocal = async (): Promise<void> => {
+    logEntries.value = logEntries.value.filter((entry) => entry.id !== id)
     await clearQueuedOps(id)
     await deleteEntryFromIndexedDB(id)
   }
-  
-  // Update local state (remove from UI)
-  logEntries.value = logEntries.value.filter((entry) => entry.id !== id)
+
+  if (!isAuthenticated.value || !userId) {
+    await removeLocal()
+    return
+  }
+
+  let supabaseId = id
+  let entryData: Record<string, unknown> | null = null
+  let existsOnServer = isValidUUID(id)
+
+  if (!isValidUUID(id) && localEntry) {
+    await checkOnlineStatus()
+    const browserOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
+    if (isOnline.value || browserOnline) {
+      const { data: matchingEntries, error: findError } = await (supabase
+        .from('log_entries') as any)
+        .select('id, date, registration, departure, destination')
+        .eq('date', localEntry.date)
+        .eq('registration', localEntry.registration)
+        .eq('departure', localEntry.departure)
+        .eq('destination', localEntry.destination)
+        .limit(1)
+
+      if (!findError && matchingEntries && matchingEntries.length > 0) {
+        supabaseId = matchingEntries[0].id
+        existsOnServer = true
+      } else {
+        existsOnServer = false
+      }
+    } else {
+      existsOnServer = false
+    }
+  }
+
+  await removeLocal()
+
+  if (!existsOnServer) {
+    return
+  }
+
+  await checkOnlineStatus()
+  const browserOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
+  if (!isOnline.value && !browserOnline) {
+    await addToQueue('delete', supabaseId, undefined, userId)
+    return
+  }
+
+  try {
+    try {
+      const { data } = await (supabase
+        .from('log_entries') as any)
+        .select('*')
+        .eq('id', supabaseId)
+        .single()
+      entryData = data
+    } catch (err) {
+      console.warn('Could not fetch entry data for audit log:', err)
+    }
+
+    const { error } = await (supabase
+      .from('log_entries') as any)
+      .delete()
+      .eq('id', supabaseId)
+
+    if (error) {
+      if (error.message?.includes('invalid input syntax for type uuid') && !isValidUUID(id)) {
+        return
+      }
+      console.warn('[RemoveEntry] Supabase delete failed; queueing for retry:', error)
+      await addToQueue('delete', supabaseId, undefined, userId)
+      return
+    }
+
+    if (entryData) {
+      try {
+        await (supabase
+          .from('audit_logs') as any)
+          .insert({
+            entry_id: supabaseId,
+            user_id: userId,
+            action: 'delete',
+            old_data: entryData,
+            new_data: null,
+            changed_fields: [],
+            change_summary: `Deleted log entry for ${entryData.date}`,
+            is_compliance_event: false,
+          })
+      } catch (auditError) {
+        console.warn('Failed to create audit log for deletion:', auditError)
+      }
+    }
+  } catch (error) {
+    console.warn('[RemoveEntry] Delete failed; queueing for retry:', error)
+    await addToQueue('delete', supabaseId, undefined, userId)
+  }
 }
 
 async function confirmAndDeleteEditing(): Promise<void> {
@@ -12175,9 +12219,80 @@ async function handleEntryRestored(entryId: string) {
     }
   }
 }
+function normalizeLogEntryForDisplay(entry: LogEntry): LogEntry {
+  const normalizedFlightTime: FlightTimeBreakdown = {
+    ...createEmptyFlightTime(),
+  }
+  flightTimeFields.forEach((field) => {
+    normalizedFlightTime[field.key] = normalizeNumber(entry.flightTime?.[field.key])
+  })
+
+  const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
+  performanceFields.forEach((field) => {
+    const rawValue = entry.performance?.[field.key]
+    const val =
+      typeof rawValue === 'string'
+        ? isNaN(parseFloat(rawValue))
+          ? null
+          : parseFloat(rawValue)
+        : normalizeNumber(rawValue)
+    ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
+  })
+  normalizedPerformance.approaches = Array.isArray(entry.performance?.approaches)
+    ? [...entry.performance.approaches]
+    : getApproachesFromPerformance(entry.performance)
+  normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
+  normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
+
+  return {
+    ...entry,
+    flightTime: normalizedFlightTime,
+    performance: normalizedPerformance,
+    logbookType: entry.logbookType === undefined ? getEntryLogbookType(entry) : entry.logbookType,
+  }
+}
+
+function mapSupabaseRowToLogEntry(dbEntry: any): LogEntry {
+  const entry: LogEntry = {
+    id: dbEntry.id,
+    date: dbEntry.date,
+    role: dbEntry.role,
+    aircraftCategoryClass: dbEntry.aircraft_category_class,
+    categoryClassTime: dbEntry.category_class_time,
+    aircraftMakeModel: dbEntry.aircraft_make_model,
+    registration: dbEntry.registration,
+    flightNumber: dbEntry.flight_number,
+    departure: dbEntry.departure,
+    destination: dbEntry.destination,
+    route: dbEntry.route || '',
+    trainingElements: dbEntry.training_elements || '',
+    trainingInstructor: dbEntry.training_instructor || '',
+    instructorCertificate: dbEntry.instructor_certificate || '',
+    flightConditions: sanitizeFlightConditions(dbEntry.flight_conditions || []),
+    remarks: dbEntry.remarks || '',
+    tags: Array.isArray(dbEntry.tags) ? [...dbEntry.tags] : [],
+    logbookType: dbEntry.logbook_type === 'simulator' ? 'simulator' : 'flight',
+    flightTime: dbEntry.flight_time as FlightTimeBreakdown,
+    performance: dbEntry.performance as PerformanceMetrics,
+    oooi: dbEntry.oooi as OOOITimes | undefined,
+    flagged: dbEntry.flagged || false,
+    version: dbEntry.version,
+    dataHash: dbEntry.data_hash || undefined,
+    createdAt: dbEntry.created_at || undefined,
+    updatedAt: dbEntry.updated_at || undefined,
+    isImported: dbEntry.is_imported || false,
+    importSource: dbEntry.import_source || undefined,
+    importBatchId: dbEntry.import_batch_id || undefined,
+    originalEntryDate: dbEntry.original_entry_date || undefined,
+    importMetadata: dbEntry.import_metadata || undefined,
+  }
+
+  return normalizeLogEntryForDisplay(entry)
+}
+
 // Load entries from Supabase (when authenticated) or localStorage (fallback)
-async function loadEntries(): Promise<void> {
-  if (!isBrowser) return
+async function loadEntries(): Promise<number> {
+  if (!isBrowser) return 0
   
   try {
     // Initialize IndexedDB
@@ -12187,41 +12302,50 @@ async function loadEntries(): Promise<void> {
     console.error('[LoadEntries] Failed to initialize IndexedDB:', error)
     // Continue with fallback loading
   }
+
+  let inboundRemovedCount = 0
   
   // LOCAL-FIRST: Load from IndexedDB first (scoped to current user when authenticated)
   const scopedUserId = user.value?.id
+  let idbEntries: Awaited<ReturnType<typeof getAllIDBLogEntriesForUser>> = []
   try {
     if (scopedUserId) {
-      const indexedDBEntries = await getAllEntriesFromIndexedDB(scopedUserId)
-
-      logEntries.value = indexedDBEntries.map((entry) => {
-        // Normalize flight time values
-        const normalizedFlightTime: FlightTimeBreakdown = {
-          ...createEmptyFlightTime()
-        }
-        flightTimeFields.forEach((field) => {
-          const rawValue = entry.flightTime?.[field.key]
-          normalizedFlightTime[field.key] = normalizeNumber(rawValue)
+      idbEntries = await getAllIDBLogEntriesForUser(scopedUserId)
+      logEntries.value = idbEntries.map((entry) =>
+        normalizeLogEntryForDisplay({
+          id: entry.id,
+          date: entry.date,
+          role: entry.role,
+          aircraftCategoryClass: entry.aircraftCategoryClass,
+          categoryClassTime: entry.categoryClassTime,
+          aircraftMakeModel: entry.aircraftMakeModel,
+          registration: entry.registration,
+          flightNumber: entry.flightNumber,
+          departure: entry.departure,
+          destination: entry.destination,
+          route: entry.route,
+          trainingElements: entry.trainingElements,
+          trainingInstructor: entry.trainingInstructor,
+          instructorCertificate: entry.instructorCertificate,
+          flightConditions: entry.flightConditions,
+          remarks: entry.remarks,
+          tags: entry.tags,
+          logbookType: entry.logbookType,
+          flightTime: entry.flightTime,
+          performance: entry.performance,
+          oooi: entry.oooi,
+          flagged: entry.flagged,
+          version: entry.version,
+          dataHash: entry.dataHash,
+          createdAt: entry.createdAt,
+          updatedAt: entry.updatedAt,
+          isImported: entry.isImported,
+          importSource: entry.importSource,
+          importBatchId: entry.importBatchId,
+          originalEntryDate: entry.originalEntryDate,
+          importMetadata: entry.importMetadata,
         })
-        entry.flightTime = normalizedFlightTime
-        
-        // Normalize performance values
-        const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
-        performanceFields.forEach((field) => {
-          const rawValue = entry.performance?.[field.key]
-          const val = typeof rawValue === 'string'
-            ? (isNaN(parseFloat(rawValue)) ? null : parseFloat(rawValue))
-            : normalizeNumber(rawValue)
-          ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
-        })
-        normalizedPerformance.approaches = Array.isArray(entry.performance?.approaches) ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance)
-        normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
-        normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
-        entry.performance = normalizedPerformance
-        
-        if (entry.logbookType === undefined) entry.logbookType = getEntryLogbookType(entry)
-        return entry
-      })
+      )
 
       console.log('[LoadEntries] Loaded', logEntries.value.length, 'entries from IndexedDB')
     }
@@ -12229,7 +12353,7 @@ async function loadEntries(): Promise<void> {
     console.error('[LoadEntries] Error loading from IndexedDB:', error)
   }
   
-  // If authenticated, sync with Supabase (merge using last-write-wins)
+  // If authenticated, sync with Supabase (merge + remote-delete reconciliation)
   if (isAuthenticated.value && user.value) {
     await checkOnlineStatus()
     const hasSession = await waitForSupabaseSession()
@@ -12237,7 +12361,6 @@ async function loadEntries(): Promise<void> {
     if (hasSession && (isOnline.value || browserOnline)) {
     try {
       await withTimeout((async () => {
-      // Paginate in batches of 1000 (Supabase default max per request)
       const BATCH_SIZE = 1000
       let allData: any[] = []
       let from = 0
@@ -12252,105 +12375,85 @@ async function loadEntries(): Promise<void> {
           .range(from, to)
         if (error) {
           console.error('[LoadEntries] Error loading entries from Supabase:', error)
-          return
+          throw error
         }
         if (!batch || batch.length === 0) break
         allData = allData.concat(batch)
         hasMore = batch.length >= BATCH_SIZE
         from += BATCH_SIZE
       }
-      const data = allData
 
-      if (data && data.length > 0) {
-        // Convert database format to LogEntry format
-        const supabaseEntries: LogEntry[] = data.map((dbEntry: any) => {
-          const entry: LogEntry = {
-            id: dbEntry.id,
-            date: dbEntry.date,
-            role: dbEntry.role,
-            aircraftCategoryClass: dbEntry.aircraft_category_class,
-            categoryClassTime: dbEntry.category_class_time,
-            aircraftMakeModel: dbEntry.aircraft_make_model,
-            registration: dbEntry.registration,
-            flightNumber: dbEntry.flight_number,
-            departure: dbEntry.departure,
-            destination: dbEntry.destination,
-            route: dbEntry.route || '',
-            trainingElements: dbEntry.training_elements || '',
-            trainingInstructor: dbEntry.training_instructor || '',
-            instructorCertificate: dbEntry.instructor_certificate || '',
-            flightConditions: sanitizeFlightConditions(dbEntry.flight_conditions || []),
-            remarks: dbEntry.remarks || '',
-            tags: Array.isArray(dbEntry.tags) ? [...dbEntry.tags] : [],
-            logbookType: dbEntry.logbook_type === 'simulator' ? 'simulator' : 'flight',
-            flightTime: dbEntry.flight_time as FlightTimeBreakdown,
-            performance: dbEntry.performance as PerformanceMetrics,
-            oooi: dbEntry.oooi as OOOITimes | undefined,
-            flagged: dbEntry.flagged || false,
-            version: dbEntry.version,
-            dataHash: dbEntry.data_hash || undefined,
-            createdAt: dbEntry.created_at || undefined,
-            updatedAt: dbEntry.updated_at || undefined,
-            isImported: dbEntry.is_imported || false,
-            importSource: dbEntry.import_source || undefined,
-            importBatchId: dbEntry.import_batch_id || undefined,
-            originalEntryDate: dbEntry.original_entry_date || undefined,
-            importMetadata: dbEntry.import_metadata || undefined
-          }
-          
-          // Normalize flight time and performance
-          const normalizedFlightTime: FlightTimeBreakdown = { ...createEmptyFlightTime() }
-          flightTimeFields.forEach((field) => {
-            normalizedFlightTime[field.key] = normalizeNumber(entry.flightTime?.[field.key])
-          })
-          entry.flightTime = normalizedFlightTime
-          
-          const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
-          performanceFields.forEach((field) => {
-            const rawValue = entry.performance?.[field.key]
-            const val = typeof rawValue === 'string'
-              ? (isNaN(parseFloat(rawValue)) ? null : parseFloat(rawValue))
-              : normalizeNumber(rawValue)
-            ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
-          })
-          normalizedPerformance.approaches = Array.isArray(entry.performance?.approaches) ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance)
-          normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
-          normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
-          entry.performance = normalizedPerformance
-        
-          return entry
-        })
-        
-        // Merge with IndexedDB entries using last-write-wins (compare updated_at or version)
-        const entryMap = new Map<string, LogEntry>()
-        
-        // First, add all IndexedDB entries
-        logEntries.value.forEach(entry => {
-          entryMap.set(entry.id, entry)
-        })
-        
-        // Then merge Supabase entries (last-write-wins based on version or updated_at)
-        supabaseEntries.forEach(supabaseEntry => {
-          const existing = entryMap.get(supabaseEntry.id)
-          if (shouldPreferSupabaseEntry(existing, supabaseEntry)) {
-            entryMap.set(supabaseEntry.id, supabaseEntry)
-            // Update IndexedDB with synced entry
-            updateEntryInIndexedDB(supabaseEntry, {
-              synced: true,
-              syncTimestamp: Date.now(),
-              userId: user.value!.id,
-            }).catch(err => {
-              console.warn('[LoadEntries] Failed to update IndexedDB with synced entry:', err)
-            })
-          }
-        })
-        
-        // Update logEntries with merged results
-        logEntries.value = Array.from(entryMap.values())
-        logEntries.value = sortEntriesByDateAndOOOI(logEntries.value)
-        
-        console.log('[LoadEntries] Merged entries: IndexedDB + Supabase =', logEntries.value.length, 'entries')
+      const supabaseEntries = allData.map(mapSupabaseRowToLogEntry)
+      const syncQueue = await getSyncQueue(user.value!.id)
+      const localWithSync = idbEntries.map((entry) => ({
+        entry: normalizeLogEntryForDisplay({
+          id: entry.id,
+          date: entry.date,
+          role: entry.role,
+          aircraftCategoryClass: entry.aircraftCategoryClass,
+          categoryClassTime: entry.categoryClassTime,
+          aircraftMakeModel: entry.aircraftMakeModel,
+          registration: entry.registration,
+          flightNumber: entry.flightNumber,
+          departure: entry.departure,
+          destination: entry.destination,
+          route: entry.route,
+          trainingElements: entry.trainingElements,
+          trainingInstructor: entry.trainingInstructor,
+          instructorCertificate: entry.instructorCertificate,
+          flightConditions: entry.flightConditions,
+          remarks: entry.remarks,
+          tags: entry.tags,
+          logbookType: entry.logbookType,
+          flightTime: entry.flightTime,
+          performance: entry.performance,
+          oooi: entry.oooi,
+          flagged: entry.flagged,
+          version: entry.version,
+          dataHash: entry.dataHash,
+          createdAt: entry.createdAt,
+          updatedAt: entry.updatedAt,
+          isImported: entry.isImported,
+          importSource: entry.importSource,
+          importBatchId: entry.importBatchId,
+          originalEntryDate: entry.originalEntryDate,
+          importMetadata: entry.importMetadata,
+        }),
+        synced: entry._synced,
+      }))
+
+      const { mergedEntries, removedEntryIds } = mergeRemoteLogEntries({
+        localEntries: localWithSync,
+        remoteEntries: supabaseEntries,
+        syncQueue,
+      })
+
+      for (const removedId of removedEntryIds) {
+        await deleteEntryFromIndexedDB(removedId)
+        await removeQueuedOperationsForEntry(removedId, user.value!.id)
       }
+      inboundRemovedCount = removedEntryIds.length
+
+      const remoteIds = new Set(supabaseEntries.map((entry) => entry.id))
+      for (const entry of mergedEntries) {
+        if (remoteIds.has(entry.id)) {
+          await saveSyncedEntryToIndexedDB(entry, user.value!.id)
+        }
+      }
+
+      logEntries.value = sortEntriesByDateAndOOOI(mergedEntries)
+      await setLastSuccessfulRemoteSyncAt(Date.now())
+      await reconcileSyncQueue(user.value!.id, {
+        remoteEntryIds: supabaseEntries.map((entry) => entry.id),
+      })
+
+      console.log(
+        '[LoadEntries] Merged entries:',
+        logEntries.value.length,
+        'entries;',
+        inboundRemovedCount,
+        'removed remotely'
+      )
       })(), 15000, 'Load entries from Supabase')
     } catch (err) {
       console.error('[LoadEntries] Error syncing with Supabase:', err)
@@ -12370,6 +12473,7 @@ async function loadEntries(): Promise<void> {
   // FC View rows may arrive without persisted night values; derive from OOOI for display consistency.
   void enrichFcvNightDataForDisplay()
   await maybeConsolidateAircraftByTail()
+  return inboundRemovedCount
 }
 
 async function maybeConsolidateAircraftByTail(): Promise<void> {
@@ -12422,22 +12526,6 @@ async function waitForSupabaseSession(maxWaitMs = 8000): Promise<boolean> {
   return false
 }
 
-function entryUpdatedAtMs(entry: LogEntry): number {
-  if (!entry.updatedAt) return 0
-  const ms = new Date(entry.updatedAt).getTime()
-  return Number.isNaN(ms) ? 0 : ms
-}
-
-/** True when the Supabase copy should win during merge. */
-function shouldPreferSupabaseEntry(local: LogEntry | undefined, remote: LogEntry): boolean {
-  if (!local) return true
-  const localVer = local.version ?? 0
-  const remoteVer = remote.version ?? 0
-  if (remoteVer > localVer) return true
-  if (localVer > remoteVer) return false
-  return entryUpdatedAtMs(remote) >= entryUpdatedAtMs(local)
-}
-
 async function refreshDashboardData(): Promise<void> {
   if (isDashboardRefreshing.value) return
   isDashboardRefreshing.value = true
@@ -12459,7 +12547,7 @@ async function refreshDashboardData(): Promise<void> {
     const queueBefore = queueLength.value
     const countBefore = logEntries.value.length
 
-    await loadEntries()
+    const removed = await loadEntries()
     await reconcileSyncQueue(user.value.id)
     await processQueue()
     await refreshQueueLength()
@@ -12474,7 +12562,12 @@ async function refreshDashboardData(): Promise<void> {
 
     const added = logEntries.value.length - countBefore
     const queueCleared = queueBefore > 0 && queueLength.value === 0
-    if (added > 0) {
+    if (removed > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      showToast(
+        `Removed ${removed} ${removed === 1 ? 'entry' : 'entries'} deleted elsewhere`
+      )
+    } else if (added > 0) {
       await new Promise((resolve) => setTimeout(resolve, 300))
       showToast(`Synced — ${added} new ${added === 1 ? 'entry' : 'entries'}`)
     } else if (queueCleared) {
@@ -14103,9 +14196,15 @@ function getDisplayConditions(entry: LogEntry): string[] {
 }
 
 .catalog-drawer-ios-scroll,
-.catalog-section-scroll {
+.catalog-section-scroll,
+.audit-trail-ios-scroll {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: auto;
+}
+
+.audit-trail-ios-scroll {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .catalog-drawer-ios input[type='text'] {

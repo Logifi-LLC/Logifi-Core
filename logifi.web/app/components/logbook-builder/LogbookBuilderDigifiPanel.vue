@@ -684,6 +684,9 @@ onUnmounted(() => {
             <code class="text-[11px]">{{ companionCaptureOrigin }}/logbook-builder</code> on this laptop instead of
             <code class="text-[11px]">0.0.0.0</code>.
           </p>
+          <p class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-500'">
+            Or open <strong>Digifi Eye (Beta)</strong> in the Logifi iOS app. It can detect this session when signed in.
+          </p>
           <div class="flex flex-wrap gap-2">
             <button
               type="button"

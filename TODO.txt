@@ -1,4 +1,8 @@
 Manual and FC View imports in the same day.
+Offline work on the app.  
+Faster saving entries when on internet. 
+The white loading screen?? 
+ 
 Digifi (Test) 
 Payment Processing on Digifi. 
 App Test
