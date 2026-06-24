@@ -70,6 +70,16 @@ export default defineNuxtConfig({
           : '/images/lightning-donation-qr.png',
       /** Base URL for Digifi phone capture QR/links. Unset in dev to auto-detect LAN IP. */
       companionCaptureOrigin: process.env.NUXT_PUBLIC_COMPANION_CAPTURE_ORIGIN || '',
+      /** Stripe publishable key — when set, Digifi credit checkout uses Stripe instead of mock. */
+      stripePublishableKey:
+        process.env.NUXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
+        process.env.STRIPE_PUBLISHABLE_KEY ||
+        '',
+      /** When true, Lightning credit checkout is available (OpenNode or BTCPay configured on server). */
+      lightningPaymentsEnabled:
+        (process.env.NUXT_PUBLIC_LIGHTNING_PAYMENTS_ENABLED ||
+          process.env.LIGHTNING_PAYMENTS_ENABLED ||
+          '') === 'true',
     },
     // FC View OAuth (server-only; never expose to client)
     fcvClientId: process.env.FCV_CLIENT_ID || '',
@@ -86,6 +96,24 @@ export default defineNuxtConfig({
     digifiModelFallbacks: process.env.NUXT_DIGIFI_MODEL_FALLBACKS || process.env.DIGIFI_MODEL_FALLBACKS || '',
     digifiEnableCapacityModelFallback: process.env.NUXT_DIGIFI_ENABLE_CAPACITY_MODEL_FALLBACK || '',
     digifiMaxScansPerDay: parseInt(process.env.NUXT_DIGIFI_MAX_SCANS_PER_DAY || process.env.DIGIFI_MAX_SCANS_PER_DAY || '10', 10) || 10,
+    // Stripe (server-only)
+    stripeSecretKey: process.env.STRIPE_SECRET_KEY || process.env.NUXT_STRIPE_SECRET_KEY || '',
+    stripeWebhookSecret:
+      process.env.STRIPE_WEBHOOK_SECRET || process.env.NUXT_STRIPE_WEBHOOK_SECRET || '',
+    // Lightning (server-only)
+    lightningProvider:
+      process.env.LIGHTNING_PROVIDER || process.env.NUXT_LIGHTNING_PROVIDER || 'opennode',
+    opennodeApiKey: process.env.OPENNODE_API_KEY || process.env.NUXT_OPENNODE_API_KEY || '',
+    opennodeCallbackOrigin:
+      process.env.OPENNODE_CALLBACK_ORIGIN || process.env.NUXT_OPENNODE_CALLBACK_ORIGIN || '',
+    btcpayHost: process.env.BTCPAY_HOST || process.env.NUXT_BTCPAY_HOST || '',
+    btcpayApiKey: process.env.BTCPAY_API_KEY || process.env.NUXT_BTCPAY_API_KEY || '',
+    btcpayStoreId: process.env.BTCPAY_STORE_ID || process.env.NUXT_BTCPAY_STORE_ID || '',
+    btcpayWebhookSecret:
+      process.env.BTCPAY_WEBHOOK_SECRET || process.env.NUXT_BTCPAY_WEBHOOK_SECRET || '',
+    /** Mock instant credit grant for beta testers. Defaults to on in dev, off in production builds. */
+    creditsMockEnabled:
+      process.env.NUXT_CREDITS_MOCK_ENABLED || process.env.CREDITS_MOCK_ENABLED || '',
   },
   // Client-side only app (uses localStorage for data persistence)
   ssr: false,

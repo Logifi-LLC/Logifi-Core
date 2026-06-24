@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import type { PaymentMethod } from '~/utils/creditsPricing'
 import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { useTheme } from '~/composables/useTheme'
@@ -16,19 +16,24 @@ const emit = defineEmits<{
 const { isDark: isDarkMode } = useTheme()
 const {
   purchaseCredits,
+  pollLightningInvoiceStatus,
+  fetchBalance,
   isPurchaseValid,
   calculateTotalDollars,
   minPagesForMethod,
   rateDollarsForMethod,
 } = useDigifiCredits()
 
-type Step = 'form' | 'loading' | 'success'
+type Step = 'form' | 'loading' | 'lightning' | 'success'
 
 const paymentMethod = ref<PaymentMethod>('lightning')
 const pageCount = ref(25)
 const step = ref<Step>('form')
 const successCreditsAdded = ref(0)
 const checkoutError = ref<string | null>(null)
+const lightningCheckoutLink = ref<string | null>(null)
+const lightningInvoiceId = ref<string | null>(null)
+let lightningPollTimer: ReturnType<typeof setInterval> | null = null
 
 const rateLabel = computed(() => `$${rateDollarsForMethod(paymentMethod.value).toFixed(2)}`)
 const totalLabel = computed(() =>
@@ -44,6 +49,13 @@ const minHint = computed(() => {
   return `Minimum ${min} page.`
 })
 
+function stopLightningPolling() {
+  if (lightningPollTimer) {
+    clearInterval(lightningPollTimer)
+    lightningPollTimer = null
+  }
+}
+
 watch(paymentMethod, (method) => {
   const min = minPagesForMethod(method)
   if (pageCount.value < min) {
@@ -58,11 +70,20 @@ watch(
       step.value = 'form'
       checkoutError.value = null
       successCreditsAdded.value = 0
+      lightningCheckoutLink.value = null
+      lightningInvoiceId.value = null
+      stopLightningPolling()
       paymentMethod.value = 'lightning'
       pageCount.value = 5
+    } else {
+      stopLightningPolling()
     }
   }
 )
+
+onUnmounted(() => {
+  stopLightningPolling()
+})
 
 function decrementPages() {
   const min = minPagesForMethod(paymentMethod.value)
@@ -80,6 +101,25 @@ function onPageInput(event: Event) {
   pageCount.value = Math.max(1, Math.min(10_000, parsed))
 }
 
+function startLightningPolling(invoiceId: string, creditsAdded: number) {
+  stopLightningPolling()
+  lightningPollTimer = setInterval(async () => {
+    try {
+      const status = await pollLightningInvoiceStatus(invoiceId)
+      if (status.paid) {
+        stopLightningPolling()
+        await fetchBalance()
+        successCreditsAdded.value = creditsAdded
+        step.value = 'success'
+        emit('purchased', creditsAdded)
+        setTimeout(() => emit('close'), 2000)
+      }
+    } catch {
+      // keep polling until user closes or payment completes
+    }
+  }, 3000)
+}
+
 async function proceedToPayment() {
   if (!canCheckout.value) return
   step.value = 'loading'
@@ -89,12 +129,24 @@ async function proceedToPayment() {
       numberOfCredits: pageCount.value,
       paymentMethod: paymentMethod.value,
     })
+
+    if (result.mode === 'stripe') {
+      window.location.href = result.checkoutUrl
+      return
+    }
+
+    if (result.mode === 'lightning') {
+      lightningInvoiceId.value = result.invoiceId
+      lightningCheckoutLink.value = result.checkoutLink
+      step.value = 'lightning'
+      startLightningPolling(result.invoiceId, result.numberOfCredits)
+      return
+    }
+
     successCreditsAdded.value = result.numberOfCredits
     step.value = 'success'
     emit('purchased', result.numberOfCredits)
-    setTimeout(() => {
-      emit('close')
-    }, 1500)
+    setTimeout(() => emit('close'), 1500)
   } catch (err: unknown) {
     step.value = 'form'
     checkoutError.value =
@@ -156,6 +208,31 @@ async function proceedToPayment() {
           <Icon name="ri:loader-4-line" class="animate-spin text-blue-500" size="40" />
           <p :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
             Processing payment…
+          </p>
+        </div>
+
+        <div v-else-if="step === 'lightning'" class="p-6 space-y-5 text-center">
+          <Icon name="ri:flashlight-fill" class="mx-auto text-amber-500" size="40" />
+          <p :class="['text-base font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+            Pay with Lightning
+          </p>
+          <p :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+            Open the OpenNode Lightning checkout page to pay. Credits are added automatically when payment is confirmed.
+          </p>
+          <a
+            v-if="lightningCheckoutLink"
+            :href="lightningCheckoutLink"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center justify-center w-full py-3 rounded-xl font-bold font-quicksand text-sm bg-amber-500 text-white hover:bg-amber-400 transition-colors"
+          >
+            Open Lightning checkout
+          </a>
+          <p v-else :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
+            Waiting for invoice… ({{ lightningInvoiceId }})
+          </p>
+          <p :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
+            This window checks payment status every few seconds.
           </p>
         </div>
 

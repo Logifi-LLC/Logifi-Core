@@ -17,11 +17,16 @@ import {
 import { loadLastTemplateIfAny } from '~/composables/useLogbookBuilderLastTemplate'
 import { useTheme } from '~/composables/useTheme'
 import { useAuth } from '~/composables/useAuth'
+import { useToast } from '~/composables/useToast'
+import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { supabase } from '~/lib/supabase'
 
 definePageMeta({ layout: 'default' })
 
 const route = useRoute()
+const router = useRouter()
+const { showToast } = useToast()
+const { fetchBalance } = useDigifiCredits()
 const gridRef = ref<InstanceType<typeof LogbookBuilderGrid> | null>(null)
 const digifiSectionRef = ref<HTMLElement | null>(null)
 const grid = useLogbookBuilderGrid()
@@ -71,6 +76,16 @@ onMounted(() => {
     nextTick(() => {
       digifiSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
+  }
+
+  const creditsResult = route.query.credits
+  if (creditsResult === 'success') {
+    void fetchBalance()
+    showToast('Credits added successfully')
+    void router.replace({ query: { ...route.query, credits: undefined } })
+  } else if (creditsResult === 'cancelled') {
+    showToast('Checkout cancelled')
+    void router.replace({ query: { ...route.query, credits: undefined } })
   }
 })
 

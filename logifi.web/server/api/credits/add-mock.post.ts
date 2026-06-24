@@ -9,6 +9,7 @@ import {
 } from '../../utils/creditsPricing'
 import { processMockPayment } from '../../utils/creditsMockPayment'
 import { addCredits } from '../../utils/creditsBalance'
+import { isMockCreditsEnabled } from '../../utils/creditsMockEnabled'
 
 const PAYMENT_METHODS = new Set<PaymentMethod>(['stripe', 'lightning'])
 
@@ -23,6 +24,13 @@ function parsePaymentMethod(value: unknown): PaymentMethod | null {
  * Identity comes from the Bearer token only — never from the request body.
  */
 export default defineEventHandler(async (event) => {
+  if (!isMockCreditsEnabled()) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Mock credit purchases are disabled on this server',
+    })
+  }
+
   const userId = await getUserIdFromEvent(event)
   if (!userId) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })

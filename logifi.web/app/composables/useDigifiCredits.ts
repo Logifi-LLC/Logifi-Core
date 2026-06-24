@@ -37,6 +37,34 @@ export type AddMockCreditsResponse = {
   rateCentsPerPage: number
 }
 
+export type StripeCheckoutResponse = {
+  ok: true
+  checkoutUrl: string
+  sessionId: string
+}
+
+export type LightningCheckoutResponse = {
+  ok: true
+  invoiceId: string
+  checkoutLink: string | null
+  bolt11: string | null
+  numberOfCredits: number
+  totalCents: number
+  totalDollars: number
+  rateCentsPerPage: number
+}
+
+export type LightningInvoiceStatusResponse = {
+  invoiceId: string
+  status: string
+  paid: boolean
+}
+
+export type PurchaseCreditsResult =
+  | ({ mode: 'mock' } & AddMockCreditsResponse)
+  | ({ mode: 'stripe' } & StripeCheckoutResponse)
+  | ({ mode: 'lightning' } & LightningCheckoutResponse)
+
 const credits = ref<number | null>(null)
 const transactions = ref<CreditTransaction[]>([])
 const transactionsLoading = ref(false)
@@ -45,6 +73,14 @@ const error = ref<string | null>(null)
 
 export function useDigifiCredits() {
   const { isAuthenticated, getAccessToken, user } = useAuth()
+  const config = useRuntimeConfig()
+
+  const stripePaymentsAvailable = computed(() =>
+    Boolean(config.public.stripePublishableKey)
+  )
+  const lightningPaymentsAvailable = computed(() =>
+    Boolean(config.public.lightningPaymentsEnabled)
+  )
 
   function authHeaders(): Record<string, string> {
     const token = getAccessToken()
@@ -113,10 +149,57 @@ export function useDigifiCredits() {
     return `${prefix}${tx.amount} credit${Math.abs(tx.amount) === 1 ? '' : 's'}`
   }
 
-  async function purchaseCredits(input: {
+  async function purchaseCreditsMock(input: {
     numberOfCredits: number
     paymentMethod: PaymentMethod
   }): Promise<AddMockCreditsResponse> {
+    const result = await $fetch<AddMockCreditsResponse>('/api/credits/add-mock', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: {
+        numberOfCredits: input.numberOfCredits,
+        paymentMethod: input.paymentMethod,
+      },
+    })
+    credits.value = result.credits
+    void fetchTransactions()
+    return result
+  }
+
+  async function startStripeCheckout(numberOfCredits: number): Promise<StripeCheckoutResponse> {
+    return $fetch<StripeCheckoutResponse>('/api/credits/checkout/stripe', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: { numberOfCredits },
+    })
+  }
+
+  async function startLightningCheckout(
+    numberOfCredits: number
+  ): Promise<LightningCheckoutResponse> {
+    return $fetch<LightningCheckoutResponse>('/api/credits/checkout/lightning', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: { numberOfCredits },
+    })
+  }
+
+  async function pollLightningInvoiceStatus(
+    invoiceId: string
+  ): Promise<LightningInvoiceStatusResponse> {
+    return $fetch<LightningInvoiceStatusResponse>(
+      `/api/credits/checkout/lightning/${encodeURIComponent(invoiceId)}/status`,
+      {
+        method: 'GET',
+        headers: authHeaders(),
+      }
+    )
+  }
+
+  async function purchaseCredits(input: {
+    numberOfCredits: number
+    paymentMethod: PaymentMethod
+  }): Promise<PurchaseCreditsResult> {
     if (!isAuthenticated.value) {
       throw new Error('Sign in to purchase credits')
     }
@@ -124,17 +207,18 @@ export function useDigifiCredits() {
     loading.value = true
     error.value = null
     try {
-      const result = await $fetch<AddMockCreditsResponse>('/api/credits/add-mock', {
-        method: 'POST',
-        headers: authHeaders(),
-        body: {
-          numberOfCredits: input.numberOfCredits,
-          paymentMethod: input.paymentMethod,
-        },
-      })
-      credits.value = result.credits
-      void fetchTransactions()
-      return result
+      if (input.paymentMethod === 'stripe' && stripePaymentsAvailable.value) {
+        const result = await startStripeCheckout(input.numberOfCredits)
+        return { mode: 'stripe', ...result }
+      }
+
+      if (input.paymentMethod === 'lightning' && lightningPaymentsAvailable.value) {
+        const result = await startLightningCheckout(input.numberOfCredits)
+        return { mode: 'lightning', ...result }
+      }
+
+      const result = await purchaseCreditsMock(input)
+      return { mode: 'mock', ...result }
     } catch (err: unknown) {
       const message =
         (err as { data?: { statusMessage?: string } })?.data?.statusMessage ??
@@ -177,11 +261,17 @@ export function useDigifiCredits() {
     displayCredits,
     loading,
     error,
+    stripePaymentsAvailable,
+    lightningPaymentsAvailable,
     fetchBalance,
     fetchTransactions,
     formatTransactionLabel,
     formatTransactionAmount,
     purchaseCredits,
+    purchaseCreditsMock,
+    startStripeCheckout,
+    startLightningCheckout,
+    pollLightningInvoiceStatus,
     setCreditsFromScan,
     isPurchaseValid,
     calculateTotalDollars,
