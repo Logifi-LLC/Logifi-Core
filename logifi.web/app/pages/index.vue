@@ -1,42 +1,7 @@
 <template>
   <!-- Force light theme on landing: dark: overrides so links/header stay light even when app uses dark mode -->
   <div class="min-h-screen bg-[#e4e8e7] font-quicksand text-gray-900 overflow-x-hidden dark:bg-[#e4e8e7] dark:text-gray-900">
-    <!-- Sticky Header -->
-    <header
-      class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b border-white/10 bg-white/5 backdrop-blur-md"
-    >
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-        <div class="flex items-center">
-          <img src="/images/logifi-logo.png" alt="Logifi" class="h-32 w-auto brightness-0" />
-        </div>
-        
-        <nav class="hidden md:flex items-center space-x-8">
-          <a href="#features" class="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors dark:text-gray-700 dark:hover:text-blue-600">Features</a>
-          <NuxtLink to="/integrations" class="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors dark:text-gray-700 dark:hover:text-blue-600">Integrations</NuxtLink>
-          <NuxtLink to="/pricing" class="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors dark:text-gray-700 dark:hover:text-blue-600">Pricing</NuxtLink>
-          <NuxtLink to="/developers?from=landing" class="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors dark:text-gray-700 dark:hover:text-blue-600">Developers</NuxtLink>
-          <NuxtLink to="/feedback?from=landing" class="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors dark:text-gray-700 dark:hover:text-blue-600">Feedback</NuxtLink>
-          <div class="h-4 w-px bg-gray-200 dark:bg-gray-200"></div>
-          <button 
-            @click="openAuth('signin')"
-            class="text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors dark:text-gray-700 dark:hover:text-blue-600"
-          >
-            Sign In
-          </button>
-          <button 
-            @click="openAuth('signup')"
-            class="btn-cta-primary px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-all ring-1 ring-blue-400/60 shadow-[0_0_16px_-3px_rgba(37,99,235,0.48),0_0_32px_-12px_rgba(59,130,246,0.22)] hover:shadow-[0_0_24px_-2px_rgba(37,99,235,0.55),0_0_40px_-10px_rgba(59,130,246,0.28)] active:scale-[0.98] dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
-          >
-            <span class="relative z-10">Get Started</span>
-          </button>
-        </nav>
-
-        <!-- Mobile Menu Button -->
-        <button class="md:hidden p-2 text-gray-700 dark:text-gray-700">
-          <Icon name="ri:menu-line" size="24" />
-        </button>
-      </div>
-    </header>
+    <MarketingHeader active-page="home" :logo-href="null" @open-auth="openAuth" />
 
     <!-- Hero Section -->
     <main>
@@ -49,7 +14,7 @@
 
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <div class="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-semibold mb-8 shadow-[0_0_22px_-6px_rgba(59,130,246,0.38),0_0_36px_-12px_rgba(37,99,235,0.18)] animate-fade-in dark:bg-blue-50 dark:border-blue-100 dark:text-blue-700">
-            <span class="mr-2">✨</span> NOW IN BETA
+            Free · FAA-compliant · Open source
           </div>
           
           <h1 class="text-5xl lg:text-7xl font-bold tracking-tight text-gray-900 mb-8 animate-slide-up dark:text-gray-900">
@@ -139,10 +104,15 @@
               </div>
             </div>
 
-            <!-- Features to Come -->
-            <div class="relative z-10">
-              <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center dark:text-gray-900">Features to Come</h3>
-              <div class="grid grid-cols-1 md:grid-cols-6 gap-5 md:gap-6 md:auto-rows-min">
+            <!-- On the roadmap -->
+            <details class="relative z-10 group">
+              <summary class="cursor-pointer list-none text-center mb-6 select-none">
+                <span class="inline-flex items-center gap-2 text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors dark:text-gray-800">
+                  On the roadmap
+                  <Icon name="ri:arrow-down-s-line" size="20" class="transition-transform group-open:rotate-180" />
+                </span>
+              </summary>
+              <div class="grid grid-cols-1 md:grid-cols-6 gap-5 md:gap-6 md:auto-rows-min pt-2">
                 <div
                   v-for="(feature, i) in featuresToCome"
                   :key="i"
@@ -160,27 +130,12 @@
                   <p class="text-gray-700 leading-relaxed dark:text-gray-700 md:grow">{{ feature.description }}</p>
                 </div>
               </div>
-            </div>
+            </details>
           </div>
         </div>
         </section>
 
-      <!-- Footer: same glass bar language as the sticky header -->
-      <footer class="relative z-10 border-t border-white/10 bg-white/5 backdrop-blur-md pb-6 pt-2 transition-colors duration-300">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 text-center">
-          <p class="text-sm font-medium text-gray-700 dark:text-gray-700">
-            <NuxtLink to="/integrations" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Integrations</NuxtLink>
-            <span class="mx-2 text-gray-400 dark:text-gray-400">·</span>
-            <NuxtLink to="/pricing" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Pricing</NuxtLink>
-            <span class="mx-2 text-gray-400 dark:text-gray-400">·</span>
-            <NuxtLink to="/data-sources?from=landing" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Data sources</NuxtLink>
-            <span class="mx-2 text-gray-400 dark:text-gray-400">·</span>
-            <NuxtLink to="/terms?from=landing" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Terms of Service</NuxtLink>
-            <span class="mx-2 text-gray-400 dark:text-gray-400">·</span>
-            <NuxtLink to="/privacy?from=landing" class="hover:text-blue-600 transition-colors dark:hover:text-blue-600">Privacy Policy</NuxtLink>
-          </p>
-        </div>
-      </footer>
+      <MarketingFooter />
       </div>
     </main>
 
@@ -199,6 +154,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import AuthModal from '~/components/AuthModal.vue'
+import MarketingFooter from '~/components/MarketingFooter.vue'
+import MarketingHeader from '~/components/MarketingHeader.vue'
 
 const { theme, applyDocumentTheme } = useTheme()
 
@@ -256,7 +213,7 @@ const features = [
   },
   {
     title: 'FAA Compliant',
-    description: 'Rest easy knowing your records meet all AC 120-78B requirements. Digital signatures coming soon.',
+    description: 'Rest easy knowing your records meet AC 120-78B requirements for data integrity and revision history.',
     icon: 'ri:shield-check-line'
   },
   {
@@ -268,9 +225,9 @@ const features = [
 
 const featuresToCome = [
   {
-    title: 'The Hangar',
-    description: 'A community hub where pilots share flights, debrief experiences, and ask questions. Share ideas via Feedback until The Hangar launches.',
-    icon: 'ri:flight-takeoff-line'
+    title: 'Mobile App',
+    description: 'A native iOS app for your logbook on the go—log flights, check currency, and capture Digifi scans from your phone.',
+    icon: 'ri:smartphone-line'
   },
   {
     title: 'Student/Instructor Portals',
@@ -285,64 +242,3 @@ const featuresToCome = [
 ] as const
 
 </script>
-
-<style>
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slide-up {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-fade-in {
-  animation: fade-in 1s ease-out forwards;
-}
-
-.animate-slide-up {
-  opacity: 0;
-  animation: slide-up 0.8s ease-out forwards;
-}
-
-.delay-100 { animation-delay: 0.1s; }
-.delay-200 { animation-delay: 0.2s; }
-
-@keyframes cta-shimmer {
-  0%,
-  100% {
-    transform: translateX(-140%) skewX(-14deg);
-  }
-  50% {
-    transform: translateX(140%) skewX(-14deg);
-  }
-}
-
-.btn-cta-primary {
-  position: relative;
-  overflow: hidden;
-}
-
-.btn-cta-primary::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    105deg,
-    transparent 38%,
-    rgba(255, 255, 255, 0.12) 50%,
-    transparent 62%
-  );
-  animation: cta-shimmer 3.2s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .btn-cta-primary::after {
-    animation: none;
-    opacity: 0;
-  }
-}
-</style>

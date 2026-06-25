@@ -26,6 +26,13 @@ export function getLightningEnv() {
   else if (providerRaw === 'none') provider = 'none'
   else if (providerRaw === 'opennode') provider = 'opennode'
 
+  const opennodeApiBase = pick(
+    process.env.OPENNODE_API_BASE,
+    process.env.NUXT_OPENNODE_API_BASE,
+    config.opennodeApiBase,
+    'https://api.opennode.com'
+  ).replace(/\/$/, '')
+
   return {
     provider,
     opennodeApiKey: pick(
@@ -33,6 +40,7 @@ export function getLightningEnv() {
       process.env.NUXT_OPENNODE_API_KEY,
       config.opennodeApiKey
     ),
+    opennodeApiBase,
     opennodeCallbackOrigin: pick(
       process.env.OPENNODE_CALLBACK_ORIGIN,
       process.env.NUXT_OPENNODE_CALLBACK_ORIGIN,

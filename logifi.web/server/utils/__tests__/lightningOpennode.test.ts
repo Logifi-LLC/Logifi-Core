@@ -1,8 +1,11 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import {
+  buildLightningCheckoutSuccessUrl,
   encodeDigifiOrderId,
   parseDigifiOrderId,
+  resolveLightningReturnDestination,
+  resolveOpennodePublicOrigin,
   verifyOpennodeWebhookSignature,
 } from '../lightningOpennode'
 
@@ -25,6 +28,57 @@ describe('encodeDigifiOrderId / parseDigifiOrderId', () => {
     expect(parseDigifiOrderId('digifi_credits|user|0')).toBeNull()
     expect(parseDigifiOrderId('digifi_credits||5')).toBeNull()
     expect(parseDigifiOrderId('digifi_credits|user|abc')).toBeNull()
+  })
+})
+
+describe('buildLightningCheckoutSuccessUrl / resolveLightningReturnDestination', () => {
+  it('builds a public return URL that redirects to localhost logbook-builder', () => {
+    const successUrl = buildLightningCheckoutSuccessUrl({
+      publicOrigin: 'https://abc.ngrok-free.app',
+      requestOrigin: 'https://localhost:3000',
+    })
+    expect(successUrl).toContain('https://abc.ngrok-free.app/api/credits/checkout/lightning/return?r=')
+    expect(successUrl).not.toContain('localhost')
+
+    const token = new URL(successUrl).searchParams.get('r')
+    expect(resolveLightningReturnDestination(token ?? undefined)).toBe(
+      'https://localhost:3000/logbook-builder?digifi=open&credits=success'
+    )
+  })
+
+  it('rejects tunnel hosts and non-logbook paths', () => {
+    const tunnelDest = Buffer.from(
+      'https://evil.trycloudflare.com/logbook-builder?digifi=open&credits=success',
+      'utf8'
+    ).toString('base64url')
+    expect(resolveLightningReturnDestination(tunnelDest)).toBeNull()
+
+    const settingsDest = Buffer.from('https://localhost:3000/settings', 'utf8').toString('base64url')
+    expect(resolveLightningReturnDestination(settingsDest)).toBeNull()
+  })
+})
+
+describe('resolveOpennodePublicOrigin', () => {
+  it('uses OPENNODE_CALLBACK_ORIGIN when set', () => {
+    expect(
+      resolveOpennodePublicOrigin({
+        opennodeCallbackOrigin: 'https://abc.ngrok-free.app',
+        requestOrigin: 'https://localhost:3000',
+      })
+    ).toBe('https://abc.ngrok-free.app')
+  })
+
+  it('rejects localhost when no public callback origin is configured', () => {
+    let caught: unknown
+    try {
+      resolveOpennodePublicOrigin({
+        opennodeCallbackOrigin: '',
+        requestOrigin: 'https://localhost:3000',
+      })
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toMatchObject({ statusCode: 503 })
   })
 })
 

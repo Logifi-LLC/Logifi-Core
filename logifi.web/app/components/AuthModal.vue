@@ -19,7 +19,7 @@
           {{ activeTab === 'signin' ? 'Welcome Back' : 'Create Account' }}
         </h3>
         <p :class="['text-sm font-quicksand mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-          {{ activeTab === 'signin' ? 'Log in to access your flight logs' : 'Join 500+ pilots digitizing their history' }}
+          {{ activeTab === 'signin' ? 'Log in to access your flight logs' : 'Create your free digital logbook' }}
         </p>
         
         <button

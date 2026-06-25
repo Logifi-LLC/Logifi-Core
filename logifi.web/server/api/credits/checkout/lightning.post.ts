@@ -32,12 +32,25 @@ export default defineEventHandler(async (event) => {
 
   const pricing = pricingForLightningCredits(numberOfCredits)
   const requestOrigin = getRequestURL(event).origin
-  const invoice = await createLightningCreditsInvoice({
-    userId,
-    numberOfCredits,
-    totalCents: pricing.totalCents,
-    requestOrigin,
-  })
+
+  let invoice
+  try {
+    invoice = await createLightningCreditsInvoice({
+      userId,
+      numberOfCredits,
+      totalCents: pricing.totalCents,
+      requestOrigin,
+    })
+  } catch (err: unknown) {
+    if (err && typeof err === 'object' && 'statusCode' in err) {
+      throw err
+    }
+    console.error('[lightning] checkout failed:', err)
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'Could not create Lightning charge',
+    })
+  }
 
   return {
     ok: true as const,

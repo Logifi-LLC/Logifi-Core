@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 /* Logifi theme is `html.dark` / `html.light` from `useTheme()`, not OS media alone. */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -11,4 +12,70 @@
   position: fixed;
   inset: 0;
   z-index: 90;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 1s ease-out forwards;
+}
+
+.animate-slide-up {
+  opacity: 0;
+  animation: slide-up 0.8s ease-out forwards;
+}
+
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+
+@keyframes cta-shimmer {
+  0%,
+  100% {
+    transform: translateX(-140%) skewX(-14deg);
+  }
+  50% {
+    transform: translateX(140%) skewX(-14deg);
+  }
+}
+
+.btn-cta-primary {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-cta-primary::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.12) 50%,
+    transparent 62%
+  );
+  animation: cta-shimmer 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-cta-primary::after {
+    animation: none;
+    opacity: 0;
+  }
+
+  .animate-fade-in,
+  .animate-slide-up {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }

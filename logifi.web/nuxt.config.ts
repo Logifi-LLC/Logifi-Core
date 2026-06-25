@@ -104,6 +104,10 @@ export default defineNuxtConfig({
     lightningProvider:
       process.env.LIGHTNING_PROVIDER || process.env.NUXT_LIGHTNING_PROVIDER || 'opennode',
     opennodeApiKey: process.env.OPENNODE_API_KEY || process.env.NUXT_OPENNODE_API_KEY || '',
+    opennodeApiBase:
+      process.env.OPENNODE_API_BASE ||
+      process.env.NUXT_OPENNODE_API_BASE ||
+      'https://api.opennode.com',
     opennodeCallbackOrigin:
       process.env.OPENNODE_CALLBACK_ORIGIN || process.env.NUXT_OPENNODE_CALLBACK_ORIGIN || '',
     btcpayHost: process.env.BTCPAY_HOST || process.env.NUXT_BTCPAY_HOST || '',
@@ -124,11 +128,33 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
+      title: 'Logifi — Digital Pilot Logbooks',
       meta: [
         {
           name: 'viewport',
           content: 'width=device-width, initial-scale=1, viewport-fit=cover',
         },
+        {
+          name: 'description',
+          content:
+            'Free, FAA-compliant digital pilot logbooks. AI-powered paper scanning with Digifi, FC View import, and open-source transparency.',
+        },
+        { property: 'og:type', content: 'website' },
+        { property: 'og:title', content: 'Logifi — Digital Pilot Logbooks' },
+        {
+          property: 'og:description',
+          content:
+            'Free, FAA-compliant digital pilot logbooks. AI-powered paper scanning with Digifi, FC View import, and open-source transparency.',
+        },
+        { property: 'og:image', content: '/images/app-logo-mark.png' },
+        { name: 'twitter:card', content: 'summary' },
+        { name: 'twitter:title', content: 'Logifi — Digital Pilot Logbooks' },
+        {
+          name: 'twitter:description',
+          content:
+            'Free, FAA-compliant digital pilot logbooks. AI-powered paper scanning with Digifi, FC View import, and open-source transparency.',
+        },
+        { name: 'twitter:image', content: '/images/app-logo-mark.png' },
       ],
       link: [
         { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon.png' },
