@@ -14,6 +14,18 @@ export type ProductUpdate = {
 
 export const PRODUCT_UPDATES: ProductUpdate[] = [
   {
+    id: '2026-06-welcome-credits',
+    date: '2026-06-25',
+    title: 'Welcome Digifi spreads',
+    tagline: 'Try paper scanning on us',
+    summary: 'Every account now includes 10 free Digifi spreads to digitize your paper logbook and build your aircraft catalog.',
+    bullets: [
+      'Scan, review, and import spreads to grow your Logbook Catalog.',
+      'Corrections you make before import help future scans recognize your tails and aircraft.',
+      'Re-scanning the same spread never uses another credit.',
+    ],
+  },
+  {
     id: '2026-06-digifi',
     date: '2026-06-03',
     title: 'Digifi',

@@ -369,7 +369,7 @@
                 Logbook Catalog
               </h2>
               <p :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                Auto-populated from saved entries.
+                Grows from saved entries and Digifi imports. Corrections teach future scans.
               </p>
         </div>
             <div class="flex items-center gap-2">

@@ -6,6 +6,7 @@ import {
   minPagesForMethod,
   rateDollarsForMethod,
 } from '~/utils/creditsPricing'
+import { WELCOME_CREDITS } from '../../shared/creditsWelcome'
 import { useAuth } from '~/composables/useAuth'
 
 export type CreditsBalanceResponse = { credits: number }
@@ -254,11 +255,23 @@ export function useDigifiCredits() {
     credits.value === null ? '—' : String(credits.value)
   )
 
+  const hasPurchasedCredits = computed(() =>
+    transactions.value.some((tx) => tx.type === 'purchase')
+  )
+
+  const showWelcomeCreditsHint = computed(() => {
+    if (credits.value === null || loading.value) return false
+    if (hasPurchasedCredits.value) return false
+    return credits.value <= WELCOME_CREDITS
+  })
+
   return {
     credits,
     transactions,
     transactionsLoading,
     displayCredits,
+    hasPurchasedCredits,
+    showWelcomeCreditsHint,
     loading,
     error,
     stripePaymentsAvailable,

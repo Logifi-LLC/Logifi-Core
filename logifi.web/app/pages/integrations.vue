@@ -78,9 +78,10 @@
               We do not send FC View tokens, authorization codes, or passkeys to Gemini or any other AI provider.
             </p>
             <p class="text-lg leading-relaxed">
-              Digifi scanning uses a pay-per-spread credit model—see
+              Digifi scanning uses a pay-per-spread credit model. Every account includes
+              <strong class="text-gray-950 dark:text-gray-900">10 free Digifi spreads</strong> to get started—see
               <NuxtLink to="/pricing" class="text-blue-600 font-bold hover:underline dark:text-blue-600">Pricing</NuxtLink>
-              for rates. Purchase credits in Settings → Account after signing in.
+              for additional rates. Purchase more credits in Settings → Account after signing in.
             </p>
             <p class="text-lg leading-relaxed">
               More detail on data handling:

@@ -3,11 +3,13 @@ import { inject, ref } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import type { ValidateOnlyResult, ColumnTotalRow } from '~/composables/useLogbookBuilderImport'
 import { useTheme } from '~/composables/useTheme'
+import { useToast } from '~/composables/useToast'
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
 if (!grid) throw new Error('LogbookBuilderValidateBar must be used inside a page that provides logbookBuilderGrid')
 
 const { isDark } = useTheme()
+const { showToast } = useToast()
 
 const validating = ref(false)
 const errorMessage = ref<string | null>(null)
@@ -53,6 +55,7 @@ async function handleImport() {
       showConfirm.value = false
       confirmResult.value = null
     } else if (result.imported > 0) {
+      showToast('Imported. Your catalog is growing — future Digifi scans will recognize more of your aircraft.')
       await navigateTo('/dashboard')
     }
   } catch (e: any) {

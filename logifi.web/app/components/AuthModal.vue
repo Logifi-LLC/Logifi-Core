@@ -19,7 +19,11 @@
           {{ activeTab === 'signin' ? 'Welcome Back' : 'Create Account' }}
         </h3>
         <p :class="['text-sm font-quicksand mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-          {{ activeTab === 'signin' ? 'Log in to access your flight logs' : 'Create your free digital logbook' }}
+          {{
+            activeTab === 'signin'
+              ? 'Log in to access your flight logs'
+              : `Create your free digital logbook — includes ${welcomeCredits} free Digifi spreads`
+          }}
         </p>
         
         <button
@@ -252,6 +256,9 @@
 import { ref, computed, watch } from 'vue'
 import { useAuth } from '~/composables/useAuth'
 import { resetIosInputZoom } from '~/composables/useCapacitorPlatform'
+import { WELCOME_CREDITS } from '../../shared/creditsWelcome'
+
+const welcomeCredits = WELCOME_CREDITS
 
 const props = withDefaults(
   defineProps<{

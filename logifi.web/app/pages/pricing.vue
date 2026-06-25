@@ -23,6 +23,10 @@
         <div class="border-t border-white/20 pt-8 dark:border-white/20">
           <p class="text-sm font-bold uppercase tracking-wide text-blue-600 dark:text-blue-600">Digifi Credits</p>
           <p class="text-gray-800 mt-2 text-lg leading-relaxed dark:text-gray-800">
+            Every account starts with <strong class="text-gray-950 dark:text-gray-900">{{ welcomeCredits }} free Digifi spreads</strong>
+            (about {{ welcomeCredits * 2 }} logbook pages). Scan a few spreads, review and import them, and Digifi starts learning your aircraft and handwriting. Re-scanning the same spread is always free.
+          </p>
+          <p class="text-gray-800 mt-4 text-lg leading-relaxed dark:text-gray-800">
             <strong class="text-gray-950 dark:text-gray-900">1 credit = 1 logbook spread</strong> (left + right pages).
           </p>
           <ul class="mt-4 space-y-3 text-lg text-gray-800 dark:text-gray-800">
@@ -71,6 +75,9 @@ import {
   rateDollarsForMethod,
   minPagesForMethod,
 } from '~/utils/creditsPricing'
+import { WELCOME_CREDITS } from '../../shared/creditsWelcome'
+
+const welcomeCredits = WELCOME_CREDITS
 
 const stripeRateDollars = rateDollarsForMethod('stripe')
 const lightningRateDollars = rateDollarsForMethod('lightning')
@@ -108,7 +115,7 @@ useHead({
     {
       name: 'description',
       content:
-        'Logifi is free. Digifi paper scanning uses pay-per-spread credits ($0.30–$0.40). FC View sold separately.',
+        'Logifi is free. Every account includes 10 free Digifi spreads. Additional scanning uses pay-per-spread credits ($0.30–$0.40). FC View sold separately.',
     },
   ],
 })

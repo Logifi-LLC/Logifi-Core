@@ -1,5 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '../../app/types/database'
+import {
+  WELCOME_CREDITS,
+  WELCOME_CREDITS_DESCRIPTION,
+  welcomeCreditsReferenceId,
+} from '../../shared/creditsWelcome'
 
 type ServiceClient = SupabaseClient<Database>
 
@@ -33,6 +38,7 @@ export interface AddCreditsOptions {
   description?: string
   paymentMethod?: string
   referenceId?: string
+  type?: CreditTransactionType
 }
 
 async function ensureUserProfile(service: ServiceClient, userId: string): Promise<void> {
@@ -90,6 +96,49 @@ export async function getCreditsBalance(
   return data?.credits ?? 0
 }
 
+/**
+ * Sync user_profiles.credits to the latest ledger balance_after when they diverge.
+ * Fixes welcome-credit migrations run via SQL Editor (protect_user_profile_credits blocks non-service_role updates).
+ */
+export async function reconcileCreditsBalanceFromLedger(
+  service: ServiceClient,
+  userId: string
+): Promise<number> {
+  const { data: latestTx, error: txError } = await service
+    .from('credit_transactions')
+    .select('balance_after')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (txError) {
+    throw new Error(`Failed to read credit ledger: ${txError.message}`)
+  }
+
+  if (!latestTx) {
+    return getCreditsBalance(service, userId)
+  }
+
+  const current = await getCreditsBalance(service, userId)
+  if (current === latestTx.balance_after) {
+    return current
+  }
+
+  const { data, error } = await service
+    .from('user_profiles')
+    .update({ credits: latestTx.balance_after, updated_at: new Date().toISOString() })
+    .eq('id', userId)
+    .select('credits')
+    .single()
+
+  if (error) {
+    throw new Error(`Failed to reconcile credits balance: ${error.message}`)
+  }
+
+  return data.credits
+}
+
 export async function listCreditTransactions(
   service: ServiceClient,
   userId: string,
@@ -139,13 +188,54 @@ export async function addCredits(
     userId,
     amount,
     balanceAfter: data.credits,
-    type: 'purchase',
+    type: options.type ?? 'purchase',
     description: options.description ?? `Added ${amount} credits`,
     paymentMethod: options.paymentMethod,
     referenceId: options.referenceId,
   })
 
   return data.credits
+}
+
+export async function hasWelcomeCreditsGrant(
+  service: ServiceClient,
+  userId: string
+): Promise<boolean> {
+  const referenceId = welcomeCreditsReferenceId(userId)
+  const { data, error } = await service
+    .from('credit_transactions')
+    .select('id')
+    .eq('reference_id', referenceId)
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(`Failed to check welcome credits: ${error.message}`)
+  }
+
+  return Boolean(data)
+}
+
+export async function grantWelcomeCredits(
+  service: ServiceClient,
+  userId: string,
+  amount: number = WELCOME_CREDITS
+): Promise<{ credits: number; granted: boolean }> {
+  if (!Number.isInteger(amount) || amount < 1) {
+    throw new Error('amount must be a positive integer')
+  }
+
+  if (await hasWelcomeCreditsGrant(service, userId)) {
+    const credits = await getCreditsBalance(service, userId)
+    return { credits, granted: false }
+  }
+
+  const credits = await addCredits(service, userId, amount, {
+    type: 'admin',
+    description: WELCOME_CREDITS_DESCRIPTION,
+    referenceId: welcomeCreditsReferenceId(userId),
+  })
+
+  return { credits, granted: true }
 }
 
 /** @deprecated Use consumeCreditForSpread for Digifi scans. */
