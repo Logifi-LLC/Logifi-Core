@@ -5624,21 +5624,6 @@
   </div>
   </Teleport>
 
-  <!-- End Main Content -->
-  </div>
-  
-  <!-- Loading State -->
-  <div
-    v-else-if="authLoading"
-    class="flex items-center justify-center min-h-screen"
-    :class="isDarkMode ? 'bg-gray-900' : 'bg-gray-300'"
-  >
-    <div class="text-center">
-      <Icon name="ri:loader-4-line" size="48" class="animate-spin mx-auto mb-4" :class="isDarkMode ? 'text-gray-400' : 'text-gray-600'" />
-      <p :class="['text-lg font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Loading...</p>
-    </div>
-  </div>
-  
   <!-- Scroll to Top Button -->
   <Transition
     enter-active-class="transition-opacity duration-300"
