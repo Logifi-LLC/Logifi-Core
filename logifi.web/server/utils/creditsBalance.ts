@@ -34,6 +34,12 @@ export interface ConsumeCreditForSpreadResult {
   balance: number
 }
 
+export interface AssertCanScanSpreadResult {
+  allowed: boolean
+  willCharge: boolean
+  balance: number
+}
+
 export interface AddCreditsOptions {
   description?: string
   paymentMethod?: string
@@ -271,6 +277,36 @@ export async function consumeCredit(
   })
 
   return { ok: true, balance: data.credits }
+}
+
+export async function assertCanScanSpread(
+  service: ServiceClient,
+  userId: string,
+  spreadId: string
+): Promise<AssertCanScanSpreadResult> {
+  await ensureUserProfile(service, userId)
+
+  const { data: existing, error: existingError } = await service
+    .from('digifi_spread_charges')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('spread_id', spreadId)
+    .maybeSingle()
+
+  if (existingError) {
+    throw new Error(`Failed to check spread charge: ${existingError.message}`)
+  }
+
+  const balance = await getCreditsBalance(service, userId)
+  if (existing) {
+    return { allowed: true, willCharge: false, balance }
+  }
+
+  if (balance < 1) {
+    return { allowed: false, willCharge: false, balance }
+  }
+
+  return { allowed: true, willCharge: true, balance }
 }
 
 export async function consumeCreditForSpread(

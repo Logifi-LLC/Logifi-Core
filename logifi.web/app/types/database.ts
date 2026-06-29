@@ -271,6 +271,7 @@ export type Database = {
           layout: string
           row_count: number
           model_used: string | null
+          scan_payload: Json | null
           created_at: string
           expires_at: string
         }
@@ -284,6 +285,7 @@ export type Database = {
           layout?: string
           row_count?: number
           model_used?: string | null
+          scan_payload?: Json | null
           created_at?: string
           expires_at?: string
         }
@@ -297,6 +299,7 @@ export type Database = {
           layout?: string
           row_count?: number
           model_used?: string | null
+          scan_payload?: Json | null
           created_at?: string
           expires_at?: string
         }

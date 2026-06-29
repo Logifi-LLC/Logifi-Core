@@ -140,3 +140,29 @@ export function setupBuilderDraftAutosave(grid: Grid, userId?: string, debounceM
     stopSpreadId()
   }
 }
+
+/** Flush draft to storage on tab close / hide (complements debounced autosave). */
+export function setupBuilderDraftFlush(grid: Grid, userId?: string): () => void {
+  if (typeof window === 'undefined') {
+    return () => {}
+  }
+
+  const flush = () => {
+    saveDraftNow(grid, userId)
+  }
+
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') {
+      flush()
+    }
+  }
+
+  window.addEventListener('pagehide', flush)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+
+  return () => {
+    flush()
+    window.removeEventListener('pagehide', flush)
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+  }
+}

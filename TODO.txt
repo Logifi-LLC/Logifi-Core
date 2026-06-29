@@ -1,11 +1,28 @@
-Manual and FC View imports in the same day.
-Offline work on the app.  
-Faster saving entries when on internet. 
-The white loading screen?? 
- 
-Digifi (Test) 
-Payment Processing on Digifi. 
-App Test
+RELEASE ORDER
+1. Digifi web (now) — Add Pages, QR phone companion, mock credits for testers
+2. App — logbook, offline, catalog (Digifi Eye stays Beta / parked)
+3. Digifi in app — Eye production pairing
+4. FC View integration
 
-GET AHOLD OF MURRAY
-GET TESTERS 
+BRANCHES
+- dev — Digifi web testing, Murray, QR fixes, mock credits
+- payment — Stripe + Lightning (branched off dev; merge into dev AFTER Digifi web test sign-off)
+- Do NOT merge payment → main until dev is stable with payments
+
+DEV NOW (Digifi main)
+- GET AHOLD OF MURRAY / first tester — see logifi.web/docs/digifi-tester-guide.md
+- QR companion path (not Digifi Eye native app for v1 testers)
+- Mock credits via Add Credits modal (real payments on payment branch only)
+- Fix only what testing surfaces
+
+PAYMENT BRANCH (merge into dev AFTER Digifi web test sign-off — see digifi-tester-guide.md)
+- Stripe Checkout + webhook — implemented on `payment` branch
+- Lightning invoice + webhook (BTCPay scaffold) — implemented on `payment` branch
+- add-mock gated via NUXT_CREDITS_MOCK_ENABLED (default on in dev, off in prod)
+- Push: git push -u origin payment (when remote access available)
+- DO NOT merge payment → dev until tester sign-off checklist is complete
+
+PARKED
+- Digifi Eye iOS session pairing / Capacitor API routing
+- Manual and FC View imports in the same day
+- Offline work on the app (Phase 2)

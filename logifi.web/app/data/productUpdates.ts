@@ -17,10 +17,11 @@ export const PRODUCT_UPDATES: ProductUpdate[] = [
     id: '2026-06-welcome-credits',
     date: '2026-06-25',
     title: 'Welcome Digifi spreads',
-    tagline: 'Try paper scanning on us',
-    summary: 'Every account now includes 10 free Digifi spreads to digitize your paper logbook and build your aircraft catalog.',
+    tagline: 'Your first 10 spreads are on us',
+    summary:
+      'Every new account includes 10 free Digifi spreads (~20 logbook pages) so you can try paper scanning, build your aircraft catalog, and see Digifi improve as you import.',
     bullets: [
-      'Scan, review, and import spreads to grow your Logbook Catalog.',
+      'Your first 10 spreads are on us—no purchase required to get started.',
       'Corrections you make before import help future scans recognize your tails and aircraft.',
       'Re-scanning the same spread never uses another credit.',
     ],

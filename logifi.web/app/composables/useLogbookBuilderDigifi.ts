@@ -2,6 +2,7 @@ import { ref, computed, inject } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { useAuth } from '~/composables/useAuth'
 import { useDigifiCredits } from '~/composables/useDigifiCredits'
+import { saveDraftNow } from '~/composables/useLogbookBuilderDraft'
 import type {
   DigifiScanChunkMeta,
   DigifiPageSide,
@@ -188,7 +189,7 @@ export function useLogbookBuilderDigifi() {
     throw new Error('useLogbookBuilderDigifi must be used inside logbook-builder page')
   }
 
-  const { getAccessToken, isAuthenticated } = useAuth()
+  const { getAccessToken, isAuthenticated, user } = useAuth()
   const { setCreditsFromScan, fetchBalance } = useDigifiCredits()
   const {
     visibleColumns,
@@ -312,6 +313,7 @@ export function useLogbookBuilderDigifi() {
 
       const applied = applyScanResults(pageSide, result.rows)
       lastFilledCount.value = applied.filled
+      saveDraftNow(grid, user.value?.id)
 
       const diagnostics =
         result.missingRowIndices != null

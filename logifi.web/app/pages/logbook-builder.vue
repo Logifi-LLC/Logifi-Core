@@ -10,11 +10,14 @@ import {
   getStoredDraft,
   restoreDraftToGrid,
   resumeDraftAutosave,
+  saveDraftNow,
   setupBuilderDraftAutosave,
+  setupBuilderDraftFlush,
   storedDraftHasContent,
   suspendDraftAutosave,
 } from '~/composables/useLogbookBuilderDraft'
 import { loadLastTemplateIfAny } from '~/composables/useLogbookBuilderLastTemplate'
+import { recoverDigifiSpreadFromServer } from '~/composables/useDigifiSpreadRecovery'
 import { useTheme } from '~/composables/useTheme'
 import { useAuth } from '~/composables/useAuth'
 import { useToast } from '~/composables/useToast'
@@ -31,10 +34,28 @@ const gridRef = ref<InstanceType<typeof LogbookBuilderGrid> | null>(null)
 const digifiSectionRef = ref<HTMLElement | null>(null)
 const grid = useLogbookBuilderGrid()
 provide('logbookBuilderGrid', grid)
-const { user, isAuthenticated } = useAuth()
+const { user, isAuthenticated, getAccessToken } = useAuth()
 
 let stopAutosave: (() => void) | null = null
+let stopDraftFlush: (() => void) | null = null
 let pageInitDone = false
+
+async function recoverSpreadIfNeeded(userId: string | undefined): Promise<void> {
+  if (!isAuthenticated.value || !userId) return
+
+  const spreadId = grid.spreadId.value
+  if (!spreadId) return
+
+  const { recoveredPages } = await recoverDigifiSpreadFromServer({
+    grid,
+    spreadId,
+    getAccessToken,
+  })
+
+  if (recoveredPages > 0) {
+    saveDraftNow(grid, userId)
+  }
+}
 
 async function finishPageInit() {
   if (pageInitDone) return
@@ -46,6 +67,7 @@ async function finishPageInit() {
     const draft = getStoredDraft(userId)
     if (draft) {
       restoreDraftToGrid(grid, draft)
+      await recoverSpreadIfNeeded(userId)
       pageInitDone = true
       resumeDraftAutosave()
       stopAutosave?.()
@@ -62,6 +84,7 @@ async function finishPageInit() {
   }
 
   await loadLastTemplateIfAny(grid, user.value.id)
+  await recoverSpreadIfNeeded(userId)
   pageInitDone = true
   resumeDraftAutosave()
   stopAutosave?.()
@@ -70,6 +93,8 @@ async function finishPageInit() {
 
 onMounted(() => {
   finishPageInit()
+  stopDraftFlush?.()
+  stopDraftFlush = setupBuilderDraftFlush(grid, user.value?.id)
 
   if (route.query.digifi === 'open') {
     showDigifiPanel.value = true
@@ -95,8 +120,19 @@ watchEffect(() => {
   }
 })
 
+watchEffect((onCleanup) => {
+  const userId = user.value?.id
+  stopDraftFlush?.()
+  stopDraftFlush = setupBuilderDraftFlush(grid, userId)
+  onCleanup(() => {
+    stopDraftFlush?.()
+    stopDraftFlush = null
+  })
+})
+
 onUnmounted(() => {
   stopAutosave?.()
+  stopDraftFlush?.()
 })
 
 const builderPilots = ref<string[]>([])

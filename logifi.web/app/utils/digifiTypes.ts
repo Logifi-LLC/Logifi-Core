@@ -78,6 +78,53 @@ export interface DigifiScanRow {
   cellMeta?: Record<string, DigifiScanCellMeta>
 }
 
+/** Persisted on digifi_scan_sessions.scan_payload for spread recovery. */
+export interface DigifiScanSessionPayload {
+  pageSide: DigifiPageSide
+  rows: DigifiScanRow[]
+  filledCellCount: number
+  reviewMessages?: string[]
+  reviewRequiredCount?: number
+  rowsReturned: number
+  distinctRowIndices: number[]
+  missingRowIndices: number[]
+  duplicateRowIndices: number[]
+  emptyRowIndices: number[]
+  hasGaps: boolean
+  strategyUsed: DigifiScanStrategy
+  chunkCount: number
+  rescueAttempted: boolean
+  rescueRecoveredCount: number
+  baseRow?: number
+  allowedColumnIds?: string[]
+}
+
+export interface DigifiSpreadRecoveryPage {
+  scanId: string
+  pageSide: DigifiPageSide
+  rows: DigifiScanRow[]
+  filledCellCount: number
+  reviewMessages?: string[]
+  reviewRequiredCount?: number
+  rowsReturned: number
+  distinctRowIndices: number[]
+  missingRowIndices: number[]
+  duplicateRowIndices: number[]
+  emptyRowIndices: number[]
+  hasGaps: boolean
+  strategyUsed: DigifiScanStrategy
+  chunkCount: number
+  rescueAttempted: boolean
+  rescueRecoveredCount: number
+  baseRow?: number
+  allowedColumnIds?: string[]
+}
+
+export interface DigifiSpreadRecoveryResponse {
+  spreadId: string
+  pages: DigifiSpreadRecoveryPage[]
+}
+
 export interface DigifiScanResponse {
   ok: true
   scanId: string

@@ -11,7 +11,9 @@ import { normalizeScanRows } from '../../utils/digifiNormalize'
 import { sanitizeDigifiScanRows } from '../../utils/digifiScanSanitize'
 import { personalizeDigifiScanRows } from '../../utils/digifiPersonalization'
 import { analyzeDigifiScanRows } from '../../../app/utils/digifiScanDiagnostics'
-import { consumeCreditForSpread, linkSpreadChargeToScanSession } from '../../utils/creditsBalance'
+import { assertCanScanSpread } from '../../utils/creditsBalance'
+import { buildDigifiScanSessionPayload } from '../../utils/digifiScanPayload'
+import { finalizeDigifiScanBilling } from '../../utils/digifiScanBilling'
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
@@ -150,11 +152,8 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const creditResult = await consumeCreditForSpread(service, userId, {
-    spreadId: meta.spreadId,
-    layout: meta.layout,
-  })
-  if (!creditResult.ok) {
+  const scanEligibility = await assertCanScanSpread(service, userId, meta.spreadId)
+  if (!scanEligibility.allowed) {
     throw createError({
       statusCode: 402,
       statusMessage: 'Insufficient credits. Add pages from your dashboard.',
@@ -260,6 +259,35 @@ export default defineEventHandler(async (event) => {
     console.error('[digifi] personalization failed:', error)
   }
 
+  let filledCellCount = 0
+  for (const row of personalizedRows) {
+    for (const v of Object.values(row.cells)) {
+      if (v.trim()) filledCellCount++
+    }
+  }
+
+  const rowDiagnostics = analyzeDigifiScanRows(personalizedRows, meta.rowCount)
+  const scanPayload = buildDigifiScanSessionPayload({
+    pageSide: meta.pageSide,
+    rows: personalizedRows,
+    filledCellCount,
+    reviewMessages,
+    reviewRequiredCount,
+    rowsReturned: rowDiagnostics.rowsReturned,
+    distinctRowIndices: rowDiagnostics.distinctRowIndices,
+    missingRowIndices: rowDiagnostics.missingRowIndices,
+    duplicateRowIndices:
+      scanResult.duplicateRowIndices.length > 0
+        ? scanResult.duplicateRowIndices
+        : rowDiagnostics.duplicateRowIndices,
+    emptyRowIndices: rowDiagnostics.emptyRowIndices,
+    hasGaps: rowDiagnostics.hasGaps,
+    strategyUsed: scanResult.strategyUsed,
+    chunkCount: scanResult.chunkCount,
+    rescueAttempted: scanResult.rescueAttempted,
+    rescueRecoveredCount: scanResult.rescueRecoveredCount,
+  })
+
   const { error: insertError } = await supabase.from('digifi_scan_sessions').insert({
     id: scanId,
     user_id: userId,
@@ -271,22 +299,21 @@ export default defineEventHandler(async (event) => {
     row_count: meta.rowCount,
     model_used: scanResult.modelUsed,
     expires_at: expiresAt,
+    scan_payload: scanPayload,
+  })
+
+  let creditResult = await finalizeDigifiScanBilling(service, userId, {
+    spreadId: meta.spreadId,
+    layout: meta.layout,
+    scanId,
+    insertError,
+    fallbackBalance: scanEligibility.balance,
   })
 
   if (insertError) {
     console.error('[digifi] session insert failed:', insertError.message)
-  } else if (creditResult.charged) {
-    await linkSpreadChargeToScanSession(service, userId, meta.spreadId, scanId)
   }
 
-  let filledCellCount = 0
-  for (const row of personalizedRows) {
-    for (const v of Object.values(row.cells)) {
-      if (v.trim()) filledCellCount++
-    }
-  }
-
-  const rowDiagnostics = analyzeDigifiScanRows(personalizedRows, meta.rowCount)
   const totalMs = Date.now() - requestStartedAt
   const extractMs = t.afterExtract && t.extractStart ? t.afterExtract - t.extractStart : undefined
   const normalizeMs = t.afterNormalize && t.afterExtract ? t.afterNormalize - t.afterExtract : undefined
