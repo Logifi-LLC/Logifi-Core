@@ -7,6 +7,7 @@ export type FlightTimeKey =
   | 'dual'
   | 'solo'
   | 'night'
+  | 'nvg'
   | 'actualInstrument'
   | 'dualGiven'
   | 'crossCountry'
@@ -22,6 +23,8 @@ export interface FlightTimeBreakdown {
   dual: number | null
   solo: number | null
   night: number | null
+  /** Night Vision Goggle hours (military logbook) */
+  nvg?: number | null
   actualInstrument: number | null
   dualGiven: number | null
   crossCountry: number | null
@@ -131,6 +134,7 @@ export type LogbookColumnKey =
   | 'dualR'
   | 'solo'
   | 'night'
+  | 'nvg'
   | 'actual'
   | 'hood'
   | 'dualG'
@@ -167,15 +171,16 @@ export const DEFAULT_COLUMN_CONFIG: LogbookColumnConfig[] = [
   { key: 'dualR', label: 'Dual R', visible: false, order: 9, required: false, width: 80 },
   { key: 'solo', label: 'Solo', visible: false, order: 10, required: false, width: 70 },
   { key: 'night', label: 'Night', visible: false, order: 11, required: false, width: 70 },
-  { key: 'actual', label: 'Actual', visible: false, order: 12, required: false, width: 80 },
-  { key: 'hood', label: 'Hood', visible: false, order: 13, required: false, width: 70 },
-  { key: 'dualG', label: 'Dual G', visible: false, order: 14, required: false, width: 80 },
-  { key: 'xc', label: 'XC', visible: false, order: 15, required: false, width: 70 },
-  { key: 'dayLandings', label: 'Day Landings', visible: false, order: 16, required: false, width: 100 },
-  { key: 'nightLandings', label: 'Night Landings', visible: false, order: 17, required: false, width: 110 },
-  { key: 'approach', label: 'Approach', visible: false, order: 18, required: false, width: 90 },
-  { key: 'pilots', label: 'Pilots', visible: false, order: 19, required: false, width: 150 },
-  { key: 'total', label: 'Total', visible: true, order: 20, required: true, width: 70 }
+  { key: 'nvg', label: 'NVG', visible: false, order: 12, required: false, width: 70 },
+  { key: 'actual', label: 'Actual', visible: false, order: 13, required: false, width: 80 },
+  { key: 'hood', label: 'Hood', visible: false, order: 14, required: false, width: 70 },
+  { key: 'dualG', label: 'Dual G', visible: false, order: 15, required: false, width: 80 },
+  { key: 'xc', label: 'XC', visible: false, order: 16, required: false, width: 70 },
+  { key: 'dayLandings', label: 'Day Landings', visible: false, order: 17, required: false, width: 100 },
+  { key: 'nightLandings', label: 'Night Landings', visible: false, order: 18, required: false, width: 110 },
+  { key: 'approach', label: 'Approach', visible: false, order: 19, required: false, width: 90 },
+  { key: 'pilots', label: 'Pilots', visible: false, order: 20, required: false, width: 150 },
+  { key: 'total', label: 'Total', visible: true, order: 21, required: true, width: 70 }
 ]
 
 export const createEmptyFlightTime = (): FlightTimeBreakdown => ({
@@ -185,6 +190,7 @@ export const createEmptyFlightTime = (): FlightTimeBreakdown => ({
   dual: null,
   solo: null,
   night: null,
+  nvg: null,
   actualInstrument: null,
   dualGiven: null,
   crossCountry: null,

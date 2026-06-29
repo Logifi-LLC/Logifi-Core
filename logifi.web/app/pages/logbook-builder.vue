@@ -378,6 +378,29 @@ const showDigifiCommonMistakes = ref(false)
 
       <LogbookBuilderGrid ref="gridRef" />
       <LogbookBuilderValidateBar />
+      <section
+        class="rounded-3xl p-4 sm:p-6 font-quicksand border shadow-[0_20px_50px_rgba(0,0,0,0.15)]"
+        :class="theme === 'dark'
+          ? 'border-white/10 bg-gray-900'
+          : 'border-gray-200 bg-white'"
+      >
+        <h2
+          class="text-base font-semibold mb-3"
+          :class="theme === 'dark' ? 'text-white' : 'text-gray-900'"
+        >
+          How to use
+        </h2>
+        <ul
+          class="space-y-2 text-sm list-disc list-inside"
+          :class="theme === 'dark' ? 'text-gray-300' : 'text-gray-700'"
+        >
+          <li>Use this grid to <strong>transcribe entries from a paper logbook</strong>. Fill in the cells, then validate and import into your digital logbook.</li>
+          <li><strong>Toolbar:</strong> Set the number of rows; choose single-page or two-page layout (and “Columns on left” for two-page); add or remove columns; sign in to save or load templates.</li>
+          <li><strong>Grid:</strong> Click a cell to edit; drag a column header to reorder columns; drag the right edge of a column header to resize; use the Tags column for each row. Use Tab or Enter to move between cells.</li>
+          <li><strong>Approaches:</strong> Use the <strong>Approach</strong> column for counts, and the <strong>Approach Type</strong> dropdown (ILS, RNAV, Visual, etc.) when you want the type tracked. If the type is only written in remarks, you can leave the dropdown blank and the system will still count the approaches.</li>
+          <li>Click <strong>Validate</strong> to check your data and see a summary with column totals. Then click <strong>Import</strong> on the confirmation step to add the entries to your logbook.</li>
+        </ul>
+      </section>
     </div>
   </div>
 </template>

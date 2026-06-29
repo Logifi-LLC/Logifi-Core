@@ -74,6 +74,50 @@
           Duplicates (same date and registration) are skipped. Drag and drop also works on desktop.
         </p>
       </div>
+      <div class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
+        <button
+          type="button"
+          class="flex w-full items-center justify-between text-left text-sm font-semibold font-quicksand transition-colors"
+          :class="isDarkMode ? 'text-gray-100 hover:text-white' : 'text-gray-900 hover:text-gray-700'"
+          @click="showImportGuide = !showImportGuide"
+        >
+          <span>Supported columns</span>
+          <Icon :name="showImportGuide ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'" size="18" />
+        </button>
+        <div
+          v-show="showImportGuide"
+          class="mt-3 rounded-lg border p-4 text-sm font-quicksand space-y-3"
+          :class="isDarkMode ? 'border-gray-700 bg-gray-900/40 text-gray-300' : 'border-gray-200 bg-white text-gray-700'"
+        >
+          <p>
+            Logifi accepts flexible column headers. Export from Logifi for the canonical round-trip format.
+          </p>
+          <div>
+            <p class="font-semibold mb-1">Required for Part 61 validation</p>
+            <ul class="list-disc pl-5 space-y-0.5">
+              <li>Date</li>
+              <li>Role (or PIC/SIC/Dual Received time to infer role)</li>
+              <li>Category/Class (e.g. HELI, ASEL)</li>
+              <li>Registration / Ident</li>
+              <li>Aircraft Make/Model or Aircraft Type</li>
+              <li>Total Flight Time or Total (Turbine accepted as alias)</li>
+            </ul>
+          </div>
+          <div>
+            <p class="font-semibold mb-1">Common time column aliases</p>
+            <ul class="list-disc pl-5 space-y-0.5">
+              <li>Night → Night</li>
+              <li>Actual → Actual Instrument</li>
+              <li>Hood → Simulated Instrument</li>
+              <li>NVG → NVG time (enable military fields in Profile)</li>
+              <li>Dual Received → Dual Received</li>
+            </ul>
+          </div>
+          <p :class="helper" class="text-xs">
+            Enable <strong>Military logbook fields</strong> under Profile to log NVG hours and use the NVG flight condition.
+          </p>
+        </div>
+      </div>
     </SettingsListGroup>
 
     <SettingsListGroup title="Integrations" :is-dark-mode="isDarkMode">
@@ -140,6 +184,8 @@ const emit = defineEmits<{
   'generate-8710': []
   close: []
 }>()
+
+const showImportGuide = ref(false)
 
 const { helper } = useSettingsClasses(computed(() => props.isDarkMode))
 const fileInputRef = ref<HTMLInputElement | null>(null)

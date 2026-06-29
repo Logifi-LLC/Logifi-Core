@@ -3,7 +3,13 @@ import {
   validateDate,
   validateFlightTime,
   validateCrossCountry,
-  validatePart61RequiredFields
+  validatePart61RequiredFields,
+  parseRouteAirportCodes,
+  getEntryAirportCodes,
+  getCatalogAirportCodes,
+  computeCrossCountryDistanceNm,
+  qualifiesForCrossCountryDistance,
+  MIN_CROSS_COUNTRY_DISTANCE_NM
 } from '../validation'
 import type { LogEntry } from '../logbookTypes'
 
@@ -189,9 +195,152 @@ describe('validation', () => {
       const warnings = results.filter(r => r.type === 'warning' && r.field === 'pic')
       expect(warnings.length).toBeGreaterThan(0)
     })
+
+    it('should error for negative NVG time', () => {
+      const entry = createTestEntry({
+        flightTime: {
+          total: 2.0,
+          pic: 2.0,
+          sic: null,
+          dual: null,
+          solo: null,
+          night: null,
+          nvg: -0.5,
+          actualInstrument: null,
+          simulatedInstrument: null,
+          crossCountry: null
+        }
+      })
+
+      const results = validateFlightTime(entry)
+      const errors = results.filter(r => r.type === 'error' && r.field === 'nvg')
+      expect(errors.length).toBeGreaterThan(0)
+    })
+
+    it('should warn when NVG time exceeds total time', () => {
+      const entry = createTestEntry({
+        flightTime: {
+          total: 2.0,
+          pic: 2.0,
+          sic: null,
+          dual: null,
+          solo: null,
+          night: 1.0,
+          nvg: 3.0,
+          actualInstrument: null,
+          simulatedInstrument: null,
+          crossCountry: null
+        }
+      })
+
+      const results = validateFlightTime(entry)
+      const warnings = results.filter(r => r.type === 'warning' && r.field === 'nvg')
+      expect(warnings.length).toBeGreaterThan(0)
+    })
+
+    it('should warn when NVG time exceeds night time', () => {
+      const entry = createTestEntry({
+        flightTime: {
+          total: 2.0,
+          pic: 2.0,
+          sic: null,
+          dual: null,
+          solo: null,
+          night: 1.0,
+          nvg: 1.5,
+          actualInstrument: null,
+          simulatedInstrument: null,
+          crossCountry: null
+        }
+      })
+
+      const results = validateFlightTime(entry)
+      const warnings = results.filter(
+        r => r.type === 'warning' && r.field === 'nvg' && r.message.includes('night')
+      )
+      expect(warnings.length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('parseRouteAirportCodes', () => {
+    it('parses single and multiple space-separated codes', () => {
+      expect(parseRouteAirportCodes('KFWA')).toEqual(['KFWA'])
+      expect(parseRouteAirportCodes('KIND KMCX KLGA')).toEqual(['KIND', 'KMCX', 'KLGA'])
+    })
+
+    it('ignores short tokens and normalizes case', () => {
+      expect(parseRouteAirportCodes('  klaf  KFWA  ')).toEqual(['KLAF', 'KFWA'])
+      expect(parseRouteAirportCodes('AB CD')).toEqual([])
+    })
+
+    it('returns empty array for blank route', () => {
+      expect(parseRouteAirportCodes('')).toEqual([])
+      expect(parseRouteAirportCodes('   ')).toEqual([])
+    })
+  })
+
+  describe('getCatalogAirportCodes', () => {
+    it('includes departure and destination only', () => {
+      expect(getCatalogAirportCodes({
+        departure: 'KLAF',
+        destination: 'KLAF'
+      })).toEqual(['KLAF'])
+    })
+  })
+
+  describe('getEntryAirportCodes', () => {
+    it('includes classified route airports on the entry', () => {
+      const classified = new Set(['KFWA'])
+      expect(getEntryAirportCodes({
+        departure: 'KLAF',
+        destination: 'KLAF',
+        route: 'KFWA FWA'
+      }, classified)).toEqual(['KLAF', 'KFWA'])
+    })
+
+    it('excludes unclassified route tokens', () => {
+      expect(getEntryAirportCodes({
+        departure: 'KLAF',
+        destination: 'KLAF',
+        route: 'FWA'
+      })).toEqual(['KLAF'])
+    })
+  })
+
+  describe('computeCrossCountryDistanceNm', () => {
+    const departure = { latitude: 40.0, longitude: -74.0 }
+    const nearbyDestination = { latitude: 40.1, longitude: -74.0 }
+    const farRouteStop = { latitude: 41.0, longitude: -74.0 }
+
+    it('uses max distance from departure to destination and route stops', () => {
+      const depToDest = computeCrossCountryDistanceNm(departure, nearbyDestination)
+      expect(depToDest).toBeLessThan(MIN_CROSS_COUNTRY_DISTANCE_NM)
+
+      const withRoute = computeCrossCountryDistanceNm(departure, nearbyDestination, [farRouteStop])
+      expect(withRoute).toBeGreaterThanOrEqual(MIN_CROSS_COUNTRY_DISTANCE_NM)
+      expect(withRoute).toBeGreaterThan(depToDest)
+    })
+
+    it('supports round-trip legs using route stops only', () => {
+      const distance = computeCrossCountryDistanceNm(departure, departure, [farRouteStop])
+      expect(distance).toBeGreaterThanOrEqual(MIN_CROSS_COUNTRY_DISTANCE_NM)
+    })
+  })
+
+  describe('qualifiesForCrossCountryDistance', () => {
+    it('requires at least 50nm', () => {
+      expect(qualifiesForCrossCountryDistance(49.9)).toBe(false)
+      expect(qualifiesForCrossCountryDistance(50)).toBe(true)
+      expect(qualifiesForCrossCountryDistance(120)).toBe(true)
+    })
   })
 
   describe('validateCrossCountry', () => {
+    const kjfk = { latitude: 40.6398, longitude: -73.7789 }
+    const kbos = { latitude: 42.3656, longitude: -71.0096 }
+    const klaf = { latitude: 40.4127, longitude: -86.9369 }
+    const kfwa = { latitude: 40.9785, longitude: -85.1951 }
+
     it('should return no errors for valid cross-country entry', () => {
       const entry = createTestEntry({
         departure: 'KJFK',
@@ -209,22 +358,25 @@ describe('validation', () => {
           simulatedInstrument: null
         }
       })
-      
+
       const results = validateCrossCountry(entry, {
-        'KJFK': { latitude: 40.6398, longitude: -73.7789 },
-        'KBOS': { latitude: 42.3656, longitude: -71.0096 }
+        departure: kjfk,
+        destination: kbos
       })
-      
+
       const errors = results.filter(r => r.type === 'error')
       expect(errors.length).toBe(0)
     })
 
-    it('should warn when cross-country time exceeds total time', () => {
+    it('suggests XC for round-trip when route stop is beyond 50nm from departure', () => {
       const entry = createTestEntry({
+        departure: 'KLAF',
+        destination: 'KLAF',
+        route: 'KFWA',
         flightTime: {
-          total: 2.0,
-          pic: 2.0,
-          crossCountry: 3.0, // Exceeds total
+          total: 1.5,
+          pic: 1.5,
+          crossCountry: null,
           sic: null,
           dual: null,
           solo: null,
@@ -233,9 +385,89 @@ describe('validation', () => {
           simulatedInstrument: null
         }
       })
-      
+
+      const results = validateCrossCountry(entry, {
+        departure: klaf,
+        destination: klaf,
+        route: [kfwa]
+      })
+
+      const autoFix = results.find(r => r.field === 'crossCountry' && r.autoFix)
+      expect(autoFix).toBeDefined()
+      expect(autoFix?.autoFix?.value).toBe(1.5)
+    })
+
+    it('warns when same-airport round trip has XC but no qualifying route', () => {
+      const entry = createTestEntry({
+        departure: 'KLAF',
+        destination: 'KLAF',
+        route: '',
+        flightTime: {
+          total: 1.5,
+          pic: 1.5,
+          crossCountry: 1.5,
+          sic: null,
+          dual: null,
+          solo: null,
+          night: null,
+          actualInstrument: null,
+          simulatedInstrument: null
+        }
+      })
+
       const results = validateCrossCountry(entry, {})
-      
+      const warning = results.find(r => r.field === 'crossCountry' && r.message?.includes('same'))
+      expect(warning).toBeDefined()
+    })
+
+    it('qualifies via route when departure and destination are closer than 50nm', () => {
+      const departure = { latitude: 40.0, longitude: -74.0 }
+      const nearbyDestination = { latitude: 40.1, longitude: -74.0 }
+      const farRouteStop = { latitude: 41.0, longitude: -74.0 }
+
+      const entry = createTestEntry({
+        departure: 'KAAA',
+        destination: 'KBBB',
+        route: 'KCCC',
+        flightTime: {
+          total: 2.0,
+          pic: 2.0,
+          crossCountry: null,
+          sic: null,
+          dual: null,
+          solo: null,
+          night: null,
+          actualInstrument: null,
+          simulatedInstrument: null
+        }
+      })
+
+      const results = validateCrossCountry(entry, {
+        departure,
+        destination: nearbyDestination,
+        route: [farRouteStop]
+      })
+
+      expect(results.some(r => r.field === 'crossCountry' && r.autoFix)).toBe(true)
+    })
+
+    it('should warn when cross-country time exceeds total time', () => {
+      const entry = createTestEntry({
+        flightTime: {
+          total: 2.0,
+          pic: 2.0,
+          crossCountry: 3.0,
+          sic: null,
+          dual: null,
+          solo: null,
+          night: null,
+          actualInstrument: null,
+          simulatedInstrument: null
+        }
+      })
+
+      const results = validateFlightTime(entry)
+
       const warnings = results.filter(r => r.type === 'warning' && r.field === 'crossCountry')
       expect(warnings.length).toBeGreaterThan(0)
     })

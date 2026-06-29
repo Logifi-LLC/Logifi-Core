@@ -60,6 +60,27 @@
             </SettingsField>
           </div>
           <div class="px-4 py-3">
+            <SettingsField
+              label="Military logbook fields"
+              hint="NVG time and condition for military flight records"
+              :is-dark-mode="isDarkMode"
+            >
+              <template #default>
+                <label class="inline-flex cursor-pointer items-center gap-3">
+                  <input
+                    v-model="profile.enableMilitaryFields"
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    :class="isDarkMode ? 'border-gray-600 bg-gray-800' : 'bg-white'"
+                  />
+                  <span class="text-sm" :class="isDarkMode ? 'text-gray-200' : 'text-gray-700'">
+                    Enable military logbook fields (NVG time + condition)
+                  </span>
+                </label>
+              </template>
+            </SettingsField>
+          </div>
+          <div class="px-4 py-3">
             <SettingsField label="Current focus" :is-dark-mode="isDarkMode">
               <template #default="{ inputClass }">
                 <SettingsAutoTextarea
@@ -233,6 +254,7 @@ export interface PilotProfileForm {
   certificates: string
   flightGoals: string
   notes: string
+  enableMilitaryFields: boolean
   dateOfBirth: string
   placeOfBirth: string
   residentialAddress: string

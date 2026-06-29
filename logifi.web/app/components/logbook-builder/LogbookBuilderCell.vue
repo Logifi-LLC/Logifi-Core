@@ -12,7 +12,7 @@ import { shouldDeferGridKeydown as shouldDeferGridKeydownUtil } from '~/utils/lo
 import { useTheme } from '~/composables/useTheme'
 
 const numericKeys: LogbookColumnKey[] = [
-  'pic', 'sic', 'dualR', 'solo', 'night', 'actual', 'hood', 'dualG', 'xc',
+  'pic', 'sic', 'dualR', 'solo', 'night', 'nvg', 'actual', 'hood', 'dualG', 'xc',
   'dayLandings', 'nightLandings', 'approach', 'total',
 ]
 

@@ -63,6 +63,86 @@ export function calculateDistanceNM(coord1: AirportCoordinates, coord2: AirportC
   return distance
 }
 
+/** Part 61 cross-country minimum distance from original point of departure (nautical miles). */
+export const MIN_CROSS_COUNTRY_DISTANCE_NM = 50
+
+export interface CrossCountryAirportCoords {
+  departure?: AirportCoordinates
+  destination?: AirportCoordinates
+  route?: AirportCoordinates[]
+}
+
+/** Parse space-separated airport codes from the route field (matches import normalization). */
+export function parseRouteAirportCodes(route: string): string[] {
+  return (route || '')
+    .trim()
+    .split(/\s+/)
+    .filter((part) => part.length >= 3)
+    .map((part) => part.toUpperCase())
+}
+
+/** Departure and destination only — always counted as airports visited. */
+export function getCatalogAirportCodes(entry: {
+  departure?: string
+  destination?: string
+}): string[] {
+  const codes = new Set<string>()
+  const departure = (entry.departure || '').trim().toUpperCase()
+  const destination = (entry.destination || '').trim().toUpperCase()
+  if (departure && departure !== 'UNKNOWN') codes.add(departure)
+  if (destination && destination !== 'UNKNOWN') codes.add(destination)
+  return Array.from(codes)
+}
+
+/** Airport codes for catalog/filter: dep/dest plus route tokens on this entry classified as airports. */
+export function getEntryAirportCodes(
+  entry: {
+    departure?: string
+    destination?: string
+    route?: string
+  },
+  classifiedRouteAirportSet?: ReadonlySet<string>
+): string[] {
+  const codes = new Set<string>(getCatalogAirportCodes(entry))
+  if (classifiedRouteAirportSet) {
+    parseRouteAirportCodes(entry.route || '').forEach((code) => {
+      if (classifiedRouteAirportSet.has(code)) codes.add(code)
+    })
+  }
+  return Array.from(codes)
+}
+
+/** True when entry matches an airport code (dep/dest or classified route airport on this entry). */
+export function entryUsesAirport(
+  entry: { departure?: string; destination?: string; route?: string },
+  airportCode: string,
+  classifiedRouteAirportSet?: ReadonlySet<string>
+): boolean {
+  const normalized = airportCode.trim().toUpperCase()
+  if (!normalized) return false
+  return getEntryAirportCodes(entry, classifiedRouteAirportSet).includes(normalized)
+}
+
+/** Max great-circle distance from departure to destination and/or route stops. */
+export function computeCrossCountryDistanceNm(
+  departure: AirportCoordinates,
+  destination?: AirportCoordinates | null,
+  routeCoords?: AirportCoordinates[]
+): number {
+  let max = 0
+  if (destination) {
+    max = Math.max(max, calculateDistanceNM(departure, destination))
+  }
+  for (const routeCoord of routeCoords || []) {
+    max = Math.max(max, calculateDistanceNM(departure, routeCoord))
+  }
+  return max
+}
+
+export function qualifiesForCrossCountryDistance(distance: number): boolean {
+  return distance >= MIN_CROSS_COUNTRY_DISTANCE_NM
+}
+
 /**
  * Validate date for a log entry
  * @param entry - The log entry to validate
@@ -174,6 +254,7 @@ export function validateFlightTime(entry: LogEntry): ValidationResult[] {
   const dual = getNumericValue(flightTime.dual)
   const solo = getNumericValue(flightTime.solo)
   const night = getNumericValue(flightTime.night)
+  const nvg = getNumericValue(flightTime.nvg)
   const actualInstrument = getNumericValue(flightTime.actualInstrument)
   const simulatedInstrument = getNumericValue(flightTime.simulatedInstrument)
   const crossCountry = getNumericValue(flightTime.crossCountry)
@@ -235,6 +316,15 @@ export function validateFlightTime(entry: LogEntry): ValidationResult[] {
       type: 'error',
       field: 'night',
       message: 'Night time cannot be negative',
+      suggestion: 'Please enter a positive value or leave blank'
+    })
+  }
+
+  if (isProvided(flightTime.nvg) && nvg < 0) {
+    results.push({
+      type: 'error',
+      field: 'nvg',
+      message: 'NVG time cannot be negative',
       suggestion: 'Please enter a positive value or leave blank'
     })
   }
@@ -316,6 +406,15 @@ export function validateFlightTime(entry: LogEntry): ValidationResult[] {
       })
     }
 
+    if (isProvided(flightTime.nvg) && nvg > total) {
+      results.push({
+        type: 'warning',
+        field: 'nvg',
+        message: `NVG time (${nvg.toFixed(2)}) exceeds total time (${total.toFixed(2)})`,
+        suggestion: 'NVG time should not exceed total flight time'
+      })
+    }
+
     if (isProvided(flightTime.actualInstrument) && actualInstrument > total) {
       results.push({
         type: 'warning',
@@ -358,6 +457,15 @@ export function validateFlightTime(entry: LogEntry): ValidationResult[] {
         field: 'dualGiven',
         message: `Dual given time (${dualGiven.toFixed(2)}) exceeds total time (${total.toFixed(2)})`,
         suggestion: 'Dual given time should not exceed total flight time'
+      })
+    }
+
+    if (isProvided(flightTime.nvg) && isProvided(flightTime.night) && nvg > night && night > 0) {
+      results.push({
+        type: 'warning',
+        field: 'nvg',
+        message: `NVG time (${nvg.toFixed(2)}) exceeds night time (${night.toFixed(2)})`,
+        suggestion: 'NVG time is usually a subset of night time'
       })
     }
 
@@ -415,18 +523,15 @@ export function validateFlightTime(entry: LogEntry): ValidationResult[] {
 }
 
 /**
- * Validate cross-country flight requirements
- * Cross-country flights must have different departure and destination airports
- * Both airports should be valid (not UNKNOWN or empty)
- * For Part 61 purposes, cross-country typically requires at least 50nm distance
- * 
+ * Validate cross-country flight requirements (Part 61: beyond 50nm from original departure).
+ * Uses max distance from departure to destination and route stops when coordinates are available.
+ *
  * @param entry - The log entry to validate
- * @param airportCoords - Optional object with departure and destination airport coordinates
- *                        If provided, will calculate distance and validate 50nm minimum
+ * @param airportCoords - Optional departure, destination, and route airport coordinates
  */
 export function validateCrossCountry(
-  entry: LogEntry, 
-  airportCoords?: { departure?: AirportCoordinates; destination?: AirportCoordinates }
+  entry: LogEntry,
+  airportCoords?: CrossCountryAirportCoords
 ): ValidationResult[] {
   const results: ValidationResult[] = []
   const flightTime = entry.flightTime
@@ -434,62 +539,88 @@ export function validateCrossCountry(
 
   const departure = (entry.departure || '').trim().toUpperCase()
   const destination = (entry.destination || '').trim().toUpperCase()
+  const routeCodes = parseRouteAirportCodes(entry.route || '')
 
-  // Check if departure and destination are the same
-  if (departure && destination && departure === destination && departure !== 'UNKNOWN') {
+  if (departure === 'UNKNOWN' || departure === '') {
     if (hasCrossCountryTime) {
       results.push({
         type: 'warning',
         field: 'crossCountry',
-        message: `Cross-country time logged but departure and destination are the same (${entry.departure})`,
-        suggestion: 'Cross-country flights typically require different departure and destination airports. Verify this entry is correct.'
+        message: 'Cross-country time logged but departure airport is missing or unknown',
+        suggestion: 'Cross-country flights should have a valid departure airport. Please verify this entry.'
       })
     }
-    return results // Early return - can't validate distance if same airport
+    return results
   }
 
-  // Check if either airport is UNKNOWN or empty
-  if (departure === 'UNKNOWN' || departure === '' || destination === 'UNKNOWN' || destination === '') {
+  if (destination === 'UNKNOWN' || destination === '') {
     if (hasCrossCountryTime) {
       results.push({
         type: 'warning',
         field: 'crossCountry',
-        message: 'Cross-country time logged but departure or destination airport is missing or unknown',
-        suggestion: 'Cross-country flights should have valid departure and destination airports. Please verify this entry.'
+        message: 'Cross-country time logged but destination airport is missing or unknown',
+        suggestion: 'Cross-country flights should have a valid destination airport. Please verify this entry.'
       })
     }
-    return results // Early return - can't validate distance without valid airports
+    return results
   }
 
-  // If we have coordinates, calculate distance and validate 50nm minimum
-  if (airportCoords?.departure && airportCoords?.destination) {
-    const distance = calculateDistanceNM(airportCoords.departure, airportCoords.destination)
-    const MIN_CROSS_COUNTRY_DISTANCE_NM = 50
+  const hasDistanceInputs =
+    airportCoords?.departure &&
+    (airportCoords.destination || (airportCoords.route && airportCoords.route.length > 0))
 
-    if (hasCrossCountryTime && distance < MIN_CROSS_COUNTRY_DISTANCE_NM) {
+  if (hasDistanceInputs && airportCoords?.departure) {
+    const distance = computeCrossCountryDistanceNm(
+      airportCoords.departure,
+      airportCoords.destination,
+      airportCoords.route
+    )
+    const sameAirportRoundTrip = departure === destination && departure !== 'UNKNOWN'
+
+    if (hasCrossCountryTime && !qualifiesForCrossCountryDistance(distance)) {
+      const routeHint =
+        sameAirportRoundTrip && routeCodes.length === 0
+          ? ' Add intermediate airports in Route if this was a round trip beyond 50nm.'
+          : sameAirportRoundTrip
+            ? ' Verify route stops are beyond 50nm from departure.'
+            : ''
       results.push({
         type: 'warning',
         field: 'crossCountry',
         message: `Cross-country time logged but distance is only ${distance.toFixed(1)}nm (minimum is typically 50nm for Part 61)`,
-        suggestion: `The flight from ${entry.departure} to ${entry.destination} is ${distance.toFixed(1)}nm. Cross-country flights typically require at least 50nm distance. Verify this entry is correct.`
+        suggestion: `Maximum distance from ${entry.departure} is ${distance.toFixed(1)}nm. Cross-country flights typically require at least 50nm from the original departure.${routeHint}`
       })
-    } else if (!hasCrossCountryTime && distance >= MIN_CROSS_COUNTRY_DISTANCE_NM) {
-      // Suggest adding cross-country time if distance meets requirement
-      // Auto-fix: Set cross-country time to total time if available
+    } else if (!hasCrossCountryTime && qualifiesForCrossCountryDistance(distance)) {
       const totalTime = getNumericValue(flightTime?.total)
       const autoFixValue = totalTime > 0 ? totalTime : null
-      
+      const distanceLabel =
+        sameAirportRoundTrip && routeCodes.length > 0
+          ? `${distance.toFixed(1)}nm from ${entry.departure} (via route)`
+          : `${distance.toFixed(1)}nm from ${entry.departure}`
+
       results.push({
         type: 'warning',
         field: 'crossCountry',
         message: `Flight distance is ${distance.toFixed(1)}nm (meets 50nm cross-country requirement) but no cross-country time is logged`,
-        suggestion: `Consider logging cross-country time for this flight. The distance from ${entry.departure} to ${entry.destination} is ${distance.toFixed(1)}nm.`,
+        suggestion: `Consider logging cross-country time for this flight. Maximum distance from departure is ${distanceLabel}.`,
         autoFix: autoFixValue !== null ? {
           field: 'crossCountry',
           value: autoFixValue
         } : undefined
       })
     }
+  } else if (
+    hasCrossCountryTime &&
+    departure === destination &&
+    departure !== 'UNKNOWN' &&
+    routeCodes.length === 0
+  ) {
+    results.push({
+      type: 'warning',
+      field: 'crossCountry',
+      message: `Cross-country time logged but departure and destination are the same (${entry.departure})`,
+      suggestion: 'Round-trip cross-country flights require a route stop beyond 50nm from departure. Add intermediate airports in Route.'
+    })
   }
 
   return results

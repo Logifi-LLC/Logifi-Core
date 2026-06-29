@@ -28,6 +28,7 @@ const FIELD_OPTIONS: { value: LogbookColumnKey | ''; label: string }[] = [
   { value: 'dualR', label: 'Dual R' },
   { value: 'solo', label: 'Solo' },
   { value: 'night', label: 'Night' },
+  { value: 'nvg', label: 'NVG' },
   { value: 'actual', label: 'Actual' },
   { value: 'hood', label: 'Hood' },
   { value: 'dualG', label: 'Dual G' },

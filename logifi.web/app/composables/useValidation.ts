@@ -9,18 +9,22 @@ import {
   validateAirportCode,
   validateAircraftRegistration,
   validateNumericPrecision,
+  parseRouteAirportCodes,
   type ValidationResult, 
-  type AirportCoordinates 
+  type AirportCoordinates,
+  type CrossCountryAirportCoords
 } from '~/utils/validation'
 import { lookupAirportLocal } from '../../shared/airportLookup'
 import { isCapacitorNative } from '~/composables/useCapacitorPlatform'
 import { useAirportLookup } from '~/composables/useAirportLookup'
+import { useLocationLookup } from '~/composables/useLocationLookup'
 
 export const useValidation = () => {
   const validationResults: Ref<ValidationResult[]> = ref([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const { lookupAirport } = useAirportLookup()
+  const { lookupLocationCoords } = useLocationLookup()
 
   const resolveAirportCoordinates = async (
     code: string
@@ -87,32 +91,51 @@ export const useValidation = () => {
       
       if (departure && destination && departure !== 'UNKNOWN' && destination !== 'UNKNOWN') {
         try {
-          const [depInfo, destInfo] = await Promise.all([
+          const routeCodes = parseRouteAirportCodes(entry.route || '')
+          const uniqueRouteCodes = [...new Set(routeCodes)]
+
+          const [depInfo, destInfo, ...routeInfos] = await Promise.all([
             resolveAirportCoordinates(departure),
             resolveAirportCoordinates(destination),
+            ...uniqueRouteCodes.map((code) => lookupLocationCoords(code))
           ])
-          
-          const airportCoords: { departure?: AirportCoordinates; destination?: AirportCoordinates } = {}
-          
+
+          const airportCoords: CrossCountryAirportCoords = {}
+
           if (depInfo?.latitude !== undefined && depInfo?.longitude !== undefined) {
             airportCoords.departure = {
               latitude: depInfo.latitude,
               longitude: depInfo.longitude
             }
           }
-          
+
           if (destInfo?.latitude !== undefined && destInfo?.longitude !== undefined) {
             airportCoords.destination = {
               latitude: destInfo.latitude,
               longitude: destInfo.longitude
             }
           }
-          
-          // Only pass coordinates if we have both
-          if (airportCoords.departure && airportCoords.destination) {
+
+          const routeCoords: AirportCoordinates[] = []
+          routeInfos.forEach((info) => {
+            if (info?.latitude != null && info?.longitude != null) {
+              routeCoords.push({
+                latitude: info.latitude,
+                longitude: info.longitude
+              })
+            }
+          })
+          if (routeCoords.length > 0) {
+            airportCoords.route = routeCoords
+          }
+
+          const canComputeDistance =
+            airportCoords.departure &&
+            (airportCoords.destination || (airportCoords.route && airportCoords.route.length > 0))
+
+          if (canComputeDistance) {
             crossCountryResults = validateCrossCountry(entry, airportCoords)
           } else {
-            // Fall back to basic validation without distance
             crossCountryResults = validateCrossCountry(entry)
           }
         } catch (err) {
@@ -151,7 +174,7 @@ export const useValidation = () => {
       
       // Numeric precision validation for flight times
       if (entry.flightTime) {
-        const timeFields = ['total', 'pic', 'sic', 'dual', 'solo', 'night', 'actualInstrument', 'simulatedInstrument', 'crossCountry', 'dualGiven'] as const
+        const timeFields = ['total', 'pic', 'sic', 'dual', 'solo', 'night', 'nvg', 'actualInstrument', 'simulatedInstrument', 'crossCountry', 'dualGiven'] as const
         timeFields.forEach(field => {
           const value = entry.flightTime[field]
           if (value !== null && value !== undefined) {

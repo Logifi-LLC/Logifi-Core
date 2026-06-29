@@ -10,6 +10,26 @@ Download the FAA aircraft database for the first time:
 npm run update-aircraft-db
 ```
 
+## Airport Supplement (US GA fields)
+
+Many US general-aviation airports (e.g. `KBEH` Benton Harbor) are not in `@nwpr/airport-codes`. Regenerate the supplement from OurAirports when needed:
+
+```bash
+npm run build-airport-supplement
+```
+
+This writes `server/data/us-airport-supplement.json` (~2,500 US airports).
+
+## Navaid index (route token classification)
+
+Classify route tokens as navaid vs airport (e.g. `FWA` VORTAC vs `KFWA` airport):
+
+```bash
+npm run build-navaid-index
+```
+
+This writes `server/data/navaid-index.json` (~6,000 navaids from OurAirports).
+
 Or run directly:
 
 ```bash
