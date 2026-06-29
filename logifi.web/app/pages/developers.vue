@@ -279,78 +279,6 @@
             <Icon name="ri:external-link-line" size="18" :class="['flex-shrink-0 mt-1', isFromLanding ? 'text-gray-600 dark:text-gray-600' : (effectiveDark ? 'text-gray-500' : 'text-gray-400')]" />
           </a>
 
-          <!-- Lightning donation — layout aligned with other link cards (icon + body); small QR top-right in body so the cell stays narrow. -->
-          <div
-            :class="[
-              'flex items-start gap-4 p-6 rounded-3xl border transition-all duration-200',
-              isFromLanding
-                ? 'bg-white/10 backdrop-blur-md border-white/15 shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)] dark:bg-white/10 dark:border-white/15'
-                : effectiveDark
-                  ? 'bg-gray-800 border-gray-700 text-gray-200 shadow-[0_20px_50px_rgba(0,0,0,0.15)]'
-                  : 'bg-gray-100 border-gray-300 text-gray-800 shadow-[0_20px_50px_rgba(0,0,0,0.15)]'
-            ]"
-          >
-            <div :class="['flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center', isFromLanding ? 'bg-amber-100/60 dark:bg-amber-100/60' : (effectiveDark ? 'bg-amber-900/40' : 'bg-amber-100')]">
-              <Icon name="ri:flashlight-fill" size="24" :class="isFromLanding ? 'text-amber-700 dark:text-amber-800' : (effectiveDark ? 'text-amber-300' : 'text-amber-600')" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center justify-between gap-3">
-                <div class="min-w-0 flex-1">
-                  <h3 :class="['font-semibold font-quicksand mb-1', isFromLanding ? 'text-gray-950 dark:text-gray-900' : (effectiveDark ? 'text-white' : 'text-gray-900')]">
-                    Donate (Lightning BTC)
-                  </h3>
-                  <p :class="['text-sm leading-snug', isFromLanding ? 'text-gray-800 dark:text-gray-800' : (effectiveDark ? 'text-gray-400' : 'text-gray-600')]">
-                    Optional support for development. Kachow!
-                  </p>
-                  <p
-                    v-if="!lightningAddress"
-                    :class="['mt-2 text-xs', isFromLanding ? 'text-gray-600 dark:text-gray-600' : (effectiveDark ? 'text-gray-500' : 'text-gray-500')]"
-                  >
-                    Set <span class="font-mono">NUXT_PUBLIC_LIGHTNING_DONATION_ADDRESS</span> to enable tap-to-copy on the QR.
-                  </p>
-                </div>
-                <div
-                  v-if="lightningQrPath && lightningQrLoaded !== false"
-                  class="flex shrink-0 flex-col items-center gap-0.5 self-center"
-                >
-                  <div class="relative rounded-md">
-                    <img
-                      :src="lightningQrPath"
-                      alt=""
-                      role="presentation"
-                      class="block h-14 w-14 shrink-0 rounded-md border object-contain sm:h-16 sm:w-16"
-                      :class="isFromLanding ? 'border-white/25 bg-white/90' : effectiveDark ? 'border-gray-600 bg-white' : 'border-gray-200 bg-white'"
-                      loading="lazy"
-                      decoding="async"
-                      @error="onLightningQrError"
-                    />
-                    <button
-                      v-if="lightningAddress"
-                      type="button"
-                      class="absolute inset-0 rounded-md transition-colors hover:bg-black/[0.06] active:bg-black/[0.1] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-                      :class="isFromLanding ? 'focus-visible:ring-offset-[#e4e8e7]' : effectiveDark ? 'focus-visible:ring-offset-gray-800' : 'focus-visible:ring-offset-gray-100'"
-                      aria-label="Copy Lightning payment link to clipboard"
-                      @click="copyLightningAddress"
-                    />
-                  </div>
-                  <span
-                    :class="['text-center text-[8px] leading-none uppercase tracking-wide text-balance max-w-[4.25rem]', isFromLanding ? 'text-gray-600 dark:text-gray-600' : effectiveDark ? 'text-gray-500' : 'text-gray-500']"
-                  >
-                    <template v-if="lightningAddress">
-                      {{ copyLightningStatus === 'copied' ? 'Copied' : copyLightningStatus === 'error' ? 'Retry' : 'Scan · tap' }}
-                    </template>
-                    <template v-else>Scan</template>
-                  </span>
-                </div>
-              </div>
-              <p
-                v-if="lightningQrLoaded === false && lightningQrPath"
-                :class="['mt-2 text-[11px] leading-snug', isFromLanding ? 'text-gray-600 dark:text-gray-600' : effectiveDark ? 'text-gray-500' : 'text-gray-500']"
-              >
-                QR did not load. Add <span class="font-mono">public/images/lightning-donation-qr.png</span> or set <span class="font-mono">NUXT_PUBLIC_LIGHTNING_DONATION_QR_PATH</span>.
-              </p>
-            </div>
-          </div>
         </div>
 
         <!-- Tech Stack -->
@@ -407,43 +335,7 @@ import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
 
 const route = useRoute()
 const router = useRouter()
-const runtimeConfig = useRuntimeConfig()
 const { isIos } = useCapacitorPlatform()
-
-const lightningAddress = computed(() => {
-  const v = runtimeConfig.public.lightningDonationAddress
-  return typeof v === 'string' ? v.trim() : ''
-})
-
-const lightningQrPath = computed(() => {
-  const v = runtimeConfig.public.lightningDonationQrPath
-  return typeof v === 'string' ? v.trim() : ''
-})
-
-/** `null` until error: show `<img>`; `false` after `@error` hides broken asset */
-const lightningQrLoaded = ref<boolean | null>(null)
-
-function onLightningQrError() {
-  lightningQrLoaded.value = false
-}
-
-const copyLightningStatus = ref<'idle' | 'copied' | 'error'>('idle')
-
-async function copyLightningAddress() {
-  if (!lightningAddress.value || !import.meta.client) return
-  try {
-    await navigator.clipboard.writeText(lightningAddress.value)
-    copyLightningStatus.value = 'copied'
-    window.setTimeout(() => {
-      copyLightningStatus.value = 'idle'
-    }, 2000)
-  } catch {
-    copyLightningStatus.value = 'error'
-    window.setTimeout(() => {
-      copyLightningStatus.value = 'idle'
-    }, 2500)
-  }
-}
 
 const showAuth = ref(false)
 const authTab = ref<'signin' | 'signup'>('signin')

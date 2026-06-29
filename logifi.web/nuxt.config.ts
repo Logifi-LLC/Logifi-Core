@@ -62,12 +62,6 @@ export default defineNuxtConfig({
       /** `off` | `beta` | `coming_soon` — see useFcvUiLabel (integrations page + Settings connect UI only). */
       fcvUiLabel: process.env.NUXT_PUBLIC_FCV_UI_LABEL || 'off',
       /** Lightning / LNURL-pay / Lightning address shown on /developers (Open Source donation). */
-      lightningDonationAddress: process.env.NUXT_PUBLIC_LIGHTNING_DONATION_ADDRESS || '',
-      /** Public URL or site-relative path to a QR PNG/SVG. Leave env unset for `/images/lightning-donation-qr.png`; set to empty string to hide the QR. */
-      lightningDonationQrPath:
-        process.env.NUXT_PUBLIC_LIGHTNING_DONATION_QR_PATH !== undefined
-          ? process.env.NUXT_PUBLIC_LIGHTNING_DONATION_QR_PATH
-          : '/images/lightning-donation-qr.png',
       /** Base URL for Digifi phone capture QR/links. Unset in dev to auto-detect LAN IP. */
       companionCaptureOrigin: process.env.NUXT_PUBLIC_COMPANION_CAPTURE_ORIGIN || '',
       /** Stripe publishable key — when set, Digifi credit checkout uses Stripe instead of mock. */
