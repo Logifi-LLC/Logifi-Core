@@ -166,11 +166,17 @@
       <header>
       <div
         :class="[
-          'left-0 right-0 z-30 transition-colors duration-300',
-          isIos ? 'sticky top-0 pt-[env(safe-area-inset-top)]' : 'fixed top-0',
+          'left-0 right-0 z-50 transition-colors duration-300',
+          isIos
+            ? 'sticky inset-x-0 top-0 border-b backdrop-blur-sm pt-[env(safe-area-inset-top)]'
+            : 'fixed top-0',
           isDarkMode
-            ? 'border-gray-700/50 bg-gray-950/95'
-            : 'border-gray-400/50 bg-gray-50/95'
+            ? isIos
+              ? 'border-gray-700/50 bg-gray-950/95'
+              : 'border-gray-700/50'
+            : isIos
+              ? 'border-gray-200 bg-gray-50/95'
+              : 'border-gray-400/50'
         ]"
       >
         <div
@@ -223,7 +229,7 @@
             {{ displayClock }}
           </span>
         </div>
-        <nav class="flex items-center gap-2">
+        <nav class="flex items-center gap-2 relative z-10">
           <NuxtLink
             to="/feedback?from=dashboard"
             class="hidden sm:inline-block text-xs sm:text-sm font-medium font-quicksand transition-colors mr-2"
