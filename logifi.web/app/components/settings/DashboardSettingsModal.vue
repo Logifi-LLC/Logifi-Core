@@ -72,26 +72,27 @@
     <SettingsPreferencesTab
       v-else-if="currentFrame === 'preferences'"
       :is-dark-mode="isDarkMode"
+      :is-ios="isIos"
       :theme="theme"
       :clock-format="clockFormat"
       :clock-zone="clockZone"
       :available-metrics="availableMetrics"
       :selected-metrics="selectedMetrics"
-      :entry-card-presets="entryCardPresets"
-      :active-entry-card-preset-id="activeEntryCardPresetId"
-      :entry-card-picker-fields="entryCardPickerFields"
-      :entry-card-detail-crowded="entryCardDetailCrowded"
+      :logbook-layout-presets="logbookLayoutPresets"
+      :active-logbook-layout-preset-id="activeLogbookLayoutPresetId"
+      :logbook-layout-picker-fields="logbookLayoutPickerFields"
+      :logbook-layout-detail-crowded="logbookLayoutDetailCrowded"
       @set-theme="$emit('set-theme', $event)"
       @set-clock-format="$emit('set-clock-format', $event)"
       @set-clock-zone="$emit('set-clock-zone', $event)"
       @toggle-metric="$emit('toggle-metric', $event)"
-      @apply-entry-card-preset="$emit('apply-entry-card-preset', $event)"
-      @toggle-entry-card-field="$emit('toggle-entry-card-field', $event)"
-      @entry-card-drag-start="$emit('entry-card-drag-start', $event)"
-      @entry-card-drop="$emit('entry-card-drop', $event)"
-      @entry-card-move-up="$emit('entry-card-move-up', $event)"
-      @entry-card-move-down="$emit('entry-card-move-down', $event)"
-      @reset-entry-card="$emit('reset-entry-card')"
+      @apply-logbook-layout-preset="$emit('apply-logbook-layout-preset', $event)"
+      @toggle-logbook-layout-field="$emit('toggle-logbook-layout-field', $event)"
+      @logbook-layout-drag-start="$emit('logbook-layout-drag-start', $event)"
+      @logbook-layout-drop="$emit('logbook-layout-drop', $event)"
+      @logbook-layout-move-up="$emit('logbook-layout-move-up', $event)"
+      @logbook-layout-move-down="$emit('logbook-layout-move-down', $event)"
+      @reset-logbook-layout="$emit('reset-logbook-layout')"
     />
 
     <SettingsUpdatesTab
@@ -169,10 +170,11 @@ const props = defineProps<{
   clockZone: 'UTC' | 'Local'
   availableMetrics: { key: string; label: string }[]
   selectedMetrics: string[]
-  entryCardPresets: readonly EntryCardPreset[]
-  activeEntryCardPresetId: EntryCardPresetId
-  entryCardPickerFields: LogbookColumnConfig[]
-  entryCardDetailCrowded: boolean
+  isIos: boolean
+  logbookLayoutPresets: readonly EntryCardPreset[]
+  activeLogbookLayoutPresetId: EntryCardPresetId
+  logbookLayoutPickerFields: LogbookColumnConfig[]
+  logbookLayoutDetailCrowded: boolean
   isOnline: boolean
   isSyncing: boolean
   syncError: unknown
@@ -203,13 +205,13 @@ defineEmits<{
   'set-clock-format': [format: '12' | '24']
   'set-clock-zone': [zone: 'UTC' | 'Local']
   'toggle-metric': [key: string]
-  'apply-entry-card-preset': [id: EntryCardPresetId]
-  'toggle-entry-card-field': [key: LogbookColumnKey]
-  'entry-card-drag-start': [key: LogbookColumnKey]
-  'entry-card-drop': [key: LogbookColumnKey]
-  'entry-card-move-up': [key: LogbookColumnKey]
-  'entry-card-move-down': [key: LogbookColumnKey]
-  'reset-entry-card': []
+  'apply-logbook-layout-preset': [id: EntryCardPresetId]
+  'toggle-logbook-layout-field': [key: LogbookColumnKey]
+  'logbook-layout-drag-start': [key: LogbookColumnKey]
+  'logbook-layout-drop': [key: LogbookColumnKey]
+  'logbook-layout-move-up': [key: LogbookColumnKey]
+  'logbook-layout-move-down': [key: LogbookColumnKey]
+  'reset-logbook-layout': []
   'retry-sync': []
   'sync-now': []
   'import-dragover': []

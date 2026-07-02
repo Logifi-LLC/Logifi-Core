@@ -423,7 +423,7 @@ export default defineEventHandler(async (event) => {
         ? (flightActions[fcvId] as FcvFlightAction)
         : undefined
 
-    if (action === 'skip') {
+    if (action === 'skip' && heuristicMatch) {
       skipped++
       continue
     }

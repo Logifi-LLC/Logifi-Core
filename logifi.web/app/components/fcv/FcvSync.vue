@@ -4,6 +4,12 @@ import { useAuth } from '~/composables/useAuth'
 import { useFcvUiLabel } from '~/composables/useFcvUiLabel'
 import { useRoute } from 'vue-router'
 import FcvApiDisclaimers from '~/components/fcv/FcvApiDisclaimers.vue'
+import {
+  buildFcvImportRequestPayload,
+  countUnresolvedDuplicateActions,
+  defaultSelectedFcvFlightIds,
+  type FcvFlightAction,
+} from '~/utils/fcvImportPayload'
 
 /** Must match dashboard theme; avoid `dark:` here so OS dark mode does not fight white settings cards. */
 const props = withDefaults(
@@ -65,7 +71,6 @@ interface CrewReviewCandidate {
 }
 
 type CrewOverrideMode = 'pick' | 'rename' | 'asis'
-type FcvFlightAction = 'skip' | 'import' | 'link'
 
 interface HeuristicMatchInfo {
   index: number
@@ -116,6 +121,8 @@ const includeDuplicatesInImport = ref(false)
 const includeAlreadyImportedInImport = ref(false)
 const heuristicMatches = ref<HeuristicMatchInfo[]>([])
 const flightRowActions = ref<Record<string, FcvFlightAction>>({})
+/** Per-row include in import, keyed by `fcv_flight_id`. */
+const selectedFcvFlightIds = ref<Set<string>>(new Set())
 /** When "Since last entry" hid rows that are already in the logbook (FC View id). */
 const sinceLastEntryOmittedAlreadyImported = ref(0)
 const expandedEnrichmentRows = ref<Set<number>>(new Set())
@@ -318,6 +325,7 @@ async function disconnectFcv() {
     alreadyImportedIndices.value = new Set()
     heuristicMatches.value = []
     flightRowActions.value = {}
+    selectedFcvFlightIds.value = new Set()
     perFlightEnrichment.value = {}
     expandedEnrichmentRows.value = new Set()
     crewReviewCandidates.value = []
@@ -381,14 +389,56 @@ function applyDupCheckToState(dup: FcvDupCheckResponse) {
         : union
   }
   heuristicMatches.value = Array.isArray(dup.heuristicMatches) ? dup.heuristicMatches : []
-  const nextActions: Record<string, FcvFlightAction> = {}
-  for (const match of heuristicMatches.value) {
-    const id = String(match.fcvFlightId ?? '').trim()
-    if (id && !(id in flightRowActions.value)) {
-      nextActions[id] = 'skip'
+  initSelectionFromPreview()
+}
+
+function fcvIdFromFlight(f: FcvMappedEntry): string {
+  return String(f.fcv_flight_id ?? '').trim()
+}
+
+function initSelectionFromPreview() {
+  selectedFcvFlightIds.value = defaultSelectedFcvFlightIds(
+    previewFlights.value,
+    heuristicDuplicateIndices.value,
+    alreadyImportedIndices.value
+  )
+}
+
+function isFlightSelected(fcvFlightId: string): boolean {
+  const id = fcvFlightId.trim()
+  return id.length > 0 && selectedFcvFlightIds.value.has(id)
+}
+
+function toggleFlightSelection(fcvFlightId: string) {
+  const id = fcvFlightId.trim()
+  if (!id) return
+  const next = new Set(selectedFcvFlightIds.value)
+  if (next.has(id)) {
+    next.delete(id)
+    if (id in flightRowActions.value) {
+      const { [id]: _removed, ...rest } = flightRowActions.value
+      flightRowActions.value = rest
     }
+  } else {
+    next.add(id)
   }
-  flightRowActions.value = { ...flightRowActions.value, ...nextActions }
+  selectedFcvFlightIds.value = next
+}
+
+function selectAllFlights() {
+  const next = new Set<string>()
+  for (const f of previewFlights.value) {
+    const id = fcvIdFromFlight(f)
+    if (id) next.add(id)
+  }
+  selectedFcvFlightIds.value = next
+}
+
+function deselectAllFlights() {
+  selectedFcvFlightIds.value = new Set()
+  flightRowActions.value = {}
+  includeDuplicatesInImport.value = false
+  includeAlreadyImportedInImport.value = false
 }
 
 function heuristicMatchForIndex(index: number): HeuristicMatchInfo | null {
@@ -406,20 +456,19 @@ function formatMatchTotalHours(total: number | null): string {
   return `${Math.round(total * 100) / 100}h`
 }
 
-function setFlightRowAction(fcvFlightId: string, action: FcvFlightAction) {
+function setFlightRowAction(fcvFlightId: string, action: 'link' | 'import') {
   const id = fcvFlightId.trim()
   if (!id) return
-  flightRowActions.value[id] = action
+  flightRowActions.value = { ...flightRowActions.value, [id]: action }
   if (action !== 'import') {
     includeDuplicatesInImport.value = false
   }
 }
 
-function flightRowAction(fcvFlightId: string): FcvFlightAction {
+function flightRowAction(fcvFlightId: string): FcvFlightAction | undefined {
   const id = fcvFlightId.trim()
-  if (!id) return 'skip'
-  if (includeDuplicatesInImport.value) return 'import'
-  return flightRowActions.value[id] ?? 'skip'
+  if (!id) return undefined
+  return flightRowActions.value[id]
 }
 
 function canLinkHeuristicMatch(match: HeuristicMatchInfo | null): boolean {
@@ -456,6 +505,7 @@ async function fetchFlights(opts?: { hideAlreadyImportedFromFcView?: boolean }) 
       alreadyImportedIndices.value = new Set()
       heuristicMatches.value = []
       flightRowActions.value = {}
+      selectedFcvFlightIds.value = new Set()
       perFlightEnrichment.value = {}
       expandedEnrichmentRows.value = new Set()
       crewReviewCandidates.value = []
@@ -501,6 +551,7 @@ async function fetchFlights(opts?: { hideAlreadyImportedFromFcView?: boolean }) 
         error.value =
           'Fetched flights but could not check for duplicates. Review carefully before importing.'
         previewFlights.value = flightsForPreview
+        initSelectionFromPreview()
       }
       showPreviewModal.value = true
     }
@@ -532,10 +583,7 @@ async function fetchSinceLastEntry() {
 }
 
 async function confirmImport() {
-  const flights = flightsToImportWithIndex.value.map(({ flight, index }) =>
-    buildFlightForImport(flight, index)
-  )
-  if (flights.length === 0) return
+  if (flightsToImportWithIndex.value.length === 0) return
   loadingImport.value = true
   error.value = null
   try {
@@ -556,6 +604,13 @@ async function confirmImport() {
       }
     }
 
+    const payload = buildFcvImportRequestPayload({
+      selectedWithIndex: flightsToImportWithIndex.value,
+      heuristicDuplicateIndices: heuristicDuplicateIndices.value,
+      flightRowActions: flightRowActions.value,
+      buildFlight: buildFlightForImport,
+    })
+
     const importBody: {
       flights: FcvMappedEntry[]
       crewNameOverrides?: Record<string, string>
@@ -563,26 +618,15 @@ async function confirmImport() {
       allowDuplicates?: boolean
       flightActions?: Record<string, FcvFlightAction>
     } = {
-      flights,
-      allowDuplicates: includeDuplicatesInImport.value,
+      flights: payload.flights,
+      allowDuplicates: payload.allowDuplicates,
+    }
+    if (payload.flightActions) {
+      importBody.flightActions = payload.flightActions
     }
     if (review.length > 0) {
       importBody.crewNameOverrides = crewNameOverridesPayload
       importBody.crewOverrideModes = crewOverrideModesPayload
-    }
-
-    const flightActionsPayload: Record<string, FcvFlightAction> = {}
-    for (const { flight, index } of flightsToImportWithIndex.value) {
-      const fcvId = String(flight.fcv_flight_id ?? '').trim()
-      if (!fcvId) continue
-      if (includeDuplicatesInImport.value && heuristicDuplicateIndices.value.has(index)) {
-        flightActionsPayload[fcvId] = 'import'
-      } else {
-        flightActionsPayload[fcvId] = flightRowAction(fcvId)
-      }
-    }
-    if (Object.keys(flightActionsPayload).length > 0) {
-      importBody.flightActions = flightActionsPayload
     }
 
     const result = await $fetch<{
@@ -613,7 +657,7 @@ async function confirmImport() {
       return
     }
     emit('imported', {
-      imported: typeof result?.imported === 'number' ? result.imported : flights.length,
+      imported: typeof result?.imported === 'number' ? result.imported : payload.flights.length,
       linked: typeof result?.linked === 'number' ? result.linked : 0,
       skipped: typeof result?.skipped === 'number' ? result.skipped : 0,
       importBatchId: result?.import_batch_id,
@@ -625,6 +669,7 @@ async function confirmImport() {
     alreadyImportedIndices.value = new Set()
     heuristicMatches.value = []
     flightRowActions.value = {}
+    selectedFcvFlightIds.value = new Set()
     includeDuplicatesInImport.value = false
     includeAlreadyImportedInImport.value = false
     perFlightEnrichment.value = {}
@@ -648,6 +693,7 @@ function closePreview() {
   includeAlreadyImportedInImport.value = false
   heuristicMatches.value = []
   flightRowActions.value = {}
+  selectedFcvFlightIds.value = new Set()
   expandedEnrichmentRows.value = new Set()
   perFlightEnrichment.value = {}
   crewReviewCandidates.value = []
@@ -662,18 +708,6 @@ function isHeuristicDuplicateRow(index: number) {
 
 function isAlreadyImportedRow(index: number) {
   return alreadyImportedIndices.value.has(index)
-}
-
-function isExcludedFromDefaultImport(index: number) {
-  const flight = previewFlights.value[index]
-  const fcvId = String(flight?.fcv_flight_id ?? '').trim()
-  const action = fcvId ? flightRowAction(fcvId) : 'skip'
-
-  if (action === 'link' || action === 'import') return false
-
-  const heur = heuristicDuplicateIndices.value.has(index) && !includeDuplicatesInImport.value
-  const imp = alreadyImportedIndices.value.has(index) && !includeAlreadyImportedInImport.value
-  return heur || imp
 }
 
 function crewCandidateByFlightId(fcvFlightId: string): CrewReviewCandidate | null {
@@ -730,9 +764,10 @@ const heuristicDuplicateCount = computed(() => heuristicDuplicateIndices.value.s
 const linkedImportCount = computed(() => {
   let n = 0
   for (const { index, flight } of previewFlights.value.map((flight, index) => ({ flight, index }))) {
-    const fcvId = String(flight.fcv_flight_id ?? '').trim()
-    if (!fcvId || !heuristicDuplicateIndices.value.has(index)) continue
-    if (flightRowAction(fcvId) === 'link') n++
+    const fcvId = fcvIdFromFlight(flight)
+    if (!fcvId || !selectedFcvFlightIds.value.has(fcvId)) continue
+    if (!heuristicDuplicateIndices.value.has(index)) continue
+    if (flightRowActions.value[fcvId] === 'link') n++
   }
   return n
 })
@@ -741,6 +776,27 @@ const crewReviewCount = computed(() => crewReviewCandidates.value.length)
 const unresolvedCrewReviewCount = computed(
   () => crewReviewCandidates.value.filter((c) => !isCrewReviewRowResolved(c)).length
 )
+
+const flightsToImport = computed(() => {
+  return previewFlights.value.filter((f) => isFlightSelected(fcvIdFromFlight(f)))
+})
+
+const flightsToImportWithIndex = computed(() => {
+  return previewFlights.value
+    .map((flight, index) => ({ flight, index }))
+    .filter(({ flight }) => isFlightSelected(fcvIdFromFlight(flight)))
+})
+
+const unresolvedDuplicateActionCount = computed(() =>
+  countUnresolvedDuplicateActions(
+    flightsToImportWithIndex.value,
+    heuristicDuplicateIndices.value,
+    flightRowActions.value
+  )
+)
+
+const importCount = computed(() => flightsToImport.value.length)
+
 const isConnectOnly = computed(() => props.mode === 'connect')
 const isFetchOnly = computed(() => props.mode === 'fetch')
 const showConnectCta = computed(() => !isFetchOnly.value && !connected.value)
@@ -749,18 +805,6 @@ const showConnectManage = computed(() => isConnectOnly.value && connected.value)
 const showFetchNeedsConnection = computed(
   () => isFetchOnly.value && !loadingStatus.value && !connected.value
 )
-
-const flightsToImport = computed(() => {
-  return previewFlights.value.filter((_, i) => !isExcludedFromDefaultImport(i))
-})
-
-const flightsToImportWithIndex = computed(() => {
-  return previewFlights.value
-    .map((flight, index) => ({ flight, index }))
-    .filter(({ index }) => !isExcludedFromDefaultImport(index))
-})
-
-const importCount = computed(() => flightsToImport.value.length)
 
 const totalTime = computed(() => {
   let t = 0
@@ -817,6 +861,37 @@ function formatCrewPreviewLine(f: FcvMappedEntry): string {
   if (name) bits.push(label ? `${label}: ${name}` : `Crew: ${name}`)
   return bits.join(' · ')
 }
+
+watch(includeDuplicatesInImport, (on) => {
+  const next = new Set(selectedFcvFlightIds.value)
+  const actions = { ...flightRowActions.value }
+  previewFlights.value.forEach((f, index) => {
+    if (!heuristicDuplicateIndices.value.has(index)) return
+    const id = fcvIdFromFlight(f)
+    if (!id) return
+    if (on) {
+      next.add(id)
+      actions[id] = 'import'
+    } else {
+      next.delete(id)
+      delete actions[id]
+    }
+  })
+  selectedFcvFlightIds.value = next
+  flightRowActions.value = actions
+})
+
+watch(includeAlreadyImportedInImport, (on) => {
+  const next = new Set(selectedFcvFlightIds.value)
+  previewFlights.value.forEach((f, index) => {
+    if (!alreadyImportedIndices.value.has(index)) return
+    const id = fcvIdFromFlight(f)
+    if (!id) return
+    if (on) next.add(id)
+    else next.delete(id)
+  })
+  selectedFcvFlightIds.value = next
+})
 
 onMounted(() => {
   if (isAuthenticated.value) checkStatus()
@@ -1082,6 +1157,32 @@ const inputClass = computed(() =>
               {{ sinceLastEntryOmittedAlreadyImported }} flight(s) already in your logbook were not
               shown (Since last entry only lists new FC View flights).
             </p>
+            <div v-if="previewFlights.length > 0" class="flex flex-wrap gap-2 mt-2">
+              <button
+                type="button"
+                :class="[
+                  'text-xs font-medium rounded-md px-2 py-1 transition-colors',
+                  isDarkMode
+                    ? 'text-blue-300 hover:bg-gray-800'
+                    : 'text-blue-700 hover:bg-blue-50',
+                ]"
+                @click="selectAllFlights"
+              >
+                Select all
+              </button>
+              <button
+                type="button"
+                :class="[
+                  'text-xs font-medium rounded-md px-2 py-1 transition-colors',
+                  isDarkMode
+                    ? 'text-gray-400 hover:bg-gray-800'
+                    : 'text-gray-600 hover:bg-gray-100',
+                ]"
+                @click="deselectAllFlights"
+              >
+                Deselect all
+              </button>
+            </div>
           </div>
           <button
             type="button"
@@ -1101,10 +1202,11 @@ const inputClass = computed(() =>
             v-for="(f, idx) in previewFlights"
             :key="`${f.fcv_flight_id || 'row'}-${idx}`"
             :class="[
-              'flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2 border-b last:border-0 text-sm rounded-lg px-2 -mx-2',
+              'flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2 border-b last:border-0 text-sm rounded-lg px-2 -mx-2 transition-opacity',
               isDarkMode
                 ? 'border-gray-700 text-gray-200'
                 : 'border-gray-200 text-gray-800',
+              !isFlightSelected(f.fcv_flight_id) ? 'opacity-45' : '',
               isAlreadyImportedRow(idx)
                 ? isDarkMode
                   ? 'bg-slate-800/50 border-slate-600/60 ring-1 ring-slate-600/35'
@@ -1116,6 +1218,21 @@ const inputClass = computed(() =>
                   : '',
             ]"
           >
+            <label
+              :class="[
+                'flex items-center gap-2 shrink-0 cursor-pointer select-none',
+                isDarkMode ? 'text-gray-300' : 'text-gray-600',
+              ]"
+            >
+              <input
+                type="checkbox"
+                class="shrink-0 rounded"
+                :checked="isFlightSelected(f.fcv_flight_id)"
+                :aria-label="`Include ${f.date} ${f.departure} to ${f.destination} in import`"
+                @change="toggleFlightSelection(f.fcv_flight_id)"
+              />
+              <span class="sr-only">Include in import</span>
+            </label>
             <div class="flex items-center gap-2 min-w-0">
               <Icon
                 v-if="isAlreadyImportedRow(idx)"
@@ -1184,7 +1301,7 @@ const inputClass = computed(() =>
               May match an existing entry
             </span>
             <div
-              v-if="isHeuristicDuplicateRow(idx) && heuristicMatchForIndex(idx)"
+              v-if="isHeuristicDuplicateRow(idx) && isFlightSelected(f.fcv_flight_id) && heuristicMatchForIndex(idx)"
               :class="[
                 'w-full mt-1 rounded-lg border p-3 text-xs space-y-2',
                 isDarkMode ? 'border-amber-800/60 bg-amber-950/25 text-amber-100' : 'border-amber-200 bg-amber-50/80 text-amber-950',
@@ -1216,21 +1333,6 @@ const inputClass = computed(() =>
               </p>
               <fieldset class="space-y-1.5">
                 <legend class="sr-only">How to handle this flight</legend>
-                <label
-                  :class="[
-                    'flex items-center gap-2 cursor-pointer select-none',
-                    isDarkMode ? 'text-amber-100' : 'text-amber-900',
-                  ]"
-                >
-                  <input
-                    type="radio"
-                    class="shrink-0"
-                    :name="`fcv-dup-action-${f.fcv_flight_id}`"
-                    :checked="flightRowAction(f.fcv_flight_id) === 'skip'"
-                    @change="setFlightRowAction(f.fcv_flight_id, 'skip')"
-                  />
-                  <span>Skip (do not import)</span>
-                </label>
                 <label
                   v-if="canLinkHeuristicMatch(heuristicMatchForIndex(idx))"
                   :class="[
@@ -1521,6 +1623,13 @@ const inputClass = computed(() =>
               different out-times can still be told apart when both entries have OOOI out logged.
             </p>
             <p
+              v-if="unresolvedDuplicateActionCount > 0"
+              :class="isDarkMode ? 'text-amber-300' : 'text-amber-800'"
+            >
+              Choose Link or Import for {{ unresolvedDuplicateActionCount }} selected possible
+              duplicate(s).
+            </p>
+            <p
               v-if="crewReviewCount > 0"
               :class="isDarkMode ? 'text-orange-300' : 'text-orange-800'"
             >
@@ -1566,7 +1675,7 @@ const inputClass = computed(() =>
             <button
               type="button"
               class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 shadow-sm"
-              :disabled="loadingImport || importCount === 0 || unresolvedCrewReviewCount > 0"
+              :disabled="loadingImport || importCount === 0 || unresolvedCrewReviewCount > 0 || unresolvedDuplicateActionCount > 0"
               @click="confirmImport"
             >
               {{ loadingImport ? 'Importing…' : `Import ${importCount} flight(s)` }}

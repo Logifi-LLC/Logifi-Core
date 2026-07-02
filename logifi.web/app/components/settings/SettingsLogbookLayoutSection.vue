@@ -1,8 +1,13 @@
 <template>
   <div class="space-y-3">
-    <p :class="listGroupHeader">Entry card</p>
+    <p :class="listGroupHeader">Logbook layout</p>
     <p :class="['px-1 text-xs font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-      Choose which details appear on each logbook entry. Date, route, aircraft, and total always show in the card header.
+      <template v-if="isIos">
+        Choose which details appear on each logbook entry. Date, route, aircraft, and total always show in the card header.
+      </template>
+      <template v-else>
+        Choose which columns appear in your logbook table. Date and total are always shown.
+      </template>
     </p>
 
     <div class="flex flex-wrap gap-2 px-1">
@@ -25,7 +30,7 @@
     </div>
 
     <p
-      v-if="detailFieldCrowded"
+      v-if="detailFieldCrowded && isIos"
       :class="['px-1 text-xs font-quicksand', isDarkMode ? 'text-amber-400' : 'text-amber-600']"
     >
       You have many detail fields selected — cards may feel crowded. Consider using a preset or hiding a few fields.
@@ -35,24 +40,24 @@
       <div
         v-for="(col, index) in pickerFields"
         :key="col.key"
-        :draggable="!isHeaderField(col.key)"
+        :draggable="isDraggable(col)"
         class="flex items-center gap-2 px-3 py-2.5"
         :class="[
           listRowSeparator,
-          !isHeaderField(col.key) ? 'cursor-move' : '',
+          isDraggable(col) ? 'cursor-move' : '',
         ]"
-        @dragstart="!isHeaderField(col.key) && $emit('drag-start', col.key)"
+        @dragstart="isDraggable(col) && $emit('drag-start', col.key)"
         @dragover.prevent
-        @drop.prevent="!isHeaderField(col.key) && $emit('drop', col.key)"
+        @drop.prevent="isDraggable(col) && $emit('drop', col.key)"
       >
         <Icon
-          v-if="!isHeaderField(col.key)"
+          v-if="isDraggable(col)"
           name="ri:drag-move-2-line"
           size="16"
           class="hidden sm:block shrink-0"
           :class="isDarkMode ? 'text-gray-500' : 'text-gray-400'"
         />
-        <div v-if="!isHeaderField(col.key)" class="flex shrink-0 flex-col gap-0.5 sm:hidden">
+        <div v-if="isDraggable(col)" class="flex shrink-0 flex-col gap-0.5 sm:hidden">
           <button
             type="button"
             class="rounded p-0.5"
@@ -79,21 +84,21 @@
         <label
           :class="[
             'flex flex-1 items-center gap-2 min-w-0',
-            isHeaderField(col.key) ? 'opacity-60 cursor-default' : 'cursor-pointer',
+            isFieldLocked(col) ? 'opacity-60 cursor-default' : 'cursor-pointer',
           ]"
         >
           <input
             type="checkbox"
             :checked="col.visible"
-            :disabled="isHeaderField(col.key)"
+            :disabled="isFieldLocked(col)"
             class="h-5 w-5 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
             :class="isDarkMode ? 'border-gray-600 bg-gray-800' : 'bg-white'"
             @change="$emit('toggle-field', col.key)"
           />
           <span class="truncate text-sm font-quicksand" :class="isDarkMode ? 'text-gray-200' : 'text-gray-700'">
             {{ col.label }}
-            <span v-if="isHeaderField(col.key)" :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
-              (header)
+            <span v-if="fieldLockLabel(col)" :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
+              {{ fieldLockLabel(col) }}
             </span>
           </span>
         </label>
@@ -121,6 +126,7 @@ import { isHeaderZoneKey, type EntryCardPreset, type EntryCardPresetId } from '~
 
 const props = defineProps<{
   isDarkMode: boolean
+  isIos: boolean
   presets: readonly EntryCardPreset[]
   activePresetId: EntryCardPresetId
   pickerFields: LogbookColumnConfig[]
@@ -151,7 +157,18 @@ function chipClass(active: boolean): string {
     : `${base} border-gray-200 bg-white text-gray-700 hover:bg-gray-50`
 }
 
-function isHeaderField(key: LogbookColumnKey): boolean {
-  return isHeaderZoneKey(key)
+function isFieldLocked(col: LogbookColumnConfig): boolean {
+  if (props.isIos) return isHeaderZoneKey(col.key)
+  return col.required
+}
+
+function isDraggable(col: LogbookColumnConfig): boolean {
+  return !isFieldLocked(col)
+}
+
+function fieldLockLabel(col: LogbookColumnConfig): string {
+  if (props.isIos && isHeaderZoneKey(col.key)) return '(header)'
+  if (!props.isIos && col.required) return '(required)'
+  return ''
 }
 </script>

@@ -53,9 +53,16 @@ function mountFcvSync() {
       stubs: {
         Icon: true,
         FcvApiDisclaimers: true,
+        Teleport: true,
       },
     },
   })
+}
+
+function primePreviewModal(setupState: Record<string, unknown>, flights: ReturnType<typeof buildPreviewFlight>[]) {
+  setupState.connected = true
+  setupState.previewFlights = flights
+  setupState.showPreviewModal = true
 }
 
 describe('FcvSync preview flight number', () => {
@@ -63,8 +70,7 @@ describe('FcvSync preview flight number', () => {
     const wrapper = mountFcvSync()
     const setupState = (wrapper.vm as { $: { setupState: Record<string, unknown> } }).$.setupState
 
-    setupState.previewFlights = [buildPreviewFlight({ flight_number: '4321' })]
-    setupState.showPreviewModal = true
+    primePreviewModal(setupState, [buildPreviewFlight({ flight_number: '4321' })])
     await nextTick()
 
     expect(wrapper.text()).toContain('Flight 4321')
@@ -74,10 +80,43 @@ describe('FcvSync preview flight number', () => {
     const wrapper = mountFcvSync()
     const setupState = (wrapper.vm as { $: { setupState: Record<string, unknown> } }).$.setupState
 
-    setupState.previewFlights = [buildPreviewFlight()]
-    setupState.showPreviewModal = true
+    primePreviewModal(setupState, [buildPreviewFlight()])
     await nextTick()
 
     expect(wrapper.text()).not.toContain('Flight')
+  })
+})
+
+describe('FcvSync row selection', () => {
+  it('importCount reflects selected rows only', async () => {
+    const wrapper = mountFcvSync()
+    const setupState = (wrapper.vm as { $: { setupState: Record<string, unknown> } }).$.setupState
+
+    primePreviewModal(setupState, [
+      buildPreviewFlight({ fcv_flight_id: 'fcv-1' }),
+      buildPreviewFlight({ fcv_flight_id: 'fcv-2' }),
+    ])
+    setupState.selectedFcvFlightIds = new Set(['fcv-1'])
+    await nextTick()
+
+    expect(setupState.importCount).toBe(1)
+  })
+
+  it('deselecting a row lowers importCount', async () => {
+    const wrapper = mountFcvSync()
+    const setupState = (wrapper.vm as { $: { setupState: Record<string, unknown> } }).$.setupState
+
+    setupState.previewFlights = [
+      buildPreviewFlight({ fcv_flight_id: 'fcv-1' }),
+      buildPreviewFlight({ fcv_flight_id: 'fcv-2' }),
+    ]
+    setupState.selectedFcvFlightIds = new Set(['fcv-1', 'fcv-2'])
+    await nextTick()
+    expect(setupState.importCount).toBe(2)
+
+    const toggle = setupState.toggleFlightSelection as (id: string) => void
+    toggle('fcv-2')
+    await nextTick()
+    expect(setupState.importCount).toBe(1)
   })
 })

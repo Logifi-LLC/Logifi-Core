@@ -70,19 +70,20 @@
       </div>
     </SettingsListGroup>
 
-    <SettingsEntryCardSection
+    <SettingsLogbookLayoutSection
       :is-dark-mode="isDarkMode"
-      :presets="entryCardPresets"
-      :active-preset-id="activeEntryCardPresetId"
-      :picker-fields="entryCardPickerFields"
-      :detail-field-crowded="entryCardDetailCrowded"
-      @apply-preset="$emit('apply-entry-card-preset', $event)"
-      @toggle-field="$emit('toggle-entry-card-field', $event)"
-      @drag-start="$emit('entry-card-drag-start', $event)"
-      @drop="$emit('entry-card-drop', $event)"
-      @move-up="$emit('entry-card-move-up', $event)"
-      @move-down="$emit('entry-card-move-down', $event)"
-      @reset="$emit('reset-entry-card')"
+      :is-ios="isIos"
+      :presets="logbookLayoutPresets"
+      :active-preset-id="activeLogbookLayoutPresetId"
+      :picker-fields="logbookLayoutPickerFields"
+      :detail-field-crowded="logbookLayoutDetailCrowded"
+      @apply-preset="$emit('apply-logbook-layout-preset', $event)"
+      @toggle-field="$emit('toggle-logbook-layout-field', $event)"
+      @drag-start="$emit('logbook-layout-drag-start', $event)"
+      @drop="$emit('logbook-layout-drop', $event)"
+      @move-up="$emit('logbook-layout-move-up', $event)"
+      @move-down="$emit('logbook-layout-move-down', $event)"
+      @reset="$emit('reset-logbook-layout')"
     />
   </div>
 </template>
@@ -91,21 +92,22 @@
 import SettingsRow from '../SettingsRow.vue'
 import SegmentedControl from '../SegmentedControl.vue'
 import SettingsListGroup from '../SettingsListGroup.vue'
-import SettingsEntryCardSection from '../SettingsEntryCardSection.vue'
+import SettingsLogbookLayoutSection from '../SettingsLogbookLayoutSection.vue'
 import type { LogbookColumnConfig, LogbookColumnKey } from '~/utils/logbookTypes'
 import type { EntryCardPreset, EntryCardPresetId } from '~/utils/entryCardPresets'
 
 defineProps<{
   isDarkMode: boolean
+  isIos: boolean
   theme: 'dark' | 'light'
   clockFormat: '12' | '24'
   clockZone: 'UTC' | 'Local'
   availableMetrics: { key: string; label: string }[]
   selectedMetrics: string[]
-  entryCardPresets: readonly EntryCardPreset[]
-  activeEntryCardPresetId: EntryCardPresetId
-  entryCardPickerFields: LogbookColumnConfig[]
-  entryCardDetailCrowded: boolean
+  logbookLayoutPresets: readonly EntryCardPreset[]
+  activeLogbookLayoutPresetId: EntryCardPresetId
+  logbookLayoutPickerFields: LogbookColumnConfig[]
+  logbookLayoutDetailCrowded: boolean
 }>()
 
 defineEmits<{
@@ -113,12 +115,12 @@ defineEmits<{
   'set-clock-format': [format: '12' | '24']
   'set-clock-zone': [zone: 'UTC' | 'Local']
   'toggle-metric': [key: string]
-  'apply-entry-card-preset': [id: EntryCardPresetId]
-  'toggle-entry-card-field': [key: LogbookColumnKey]
-  'entry-card-drag-start': [key: LogbookColumnKey]
-  'entry-card-drop': [key: LogbookColumnKey]
-  'entry-card-move-up': [key: LogbookColumnKey]
-  'entry-card-move-down': [key: LogbookColumnKey]
-  'reset-entry-card': []
+  'apply-logbook-layout-preset': [id: EntryCardPresetId]
+  'toggle-logbook-layout-field': [key: LogbookColumnKey]
+  'logbook-layout-drag-start': [key: LogbookColumnKey]
+  'logbook-layout-drop': [key: LogbookColumnKey]
+  'logbook-layout-move-up': [key: LogbookColumnKey]
+  'logbook-layout-move-down': [key: LogbookColumnKey]
+  'reset-logbook-layout': []
 }>()
 </script>

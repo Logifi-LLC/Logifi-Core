@@ -30,7 +30,7 @@ export const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     label: 'Preferences',
     icon: 'ri:settings-4-line',
     group: 'Logbook',
-    subtitle: 'Display, totals, entry cards',
+    subtitle: 'Display, totals, layout',
   },
   {
     id: 'digifi',

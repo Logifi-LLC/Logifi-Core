@@ -9,6 +9,7 @@ export const ACCOUNT_SCOPED_STORAGE_KEYS = {
   CREW_PROFILES: 'logifi://crew-profiles',
   MIGRATION_STATUS: 'logifi://migration-status',
   COLUMN_CONFIG: 'logifi-logbook-columns',
+  ENTRY_CARD_PRESET: 'logifi-entry-card-preset',
   ACTIVE_LOGBOOK: 'logifi-active-logbook',
   TOTALS_METRICS: 'logifi-totals-metrics',
   BUILDER_DRAFT: 'logifi-logbook-builder-draft',

@@ -1132,6 +1132,7 @@
         </div>
 
             <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center justify-between gap-4">
             <div :class="['mt-4 text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
               <span v-if="dateRangeFilterSummary">
                 Showing {{ filteredEntries.length }} {{ filteredEntries.length === 1 ? 'entry' : 'entries' }} for {{ dateRangeFilterSummary }}.
@@ -1140,6 +1141,122 @@
                 Sorted by most recent entry date.
               </span>
             </div>
+            <div
+              v-if="!isIos && filteredEntries.length > 0"
+              class="relative column-settings-container mt-4"
+            >
+              <button
+                type="button"
+                @click.stop="showColumnSettings = !showColumnSettings"
+                :class="[
+                  'p-1.5 rounded transition-colors',
+                  isDarkMode
+                    ? 'hover:bg-white/10 text-gray-400 hover:text-gray-300 bg-white/5 border border-white/10 shadow-sm shadow-black/20'
+                    : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700 bg-gray-100'
+                ]"
+                aria-label="Column settings"
+              >
+                <Icon name="ri:settings-3-line" size="16" />
+              </button>
+              <div
+                v-if="showColumnSettings"
+                :class="[
+                  'absolute right-0 top-full mt-2 w-80 rounded-xl border shadow-2xl p-4 z-50',
+                  isDarkMode
+                    ? 'bg-gray-900 border-white/10 shadow-xl shadow-black/50'
+                    : 'bg-white border-gray-200'
+                ]"
+                @click.stop
+              >
+                <div class="flex items-center justify-between mb-4">
+                  <h3 :class="['font-semibold font-quicksand text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
+                    Column Settings
+                  </h3>
+                  <button
+                    type="button"
+                    @click="showColumnSettings = false"
+                    :class="['hover:opacity-70 transition-opacity', isDarkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700']"
+                    aria-label="Close column settings"
+                  >
+                    <Icon name="ri:close-line" size="20" />
+                  </button>
+                </div>
+                <div class="space-y-2 max-h-96 overflow-y-auto">
+                  <div
+                    v-for="col in [...displayColumnConfig].sort((a, b) => a.order - b.order)"
+                    :key="col.key"
+                    :draggable="true"
+                    @dragstart="draggedColumnKey = col.key"
+                    @dragover.prevent
+                    @drop.prevent="handleColumnDrop(col.key)"
+                    :class="[
+                      'flex items-center gap-3 p-2 rounded-lg cursor-move transition-colors',
+                      draggedColumnKey === col.key
+                        ? (isDarkMode ? 'bg-gray-700 opacity-50' : 'bg-gray-200 opacity-50')
+                        : (isDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-200')
+                    ]"
+                  >
+                    <Icon
+                      name="ri:drag-move-2-line"
+                      size="16"
+                      :class="[isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+                    />
+                    <label
+                      :class="[
+                        'flex-1 flex items-center gap-2 cursor-pointer',
+                        col.required ? 'opacity-60' : ''
+                      ]"
+                    >
+                      <input
+                        type="checkbox"
+                        :checked="col.visible"
+                        :disabled="col.required"
+                        @change="toggleColumnVisibility(col.key)"
+                        :class="[
+                          'h-4 w-4 rounded border transition-colors',
+                          isDarkMode
+                            ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500'
+                            : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500'
+                        ]"
+                      />
+                      <span :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+                        {{ col.label }}
+                        <span v-if="col.required" :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-400']">(required)</span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+                <div class="mt-4 pt-4 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+                  <div class="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      @click="resetColumnWidths()"
+                      :class="[
+                        'w-full px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
+                        isDarkMode
+                          ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                          : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                      ]"
+                    >
+                      Reset Column Widths
+                    </button>
+                    <button
+                      type="button"
+                      @click="resetColumnConfig()"
+                      :class="[
+                        'w-full px-4 py-2 rounded-lg text-sm font-quicksand transition-colors',
+                        isDarkMode
+                          ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                          : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                      ]"
+                    >
+                      Reset to Defaults
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            </div>
             <button
               v-if="isIos && filteredEntries.length > 0"
               type="button"
@@ -1147,9 +1264,9 @@
                 'mt-4 text-xs font-quicksand underline-offset-2 hover:underline transition-colors',
                 isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-700 hover:text-blue-800',
               ]"
-              @click="openEntryCardPreferences"
+              @click="openLogbookLayoutPreferences"
             >
-              Customize entry cards in Settings →
+              Customize logbook layout in Settings →
             </button>
           </div>
 
@@ -3436,17 +3553,18 @@
       @set-clock-format="setClockFormat"
       @set-clock-zone="setClockZone"
       @toggle-metric="toggleTotalsMetric"
-      :entry-card-presets="entryCardPresets"
-      :active-entry-card-preset-id="activePresetId"
-      :entry-card-picker-fields="pickerFields"
-      :entry-card-detail-crowded="detailFieldCrowded"
-      @apply-entry-card-preset="applyEntryCardPreset"
-      @toggle-entry-card-field="toggleEntryCardFieldVisibility"
-      @entry-card-drag-start="onEntryCardDragStart"
-      @entry-card-drop="handleEntryCardColumnDrop"
-      @entry-card-move-up="(key) => moveEntryCardColumn(key, 'up')"
-      @entry-card-move-down="(key) => moveEntryCardColumn(key, 'down')"
-      @reset-entry-card="resetEntryCardConfig"
+      :logbook-layout-presets="logbookLayoutPresets"
+      :active-logbook-layout-preset-id="activePresetId"
+      :logbook-layout-picker-fields="pickerFields"
+      :logbook-layout-detail-crowded="detailFieldCrowded"
+      :is-ios="isIos"
+      @apply-logbook-layout-preset="applyLogbookLayoutPreset"
+      @toggle-logbook-layout-field="toggleColumnVisibility"
+      @logbook-layout-drag-start="onLogbookLayoutDragStart"
+      @logbook-layout-drop="handleColumnDrop"
+      @logbook-layout-move-up="(key) => moveColumn(key, 'up')"
+      @logbook-layout-move-down="(key) => moveColumn(key, 'down')"
+      @reset-logbook-layout="resetColumnConfig"
       @retry-sync="retryFailed()"
       @sync-now="refreshDashboardData()"
       @import-dragover="handleImportDragOver"
@@ -5693,7 +5811,6 @@ import {
   createEmptyFlightTime,
   createEmptyPerformance,
   createEmptyOOOI,
-  DEFAULT_COLUMN_CONFIG,
   getApproachesFromPerformance,
   getTotalApproachCount
 } from '../utils/logbookTypes'
@@ -5793,7 +5910,7 @@ import { useCurrency } from '../composables/useCurrency'
 import { useCapacitorPlatform } from '../composables/useCapacitorPlatform'
 import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGestures'
 import { usePullToRefresh } from '../composables/usePullToRefresh'
-import { useEntryCardConfig } from '../composables/useEntryCardConfig'
+import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
 import AuthModal from '../components/AuthModal.vue'
 import AuditTrail from '../components/AuditTrail.vue'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
@@ -6224,7 +6341,6 @@ async function onUserSessionReady(userId: string): Promise<void> {
   loadPilotProfilePrefs()
   loadSelectedTotalsMetrics()
   loadColumnConfig()
-  loadEntryCardConfig()
   loadActiveLogbook()
   maybeAutoOpenEntryFormForEmptyLogbook()
   startBackgroundSync()
@@ -6880,167 +6996,38 @@ const summaryFields = computed(() => {
     .filter((m): m is TotalsMetric => m !== undefined)
 })
 
-// Column configuration for web logbook table
-const COLUMN_CONFIG_STORAGE_KEY = ACCOUNT_SCOPED_STORAGE_KEYS.COLUMN_CONFIG
-const columnConfig = ref<LogbookColumnConfig[]>(DEFAULT_COLUMN_CONFIG.map(c => ({ ...c })))
+// Unified logbook column configuration (web table + iOS entry cards)
+const {
+  activePresetId,
+  draggedColumnKey,
+  visibleColumns: baseVisibleColumns,
+  displayColumnConfig: baseDisplayColumnConfig,
+  visibleDetailFields,
+  showRemarksFooter,
+  detailFieldCrowded,
+  pickerFields,
+  presets: logbookLayoutPresets,
+  loadColumnConfig,
+  toggleColumnVisibility,
+  handleColumnDrop,
+  moveColumn,
+  resetColumnConfig,
+  resetColumnWidths,
+  applyPreset: applyLogbookLayoutPreset,
+  startResize,
+  stopResize,
+  resizingColumn,
+} = useLogbookColumnConfig()
 
-function loadColumnConfig(): void {
-  if (!isBrowser) return
-  const saved = readUserScopedLocal(COLUMN_CONFIG_STORAGE_KEY, true)
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved) as LogbookColumnConfig[]
-      if (Array.isArray(parsed)) {
-        const merged = DEFAULT_COLUMN_CONFIG.map(defaultCol => {
-          const savedCol = parsed.find(p => p.key === defaultCol.key)
-          if (savedCol) {
-            return {
-              ...savedCol,
-              required: defaultCol.required,
-              label: defaultCol.label,
-              responsiveClass: defaultCol.responsiveClass,
-              width: savedCol.width ?? defaultCol.width,
-              visible: defaultCol.required ? true : savedCol.visible
-            }
-          }
-          return { ...defaultCol }
-        })
-        merged.forEach(col => {
-          if (col.required) col.visible = true
-        })
-        columnConfig.value = merged
-        saveColumnConfig()
-        return
-      }
-    } catch {
-      // Invalid JSON, use defaults
-    }
-  }
-  columnConfig.value = DEFAULT_COLUMN_CONFIG.map(c => ({ ...c }))
-}
-
-function saveColumnConfig(): void {
-  if (!isBrowser) return
-  writeUserScopedLocal(COLUMN_CONFIG_STORAGE_KEY, JSON.stringify(columnConfig.value))
-}
-
-// Computed: visible columns sorted by order (NVG hidden unless military fields enabled)
-const visibleColumns = computed(() => {
-  return columnConfig.value
-    .filter(col => col.visible)
-    .filter(col => col.key !== 'nvg' || pilotProfile.enableMilitaryFields)
-    .sort((a, b) => a.order - b.order)
-})
-
-const displayColumnConfig = computed(() =>
-  columnConfig.value.filter(col => col.key !== 'nvg' || pilotProfile.enableMilitaryFields)
+const visibleColumns = computed(() =>
+  baseVisibleColumns.value.filter(col => col.key !== 'nvg' || pilotProfile.enableMilitaryFields),
 )
 
-// Toggle column visibility
-function toggleColumnVisibility(key: LogbookColumnKey): void {
-  const col = columnConfig.value.find(c => c.key === key)
-  if (!col || col.required) return // Can't hide required columns
-  
-  // Ensure at least one non-required column remains visible
-  const visibleNonRequired = columnConfig.value.filter(c => c.visible && !c.required)
-  if (visibleNonRequired.length === 1 && col.visible) {
-    // Can't hide the last visible non-required column
-    return
-  }
-  
-  col.visible = !col.visible
-  saveColumnConfig()
-}
+const displayColumnConfig = computed(() =>
+  baseDisplayColumnConfig.value.filter(col => col.key !== 'nvg' || pilotProfile.enableMilitaryFields),
+)
 
-// Reorder columns
-function reorderColumns(draggedKey: LogbookColumnKey, targetOrder: number): void {
-  const draggedCol = columnConfig.value.find(c => c.key === draggedKey)
-  if (!draggedCol) return
-  
-  const currentOrder = draggedCol.order
-  
-  // Update orders
-  columnConfig.value.forEach(col => {
-    if (col.key === draggedKey) {
-      col.order = targetOrder
-    } else if (targetOrder < currentOrder) {
-      // Moving up: shift columns down
-      if (col.order >= targetOrder && col.order < currentOrder) {
-        col.order += 1
-      }
-    } else {
-      // Moving down: shift columns up
-      if (col.order > currentOrder && col.order <= targetOrder) {
-        col.order -= 1
-      }
-    }
-  })
-  
-  saveColumnConfig()
-}
-
-// Reset to defaults
-function resetColumnConfig(): void {
-  columnConfig.value = DEFAULT_COLUMN_CONFIG.map(c => ({ ...c }))
-  saveColumnConfig()
-}
-
-// Drag and drop state
-const draggedColumnKey = ref<LogbookColumnKey | null>(null)
-
-// Handle column drop for reordering
-function handleColumnDrop(targetKey: LogbookColumnKey): void {
-  if (!draggedColumnKey.value || draggedColumnKey.value === targetKey) {
-    draggedColumnKey.value = null
-    return
-  }
-  
-  const targetCol = columnConfig.value.find(c => c.key === targetKey)
-  if (!targetCol) {
-    draggedColumnKey.value = null
-    return
-  }
-  
-  reorderColumns(draggedColumnKey.value, targetCol.order)
-  draggedColumnKey.value = null
-}
-
-// Column resize state
-const resizingColumn = ref<LogbookColumnKey | null>(null)
-const resizeStartX = ref(0)
-const resizeStartWidth = ref(0)
-
-function startResize(columnKey: LogbookColumnKey, event: MouseEvent): void {
-  const col = columnConfig.value.find(c => c.key === columnKey)
-  if (!col) return
-
-  resizingColumn.value = columnKey
-  resizeStartX.value = event.clientX
-  resizeStartWidth.value = col.width ?? 100
-
-  document.addEventListener('mousemove', handleResize)
-  document.addEventListener('mouseup', stopResize)
-  event.preventDefault()
-}
-
-function handleResize(event: MouseEvent): void {
-  if (!resizingColumn.value) return
-
-  const col = columnConfig.value.find(c => c.key === resizingColumn.value)
-  if (!col) return
-
-  const deltaX = event.clientX - resizeStartX.value
-  col.width = Math.max(50, resizeStartWidth.value + deltaX)
-}
-
-function stopResize(): void {
-  if (resizingColumn.value) {
-    saveColumnConfig()
-  }
-  resizingColumn.value = null
-  document.removeEventListener('mousemove', handleResize)
-  document.removeEventListener('mouseup', stopResize)
-}
+const showColumnSettings = ref(false)
 
 function getColumnPadding(col: LogbookColumnConfig): string[] {
   switch (col.key) {
@@ -7143,29 +7130,12 @@ const tableHeaderRef = ref<HTMLElement | null>(null)
 const tableContainerRef = ref<HTMLElement | null>(null)
 const tableRef = ref<HTMLTableElement | null>(null)
 
-// Entry card configuration for iOS (Settings → Preferences)
-const {
-  activePresetId,
-  draggedColumnKey: entryCardDraggedColumnKey,
-  visibleDetailFields,
-  showRemarksFooter,
-  detailFieldCrowded,
-  pickerFields,
-  presets: entryCardPresets,
-  loadColumnConfig: loadEntryCardConfig,
-  toggleColumnVisibility: toggleEntryCardFieldVisibility,
-  handleColumnDrop: handleEntryCardColumnDrop,
-  moveColumn: moveEntryCardColumn,
-  resetColumnConfig: resetEntryCardConfig,
-  applyPreset: applyEntryCardPreset,
-} = useEntryCardConfig()
-
-function openEntryCardPreferences(): void {
+function openLogbookLayoutPreferences(): void {
   openSettings('preferences')
 }
 
-function onEntryCardDragStart(key: LogbookColumnKey): void {
-  entryCardDraggedColumnKey.value = key
+function onLogbookLayoutDragStart(key: LogbookColumnKey): void {
+  draggedColumnKey.value = key
 }
 
 const catalogSections = [
@@ -13856,6 +13826,10 @@ onMounted(async () => {
   const handleClickOutside = (event: MouseEvent) => {
     const target = event.target as HTMLElement
 
+    if (showColumnSettings.value && !target.closest('.column-settings-container')) {
+      showColumnSettings.value = false
+    }
+
     // Close context menu when clicking outside
     if (contextMenuVisible.value && !target.closest('.context-menu-container')) {
       closeContextMenu()
@@ -13887,9 +13861,7 @@ onMounted(async () => {
     }
     // Clean up resize listeners if still active
     if (resizingColumn.value) {
-      document.removeEventListener('mousemove', handleResize)
-      document.removeEventListener('mouseup', stopResize)
-      resizingColumn.value = null
+      stopResize()
     }
   }
 })
