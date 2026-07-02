@@ -281,8 +281,7 @@
 
     <main
       :class="[
-        'min-h-screen flex flex-col px-4 sm:px-6 lg:px-8 transition-colors duration-300',
-        isIos ? 'overflow-x-hidden' : 'overflow-x-auto',
+        'min-h-screen flex flex-col px-4 sm:px-6 lg:px-8 transition-colors duration-300 overflow-x-hidden',
         isIos
           ? 'pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))]'
           : 'pt-40 pb-20',
@@ -756,7 +755,7 @@
           </Transition>
         </Teleport>
 
-        <div :class="['flex-1 space-y-12 min-w-0', isIos ? '' : 'overflow-x-auto']">
+        <div :class="['flex-1 space-y-12 min-w-0']">
           <section class="text-center lg:text-left">
 
             <div class="space-y-6">
@@ -1131,8 +1130,8 @@
               </div>
         </div>
 
-            <div class="flex items-center justify-between gap-4">
-            <div class="flex items-center justify-between gap-4">
+            <div class="flex w-full items-center justify-between gap-4">
+            <div class="flex w-full items-center justify-between gap-4">
             <div :class="['mt-4 text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
               <span v-if="dateRangeFilterSummary">
                 Showing {{ filteredEntries.length }} {{ filteredEntries.length === 1 ? 'entry' : 'entries' }} for {{ dateRangeFilterSummary }}.
@@ -1143,9 +1142,10 @@
             </div>
             <div
               v-if="!isIos && filteredEntries.length > 0"
-              class="relative column-settings-container mt-4"
+              class="relative column-settings-container mt-4 ml-auto"
             >
               <button
+                ref="columnSettingsTriggerRef"
                 type="button"
                 @click.stop="showColumnSettings = !showColumnSettings"
                 :class="[
@@ -1158,14 +1158,18 @@
               >
                 <Icon name="ri:settings-3-line" size="16" />
               </button>
+            </div>
+            <Teleport to="body">
               <div
                 v-if="showColumnSettings"
+                class="column-settings-panel"
                 :class="[
-                  'absolute right-0 top-full mt-2 w-80 rounded-xl border shadow-2xl p-4 z-50',
+                  'fixed z-[100] w-80 rounded-xl border shadow-2xl p-4',
                   isDarkMode
                     ? 'bg-gray-900 border-white/10 shadow-xl shadow-black/50'
                     : 'bg-white border-gray-200'
                 ]"
+                :style="{ top: `${columnSettingsPosition.top}px`, left: `${columnSettingsPosition.left}px` }"
                 @click.stop
               >
                 <div class="flex items-center justify-between mb-4">
@@ -1255,7 +1259,7 @@
                   </div>
                 </div>
               </div>
-            </div>
+            </Teleport>
             </div>
             <button
               v-if="isIos && filteredEntries.length > 0"
@@ -7028,6 +7032,33 @@ const displayColumnConfig = computed(() =>
 )
 
 const showColumnSettings = ref(false)
+const columnSettingsTriggerRef = ref<HTMLElement | null>(null)
+const columnSettingsPosition = ref({ top: 0, left: 0 })
+const COLUMN_SETTINGS_PANEL_WIDTH = 320
+
+function updateColumnSettingsPosition(): void {
+  nextTick(() => {
+    const el = columnSettingsTriggerRef.value
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    columnSettingsPosition.value = {
+      top: rect.bottom + 8,
+      left: Math.max(8, rect.right - COLUMN_SETTINGS_PANEL_WIDTH),
+    }
+  })
+}
+
+watch(showColumnSettings, (open, _old, onCleanup) => {
+  if (!open) return
+  updateColumnSettingsPosition()
+  const onReposition = () => updateColumnSettingsPosition()
+  window.addEventListener('resize', onReposition)
+  window.addEventListener('scroll', onReposition, true)
+  onCleanup(() => {
+    window.removeEventListener('resize', onReposition)
+    window.removeEventListener('scroll', onReposition, true)
+  })
+})
 
 function getColumnPadding(col: LogbookColumnConfig): string[] {
   switch (col.key) {
@@ -13826,7 +13857,11 @@ onMounted(async () => {
   const handleClickOutside = (event: MouseEvent) => {
     const target = event.target as HTMLElement
 
-    if (showColumnSettings.value && !target.closest('.column-settings-container')) {
+    if (
+      showColumnSettings.value
+      && !target.closest('.column-settings-container')
+      && !target.closest('.column-settings-panel')
+    ) {
       showColumnSettings.value = false
     }
 
