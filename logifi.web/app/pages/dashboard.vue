@@ -160,6 +160,48 @@
     </div>
   </div>
 
+  <!-- iOS sync status banner -->
+  <div
+    v-if="isIos && iosSyncBannerVisible"
+    class="fixed left-0 right-0 z-[55] px-4 pointer-events-auto"
+    :style="{ top: 'calc(env(safe-area-inset-top, 0px) + 3.25rem)' }"
+  >
+    <div
+      :class="[
+        'rounded-lg border px-3 py-2 text-xs font-quicksand flex items-center justify-between gap-2 shadow-md',
+        iosSyncStatus === 'error'
+          ? isDarkMode
+            ? 'border-red-700/50 bg-red-950/90 text-red-200'
+            : 'border-red-300 bg-red-50 text-red-800'
+          : iosSyncStatus === 'success'
+            ? isDarkMode
+              ? 'border-green-700/50 bg-green-950/90 text-green-200'
+              : 'border-green-300 bg-green-50 text-green-800'
+            : isDarkMode
+              ? 'border-blue-700/50 bg-gray-900/95 text-gray-200'
+              : 'border-blue-200 bg-white text-gray-800'
+      ]"
+    >
+      <div class="flex items-center gap-2 min-w-0">
+        <Icon
+          v-if="iosSyncStatus === 'loading'"
+          name="ri:loader-4-line"
+          size="14"
+          class="animate-spin flex-shrink-0"
+        />
+        <span class="truncate">{{ iosSyncMessage }}</span>
+      </div>
+      <button
+        v-if="iosSyncStatus === 'error'"
+        type="button"
+        class="flex-shrink-0 rounded-md px-2 py-1 text-xs font-semibold underline-offset-2 hover:underline"
+        @click="retryIosSync"
+      >
+        Retry
+      </button>
+    </div>
+  </div>
+
   <!-- Main Content (only show when authenticated) -->
   <div v-if="isAuthenticated && !authLoading">
     <div :style="pullTransformStyle">
@@ -422,6 +464,18 @@
           >
             <div class="space-y-6">
             <div
+              v-if="isIos && iosCatalogBuilding"
+              :class="[
+                'rounded-xl border px-4 py-8 text-center text-sm font-quicksand',
+                theme === 'dark'
+                  ? 'bg-white/5 border-white/10 text-gray-400'
+                  : 'bg-white border-gray-200 text-gray-500'
+              ]"
+            >
+              Building filters…
+            </div>
+            <template v-if="!isIos || !iosCatalogBuilding">
+            <div
               v-for="section in catalogSections"
               :key="section.key"
               :class="[
@@ -591,6 +645,7 @@
                   </template>
         </div>
             </div>
+            </template>
 
           <!-- Conditions filter section -->
           <div v-show="!isSidebarCollapsed || isIos">
@@ -1296,12 +1351,30 @@
 
             <LogEntryList
               v-else-if="isIos"
-              :entries="filteredEntries"
+              :entries="iosDisplayedEntries"
               :is-dark-mode="isDarkMode"
               :visible-detail-fields="visibleDetailFields"
               :show-remarks-footer="showRemarksFooter"
               @select="beginInlineEditing"
             />
+
+            <div
+              v-if="isIos && filteredEntries.length > iosVisibleEntryCount"
+              class="mt-4 flex justify-center"
+            >
+              <button
+                type="button"
+                :class="[
+                  'rounded-lg border px-4 py-2.5 text-sm font-quicksand font-medium transition-colors',
+                  isDarkMode
+                    ? 'border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700'
+                    : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-100'
+                ]"
+                @click="loadMoreIosEntries"
+              >
+                Load more ({{ iosDisplayedEntries.length }} of {{ filteredEntries.length }})
+              </button>
+            </div>
 
             <div
               v-else
@@ -5809,7 +5882,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch, watchEffect } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, shallowRef, watch, watchEffect } from 'vue'
 import {
   LOGBOOK_STORAGE_KEY,
   createEmptyFlightTime,
@@ -5911,7 +5984,7 @@ import {
   resolveAircraftByTail,
 } from '../../shared/aircraftTailIndex'
 import { useCurrency } from '../composables/useCurrency'
-import { useCapacitorPlatform } from '../composables/useCapacitorPlatform'
+import { useCapacitorPlatform, isCapacitorNative } from '../composables/useCapacitorPlatform'
 import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGestures'
 import { usePullToRefresh } from '../composables/usePullToRefresh'
 import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
@@ -5944,6 +6017,7 @@ import {
   getSyncQueue,
   removeQueuedOperationsForEntry,
   migrateLegacyLocalData,
+  getLastSuccessfulRemoteSyncAt,
   setLastSuccessfulRemoteSyncAt,
 } from '../utils/indexedDB'
 import { mergeRemoteLogEntries } from '../../shared/logEntryMerge'
@@ -6224,6 +6298,10 @@ function dismissSnapshot() {
   showRegulatorySnapshot.value = false
 }
 function openSettings(tab?: SettingsTabId) {
+  if (isIos.value && isCatalogDrawerOpen.value) {
+    closeCatalogDrawer()
+  }
+  refreshPilotProfileStatsCache()
   settingsStack.value = tab ? ['root', tab] : ['root']
   showSettingsModal.value = true
 }
@@ -6249,6 +6327,19 @@ function closeSettings() {
 const isMigrating = ref(false)
 const migrationProgress = ref({ step: '', current: 0, total: 0 })
 const isDashboardRefreshing = ref(false)
+const isLoadEntriesRunning = ref(false)
+const isBulkLoadInProgress = ref(false)
+let loadEntriesInFlight: Promise<number> | null = null
+
+type IosSyncStatus = 'idle' | 'loading' | 'success' | 'error'
+const iosSyncStatus = ref<IosSyncStatus>('idle')
+const iosSyncMessage = ref('')
+const iosSyncBannerVisible = ref(false)
+let iosSyncSuccessTimer: ReturnType<typeof setTimeout> | null = null
+
+const IOS_ENTRIES_PAGE_SIZE = 50
+const CACHE_FRESH_MS = 5 * 60 * 1000
+const iosVisibleEntryCount = ref(IOS_ENTRIES_PAGE_SIZE)
 
 // Log entries - must be declared before any functions that use it
 const logEntries = ref<LogEntry[]>([])
@@ -6256,6 +6347,12 @@ const logEntries = ref<LogEntry[]>([])
 const aircraftTailIndex = computed(() => buildAircraftTailIndex(logEntries.value))
 
 const tailCatalogFamilyMap = computed(() => buildTailCatalogFamilyMap(logEntries.value))
+const iosTailCatalogFamilyMap = shallowRef<Map<string, string>>(new Map())
+
+function refreshIosTailCatalogFamilyMap(): void {
+  if (!isIos.value) return
+  iosTailCatalogFamilyMap.value = buildTailCatalogFamilyMap(logEntries.value)
+}
 
 function effectiveFamilyKeyForEntry(entry: {
   aircraftMakeModel?: string
@@ -6329,7 +6426,6 @@ async function onUserSessionReady(userId: string): Promise<void> {
 
       if (result.success) {
         console.log('Migration completed:', result)
-        await loadEntries()
       } else {
         console.error('Migration failed:', result.error)
       }
@@ -6338,9 +6434,9 @@ async function onUserSessionReady(userId: string): Promise<void> {
     } finally {
       isMigrating.value = false
     }
-  } else {
-    await loadEntries()
   }
+
+  await loadEntries()
 
   loadPilotProfilePrefs()
   loadSelectedTotalsMetrics()
@@ -6400,6 +6496,12 @@ watch(
   { immediate: true }
 )
 
+watch(isMigrating, (migrating, wasMigrating) => {
+  if (wasMigrating && !migrating && isAuthenticated.value && user.value?.id) {
+    void loadEntries()
+  }
+})
+
 watch(
   [() => route.query.fcv, isAuthenticated],
   ([val, authed]) => {
@@ -6432,8 +6534,12 @@ onMounted(async () => {
     await initIndexedDB()
     console.log('[App] IndexedDB initialized')
 
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    handleScroll()
+    await nextTick()
+    const scrollTarget = isIos.value ? rootScrollContainerRef.value : window
+    if (scrollTarget) {
+      scrollTarget.addEventListener('scroll', handleScroll, { passive: true })
+      handleScroll()
+    }
 
     document.addEventListener('visibilitychange', handleAppResume)
   } catch (error) {
@@ -6454,11 +6560,22 @@ function handleAppResume(): void {
 // Cleanup scroll event listener on unmount
 onUnmounted(() => {
   if (isBrowser) {
-    window.removeEventListener('scroll', handleScroll)
+    const scrollTarget = isIos.value ? rootScrollContainerRef.value : window
+    if (scrollTarget) {
+      scrollTarget.removeEventListener('scroll', handleScroll)
+    }
     document.removeEventListener('visibilitychange', handleAppResume)
     if (isIos.value) {
       setIosOverlayScrollLock(false)
       window.removeEventListener('keydown', handleIosOverlayEscape)
+      document.documentElement.style.overflow = ''
+      document.documentElement.style.overflowX = ''
+      document.body.style.overflow = ''
+      document.body.style.overflowX = ''
+      if (iosSyncSuccessTimer) {
+        clearTimeout(iosSyncSuccessTimer)
+        iosSyncSuccessTimer = null
+      }
     }
   }
 })
@@ -7246,12 +7363,20 @@ const fcvFetchSectionRef = ref<HTMLElement | null>(null)
 const showScrollToTop = ref(false)
 const handleScroll = (): void => {
   if (!isBrowser) return
-  const scrollTop = window.scrollY || document.documentElement.scrollTop
+  const container = rootScrollContainerRef.value
+  const scrollTop = container
+    ? container.scrollTop
+    : window.scrollY || document.documentElement.scrollTop
   showScrollToTop.value = scrollTop > 300
 }
 const scrollToTop = (): void => {
   if (!isBrowser) return
-  window.scrollTo({ top: 0, behavior: 'smooth' })
+  const container = rootScrollContainerRef.value
+  if (container) {
+    container.scrollTo({ top: 0, behavior: 'smooth' })
+  } else {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 }
 
 const openFcvFetchSection = async (): Promise<void> => {
@@ -7270,6 +7395,7 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
     inlineEditEntry.value = null
     isInlineCommercialMode.value = false
   } else {
+    ensureIosCatalogIndex()
     // Close Add Entry form when opening inline edit
     isEntryFormOpen.value = false
     closeAuditTrailSidebar()
@@ -9886,6 +10012,71 @@ async function ensureAirportNameLoaded(code: string): Promise<void> {
   }
 }
 
+const AIRPORT_HYDRATE_CONCURRENCY = 5
+const airportHydratePendingNames: Record<string, string> = {}
+let airportHydrateFlushScheduled = false
+const airportHydrateInFlight = new Set<string>()
+const airportHydrateQueued = new Set<string>()
+let airportHydrateQueue: string[] = []
+
+function flushPendingAirportNames(): void {
+  airportHydrateFlushScheduled = false
+  const keys = Object.keys(airportHydratePendingNames)
+  if (keys.length === 0) return
+  airportNames.value = { ...airportNames.value, ...airportHydratePendingNames }
+  for (const key of keys) {
+    delete airportHydratePendingNames[key]
+  }
+}
+
+function scheduleAirportNamesFlush(): void {
+  if (airportHydrateFlushScheduled) return
+  airportHydrateFlushScheduled = true
+  setTimeout(flushPendingAirportNames, 50)
+}
+
+function pumpAirportHydrateQueue(): void {
+  while (
+    airportHydrateInFlight.size < AIRPORT_HYDRATE_CONCURRENCY &&
+    airportHydrateQueue.length > 0
+  ) {
+    const code = airportHydrateQueue.shift()!
+    airportHydrateQueued.delete(code)
+    void loadAirportNameIntoBatch(code)
+  }
+}
+
+async function loadAirportNameIntoBatch(code: string): Promise<void> {
+  const normalized = code.trim().toUpperCase()
+  if (!normalized || airportNames.value[normalized] !== undefined) return
+
+  airportHydrateInFlight.add(normalized)
+  try {
+    const info = await lookupAirport(normalized)
+    airportHydratePendingNames[normalized] = info?.name ?? ''
+    scheduleAirportNamesFlush()
+  } catch (error) {
+    airportHydratePendingNames[normalized] = ''
+    scheduleAirportNamesFlush()
+    console.warn(`Failed to load airport name for ${normalized}:`, error)
+  } finally {
+    airportHydrateInFlight.delete(normalized)
+    pumpAirportHydrateQueue()
+  }
+}
+
+function enqueueAirportNamesForHydration(codes: string[]): void {
+  for (const code of codes) {
+    const normalized = code.trim().toUpperCase()
+    if (!normalized) continue
+    if (airportNames.value[normalized] !== undefined) continue
+    if (airportHydrateQueued.has(normalized) || airportHydrateInFlight.has(normalized)) continue
+    airportHydrateQueued.add(normalized)
+    airportHydrateQueue.push(normalized)
+  }
+  pumpAirportHydrateQueue()
+}
+
 // Format airport display text: "CODE - Name" or just "CODE" if name not loaded
 function getAirportDisplayText(code: string): string {
   const name = airportNames.value[code]
@@ -10549,6 +10740,7 @@ function resetForm(): void {
 }
 
 function maybeAutoOpenEntryFormForEmptyLogbook(): void {
+  if (isIos.value) return
   if (logEntries.value.length === 0 && isAuthenticated.value) {
     expandedEntryId.value = null
     inlineEditEntry.value = null
@@ -10728,11 +10920,275 @@ function toggleSidebar(): void {
   isSidebarCollapsed.value = !isSidebarCollapsed.value
 }
 
+interface CatalogsValue {
+  aircraft: string[]
+  airports: string[]
+  pilots: string[]
+  categoryClass: string[]
+  families: string[]
+  familyToItems: Record<string, string[]>
+  familyDisplayName: Record<string, string>
+  totalAircraftItems: number
+}
+
+const EMPTY_CATALOGS: CatalogsValue = {
+  aircraft: [],
+  airports: [],
+  pilots: [],
+  categoryClass: [],
+  families: [],
+  familyToItems: {},
+  familyDisplayName: {},
+  totalAircraftItems: 0,
+}
+
+const iosCatalogCache = shallowRef<CatalogsValue>({ ...EMPTY_CATALOGS })
+const iosCatalogBuilt = ref(false)
+const iosCatalogBuilding = ref(false)
+const IOS_CATALOG_BATCH_SIZE = 100
+let iosCatalogBuildGeneration = 0
+
+function initFamilyOpenStateForCatalog(families: string[]): void {
+  const defaultExpandFamilies = families.length <= 3
+  families.forEach((fam) => {
+    if (familyOpenState[fam] === undefined) {
+      familyOpenState[fam] = defaultExpandFamilies
+    }
+  })
+}
+
+interface CatalogBuildAccumulator {
+  aircraft: Set<string>
+  airports: Set<string>
+  pilots: Set<string>
+  categoryClass: Set<string>
+  familiesSet: Set<string>
+  familyMakeModelCounts: Record<string, Record<string, number>>
+  familyToItemsMap: Record<string, Set<string>>
+  seenTails: Set<string>
+}
+
+function createCatalogBuildAccumulator(): CatalogBuildAccumulator {
+  return {
+    aircraft: new Set<string>(),
+    airports: new Set<string>(),
+    pilots: new Set<string>(),
+    categoryClass: new Set<string>(),
+    familiesSet: new Set<string>(),
+    familyMakeModelCounts: {},
+    familyToItemsMap: {},
+    seenTails: new Set<string>(),
+  }
+}
+
+function processCatalogEntryIntoAccumulator(
+  acc: CatalogBuildAccumulator,
+  entry: LogEntry,
+  tailFamilyMap: Map<string, string>,
+  airportSet: Set<string>
+): void {
+  const makeModel = entry.aircraftMakeModel.trim()
+  const tail = entry.registration.trim().toUpperCase()
+  const fam = effectiveCatalogFamilyKey(entry, tailFamilyMap)
+
+  if (makeModel || tail) {
+    acc.aircraft.add(tail ? `${makeModel || 'Airframe'} · ${tail}` : makeModel)
+  }
+  if (fam && makeModel) {
+    if (!acc.familyMakeModelCounts[fam]) acc.familyMakeModelCounts[fam] = {}
+    acc.familyMakeModelCounts[fam][makeModel] = (acc.familyMakeModelCounts[fam][makeModel] || 0) + 1
+  }
+  getEntryAirportCodes(entry, airportSet).forEach((code) => acc.airports.add(code))
+  if (entry.trainingElements.trim()) {
+    acc.pilots.add(entry.trainingElements.trim())
+  }
+  if (entry.aircraftCategoryClass.trim()) {
+    acc.categoryClass.add(entry.aircraftCategoryClass.trim().toUpperCase())
+  }
+
+  if (!fam) return
+  const tailKey = normalizeAircraftTailKey(entry.registration)
+  const tailDisplay = entry.registration.trim().toUpperCase()
+  if (tailKey) {
+    if (acc.seenTails.has(tailKey)) return
+    acc.seenTails.add(tailKey)
+    acc.familiesSet.add(fam)
+    if (!acc.familyToItemsMap[fam]) acc.familyToItemsMap[fam] = new Set<string>()
+    acc.familyToItemsMap[fam]!.add(tailDisplay)
+  } else if (makeModel) {
+    acc.familiesSet.add(fam)
+    if (!acc.familyToItemsMap[fam]) acc.familyToItemsMap[fam] = new Set<string>()
+    acc.familyToItemsMap[fam]!.add(makeModel)
+  }
+}
+
+function finalizeCatalogAccumulator(acc: CatalogBuildAccumulator): CatalogsValue {
+  const familyDisplayName: Record<string, string> = {}
+  for (const fam of acc.familiesSet) {
+    const counts = acc.familyMakeModelCounts[fam] ?? {}
+    const entries = Object.entries(counts)
+    const mode = entries.length ? entries.sort((a, b) => b[1] - a[1])[0]![0] : fam
+    familyDisplayName[fam] = mode
+  }
+
+  const familyToItems: Record<string, string[]> = {}
+  const families = Array.from(acc.familiesSet).sort((a, b) => a.localeCompare(b))
+  families.forEach((fam) => {
+    familyToItems[fam] = Array.from(acc.familyToItemsMap[fam] || []).sort((a, b) => a.localeCompare(b))
+  })
+
+  const totalAircraftItems = families.reduce(
+    (sum, fam) => sum + (familyToItems[fam]?.length || 0),
+    0
+  )
+
+  return {
+    aircraft: Array.from(acc.aircraft).sort((a, b) => a.localeCompare(b)),
+    airports: Array.from(acc.airports).sort(sortAirportCatalogCodes),
+    pilots: Array.from(acc.pilots).sort((a, b) => a.localeCompare(b)),
+    categoryClass: Array.from(acc.categoryClass).sort((a, b) => a.localeCompare(b)),
+    families,
+    familyToItems,
+    familyDisplayName,
+    totalAircraftItems,
+  }
+}
+
+function getCatalogTailFamilyMap(): Map<string, string> {
+  if (isIos.value) {
+    if (iosTailCatalogFamilyMap.value.size === 0 && logEntries.value.length > 0) {
+      refreshIosTailCatalogFamilyMap()
+    }
+    return iosTailCatalogFamilyMap.value
+  }
+  return tailCatalogFamilyMap.value
+}
+
+function buildCatalogsFromEntries(): CatalogsValue {
+  const acc = createCatalogBuildAccumulator()
+  const tailFamilyMap = getCatalogTailFamilyMap()
+  const airportSet = classifiedRouteAirportSet.value
+  const entriesForActiveCatalog = logEntries.value.filter(
+    (entry) => inferLogbookType(entry) === activeLogbook.value
+  )
+  for (const entry of entriesForActiveCatalog) {
+    processCatalogEntryIntoAccumulator(acc, entry, tailFamilyMap, airportSet)
+  }
+  return finalizeCatalogAccumulator(acc)
+}
+
+async function scheduleIosCatalogBuild(): Promise<void> {
+  if (!isIos.value) return
+
+  iosCatalogBuilding.value = true
+  iosCatalogBuilt.value = false
+  const generation = ++iosCatalogBuildGeneration
+
+  const tailFamilyMap = getCatalogTailFamilyMap()
+  const airportSet = classifiedRouteAirportSet.value
+  const entriesForActiveCatalog = logEntries.value.filter(
+    (entry) => inferLogbookType(entry) === activeLogbook.value
+  )
+  const acc = createCatalogBuildAccumulator()
+
+  for (let i = 0; i < entriesForActiveCatalog.length; i += IOS_CATALOG_BATCH_SIZE) {
+    if (generation !== iosCatalogBuildGeneration) return
+    if (!isCatalogDrawerOpen.value) {
+      iosCatalogBuilding.value = false
+      return
+    }
+
+    const batch = entriesForActiveCatalog.slice(i, i + IOS_CATALOG_BATCH_SIZE)
+    for (const entry of batch) {
+      processCatalogEntryIntoAccumulator(acc, entry, tailFamilyMap, airportSet)
+    }
+
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  }
+
+  if (generation !== iosCatalogBuildGeneration || !isCatalogDrawerOpen.value) {
+    iosCatalogBuilding.value = false
+    return
+  }
+
+  const built = finalizeCatalogAccumulator(acc)
+  initFamilyOpenStateForCatalog(built.families)
+  iosCatalogCache.value = built
+  iosCatalogBuilt.value = true
+  iosCatalogBuilding.value = false
+}
+
+function buildIosCatalogIndex(): void {
+  if (!isIos.value) return
+  const built = buildCatalogsFromEntries()
+  initFamilyOpenStateForCatalog(built.families)
+  iosCatalogCache.value = built
+  iosCatalogBuilt.value = true
+  iosCatalogBuilding.value = false
+}
+
+function invalidateIosCatalogCache(): void {
+  if (!isIos.value) return
+  iosCatalogBuildGeneration++
+  iosCatalogBuilt.value = false
+  iosCatalogBuilding.value = false
+  iosCatalogCache.value = {
+    aircraft: [],
+    airports: [],
+    pilots: [],
+    categoryClass: [],
+    families: [],
+    familyToItems: {},
+    familyDisplayName: {},
+    totalAircraftItems: 0,
+  }
+}
+
+function ensureIosCatalogIndex(): void {
+  if (!isIos.value || iosCatalogBuilt.value || iosCatalogBuilding.value) return
+  void scheduleIosCatalogBuild()
+}
+
+const catalogs = computed<CatalogsValue>(() => {
+  if (isIos.value) {
+    return iosCatalogBuilt.value ? iosCatalogCache.value : EMPTY_CATALOGS
+  }
+  const built = buildCatalogsFromEntries()
+  initFamilyOpenStateForCatalog(built.families)
+  return built
+})
+
+watch(() => logEntries.value.length, () => {
+  if (isIos.value) {
+    refreshIosTailCatalogFamilyMap()
+    invalidateIosCatalogCache()
+    if (isCatalogDrawerOpen.value) {
+      void scheduleIosCatalogBuild()
+    }
+  }
+})
+
+watch(activeLogbook, () => {
+  if (isIos.value) {
+    invalidateIosCatalogCache()
+    if (isCatalogDrawerOpen.value) {
+      void scheduleIosCatalogBuild()
+    }
+  }
+})
+
 function openCatalogDrawer(): void {
+  if (isIos.value) {
+    isCatalogDrawerOpen.value = true
+    void scheduleIosCatalogBuild()
+    return
+  }
   isCatalogDrawerOpen.value = true
 }
 
 function closeCatalogDrawer(): void {
+  iosCatalogBuildGeneration++
+  iosCatalogBuilding.value = false
   isCatalogDrawerOpen.value = false
 }
 
@@ -10790,7 +11246,8 @@ const pullToRefreshDisabled = computed(
     expandedEntryId.value !== null ||
     showCrewProfileModal.value ||
     showAuthModal.value ||
-    isDashboardRefreshing.value
+    isDashboardRefreshing.value ||
+    isLoadEntriesRunning.value
 )
 
 const { pullDistance, isPulling, isRefreshing: isPullRefreshing } = usePullToRefresh({
@@ -13149,192 +13606,452 @@ function mapSupabaseRowToLogEntry(dbEntry: any): LogEntry {
   return normalizeLogEntryForDisplay(entry)
 }
 
-// Load entries from Supabase (when authenticated) or localStorage (fallback)
-async function loadEntries(): Promise<number> {
-  if (!isBrowser) return 0
-  
-  try {
-    // Initialize IndexedDB
-    await initIndexedDB()
-    console.log('[LoadEntries] IndexedDB initialized')
-  } catch (error) {
-    console.error('[LoadEntries] Failed to initialize IndexedDB:', error)
-    // Continue with fallback loading
+const IDB_PERSIST_BATCH = 50
+const PROGRESSIVE_FIRST_BATCH = 100
+const SUPABASE_BATCH_SIZE = 1000
+
+function updateIosSyncBanner(status: Exclude<IosSyncStatus, 'idle'>, message: string): void {
+  if (!isIos.value) return
+  if (iosSyncSuccessTimer) {
+    clearTimeout(iosSyncSuccessTimer)
+    iosSyncSuccessTimer = null
+  }
+  iosSyncStatus.value = status
+  iosSyncMessage.value = message
+  iosSyncBannerVisible.value = true
+  if (status === 'success') {
+    iosSyncSuccessTimer = setTimeout(() => {
+      iosSyncBannerVisible.value = false
+      iosSyncStatus.value = 'idle'
+      iosSyncSuccessTimer = null
+    }, 3000)
+  }
+}
+
+function retryIosSync(): void {
+  void loadEntries()
+}
+
+function finalizeBulkLoadSideEffects(): void {
+  isBulkLoadInProgress.value = false
+  if (!isBrowser || logEntries.value.length === 0) return
+  if (isAuthenticated.value && user.value?.id) {
+    writeUserScopedLocal(LOGBOOK_STORAGE_KEY, JSON.stringify(logEntries.value))
+  }
+  if (!(isIos.value && (isCatalogDrawerOpen.value || showSettingsModal.value))) {
+    calculateAllCurrency(logEntries.value)
+  }
+}
+
+function hasUsableAuthSession(): boolean {
+  return !!(session.value?.access_token && user.value?.id)
+}
+
+async function ensureSupabaseClientSession(): Promise<boolean> {
+  if (!hasUsableAuthSession()) return false
+
+  const { data: { session: sbSession } } = await supabase.auth.getSession()
+  if (sbSession?.access_token) return true
+
+  const authSession = session.value
+  if (!authSession?.access_token) return false
+
+  const { error } = await supabase.auth.setSession({
+    access_token: authSession.access_token,
+    refresh_token: authSession.refresh_token ?? '',
+  })
+  if (error) {
+    console.warn('[LoadEntries] setSession failed:', error.message)
+    return false
+  }
+  return true
+}
+
+async function fetchSupabaseLogEntriesRange(
+  userId: string,
+  from: number,
+  to: number
+): Promise<LogEntry[]> {
+  const { data: batch, error } = await (supabase
+    .from('log_entries') as any)
+    .select('*')
+    .eq('user_id', userId)
+    .order('date', { ascending: false })
+    .range(from, to)
+  if (error) {
+    console.error('[LoadEntries] Error loading entries from Supabase:', error)
+    throw error
+  }
+  if (!batch?.length) return []
+  return batch.map(mapSupabaseRowToLogEntry)
+}
+
+async function fetchRemainingSupabaseLogEntries(
+  userId: string,
+  startFrom: number,
+  onProgress?: (loaded: number) => void
+): Promise<LogEntry[]> {
+  let allEntries: LogEntry[] = []
+  let from = startFrom
+  let hasMore = true
+
+  while (hasMore) {
+    const to = from + SUPABASE_BATCH_SIZE - 1
+    const batch = await fetchSupabaseLogEntriesRange(userId, from, to)
+    if (!batch.length) break
+    allEntries = allEntries.concat(batch)
+    onProgress?.(startFrom + allEntries.length)
+    hasMore = batch.length >= SUPABASE_BATCH_SIZE
+    from += SUPABASE_BATCH_SIZE
   }
 
-  let inboundRemovedCount = 0
-  
-  // LOCAL-FIRST: Load from IndexedDB first (scoped to current user when authenticated)
-  const scopedUserId = user.value?.id
-  let idbEntries: Awaited<ReturnType<typeof getAllIDBLogEntriesForUser>> = []
-  try {
-    if (scopedUserId) {
-      idbEntries = await getAllIDBLogEntriesForUser(scopedUserId)
-      logEntries.value = idbEntries.map((entry) =>
-        normalizeLogEntryForDisplay({
-          id: entry.id,
-          date: entry.date,
-          role: entry.role,
-          aircraftCategoryClass: entry.aircraftCategoryClass,
-          categoryClassTime: entry.categoryClassTime,
-          aircraftMakeModel: entry.aircraftMakeModel,
-          registration: entry.registration,
-          flightNumber: entry.flightNumber,
-          departure: entry.departure,
-          destination: entry.destination,
-          route: entry.route,
-          trainingElements: entry.trainingElements,
-          trainingInstructor: entry.trainingInstructor,
-          instructorCertificate: entry.instructorCertificate,
-          flightConditions: entry.flightConditions,
-          remarks: entry.remarks,
-          tags: entry.tags,
-          logbookType: entry.logbookType,
-          flightTime: entry.flightTime,
-          performance: entry.performance,
-          oooi: entry.oooi,
-          flagged: entry.flagged,
-          version: entry.version,
-          dataHash: entry.dataHash,
-          createdAt: entry.createdAt,
-          updatedAt: entry.updatedAt,
-          isImported: entry.isImported,
-          importSource: entry.importSource,
-          importBatchId: entry.importBatchId,
-          originalEntryDate: entry.originalEntryDate,
-          importMetadata: entry.importMetadata,
-        })
-      )
+  return allEntries
+}
 
-      console.log('[LoadEntries] Loaded', logEntries.value.length, 'entries from IndexedDB')
-    }
-  } catch (error) {
-    console.error('[LoadEntries] Error loading from IndexedDB:', error)
+const deferredLogEntries = shallowRef<LogEntry[] | null>(null)
+
+function assignLogEntries(entries: LogEntry[]): void {
+  const sorted = sortEntriesByDateAndOOOI(entries)
+  if (isIos.value && (isCatalogDrawerOpen.value || showSettingsModal.value)) {
+    deferredLogEntries.value = sorted
+    return
   }
-  
-  // If authenticated, sync with Supabase (merge + remote-delete reconciliation)
-  if (isAuthenticated.value && user.value) {
-    await checkOnlineStatus()
-    const hasSession = await waitForSupabaseSession()
-    const browserOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
-    if (hasSession && (isOnline.value || browserOnline)) {
-    try {
-      await withTimeout((async () => {
-      const BATCH_SIZE = 1000
-      let allData: any[] = []
-      let from = 0
-      let hasMore = true
-      while (hasMore) {
-        const to = from + BATCH_SIZE - 1
-        const { data: batch, error } = await (supabase
-          .from('log_entries') as any)
-          .select('*')
-          .eq('user_id', user.value!.id)
-          .order('date', { ascending: false })
-          .range(from, to)
-        if (error) {
-          console.error('[LoadEntries] Error loading entries from Supabase:', error)
-          throw error
-        }
-        if (!batch || batch.length === 0) break
-        allData = allData.concat(batch)
-        hasMore = batch.length >= BATCH_SIZE
-        from += BATCH_SIZE
-      }
+  deferredLogEntries.value = null
+  logEntries.value = sorted
+}
 
-      const supabaseEntries = allData.map(mapSupabaseRowToLogEntry)
-      const syncQueue = await getSyncQueue(user.value!.id)
-      const localWithSync = idbEntries.map((entry) => ({
-        entry: normalizeLogEntryForDisplay({
-          id: entry.id,
-          date: entry.date,
-          role: entry.role,
-          aircraftCategoryClass: entry.aircraftCategoryClass,
-          categoryClassTime: entry.categoryClassTime,
-          aircraftMakeModel: entry.aircraftMakeModel,
-          registration: entry.registration,
-          flightNumber: entry.flightNumber,
-          departure: entry.departure,
-          destination: entry.destination,
-          route: entry.route,
-          trainingElements: entry.trainingElements,
-          trainingInstructor: entry.trainingInstructor,
-          instructorCertificate: entry.instructorCertificate,
-          flightConditions: entry.flightConditions,
-          remarks: entry.remarks,
-          tags: entry.tags,
-          logbookType: entry.logbookType,
-          flightTime: entry.flightTime,
-          performance: entry.performance,
-          oooi: entry.oooi,
-          flagged: entry.flagged,
-          version: entry.version,
-          dataHash: entry.dataHash,
-          createdAt: entry.createdAt,
-          updatedAt: entry.updatedAt,
-          isImported: entry.isImported,
-          importSource: entry.importSource,
-          importBatchId: entry.importBatchId,
-          originalEntryDate: entry.originalEntryDate,
-          importMetadata: entry.importMetadata,
-        }),
-        synced: entry._synced,
-      }))
+function flushDeferredLogEntries(): void {
+  if (!deferredLogEntries.value) return
+  logEntries.value = deferredLogEntries.value
+  deferredLogEntries.value = null
+  if (logEntries.value.length > 0) {
+    calculateAllCurrency(logEntries.value)
+  }
+}
 
-      const { mergedEntries, removedEntryIds } = mergeRemoteLogEntries({
-        localEntries: localWithSync,
-        remoteEntries: supabaseEntries,
-        syncQueue,
-      })
+watch([isCatalogDrawerOpen, showSettingsModal], () => {
+  if (!isIos.value) return
+  if (!isCatalogDrawerOpen.value && !showSettingsModal.value) {
+    flushDeferredLogEntries()
+  }
+})
 
-      for (const removedId of removedEntryIds) {
+async function applyRemoteSync(
+  supabaseEntries: LogEntry[],
+  idbEntries: Awaited<ReturnType<typeof getAllIDBLogEntriesForUser>>,
+  userId: string,
+  options: { reconcileRemoteDeletes?: boolean; awaitIdbPersist?: boolean } = {}
+): Promise<number> {
+  const reconcileRemoteDeletes = options.reconcileRemoteDeletes ?? true
+  const syncQueue = await getSyncQueue(userId)
+  const localWithSync = idbEntries.map((entry) => ({
+    entry: mapIdbEntryToLogEntry(entry),
+    synced: entry._synced,
+  }))
+
+  const { mergedEntries, removedEntryIds } = mergeRemoteLogEntries({
+    localEntries: localWithSync,
+    remoteEntries: supabaseEntries,
+    syncQueue,
+    reconcileRemoteDeletes,
+  })
+
+  if (removedEntryIds.length > 0) {
+    await Promise.all(
+      removedEntryIds.map(async (removedId) => {
         await deleteEntryFromIndexedDB(removedId)
-        await removeQueuedOperationsForEntry(removedId, user.value!.id)
-      }
-      inboundRemovedCount = removedEntryIds.length
+        await removeQueuedOperationsForEntry(removedId, userId)
+      })
+    )
+  }
 
-      const remoteIds = new Set(supabaseEntries.map((entry) => entry.id))
-      for (const entry of mergedEntries) {
-        if (remoteIds.has(entry.id)) {
-          await saveSyncedEntryToIndexedDB(entry, user.value!.id)
+  assignLogEntries(mergedEntries)
+  await setLastSuccessfulRemoteSyncAt(Date.now())
+  await reconcileSyncQueue(userId, {
+    remoteEntryIds: supabaseEntries.map((entry) => entry.id),
+  })
+
+  console.log(
+    '[LoadEntries] Merged entries:',
+    logEntries.value.length,
+    'entries;',
+    removedEntryIds.length,
+    'removed remotely'
+  )
+
+  const remoteIds = new Set(supabaseEntries.map((entry) => entry.id))
+  if (options.awaitIdbPersist) {
+    await persistSyncedEntriesToIndexedDB(mergedEntries, remoteIds, userId)
+  } else {
+    void persistSyncedEntriesToIndexedDB(mergedEntries, remoteIds, userId).catch((err) => {
+      console.warn('[LoadEntries] Background IndexedDB persist failed:', err)
+    })
+  }
+
+  return removedEntryIds.length
+}
+
+async function backgroundFullRemoteSync(userId: string): Promise<number> {
+  const allRemote = await fetchRemainingSupabaseLogEntries(userId, 0, (loaded) => {
+    updateIosSyncBanner('loading', `Loading logbook… ${loaded} entries`)
+  })
+  const freshIdb = await getAllIDBLogEntriesForUser(userId)
+  return applyRemoteSync(allRemote, freshIdb, userId, {
+    reconcileRemoteDeletes: true,
+    awaitIdbPersist: true,
+  })
+}
+
+async function syncLogEntriesFromSupabase(
+  userId: string,
+  idbEntries: Awaited<ReturnType<typeof getAllIDBLogEntriesForUser>>,
+  cachedEntryCount: number
+): Promise<number> {
+  isBulkLoadInProgress.value = true
+
+  const lastSyncAt = await getLastSuccessfulRemoteSyncAt()
+  const cacheFresh =
+    cachedEntryCount > 0 &&
+    lastSyncAt != null &&
+    Date.now() - lastSyncAt < CACHE_FRESH_MS
+
+  if (cachedEntryCount > 0) {
+    updateIosSyncBanner(
+      'loading',
+      cacheFresh
+        ? `Showing ${cachedEntryCount} cached entries`
+        : `Showing ${cachedEntryCount} cached entries — updating…`
+    )
+
+    if (cacheFresh) {
+      void (async () => {
+        try {
+          await backgroundFullRemoteSync(userId)
+          updateIosSyncBanner('success', `${logEntries.value.length} entries loaded`)
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Sync failed'
+          console.error('[LoadEntries] Background cache refresh failed:', err)
+          updateIosSyncBanner('error', `Sync failed: ${message}`)
+        } finally {
+          finalizeBulkLoadSideEffects()
+        }
+      })()
+      return 0
+    }
+
+    try {
+      const removed = await backgroundFullRemoteSync(userId)
+      updateIosSyncBanner('success', `${logEntries.value.length} entries loaded`)
+      return removed
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Sync failed'
+      console.error('[LoadEntries] Error syncing with Supabase:', err)
+      updateIosSyncBanner('error', `Sync failed: ${message}`)
+      throw err
+    } finally {
+      finalizeBulkLoadSideEffects()
+    }
+  }
+
+  updateIosSyncBanner('loading', 'Syncing… fetching entries')
+  const fetchTimeout = syncTimeoutMs(Math.max(idbEntries.length, logEntries.value.length, 500))
+
+  try {
+    const firstBatch = await withTimeout(
+      fetchSupabaseLogEntriesRange(userId, 0, PROGRESSIVE_FIRST_BATCH - 1),
+      fetchTimeout,
+      'Fetch first log entries from Supabase'
+    )
+
+    let inboundRemovedCount = 0
+    if (firstBatch.length > 0) {
+      inboundRemovedCount = await applyRemoteSync(firstBatch, idbEntries, userId, {
+        reconcileRemoteDeletes: false,
+      })
+      calculateAllCurrency(logEntries.value)
+      updateIosSyncBanner('loading', `Loading logbook… ${firstBatch.length} entries`)
+    }
+
+    if (firstBatch.length < PROGRESSIVE_FIRST_BATCH) {
+      finalizeBulkLoadSideEffects()
+      updateIosSyncBanner('success', `${logEntries.value.length} entries loaded`)
+      return inboundRemovedCount
+    }
+
+    void (async () => {
+      try {
+        const removed = await backgroundFullRemoteSync(userId)
+        updateIosSyncBanner('success', `${logEntries.value.length} entries loaded`)
+        void removed
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Sync failed'
+        console.error('[LoadEntries] Background full sync failed:', err)
+        updateIosSyncBanner('error', `Sync failed: ${message}`)
+      } finally {
+        finalizeBulkLoadSideEffects()
+      }
+    })()
+
+    return inboundRemovedCount
+  } catch (err) {
+    finalizeBulkLoadSideEffects()
+    const message = err instanceof Error ? err.message : 'Sync failed'
+    console.error('[LoadEntries] Error syncing with Supabase:', err)
+    updateIosSyncBanner('error', `Sync failed: ${message}`)
+    throw err
+  }
+}
+
+function mapIdbEntryToLogEntry(
+  entry: Awaited<ReturnType<typeof getAllIDBLogEntriesForUser>>[number]
+): LogEntry {
+  return normalizeLogEntryForDisplay({
+    id: entry.id,
+    date: entry.date,
+    role: entry.role,
+    aircraftCategoryClass: entry.aircraftCategoryClass,
+    categoryClassTime: entry.categoryClassTime,
+    aircraftMakeModel: entry.aircraftMakeModel,
+    registration: entry.registration,
+    flightNumber: entry.flightNumber,
+    departure: entry.departure,
+    destination: entry.destination,
+    route: entry.route,
+    trainingElements: entry.trainingElements,
+    trainingInstructor: entry.trainingInstructor,
+    instructorCertificate: entry.instructorCertificate,
+    flightConditions: entry.flightConditions,
+    remarks: entry.remarks,
+    tags: entry.tags,
+    logbookType: entry.logbookType,
+    flightTime: entry.flightTime,
+    performance: entry.performance,
+    oooi: entry.oooi,
+    flagged: entry.flagged,
+    version: entry.version,
+    dataHash: entry.dataHash,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+    isImported: entry.isImported,
+    importSource: entry.importSource,
+    importBatchId: entry.importBatchId,
+    originalEntryDate: entry.originalEntryDate,
+    importMetadata: entry.importMetadata,
+  })
+}
+
+function syncTimeoutMs(estimatedEntryCount: number): number {
+  return Math.max(30000, estimatedEntryCount * 20)
+}
+
+async function persistSyncedEntriesToIndexedDB(
+  entries: LogEntry[],
+  remoteIds: Set<string>,
+  userId: string
+): Promise<void> {
+  const toPersist = entries.filter((entry) => remoteIds.has(entry.id))
+  for (let i = 0; i < toPersist.length; i += IDB_PERSIST_BATCH) {
+    const batch = toPersist.slice(i, i + IDB_PERSIST_BATCH)
+    await Promise.all(batch.map((entry) => saveSyncedEntryToIndexedDB(entry, userId)))
+  }
+  console.log('[LoadEntries] IndexedDB persist complete:', toPersist.length, 'entries')
+}
+
+async function runDeferredPostLoadWork(): Promise<void> {
+  try {
+    await migrateSimulatorInstrumentOnLoad()
+    void enrichFcvNightDataForDisplay()
+    await maybeConsolidateAircraftByTail()
+  } catch (err) {
+    console.warn('[LoadEntries] Deferred post-load work failed:', err)
+  }
+}
+
+// Load entries from Supabase (when authenticated) or localStorage (fallback)
+async function loadEntriesInternal(): Promise<number> {
+  if (!isBrowser) return 0
+
+  isLoadEntriesRunning.value = true
+  let inboundRemovedCount = 0
+
+  try {
+    try {
+      await initIndexedDB()
+      console.log('[LoadEntries] IndexedDB initialized')
+    } catch (error) {
+      console.error('[LoadEntries] Failed to initialize IndexedDB:', error)
+    }
+
+    const scopedUserId = user.value?.id
+    let idbEntries: Awaited<ReturnType<typeof getAllIDBLogEntriesForUser>> = []
+    try {
+      if (scopedUserId) {
+        idbEntries = await getAllIDBLogEntriesForUser(scopedUserId)
+        logEntries.value = idbEntries.map(mapIdbEntryToLogEntry)
+        console.log('[LoadEntries] Loaded', logEntries.value.length, 'entries from IndexedDB')
+        if (logEntries.value.length > 0) {
+          calculateAllCurrency(logEntries.value)
+          refreshPilotProfileStatsCache()
+          if (isIos.value) {
+            refreshIosTailCatalogFamilyMap()
+          }
         }
       }
-
-      logEntries.value = sortEntriesByDateAndOOOI(mergedEntries)
-      await setLastSuccessfulRemoteSyncAt(Date.now())
-      await reconcileSyncQueue(user.value!.id, {
-        remoteEntryIds: supabaseEntries.map((entry) => entry.id),
-      })
-
-      console.log(
-        '[LoadEntries] Merged entries:',
-        logEntries.value.length,
-        'entries;',
-        inboundRemovedCount,
-        'removed remotely'
-      )
-      })(), 15000, 'Load entries from Supabase')
-    } catch (err) {
-      console.error('[LoadEntries] Error syncing with Supabase:', err)
-      // Continue with IndexedDB entries
+    } catch (error) {
+      console.error('[LoadEntries] Error loading from IndexedDB:', error)
     }
+
+    if (isAuthenticated.value && user.value) {
+      await checkOnlineStatus()
+      const browserOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
+      const canSyncRemote = hasUsableAuthSession() && (isOnline.value || browserOnline)
+
+      if (!canSyncRemote) {
+        if (isIos.value && hasUsableAuthSession()) {
+          updateIosSyncBanner('error', 'Sync skipped: offline or no session')
+        }
+      } else {
+        const sessionReady = await ensureSupabaseClientSession()
+        if (!sessionReady) {
+          console.warn('[LoadEntries] Supabase client session unavailable')
+          if (isIos.value) {
+            updateIosSyncBanner('error', 'Sync failed: session unavailable')
+          }
+        } else {
+          try {
+            inboundRemovedCount = await syncLogEntriesFromSupabase(
+              user.value.id,
+              idbEntries,
+              idbEntries.length
+            )
+          } catch {
+            // Error already logged and banner updated in syncLogEntriesFromSupabase
+          }
+        }
+      }
+    } else if (!isAuthenticated.value) {
+      loadPersistedEntries()
     }
-  } else if (!isAuthenticated.value) {
-    // Not authenticated - fallback to localStorage
-    loadPersistedEntries()
-  }
-  
-  // Start background sync if authenticated
-  if (isAuthenticated.value && user.value) {
-    startBackgroundSync()
-  }
 
-  await migrateSimulatorInstrumentOnLoad()
+    if (isAuthenticated.value && user.value) {
+      startBackgroundSync()
+    }
 
-  // FC View rows may arrive without persisted night values; derive from OOOI for display consistency.
-  void enrichFcvNightDataForDisplay()
-  await maybeConsolidateAircraftByTail()
-  return inboundRemovedCount
+    void runDeferredPostLoadWork()
+    return inboundRemovedCount
+  } finally {
+    isLoadEntriesRunning.value = false
+  }
+}
+
+async function loadEntries(): Promise<number> {
+  if (loadEntriesInFlight) return loadEntriesInFlight
+  loadEntriesInFlight = loadEntriesInternal()
+  try {
+    return await loadEntriesInFlight
+  } finally {
+    loadEntriesInFlight = null
+  }
 }
 
 async function maybeConsolidateAircraftByTail(): Promise<void> {
@@ -13374,17 +14091,6 @@ async function maybeConsolidateAircraftByTail(): Promise<void> {
       console.warn('[ConsolidateAircraft] Persist failed for', entry.id, error)
     }
   }
-}
-
-async function waitForSupabaseSession(maxWaitMs = 8000): Promise<boolean> {
-  const deadline = Date.now() + maxWaitMs
-  while (Date.now() < deadline) {
-    const { data: { session: sbSession } } = await supabase.auth.getSession()
-    if (sbSession?.access_token && user.value?.id) return true
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
-  console.warn('[LoadEntries] Timed out waiting for Supabase session')
-  return false
 }
 
 async function refreshDashboardData(): Promise<void> {
@@ -13907,13 +14613,15 @@ watch(
     if (!isBrowser) {
       return
     }
+    if (isBulkLoadInProgress.value) {
+      return
+    }
     if (isAuthenticated.value && user.value?.id) {
       writeUserScopedLocal(LOGBOOK_STORAGE_KEY, JSON.stringify(entries))
     } else if (!isAuthenticated.value) {
       window.localStorage.setItem(LOGBOOK_STORAGE_KEY, JSON.stringify(entries))
     }
-    // Calculate currency when entries change
-    if (entries.length > 0) {
+    if (entries.length > 0 && !(isIos.value && (isCatalogDrawerOpen.value || showSettingsModal.value))) {
       calculateAllCurrency(entries)
     }
   },
@@ -14050,6 +14758,24 @@ const filteredEntries = computed(() => {
   return sortEntriesByDateAndOOOI(result)
 })
 
+const iosDisplayedEntries = computed(() =>
+  isIos.value ? filteredEntries.value.slice(0, iosVisibleEntryCount.value) : filteredEntries.value
+)
+
+function loadMoreIosEntries(): void {
+  iosVisibleEntryCount.value += IOS_ENTRIES_PAGE_SIZE
+}
+
+watch(
+  [searchTerm, activeLogbook, totalsTimeMode, totalsCustomStart, totalsCustomEnd, selectedFilters],
+  () => {
+    if (isIos.value) {
+      iosVisibleEntryCount.value = IOS_ENTRIES_PAGE_SIZE
+    }
+  },
+  { deep: true }
+)
+
 const entriesHiddenOnlyByDateRange = computed(() => {
   const dateRange = getTotalsDateRange()
   if (!dateRange || filteredEntries.value.length > 0) return false
@@ -14139,105 +14865,6 @@ const totals = computed(() => {
   }
 })
 
-interface CatalogsValue {
-  aircraft: string[]
-  airports: string[]
-  pilots: string[]
-  categoryClass: string[]
-  families: string[]
-  familyToItems: Record<string, string[]>
-  familyDisplayName: Record<string, string>
-  totalAircraftItems: number
-}
-const catalogs = computed<CatalogsValue>(() => {
-  const aircraft = new Set<string>()
-  const airports = new Set<string>()
-  const pilots = new Set<string>()
-  const categoryClass = new Set<string>()
-  const familiesSet = new Set<string>()
-  const familyMakeModelCounts: Record<string, Record<string, number>> = {}
-  const familyToItemsMap: Record<string, Set<string>> = {}
-  const tailFamilyMap = tailCatalogFamilyMap.value
-  const entriesForActiveCatalog = logEntries.value.filter(
-    (entry) => inferLogbookType(entry) === activeLogbook.value
-  )
-
-  entriesForActiveCatalog.forEach((entry) => {
-    const makeModel = entry.aircraftMakeModel.trim()
-    const tail = entry.registration.trim().toUpperCase()
-    const fam = effectiveCatalogFamilyKey(entry, tailFamilyMap)
-    if (makeModel || tail) {
-      aircraft.add(tail ? `${makeModel || 'Airframe'} · ${tail}` : makeModel)
-    }
-    if (fam && makeModel) {
-      if (!familyMakeModelCounts[fam]) familyMakeModelCounts[fam] = {}
-      familyMakeModelCounts[fam][makeModel] = (familyMakeModelCounts[fam][makeModel] || 0) + 1
-    }
-    getEntryAirportCodes(entry, classifiedRouteAirportSet.value).forEach((code) => airports.add(code))
-    if (entry.trainingElements.trim()) {
-      pilots.add(entry.trainingElements.trim())
-    }
-    if (entry.aircraftCategoryClass.trim()) {
-      categoryClass.add(entry.aircraftCategoryClass.trim().toUpperCase())
-    }
-  })
-
-  const familyDisplayName: Record<string, string> = {}
-  const seenTails = new Set<string>()
-  entriesForActiveCatalog.forEach((entry) => {
-    const makeModel = entry.aircraftMakeModel.trim()
-    const tailKey = normalizeAircraftTailKey(entry.registration)
-    const tailDisplay = entry.registration.trim().toUpperCase()
-    const fam = effectiveCatalogFamilyKey(entry, tailFamilyMap)
-    if (!fam) return
-
-    if (tailKey) {
-      if (seenTails.has(tailKey)) return
-      seenTails.add(tailKey)
-      familiesSet.add(fam)
-      if (!familyToItemsMap[fam]) familyToItemsMap[fam] = new Set<string>()
-      familyToItemsMap[fam]!.add(tailDisplay)
-    } else if (makeModel) {
-      familiesSet.add(fam)
-      if (!familyToItemsMap[fam]) familyToItemsMap[fam] = new Set<string>()
-      familyToItemsMap[fam]!.add(makeModel)
-    }
-  })
-
-  for (const fam of familiesSet) {
-    const counts = familyMakeModelCounts[fam] ?? {}
-    const entries = Object.entries(counts)
-    const mode = entries.length ? entries.sort((a, b) => b[1] - a[1])[0]![0] : fam
-    familyDisplayName[fam] = mode
-  }
-
-  const familyToItems: Record<string, string[]> = {}
-  const families = Array.from(familiesSet).sort((a, b) => a.localeCompare(b))
-  const defaultExpandFamilies = families.length <= 3
-  families.forEach((fam) => {
-    familyToItems[fam] = Array.from(familyToItemsMap[fam] || []).sort((a, b) => a.localeCompare(b))
-    if (familyOpenState[fam] === undefined) {
-      familyOpenState[fam] = defaultExpandFamilies
-    }
-  })
-
-  const totalAircraftItems = families.reduce(
-    (sum, fam) => sum + (familyToItems[fam]?.length || 0),
-    0
-  )
-
-  return {
-    aircraft: Array.from(aircraft).sort((a, b) => a.localeCompare(b)),
-    airports: Array.from(airports).sort(sortAirportCatalogCodes),
-    pilots: Array.from(pilots).sort((a, b) => a.localeCompare(b)),
-    categoryClass: Array.from(categoryClass).sort((a, b) => a.localeCompare(b)),
-    families,
-    familyToItems,
-    familyDisplayName,
-    totalAircraftItems,
-  }
-})
-
 // Tags that appear in the logbook (for sidebar filter)
 const catalogTags = computed(() => {
   const set = new Set<string>()
@@ -14251,6 +14878,8 @@ const catalogTags = computed(() => {
 
 // Classify route tokens (navaid vs airport) for catalog and filtering
 watchEffect(() => {
+  if (isCapacitorNative()) return
+
   const routeTokens = new Set<string>()
   logEntries.value
     .filter((entry) => inferLogbookType(entry) === activeLogbook.value)
@@ -14286,11 +14915,29 @@ watchEffect(() => {
 })
 
 // Lazy load airport names for display in catalog
-watchEffect(() => {
-  catalogs.value.airports.forEach((code) => {
-    void ensureAirportNameLoaded(code)
-  })
-})
+watch(
+  [
+    isCatalogDrawerOpen,
+    iosCatalogBuilt,
+    iosCatalogBuilding,
+    () => catalogOpenState.airports,
+    () => catalogSearchTerms.airports,
+    () => catalogs.value.airports.length,
+  ],
+  () => {
+    if (isCapacitorNative()) {
+      if (!isCatalogDrawerOpen.value || !iosCatalogBuilt.value || iosCatalogBuilding.value) return
+      if (!catalogOpenState.airports) return
+      const codes = getFilteredCatalogItems('airports').slice(0, 60)
+      enqueueAirportNamesForHydration(codes)
+      return
+    }
+
+    catalogs.value.airports.forEach((code) => {
+      void ensureAirportNameLoaded(code)
+    })
+  }
+)
 
 // Aircraft registry for Ident dropdown - unique registrations with their make/model
 function applyTailResolutionToEntry(entry: {
@@ -14691,7 +15338,28 @@ function getTopKey(record: Record<string, number>): string | null {
   return entries[0]?.[0] ?? null
 }
 
-const pilotProfileStats = computed<PilotProfileStats>(() => {
+function createEmptyPilotProfileStats(): PilotProfileStats {
+  return {
+    totalFlights: 0,
+    totalHours: 0,
+    picHours: 0,
+    nightHours: 0,
+    instrumentHours: 0,
+    airportsVisited: 0,
+    avgDuration: 0,
+    favoriteAircraft: null,
+    favoriteRoute: null,
+    conditions: [],
+    lastFlight: null,
+    dayLandings: 0,
+    nightLandings: 0,
+    longestLeg: null,
+  }
+}
+
+const cachedPilotProfileStats = shallowRef<PilotProfileStats>(createEmptyPilotProfileStats())
+
+function computePilotProfileStats(): PilotProfileStats {
   const stats: PilotProfileStats = {
     totalFlights: logEntries.value.length,
     totalHours: 0,
@@ -14706,7 +15374,7 @@ const pilotProfileStats = computed<PilotProfileStats>(() => {
     lastFlight: null,
     dayLandings: 0,
     nightLandings: 0,
-    longestLeg: null
+    longestLeg: null,
   }
 
   if (logEntries.value.length === 0) {
@@ -14760,7 +15428,7 @@ const pilotProfileStats = computed<PilotProfileStats>(() => {
       stats.longestLeg = {
         route: routeLabel,
         duration: total,
-        date: entry.date
+        date: entry.date,
       }
     }
   })
@@ -14769,21 +15437,32 @@ const pilotProfileStats = computed<PilotProfileStats>(() => {
   stats.avgDuration = stats.totalFlights > 0 ? stats.totalHours / stats.totalFlights : 0
   stats.favoriteAircraft = getTopKey(familyCounts)
   stats.favoriteRoute = getTopKey(routeCounts)
-  // Create a map of label to index for fixed ordering
   const conditionOrderMap = new Map<string, number>(
     activeConditionOptions.value.map((opt, index) => [opt.label, index])
   )
-  
+
   stats.conditions = Object.entries(conditionCounts)
-    .filter(([label, count]) => count > 0) // Only include conditions with counts > 0
+    .filter(([, count]) => count > 0)
     .sort((a, b) => {
       const orderA = conditionOrderMap.get(a[0]) ?? Infinity
       const orderB = conditionOrderMap.get(b[0]) ?? Infinity
-      return orderA - orderB // Sort by fixed order from activeConditionOptions
+      return orderA - orderB
     })
     .map(([label, count]) => ({ label, count }))
 
   return stats
+}
+
+function refreshPilotProfileStatsCache(): void {
+  cachedPilotProfileStats.value = computePilotProfileStats()
+}
+
+const pilotProfileStats = computed(() => cachedPilotProfileStats.value)
+
+watch(isBulkLoadInProgress, (inProgress, wasInProgress) => {
+  if (wasInProgress && !inProgress) {
+    refreshPilotProfileStatsCache()
+  }
 })
 
 const pilotStatCards = computed(() => {

@@ -140,4 +140,23 @@ describe('mergeRemoteLogEntries', () => {
     expect(result.removedEntryIds).toEqual(['a'])
     expect(result.mergedEntries.map((e) => e.id)).toEqual(['b'])
   })
+
+  it('keeps synced locals missing from partial remote when reconcileRemoteDeletes is false', () => {
+    const localEntries = Array.from({ length: 5 }, (_, i) => ({
+      entry: buildEntry(`local-${i}`),
+      synced: true,
+    }))
+    const remoteEntries = [buildEntry('local-0', { remarks: 'updated' })]
+
+    const result = mergeRemoteLogEntries({
+      localEntries,
+      remoteEntries,
+      syncQueue: [],
+      reconcileRemoteDeletes: false,
+    })
+
+    expect(result.removedEntryIds).toEqual([])
+    expect(result.mergedEntries).toHaveLength(5)
+    expect(result.mergedEntries.find((e) => e.id === 'local-0')?.remarks).toBe('updated')
+  })
 })

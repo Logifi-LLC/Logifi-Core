@@ -46,6 +46,9 @@ export default defineNuxtConfig({
   /** FC View OAuth requires https:// redirect URIs; use mkcert + NUXT_DEV_HTTPS_* (see env.example). */
   devServer: devHttps ? { https: devHttps } : undefined,
   modules: ['@nuxt/icon'],
+  icon: {
+    serverBundle: false,
+  },
   vite: {
     plugins: [
       tailwindcss(),
@@ -59,6 +62,8 @@ export default defineNuxtConfig({
     public: {
       supabaseUrl: process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
       supabaseAnonKey: process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY,
+      /** Production API base for Capacitor static builds (Digifi, FC View, lookups). */
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || '',
       /** `off` | `beta` | `coming_soon` — see useFcvUiLabel (integrations page + Settings connect UI only). */
       fcvUiLabel: process.env.NUXT_PUBLIC_FCV_UI_LABEL || 'off',
       /** Lightning / LNURL-pay / Lightning address shown on /developers (Open Source donation). */

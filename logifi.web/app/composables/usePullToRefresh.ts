@@ -1,4 +1,4 @@
-import { ref, onMounted, onUnmounted, type ComputedRef, type Ref } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, type ComputedRef, type Ref } from 'vue'
 import { isCapacitorIos } from '~/composables/useCapacitorPlatform'
 
 const PULL_THRESHOLD = 70
@@ -18,6 +18,7 @@ export function usePullToRefresh(options: PullToRefreshOptions) {
   let touchStartY = 0
   let touchStartX = 0
   let tracking = false
+  let touchTarget: HTMLElement | Document | null = null
 
   function getScrollTop(): number {
     if (typeof window === 'undefined') return 0
@@ -96,22 +97,26 @@ export function usePullToRefresh(options: PullToRefreshOptions) {
     }
   }
 
-  onMounted(() => {
+  onMounted(async () => {
     if (!isCapacitorIos()) return
 
-    document.addEventListener('touchstart', onTouchStart, { passive: true })
-    document.addEventListener('touchmove', onTouchMove, { passive: false })
-    document.addEventListener('touchend', onTouchEnd, { passive: true })
-    document.addEventListener('touchcancel', onTouchEnd, { passive: true })
+    await nextTick()
+    touchTarget = options.scrollContainerRef?.value ?? document
+
+    touchTarget.addEventListener('touchstart', onTouchStart, { passive: true })
+    touchTarget.addEventListener('touchmove', onTouchMove, { passive: false })
+    touchTarget.addEventListener('touchend', onTouchEnd, { passive: true })
+    touchTarget.addEventListener('touchcancel', onTouchEnd, { passive: true })
   })
 
   onUnmounted(() => {
-    if (!isCapacitorIos()) return
+    if (!isCapacitorIos() || !touchTarget) return
 
-    document.removeEventListener('touchstart', onTouchStart)
-    document.removeEventListener('touchmove', onTouchMove)
-    document.removeEventListener('touchend', onTouchEnd)
-    document.removeEventListener('touchcancel', onTouchEnd)
+    touchTarget.removeEventListener('touchstart', onTouchStart)
+    touchTarget.removeEventListener('touchmove', onTouchMove)
+    touchTarget.removeEventListener('touchend', onTouchEnd)
+    touchTarget.removeEventListener('touchcancel', onTouchEnd)
+    touchTarget = null
   })
 
   return {

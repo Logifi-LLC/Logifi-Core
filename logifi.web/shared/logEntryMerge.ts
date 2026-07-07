@@ -39,8 +39,11 @@ export function mergeRemoteLogEntries(options: {
   localEntries: LocalLogEntryWithSync[]
   remoteEntries: LogEntry[]
   syncQueue: SyncQueueItemLike[]
+  /** When false, keep synced locals missing from a partial remote snapshot (progressive fetch). */
+  reconcileRemoteDeletes?: boolean
 }): MergeRemoteLogEntriesResult {
   const { localEntries, remoteEntries, syncQueue } = options
+  const reconcileRemoteDeletes = options.reconcileRemoteDeletes ?? true
   const remoteIds = new Set(remoteEntries.map((entry) => entry.id))
   const pendingInsertIds = new Set(
     syncQueue.filter((item) => item.operation === 'insert').map((item) => item.entryId)
@@ -53,6 +56,11 @@ export function mergeRemoteLogEntries(options: {
     if (remoteIds.has(entry.id)) {
       const remote = remoteEntries.find((r) => r.id === entry.id)!
       entryMap.set(entry.id, shouldPreferRemoteEntry(entry, remote) ? remote : entry)
+      continue
+    }
+
+    if (!reconcileRemoteDeletes) {
+      entryMap.set(entry.id, entry)
       continue
     }
 
