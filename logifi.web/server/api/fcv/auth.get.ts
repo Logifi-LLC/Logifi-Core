@@ -1,4 +1,4 @@
-import { defineEventHandler, createError } from 'h3'
+import { defineEventHandler, createError, getQuery } from 'h3'
 import { getUserIdFromEvent } from '../../utils/supabase'
 import { createFcvState } from '../../utils/fcvState'
 import { getFcvIntegrationEnv } from '../../utils/fcvEnv'
@@ -43,7 +43,13 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const state = createFcvState(userId, secret)
+  // Native (Capacitor) clients pass `platform=ios`; the callback then returns via the
+  // io.logifi.app:// deep link instead of the web origin.
+  const query = getQuery(event)
+  const platform = typeof query.platform === 'string' ? query.platform.toLowerCase() : ''
+  const isNative = platform === 'ios' || platform === 'android' || query.native === '1'
+
+  const state = createFcvState(userId, secret, { native: isNative })
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,

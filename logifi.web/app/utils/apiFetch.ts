@@ -1,11 +1,17 @@
 import type { FetchOptions } from 'ofetch'
+import { isCapacitorNative } from '~/composables/useCapacitorPlatform'
 
 /**
- * Resolves `/api/*` paths to the production backend when `NUXT_PUBLIC_API_BASE` is set.
- * Required for Capacitor iOS builds (`nuxt generate` has no Nitro server in the bundle).
+ * Resolves `/api/*` paths to the remote backend (`NUXT_PUBLIC_API_BASE`) on the native
+ * Capacitor app, which has no bundled Nitro server (`nuxt generate`).
+ *
+ * In the browser — local dev and the deployed web app — the path is left relative so it hits
+ * whatever origin is serving the app. This avoids cross-origin calls (e.g. `pnpm dev` on
+ * localhost trying to reach the production domain).
  */
 export function resolveApiUrl(path: string): string {
   if (!path.startsWith('/api/')) return path
+  if (!isCapacitorNative()) return path
 
   try {
     const config = useRuntimeConfig()

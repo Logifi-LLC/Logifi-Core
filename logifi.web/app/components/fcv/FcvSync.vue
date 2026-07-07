@@ -4,6 +4,8 @@ import { useAuth } from '~/composables/useAuth'
 import { useFcvUiLabel } from '~/composables/useFcvUiLabel'
 import { useRoute } from 'vue-router'
 import FcvApiDisclaimers from '~/components/fcv/FcvApiDisclaimers.vue'
+import { apiFetch } from '~/utils/apiFetch'
+import { isCapacitorNative } from '~/composables/useCapacitorPlatform'
 import {
   buildFcvImportRequestPayload,
   countUnresolvedDuplicateActions,
@@ -268,7 +270,7 @@ async function checkStatus() {
   loadingStatus.value = true
   error.value = null
   try {
-    const data = await $fetch<{ connected: boolean }>('/api/fcv/status', {
+    const data = await apiFetch<{ connected: boolean }>('/api/fcv/status', {
       headers: authHeaders(),
     })
     connected.value = data.connected
@@ -283,10 +285,18 @@ async function checkStatus() {
 async function connectFcv() {
   error.value = null
   try {
-    const data = await $fetch<{ redirectUrl: string }>('/api/fcv/auth', {
+    const native = isCapacitorNative()
+    const data = await apiFetch<{ redirectUrl: string }>('/api/fcv/auth', {
       headers: authHeaders(),
+      query: native ? { platform: 'ios' } : undefined,
     })
-    if (data?.redirectUrl) {
+    if (!data?.redirectUrl) return
+    if (native) {
+      // Open OAuth in an in-app browser so the app's WebView stays alive; the server
+      // callback returns via the io.logifi.app:// deep link, which reopens the app.
+      const { Browser } = await import('@capacitor/browser')
+      await Browser.open({ url: data.redirectUrl })
+    } else {
       window.location.href = data.redirectUrl
     }
   } catch (e: unknown) {
@@ -311,7 +321,7 @@ async function disconnectFcv() {
   disconnecting.value = true
   error.value = null
   try {
-    await $fetch<{ success: boolean }>('/api/fcv/disconnect', {
+    await apiFetch<{ success: boolean }>('/api/fcv/disconnect', {
       method: 'POST',
       headers: authHeaders(),
     })
@@ -366,7 +376,7 @@ async function requestCheckDuplicates(flights: FcvMappedEntry[]): Promise<FcvDup
       syncingLogbook.value = false
     }
   }
-  return await $fetch<FcvDupCheckResponse>('/api/fcv/check-duplicates', {
+  return await apiFetch<FcvDupCheckResponse>('/api/fcv/check-duplicates', {
     method: 'POST',
     headers: {
       ...authHeaders(),
@@ -482,7 +492,7 @@ async function fetchFlights(opts?: { hideAlreadyImportedFromFcView?: boolean }) 
   previewFlights.value = []
   sinceLastEntryOmittedAlreadyImported.value = 0
   try {
-    const data = await $fetch<{ success: boolean; flights: FcvMappedEntry[]; count: number }>(
+    const data = await apiFetch<{ success: boolean; flights: FcvMappedEntry[]; count: number }>(
       '/api/fcv/fetch',
       {
         method: 'POST',
@@ -567,7 +577,7 @@ async function fetchSinceLastEntry() {
   loadingSinceLast.value = true
   error.value = null
   try {
-    const latest = await $fetch<{ date: string | null }>('/api/fcv/last-entry-date', {
+    const latest = await apiFetch<{ date: string | null }>('/api/fcv/last-entry-date', {
       headers: authHeaders(),
     })
     const today = new Date().toISOString().slice(0, 10)
@@ -629,7 +639,7 @@ async function confirmImport() {
       importBody.crewOverrideModes = crewOverrideModesPayload
     }
 
-    const result = await $fetch<{
+    const result = await apiFetch<{
       success: boolean
       import_batch_id?: string
       imported: number

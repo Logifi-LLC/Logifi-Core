@@ -5954,6 +5954,7 @@ import { useValidation } from '../composables/useValidation'
 import { useOffline } from '../composables/useOffline'
 import { useToast } from '../composables/useToast'
 import { withTimeout } from '../utils/promiseTimeout'
+import { apiFetch } from '../utils/apiFetch'
 import { useSyncQueue } from '../composables/useSyncQueue'
 import { useExport } from '../composables/useExport'
 import { logbookDataBridgeService } from '../../shared/logbookDataBridge'
@@ -6406,7 +6407,7 @@ async function refreshDashboardFcvStatus(): Promise<void> {
     return
   }
   try {
-    const data = await $fetch<{ connected: boolean }>('/api/fcv/status', {
+    const data = await apiFetch<{ connected: boolean }>('/api/fcv/status', {
       headers: { Authorization: `Bearer ${token}` },
     })
     dashboardFcvConnected.value = Boolean(data?.connected)

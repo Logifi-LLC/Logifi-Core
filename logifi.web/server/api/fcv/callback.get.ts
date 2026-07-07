@@ -58,14 +58,27 @@ function sendHtmlAutoRedirect(event: H3Event, targetUrl: string) {
 </html>`
 }
 
-const redirectWithFcvError = (event: any, reason: string) => {
+/**
+ * Custom URL scheme registered in the iOS app (Info.plist CFBundleURLSchemes) and mirrored in
+ * `app/utils/authRedirectOrigin.ts` (CAPACITOR_AUTH_SCHEME). Used to hand the OAuth result back to
+ * the native app after it opened FC View in an in-app browser.
+ */
+const FCV_APP_SCHEME = 'io.logifi.app'
+
+/** Build the post-OAuth return URL: native app deep link or web dashboard. */
+function buildFcvReturnUrl(event: H3Event, native: boolean, params: URLSearchParams): string {
+  const search = params.toString()
+  if (native) return `${FCV_APP_SCHEME}://dashboard?${search}`
   const appOrigin = getRequestURL(event).origin
-  const returnPath = '/dashboard'
+  return `${appOrigin}/dashboard?${search}`
+}
+
+const redirectWithFcvError = (event: H3Event, reason: string, native = false) => {
   const params = new URLSearchParams({
     fcv: 'error',
     reason,
   })
-  return sendHtmlAutoRedirect(event, `${appOrigin}${returnPath}?${params.toString()}`)
+  return sendHtmlAutoRedirect(event, buildFcvReturnUrl(event, native, params))
 }
 
 /**
@@ -79,11 +92,6 @@ export default defineEventHandler(async (event) => {
   const providerError = query.error as string | undefined
   const providerErrorDescription = query.error_description as string | undefined
 
-  if (providerError) {
-    const reason = clean(providerErrorDescription) || clean(providerError) || 'Authorization was denied by FC View.'
-    return redirectWithFcvError(event, reason)
-  }
-
   const config = useRuntimeConfig()
   const fcv = getFcvIntegrationEnv(event)
   const secret = fcv.clientSecret
@@ -96,6 +104,15 @@ export default defineEventHandler(async (event) => {
     process.env.SUPABASE_SERVICE_ROLE_KEY || config.supabaseServiceRoleKey
   )
 
+  // Best-effort platform detection so even early error redirects return to the native app.
+  const verifiedState = state && secret ? verifyFcvState(state, secret) : null
+  const native = verifiedState?.native ?? false
+
+  if (providerError) {
+    const reason = clean(providerErrorDescription) || clean(providerError) || 'Authorization was denied by FC View.'
+    return redirectWithFcvError(event, reason, native)
+  }
+
   if (!code || !state) {
     console.error('[fcv/callback] Missing OAuth query params', {
       hasCode: Boolean(code),
@@ -103,7 +120,8 @@ export default defineEventHandler(async (event) => {
     })
     return redirectWithFcvError(
       event,
-      'Authorization response was incomplete. Please try Connect FC View again.'
+      'Authorization response was incomplete. Please try Connect FC View again.',
+      native
     )
   }
 
@@ -116,14 +134,19 @@ export default defineEventHandler(async (event) => {
     })
     return redirectWithFcvError(
       event,
-      'This deployment is missing FC View integration settings (including token endpoint). Check environment variables for Preview deployments and redeploy.'
+      'This deployment is missing FC View integration settings (including token endpoint). Check environment variables for Preview deployments and redeploy.',
+      native
     )
   }
 
-  const userId = verifyFcvState(state, secret)
-  if (!userId) {
-    return redirectWithFcvError(event, 'Invalid FC View callback state. Please try connecting again.')
+  if (!verifiedState) {
+    return redirectWithFcvError(
+      event,
+      'Invalid FC View callback state. Please try connecting again.',
+      native
+    )
   }
+  const userId = verifiedState.userId
 
   const tokenRes = await fetchFcvWithRetry(tokenUrl, {
     logLabel: 'FC View token exchange',
@@ -145,7 +168,8 @@ export default defineEventHandler(async (event) => {
     console.error('FC View token exchange failed:', tokenRes.status, errText)
     return redirectWithFcvError(
       event,
-      'FC View rejected the authorization request for this client account.'
+      'FC View rejected the authorization request for this client account.',
+      native
     )
   }
 
@@ -160,7 +184,8 @@ export default defineEventHandler(async (event) => {
   if (!serviceRoleKey) {
     return redirectWithFcvError(
       event,
-      'Server configuration is incomplete for FC View integration.'
+      'Server configuration is incomplete for FC View integration.',
+      native
     )
   }
 
@@ -184,11 +209,13 @@ export default defineEventHandler(async (event) => {
 
   if (upsertError) {
     console.error('fcv_integrations upsert failed:', upsertError)
-    return redirectWithFcvError(event, 'Connected to FC View but failed to save integration.')
+    return redirectWithFcvError(
+      event,
+      'Connected to FC View but failed to save integration.',
+      native
+    )
   }
 
-  const appOrigin = getRequestURL(event).origin
-  const returnPath = '/dashboard'
-  const redirectTo = `${appOrigin}${returnPath}?fcv=connected`
+  const redirectTo = buildFcvReturnUrl(event, native, new URLSearchParams({ fcv: 'connected' }))
   return sendHtmlAutoRedirect(event, redirectTo)
 })

@@ -24,14 +24,35 @@ function isAuthRoute(path: string): boolean {
   return path.includes('/auth/callback') || path.includes('/reset-password')
 }
 
+/** FC View OAuth return (io.logifi.app://dashboard?fcv=connected|error). */
+function isFcvReturn(path: string): boolean {
+  return /[?&]fcv=/.test(path)
+}
+
+/** The FC View OAuth flow runs in an in-app browser; close it once we return. */
+async function closeInAppBrowser() {
+  try {
+    const { Browser } = await import('@capacitor/browser')
+    await Browser.close()
+  } catch {
+    // Browser plugin not present or nothing open — safe to ignore.
+  }
+}
+
 export default defineNuxtPlugin(() => {
   if (!isCapacitorNative()) return
 
   const router = useRouter()
 
-  const navigateToAuthPath = (path: string) => {
-    if (!isAuthRoute(path)) return
-    void router.replace(path)
+  const handleDeepLink = (path: string) => {
+    if (isFcvReturn(path)) {
+      void closeInAppBrowser()
+      void router.replace(path)
+      return
+    }
+    if (isAuthRoute(path)) {
+      void router.replace(path)
+    }
   }
 
   void (async () => {
@@ -40,13 +61,13 @@ export default defineNuxtPlugin(() => {
 
       await App.addListener('appUrlOpen', (event) => {
         const path = pathFromDeepLink(event.url)
-        if (path) navigateToAuthPath(path)
+        if (path) handleDeepLink(path)
       })
 
       const launch = await App.getLaunchUrl()
       if (launch?.url) {
         const path = pathFromDeepLink(launch.url)
-        if (path) navigateToAuthPath(path)
+        if (path) handleDeepLink(path)
       }
     } catch (error) {
       console.warn('[capacitor-auth-deeplink] App plugin unavailable:', error)
