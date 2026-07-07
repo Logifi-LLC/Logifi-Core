@@ -111,6 +111,7 @@
       :queue-length="queueLength"
       :is-drag-over="isDragOverImport"
       :entry-count="entryCount"
+      :fcv-connected="fcvConnected"
       @retry-sync="$emit('retry-sync')"
       @sync-now="$emit('sync-now')"
       @import-dragover="$emit('import-dragover')"
@@ -120,6 +121,7 @@
       @import-file="$emit('import-file', $event)"
       @export-logbook="$emit('export-logbook')"
       @generate-8710="$emit('generate-8710')"
+      @import-fcv="$emit('import-fcv')"
       @close="$emit('close')"
     />
 
@@ -184,6 +186,7 @@ const props = defineProps<{
   isDragOverImport: boolean
   entryCount: number
   updatesBadge?: string
+  fcvConnected?: boolean
 }>()
 
 const profileSubTabModel = defineModel<'profile' | 'stats'>('profileSubTab', { required: true })
@@ -221,6 +224,7 @@ defineEmits<{
   'import-file': [file: File]
   'export-logbook': []
   'generate-8710': []
+  'import-fcv': []
 }>()
 
 const currentFrame = computed(() => props.stack[props.stack.length - 1] ?? 'root')

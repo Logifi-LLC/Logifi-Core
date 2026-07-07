@@ -24,11 +24,14 @@ const props = withDefaults(
     beforeDuplicateCheck?: () => Promise<void>
     /** Unsynced entries on this device; shown as a warning before FC View import. */
     pendingSyncCount?: number
+    /** Mobile / iOS sheet: primary "Import new flights" CTA, collapsible date range, fullscreen preview. */
+    compact?: boolean
   }>(),
   {
     mode: 'full',
     showRolloutLabel: false,
     pendingSyncCount: 0,
+    compact: false,
   }
 )
 const emit = defineEmits<{
@@ -112,6 +115,7 @@ const dateFrom = ref('')
 const dateTo = ref('')
 const includeDeadheads = ref(false)
 const includeScheduled = ref(false)
+const showAdvancedDateRange = ref(false)
 
 const previewFlights = ref<FcvMappedEntry[]>([])
 const showPreviewModal = ref(false)
@@ -809,6 +813,7 @@ const importCount = computed(() => flightsToImport.value.length)
 
 const isConnectOnly = computed(() => props.mode === 'connect')
 const isFetchOnly = computed(() => props.mode === 'fetch')
+const isCompactFetch = computed(() => props.compact && isFetchOnly.value)
 const showConnectCta = computed(() => !isFetchOnly.value && !connected.value)
 const showFetchControls = computed(() => !isConnectOnly.value && connected.value)
 const showConnectManage = computed(() => isConnectOnly.value && connected.value)
@@ -962,11 +967,29 @@ const inputClass = computed(() =>
       : 'bg-white border-gray-200 text-gray-900',
   ].join(' ')
 )
+
+const previewModalShellClass = computed(() =>
+  props.compact
+    ? [
+        'relative flex h-full w-full flex-col overflow-hidden font-quicksand',
+        props.isDarkMode ? 'bg-gray-900' : 'bg-white',
+      ].join(' ')
+    : [
+        'relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl border shadow-xl overflow-hidden font-quicksand',
+        props.isDarkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200',
+      ].join(' ')
+)
+
+const previewModalOverlayClass = computed(() =>
+  props.compact
+    ? 'app-modal-overlay flex flex-col'
+    : 'app-modal-overlay flex items-center justify-center p-4'
+)
 </script>
 
 <template>
   <div class="space-y-4 font-quicksand" :class="$attrs.class">
-    <div class="space-y-1.5">
+    <div v-if="!isCompactFetch" class="space-y-1.5">
       <div class="flex flex-wrap items-center gap-2">
         <h4
           :class="[
@@ -1010,57 +1033,159 @@ const inputClass = computed(() =>
       </div>
     </template>
     <template v-else-if="showFetchControls">
-      <p :class="['text-sm mb-4', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+      <p
+        v-if="!isCompactFetch"
+        :class="['text-sm mb-4', isDarkMode ? 'text-gray-400' : 'text-gray-600']"
+      >
         Choose a date range and fetch flights to preview before importing.
       </p>
       <div class="space-y-4">
-        <div class="flex flex-wrap items-center gap-4">
-          <label
-            :class="[
-              'flex items-center gap-2 text-sm font-medium',
-              isDarkMode ? 'text-gray-300' : 'text-gray-700',
-            ]"
+        <template v-if="isCompactFetch">
+          <button
+            type="button"
+            :class="[btnConnectFcvClass, 'w-full']"
+            :disabled="loadingFetch || loadingSinceLast || syncingLogbook"
+            @click="fetchSinceLastEntry"
           >
-            <span>From</span>
-            <input v-model="dateFrom" type="date" :class="inputClass" />
-          </label>
-          <label
+            <Icon name="ri:download-cloud-2-line" size="18" />
+            {{
+              loadingSinceLast
+                ? syncingLogbook
+                  ? 'Syncing logbook…'
+                  : 'Loading flights…'
+                : 'Import new flights'
+            }}
+          </button>
+          <button
+            type="button"
             :class="[
-              'flex items-center gap-2 text-sm font-medium',
-              isDarkMode ? 'text-gray-300' : 'text-gray-700',
+              'w-full text-sm font-medium font-quicksand text-left transition-colors',
+              isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-700 hover:text-blue-800',
             ]"
+            @click="showAdvancedDateRange = !showAdvancedDateRange"
           >
-            <span>To</span>
-            <input v-model="dateTo" type="date" :class="inputClass" />
-          </label>
-        </div>
-        <div class="space-y-2.5">
-          <label
-            :class="[
-              'flex items-center gap-2.5 text-sm cursor-pointer hover:opacity-80 transition-opacity',
-              isDarkMode ? 'text-gray-300' : 'text-gray-700',
-            ]"
+            {{ showAdvancedDateRange ? 'Hide date range options' : 'Choose date range…' }}
+          </button>
+        </template>
+        <div v-if="!isCompactFetch || showAdvancedDateRange" class="space-y-4">
+          <div
+            v-if="isCompactFetch"
+            :class="['rounded-xl border p-4 space-y-4', isDarkMode ? 'border-gray-700 bg-gray-800/40' : 'border-gray-200 bg-gray-50']"
           >
-            <input
-              v-model="includeDeadheads"
-              type="checkbox"
-              :class="['rounded text-blue-600 focus:ring-blue-500', isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300']"
-            />
-            <span>Include deadheads</span>
-          </label>
-          <label
-            :class="[
-              'flex items-center gap-2.5 text-sm cursor-pointer hover:opacity-80 transition-opacity',
-              isDarkMode ? 'text-gray-300' : 'text-gray-700',
-            ]"
-          >
-            <input
-              v-model="includeScheduled"
-              type="checkbox"
-              :class="['rounded text-blue-600 focus:ring-blue-500', isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300']"
-            />
-            <span>Include scheduled (not yet departed) flights</span>
-          </label>
+            <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+              <label
+                :class="[
+                  'flex items-center gap-2 text-sm font-medium',
+                  isDarkMode ? 'text-gray-300' : 'text-gray-700',
+                ]"
+              >
+                <span class="shrink-0 w-10">From</span>
+                <input v-model="dateFrom" type="date" :class="[inputClass, 'flex-1 min-w-0']" />
+              </label>
+              <label
+                :class="[
+                  'flex items-center gap-2 text-sm font-medium',
+                  isDarkMode ? 'text-gray-300' : 'text-gray-700',
+                ]"
+              >
+                <span class="shrink-0 w-10">To</span>
+                <input v-model="dateTo" type="date" :class="[inputClass, 'flex-1 min-w-0']" />
+              </label>
+            </div>
+            <div class="space-y-2.5">
+              <label
+                :class="[
+                  'flex items-center gap-2.5 text-sm cursor-pointer hover:opacity-80 transition-opacity',
+                  isDarkMode ? 'text-gray-300' : 'text-gray-700',
+                ]"
+              >
+                <input
+                  v-model="includeDeadheads"
+                  type="checkbox"
+                  :class="['rounded text-blue-600 focus:ring-blue-500', isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300']"
+                />
+                <span>Include deadheads</span>
+              </label>
+              <label
+                :class="[
+                  'flex items-center gap-2.5 text-sm cursor-pointer hover:opacity-80 transition-opacity',
+                  isDarkMode ? 'text-gray-300' : 'text-gray-700',
+                ]"
+              >
+                <input
+                  v-model="includeScheduled"
+                  type="checkbox"
+                  :class="['rounded text-blue-600 focus:ring-blue-500', isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300']"
+                />
+                <span>Include scheduled (not yet departed) flights</span>
+              </label>
+            </div>
+            <button
+              type="button"
+              :class="[btnOutlineClass, 'w-full']"
+              :disabled="loadingFetch || loadingSinceLast || syncingLogbook"
+              @click="fetchFlights"
+            >
+              <Icon name="ri:calendar-line" size="18" />
+              {{
+                loadingFetch
+                  ? syncingLogbook
+                    ? 'Syncing logbook…'
+                    : 'Fetching…'
+                  : 'Fetch flights for range'
+              }}
+            </button>
+          </div>
+          <template v-if="!isCompactFetch">
+            <div class="flex flex-wrap items-center gap-4">
+              <label
+                :class="[
+                  'flex items-center gap-2 text-sm font-medium',
+                  isDarkMode ? 'text-gray-300' : 'text-gray-700',
+                ]"
+              >
+                <span>From</span>
+                <input v-model="dateFrom" type="date" :class="inputClass" />
+              </label>
+              <label
+                :class="[
+                  'flex items-center gap-2 text-sm font-medium',
+                  isDarkMode ? 'text-gray-300' : 'text-gray-700',
+                ]"
+              >
+                <span>To</span>
+                <input v-model="dateTo" type="date" :class="inputClass" />
+              </label>
+            </div>
+            <div class="space-y-2.5">
+              <label
+                :class="[
+                  'flex items-center gap-2.5 text-sm cursor-pointer hover:opacity-80 transition-opacity',
+                  isDarkMode ? 'text-gray-300' : 'text-gray-700',
+                ]"
+              >
+                <input
+                  v-model="includeDeadheads"
+                  type="checkbox"
+                  :class="['rounded text-blue-600 focus:ring-blue-500', isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300']"
+                />
+                <span>Include deadheads</span>
+              </label>
+              <label
+                :class="[
+                  'flex items-center gap-2.5 text-sm cursor-pointer hover:opacity-80 transition-opacity',
+                  isDarkMode ? 'text-gray-300' : 'text-gray-700',
+                ]"
+              >
+                <input
+                  v-model="includeScheduled"
+                  type="checkbox"
+                  :class="['rounded text-blue-600 focus:ring-blue-500', isDarkMode ? 'border-gray-600 bg-gray-800' : 'border-gray-300']"
+                />
+                <span>Include scheduled (not yet departed) flights</span>
+              </label>
+            </div>
+          </template>
         </div>
         <p
           v-if="pendingSyncCount > 0"
@@ -1071,7 +1196,7 @@ const inputClass = computed(() =>
           other device and wait for sync before importing, or duplicates logged elsewhere may not be
           detected.
         </p>
-        <div class="flex flex-wrap items-center gap-3 pt-2">
+        <div v-if="!isCompactFetch" class="flex flex-wrap items-center gap-3 pt-2">
           <button
             type="button"
             :class="btnOutlineClass"
@@ -1136,21 +1261,18 @@ const inputClass = computed(() =>
     <Teleport to="body">
     <div
       v-if="showPreviewModal"
-      class="app-modal-overlay flex items-center justify-center p-4"
+      :class="previewModalOverlayClass"
     >
       <div
+        v-if="!compact"
         class="absolute inset-0 bg-black/60 backdrop-blur-sm"
         @click="closePreview"
       />
-      <div
-        :class="[
-          'relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl border shadow-xl overflow-hidden font-quicksand',
-          isDarkMode ? 'bg-gray-900 border-gray-700' : 'bg-white border-gray-200',
-        ]"
-      >
+      <div :class="previewModalShellClass">
         <div
           :class="[
-            'p-4 border-b flex items-center justify-between',
+            'p-4 border-b flex items-center justify-between shrink-0',
+            compact ? 'pt-[max(1rem,env(safe-area-inset-top))]' : '',
             isDarkMode ? 'border-gray-700' : 'border-gray-200',
           ]"
         >
@@ -1598,7 +1720,8 @@ const inputClass = computed(() =>
         </div>
         <div
           :class="[
-            'p-4 border-t flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between',
+            'p-4 border-t flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shrink-0',
+            compact ? 'pb-[max(1rem,env(safe-area-inset-bottom))]' : '',
             isDarkMode ? 'border-gray-700' : 'border-gray-200',
           ]"
         >

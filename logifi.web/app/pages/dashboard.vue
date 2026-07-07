@@ -284,25 +284,6 @@
           >
             Feedback
           </NuxtLink>
-          <template v-if="dashboardFcvConnected">
-            <button
-              type="button"
-              class="hidden sm:inline-flex items-center text-xs sm:text-sm font-medium font-quicksand transition-colors mr-2"
-              :class="[
-                isDarkMode
-                  ? 'text-gray-300 hover:text-blue-400'
-                  : 'text-gray-600 hover:text-blue-600'
-              ]"
-              aria-label="Open FC View fetch section"
-              @click="openFcvFetchSection"
-            >
-              FC View Fetch
-            </button>
-            <div
-              class="h-4 w-px bg-gray-200"
-              :class="isDarkMode ? 'bg-gray-700' : 'bg-gray-200'"
-            ></div>
-          </template>
           <button
             type="button"
             @click="openSettings()"
@@ -331,7 +312,7 @@
       ]"
     >
       <section
-        v-show="showFcvFetchPanel && dashboardFcvConnected"
+        v-show="showFcvFetchPanel && dashboardFcvConnected && !isIos"
         ref="fcvFetchSectionRef"
         :class="[
           'mr-auto mb-8 w-full rounded-2xl border p-4 sm:p-6 space-y-4',
@@ -353,7 +334,7 @@
               'inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-quicksand font-medium transition-colors',
               isDarkMode ? 'bg-gray-800 text-gray-300 hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             ]"
-            @click="showFcvFetchPanel = false"
+            @click="closeFcvFetchUi"
           >
             Close
           </button>
@@ -384,6 +365,53 @@
           </p>
         </div>
       </section>
+
+      <!-- iOS: fullscreen FC View import sheet -->
+      <Teleport to="body">
+        <Transition name="fade">
+          <div
+            v-if="isIos && showFcvFetchPanel && dashboardFcvConnected"
+            class="fixed inset-0 z-[65] flex flex-col font-quicksand"
+            :class="isDarkMode ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'"
+          >
+            <header
+              class="shrink-0 border-b px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]"
+              :class="isDarkMode ? 'border-gray-800 bg-gray-900/95' : 'border-gray-200 bg-gray-50/95'"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <h2 class="text-base font-semibold font-quicksand">Import from FC View</h2>
+                <button
+                  type="button"
+                  class="rounded-lg px-2 py-1.5 text-sm font-semibold font-quicksand transition-colors"
+                  :class="isDarkMode ? 'text-blue-400 hover:bg-gray-800' : 'text-blue-600 hover:bg-gray-200'"
+                  @click="closeFcvFetchUi"
+                >
+                  Done
+                </button>
+              </div>
+              <p
+                :class="['text-xs mt-1 font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-600']"
+              >
+                Pull new flights into your logbook. Review before importing.
+              </p>
+            </header>
+            <div
+              class="flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-4"
+            >
+              <FcvApiDisclaimers :is-dark-mode="isDarkMode" tone="dashboard" />
+              <FcvSync
+                mode="fetch"
+                compact
+                :is-dark-mode="isDarkMode"
+                :before-duplicate-check="prepareLogbookForFcvImport"
+                :pending-sync-count="queueLength"
+                @imported="handleFcvImported"
+              />
+            </div>
+          </div>
+        </Transition>
+      </Teleport>
+
       <div class="mr-auto w-full max-w-full flex flex-col gap-10 lg:flex-row">
         <Teleport to="body" :disabled="!isIos">
           <Transition name="fade">
@@ -859,6 +887,21 @@
                         Sim
                       </button>
                     </div>
+                    <button
+                      v-if="dashboardFcvConnected"
+                      type="button"
+                      :class="[
+                        'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-quicksand font-medium transition-colors border',
+                        isDarkMode
+                          ? 'border-blue-500/40 bg-blue-600/15 text-blue-300 hover:bg-blue-600/30'
+                          : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100',
+                      ]"
+                      aria-label="Import from FC View"
+                      @click="openFcvFetchSection"
+                    >
+                      <Icon name="ri:download-cloud-2-line" size="16" class="shrink-0" />
+                      FC View
+                    </button>
                   </div>
                   <div class="flex flex-wrap items-center gap-2">
                     <button
@@ -3619,6 +3662,7 @@
       :queue-length="queueLength"
       :is-drag-over-import="isDragOverImport"
       :entry-count="logEntries.length"
+      :fcv-connected="dashboardFcvConnected"
       @close="closeSettings"
       @logout="handleLogout"
       @pop="popSettingsFrame"
@@ -3651,6 +3695,7 @@
       @import-file="handleSettingsImportFile"
       @export-logbook="openExportDialog"
       @generate-8710="showForm8710Modal = true"
+      @import-fcv="handleOpenFcvImportFromSettings"
     />
 
     <input
@@ -6395,6 +6440,7 @@ const route = useRoute()
 /** Header “FC View Fetch” only when FC View OAuth is connected (see `/api/fcv/status`). */
 const dashboardFcvConnected = ref(false)
 const showFcvFetchPanel = ref(false)
+const fcvImportPromptHandled = ref(false)
 
 async function refreshDashboardFcvStatus(): Promise<void> {
   if (!isAuthenticated.value) {
@@ -6530,18 +6576,25 @@ watch(isMigrating, (migrating, wasMigrating) => {
 })
 
 watch(
-  [() => route.query.fcv, isAuthenticated],
-  ([val, authed]) => {
-    // OAuth returns before client session may be hydrated; re-run when auth becomes ready.
-    if (val === 'connected' && authed) {
-      void refreshDashboardFcvStatus()
+  [() => route.query.fcv, isAuthenticated, () => session.value?.access_token],
+  async ([val, authed, token]) => {
+    if (val !== 'connected' || !authed || !token || fcvImportPromptHandled.value) return
+    await refreshDashboardFcvStatus()
+    if (!dashboardFcvConnected.value) return
+    fcvImportPromptHandled.value = true
+    if (isIos.value) {
+      closeSettings()
+      await openFcvFetchSection()
     }
   },
   { immediate: true }
 )
 
 watch(dashboardFcvConnected, (c) => {
-  if (!c) showFcvFetchPanel.value = false
+  if (!c) {
+    showFcvFetchPanel.value = false
+    fcvImportPromptHandled.value = false
+  }
 })
 
 // Show auth modal if not authenticated after loading
@@ -7408,8 +7461,18 @@ const scrollToTop = (): void => {
 
 const openFcvFetchSection = async (): Promise<void> => {
   showFcvFetchPanel.value = true
+  if (isIos.value) return
   await nextTick()
   fcvFetchSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function closeFcvFetchUi(): void {
+  showFcvFetchPanel.value = false
+}
+
+function handleOpenFcvImportFromSettings(): void {
+  closeSettings()
+  void openFcvFetchSection()
 }
 const isInlineCommercialMode = ref(false)
 const editingEntryId = ref<string | null>(null)
@@ -14367,8 +14430,7 @@ async function handleFcvImported(payload: {
   skipped: number
   importBatchId?: string
 }): Promise<void> {
-  // Auto-close the dashboard fetch panel once FC View import completes.
-  showFcvFetchPanel.value = false
+  closeFcvFetchUi()
   await loadEntries({ mode: 'full' })
   const parts: string[] = []
   if (payload.imported > 0) {
@@ -14380,10 +14442,14 @@ async function handleFcvImported(payload: {
   if (payload.skipped > 0) {
     parts.push(`${payload.skipped} ${payload.skipped === 1 ? 'entry' : 'entries'} skipped`)
   }
-  fcvImportMessage.value =
+  const summary =
     parts.length > 0
       ? `FC View import complete: ${parts.join(', ')}.`
       : 'FC View import complete.'
+  fcvImportMessage.value = summary
+  if (isIos.value) {
+    showToast(summary, 5000)
+  }
 }
 
 async function enrichFcvNightDataForDisplay(): Promise<void> {

@@ -87,6 +87,30 @@ describe('FcvSync preview flight number', () => {
   })
 })
 
+describe('FcvSync compact fetch', () => {
+  it('shows the primary Import new flights action in compact mode', async () => {
+    const wrapper = mount(FcvSync, {
+      props: {
+        isDarkMode: false,
+        mode: 'fetch',
+        compact: true,
+      },
+      global: {
+        stubs: {
+          Icon: true,
+          FcvApiDisclaimers: true,
+          Teleport: true,
+        },
+      },
+    })
+    const setupState = (wrapper.vm as { $: { setupState: Record<string, unknown> } }).$.setupState
+    setupState.connected = true
+    await nextTick()
+    expect(wrapper.text()).toContain('Import new flights')
+    expect(wrapper.text()).toContain('Choose date range…')
+  })
+})
+
 describe('FcvSync row selection', () => {
   it('importCount reflects selected rows only', async () => {
     const wrapper = mountFcvSync()

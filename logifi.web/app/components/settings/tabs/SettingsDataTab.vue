@@ -122,6 +122,14 @@
 
     <SettingsListGroup title="Integrations" :is-dark-mode="isDarkMode">
       <SettingsListRow
+        v-if="fcvConnected"
+        label="Import from FC View"
+        subtitle="Pull new flights into logbook"
+        icon="ri:download-cloud-2-line"
+        :is-dark-mode="isDarkMode"
+        @click="$emit('import-fcv')"
+      />
+      <SettingsListRow
         label="Data sources"
         subtitle="Third-party APIs"
         icon="ri:links-line"
@@ -170,6 +178,7 @@ const props = defineProps<{
   queueLength: number
   isDragOver: boolean
   entryCount: number
+  fcvConnected?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -182,6 +191,7 @@ const emit = defineEmits<{
   'import-file': [file: File]
   'export-logbook': []
   'generate-8710': []
+  'import-fcv': []
   close: []
 }>()
 
