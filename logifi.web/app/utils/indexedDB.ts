@@ -468,6 +468,7 @@ export async function setLastSyncTimestamp(timestamp: number): Promise<void> {
 }
 
 export const METADATA_LAST_SUCCESSFUL_REMOTE_SYNC = 'lastSuccessfulRemoteSyncAt'
+export const METADATA_REMOTE_SYNC_WATERMARK = 'remoteSyncWatermark'
 
 export async function getLastSuccessfulRemoteSyncAt(): Promise<number | null> {
   return getMetadata(METADATA_LAST_SUCCESSFUL_REMOTE_SYNC)
@@ -475,6 +476,16 @@ export async function getLastSuccessfulRemoteSyncAt(): Promise<number | null> {
 
 export async function setLastSuccessfulRemoteSyncAt(timestamp: number): Promise<void> {
   return setMetadata(METADATA_LAST_SUCCESSFUL_REMOTE_SYNC, timestamp)
+}
+
+/** Max server `updated_at` (or tombstone `deleted_at`) from the last successful inbound sync. */
+export async function getRemoteSyncWatermark(): Promise<string | null> {
+  const value = await getMetadata(METADATA_REMOTE_SYNC_WATERMARK)
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
+export async function setRemoteSyncWatermark(iso: string): Promise<void> {
+  return setMetadata(METADATA_REMOTE_SYNC_WATERMARK, iso)
 }
 
 /**

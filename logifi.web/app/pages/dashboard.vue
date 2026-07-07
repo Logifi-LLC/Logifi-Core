@@ -6019,8 +6019,22 @@ import {
   migrateLegacyLocalData,
   getLastSuccessfulRemoteSyncAt,
   setLastSuccessfulRemoteSyncAt,
+  getRemoteSyncWatermark,
+  setRemoteSyncWatermark,
 } from '../utils/indexedDB'
 import { mergeRemoteLogEntries } from '../../shared/logEntryMerge'
+import {
+  applyTombstoneDeletions,
+  computeRemoteSyncWatermark,
+  DELTA_FALLBACK_THRESHOLD,
+  mergeWatermarks,
+  type LogEntryDeletionTombstone,
+} from '../../shared/logEntrySync'
+import {
+  fetchDeltaDeletions,
+  fetchDeltaLogEntries,
+  insertLogEntryTombstone,
+} from '../utils/logEntryInboundSync'
 
 // Browser check (must be defined early for watchers with immediate: true)
 const isBrowser = typeof window !== 'undefined'
@@ -6339,9 +6353,21 @@ let iosSyncSuccessTimer: ReturnType<typeof setTimeout> | null = null
 
 const IOS_ENTRIES_PAGE_SIZE = 50
 const CACHE_FRESH_MS = 5 * 60 * 1000
-const iosVisibleEntryCount = ref(IOS_ENTRIES_PAGE_SIZE)
+const LOG_ENTRIES_SIDE_EFFECT_DEBOUNCE_MS = 400
+const IOS_CATALOG_DEBOUNCE_MS = 400
 
-// Log entries - must be declared before any functions that use it
+type InboundSyncMode = 'auto' | 'delta' | 'full'
+
+interface LoadEntriesOptions {
+  mode?: InboundSyncMode
+  /** Skip inbound sync when a recent sync completed (resume/reconnect). */
+  skipIfFresh?: boolean
+}
+
+let logEntriesSideEffectTimer: ReturnType<typeof setTimeout> | null = null
+let iosCatalogDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
+const iosVisibleEntryCount = ref(IOS_ENTRIES_PAGE_SIZE)
 const logEntries = ref<LogEntry[]>([])
 
 const aircraftTailIndex = computed(() => buildAircraftTailIndex(logEntries.value))
@@ -6436,7 +6462,7 @@ async function onUserSessionReady(userId: string): Promise<void> {
     }
   }
 
-  await loadEntries()
+  await loadEntries({ mode: 'auto' })
 
   loadPilotProfilePrefs()
   loadSelectedTotalsMetrics()
@@ -6487,8 +6513,8 @@ watch(
     if (authed && token) {
       void refreshDashboardFcvStatus()
     }
-    if (authed && token && token !== prevToken && user.value?.id && !isMigrating.value) {
-      void loadEntries()
+    // Token refresh only drains the outbound queue — inbound delta is not needed.
+    if (authed && token && prevToken && token !== prevToken && user.value?.id && !isMigrating.value) {
       void reconcileSyncQueue(user.value.id)
       void processQueue({ silent: true })
     }
@@ -6498,7 +6524,7 @@ watch(
 
 watch(isMigrating, (migrating, wasMigrating) => {
   if (wasMigrating && !migrating && isAuthenticated.value && user.value?.id) {
-    void loadEntries()
+    void loadEntries({ mode: 'full' })
   }
 })
 
@@ -6553,7 +6579,7 @@ function handleAppResume(): void {
   void processQueue({ silent: true })
   if (!isOnline.value) return
   if (!isMigrating.value) {
-    void loadEntries()
+    void loadEntries({ mode: 'delta', skipIfFresh: true })
   }
 }
 
@@ -6586,7 +6612,7 @@ watch(isOnline, (online, wasOnline) => {
     void reconcileSyncQueue(user.value.id)
     void processQueue({ silent: true })
     if (!isMigrating.value) {
-      void loadEntries()
+      void loadEntries({ mode: 'delta' })
     }
   }
 })
@@ -11159,13 +11185,15 @@ const catalogs = computed<CatalogsValue>(() => {
 })
 
 watch(() => logEntries.value.length, () => {
-  if (isIos.value) {
+  if (!isIos.value) return
+  if (iosCatalogDebounceTimer) clearTimeout(iosCatalogDebounceTimer)
+  iosCatalogDebounceTimer = setTimeout(() => {
     refreshIosTailCatalogFamilyMap()
     invalidateIosCatalogCache()
     if (isCatalogDrawerOpen.value) {
       void scheduleIosCatalogBuild()
     }
-  }
+  }, IOS_CATALOG_DEBOUNCE_MS)
 })
 
 watch(activeLogbook, () => {
@@ -13451,6 +13479,10 @@ async function removeEntry(id: string): Promise<void> {
       .delete()
       .eq('id', supabaseId)
 
+    if (!error) {
+      await insertLogEntryTombstone(userId, supabaseId)
+    }
+
     if (error) {
       if (error.message?.includes('invalid input syntax for type uuid') && !isValidUUID(id)) {
         return
@@ -13518,7 +13550,7 @@ function openAuditTrail(entryId: string) {
 
 async function handleEntryRestored(entryId: string) {
   // Reload the entry from Supabase to get updated data
-  await loadEntries()
+  await loadEntries({ mode: 'delta' })
   // If we're currently editing this entry, refresh the form
   if (editingEntryId.value === entryId) {
     const updatedEntry = logEntries.value.find(e => e.id === entryId)
@@ -13629,15 +13661,12 @@ function updateIosSyncBanner(status: Exclude<IosSyncStatus, 'idle'>, message: st
 }
 
 function retryIosSync(): void {
-  void loadEntries()
+  void loadEntries({ mode: 'delta' })
 }
 
 function finalizeBulkLoadSideEffects(): void {
   isBulkLoadInProgress.value = false
   if (!isBrowser || logEntries.value.length === 0) return
-  if (isAuthenticated.value && user.value?.id) {
-    writeUserScopedLocal(LOGBOOK_STORAGE_KEY, JSON.stringify(logEntries.value))
-  }
   if (!(isIos.value && (isCatalogDrawerOpen.value || showSettingsModal.value))) {
     calculateAllCurrency(logEntries.value)
   }
@@ -13736,11 +13765,29 @@ watch([isCatalogDrawerOpen, showSettingsModal], () => {
   }
 })
 
+async function advanceSyncWatermarks(
+  entries: LogEntry[],
+  tombstones: LogEntryDeletionTombstone[] = []
+): Promise<void> {
+  const incoming = computeRemoteSyncWatermark(entries, tombstones)
+  const existing = await getRemoteSyncWatermark()
+  const merged = mergeWatermarks(existing, incoming)
+  if (merged) {
+    await setRemoteSyncWatermark(merged)
+  }
+  await setLastSuccessfulRemoteSyncAt(Date.now())
+}
+
 async function applyRemoteSync(
   supabaseEntries: LogEntry[],
   idbEntries: Awaited<ReturnType<typeof getAllIDBLogEntriesForUser>>,
   userId: string,
-  options: { reconcileRemoteDeletes?: boolean; awaitIdbPersist?: boolean } = {}
+  options: {
+    reconcileRemoteDeletes?: boolean
+    awaitIdbPersist?: boolean
+    tombstones?: LogEntryDeletionTombstone[]
+    reconcileQueue?: boolean
+  } = {}
 ): Promise<number> {
   const reconcileRemoteDeletes = options.reconcileRemoteDeletes ?? true
   const syncQueue = await getSyncQueue(userId)
@@ -13756,39 +13803,67 @@ async function applyRemoteSync(
     reconcileRemoteDeletes,
   })
 
-  if (removedEntryIds.length > 0) {
+  const tombstoneIds = (options.tombstones ?? []).map((t) => t.entryId)
+  const afterTombstones = applyTombstoneDeletions(mergedEntries, tombstoneIds, syncQueue)
+  const allRemovedIds = [...new Set([...removedEntryIds, ...afterTombstones.removedEntryIds])]
+
+  if (allRemovedIds.length > 0) {
     await Promise.all(
-      removedEntryIds.map(async (removedId) => {
+      allRemovedIds.map(async (removedId) => {
         await deleteEntryFromIndexedDB(removedId)
         await removeQueuedOperationsForEntry(removedId, userId)
       })
     )
   }
 
-  assignLogEntries(mergedEntries)
-  await setLastSuccessfulRemoteSyncAt(Date.now())
-  await reconcileSyncQueue(userId, {
-    remoteEntryIds: supabaseEntries.map((entry) => entry.id),
-  })
+  assignLogEntries(afterTombstones.mergedEntries)
+  await advanceSyncWatermarks(supabaseEntries, options.tombstones ?? [])
+
+  if (options.reconcileQueue !== false && reconcileRemoteDeletes) {
+    await reconcileSyncQueue(userId, {
+      remoteEntryIds: supabaseEntries.map((entry) => entry.id),
+    })
+  } else if (options.reconcileQueue !== false) {
+    await reconcileSyncQueue(userId)
+  }
 
   console.log(
     '[LoadEntries] Merged entries:',
     logEntries.value.length,
     'entries;',
-    removedEntryIds.length,
+    allRemovedIds.length,
     'removed remotely'
   )
 
   const remoteIds = new Set(supabaseEntries.map((entry) => entry.id))
   if (options.awaitIdbPersist) {
-    await persistSyncedEntriesToIndexedDB(mergedEntries, remoteIds, userId)
-  } else {
-    void persistSyncedEntriesToIndexedDB(mergedEntries, remoteIds, userId).catch((err) => {
+    await persistSyncedEntriesToIndexedDB(supabaseEntries, remoteIds, userId)
+  } else if (supabaseEntries.length > 0) {
+    void persistSyncedEntriesToIndexedDB(supabaseEntries, remoteIds, userId).catch((err) => {
       console.warn('[LoadEntries] Background IndexedDB persist failed:', err)
     })
   }
 
-  return removedEntryIds.length
+  return allRemovedIds.length
+}
+
+async function applyDeltaRemoteSync(
+  changedEntries: LogEntry[],
+  tombstones: LogEntryDeletionTombstone[],
+  idbEntries: Awaited<ReturnType<typeof getAllIDBLogEntriesForUser>>,
+  userId: string
+): Promise<number> {
+  if (changedEntries.length === 0 && tombstones.length === 0) {
+    await setLastSuccessfulRemoteSyncAt(Date.now())
+    return 0
+  }
+
+  return applyRemoteSync(changedEntries, idbEntries, userId, {
+    reconcileRemoteDeletes: false,
+    awaitIdbPersist: true,
+    tombstones,
+    reconcileQueue: true,
+  })
 }
 
 async function backgroundFullRemoteSync(userId: string): Promise<number> {
@@ -13799,15 +13874,77 @@ async function backgroundFullRemoteSync(userId: string): Promise<number> {
   return applyRemoteSync(allRemote, freshIdb, userId, {
     reconcileRemoteDeletes: true,
     awaitIdbPersist: true,
+    reconcileQueue: true,
   })
 }
 
-async function syncLogEntriesFromSupabase(
+async function backgroundDeltaRemoteSync(
+  userId: string,
+  idbEntries: Awaited<ReturnType<typeof getAllIDBLogEntriesForUser>>
+): Promise<number> {
+  const watermark = await getRemoteSyncWatermark()
+  if (!watermark) {
+    return backgroundFullRemoteSync(userId)
+  }
+
+  const [changedEntries, tombstones] = await Promise.all([
+    fetchDeltaLogEntries(userId, watermark, mapSupabaseRowToLogEntry),
+    fetchDeltaDeletions(userId, watermark),
+  ])
+
+  if (changedEntries.length >= DELTA_FALLBACK_THRESHOLD) {
+    console.warn(
+      '[LoadEntries] Delta batch exceeded threshold; falling back to full sync:',
+      changedEntries.length
+    )
+    return backgroundFullRemoteSync(userId)
+  }
+
+  const freshIdb = idbEntries.length > 0 ? idbEntries : await getAllIDBLogEntriesForUser(userId)
+  return applyDeltaRemoteSync(changedEntries, tombstones, freshIdb, userId)
+}
+
+async function syncInbound(
   userId: string,
   idbEntries: Awaited<ReturnType<typeof getAllIDBLogEntriesForUser>>,
-  cachedEntryCount: number
+  cachedEntryCount: number,
+  options: { mode: InboundSyncMode; skipIfFresh?: boolean }
 ): Promise<number> {
+  const mode = options.mode === 'auto'
+    ? (cachedEntryCount > 0 ? 'delta' : 'full')
+    : options.mode
+
+  if (options.skipIfFresh && mode === 'delta') {
+    const lastSyncAt = await getLastSuccessfulRemoteSyncAt()
+    if (lastSyncAt != null && Date.now() - lastSyncAt < CACHE_FRESH_MS) {
+      return 0
+    }
+  }
+
   isBulkLoadInProgress.value = true
+
+  if (mode === 'delta') {
+    if (cachedEntryCount > 0) {
+      updateIosSyncBanner('loading', `Showing ${cachedEntryCount} cached entries`)
+    }
+
+    try {
+      const removed = await backgroundDeltaRemoteSync(userId, idbEntries)
+      if (cachedEntryCount > 0) {
+        updateIosSyncBanner('success', `${logEntries.value.length} entries loaded`)
+      }
+      return removed
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Sync failed'
+      console.error('[LoadEntries] Delta sync failed:', err)
+      if (cachedEntryCount > 0) {
+        updateIosSyncBanner('error', `Sync failed: ${message}`)
+      }
+      throw err
+    } finally {
+      finalizeBulkLoadSideEffects()
+    }
+  }
 
   const lastSyncAt = await getLastSuccessfulRemoteSyncAt()
   const cacheFresh =
@@ -13822,22 +13959,6 @@ async function syncLogEntriesFromSupabase(
         ? `Showing ${cachedEntryCount} cached entries`
         : `Showing ${cachedEntryCount} cached entries — updating…`
     )
-
-    if (cacheFresh) {
-      void (async () => {
-        try {
-          await backgroundFullRemoteSync(userId)
-          updateIosSyncBanner('success', `${logEntries.value.length} entries loaded`)
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Sync failed'
-          console.error('[LoadEntries] Background cache refresh failed:', err)
-          updateIosSyncBanner('error', `Sync failed: ${message}`)
-        } finally {
-          finalizeBulkLoadSideEffects()
-        }
-      })()
-      return 0
-    }
 
     try {
       const removed = await backgroundFullRemoteSync(userId)
@@ -13867,6 +13988,7 @@ async function syncLogEntriesFromSupabase(
     if (firstBatch.length > 0) {
       inboundRemovedCount = await applyRemoteSync(firstBatch, idbEntries, userId, {
         reconcileRemoteDeletes: false,
+        reconcileQueue: false,
       })
       calculateAllCurrency(logEntries.value)
       updateIosSyncBanner('loading', `Loading logbook… ${firstBatch.length} entries`)
@@ -13968,7 +14090,7 @@ async function runDeferredPostLoadWork(): Promise<void> {
 }
 
 // Load entries from Supabase (when authenticated) or localStorage (fallback)
-async function loadEntriesInternal(): Promise<number> {
+async function loadEntriesInternal(options: LoadEntriesOptions = {}): Promise<number> {
   if (!isBrowser) return 0
 
   isLoadEntriesRunning.value = true
@@ -14019,13 +14141,17 @@ async function loadEntriesInternal(): Promise<number> {
           }
         } else {
           try {
-            inboundRemovedCount = await syncLogEntriesFromSupabase(
+            inboundRemovedCount = await syncInbound(
               user.value.id,
               idbEntries,
-              idbEntries.length
+              idbEntries.length,
+              {
+                mode: options.mode ?? 'auto',
+                skipIfFresh: options.skipIfFresh,
+              }
             )
           } catch {
-            // Error already logged and banner updated in syncLogEntriesFromSupabase
+            // Error already logged and banner updated in syncInbound
           }
         }
       }
@@ -14044,9 +14170,9 @@ async function loadEntriesInternal(): Promise<number> {
   }
 }
 
-async function loadEntries(): Promise<number> {
+async function loadEntries(options: LoadEntriesOptions = {}): Promise<number> {
   if (loadEntriesInFlight) return loadEntriesInFlight
-  loadEntriesInFlight = loadEntriesInternal()
+  loadEntriesInFlight = loadEntriesInternal(options)
   try {
     return await loadEntriesInFlight
   } finally {
@@ -14114,7 +14240,7 @@ async function refreshDashboardData(): Promise<void> {
     const queueBefore = queueLength.value
     const countBefore = logEntries.value.length
 
-    const removed = await loadEntries()
+    const removed = await loadEntries({ mode: 'full' })
     await reconcileSyncQueue(user.value.id)
     await processQueue()
     await refreshQueueLength()
@@ -14153,7 +14279,7 @@ async function prepareLogbookForFcvImport(): Promise<void> {
   if (isAuthenticated.value && user.value) {
     await processQueue({ silent: true })
   }
-  await loadEntries()
+  await loadEntries({ mode: 'full' })
 }
 
 /** One-time-style migration: simulator entries cannot have actual instrument time. */
@@ -14242,7 +14368,7 @@ async function handleFcvImported(payload: {
 }): Promise<void> {
   // Auto-close the dashboard fetch panel once FC View import completes.
   showFcvFetchPanel.value = false
-  await loadEntries()
+  await loadEntries({ mode: 'full' })
   const parts: string[] = []
   if (payload.imported > 0) {
     parts.push(`${payload.imported} ${payload.imported === 1 ? 'entry' : 'entries'} added`)
@@ -14546,7 +14672,7 @@ if (typeof window !== 'undefined') {
     if (result.success) {
       alert(`Merged "${duplicateName}" into "${canonicalName}"! Refreshing page...`)
       await loadCrewProfiles() // Reload from Supabase
-      await loadEntries() // Reload entries
+      await loadEntries({ mode: 'full' }) // Reload entries
       window.location.reload()
     } else {
       alert(`Error: ${result.error}`)
@@ -14616,14 +14742,17 @@ watch(
     if (isBulkLoadInProgress.value) {
       return
     }
-    if (isAuthenticated.value && user.value?.id) {
-      writeUserScopedLocal(LOGBOOK_STORAGE_KEY, JSON.stringify(entries))
-    } else if (!isAuthenticated.value) {
-      window.localStorage.setItem(LOGBOOK_STORAGE_KEY, JSON.stringify(entries))
+    if (logEntriesSideEffectTimer) {
+      clearTimeout(logEntriesSideEffectTimer)
     }
-    if (entries.length > 0 && !(isIos.value && (isCatalogDrawerOpen.value || showSettingsModal.value))) {
-      calculateAllCurrency(entries)
-    }
+    logEntriesSideEffectTimer = setTimeout(() => {
+      if (!isAuthenticated.value) {
+        window.localStorage.setItem(LOGBOOK_STORAGE_KEY, JSON.stringify(entries))
+      }
+      if (entries.length > 0 && !(isIos.value && (isCatalogDrawerOpen.value || showSettingsModal.value))) {
+        calculateAllCurrency(entries)
+      }
+    }, LOG_ENTRIES_SIDE_EFFECT_DEBOUNCE_MS)
   },
   { deep: true }
 )

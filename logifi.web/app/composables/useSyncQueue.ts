@@ -11,6 +11,7 @@ import {
   updateEntryInIndexedDB,
   type SyncQueueEntry
 } from '~/utils/indexedDB'
+import { insertLogEntryTombstone } from '~/utils/logEntryInboundSync'
 import { useOffline } from './useOffline'
 
 const MAX_RETRIES = 3
@@ -424,11 +425,13 @@ export const useSyncQueue = () => {
 
     if (error) {
       if (error.code === 'PGRST116') {
+        await insertLogEntryTombstone(authUser.id, item.entryId)
         return true
       }
       throw error
     }
 
+    await insertLogEntryTombstone(authUser.id, item.entryId)
     return true
   }
 

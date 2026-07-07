@@ -51,10 +51,11 @@ export function mergeRemoteLogEntries(options: {
 
   const entryMap = new Map<string, LogEntry>()
   const removedEntryIds: string[] = []
+  const remoteById = new Map(remoteEntries.map((entry) => [entry.id, entry]))
 
   for (const { entry, synced } of localEntries) {
     if (remoteIds.has(entry.id)) {
-      const remote = remoteEntries.find((r) => r.id === entry.id)!
+      const remote = remoteById.get(entry.id)!
       entryMap.set(entry.id, shouldPreferRemoteEntry(entry, remote) ? remote : entry)
       continue
     }
