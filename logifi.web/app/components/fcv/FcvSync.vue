@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useAuth } from '~/composables/useAuth'
 import { useFcvUiLabel } from '~/composables/useFcvUiLabel'
 import { useRoute } from 'vue-router'
@@ -12,6 +12,9 @@ import {
   defaultSelectedFcvFlightIds,
   type FcvFlightAction,
 } from '~/utils/fcvImportPayload'
+import {
+  catalogContainsPersonName,
+} from '../../../shared/catalogPersonNames'
 
 /** Must match dashboard theme; avoid `dark:` here so OS dark mode does not fight white settings cards. */
 const props = withDefaults(
@@ -26,12 +29,15 @@ const props = withDefaults(
     pendingSyncCount?: number
     /** Mobile / iOS sheet: primary "Import new flights" CTA, collapsible date range, fullscreen preview. */
     compact?: boolean
+    /** Full pilot catalog display names for crew pickers during import preview. */
+    catalogPersonNames?: string[]
   }>(),
   {
     mode: 'full',
     showRolloutLabel: false,
     pendingSyncCount: 0,
     compact: false,
+    catalogPersonNames: () => [],
   }
 )
 const emit = defineEmits<{
@@ -138,6 +144,11 @@ const crewReviewCandidates = ref<CrewReviewCandidate[]>([])
 const crewResolutionMode = ref<Record<string, CrewOverrideMode>>({})
 const crewPickSelection = ref<Record<string, string>>({})
 const crewRenameText = ref<Record<string, string>>({})
+/** Editable other-pilot name per FC View flight id in import preview. */
+const perFlightCrewName = ref<Record<string, string>>({})
+/** Full catalog from server when crew review is required (fallback path). */
+const crewReviewCatalogNames = ref<string[]>([])
+const activePilotPickerId = ref<string | null>(null)
 const approachTypeOptions = ['ILS', 'LOC', 'RNAV', 'VOR', 'NDB', 'LDA', 'SDF', 'VISUAL']
 
 function syncCrewReviewUiState(candidates: CrewReviewCandidate[]) {
@@ -330,22 +341,7 @@ async function disconnectFcv() {
       headers: authHeaders(),
     })
     connected.value = false
-    showPreviewModal.value = false
-    previewFlights.value = []
-    sinceLastEntryOmittedAlreadyImported.value = 0
-    includeDuplicatesInImport.value = false
-    includeAlreadyImportedInImport.value = false
-    heuristicDuplicateIndices.value = new Set()
-    alreadyImportedIndices.value = new Set()
-    heuristicMatches.value = []
-    flightRowActions.value = {}
-    selectedFcvFlightIds.value = new Set()
-    perFlightEnrichment.value = {}
-    expandedEnrichmentRows.value = new Set()
-    crewReviewCandidates.value = []
-    crewResolutionMode.value = {}
-    crewPickSelection.value = {}
-    crewRenameText.value = {}
+    resetPreviewImportState()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to disconnect FC View'
   } finally {
@@ -416,6 +412,142 @@ function initSelectionFromPreview() {
     heuristicDuplicateIndices.value,
     alreadyImportedIndices.value
   )
+  initPerFlightCrewNames()
+}
+
+function rawCrewNameFromFlight(f: FcvMappedEntry): string {
+  const nameRaw = f.training_elements
+  return typeof nameRaw === 'string' ? nameRaw.trim() : ''
+}
+
+function initPerFlightCrewNames() {
+  const next: Record<string, string> = { ...perFlightCrewName.value }
+  for (const f of previewFlights.value) {
+    const id = fcvIdFromFlight(f)
+    if (!id || id in next) continue
+    next[id] = rawCrewNameFromFlight(f)
+  }
+  perFlightCrewName.value = next
+}
+
+function getPerFlightCrewName(fcvFlightId: string): string {
+  const id = fcvFlightId.trim()
+  return id ? (perFlightCrewName.value[id] ?? '') : ''
+}
+
+function setPerFlightCrewName(fcvFlightId: string, value: string) {
+  const id = fcvFlightId.trim()
+  if (!id) return
+  perFlightCrewName.value = { ...perFlightCrewName.value, [id]: value }
+}
+
+function openPilotPicker(fcvFlightId: string, event?: FocusEvent) {
+  activePilotPickerId.value = fcvFlightId.trim() || null
+  if (!props.compact) return
+  const target = event?.target
+  if (!(target instanceof HTMLElement)) return
+  void nextTick(() => {
+    target.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  })
+}
+
+function closePilotPickerSoon() {
+  window.setTimeout(() => {
+    activePilotPickerId.value = null
+  }, 150)
+}
+
+function selectPilotFromCatalog(fcvFlightId: string, name: string) {
+  setPerFlightCrewName(fcvFlightId, name)
+  activePilotPickerId.value = null
+}
+
+const fullCatalogPersonNames = computed(() => {
+  const merged = new Set<string>()
+  for (const name of props.catalogPersonNames ?? []) {
+    const trimmed = name.trim()
+    if (trimmed) merged.add(trimmed)
+  }
+  for (const name of crewReviewCatalogNames.value) {
+    const trimmed = name.trim()
+    if (trimmed) merged.add(trimmed)
+  }
+  return [...merged].sort((a, b) => a.localeCompare(b))
+})
+
+function filteredPilotSuggestions(query: string): string[] {
+  const q = query.trim().toLowerCase()
+  const names = fullCatalogPersonNames.value
+  if (!q) return names.slice(0, 40)
+  return names.filter((n) => n.toLowerCase().includes(q)).slice(0, 40)
+}
+
+function resolveCrewOverrideMode(editedName: string, rawName: string): CrewOverrideMode {
+  if (!editedName) return 'asis'
+  if (!rawName || editedName === rawName) return 'asis'
+  if (catalogContainsPersonName(fullCatalogPersonNames.value, editedName)) return 'pick'
+  return 'rename'
+}
+
+function resetPreviewImportState() {
+  showPreviewModal.value = false
+  previewFlights.value = []
+  sinceLastEntryOmittedAlreadyImported.value = 0
+  heuristicDuplicateIndices.value = new Set()
+  alreadyImportedIndices.value = new Set()
+  heuristicMatches.value = []
+  flightRowActions.value = {}
+  selectedFcvFlightIds.value = new Set()
+  includeDuplicatesInImport.value = false
+  includeAlreadyImportedInImport.value = false
+  perFlightEnrichment.value = {}
+  expandedEnrichmentRows.value = new Set()
+  perFlightCrewName.value = {}
+  crewReviewCandidates.value = []
+  crewReviewCatalogNames.value = []
+  crewResolutionMode.value = {}
+  crewPickSelection.value = {}
+  crewRenameText.value = {}
+  activePilotPickerId.value = null
+}
+
+function buildCrewOverridePayloads(): {
+  crewNameOverrides: Record<string, string>
+  crewOverrideModes: Record<string, CrewOverrideMode>
+} {
+  const crewNameOverrides: Record<string, string> = {}
+  const crewOverrideModes: Record<string, CrewOverrideMode> = {}
+
+  for (const { flight } of flightsToImportWithIndex.value) {
+    const fcvId = fcvIdFromFlight(flight)
+    if (!fcvId) continue
+    const raw = rawCrewNameFromFlight(flight)
+    const edited = getPerFlightCrewName(fcvId).trim()
+    const name = edited || raw
+    if (!name) continue
+    crewNameOverrides[fcvId] = name
+    crewOverrideModes[fcvId] = resolveCrewOverrideMode(name, raw)
+  }
+
+  for (const c of crewReviewCandidates.value) {
+    const id = c.fcv_flight_id
+    const rawKey = c.raw_name
+    const mode = crewResolutionMode.value[rawKey] ?? 'pick'
+    let name = ''
+    if (mode === 'pick') {
+      name = (crewPickSelection.value[rawKey] ?? '').trim()
+    } else if (mode === 'rename') {
+      name = (crewRenameText.value[rawKey] ?? '').trim()
+    } else {
+      name = c.raw_name
+    }
+    if (!name) continue
+    crewNameOverrides[id] = name
+    crewOverrideModes[id] = mode
+    perFlightCrewName.value = { ...perFlightCrewName.value, [id]: name }
+  }
+
+  return { crewNameOverrides, crewOverrideModes }
 }
 
 function isFlightSelected(fcvFlightId: string): boolean {
@@ -601,22 +733,8 @@ async function confirmImport() {
   loadingImport.value = true
   error.value = null
   try {
-    const review = crewReviewCandidates.value
-    const crewNameOverridesPayload: Record<string, string> = {}
-    const crewOverrideModesPayload: Record<string, CrewOverrideMode> = {}
-    for (const c of review) {
-      const id = c.fcv_flight_id
-      const rawKey = c.raw_name
-      const mode = crewResolutionMode.value[rawKey] ?? 'pick'
-      crewOverrideModesPayload[id] = mode
-      if (mode === 'pick') {
-        crewNameOverridesPayload[id] = (crewPickSelection.value[rawKey] ?? '').trim()
-      } else if (mode === 'rename') {
-        crewNameOverridesPayload[id] = (crewRenameText.value[rawKey] ?? '').trim()
-      } else {
-        crewNameOverridesPayload[id] = c.raw_name
-      }
-    }
+    const { crewNameOverrides: crewNameOverridesPayload, crewOverrideModes: crewOverrideModesPayload } =
+      buildCrewOverridePayloads()
 
     const payload = buildFcvImportRequestPayload({
       selectedWithIndex: flightsToImportWithIndex.value,
@@ -638,7 +756,7 @@ async function confirmImport() {
     if (payload.flightActions) {
       importBody.flightActions = payload.flightActions
     }
-    if (review.length > 0) {
+    if (Object.keys(crewNameOverridesPayload).length > 0) {
       importBody.crewNameOverrides = crewNameOverridesPayload
       importBody.crewOverrideModes = crewOverrideModesPayload
     }
@@ -651,6 +769,7 @@ async function confirmImport() {
       skipped: number
       requires_crew_review?: boolean
       review_candidates?: CrewReviewCandidate[]
+      catalog_person_names?: string[]
     }>('/api/fcv/import', {
       method: 'POST',
       headers: {
@@ -663,6 +782,9 @@ async function confirmImport() {
       crewReviewCandidates.value = Array.isArray(result.review_candidates)
         ? result.review_candidates
         : []
+      crewReviewCatalogNames.value = Array.isArray(result.catalog_person_names)
+        ? result.catalog_person_names
+        : []
       syncCrewReviewUiState(crewReviewCandidates.value)
       error.value =
         crewReviewCandidates.value.length > 0
@@ -670,28 +792,15 @@ async function confirmImport() {
           : 'Crew review is required before importing.'
       return
     }
-    emit('imported', {
+    const importedPayload = {
       imported: typeof result?.imported === 'number' ? result.imported : payload.flights.length,
       linked: typeof result?.linked === 'number' ? result.linked : 0,
       skipped: typeof result?.skipped === 'number' ? result.skipped : 0,
       importBatchId: result?.import_batch_id,
-    })
-    showPreviewModal.value = false
-    previewFlights.value = []
-    sinceLastEntryOmittedAlreadyImported.value = 0
-    heuristicDuplicateIndices.value = new Set()
-    alreadyImportedIndices.value = new Set()
-    heuristicMatches.value = []
-    flightRowActions.value = {}
-    selectedFcvFlightIds.value = new Set()
-    includeDuplicatesInImport.value = false
-    includeAlreadyImportedInImport.value = false
-    perFlightEnrichment.value = {}
-    expandedEnrichmentRows.value = new Set()
-    crewReviewCandidates.value = []
-    crewResolutionMode.value = {}
-    crewPickSelection.value = {}
-    crewRenameText.value = {}
+    }
+    resetPreviewImportState()
+    await nextTick()
+    emit('imported', importedPayload)
     await checkStatus()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to import flights'
@@ -701,19 +810,10 @@ async function confirmImport() {
 }
 
 function closePreview() {
-  showPreviewModal.value = false
+  resetPreviewImportState()
   sinceLastEntryOmittedAlreadyImported.value = 0
   includeDuplicatesInImport.value = false
   includeAlreadyImportedInImport.value = false
-  heuristicMatches.value = []
-  flightRowActions.value = {}
-  selectedFcvFlightIds.value = new Set()
-  expandedEnrichmentRows.value = new Set()
-  perFlightEnrichment.value = {}
-  crewReviewCandidates.value = []
-  crewResolutionMode.value = {}
-  crewPickSelection.value = {}
-  crewRenameText.value = {}
 }
 
 function isHeuristicDuplicateRow(index: number) {
@@ -771,7 +871,9 @@ function isCrewReviewRowResolved(c: CrewReviewCandidate): boolean {
   if (mode === 'rename') return !!(crewRenameText.value[rawName] ?? '').trim()
   const sel = (crewPickSelection.value[rawName] ?? '').trim()
   if (!sel) return false
-  return c.candidates.includes(sel)
+  return (
+    catalogContainsPersonName(fullCatalogPersonNames.value, sel) || c.candidates.includes(sel)
+  )
 }
 
 const heuristicDuplicateCount = computed(() => heuristicDuplicateIndices.value.size)
@@ -961,7 +1063,8 @@ const btnOutlineClass = computed(() =>
 
 const inputClass = computed(() =>
   [
-    'rounded-lg border px-2 py-1.5 text-sm font-quicksand',
+    'rounded-lg border px-2 py-1.5 font-quicksand',
+    props.compact ? 'text-base' : 'text-sm',
     props.isDarkMode
       ? 'bg-gray-800 border-gray-600 text-gray-100'
       : 'bg-white border-gray-200 text-gray-900',
@@ -971,7 +1074,7 @@ const inputClass = computed(() =>
 const previewModalShellClass = computed(() =>
   props.compact
     ? [
-        'relative flex h-full w-full flex-col overflow-hidden font-quicksand',
+        'flex w-full flex-col min-h-0 font-quicksand',
         props.isDarkMode ? 'bg-gray-900' : 'bg-white',
       ].join(' ')
     : [
@@ -982,7 +1085,7 @@ const previewModalShellClass = computed(() =>
 
 const previewModalOverlayClass = computed(() =>
   props.compact
-    ? 'app-modal-overlay flex flex-col'
+    ? 'flex flex-col min-h-0'
     : 'app-modal-overlay flex items-center justify-center p-4'
 )
 </script>
@@ -1032,7 +1135,7 @@ const previewModalOverlayClass = computed(() =>
         </button>
       </div>
     </template>
-    <template v-else-if="showFetchControls">
+    <template v-else-if="showFetchControls && !(compact && showPreviewModal)">
       <p
         v-if="!isCompactFetch"
         :class="['text-sm mb-4', isDarkMode ? 'text-gray-400' : 'text-gray-600']"
@@ -1257,8 +1360,8 @@ const previewModalOverlayClass = computed(() =>
       </p>
     </template>
 
-    <!-- Preview modal -->
-    <Teleport to="body">
+    <!-- Preview modal (inline on iOS compact; teleported modal on desktop) -->
+    <Teleport to="body" :disabled="compact">
     <div
       v-if="showPreviewModal"
       :class="previewModalOverlayClass"
@@ -1272,7 +1375,6 @@ const previewModalOverlayClass = computed(() =>
         <div
           :class="[
             'p-4 border-b flex items-center justify-between shrink-0',
-            compact ? 'pt-[max(1rem,env(safe-area-inset-top))]' : '',
             isDarkMode ? 'border-gray-700' : 'border-gray-200',
           ]"
         >
@@ -1329,7 +1431,7 @@ const previewModalOverlayClass = computed(() =>
             <Icon name="ri:close-line" size="22" />
           </button>
         </div>
-        <div class="flex-1 overflow-y-auto p-4 space-y-3">
+        <div :class="compact ? 'p-4 space-y-3' : 'flex-1 overflow-y-auto p-4 space-y-3'">
           <div
             v-for="(f, idx) in previewFlights"
             :key="`${f.fcv_flight_id || 'row'}-${idx}`"
@@ -1414,6 +1516,57 @@ const previewModalOverlayClass = computed(() =>
             >
               {{ formatCrewPreviewLine(f) }}
             </span>
+            <div
+              v-if="isFlightSelected(f.fcv_flight_id)"
+              class="w-full basis-full mt-2 space-y-1"
+            >
+              <label
+                :class="['block text-xs font-medium', isDarkMode ? 'text-gray-300' : 'text-gray-700']"
+              >
+                Other pilot
+              </label>
+              <div class="relative">
+                <input
+                  :value="getPerFlightCrewName(f.fcv_flight_id)"
+                  type="text"
+                  autocomplete="name"
+                  placeholder="Pilot name"
+                  :class="[inputClass, 'w-full']"
+                  @input="setPerFlightCrewName(f.fcv_flight_id, ($event.target as HTMLInputElement).value)"
+                  @focus="openPilotPicker(f.fcv_flight_id, $event)"
+                  @blur="closePilotPickerSoon"
+                />
+                <ul
+                  v-if="activePilotPickerId === f.fcv_flight_id && filteredPilotSuggestions(getPerFlightCrewName(f.fcv_flight_id)).length"
+                  :class="[
+                    'absolute z-20 mt-1 max-h-40 w-full overflow-y-auto rounded-lg border shadow-lg text-sm',
+                    isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white',
+                  ]"
+                >
+                  <li
+                    v-for="name in filteredPilotSuggestions(getPerFlightCrewName(f.fcv_flight_id))"
+                    :key="`${f.fcv_flight_id}-pilot-${name}`"
+                  >
+                    <button
+                      type="button"
+                      :class="[
+                        'block w-full px-3 py-2 text-left',
+                        isDarkMode ? 'hover:bg-gray-800 text-gray-100' : 'hover:bg-gray-100 text-gray-900',
+                      ]"
+                      @mousedown.prevent="selectPilotFromCatalog(f.fcv_flight_id, name)"
+                    >
+                      {{ name }}
+                    </button>
+                  </li>
+                </ul>
+              </div>
+              <p
+                v-if="fullCatalogPersonNames.length"
+                :class="['text-[11px] leading-snug', isDarkMode ? 'text-gray-500' : 'text-gray-500']"
+              >
+                Search your full pilot catalog or type a new name.
+              </p>
+            </div>
             <span
               v-if="isAlreadyImportedRow(idx)"
               :class="[
@@ -1565,20 +1718,40 @@ const previewModalOverlayClass = computed(() =>
                 </div>
               </fieldset>
               <div v-if="crewModeFor(crewRawKey(f.fcv_flight_id)) === 'pick'" class="space-y-1">
-                <span :class="isDarkMode ? 'text-orange-100' : 'text-orange-800'">Match to a suggested name</span>
-                <select
+                <span :class="isDarkMode ? 'text-orange-100' : 'text-orange-800'">Match to catalog person</span>
+                <input
                   v-model="crewPickSelection[crewRawKey(f.fcv_flight_id)]"
+                  type="text"
+                  autocomplete="name"
+                  placeholder="Search your full pilot catalog"
                   :class="[inputClass, 'w-full mt-0.5']"
+                />
+                <ul
+                  v-if="filteredPilotSuggestions(crewPickSelection[crewRawKey(f.fcv_flight_id)] ?? '').length"
+                  :class="[
+                    'mt-1 max-h-36 overflow-y-auto rounded-lg border text-sm',
+                    isDarkMode ? 'border-orange-800/60 bg-orange-950/40' : 'border-orange-200 bg-white',
+                  ]"
                 >
-                  <option value="">Choose person…</option>
-                  <option
-                    v-for="candidate in crewCandidateByFlightId(f.fcv_flight_id)?.candidates || []"
-                    :key="`${f.fcv_flight_id}-${candidate}`"
-                    :value="candidate"
+                  <li
+                    v-for="name in filteredPilotSuggestions(crewPickSelection[crewRawKey(f.fcv_flight_id)] ?? '')"
+                    :key="`${f.fcv_flight_id}-crew-${name}`"
                   >
-                    {{ candidate }}
-                  </option>
-                </select>
+                    <button
+                      type="button"
+                      :class="[
+                        'block w-full px-3 py-2 text-left',
+                        isDarkMode ? 'hover:bg-orange-900/50 text-orange-50' : 'hover:bg-orange-50 text-orange-950',
+                      ]"
+                      @mousedown.prevent="crewPickSelection[crewRawKey(f.fcv_flight_id)] = name"
+                    >
+                      {{ name }}
+                    </button>
+                  </li>
+                </ul>
+                <p :class="['text-[11px] leading-snug', isDarkMode ? 'text-orange-100/85' : 'text-orange-800']">
+                  Pick from your full pilot catalog, not just fuzzy suggestions.
+                </p>
               </div>
               <div v-else-if="crewModeFor(crewRawKey(f.fcv_flight_id)) === 'rename'" class="space-y-1">
                 <label class="block">
@@ -1721,7 +1894,6 @@ const previewModalOverlayClass = computed(() =>
         <div
           :class="[
             'p-4 border-t flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between shrink-0',
-            compact ? 'pb-[max(1rem,env(safe-area-inset-bottom))]' : '',
             isDarkMode ? 'border-gray-700' : 'border-gray-200',
           ]"
         >

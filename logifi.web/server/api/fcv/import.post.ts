@@ -314,6 +314,9 @@ export default defineEventHandler(async (event) => {
       success: false,
       requires_crew_review: true,
       review_candidates: reviewCandidates,
+      catalog_person_names: [...alignmentIndex.crewCanonicalNames].sort((a, b) =>
+        a.localeCompare(b)
+      ),
       imported: 0,
       skipped: 0,
     }

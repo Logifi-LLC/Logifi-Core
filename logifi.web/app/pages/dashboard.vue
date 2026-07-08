@@ -355,6 +355,7 @@
             :is-dark-mode="isDarkMode"
             :before-duplicate-check="prepareLogbookForFcvImport"
             :pending-sync-count="queueLength"
+            :catalog-person-names="catalogPersonNames"
             @imported="handleFcvImported"
           />
           <p
@@ -405,6 +406,7 @@
                 :is-dark-mode="isDarkMode"
                 :before-duplicate-check="prepareLogbookForFcvImport"
                 :pending-sync-count="queueLength"
+                :catalog-person-names="catalogPersonNames"
                 @imported="handleFcvImported"
               />
             </div>
@@ -5967,6 +5969,7 @@ import { calculateNightTime } from '../utils/nightTimeCalculator'
 import { DateTime } from 'luxon'
 import { getAirportIanaTimezone, normalizeTimezoneToIANA } from '../../shared/airportTimezone'
 import { sortEntriesByDateAndOOOI } from '../../shared/oooiSort'
+import { listCatalogPersonDisplayNames } from '../../shared/catalogPersonNames'
 import { calculateSectionII, calculateSectionIII } from '../utils/form8710Calculator'
 import type { Form8710Data, AircraftCategory8710, ComplianceMetadata } from '../utils/form8710Types'
 import { mapCategoryTo8710, isTrainingDevice } from '../utils/form8710Types'
@@ -6674,6 +6677,12 @@ watch(isOnline, (online, wasOnline) => {
 // Catalog entity tags (family, aircraft, person) - loaded from Supabase when authenticated
 type CatalogEntityTagRow = { id: string; user_id: string; entity_type: 'family' | 'aircraft' | 'person'; entity_id: string; tag: string }
 const entityTagsList = ref<CatalogEntityTagRow[]>([])
+
+const catalogPersonNames = computed(() =>
+  listCatalogPersonDisplayNames(
+    entityTagsList.value.filter((r) => r.entity_type === 'person')
+  )
+)
 
 async function fetchEntityTags(): Promise<void> {
   if (!isAuthenticated.value || !user.value) {
@@ -11298,7 +11307,11 @@ function handleIosOverlayEscape(e: KeyboardEvent) {
 }
 
 const isIosOverlayOpen = computed(
-  () => isCatalogDrawerOpen.value || isEntryFormOpen.value || expandedEntryId.value !== null || showCrewProfileModal.value
+  () =>
+    isCatalogDrawerOpen.value ||
+    isEntryFormOpen.value ||
+    expandedEntryId.value !== null ||
+    showCrewProfileModal.value
 )
 
 function setIosOverlayScrollLock(open: boolean): void {
@@ -14431,7 +14444,9 @@ async function handleFcvImported(payload: {
   importBatchId?: string
 }): Promise<void> {
   closeFcvFetchUi()
+  await nextTick()
   await loadEntries({ mode: 'full' })
+  flushDeferredLogEntries()
   const parts: string[] = []
   if (payload.imported > 0) {
     parts.push(`${payload.imported} ${payload.imported === 1 ? 'entry' : 'entries'} added`)
@@ -16137,6 +16152,10 @@ function getDisplayConditions(entry: LogEntry): string[] {
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.3s ease;
+}
+
+.fade-leave-active {
+  pointer-events: none;
 }
 
 .fade-enter-from,

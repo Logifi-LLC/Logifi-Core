@@ -1,28 +1,48 @@
+FOCUS: App — get it ready for users
+
 RELEASE ORDER
-1. Digifi web (now) — Add Pages, QR phone companion, mock credits for testers
-2. App — logbook, offline, catalog (Digifi Eye stays Beta / parked)
-3. Digifi in app — Eye production pairing
-4. FC View integration
+1. App (now) — logbook, offline, Digifi Eye, user-ready polish
+2. Digifi web — Pages, QR companion, mock credits for testers
+3. FC View integration
+4. Endorsements & signatures (after app is user-ready)
 
-BRANCHES
-- dev — Digifi web testing, Murray, QR fixes, mock credits
-- payment — Stripe + Lightning (branched off dev; merge into dev AFTER Digifi web test sign-off)
-- Do NOT merge payment → main until dev is stable with payments
+────────────────────────────────────────
+APP NOW
+────────────────────────────────────────
 
-DEV NOW (Digifi main)
-- GET AHOLD OF MURRAY / first tester — see logifi.web/docs/digifi-tester-guide.md
-- QR companion path (not Digifi Eye native app for v1 testers)
-- Mock credits via Add Credits modal (real payments on payment branch only)
-- Fix only what testing surfaces
+1. OFFLINE LOGBOOK — investigate & fix if needed
+   Status: Partially working today.
+   - Signed-in users load from IndexedDB first, then sync from Supabase when online.
+   - Full logbook is available offline ONLY if it was previously synced to IndexedDB on that device.
+   - First visit with empty cache + no internet = empty logbook (gap to fix).
+   - iOS "Load more" (50 rows) is display-only — entries are in memory, not missing from cloud.
+   - Cloud fetch uses 1000-row batches; progressive first paint shows 100 then background sync.
+   - Action: Verify offline-at-altitude scenario; ensure full logbook caches locally after first online sync; fix any gaps.
 
-PAYMENT BRANCH (merge into dev AFTER Digifi web test sign-off — see digifi-tester-guide.md)
-- Stripe Checkout + webhook — implemented on `payment` branch
-- Lightning invoice + webhook (BTCPay scaffold) — implemented on `payment` branch
-- add-mock gated via NUXT_CREDITS_MOCK_ENABLED (default on in dev, off in prod)
-- Push: git push -u origin payment (when remote access available)
-- DO NOT merge payment → dev until tester sign-off checklist is complete
+2. DIGIFI EYE — test and make it work
+   - iOS session pairing / Capacitor API routing (was parked; now priority)
+   - Test: QR scan from Add Pages → capture upload on phone
+   - See: logifi.web/app/pages/digifi-eye.vue, docs/ios-testflight.md
 
-PARKED
-- Digifi Eye iOS session pairing / Capacitor API routing
+3. TALK TO ABBY — marketing
+
+────────────────────────────────────────
+DONE / GOOD
+────────────────────────────────────────
+- Stripe + Opennode (Lightning) — working as planned (payment branch)
+- Murray responded — still slammed; not available for testing yet
+
+────────────────────────────────────────
+LATER (after app is user-ready)
+────────────────────────────────────────
+- Endorsements & signatures
 - Manual and FC View imports in the same day
-- Offline work on the app (Phase 2)
+- Digifi web tester sign-off (Murray when available)
+- Merge payment branch → dev after Digifi web test sign-off
+
+────────────────────────────────────────
+BRANCHES
+────────────────────────────────────────
+- dev — app work, Digifi web testing
+- payment — Stripe + Lightning (merge into dev after Digifi web test sign-off)
+- Do NOT merge payment → main until dev is stable with payments

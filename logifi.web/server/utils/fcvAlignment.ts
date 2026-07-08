@@ -1,4 +1,17 @@
 import type { FcvMappedEntry } from './fcvMap'
+import {
+  buildCatalogPersonAlignmentSeeds,
+  normalizeCrewNameForMatching,
+  type CatalogPersonCatalogRow,
+  type CatalogPersonDisplay,
+} from '../../shared/catalogPersonNames'
+
+export {
+  buildCatalogPersonAlignmentSeeds,
+  normalizeCrewNameForMatching,
+  type CatalogPersonCatalogRow,
+  type CatalogPersonDisplay,
+}
 
 export type CrewMatchStrategy =
   | 'exact'
@@ -19,17 +32,6 @@ export interface AlignmentIndexSourceRow {
 interface TailIdentity {
   aircraft_make_model: string | null
   aircraft_category_class: string | null
-}
-
-/** One person in catalog_entity_tags after grouping by entity_id. */
-export interface CatalogPersonDisplay {
-  entityId: string
-  displayName: string
-}
-
-export interface CatalogPersonCatalogRow {
-  entity_id?: unknown
-  tag?: unknown
 }
 
 export interface AlignmentIndexBuildOptions {
@@ -122,23 +124,6 @@ export function mapAircraftCategoryClass(value: unknown): string {
   return 'AMEL'
 }
 
-export function normalizeCrewNameForMatching(value: unknown): string {
-  if (typeof value !== 'string') return ''
-  const upper = value
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toUpperCase()
-    .replace(/[^A-Z,\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (!upper) return ''
-  if (upper.includes(',')) {
-    const [last, first] = upper.split(',', 2).map((v) => v.trim())
-    return [first, last].filter(Boolean).join(' ')
-  }
-  return upper
-}
-
 function splitNamePartsForFuzzy(value: string): { first: string; last: string } {
   const n = normalizeCrewNameForMatching(value)
   if (!n) return { first: '', last: '' }
@@ -198,14 +183,6 @@ function addCanonicalCrewName(
   crewCanonicalNames.add(name)
 }
 
-function pickBestPersonCatalogDisplayTag(entityId: string, tags: string[]): string {
-  if (!tags.length) return entityId
-  const keyEid = normalizeCrewNameForMatching(entityId)
-  const matching = tags.filter((t) => normalizeCrewNameForMatching(t) === keyEid)
-  const pool = matching.length > 0 ? matching : tags
-  return pool.reduce((best, t) => (t.length > best.length ? t : best), pool[0]!)
-}
-
 function seedCatalogPersonDisplay(
   crewByNormalizedKey: Map<string, string>,
   crewCanonicalNames: Set<string>,
@@ -222,29 +199,6 @@ function seedCatalogPersonDisplay(
     crewByNormalizedKey.set(key, canonical)
   }
   crewCanonicalNames.add(canonical)
-}
-
-/** Build FC View alignment seeds from `catalog_entity_tags` person rows (grouped by entity_id). */
-export function buildCatalogPersonAlignmentSeeds(
-  rows: CatalogPersonCatalogRow[]
-): CatalogPersonDisplay[] {
-  const byEntity = new Map<string, string[]>()
-  for (const r of rows) {
-    const eid = typeof r.entity_id === 'string' ? r.entity_id.trim().toLowerCase() : ''
-    if (!eid) continue
-    const tag = typeof r.tag === 'string' ? r.tag.trim() : ''
-    const arr = byEntity.get(eid) ?? []
-    if (tag) arr.push(tag)
-    byEntity.set(eid, arr)
-  }
-  const out: CatalogPersonDisplay[] = []
-  for (const [entityId, tags] of byEntity) {
-    out.push({
-      entityId,
-      displayName: pickBestPersonCatalogDisplayTag(entityId, tags),
-    })
-  }
-  return out
 }
 
 export function buildAlignmentIndex(
