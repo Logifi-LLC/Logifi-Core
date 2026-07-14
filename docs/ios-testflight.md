@@ -28,7 +28,7 @@ npm run cap:run:ios
    - `[LoadEntries] Merged entries: N entries`
    - `[LoadEntries] IndexedDB persist complete` (may appear shortly after merge)
    - **No** `Gesture: System gesture gate timed out` within ~5s of merge
-   - Totals populate within ~1–2s; catalog/settings/FAB taps work; logbook shows first page with **Load more**
+   - Totals populate within ~1–2s; catalog/settings/FAB taps work; logbook shows first page (~100 cards) and **auto-loads more as you scroll**
 
 ### Verify cloud data (not just local cache)
 
@@ -207,7 +207,7 @@ Tester instructions: [ios-testflight-tester-guide.md](../logifi.web/docs/ios-tes
 | Symptom | Fix |
 |---------|-----|
 | `Updated list with error: DownloadFailed` / missing icons | Icons must be bundled for Capacitor (`icon.serverBundle: false` in `nuxt.config.ts`). Run `npm run cap:sync` from repo root, then **Product → Clean Build Folder** in Xcode and reinstall |
-| App feels frozen with 1000+ entries on iOS | iOS uses paginated log cards (Load more). Rebuild after `cap:sync` if you still see all entries at once |
+| App feels frozen with 1000+ entries on iOS | iOS uses display-windowed log cards (infinite scroll, ~100/page). Rebuild after `cap:sync` if you still see all entries at once |
 | Cannot scroll / taps ignored on iOS | Pull-to-refresh removed on iOS; entry form no longer auto-opens on empty logbook. Run `cap:sync`, clean Xcode build, reinstall |
 | Stuck on "Syncing logbook" | Check Safari console for `[LoadEntries] Merged entries`. Large logbooks sync in background — UI should stay interactive. Use Settings → Sync to force completion |
 | `/api/*` 404 on device | Set `NUXT_PUBLIC_API_BASE` and rebuild with `cap:sync`; verify Vercel deploy uses `nuxt build` |

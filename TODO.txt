@@ -15,7 +15,7 @@ APP NOW
    - Signed-in users load from IndexedDB first, then sync from Supabase when online.
    - Full logbook is available offline ONLY if it was previously synced to IndexedDB on that device.
    - First visit with empty cache + no internet = empty logbook (gap to fix).
-   - iOS "Load more" (50 rows) is display-only — entries are in memory, not missing from cloud.
+   - iOS list shows ~100 cards at a time (display-only; full set is in memory) and auto-loads more on scroll — not missing from cloud.
    - Cloud fetch uses 1000-row batches; progressive first paint shows 100 then background sync.
    - Action: Verify offline-at-altitude scenario; ensure full logbook caches locally after first online sync; fix any gaps.
 

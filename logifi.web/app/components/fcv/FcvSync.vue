@@ -15,6 +15,7 @@ import {
 import {
   catalogContainsPersonName,
 } from '../../../shared/catalogPersonNames'
+import { OOOI_FIELD_ORDER } from '~/utils/logbookTypes'
 
 /** Must match dashboard theme; avoid `dark:` here so OS dark mode does not fight white settings cards. */
 const props = withDefaults(
@@ -957,11 +958,7 @@ function formatOooiPreview(f: FcvMappedEntry): string {
     if (d.length !== 4) return ''
     return `${d.slice(0, 2)}:${d.slice(2, 4)}`
   }
-  const out = toDisp(o.out)
-  const off = toDisp(o.off)
-  const on = toDisp(o.on)
-  const inn = toDisp(o.in)
-  const parts = [out, off, inn, on].filter(Boolean)
+  const parts = OOOI_FIELD_ORDER.map((key) => toDisp(o[key])).filter(Boolean)
   return parts.length ? `OOOI ${parts.join(' · ')}` : ''
 }
 

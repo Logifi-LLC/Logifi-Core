@@ -74,6 +74,9 @@ export interface OOOITimes {
   isZulu: boolean
 }
 
+/** Canonical Out → Off → On → In order for display and form fields. */
+export const OOOI_FIELD_ORDER = ['out', 'off', 'on', 'in'] as const
+
 export interface LogEntry {
   id: string
   date: string

@@ -2,7 +2,9 @@
 <div
   ref="rootScrollContainerRef"
   :class="[
-    'min-h-screen overflow-y-auto transition-colors duration-300 font-quicksand',
+    isIos
+      ? 'h-dvh overflow-y-auto overscroll-y-contain transition-colors duration-300 font-quicksand'
+      : 'min-h-screen overflow-y-auto transition-colors duration-300 font-quicksand',
     theme === 'dark' ? 'bg-gray-950' : 'bg-gray-50'
   ]"
 >
@@ -142,7 +144,7 @@
   <div
     v-if="isIos && (pullDistance > 0 || isPullRefreshing)"
     class="fixed left-0 right-0 top-0 z-40 flex items-end justify-center pointer-events-none pb-2"
-    :style="{ height: `calc(env(safe-area-inset-top, 0px) + ${isPullRefreshing ? 70 : pullDistance}px)` }"
+    :style="{ height: `calc(env(safe-area-inset-top, 0px) + ${isPullRefreshing ? 100 : pullDistance}px)` }"
   >
     <div
       class="flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium font-quicksand shadow-md"
@@ -153,10 +155,10 @@
         size="16"
         :class="{
           'animate-spin': isPullRefreshing,
-          'rotate-180': pullDistance >= 70 && !isPullRefreshing,
+          'rotate-180': pullDistance >= 100 && !isPullRefreshing,
         }"
       />
-      {{ isPullRefreshing ? 'Syncing...' : pullDistance >= 70 ? 'Release to sync' : 'Pull to sync' }}
+      {{ isPullRefreshing ? 'Syncing...' : pullDistance >= 100 ? 'Release to sync' : 'Pull to sync' }}
     </div>
   </div>
 
@@ -1404,24 +1406,6 @@
             />
 
             <div
-              v-if="isIos && filteredEntries.length > iosVisibleEntryCount"
-              class="mt-4 flex justify-center"
-            >
-              <button
-                type="button"
-                :class="[
-                  'rounded-lg border px-4 py-2.5 text-sm font-quicksand font-medium transition-colors',
-                  isDarkMode
-                    ? 'border-gray-600 bg-gray-800 text-gray-200 hover:bg-gray-700'
-                    : 'border-gray-300 bg-white text-gray-800 hover:bg-gray-100'
-                ]"
-                @click="loadMoreIosEntries"
-              >
-                Load more ({{ iosDisplayedEntries.length }} of {{ filteredEntries.length }})
-              </button>
-            </div>
-
-            <div
               v-else
               ref="tableContainerRef"
               :class="[
@@ -1617,6 +1601,22 @@
                   </template>
                 </tbody>
               </table>
+            </div>
+
+            <div
+              v-if="isIos && filteredEntries.length > iosVisibleEntryCount"
+              ref="iosLoadMoreSentinelRef"
+              class="mt-4 flex flex-col items-center gap-1 py-3"
+              aria-live="polite"
+            >
+              <p
+                :class="[
+                  'text-xs font-quicksand',
+                  isDarkMode ? 'text-gray-500' : 'text-gray-400'
+                ]"
+              >
+                Showing {{ iosDisplayedEntries.length }} of {{ filteredEntries.length }}
+              </p>
             </div>
       </div>
     </div>
@@ -5936,7 +5936,8 @@ import {
   createEmptyPerformance,
   createEmptyOOOI,
   getApproachesFromPerformance,
-  getTotalApproachCount
+  getTotalApproachCount,
+  OOOI_FIELD_ORDER,
 } from '../utils/logbookTypes'
 import type {
   CatalogKey,
@@ -6400,7 +6401,7 @@ const iosSyncMessage = ref('')
 const iosSyncBannerVisible = ref(false)
 let iosSyncSuccessTimer: ReturnType<typeof setTimeout> | null = null
 
-const IOS_ENTRIES_PAGE_SIZE = 50
+const IOS_ENTRIES_PAGE_SIZE = 100
 const CACHE_FRESH_MS = 5 * 60 * 1000
 const LOG_ENTRIES_SIDE_EFFECT_DEBOUNCE_MS = 400
 const IOS_CATALOG_DEBOUNCE_MS = 400
@@ -6642,6 +6643,7 @@ function handleAppResume(): void {
 
 // Cleanup scroll event listener on unmount
 onUnmounted(() => {
+  teardownIosLoadMoreObserver()
   if (isBrowser) {
     const scrollTarget = isIos.value ? rootScrollContainerRef.value : window
     if (scrollTarget) {
@@ -6973,7 +6975,7 @@ const roleOptions = ['PIC', 'SIC', 'Dual Received', 'Solo', 'Safety Pilot', 'Exa
 function roleDisplayLabel(role: string): string {
   return role === 'Dual Received' ? 'Student' : role
 }
-const oooiFields: (keyof OOOITimes)[] = ['out', 'off', 'in', 'on']
+const oooiFields: (keyof OOOITimes)[] = [...OOOI_FIELD_ORDER]
 const oooiFieldLabels: Record<keyof OOOITimes, string> = {
   out: 'Out',
   off: 'Off',
@@ -7452,20 +7454,17 @@ const fcvFetchSectionRef = ref<HTMLElement | null>(null)
 const showScrollToTop = ref(false)
 const handleScroll = (): void => {
   if (!isBrowser) return
-  const container = rootScrollContainerRef.value
-  const scrollTop = container
-    ? container.scrollTop
-    : window.scrollY || document.documentElement.scrollTop
-  showScrollToTop.value = scrollTop > 300
+  const containerTop = rootScrollContainerRef.value?.scrollTop ?? 0
+  const windowTop = window.scrollY || document.documentElement.scrollTop || 0
+  showScrollToTop.value = Math.max(containerTop, windowTop) > 300
 }
 const scrollToTop = (): void => {
   if (!isBrowser) return
   const container = rootScrollContainerRef.value
-  if (container) {
+  if (container && container.scrollHeight > container.clientHeight) {
     container.scrollTo({ top: 0, behavior: 'smooth' })
-  } else {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 const openFcvFetchSection = async (): Promise<void> => {
@@ -11363,7 +11362,7 @@ const { pullDistance, isPulling, isRefreshing: isPullRefreshing } = usePullToRef
 
 const pullTransformStyle = computed(() => {
   if (!isIos.value) return {}
-  const y = isPullRefreshing.value ? 70 : pullDistance.value
+  const y = isPullRefreshing.value ? 100 : pullDistance.value
   const transition = isPulling.value ? 'none' : 'transform 0.25s ease-out'
   return { transform: `translateY(${y}px)`, transition }
 })
@@ -14973,9 +14972,43 @@ const iosDisplayedEntries = computed(() =>
   isIos.value ? filteredEntries.value.slice(0, iosVisibleEntryCount.value) : filteredEntries.value
 )
 
+const iosLoadMoreSentinelRef = ref<HTMLElement | null>(null)
+let iosLoadMoreObserver: IntersectionObserver | undefined
+
 function loadMoreIosEntries(): void {
+  if (iosVisibleEntryCount.value >= filteredEntries.value.length) return
   iosVisibleEntryCount.value += IOS_ENTRIES_PAGE_SIZE
 }
+
+function teardownIosLoadMoreObserver(): void {
+  iosLoadMoreObserver?.disconnect()
+  iosLoadMoreObserver = undefined
+}
+
+function setupIosLoadMoreObserver(): void {
+  teardownIosLoadMoreObserver()
+  if (!isIos.value || typeof IntersectionObserver === 'undefined') return
+  const root = rootScrollContainerRef.value
+  const sentinel = iosLoadMoreSentinelRef.value
+  if (!root || !sentinel) return
+
+  iosLoadMoreObserver = new IntersectionObserver(
+    (entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return
+      if (iosVisibleEntryCount.value >= filteredEntries.value.length) return
+      loadMoreIosEntries()
+      // Re-observe after DOM grows; fires again if sentinel is still near the viewport.
+      nextTick(() => setupIosLoadMoreObserver())
+    },
+    { root, rootMargin: '160px 0px', threshold: 0 }
+  )
+  iosLoadMoreObserver.observe(sentinel)
+}
+
+watch(iosLoadMoreSentinelRef, (el) => {
+  if (el) setupIosLoadMoreObserver()
+  else teardownIosLoadMoreObserver()
+})
 
 watch(
   [searchTerm, activeLogbook, totalsTimeMode, totalsCustomStart, totalsCustomEnd, selectedFilters],

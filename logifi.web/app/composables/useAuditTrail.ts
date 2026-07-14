@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { supabase } from '~/lib/supabase'
 import type { Database } from '~/types/database'
+import { OOOI_FIELD_ORDER } from '~/utils/logbookTypes'
 
 type AuditLog = Database['public']['Tables']['audit_logs']['Row']
 type EntryRevision = Database['public']['Tables']['entry_revisions']['Row']
@@ -331,7 +332,7 @@ export const useAuditTrail = () => {
     isZulu: 'Zulu (UTC)'
   }
 
-  const OOOI_FIELD_ORDER = ['out', 'off', 'in', 'on', 'isZulu'] as const
+  const OOOI_AUDIT_FIELD_ORDER = [...OOOI_FIELD_ORDER, 'isZulu'] as const
 
   const getFieldDiff = (oldData: any, newData: any, changedFields: string[]) => {
     const diffs: Array<{ field: string; oldValue: any; newValue: any }> = []
@@ -379,7 +380,7 @@ export const useAuditTrail = () => {
         return
       }
       if (field === 'oooi') {
-        expandNested('oooi', oldValue && typeof oldValue === 'object' ? oldValue : null, newValue && typeof newValue === 'object' ? newValue : null, OOOI_LABELS, OOOI_FIELD_ORDER)
+        expandNested('oooi', oldValue && typeof oldValue === 'object' ? oldValue : null, newValue && typeof newValue === 'object' ? newValue : null, OOOI_LABELS, OOOI_AUDIT_FIELD_ORDER)
         return
       }
 

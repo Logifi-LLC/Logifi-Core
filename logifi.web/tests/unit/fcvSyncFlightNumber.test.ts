@@ -65,6 +65,22 @@ function primePreviewModal(setupState: Record<string, unknown>, flights: ReturnT
   setupState.showPreviewModal = true
 }
 
+describe('FcvSync preview OOOI', () => {
+  it('shows On before In in the OOOI preview line', async () => {
+    const wrapper = mountFcvSync()
+    const setupState = (wrapper.vm as { $: { setupState: Record<string, unknown> } }).$.setupState
+
+    primePreviewModal(setupState, [
+      buildPreviewFlight({
+        oooi: { out: '1327', off: '1400', on: '1455', in: '1501', isZulu: false },
+      }),
+    ])
+    await nextTick()
+
+    expect(wrapper.text()).toContain('OOOI 13:27 · 14:00 · 14:55 · 15:01')
+  })
+})
+
 describe('FcvSync preview flight number', () => {
   it('shows the flight number badge when preview data includes one', async () => {
     const wrapper = mountFcvSync()
