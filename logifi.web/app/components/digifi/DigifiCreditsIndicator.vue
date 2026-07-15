@@ -13,10 +13,17 @@ defineEmits<{
   openCheckout: []
 }>()
 
-const { displayCredits, loading, showWelcomeCreditsHint, fetchTransactions } = useDigifiCredits()
+const {
+  displayCredits,
+  loading,
+  showWelcomeCreditsHint,
+  fetchBalance,
+  fetchTransactions,
+} = useDigifiCredits()
 const { isDark: isDarkMode } = useTheme()
 
 onMounted(() => {
+  void fetchBalance()
   void fetchTransactions()
 })
 

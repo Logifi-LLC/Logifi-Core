@@ -8,6 +8,7 @@ import {
 } from '~/utils/creditsPricing'
 import { WELCOME_CREDITS } from '../../shared/creditsWelcome'
 import { useAuth } from '~/composables/useAuth'
+import { apiFetch } from '~/utils/apiFetch'
 
 export type CreditsBalanceResponse = { credits: number }
 
@@ -72,6 +73,10 @@ const transactionsLoading = ref(false)
 const loading = ref(false)
 const error = ref<string | null>(null)
 
+function normalizeCredits(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
 export function useDigifiCredits() {
   const { isAuthenticated, getAccessToken, user } = useAuth()
   const config = useRuntimeConfig()
@@ -98,12 +103,13 @@ export function useDigifiCredits() {
     loading.value = true
     error.value = null
     try {
-      const result = await $fetch<CreditsBalanceResponse>('/api/credits/balance', {
+      const result = await apiFetch<CreditsBalanceResponse>('/api/credits/balance', {
         method: 'GET',
         headers: authHeaders(),
       })
-      credits.value = result.credits
-      return result.credits
+      const balance = normalizeCredits(result?.credits)
+      credits.value = balance
+      return balance
     } catch (err: unknown) {
       const message =
         (err as { data?: { statusMessage?: string } })?.data?.statusMessage ??
@@ -123,7 +129,7 @@ export function useDigifiCredits() {
 
     transactionsLoading.value = true
     try {
-      const result = await $fetch<CreditTransactionsResponse>('/api/credits/transactions', {
+      const result = await apiFetch<CreditTransactionsResponse>('/api/credits/transactions', {
         method: 'GET',
         headers: authHeaders(),
         query: { limit: String(limit) },
@@ -154,7 +160,7 @@ export function useDigifiCredits() {
     numberOfCredits: number
     paymentMethod: PaymentMethod
   }): Promise<AddMockCreditsResponse> {
-    const result = await $fetch<AddMockCreditsResponse>('/api/credits/add-mock', {
+    const result = await apiFetch<AddMockCreditsResponse>('/api/credits/add-mock', {
       method: 'POST',
       headers: authHeaders(),
       body: {
@@ -162,13 +168,13 @@ export function useDigifiCredits() {
         paymentMethod: input.paymentMethod,
       },
     })
-    credits.value = result.credits
+    credits.value = normalizeCredits(result?.credits) ?? credits.value
     void fetchTransactions()
     return result
   }
 
   async function startStripeCheckout(numberOfCredits: number): Promise<StripeCheckoutResponse> {
-    return $fetch<StripeCheckoutResponse>('/api/credits/checkout/stripe', {
+    return apiFetch<StripeCheckoutResponse>('/api/credits/checkout/stripe', {
       method: 'POST',
       headers: authHeaders(),
       body: { numberOfCredits },
@@ -178,7 +184,7 @@ export function useDigifiCredits() {
   async function startLightningCheckout(
     numberOfCredits: number
   ): Promise<LightningCheckoutResponse> {
-    return $fetch<LightningCheckoutResponse>('/api/credits/checkout/lightning', {
+    return apiFetch<LightningCheckoutResponse>('/api/credits/checkout/lightning', {
       method: 'POST',
       headers: authHeaders(),
       body: { numberOfCredits },
@@ -188,7 +194,7 @@ export function useDigifiCredits() {
   async function pollLightningInvoiceStatus(
     invoiceId: string
   ): Promise<LightningInvoiceStatusResponse> {
-    return $fetch<LightningInvoiceStatusResponse>(
+    return apiFetch<LightningInvoiceStatusResponse>(
       `/api/credits/checkout/lightning/${encodeURIComponent(invoiceId)}/status`,
       {
         method: 'GET',
@@ -252,7 +258,9 @@ export function useDigifiCredits() {
   )
 
   const displayCredits = computed(() =>
-    credits.value === null ? '—' : String(credits.value)
+    typeof credits.value === 'number' && Number.isFinite(credits.value)
+      ? String(credits.value)
+      : '—'
   )
 
   const hasPurchasedCredits = computed(() =>
@@ -260,7 +268,7 @@ export function useDigifiCredits() {
   )
 
   const showWelcomeCreditsHint = computed(() => {
-    if (credits.value === null || loading.value) return false
+    if (typeof credits.value !== 'number' || loading.value) return false
     if (hasPurchasedCredits.value) return false
     return credits.value <= WELCOME_CREDITS
   })

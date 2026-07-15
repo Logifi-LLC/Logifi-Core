@@ -15,7 +15,7 @@ export function resolveApiUrl(path: string): string {
 
   try {
     const config = useRuntimeConfig()
-    const base = String(config.public.apiBase || '').replace(/\/$/, '')
+    const base = String(config.public.apiBase || '').trim().replace(/\/$/, '')
     if (!base) return path
     return `${base}${path}`
   } catch {

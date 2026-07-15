@@ -142,7 +142,7 @@ export async function reconcileCreditsBalanceFromLedger(
     throw new Error(`Failed to reconcile credits balance: ${error.message}`)
   }
 
-  return data.credits
+  return data?.credits ?? latestTx.balance_after ?? 0
 }
 
 export async function listCreditTransactions(
