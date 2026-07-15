@@ -2,6 +2,7 @@ import { computed, onUnmounted, ref } from 'vue'
 import { supabase } from '~/lib/supabase'
 import { useAuth } from '~/composables/useAuth'
 import type { DigifiCapturePhoto, DigifiCaptureSessionResponse } from '~/utils/digifiTypes'
+import { apiFetch } from '~/utils/apiFetch'
 
 interface SessionStatusResponse {
   ok: true
@@ -49,7 +50,7 @@ export function useDigifiCompanionCapture() {
     const previousIds = new Set(photos.value.map((photo) => photo.id))
     loadingPhotos.value = true
     try {
-      const result = await $fetch<CapturePhotosResponse>('/api/digifi/capture/photos', {
+      const result = await apiFetch<CapturePhotosResponse>('/api/digifi/capture/photos', {
         method: 'GET',
         headers: authHeaders(),
         query: { sessionId: sessionId.value },
@@ -103,7 +104,7 @@ export function useDigifiCompanionCapture() {
     photos.value = []
     selectedPhotoId.value = null
     try {
-      const result = await $fetch<DigifiCaptureSessionResponse>('/api/digifi/capture/session', {
+      const result = await apiFetch<DigifiCaptureSessionResponse>('/api/digifi/capture/session', {
         method: 'POST',
         headers: authHeaders(),
       })
@@ -125,7 +126,7 @@ export function useDigifiCompanionCapture() {
   async function refreshSessionStatus() {
     if (!sessionToken.value) return
     try {
-      const result = await $fetch<SessionStatusResponse>(`/api/digifi/capture/session/${sessionToken.value}`)
+      const result = await apiFetch<SessionStatusResponse>(`/api/digifi/capture/session/${sessionToken.value}`)
       expiresAt.value = result.expiresAt
       if (!result.isActive) disconnectRealtime()
     } catch {

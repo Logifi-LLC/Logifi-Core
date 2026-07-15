@@ -1,5 +1,6 @@
 import { onUnmounted, ref, type Ref } from 'vue'
 import type { DigifiPageSide } from '~/utils/digifiTypes'
+import { apiFetch } from '~/utils/apiFetch'
 
 interface SessionStatusResponse {
   ok: true
@@ -55,7 +56,7 @@ export function useDigifiCaptureUpload(token: Ref<string>) {
     checking.value = true
     sessionError.value = null
     try {
-      const response = await $fetch<SessionStatusResponse>(`/api/digifi/capture/session/${token.value}`)
+      const response = await apiFetch<SessionStatusResponse>(`/api/digifi/capture/session/${token.value}`)
       sessionActive.value = response.isActive
       if (!response.isActive) {
         sessionError.value = 'This capture session is closed or expired.'
@@ -82,7 +83,7 @@ export function useDigifiCaptureUpload(token: Ref<string>) {
         form.append('token', token.value)
         form.append('pageSide', pageSide)
         form.append('image', file)
-        await $fetch('/api/digifi/capture/upload', {
+        await apiFetch('/api/digifi/capture/upload', {
           method: 'POST',
           body: form,
         })

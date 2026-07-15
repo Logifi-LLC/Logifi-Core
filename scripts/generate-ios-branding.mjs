@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 /**
  * Generate iOS splash + app icon from favicon.png:
- * - App icon: coarse gray-950 cross-hatch + favicon pixel remap (hatch replaces black square)
- * - Splash: gray-950 cross-hatch + full favicon composite
- * - Web logo mark: solid gray-950 + white mark (clean at small in-app sizes)
+ * - App icon / splash / web logo: gray-950 radial glow + white mark composite
  *
  * Usage: npm run generate:ios-branding
  */
@@ -29,180 +27,92 @@ const SPLASH_SIZE = 2732
 const ICON_SIZE = 1024
 const ICON_PREVIEW_SIZE = 180
 const WEB_LOGO_SIZE = 512
-const SPLASH_FAVICON_SCALE = 0.36
-const ICON_FAVICON_SCALE = 0.55
-const ICON_LOGO_SCALE = 0.57
+const SPLASH_FAVICON_SCALE = 0.42
+const ICON_FAVICON_SCALE = 0.62
+const ICON_LOGO_SCALE = 0.62
 
 // Tailwind gray-950 — matches in-app dark theme background
 const APP_BG = '#030712'
-const HATCH_LINE = '#1a2332'
-const HATCH_SPACING = 28
+const GLOW_CENTER = '#141e33'
+const GLOW_RADIUS_RATIO = 0.7
 
-// Coarser hatch for home-screen icon (survives iOS downscale to ~60pt)
-const ICON_HATCH_SPACING = 32
-const ICON_HATCH_LINE = '#243044'
-const ICON_HATCH_STROKE = 1.5
-
-function hatchSpacingForSize(size) {
-  return Math.max(8, Math.round((HATCH_SPACING * size) / SPLASH_SIZE))
-}
-
-function hatchSvg(size, opts = {}) {
-  const spacing = opts.spacing ?? hatchSpacingForSize(size)
-  const lineColor = opts.lineColor ?? HATCH_LINE
-  const strokeWidth = opts.strokeWidth ?? 1
+function glowSvg(size) {
+  const cx = size / 2
+  const cy = size / 2
+  const r = size * GLOW_RADIUS_RATIO
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-  <rect width="${size}" height="${size}" fill="${APP_BG}"/>
   <defs>
-    <pattern id="diagA" width="${spacing}" height="${spacing}" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-      <line x1="0" y1="0" x2="0" y2="${spacing}" stroke="${lineColor}" stroke-width="${strokeWidth}"/>
-    </pattern>
-    <pattern id="diagB" width="${spacing}" height="${spacing}" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
-      <line x1="0" y1="0" x2="0" y2="${spacing}" stroke="${lineColor}" stroke-width="${strokeWidth}"/>
-    </pattern>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+      <stop offset="0%" stop-color="${GLOW_CENTER}" stop-opacity="1"/>
+      <stop offset="70%" stop-color="${GLOW_CENTER}" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="${APP_BG}" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <rect width="${size}" height="${size}" fill="url(#diagA)"/>
-  <rect width="${size}" height="${size}" fill="url(#diagB)"/>
+  <rect width="${size}" height="${size}" fill="${APP_BG}"/>
+  <circle cx="${cx}" cy="${cy}" r="${r}" fill="url(#glow)"/>
 </svg>`
 }
 
-async function renderHatchBuffer(size, opts = {}) {
-  return sharp(Buffer.from(hatchSvg(size, opts)))
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true })
-}
-
-/** favicon.png is white mark on opaque black; extract white for solid-bg web logo. */
-async function loadWhiteMarkFromFavicon() {
+/**
+ * favicon.png is white mark on opaque black with large internal padding.
+ * Extract white pixels and tight-crop so scale refers to the visible mark.
+ */
+async function loadTightWhiteMark() {
   const faviconBuffer = await fs.readFile(FAVICON)
   const { data, info } = await sharp(faviconBuffer)
     .ensureAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true })
 
-  for (let i = 0; i < data.length; i += 4) {
-    const lum = (data[i] + data[i + 1] + data[i + 2]) / 3
-    data[i + 3] = lum > 64 ? 255 : 0
-    data[i] = 255
-    data[i + 1] = 255
-    data[i + 2] = 255
-  }
+  let minX = info.width
+  let minY = info.height
+  let maxX = 0
+  let maxY = 0
 
-  return sharp(Buffer.from(data), {
-    raw: { width: info.width, height: info.height, channels: 4 },
-  })
-}
-
-/** Full favicon square with black pixels made transparent for hatch compositing. */
-async function loadFaviconForComposite() {
-  const faviconBuffer = await fs.readFile(FAVICON)
-  const { data, info } = await sharp(faviconBuffer)
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true })
-
-  for (let i = 0; i < data.length; i += 4) {
-    const lum = (data[i] + data[i + 1] + data[i + 2]) / 3
-    if (lum <= 64) {
-      data[i + 3] = 0
-    }
-  }
-
-  return sharp(Buffer.from(data), {
-    raw: { width: info.width, height: info.height, channels: 4 },
-  })
-}
-
-async function buildHatchFaviconImage(size, faviconScale) {
-  const faviconWidth = Math.round(size * faviconScale)
-
-  const background = await sharp(Buffer.from(hatchSvg(size))).png().toBuffer()
-
-  const faviconLayer = await loadFaviconForComposite()
-    .then((pipeline) =>
-      pipeline.resize(faviconWidth, faviconWidth, { fit: 'inside' }).png().toBuffer()
-    )
-
-  const { width: fw, height: fh } = await sharp(faviconLayer).metadata()
-  const left = Math.round((size - fw) / 2)
-  const top = Math.round((size - fh) / 2)
-
-  return sharp(background)
-    .composite([{ input: faviconLayer, left, top }])
-    .png()
-    .toBuffer()
-}
-
-/** Home-screen icon: remap favicon dark pixels to hatch background pixels. */
-async function buildAppIconImage() {
-  const faviconWidth = Math.round(ICON_SIZE * ICON_FAVICON_SCALE)
-
-  const { data: bgData, info: bgInfo } = await renderHatchBuffer(ICON_SIZE, {
-    spacing: ICON_HATCH_SPACING,
-    lineColor: ICON_HATCH_LINE,
-    strokeWidth: ICON_HATCH_STROKE,
-  })
-
-  const faviconBuffer = await fs.readFile(FAVICON)
-  const { data: favData, info: favInfo } = await sharp(faviconBuffer)
-    .resize(faviconWidth, faviconWidth, { fit: 'inside' })
-    .ensureAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true })
-
-  const fw = favInfo.width
-  const fh = favInfo.height
-  const left = Math.round((ICON_SIZE - fw) / 2)
-  const top = Math.round((ICON_SIZE - fh) / 2)
-
-  const out = Buffer.from(bgData)
-  const canvasWidth = bgInfo.width
-
-  for (let y = 0; y < fh; y++) {
-    for (let x = 0; x < fw; x++) {
-      const fi = (y * fw + x) * 4
-      const lum = (favData[fi] + favData[fi + 1] + favData[fi + 2]) / 3
+  for (let y = 0; y < info.height; y++) {
+    for (let x = 0; x < info.width; x++) {
+      const i = (y * info.width + x) * 4
+      const lum = (data[i] + data[i + 1] + data[i + 2]) / 3
       if (lum > 64) {
-        const ox = left + x
-        const oy = top + y
-        const oi = (oy * canvasWidth + ox) * 4
-        out[oi] = 255
-        out[oi + 1] = 255
-        out[oi + 2] = 255
-        out[oi + 3] = 255
+        minX = Math.min(minX, x)
+        minY = Math.min(minY, y)
+        maxX = Math.max(maxX, x)
+        maxY = Math.max(maxY, y)
+        data[i] = 255
+        data[i + 1] = 255
+        data[i + 2] = 255
+        data[i + 3] = 255
+      } else {
+        data[i + 3] = 0
       }
     }
   }
 
-  return sharp(out, {
-    raw: { width: canvasWidth, height: bgInfo.height, channels: 4 },
-  })
-    .png()
-    .toBuffer()
+  const cropW = maxX - minX + 1
+  const cropH = maxY - minY + 1
+
+  return sharp(Buffer.from(data), {
+    raw: { width: info.width, height: info.height, channels: 4 },
+  }).extract({ left: minX, top: minY, width: cropW, height: cropH })
 }
 
-async function buildSolidMarkImage(size, logoScale) {
-  const logoWidth = Math.round(size * logoScale)
+async function buildGlowMarkImage(size, markScale) {
+  const targetWidth = Math.round(size * markScale)
 
-  const background = await sharp({
-    create: { width: size, height: size, channels: 3, background: APP_BG },
-  })
-    .png()
-    .toBuffer()
+  const background = await sharp(Buffer.from(glowSvg(size))).png().toBuffer()
 
-  const whiteLogo = await loadWhiteMarkFromFavicon()
+  const markLayer = await loadTightWhiteMark()
     .then((pipeline) =>
-      pipeline.resize(logoWidth, logoWidth, { fit: 'inside' }).png().toBuffer()
+      pipeline.resize(targetWidth, targetWidth, { fit: 'inside' }).png().toBuffer()
     )
 
-  const { width: lw, height: lh } = await sharp(whiteLogo).metadata()
-  const left = Math.round((size - lw) / 2)
-  const top = Math.round((size - lh) / 2)
+  const { width: mw, height: mh } = await sharp(markLayer).metadata()
+  const left = Math.round((size - mw) / 2)
+  const top = Math.round((size - mh) / 2)
 
   return sharp(background)
-    .composite([{ input: whiteLogo, left, top }])
+    .composite([{ input: markLayer, left, top }])
     .png()
     .toBuffer()
 }
@@ -210,9 +120,9 @@ async function buildSolidMarkImage(size, logoScale) {
 async function main() {
   await fs.access(FAVICON)
 
-  const splash = await buildHatchFaviconImage(SPLASH_SIZE, SPLASH_FAVICON_SCALE)
-  const icon = await buildAppIconImage()
-  const webLogo = await buildSolidMarkImage(WEB_LOGO_SIZE, ICON_LOGO_SCALE)
+  const splash = await buildGlowMarkImage(SPLASH_SIZE, SPLASH_FAVICON_SCALE)
+  const icon = await buildGlowMarkImage(ICON_SIZE, ICON_FAVICON_SCALE)
+  const webLogo = await buildGlowMarkImage(WEB_LOGO_SIZE, ICON_LOGO_SCALE)
 
   const splashFiles = [
     'splash-2732x2732.png',

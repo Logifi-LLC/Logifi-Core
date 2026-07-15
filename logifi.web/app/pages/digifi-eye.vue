@@ -11,6 +11,7 @@ import {
   parseDigifiCaptureTokenFromUrl,
   type DigifiCaptureSessionListItem,
 } from '~/utils/digifiTypes'
+import { apiFetch } from '~/utils/apiFetch'
 
 interface CaptureSessionsResponse {
   ok: true
@@ -83,7 +84,7 @@ async function loadSessions() {
   loadingSessions.value = true
   sessionsError.value = null
   try {
-    const response = await $fetch<CaptureSessionsResponse>('/api/digifi/capture/sessions', {
+    const response = await apiFetch<CaptureSessionsResponse>('/api/digifi/capture/sessions', {
       method: 'GET',
       headers: authHeaders(),
     })
