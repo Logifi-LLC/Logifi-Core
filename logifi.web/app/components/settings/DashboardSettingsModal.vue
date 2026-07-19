@@ -40,6 +40,12 @@
       @push-password="$emit('push', 'account-password')"
     />
 
+    <SettingsRosterTab
+      v-else-if="currentFrame === 'roster'"
+      :is-dark-mode="isDarkMode"
+      :role="profile.role"
+    />
+
     <SettingsChangeEmailView
       v-else-if="currentFrame === 'account-email'"
       v-model:account-email="accountEmailModel"
@@ -137,6 +143,7 @@ import SettingsChangeEmailView from './SettingsChangeEmailView.vue'
 import SettingsChangePasswordView from './SettingsChangePasswordView.vue'
 import SettingsProfileTab, { type PilotProfileForm } from './tabs/SettingsProfileTab.vue'
 import SettingsAccountTab from './tabs/SettingsAccountTab.vue'
+import SettingsRosterTab from './tabs/SettingsRosterTab.vue'
 import SettingsDigifiTab from './tabs/SettingsDigifiTab.vue'
 import SettingsPreferencesTab from './tabs/SettingsPreferencesTab.vue'
 import SettingsUpdatesTab from './tabs/SettingsUpdatesTab.vue'

@@ -12,6 +12,8 @@
       :is-dark-mode="isDarkMode"
       :visible-detail-fields="visibleDetailFields"
       :show-remarks-footer="showRemarksFooter"
+      :is-signed="isEntrySigned?.(entry.id) ?? false"
+      :is-pending="!!entry.signaturePending && !(isEntrySigned?.(entry.id) ?? false)"
       @click="$emit('select', $event)"
     />
   </div>
@@ -26,6 +28,7 @@ defineProps<{
   isDarkMode: boolean
   visibleDetailFields: LogbookColumnConfig[]
   showRemarksFooter: boolean
+  isEntrySigned?: (entryId: string) => boolean
 }>()
 
 defineEmits<{

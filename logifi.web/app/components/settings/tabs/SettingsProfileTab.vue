@@ -61,6 +61,80 @@
           </div>
           <div class="px-4 py-3">
             <SettingsField
+              label="Account role"
+              hint="Instructors must set Instructor or Dual so students can link to them"
+              :is-dark-mode="isDarkMode"
+            >
+              <template #default="{ inputClass }">
+                <select v-model="profile.role" :class="inputClass">
+                  <option value="STUDENT">Student</option>
+                  <option value="INSTRUCTOR">Instructor</option>
+                  <option value="DUAL">Dual (student & instructor)</option>
+                </select>
+              </template>
+            </SettingsField>
+          </div>
+          <div v-if="showCfiFields" class="px-4 py-3">
+            <SettingsField label="CFI number" :is-dark-mode="isDarkMode">
+              <template #default="{ inputClass }">
+                <input
+                  v-model="profile.cfiNumber"
+                  type="text"
+                  placeholder="CFI certificate number"
+                  :class="inputClass"
+                />
+              </template>
+            </SettingsField>
+          </div>
+          <div v-if="showCfiFields" class="px-4 py-3">
+            <SettingsField label="CFI expiration" :is-dark-mode="isDarkMode">
+              <template #default="{ inputClass }">
+                <input v-model="profile.cfiExpiration" type="date" :class="inputClass" />
+              </template>
+            </SettingsField>
+          </div>
+          <div v-if="showCfiFields" class="space-y-3 px-4 py-3">
+            <SettingsField
+              label="Signing PIN"
+              hint="Used when signing student log entries. 4–12 characters."
+              :is-dark-mode="isDarkMode"
+            >
+              <template #default="{ inputClass }">
+                <input
+                  v-model="signingPin"
+                  type="password"
+                  autocomplete="new-password"
+                  maxlength="12"
+                  placeholder="Enter PIN"
+                  :class="inputClass"
+                  :disabled="isSavingPin"
+                />
+              </template>
+            </SettingsField>
+            <SettingsField label="Confirm signing PIN" :is-dark-mode="isDarkMode">
+              <template #default="{ inputClass }">
+                <input
+                  v-model="signingPinConfirm"
+                  type="password"
+                  autocomplete="new-password"
+                  maxlength="12"
+                  placeholder="Confirm PIN"
+                  :class="inputClass"
+                  :disabled="isSavingPin"
+                />
+              </template>
+            </SettingsField>
+            <button
+              type="button"
+              :class="[btnPrimary, 'w-full']"
+              :disabled="isSavingPin || !signingPin || !signingPinConfirm"
+              @click="onSaveSigningPin"
+            >
+              {{ isSavingPin ? 'Saving…' : 'Save signing PIN' }}
+            </button>
+          </div>
+          <div class="px-4 py-3">
+            <SettingsField
               label="Military logbook fields"
               hint="NVG time and condition for military flight records"
               :is-dark-mode="isDarkMode"
@@ -246,6 +320,10 @@ import SettingsAutoTextarea from '../SettingsAutoTextarea.vue'
 import SettingsSubNav from '../SettingsSubNav.vue'
 import SettingsListGroup from '../SettingsListGroup.vue'
 import { useSettingsClasses } from '../useSettingsClasses'
+import { useFlightSigning } from '~/composables/useFlightSigning'
+import { useToast } from '~/composables/useToast'
+
+export type PilotAccountRole = 'STUDENT' | 'INSTRUCTOR' | 'DUAL'
 
 export interface PilotProfileForm {
   name: string
@@ -255,6 +333,9 @@ export interface PilotProfileForm {
   flightGoals: string
   notes: string
   enableMilitaryFields: boolean
+  role: PilotAccountRole
+  cfiNumber: string
+  cfiExpiration: string
   dateOfBirth: string
   placeOfBirth: string
   residentialAddress: string
@@ -287,11 +368,40 @@ defineEmits<{
 }>()
 
 const { helper, btnPrimary } = useSettingsClasses(computed(() => props.isDarkMode))
+const { showToast } = useToast()
+const { setSigningPin } = useFlightSigning()
 
 const certificatesTextareaRef = ref<InstanceType<typeof SettingsAutoTextarea> | null>(null)
+const signingPin = ref('')
+const signingPinConfirm = ref('')
+const isSavingPin = ref(false)
+
+const showCfiFields = computed(
+  () => props.profile.role === 'INSTRUCTOR' || props.profile.role === 'DUAL'
+)
 
 const profileSubTabs = [
   { value: 'profile', label: 'Personal', id: 'pilot-profile-tab-form', panelId: 'pilot-profile-panel-profile' },
   { value: 'stats', label: 'Stats & currency', id: 'pilot-profile-tab-stats', panelId: 'pilot-profile-panel-stats' },
 ]
+
+async function onSaveSigningPin() {
+  if (signingPin.value !== signingPinConfirm.value) {
+    showToast('PIN confirmation does not match')
+    return
+  }
+  isSavingPin.value = true
+  try {
+    const result = await setSigningPin(signingPin.value)
+    if (!result.success) {
+      showToast(result.error)
+      return
+    }
+    signingPin.value = ''
+    signingPinConfirm.value = ''
+    showToast('Signing PIN saved')
+  } finally {
+    isSavingPin.value = false
+  }
+}
 </script>

@@ -581,8 +581,14 @@
                             <button
                               type="button"
                               :aria-expanded="familyOpenState[fam]"
-                              @click="familyOpenState[fam] = !familyOpenState[fam]"
+                              class="touch-manipulation select-none"
+                              style="-webkit-touch-callout: none"
+                              @click="onFamilyNameClick(fam)"
                               @contextmenu.prevent="showRenameFamilyContextMenu($event, fam)"
+                              @pointerdown="onFamilyLongPressStart($event, fam)"
+                              @pointermove="onFamilyLongPressMove($event)"
+                              @pointerup="onFamilyLongPressEnd"
+                              @pointercancel="onFamilyLongPressCancel"
                               :class="[
                                 'inline-flex items-center gap-1 px-1 py-0.5 rounded',
                                 isDarkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-300'
@@ -1402,6 +1408,7 @@
               :is-dark-mode="isDarkMode"
               :visible-detail-fields="visibleDetailFields"
               :show-remarks-footer="showRemarksFooter"
+              :is-entry-signed="isEntrySigned"
               @select="beginInlineEditing"
             />
 
@@ -1486,8 +1493,22 @@
                       >
                         <template v-if="col.key === 'date'">
                           <div>
-                            <div :class="['font-semibold text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
-                              {{ formatDisplayDate(entry.date) }}
+                            <div :class="['flex items-center gap-1.5 font-semibold text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
+                              <span>{{ formatDisplayDate(entry.date) }}</span>
+                              <Icon
+                                v-if="isEntrySigned(entry.id)"
+                                name="ri:lock-line"
+                                size="14"
+                                :class="isDarkMode ? 'text-green-400' : 'text-green-600'"
+                                title="Signed by instructor"
+                              />
+                              <Icon
+                                v-else-if="entry.signaturePending"
+                                name="ri:time-line"
+                                size="14"
+                                :class="isDarkMode ? 'text-amber-400' : 'text-amber-600'"
+                                title="Pending instructor signature"
+                              />
                             </div>
                             <div :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                               {{ roleDisplayLabel(entry.role) }}
@@ -1684,7 +1705,9 @@
               isDarkMode ? 'text-gray-100' : 'text-gray-900'
             ]"
           >
-            {{ inlineEditEntry?.logbookType === 'simulator' ? 'Edit Simulator Entry' : 'Edit Flight Entry' }}
+            {{ isExpandedEntrySigned
+              ? (inlineEditEntry?.logbookType === 'simulator' ? 'View Simulator Entry' : 'View Flight Entry')
+              : (inlineEditEntry?.logbookType === 'simulator' ? 'Edit Simulator Entry' : 'Edit Flight Entry') }}
           </h2>
           <span
             v-if="inlineEditEntry?.logbookType === 'simulator'"
@@ -1692,6 +1715,20 @@
           >
             Simulator
           </span>
+          <Icon
+            v-if="isExpandedEntrySigned"
+            name="ri:lock-line"
+            size="18"
+            :class="isDarkMode ? 'text-green-400' : 'text-green-600'"
+            title="Signed by instructor"
+          />
+          <Icon
+            v-else-if="isExpandedEntryPending"
+            name="ri:time-line"
+            size="18"
+            :class="isDarkMode ? 'text-amber-400' : 'text-amber-600'"
+            title="Pending instructor signature"
+          />
           </div>
           <button
             type="button"
@@ -1715,6 +1752,88 @@
             data-edit-panel
           >
           <div v-if="inlineEditEntry" class="grid gap-6 min-w-0 max-w-full w-full">
+
+            <div
+              v-if="isExpandedEntrySigned"
+              :class="[
+                'rounded-lg border px-3 py-2 text-sm font-quicksand',
+                isDarkMode
+                  ? 'border-green-700/60 bg-green-900/20 text-green-200'
+                  : 'border-green-200 bg-green-50 text-green-800'
+              ]"
+            >
+              Signed by instructor — this entry cannot be edited or deleted.
+            </div>
+            <div
+              v-else-if="isExpandedEntryPending"
+              :class="[
+                'rounded-lg border px-3 py-2 text-sm font-quicksand',
+                isDarkMode
+                  ? 'border-amber-700/60 bg-amber-900/20 text-amber-200'
+                  : 'border-amber-200 bg-amber-50 text-amber-900'
+              ]"
+            >
+              Pending instructor signature — use Save &amp; Sign below when ready.
+            </div>
+
+            <div
+              v-if="expandedEntryNeedsSignature"
+              :class="[
+                'rounded-lg border p-3 space-y-3 font-quicksand',
+                isDarkMode ? 'border-gray-600 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+              ]"
+            >
+              <p :class="['text-sm font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
+                Instructor signature
+              </p>
+              <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                Dual Received time is set. Enter the instructor PIN to Save &amp; Sign, or save without signing.
+              </p>
+              <label class="block text-sm">
+                <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Instructor</span>
+                <select
+                  v-model="signInstructorId"
+                  :class="[
+                    'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                    isDarkMode ? 'border-gray-600 bg-gray-900 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
+                  ]"
+                >
+                  <option disabled value="">Select instructor</option>
+                  <option
+                    v-for="row in activeInstructorsForSigning"
+                    :key="row.id"
+                    :value="row.instructor_id"
+                  >
+                    {{ instructorDisplayName(row) }}
+                  </option>
+                </select>
+              </label>
+              <label class="block text-sm">
+                <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Instructor signing PIN</span>
+                <input
+                  v-model="signPin"
+                  type="password"
+                  autocomplete="off"
+                  maxlength="12"
+                  placeholder="4–12 characters"
+                  :class="[
+                    'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                    isDarkMode ? 'border-gray-600 bg-gray-900 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
+                  ]"
+                />
+              </label>
+              <p
+                v-if="activeInstructorsForSigning.length === 0"
+                :class="['text-xs', isDarkMode ? 'text-amber-300' : 'text-amber-700']"
+              >
+                Link an instructor in Settings → Instructor Links to enable Save &amp; Sign.
+              </p>
+            </div>
+
+            <div
+              :aria-disabled="isExpandedEntrySigned ? 'true' : undefined"
+              :class="isExpandedEntrySigned ? 'pointer-events-none opacity-80' : ''"
+            >
 
             <!-- Simulator edit layout -->
             <template v-if="inlineEditEntry.logbookType === 'simulator'">
@@ -2481,6 +2600,8 @@
 
             </template>
 
+            </div>
+
             <div 
               :class="[
                 'flex items-center justify-between mt-2 pt-4 border-t',
@@ -2488,7 +2609,7 @@
                 isDarkMode ? 'border-gray-700' : 'border-gray-200'
               ]"
             >
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 flex-wrap">
                 <button
                   v-if="expandedEntryId"
                   type="button"
@@ -2505,7 +2626,22 @@
                   <Icon name="ri:history-line" size="14" />
                   {{ showAuditTrailSidebar ? 'Hide History' : 'View History' }}
                 </button>
+                <button
+                  v-if="canSignExpandedEntry"
+                  type="button"
+                  @click.stop="openSignEntryModal"
+                  :class="[
+                    'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold font-quicksand transition-colors',
+                    isDarkMode
+                      ? 'border border-green-700/60 bg-green-900/30 text-green-200 hover:bg-green-900/50'
+                      : 'border border-green-300 bg-green-50 text-green-800 hover:bg-green-100'
+                  ]"
+                >
+                  <Icon name="ri:quill-pen-line" size="14" />
+                  Sign with instructor
+                </button>
               <button
+                v-if="!isExpandedEntrySigned"
                 type="button"
                 @click.stop="expandedEntryId && confirmAndDeleteEntry(expandedEntryId)"
                 :class="['text-xs text-red-500 hover:text-red-600 font-medium px-2 py-1']"
@@ -2513,17 +2649,47 @@
                 Delete Entry
               </button>
               </div>
-              <div class="flex items-center gap-3">
+              <div class="flex items-center gap-3 flex-wrap justify-end">
                 <button
                   type="button"
                   @click.stop="cancelInlineEdit"
                   :class="['px-4 py-2 rounded-lg text-sm font-medium', isDarkMode ? 'text-gray-400 hover:bg-white/10' : 'text-gray-600 hover:bg-gray-200']"
                 >
-                  Cancel
+                  {{ isExpandedEntrySigned ? 'Close' : 'Cancel' }}
                 </button>
+                <template v-if="!isExpandedEntrySigned && expandedEntryNeedsSignature">
+                  <button
+                    type="button"
+                    @click.stop="saveInlineEditWithIntent('later')"
+                    :disabled="isSavingInlineEdit || isSubmittingSign || isMarkingSignaturePending"
+                    :class="[
+                      'inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-semibold border',
+                      isDarkMode
+                        ? 'border-amber-700/60 bg-amber-900/30 text-amber-100 hover:bg-amber-900/50'
+                        : 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100',
+                      (isSavingInlineEdit || isSubmittingSign) ? 'opacity-60 cursor-not-allowed' : ''
+                    ]"
+                  >
+                    Save without Signing
+                  </button>
+                  <button
+                    type="button"
+                    @click.stop="saveInlineEditWithIntent('sign')"
+                    :disabled="isSavingInlineEdit || isSubmittingSign || !canSaveAndSignInlineEntry"
+                    :class="[
+                      'inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-bold shadow-lg',
+                      isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white',
+                      (isSavingInlineEdit || isSubmittingSign || !canSaveAndSignInlineEntry) ? 'opacity-60 cursor-not-allowed' : ''
+                    ]"
+                  >
+                    <Icon v-if="isSavingInlineEdit || isSubmittingSign" name="ri:loader-4-line" class="animate-spin mr-2" size="16" />
+                    {{ isSubmittingSign ? 'Signing…' : isSavingInlineEdit ? 'Saving…' : 'Save & Sign' }}
+                  </button>
+                </template>
                 <button
+                  v-else-if="!isExpandedEntrySigned"
                   type="button"
-                  @click.stop="saveInlineEdit"
+                  @click.stop="saveInlineEditWithIntent('none')"
                   :disabled="isSavingInlineEdit"
                   :class="[
                     'inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-bold shadow-lg',
@@ -2542,6 +2708,148 @@
         </div>
       </div>
     </Transition>
+
+    <!-- Sign with instructor modal -->
+    <Teleport to="body">
+      <div
+        v-if="showSignEntryModal"
+        class="fixed inset-0 z-[80] flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sign-entry-title"
+      >
+        <div class="absolute inset-0 bg-black/50" @click="closeSignEntryModal" />
+        <div
+          :class="[
+            'relative z-10 w-full max-w-md rounded-2xl border p-5 shadow-xl font-quicksand',
+            isDarkMode ? 'border-gray-700 bg-gray-900 text-gray-100' : 'border-gray-200 bg-white text-gray-900'
+          ]"
+        >
+          <h3 id="sign-entry-title" class="text-lg font-semibold">Sign with instructor</h3>
+          <p :class="['mt-1 text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+            Have your linked instructor enter their signing PIN. This locks the entry permanently.
+          </p>
+
+          <label class="mt-4 block text-sm font-medium">
+            Instructor
+            <select
+              v-model="signInstructorId"
+              :class="[
+                'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                isDarkMode ? 'border-gray-600 bg-gray-800 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
+              ]"
+            >
+              <option
+                v-for="row in activeInstructorsForSigning"
+                :key="row.id"
+                :value="row.instructor_id"
+              >
+                {{ instructorDisplayName(row) }}
+              </option>
+            </select>
+          </label>
+
+          <label class="mt-3 block text-sm font-medium">
+            Instructor signing PIN
+            <input
+              v-model="signPin"
+              type="password"
+              autocomplete="off"
+              maxlength="12"
+              placeholder="4–12 characters"
+              :class="[
+                'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                isDarkMode ? 'border-gray-600 bg-gray-800 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
+              ]"
+              @keydown.enter.prevent="submitSignEntry"
+            />
+          </label>
+
+          <div class="mt-5 flex justify-end gap-2">
+            <button
+              type="button"
+              :class="[
+                'rounded-lg px-4 py-2 text-sm font-medium',
+                isDarkMode ? 'text-gray-300 hover:bg-white/10' : 'text-gray-600 hover:bg-gray-100'
+              ]"
+              @click="closeSignEntryModal"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              :disabled="isSubmittingSign || isFlightSigningLoading || !signInstructorId || !signPin.trim()"
+              :class="[
+                'rounded-lg px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed'
+              ]"
+              @click="submitSignEntry"
+            >
+              {{ isSubmittingSign ? 'Signing…' : 'Confirm signature' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Finish dual entry: Sign now or Sign later -->
+    <Teleport to="body">
+      <div
+        v-if="showSignatureFinishModal"
+        class="fixed inset-0 z-[80] flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="signature-finish-title"
+      >
+        <div class="absolute inset-0 bg-black/50" />
+        <div
+          :class="[
+            'relative z-10 w-full max-w-md rounded-2xl border p-5 shadow-xl font-quicksand',
+            isDarkMode ? 'border-gray-700 bg-gray-900 text-gray-100' : 'border-gray-200 bg-white text-gray-900'
+          ]"
+        >
+          <h3 id="signature-finish-title" class="text-lg font-semibold">Instructor signature needed</h3>
+          <p :class="['mt-1 text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+            This entry has Dual Received time. Sign now with your instructor, or mark it to sign later.
+          </p>
+
+          <div class="mt-5 flex flex-col gap-2">
+            <button
+              type="button"
+              :disabled="isMarkingSignaturePending || isSubmittingSign"
+              :class="[
+                'w-full rounded-lg px-4 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60'
+              ]"
+              @click="openSignEntryModal"
+            >
+              Sign now
+            </button>
+            <button
+              type="button"
+              :disabled="isMarkingSignaturePending || isSubmittingSign"
+              :class="[
+                'w-full rounded-lg px-4 py-2.5 text-sm font-semibold border',
+                isDarkMode
+                  ? 'border-amber-700/60 bg-amber-900/30 text-amber-100 hover:bg-amber-900/50'
+                  : 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
+              ]"
+              @click="sendEntryForSigning"
+            >
+              {{ isMarkingSignaturePending ? 'Saving…' : 'Sign later' }}
+            </button>
+            <button
+              type="button"
+              :class="[
+                'w-full rounded-lg px-4 py-2 text-sm font-medium',
+                isDarkMode ? 'text-gray-400 hover:bg-white/10' : 'text-gray-600 hover:bg-gray-100'
+              ]"
+              @click="showSignatureFinishModal = false"
+            >
+              Stay on entry
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- Backdrop Overlay for Add Entry Panel -->
     <Transition name="fade">
@@ -2620,7 +2928,7 @@
             :class="[isIos ? 'py-4 entry-panel-ios' : 'p-6']"
             data-add-entry-panel
           >
-            <form class="grid gap-6 min-w-0 max-w-full w-full" @submit.prevent="submitEntry">
+            <form class="grid gap-6 min-w-0 max-w-full w-full" @submit.prevent="onAddEntryFormSubmit">
 
               <!-- Simulator layout -->
               <template v-if="activeLogbook === 'simulator'">
@@ -3437,6 +3745,60 @@
               </template>
 
               <div
+                v-if="newEntryNeedsSignature"
+                :class="[
+                  'rounded-lg border p-3 space-y-3 font-quicksand',
+                  isDarkMode ? 'border-gray-600 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+                ]"
+              >
+                <p :class="['text-sm font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
+                  Instructor signature
+                </p>
+                <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                  Dual Received time is set. Enter the instructor PIN to Save &amp; Sign, or save without signing.
+                </p>
+                <label class="block text-sm">
+                  <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Instructor</span>
+                  <select
+                    v-model="signInstructorId"
+                    :class="[
+                      'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                      isDarkMode ? 'border-gray-600 bg-gray-900 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
+                    ]"
+                  >
+                    <option disabled value="">Select instructor</option>
+                    <option
+                      v-for="row in activeInstructorsForSigning"
+                      :key="row.id"
+                      :value="row.instructor_id"
+                    >
+                      {{ instructorDisplayName(row) }}
+                    </option>
+                  </select>
+                </label>
+                <label class="block text-sm">
+                  <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Instructor signing PIN</span>
+                  <input
+                    v-model="signPin"
+                    type="password"
+                    autocomplete="off"
+                    maxlength="12"
+                    placeholder="4–12 characters"
+                    :class="[
+                      'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                      isDarkMode ? 'border-gray-600 bg-gray-900 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
+                    ]"
+                  />
+                </label>
+                <p
+                  v-if="activeInstructorsForSigning.length === 0"
+                  :class="['text-xs', isDarkMode ? 'text-amber-300' : 'text-amber-700']"
+                >
+                  Link an instructor in Settings → Instructor Links to enable Save &amp; Sign.
+                </p>
+              </div>
+
+              <div
                 :class="[
                   'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4',
                   isIos ? 'entry-panel-actions-ios' : ''
@@ -3596,10 +3958,41 @@
                         ? (isDarkMode ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-red-600 text-white hover:bg-red-700')
                         : (isDarkMode ? 'bg-yellow-600 text-white hover:bg-yellow-700' : 'bg-yellow-600 text-white hover:bg-yellow-700')
                     ]"
-                    @click.prevent="() => { console.log('[SaveAnyway] Setting saveAnywayValidation to true'); saveAnywayValidation = true; submitEntry(); }"
+                    @click.prevent="() => { saveAnywayValidation = true; void (newEntryNeedsSignature ? submitEntryWithIntent('later') : submitEntryWithIntent('none')) }"
                   >
                     {{ hasErrors ? 'Save Despite Errors' : 'Save Anyway' }}
                   </button>
+                  <template v-else-if="!duplicateWarning && !validationWarning && newEntryNeedsSignature">
+                    <button
+                      type="button"
+                      :disabled="isSavingEntry || isSubmittingSign || isMarkingSignaturePending"
+                      :class="[
+                        'inline-flex items-center justify-center rounded-lg px-6 py-2 font-semibold font-quicksand border transition-all',
+                        isDarkMode
+                          ? 'border-amber-700/60 bg-amber-900/30 text-amber-100 hover:bg-amber-900/50'
+                          : 'border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100',
+                        (isSavingEntry || isSubmittingSign) ? 'opacity-60 cursor-not-allowed' : ''
+                      ]"
+                      @click.prevent="submitEntryWithIntent('later')"
+                    >
+                      Save without Signing
+                    </button>
+                    <button
+                      type="button"
+                      :disabled="isSavingEntry || isSubmittingSign || !canSaveAndSignNewEntry"
+                      :class="[
+                        'inline-flex items-center justify-center rounded-lg px-6 py-2 font-semibold font-quicksand transition-all',
+                        isDarkMode
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-blue-600 text-white hover:bg-blue-700',
+                        (isSavingEntry || isSubmittingSign || !canSaveAndSignNewEntry) ? 'opacity-60 cursor-not-allowed' : ''
+                      ]"
+                      @click.prevent="submitEntryWithIntent('sign')"
+                    >
+                      <Icon v-if="isSavingEntry || isSubmittingSign" name="ri:loader-4-line" class="animate-spin mr-2" size="18" />
+                      {{ isSubmittingSign ? 'Signing…' : isSavingEntry ? 'Saving…' : 'Save & Sign' }}
+                    </button>
+                  </template>
                   <button
                     v-else-if="!duplicateWarning && !validationWarning"
                     type="submit"
@@ -5566,7 +5959,7 @@
           Cancel
         </button>
         <button
-          @click="showDuplicateOverrideDialog = false; saveAnyway = true; submitEntry()"
+          @click="showDuplicateOverrideDialog = false; saveAnyway = true; void (newEntryNeedsSignature ? submitEntryWithIntent('later') : submitEntryWithIntent('none'))"
           :class="[
             'px-4 py-2 rounded-lg font-quicksand transition-colors',
             'bg-yellow-600 hover:bg-yellow-700 text-white'
@@ -6002,6 +6395,9 @@ import { useDataIntegrity } from '../composables/useDataIntegrity'
 import { useValidation } from '../composables/useValidation'
 import { useOffline } from '../composables/useOffline'
 import { useToast } from '../composables/useToast'
+import { useFlightSigning } from '../composables/useFlightSigning'
+import { useRoster } from '../composables/useRoster'
+import { requiresInstructorSignature } from '../utils/flightSigning'
 import { withTimeout } from '../utils/promiseTimeout'
 import { apiFetch } from '../utils/apiFetch'
 import { useSyncQueue } from '../composables/useSyncQueue'
@@ -6291,6 +6687,14 @@ const { validateEntry: validateFlightTimeEntry, validationErrors, validationWarn
 // Offline support
 const { isOnline, isSyncing, syncProgress, updateSyncProgress, checkOnlineStatus } = useOffline()
 const { showToast } = useToast()
+const {
+  fetchSignaturesForEntries,
+  signLogEntry,
+  markSignaturePending,
+  isEntrySigned,
+  isLoading: isFlightSigningLoading,
+} = useFlightSigning()
+const { instructors: rosterInstructors, fetchInstructors } = useRoster()
 const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync, retryFailed, reconcileSyncQueue, setActiveUserId, refreshQueueLength } = useSyncQueue()
 
 function getStorageUserId(): string | undefined {
@@ -7057,6 +7461,9 @@ interface PilotProfilePrefs {
   notes: string
   /** Show military logbook fields (e.g. NVG time + condition) */
   enableMilitaryFields: boolean
+  role: 'STUDENT' | 'INSTRUCTOR' | 'DUAL'
+  cfiNumber: string
+  cfiExpiration: string
   // 8710 Form fields
   dateOfBirth: string
   placeOfBirth: string
@@ -7096,6 +7503,9 @@ const pilotProfileDefaults: PilotProfilePrefs = {
   flightGoals: '',
   notes: '',
   enableMilitaryFields: false,
+  role: 'STUDENT',
+  cfiNumber: '',
+  cfiExpiration: '',
   // 8710 Form fields
   dateOfBirth: '',
   placeOfBirth: '',
@@ -7486,17 +7896,204 @@ const isInlineCommercialMode = ref(false)
 const editingEntryId = ref<string | null>(null)
 const expandedEntryId = ref<string | null>(null)
 const inlineEditEntry = ref<LogEntry | null>(null)
+const showSignEntryModal = ref(false)
+const showSignatureFinishModal = ref(false)
+const signInstructorId = ref('')
+const signPin = ref('')
+const isSubmittingSign = ref(false)
+const isMarkingSignaturePending = ref(false)
+/** Intent for the in-progress save: sign immediately, mark pending, or normal (no dual). */
+const pendingSaveSigningIntent = ref<'none' | 'sign' | 'later'>('none')
+
+const isSyncedEntryId = (id: string | null | undefined): boolean =>
+  !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+
+const activeInstructorsForSigning = computed(() =>
+  rosterInstructors.value.filter((row) => row.status === 'ACTIVE')
+)
+
+const isExpandedEntrySigned = computed(() => isEntrySigned(expandedEntryId.value))
+
+const isExpandedEntryPending = computed(() => {
+  if (isExpandedEntrySigned.value) return false
+  return inlineEditEntry.value?.signaturePending === true
+    || logEntries.value.find((e) => e.id === expandedEntryId.value)?.signaturePending === true
+})
+
+const expandedEntryNeedsSignature = computed(() =>
+  requiresInstructorSignature(inlineEditEntry.value) && !isExpandedEntrySigned.value
+)
+
+const newEntryNeedsSignature = computed(() =>
+  requiresInstructorSignature({ flightTime: newEntry.flightTime })
+)
+
+const canSignExpandedEntry = computed(() => {
+  if (!expandedEntryId.value || isExpandedEntrySigned.value) return false
+  if (!isSyncedEntryId(expandedEntryId.value)) return false
+  if (!expandedEntryNeedsSignature.value) return false
+  return activeInstructorsForSigning.value.length > 0
+})
+
+const canSaveAndSignNewEntry = computed(() =>
+  newEntryNeedsSignature.value
+  && activeInstructorsForSigning.value.length > 0
+  && !!signInstructorId.value
+  && signPin.value.trim().length >= 4
+)
+
+const canSaveAndSignInlineEntry = computed(() =>
+  expandedEntryNeedsSignature.value
+  && activeInstructorsForSigning.value.length > 0
+  && !!signInstructorId.value
+  && signPin.value.trim().length >= 4
+)
+
+watch(newEntryNeedsSignature, (needs) => {
+  if (needs && isEntryFormOpen.value) ensureDefaultSignInstructor()
+})
+
+watch(expandedEntryNeedsSignature, (needs) => {
+  if (needs && expandedEntryId.value) ensureDefaultSignInstructor()
+})
+
+function instructorDisplayName(row: { profile: { full_name: string | null } | null }): string {
+  return row.profile?.full_name?.trim() || 'Instructor'
+}
+
+function closeInlineEditDrawer(): void {
+  closeAuditTrailSidebar()
+  closeSignEntryModal()
+  showSignatureFinishModal.value = false
+  expandedEntryId.value = null
+  inlineEditEntry.value = null
+  isInlineCommercialMode.value = false
+  showInlineCustomTagInput.value = false
+  customTagInputInline.value = ''
+}
+
+function setLocalSignaturePending(entryId: string, pending: boolean): void {
+  logEntries.value = sortEntriesByDateAndOOOI(
+    logEntries.value.map((entry) =>
+      entry.id === entryId ? { ...entry, signaturePending: pending } : entry
+    )
+  )
+  if (inlineEditEntry.value?.id === entryId) {
+    inlineEditEntry.value = { ...inlineEditEntry.value, signaturePending: pending }
+  }
+}
+
+async function openSignEntryModal(): Promise<void> {
+  await fetchInstructors()
+  if (activeInstructorsForSigning.value.length === 0) {
+    showToast('Link an active instructor in Settings → Instructor Links first')
+    return
+  }
+  if (!isSyncedEntryId(expandedEntryId.value)) {
+    showToast('Entry must sync to the cloud before signing')
+    return
+  }
+  if (!requiresInstructorSignature(inlineEditEntry.value)) {
+    showToast('Signing is only available when Dual Received time is greater than zero')
+    return
+  }
+  signInstructorId.value = activeInstructorsForSigning.value[0]?.instructor_id ?? ''
+  signPin.value = ''
+  showSignatureFinishModal.value = false
+  showSignEntryModal.value = true
+}
+
+function closeSignEntryModal(): void {
+  showSignEntryModal.value = false
+  signPin.value = ''
+}
+
+async function submitSignEntry(): Promise<void> {
+  const entryId = expandedEntryId.value
+  if (!entryId || !signInstructorId.value) return
+  isSubmittingSign.value = true
+  try {
+    const result = await signLogEntry(entryId, signInstructorId.value, signPin.value)
+    if (!result.success) {
+      showToast(result.error)
+      return
+    }
+    setLocalSignaturePending(entryId, false)
+    if (user.value?.id) {
+      const local = logEntries.value.find((e) => e.id === entryId)
+      if (local) {
+        try {
+          await updateEntryInIndexedDB({ ...local, signaturePending: false }, { userId: user.value.id })
+        } catch {
+          // ignore IDB errors
+        }
+      }
+    }
+    showToast('Entry signed — it can no longer be edited')
+    closeSignEntryModal()
+    closeInlineEditDrawer()
+  } finally {
+    isSubmittingSign.value = false
+  }
+}
+
+async function sendEntryForSigning(): Promise<void> {
+  const entryId = expandedEntryId.value
+  if (!entryId) return
+  isMarkingSignaturePending.value = true
+  try {
+    // Prefer cloud update; if not synced yet, keep local pending and queue sync
+    let cloudOk = false
+    if (isSyncedEntryId(entryId) && isOnline.value) {
+      const result = await markSignaturePending(entryId, true)
+      if (result.success) {
+        cloudOk = true
+      }
+    }
+
+    setLocalSignaturePending(entryId, true)
+    if (user.value?.id) {
+      const local = logEntries.value.find((e) => e.id === entryId)
+      if (local) {
+        try {
+          await updateEntryInIndexedDB({ ...local, signaturePending: true }, { userId: user.value.id })
+        } catch {
+          // ignore
+        }
+      }
+      if (!cloudOk && isSyncedEntryId(entryId)) {
+        await addToQueue('update', entryId, { signature_pending: true }, user.value.id)
+        if (isOnline.value) void processQueue({ silent: true })
+      }
+    }
+    showToast('Marked to sign later')
+    showSignatureFinishModal.value = false
+    closeInlineEditDrawer()
+  } finally {
+    isMarkingSignaturePending.value = false
+  }
+}
+
+function openSignatureFinishModal(): void {
+  showSignatureFinishModal.value = true
+}
+
+async function refreshFlightSignatures(): Promise<void> {
+  if (!isAuthenticated.value || !user.value) return
+  const ids = logEntries.value.map((entry) => entry.id).filter(isSyncedEntryId)
+  if (ids.length === 0) return
+  await fetchSignaturesForEntries(ids)
+}
 
 async function beginInlineEditing(entry: LogEntry): Promise<void> {
   if (expandedEntryId.value === entry.id) {
-    expandedEntryId.value = null
-    inlineEditEntry.value = null
-    isInlineCommercialMode.value = false
+    closeInlineEditDrawer()
   } else {
     ensureIosCatalogIndex()
     // Close Add Entry form when opening inline edit
     isEntryFormOpen.value = false
     closeAuditTrailSidebar()
+    showSignatureFinishModal.value = false
     expandedEntryId.value = entry.id
     // Deep copy for inline editing
     const copy = JSON.parse(JSON.stringify(entry))
@@ -7517,6 +8114,9 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
         (copy.oooi.in && copy.oooi.in.trim())
       )
     isInlineCommercialMode.value = hasOOOITimes
+    if (!isEntrySigned(entry.id) && requiresInstructorSignature(entry)) {
+      ensureDefaultSignInstructor()
+    }
   }
 }
 
@@ -7538,6 +8138,10 @@ function toggleInlineOOOIMode(): void {
 
 async function saveInlineEdit(): Promise<void> {
   if (!inlineEditEntry.value || isSavingInlineEdit.value) return
+  if (isEntrySigned(inlineEditEntry.value.id) || isEntrySigned(expandedEntryId.value)) {
+    showToast('Signed entries cannot be edited')
+    return
+  }
   isSavingInlineEdit.value = true
 
   try {
@@ -7597,7 +8201,11 @@ async function saveInlineEdit(): Promise<void> {
       return base
     })(),
     flightConditions: sanitizeFlightConditions([...inlineEditEntry.value.flightConditions]),
-    oooi: inlineEditEntry.value.oooi && Object.values(inlineEditEntry.value.oooi).some(v => v) ? { ...inlineEditEntry.value.oooi } : undefined
+    oooi: inlineEditEntry.value.oooi && Object.values(inlineEditEntry.value.oooi).some(v => v) ? { ...inlineEditEntry.value.oooi } : undefined,
+    signaturePending:
+      pendingSaveSigningIntent.value === 'later'
+        ? true
+        : (inlineEditEntry.value.signaturePending === true),
   }
 
   if (inferLogbookType(updatedEntry) === 'simulator') {
@@ -7652,6 +8260,10 @@ async function saveInlineEdit(): Promise<void> {
         performance: updatedEntry.performance,
         oooi: updatedEntry.oooi || null,
         flagged: oldEntryData?.flagged ?? updatedEntry.flagged ?? false,
+        signature_pending:
+          pendingSaveSigningIntent.value === 'later'
+            ? true
+            : (oldEntryData?.signature_pending ?? updatedEntry.signaturePending ?? false),
         is_imported: oldEntryData?.is_imported ?? false,
         import_source: oldEntryData?.import_source ?? null,
         import_batch_id: oldEntryData?.import_batch_id ?? null,
@@ -7669,8 +8281,7 @@ async function saveInlineEdit(): Promise<void> {
         logEntries.value = sortEntriesByDateAndOOOI(
           logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
         )
-        expandedEntryId.value = null
-        inlineEditEntry.value = null
+        afterInlineSaveSuccess(updatedEntry)
         return
       }
 
@@ -7698,8 +8309,7 @@ async function saveInlineEdit(): Promise<void> {
         logEntries.value = sortEntriesByDateAndOOOI(
           logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
         )
-        expandedEntryId.value = null
-        inlineEditEntry.value = null
+        afterInlineSaveSuccess(updatedEntry)
         return
       }
       
@@ -7770,6 +8380,8 @@ async function saveInlineEdit(): Promise<void> {
         oooi: dbEntryResult.oooi as OOOITimes | undefined,
         flagged: dbEntryResult.flagged || false,
         version: dbEntryResult.version, // Include version to keep frontend in sync with database
+        dataHash: dbEntryResult.data_hash || undefined,
+        signaturePending: dbEntryResult.signature_pending === true,
         isImported: dbEntryResult.is_imported || false,
         importSource: dbEntryResult.import_source || undefined,
         importBatchId: dbEntryResult.import_batch_id || undefined,
@@ -7901,25 +8513,183 @@ async function saveInlineEdit(): Promise<void> {
     logEntries.value.find(e => e.id === targetId)?.flightTime.night
   )
 
-  showToast('Entry updated', 3000)
-
-  expandedEntryId.value = null
-  inlineEditEntry.value = null
-  isInlineCommercialMode.value = false
-  showAuditTrailSidebar.value = false
-  auditTrailRefreshKey.value = 0
+  const savedLocal = logEntries.value.find((e) => e.id === targetId) ?? updatedEntry
+  afterInlineSaveSuccess(savedLocal)
   } finally {
     isSavingInlineEdit.value = false
   }
 }
 
-function cancelInlineEdit(): void {
+function afterInlineSaveSuccess(savedEntry: LogEntry): void {
+  void finalizeSaveWithSigningIntent(savedEntry, 'edit')
+}
+
+/** After Add Entry save: apply Sign / Sign later intent or close normally. */
+function afterAddEntrySaveSuccess(savedEntry: LogEntry): void {
+  void finalizeSaveWithSigningIntent(savedEntry, 'add')
+}
+
+async function finalizeSaveWithSigningIntent(
+  savedEntry: LogEntry,
+  source: 'add' | 'edit'
+): Promise<void> {
+  const intent = pendingSaveSigningIntent.value
+  pendingSaveSigningIntent.value = 'none'
+
+  const needsSig =
+    requiresInstructorSignature(savedEntry) && !isEntrySigned(savedEntry.id)
+
+  if (!needsSig) {
+    showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', 3000)
+    if (source === 'edit') closeInlineEditDrawer()
+    clearFormSigningFields()
+    return
+  }
+
+  if (intent === 'sign') {
+    showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', 2000)
+    if (source === 'edit') {
+      prepareInlineEditFromEntry(savedEntry)
+    }
+    const instructorId = signInstructorId.value
+    const pin = signPin.value
+    if (!instructorId || pin.trim().length < 4) {
+      showToast('Instructor and PIN are required to Save & Sign')
+      prepareInlineEditFromEntry(savedEntry)
+      ensureDefaultSignInstructor()
+      openSignatureFinishModal()
+      return
+    }
+    isSubmittingSign.value = true
+    try {
+      if (isOnline.value) {
+        await processQueue({ silent: true })
+        // Brief wait for insert sync / data_hash when entry was just created
+        await new Promise((r) => setTimeout(r, 400))
+      }
+      const result = await signLogEntry(savedEntry.id, instructorId, pin)
+      if (!result.success) {
+        showToast(result.error)
+        prepareInlineEditFromEntry(savedEntry)
+        openSignatureFinishModal()
+        return
+      }
+      setLocalSignaturePending(savedEntry.id, false)
+      if (user.value?.id) {
+        const local = logEntries.value.find((e) => e.id === savedEntry.id)
+        if (local) {
+          try {
+            await updateEntryInIndexedDB(
+              { ...local, signaturePending: false },
+              { userId: user.value.id }
+            )
+          } catch {
+            // ignore
+          }
+        }
+      }
+      showToast('Entry saved and signed')
+      clearFormSigningFields()
+      closeInlineEditDrawer()
+    } finally {
+      isSubmittingSign.value = false
+    }
+    return
+  }
+
+  if (intent === 'later') {
+    // signature_pending is set on the save payload when intent is 'later'
+    showToast(
+      source === 'edit' ? 'Entry updated — pending signature' : 'Entry saved — pending signature',
+      3000
+    )
+    if (!savedEntry.signaturePending) {
+      prepareInlineEditFromEntry(savedEntry)
+      await sendEntryForSigning()
+    } else if (source === 'edit') {
+      closeInlineEditDrawer()
+    }
+    clearFormSigningFields()
+    return
+  }
+
+  // Dual entry but no intent (shouldn't happen with new buttons) — keep finish modal as fallback
+  showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', 3000)
+  prepareInlineEditFromEntry(savedEntry)
+  ensureDefaultSignInstructor()
+  if (isOnline.value) void processQueue({ silent: true })
+  openSignatureFinishModal()
+}
+
+function clearFormSigningFields(): void {
+  signPin.value = ''
+  // keep instructor selection for convenience across entries
+}
+
+async function submitEntryWithIntent(intent: 'sign' | 'later' | 'none'): Promise<void> {
+  if (intent === 'sign') {
+    if (!canSaveAndSignNewEntry.value) {
+      if (activeInstructorsForSigning.value.length === 0) {
+        showToast('Link an active instructor in Settings → Instructor Links first')
+      } else {
+        showToast('Select an instructor and enter their PIN to Save & Sign')
+      }
+      return
+    }
+  }
+  pendingSaveSigningIntent.value = intent
+  await submitEntry()
+}
+
+function onAddEntryFormSubmit(): void {
+  if (newEntryNeedsSignature.value) {
+    // Dual entries must use Save & Sign or Save without Signing explicitly
+    return
+  }
+  void submitEntryWithIntent('none')
+}
+
+async function saveInlineEditWithIntent(intent: 'sign' | 'later' | 'none'): Promise<void> {
+  if (intent === 'sign') {
+    if (!canSaveAndSignInlineEntry.value) {
+      if (activeInstructorsForSigning.value.length === 0) {
+        showToast('Link an active instructor in Settings → Instructor Links first')
+      } else {
+        showToast('Select an instructor and enter their PIN to Save & Sign')
+      }
+      return
+    }
+  }
+  pendingSaveSigningIntent.value = intent
+  await saveInlineEdit()
+}
+
+function prepareInlineEditFromEntry(savedEntry: LogEntry): void {
+  ensureIosCatalogIndex()
   closeAuditTrailSidebar()
-  expandedEntryId.value = null
-  inlineEditEntry.value = null
-  isInlineCommercialMode.value = false
-  showInlineCustomTagInput.value = false
-  customTagInputInline.value = ''
+  showSignEntryModal.value = false
+  expandedEntryId.value = savedEntry.id
+  const copy = JSON.parse(JSON.stringify(savedEntry)) as LogEntry
+  copy.date = normalizeDateForInput(savedEntry.date)
+  if (!copy.performance.approaches?.length) {
+    copy.performance.approaches = getApproachesFromPerformance(copy.performance)
+  }
+  if (!Array.isArray(copy.tags)) copy.tags = []
+  inlineEditEntry.value = copy
+  const hasOOOITimes =
+    !!copy.oooi &&
+    !!(
+      (copy.oooi.out && copy.oooi.out.trim()) ||
+      (copy.oooi.off && copy.oooi.off.trim()) ||
+      (copy.oooi.on && copy.oooi.on.trim()) ||
+      (copy.oooi.in && copy.oooi.in.trim())
+    )
+  isInlineCommercialMode.value = hasOOOITimes
+}
+
+function cancelInlineEdit(): void {
+  clearFormSigningFields()
+  closeInlineEditDrawer()
 }
 
 const catalogOpenState = reactive<Record<CatalogKey, boolean>>({
@@ -9938,7 +10708,7 @@ async function loadPilotProfileFromSupabase(): Promise<void> {
   try {
     const { data, error } = await (supabase
       .from('user_profiles') as any)
-      .select('full_name, certificate_number, date_of_birth, place_of_birth, residential_address, mailing_address, preferences')
+      .select('full_name, certificate_number, date_of_birth, place_of_birth, residential_address, mailing_address, preferences, role, cfi_number, cfi_expiration')
       .eq('id', user.value.id)
       .maybeSingle()
     if (error) {
@@ -9951,6 +10721,11 @@ async function loadPilotProfileFromSupabase(): Promise<void> {
     if (data.certificate_number != null) prefs.certificateNumber = data.certificate_number
     if (data.date_of_birth != null) prefs.dateOfBirth = data.date_of_birth
     if (data.place_of_birth != null) prefs.placeOfBirth = data.place_of_birth
+    if (data.role === 'STUDENT' || data.role === 'INSTRUCTOR' || data.role === 'DUAL') {
+      prefs.role = data.role
+    }
+    if (data.cfi_number != null) prefs.cfiNumber = data.cfi_number
+    if (data.cfi_expiration != null) prefs.cfiExpiration = data.cfi_expiration
     const res = data.residential_address as { street?: string; city?: string; state?: string; zip?: string } | null
     if (res) {
       prefs.residentialAddress = res.street ?? ''
@@ -10001,6 +10776,9 @@ function savePilotProfileToSupabase(): void {
         certificate_number: pilotProfile.certificateNumber || null,
         date_of_birth: pilotProfile.dateOfBirth || null,
         place_of_birth: pilotProfile.placeOfBirth || null,
+        role: pilotProfile.role || 'STUDENT',
+        cfi_number: pilotProfile.cfiNumber || null,
+        cfi_expiration: pilotProfile.cfiExpiration || null,
         updated_at: new Date().toISOString()
       }
       if (pilotProfile.residentialAddress || pilotProfile.residentialCity || pilotProfile.residentialState || pilotProfile.residentialZip) {
@@ -10847,6 +11625,14 @@ function maybeAutoOpenEntryFormForEmptyLogbook(): void {
   }
 }
 
+function ensureDefaultSignInstructor(): void {
+  void fetchInstructors().then(() => {
+    if (!signInstructorId.value && activeInstructorsForSigning.value[0]) {
+      signInstructorId.value = activeInstructorsForSigning.value[0].instructor_id
+    }
+  })
+}
+
 function toggleEntryForm(): void {
   const willBeOpen = !isEntryFormOpen.value
   isEntryFormOpen.value = willBeOpen
@@ -10861,6 +11647,7 @@ function toggleEntryForm(): void {
     editingEntryId.value = null
     Object.assign(newEntry, createBlankEntry())
     showSimSection.value = activeLogbook.value === 'simulator'
+    ensureDefaultSignInstructor()
   } else {
     closeAuditTrailSidebar()
     // If closing, reset form if needed
@@ -11512,9 +12299,66 @@ function closeAircraftModal(): void {
 }
 
 // Aircraft family rename functions
+const FAMILY_LONG_PRESS_MS = 500
+const FAMILY_LONG_PRESS_MOVE_PX = 10
+
+let familyLongPressTimer: ReturnType<typeof setTimeout> | null = null
+let familyLongPressTriggered = false
+let familyLongPressStartX = 0
+let familyLongPressStartY = 0
+
+function clearFamilyLongPressTimer(): void {
+  if (familyLongPressTimer != null) {
+    clearTimeout(familyLongPressTimer)
+    familyLongPressTimer = null
+  }
+}
+
+/** Touch/pen press-and-hold opens Edit Family (desktop keeps right-click). */
+function onFamilyLongPressStart(event: PointerEvent, familyName: string): void {
+  if (event.pointerType === 'mouse') return
+  clearFamilyLongPressTimer()
+  familyLongPressTriggered = false
+  familyLongPressStartX = event.clientX
+  familyLongPressStartY = event.clientY
+  familyLongPressTimer = setTimeout(() => {
+    familyLongPressTimer = null
+    familyLongPressTriggered = true
+    openRenameFamilyModalFor(familyName)
+  }, FAMILY_LONG_PRESS_MS)
+}
+
+function onFamilyLongPressMove(event: PointerEvent): void {
+  if (familyLongPressTimer == null) return
+  const dx = event.clientX - familyLongPressStartX
+  const dy = event.clientY - familyLongPressStartY
+  if (dx * dx + dy * dy > FAMILY_LONG_PRESS_MOVE_PX * FAMILY_LONG_PRESS_MOVE_PX) {
+    clearFamilyLongPressTimer()
+  }
+}
+
+function onFamilyLongPressEnd(): void {
+  clearFamilyLongPressTimer()
+}
+
+function onFamilyLongPressCancel(): void {
+  clearFamilyLongPressTimer()
+  familyLongPressTriggered = false
+}
+
+function onFamilyNameClick(familyName: string): void {
+  if (familyLongPressTriggered) {
+    familyLongPressTriggered = false
+    return
+  }
+  familyOpenState[familyName] = !familyOpenState[familyName]
+}
+
 function showRenameFamilyContextMenu(event: MouseEvent, familyName: string): void {
   event.preventDefault()
   event.stopPropagation()
+  // Long-press already opened the edit modal; ignore the follow-up contextmenu on iOS.
+  if (familyLongPressTriggered) return
   contextMenuX.value = event.clientX
   contextMenuY.value = event.clientY
   contextMenuFamilyName.value = familyName
@@ -11526,14 +12370,17 @@ function closeContextMenu(): void {
   contextMenuFamilyName.value = ''
 }
 
-function openRenameFamilyModal(): void {
-  const canonicalKey = contextMenuFamilyName.value
-  renameFamilyCanonicalKey.value = canonicalKey
-  renameFamilyOldName.value = catalogs.value.familyDisplayName?.[canonicalKey] ?? canonicalKey
+function openRenameFamilyModalFor(familyName: string): void {
+  renameFamilyCanonicalKey.value = familyName
+  renameFamilyOldName.value = catalogs.value.familyDisplayName?.[familyName] ?? familyName
   renameFamilyNewName.value = renameFamilyOldName.value
-  renameFamilySimType.value = getCatalogSimDeviceType(contextMenuFamilyName.value) ?? ''
+  renameFamilySimType.value = getCatalogSimDeviceType(familyName) ?? ''
   closeContextMenu()
   showRenameFamilyModal.value = true
+}
+
+function openRenameFamilyModal(): void {
+  openRenameFamilyModalFor(contextMenuFamilyName.value)
 }
 
 function closeRenameFamilyModal(): void {
@@ -13383,7 +14230,8 @@ async function submitEntry(): Promise<void> {
       ...baseEntry,
       id: entryId,
       flagged: shouldFlag,
-      isImported: false
+      isImported: false,
+      signaturePending: pendingSaveSigningIntent.value === 'later',
     }
 
     const userId = user.value?.id
@@ -13432,7 +14280,8 @@ async function submitEntry(): Promise<void> {
       performance: baseEntry.performance,
       oooi: baseEntry.oooi || null,
       flagged: shouldFlag,
-      is_imported: false
+      is_imported: false,
+      signature_pending: pendingSaveSigningIntent.value === 'later',
     }
 
     // Add to sync queue (will sync to Supabase when online)
@@ -13446,15 +14295,30 @@ async function submitEntry(): Promise<void> {
       }
     }
 
-    // Show success toast and close form
-    showToast(editingEntryId.value ? 'Entry updated' : 'Entry saved', 3000)
+    // Show success and close Add Entry form; for dual entries open finish signing flow
+    const wasEditingExisting = !!editingEntryId.value
     duplicateWarning.value = null
     saveAnyway.value = false
     validationWarning.value = false
     saveAnywayValidation.value = false
     clearValidation()
+    const savedEntry = logEntries.value.find((e) => e.id === entryId) ?? entryToSave
     resetForm()
     isEntryFormOpen.value = false
+
+    if (wasEditingExisting) {
+      // Add form used for edit of existing id — treat like inline finish when dual
+      if (
+        requiresInstructorSignature(savedEntry)
+        && !isEntrySigned(savedEntry.id)
+      ) {
+        afterAddEntrySaveSuccess(savedEntry)
+      } else {
+        showToast('Entry updated', 3000)
+      }
+    } else {
+      afterAddEntrySaveSuccess(savedEntry)
+    }
 
   } catch (error) {
     console.error('[SaveEntry] Error saving entry:', error)
@@ -13594,6 +14458,10 @@ async function removeEntry(id: string): Promise<void> {
 
 async function confirmAndDeleteEditing(): Promise<void> {
   if (!editingEntryId.value) return
+  if (isEntrySigned(editingEntryId.value)) {
+    showToast('Signed entries cannot be deleted')
+    return
+  }
   const proceed = window.confirm('Delete this entry? This action cannot be undone.')
   if (!proceed) return
   await removeEntry(editingEntryId.value)
@@ -13603,6 +14471,10 @@ async function confirmAndDeleteEditing(): Promise<void> {
 }
 
 async function confirmAndDeleteEntry(id: string): Promise<void> {
+  if (isEntrySigned(id)) {
+    showToast('Signed entries cannot be deleted')
+    return
+  }
   const proceed = window.confirm('Delete this entry? This action cannot be undone.')
   if (!proceed) return
   await removeEntry(id)
@@ -13704,6 +14576,7 @@ function mapSupabaseRowToLogEntry(dbEntry: any): LogEntry {
     dataHash: dbEntry.data_hash || undefined,
     createdAt: dbEntry.created_at || undefined,
     updatedAt: dbEntry.updated_at || undefined,
+    signaturePending: dbEntry.signature_pending === true,
     isImported: dbEntry.is_imported || false,
     importSource: dbEntry.import_source || undefined,
     importBatchId: dbEntry.import_batch_id || undefined,
@@ -14130,6 +15003,7 @@ function mapIdbEntryToLogEntry(
     dataHash: entry.dataHash,
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
+    signaturePending: entry.signaturePending === true,
     isImported: entry.isImported,
     importSource: entry.importSource,
     importBatchId: entry.importBatchId,
@@ -14160,6 +15034,7 @@ async function runDeferredPostLoadWork(): Promise<void> {
     await migrateSimulatorInstrumentOnLoad()
     void enrichFcvNightDataForDisplay()
     await maybeConsolidateAircraftByTail()
+    void refreshFlightSignatures()
   } catch (err) {
     console.warn('[LoadEntries] Deferred post-load work failed:', err)
   }

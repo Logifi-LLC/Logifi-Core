@@ -3,19 +3,27 @@
     type="button"
     :class="[
       'w-full text-left rounded-xl border transition-all duration-200 border-l-4 px-4 py-3 sm:px-5 sm:py-4',
-      entry.flagged
+      isSigned
         ? isDarkMode
-          ? 'bg-amber-900/20 border-l-amber-500 border-gray-700 hover:bg-amber-900/30'
-          : 'bg-amber-50 border-l-amber-500 border-gray-300 hover:bg-amber-100'
-        : isDarkMode
-          ? 'bg-gray-900 border-gray-700 border-l-transparent hover:bg-white/10 hover:border-l-blue-500/50'
-          : 'bg-gray-100 border-gray-300 border-l-transparent hover:bg-gray-200 hover:border-l-blue-500',
+          ? 'bg-gray-900 border-l-green-500 border-gray-700 hover:bg-white/10'
+          : 'bg-gray-100 border-l-green-500 border-gray-300 hover:bg-gray-200'
+        : isPending
+          ? isDarkMode
+            ? 'bg-gray-900 border-l-amber-500 border-gray-700 hover:bg-white/10'
+            : 'bg-gray-100 border-l-amber-500 border-gray-300 hover:bg-gray-200'
+        : entry.flagged
+          ? isDarkMode
+            ? 'bg-amber-900/20 border-l-amber-500 border-gray-700 hover:bg-amber-900/30'
+            : 'bg-amber-50 border-l-amber-500 border-gray-300 hover:bg-amber-100'
+          : isDarkMode
+            ? 'bg-gray-900 border-gray-700 border-l-transparent hover:bg-white/10 hover:border-l-blue-500/50'
+            : 'bg-gray-100 border-gray-300 border-l-transparent hover:bg-gray-200 hover:border-l-blue-500',
     ]"
     @click="$emit('click', entry)"
   >
     <!-- Header zone -->
     <div class="flex flex-col gap-1.5 min-w-0">
-      <!-- Row 1: date · role left, total top-right -->
+      <!-- Row 1: date · role left, total + lock top-right -->
       <div class="flex items-start justify-between gap-3 min-w-0">
         <p
           :class="[
@@ -29,9 +37,25 @@
           </span>
         </p>
 
-        <p :class="['flex-shrink-0 text-2xl font-bold font-mono tracking-tight leading-none', totalTimeClass]">
-          {{ headerTotal }}
-        </p>
+        <div class="flex shrink-0 items-center gap-2">
+          <Icon
+            v-if="isSigned"
+            name="ri:lock-line"
+            size="18"
+            :class="isDarkMode ? 'text-green-400' : 'text-green-600'"
+            title="Signed by instructor"
+          />
+          <Icon
+            v-else-if="isPending"
+            name="ri:time-line"
+            size="18"
+            :class="isDarkMode ? 'text-amber-400' : 'text-amber-600'"
+            title="Pending instructor signature"
+          />
+          <p :class="['text-2xl font-bold font-mono tracking-tight leading-none', totalTimeClass]">
+            {{ headerTotal }}
+          </p>
+        </div>
       </div>
 
       <!-- Row 2+: route, aircraft, or sim details -->
@@ -131,6 +155,8 @@ const props = defineProps<{
   isDarkMode: boolean
   visibleDetailFields: LogbookColumnConfig[]
   showRemarksFooter: boolean
+  isSigned?: boolean
+  isPending?: boolean
 }>()
 
 defineEmits<{

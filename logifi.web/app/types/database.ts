@@ -39,6 +39,7 @@ export type Database = {
           original_entry_date: string | null
           import_metadata: Record<string, any> | null
           fcv_flight_id: string | null
+          signature_pending: boolean
         }
         Insert: {
           id?: string
@@ -73,6 +74,7 @@ export type Database = {
           original_entry_date?: string | null
           import_metadata?: Record<string, any> | null
           fcv_flight_id?: string | null
+          signature_pending?: boolean
         }
         Update: {
           id?: string
@@ -107,6 +109,7 @@ export type Database = {
           original_entry_date?: string | null
           import_metadata?: Record<string, any> | null
           fcv_flight_id?: string | null
+          signature_pending?: boolean
         }
       }
       fcv_integrations: {
@@ -494,6 +497,10 @@ export type Database = {
           preferences: Record<string, unknown> | null
           column_config: Record<string, unknown> | null
           credits: number
+          role: 'STUDENT' | 'INSTRUCTOR' | 'DUAL'
+          cfi_number: string | null
+          cfi_expiration: string | null
+          signing_pin_hash: string | null
           created_at: string
           updated_at: string
         }
@@ -508,6 +515,10 @@ export type Database = {
           preferences?: Record<string, unknown> | null
           column_config?: Record<string, unknown> | null
           credits?: number
+          role?: 'STUDENT' | 'INSTRUCTOR' | 'DUAL'
+          cfi_number?: string | null
+          cfi_expiration?: string | null
+          signing_pin_hash?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -522,8 +533,64 @@ export type Database = {
           preferences?: Record<string, unknown> | null
           column_config?: Record<string, unknown> | null
           credits?: number
+          role?: 'STUDENT' | 'INSTRUCTOR' | 'DUAL'
+          cfi_number?: string | null
+          cfi_expiration?: string | null
+          signing_pin_hash?: string | null
           created_at?: string
           updated_at?: string
+        }
+      }
+      instructor_student_relationships: {
+        Row: {
+          id: string
+          student_id: string
+          instructor_id: string
+          status: 'PENDING' | 'ACTIVE' | 'REVOKED'
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          student_id: string
+          instructor_id: string
+          status?: 'PENDING' | 'ACTIVE' | 'REVOKED'
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          student_id?: string
+          instructor_id?: string
+          status?: 'PENDING' | 'ACTIVE' | 'REVOKED'
+          created_at?: string
+        }
+      }
+      flight_signatures: {
+        Row: {
+          id: string
+          log_entry_id: string
+          signer_id: string
+          signed_at: string
+          flight_data_hash: string
+          signature_hash: string
+          drawn_signature_url: string | null
+        }
+        Insert: {
+          id?: string
+          log_entry_id: string
+          signer_id: string
+          signed_at?: string
+          flight_data_hash: string
+          signature_hash: string
+          drawn_signature_url?: string | null
+        }
+        Update: {
+          id?: string
+          log_entry_id?: string
+          signer_id?: string
+          signed_at?: string
+          flight_data_hash?: string
+          signature_hash?: string
+          drawn_signature_url?: string | null
         }
       }
       logbook_builder_templates: {
@@ -572,6 +639,38 @@ export type Database = {
           current_hash: string
           computed_hash: string
         }[]
+      }
+      request_instructor_link: {
+        Args: {
+          p_instructor_email: string
+        }
+        Returns: string
+      }
+      get_roster_member_profile: {
+        Args: {
+          p_user_id: string
+        }
+        Returns: {
+          id: string
+          full_name: string | null
+          role: 'STUDENT' | 'INSTRUCTOR' | 'DUAL'
+          cfi_number: string | null
+          cfi_expiration: string | null
+        }[]
+      }
+      set_signing_pin: {
+        Args: {
+          p_pin: string
+        }
+        Returns: undefined
+      }
+      sign_log_entry: {
+        Args: {
+          p_entry_id: string
+          p_instructor_id: string
+          p_pin: string
+        }
+        Returns: string
       }
     }
   }
