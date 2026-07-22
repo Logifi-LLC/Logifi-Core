@@ -123,10 +123,18 @@ export const useAuditTrail = () => {
         isEntrySynced.value = false
       }
 
+      const relatedEntryIds: string[] = []
+      if (localEntry?.amendsEntryId && isValidUUID(localEntry.amendsEntryId)) {
+        relatedEntryIds.push(localEntry.amendsEntryId)
+      }
+      const entryIdsToFetch = Array.from(
+        new Set([supabaseId, ...relatedEntryIds].filter((id) => isValidUUID(id)))
+      )
+
       const { data, error: fetchError } = await supabase
         .from('audit_logs')
         .select('*')
-        .eq('entry_id', supabaseId)
+        .in('entry_id', entryIdsToFetch.length > 0 ? entryIdsToFetch : [supabaseId])
         .order('timestamp', { ascending: false })
 
       if (fetchError) {

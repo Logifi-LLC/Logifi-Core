@@ -1773,7 +1773,7 @@
                   : 'border-amber-200 bg-amber-50 text-amber-900'
               ]"
             >
-              Pending instructor signature — use Save &amp; Sign below when ready.
+              Pending instructor signature — use <strong>Send to instructor</strong> if they do not see it yet, or Save &amp; Sign below when ready.
             </div>
 
             <div
@@ -1787,7 +1787,7 @@
                 Instructor signature
               </p>
               <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                Dual Received time is set. Enter the instructor PIN to Save &amp; Sign, or save without signing.
+                Dual Received time is set. Enter the instructor PIN to Save &amp; Sign, or select an instructor and Save without Signing.
               </p>
               <label class="block text-sm">
                 <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Instructor</span>
@@ -2627,6 +2627,20 @@
                   {{ showAuditTrailSidebar ? 'Hide History' : 'View History' }}
                 </button>
                 <button
+                  v-if="canAmendExpandedEntry"
+                  type="button"
+                  @click.stop="beginAmendSignedEntry"
+                  :class="[
+                    'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold font-quicksand transition-colors',
+                    isDarkMode
+                      ? 'border border-blue-700/60 bg-blue-900/30 text-blue-200 hover:bg-blue-900/50'
+                      : 'border border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100'
+                  ]"
+                >
+                  <Icon name="ri:file-copy-line" size="14" />
+                  Amend entry
+                </button>
+                <button
                   v-if="canSignExpandedEntry"
                   type="button"
                   @click.stop="openSignEntryModal"
@@ -2658,6 +2672,22 @@
                   {{ isExpandedEntrySigned ? 'Close' : 'Cancel' }}
                 </button>
                 <template v-if="!isExpandedEntrySigned && expandedEntryNeedsSignature">
+                  <button
+                    v-if="isExpandedEntryPending"
+                    type="button"
+                    @click.stop="sendPendingEntryToInstructor"
+                    :disabled="isSavingInlineEdit || isSubmittingSign || isMarkingSignaturePending || !signInstructorId"
+                    :class="[
+                      'inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-semibold border',
+                      isDarkMode
+                        ? 'border-cyan-700/60 bg-cyan-900/30 text-cyan-100 hover:bg-cyan-900/50'
+                        : 'border-cyan-300 bg-cyan-50 text-cyan-900 hover:bg-cyan-100',
+                      (isSavingInlineEdit || isSubmittingSign || isMarkingSignaturePending || !signInstructorId) ? 'opacity-60 cursor-not-allowed' : ''
+                    ]"
+                  >
+                    <Icon v-if="isMarkingSignaturePending" name="ri:loader-4-line" class="animate-spin mr-2" size="16" />
+                    {{ isMarkingSignaturePending ? 'Sending…' : 'Send to instructor' }}
+                  </button>
                   <button
                     type="button"
                     @click.stop="saveInlineEditWithIntent('later')"
@@ -3755,7 +3785,7 @@
                   Instructor signature
                 </p>
                 <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                  Dual Received time is set. Enter the instructor PIN to Save &amp; Sign, or save without signing.
+                  Dual Received time is set. Enter the instructor PIN to Save &amp; Sign, or select an instructor and Save without Signing.
                 </p>
                 <label class="block text-sm">
                   <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Instructor</span>
@@ -6398,6 +6428,10 @@ import { useToast } from '../composables/useToast'
 import { useFlightSigning } from '../composables/useFlightSigning'
 import { useRoster } from '../composables/useRoster'
 import { requiresInstructorSignature } from '../utils/flightSigning'
+import {
+  getAmendmentFor,
+  isEntrySuperseded,
+} from '../utils/logEntryAmendments'
 import { withTimeout } from '../utils/promiseTimeout'
 import { apiFetch } from '../utils/apiFetch'
 import { useSyncQueue } from '../composables/useSyncQueue'
@@ -6459,6 +6493,7 @@ import {
   saveSyncedEntryToIndexedDB,
   updateEntryInIndexedDB,
   deleteEntryFromIndexedDB,
+  getEntryFromIndexedDB,
   getAllIDBLogEntriesForUser,
   getSyncQueue,
   removeQueuedOperationsForEntry,
@@ -6691,6 +6726,7 @@ const {
   fetchSignaturesForEntries,
   signLogEntry,
   markSignaturePending,
+  confirmEntryPendingInCloud,
   isEntrySigned,
   isLoading: isFlightSigningLoading,
 } = useFlightSigning()
@@ -7905,14 +7941,101 @@ const isMarkingSignaturePending = ref(false)
 /** Intent for the in-progress save: sign immediately, mark pending, or normal (no dual). */
 const pendingSaveSigningIntent = ref<'none' | 'sign' | 'later'>('none')
 
-const isSyncedEntryId = (id: string | null | undefined): boolean =>
+/** UUID shape only — does NOT mean the row exists in Supabase. */
+const isValidEntryUUID = (id: string | null | undefined): boolean =>
   !!id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+
+async function entryExistsInCloud(entryId: string): Promise<boolean> {
+  if (!isValidEntryUUID(entryId) || !user.value?.id) return false
+  const { data, error } = await (supabase.from('log_entries') as any)
+    .select('id')
+    .eq('id', entryId)
+    .eq('user_id', user.value.id)
+    .maybeSingle()
+  if (error) {
+    console.warn('[entryExistsInCloud]', error.message)
+    return false
+  }
+  return !!data
+}
+
+/** True only when the entry actually exists in cloud (or IndexedDB _synced while offline). */
+async function isEntryCloudSynced(entryId: string | null | undefined): Promise<boolean> {
+  if (!entryId || !isValidEntryUUID(entryId)) return false
+  await checkOnlineStatus()
+  if (isOnline.value) {
+    return entryExistsInCloud(entryId)
+  }
+  try {
+    const local = await getEntryFromIndexedDB(entryId)
+    return local?._synced === true
+  } catch {
+    return false
+  }
+}
+
+function buildDbPayloadFromLogEntry(
+  entry: LogEntry,
+  userId: string,
+  options?: { signaturePending?: boolean; pendingInstructorId?: string | null }
+): Record<string, unknown> {
+  const signaturePending =
+    options?.signaturePending !== undefined
+      ? options.signaturePending
+      : entry.signaturePending === true
+  const pendingInstructorId =
+    options?.pendingInstructorId !== undefined
+      ? options.pendingInstructorId
+      : (entry.pendingInstructorId ?? null)
+
+  return {
+    id: entry.id,
+    user_id: userId,
+    date: entry.date,
+    role: entry.role,
+    aircraft_category_class: entry.aircraftCategoryClass,
+    category_class_time: entry.categoryClassTime,
+    aircraft_make_model: entry.aircraftMakeModel,
+    registration: entry.registration,
+    flight_number: entry.flightNumber,
+    departure: entry.departure,
+    destination: entry.destination,
+    route: entry.route || '',
+    training_elements: entry.trainingElements || null,
+    training_instructor: entry.trainingInstructor || null,
+    instructor_certificate: entry.instructorCertificate || null,
+    flight_conditions: entry.flightConditions,
+    remarks: entry.remarks || null,
+    tags: Array.isArray(entry.tags) ? entry.tags : [],
+    logbook_type: entry.logbookType ?? 'flight',
+    flight_time: entry.flightTime,
+    performance: entry.performance,
+    oooi: entry.oooi || null,
+    flagged: entry.flagged ?? false,
+    signature_pending: signaturePending,
+    pending_instructor_id: pendingInstructorId,
+    amends_entry_id: entry.amendsEntryId ?? null,
+    is_imported: entry.isImported ?? false,
+    import_source: entry.importSource ?? null,
+    import_batch_id: entry.importBatchId ?? null,
+    original_entry_date: entry.originalEntryDate ?? null,
+    import_metadata: entry.importMetadata ?? null,
+  }
+}
 
 const activeInstructorsForSigning = computed(() =>
   rosterInstructors.value.filter((row) => row.status === 'ACTIVE')
 )
 
 const isExpandedEntrySigned = computed(() => isEntrySigned(expandedEntryId.value))
+
+const canAmendExpandedEntry = computed(() => {
+  const id = expandedEntryId.value
+  if (!id || !isExpandedEntrySigned.value) return false
+  if (isEntrySuperseded(id, logEntries.value)) return false
+  if (getAmendmentFor(id, logEntries.value)) return false
+  return true
+})
 
 const isExpandedEntryPending = computed(() => {
   if (isExpandedEntrySigned.value) return false
@@ -7930,7 +8053,7 @@ const newEntryNeedsSignature = computed(() =>
 
 const canSignExpandedEntry = computed(() => {
   if (!expandedEntryId.value || isExpandedEntrySigned.value) return false
-  if (!isSyncedEntryId(expandedEntryId.value)) return false
+  if (!isValidEntryUUID(expandedEntryId.value)) return false
   if (!expandedEntryNeedsSignature.value) return false
   return activeInstructorsForSigning.value.length > 0
 })
@@ -7972,14 +8095,28 @@ function closeInlineEditDrawer(): void {
   customTagInputInline.value = ''
 }
 
-function setLocalSignaturePending(entryId: string, pending: boolean): void {
+function setLocalSignaturePending(
+  entryId: string,
+  pending: boolean,
+  instructorId: string | null = null
+): void {
   logEntries.value = sortEntriesByDateAndOOOI(
     logEntries.value.map((entry) =>
-      entry.id === entryId ? { ...entry, signaturePending: pending } : entry
+      entry.id === entryId
+        ? {
+            ...entry,
+            signaturePending: pending,
+            pendingInstructorId: pending ? instructorId : null,
+          }
+        : entry
     )
   )
   if (inlineEditEntry.value?.id === entryId) {
-    inlineEditEntry.value = { ...inlineEditEntry.value, signaturePending: pending }
+    inlineEditEntry.value = {
+      ...inlineEditEntry.value,
+      signaturePending: pending,
+      pendingInstructorId: pending ? instructorId : null,
+    }
   }
 }
 
@@ -7989,7 +8126,7 @@ async function openSignEntryModal(): Promise<void> {
     showToast('Link an active instructor in Settings → Instructor Links first')
     return
   }
-  if (!isSyncedEntryId(expandedEntryId.value)) {
+  if (!(await isEntryCloudSynced(expandedEntryId.value))) {
     showToast('Entry must sync to the cloud before signing')
     return
   }
@@ -8040,34 +8177,72 @@ async function submitSignEntry(): Promise<void> {
 async function sendEntryForSigning(): Promise<void> {
   const entryId = expandedEntryId.value
   if (!entryId) return
+  const instructorId = signInstructorId.value
+  if (!instructorId) {
+    showToast('Select an instructor to send for signing')
+    return
+  }
   isMarkingSignaturePending.value = true
   try {
-    // Prefer cloud update; if not synced yet, keep local pending and queue sync
-    let cloudOk = false
-    if (isSyncedEntryId(entryId) && isOnline.value) {
-      const result = await markSignaturePending(entryId, true)
-      if (result.success) {
-        cloudOk = true
-      }
+    const cloud = await ensureCloudPendingSignature(entryId, instructorId)
+    if (!cloud.ok) {
+      showToast(cloud.error, 6000)
+      return
     }
-
-    setLocalSignaturePending(entryId, true)
+    setLocalSignaturePending(entryId, true, instructorId)
     if (user.value?.id) {
       const local = logEntries.value.find((e) => e.id === entryId)
       if (local) {
         try {
-          await updateEntryInIndexedDB({ ...local, signaturePending: true }, { userId: user.value.id })
+          await updateEntryInIndexedDB(
+            { ...local, signaturePending: true, pendingInstructorId: instructorId },
+            { userId: user.value.id }
+          )
         } catch {
           // ignore
         }
       }
-      if (!cloudOk && isSyncedEntryId(entryId)) {
-        await addToQueue('update', entryId, { signature_pending: true }, user.value.id)
-        if (isOnline.value) void processQueue({ silent: true })
+    }
+    showToast('Sent to instructor for signature')
+    showSignatureFinishModal.value = false
+    closeInlineEditDrawer()
+  } finally {
+    isMarkingSignaturePending.value = false
+  }
+}
+
+/** Repair stuck local-pending entries so they appear in the instructor inbox. */
+async function sendPendingEntryToInstructor(): Promise<void> {
+  const entryId = expandedEntryId.value
+  if (!entryId || isExpandedEntrySigned.value) return
+  ensureDefaultSignInstructor()
+  const instructorId = signInstructorId.value
+  if (!instructorId) {
+    showToast('Select an instructor to Send to instructor')
+    return
+  }
+  isMarkingSignaturePending.value = true
+  try {
+    const cloud = await ensureCloudPendingSignature(entryId, instructorId)
+    if (!cloud.ok) {
+      showToast(cloud.error, 6000)
+      return
+    }
+    setLocalSignaturePending(entryId, true, instructorId)
+    if (user.value?.id) {
+      const local = logEntries.value.find((e) => e.id === entryId)
+      if (local) {
+        try {
+          await updateEntryInIndexedDB(
+            { ...local, signaturePending: true, pendingInstructorId: instructorId },
+            { userId: user.value.id }
+          )
+        } catch {
+          // ignore
+        }
       }
     }
-    showToast('Marked to sign later')
-    showSignatureFinishModal.value = false
+    showToast('Sent to instructor for signature')
     closeInlineEditDrawer()
   } finally {
     isMarkingSignaturePending.value = false
@@ -8080,7 +8255,7 @@ function openSignatureFinishModal(): void {
 
 async function refreshFlightSignatures(): Promise<void> {
   if (!isAuthenticated.value || !user.value) return
-  const ids = logEntries.value.map((entry) => entry.id).filter(isSyncedEntryId)
+  const ids = logEntries.value.map((entry) => entry.id).filter(isValidEntryUUID)
   if (ids.length === 0) return
   await fetchSignaturesForEntries(ids)
 }
@@ -8118,6 +8293,64 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
       ensureDefaultSignInstructor()
     }
   }
+}
+
+function beginAmendSignedEntry(): void {
+  const original = inlineEditEntry.value
+  const originalId = expandedEntryId.value
+  if (!original || !originalId) return
+  if (!isEntrySigned(originalId)) {
+    showToast('Only signed entries can be amended')
+    return
+  }
+  if (isEntrySuperseded(originalId, logEntries.value)) {
+    showToast('This entry has already been superseded')
+    return
+  }
+  if (getAmendmentFor(originalId, logEntries.value)) {
+    showToast('An amendment already exists — edit or delete it first')
+    return
+  }
+
+  ensureIosCatalogIndex()
+  closeAuditTrailSidebar()
+  showSignatureFinishModal.value = false
+
+  const newId = generateEntryId()
+  const copy = JSON.parse(JSON.stringify(original)) as LogEntry
+  copy.id = newId
+  copy.amendsEntryId = originalId
+  copy.signaturePending = false
+  copy.pendingInstructorId = null
+  copy.dataHash = undefined
+  copy.version = undefined
+  copy.createdAt = undefined
+  copy.updatedAt = undefined
+  copy.date = normalizeDateForInput(original.date)
+  if (!copy.performance.approaches?.length) {
+    copy.performance.approaches = getApproachesFromPerformance(copy.performance)
+  }
+  if (!Array.isArray(copy.tags)) copy.tags = []
+
+  logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, copy])
+  expandedEntryId.value = newId
+  inlineEditEntry.value = copy
+
+  const hasOOOITimes =
+    !!copy.oooi &&
+    !!(
+      (copy.oooi.out && copy.oooi.out.trim()) ||
+      (copy.oooi.off && copy.oooi.off.trim()) ||
+      (copy.oooi.on && copy.oooi.on.trim()) ||
+      (copy.oooi.in && copy.oooi.in.trim())
+    )
+  isInlineCommercialMode.value = hasOOOITimes
+
+  if (requiresInstructorSignature(copy)) {
+    ensureDefaultSignInstructor()
+  }
+
+  showToast('Amendment draft created — correct and save. History will appear in the audit trail.')
 }
 
 function ensureInlineOOOI(): void {
@@ -8206,6 +8439,11 @@ async function saveInlineEdit(): Promise<void> {
       pendingSaveSigningIntent.value === 'later'
         ? true
         : (inlineEditEntry.value.signaturePending === true),
+    pendingInstructorId:
+      pendingSaveSigningIntent.value === 'later'
+        ? (signInstructorId.value || null)
+        : (inlineEditEntry.value.pendingInstructorId ?? null),
+    amendsEntryId: inlineEditEntry.value.amendsEntryId ?? null,
   }
 
   if (inferLogbookType(updatedEntry) === 'simulator') {
@@ -8264,6 +8502,12 @@ async function saveInlineEdit(): Promise<void> {
           pendingSaveSigningIntent.value === 'later'
             ? true
             : (oldEntryData?.signature_pending ?? updatedEntry.signaturePending ?? false),
+        pending_instructor_id:
+          pendingSaveSigningIntent.value === 'later'
+            ? (signInstructorId.value || null)
+            : (oldEntryData?.pending_instructor_id ?? updatedEntry.pendingInstructorId ?? null),
+        amends_entry_id:
+          updatedEntry.amendsEntryId ?? oldEntryData?.amends_entry_id ?? null,
         is_imported: oldEntryData?.is_imported ?? false,
         import_source: oldEntryData?.import_source ?? null,
         import_batch_id: oldEntryData?.import_batch_id ?? null,
@@ -8271,15 +8515,59 @@ async function saveInlineEdit(): Promise<void> {
         import_metadata: oldEntryData?.import_metadata ?? null
       }
 
-      // Entry not in Supabase yet (0 rows): persist locally and queue for sync
+      // Entry not in Supabase yet (0 rows): insert directly when online; queue when offline
       if (!oldEntryData) {
-        console.log('[SaveInlineEdit] Entry not in Supabase yet, saving to IndexedDB and queueing for sync')
-        await updateEntryInIndexedDB(updatedEntry, { userId: user.value.id })
+        console.log('[SaveInlineEdit] Entry not in Supabase yet')
         const queueEntry = { ...dbEntry, id: targetId, user_id: user.value.id }
-        await addToQueue('insert', targetId, queueEntry, user.value.id)
-        if (isOnline.value) processQueue({ silent: true })
+        const awaitSync = pendingSaveSigningIntent.value === 'later'
+
+        await checkOnlineStatus()
+        if (isOnline.value) {
+          const { data: insertResult, error: insertError } = await (supabase
+            .from('log_entries') as any)
+            .insert(queueEntry)
+            .select()
+            .maybeSingle()
+
+          if (insertError) {
+            console.error('[SaveInlineEdit] Direct insert error:', insertError)
+            showToast(
+              insertError.message || 'Failed to save entry to the cloud. Check your connection and try again.',
+              6000
+            )
+            return
+          }
+          if (!insertResult) {
+            showToast('Insert returned no row (possible RLS or constraint issue)', 6000)
+            return
+          }
+
+          const savedEntry: LogEntry = {
+            ...updatedEntry,
+            dataHash: insertResult.data_hash || undefined,
+            version: insertResult.version,
+            signaturePending: insertResult.signature_pending === true,
+            pendingInstructorId: insertResult.pending_instructor_id ?? null,
+            amendsEntryId: insertResult.amends_entry_id ?? updatedEntry.amendsEntryId ?? null,
+          }
+          await updateEntryInIndexedDB(savedEntry, { userId: user.value.id, synced: true })
+          const existsLocally = logEntries.value.some((e) => e.id === targetId)
+          logEntries.value = sortEntriesByDateAndOOOI(
+            existsLocally
+              ? logEntries.value.map((e) => (e.id === targetId ? savedEntry : e))
+              : [...logEntries.value, savedEntry]
+          )
+          afterInlineSaveSuccess(savedEntry)
+          return
+        }
+
+        await updateEntryInIndexedDB(updatedEntry, { userId: user.value.id, synced: false })
+        await addToQueue('insert', targetId, queueEntry, user.value.id, { awaitSync })
+        const existsLocally = logEntries.value.some((e) => e.id === targetId)
         logEntries.value = sortEntriesByDateAndOOOI(
-          logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
+          existsLocally
+            ? logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
+            : [...logEntries.value, updatedEntry]
         )
         afterInlineSaveSuccess(updatedEntry)
         return
@@ -8304,8 +8592,8 @@ async function saveInlineEdit(): Promise<void> {
       if (!updateResult) {
         console.log('[SaveInlineEdit] Update returned 0 rows, saving to IndexedDB and queueing for sync')
         await updateEntryInIndexedDB(updatedEntry, { userId: user.value.id })
-        await addToQueue('update', targetId, dbEntry, user.value.id)
-        if (isOnline.value) processQueue({ silent: true })
+        const awaitSync = pendingSaveSigningIntent.value === 'later'
+        await addToQueue('update', targetId, dbEntry, user.value.id, { awaitSync })
         logEntries.value = sortEntriesByDateAndOOOI(
           logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
         )
@@ -8382,6 +8670,8 @@ async function saveInlineEdit(): Promise<void> {
         version: dbEntryResult.version, // Include version to keep frontend in sync with database
         dataHash: dbEntryResult.data_hash || undefined,
         signaturePending: dbEntryResult.signature_pending === true,
+        pendingInstructorId: dbEntryResult.pending_instructor_id ?? null,
+        amendsEntryId: dbEntryResult.amends_entry_id ?? null,
         isImported: dbEntryResult.is_imported || false,
         importSource: dbEntryResult.import_source || undefined,
         importBatchId: dbEntryResult.import_batch_id || undefined,
@@ -8529,6 +8819,131 @@ function afterAddEntrySaveSuccess(savedEntry: LogEntry): void {
   void finalizeSaveWithSigningIntent(savedEntry, 'add')
 }
 
+async function ensureCloudPendingSignature(
+  entryId: string,
+  instructorId: string | null | undefined
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!instructorId) {
+    return { ok: false, error: 'Select an instructor to Save without Signing' }
+  }
+
+  const maxAttempts = 5
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (isOnline.value) {
+      await processQueue({ silent: true })
+      await refreshQueueLength()
+    }
+
+    if (queueLength.value === 0) {
+      break
+    }
+
+    if (attempt < maxAttempts - 1) {
+      await new Promise((r) => setTimeout(r, 500))
+    }
+  }
+
+  if (queueLength.value > 0) {
+    return {
+      ok: false,
+      error:
+        'Saved locally but sync is still pending. Open Settings → Data to retry sync so your instructor can sign.',
+    }
+  }
+
+  await checkOnlineStatus()
+  let inCloud = await isEntryCloudSynced(entryId)
+
+  // Repair: local-only amendment / orphan — INSERT then mark pending (do not PATCH-only)
+  if (!inCloud) {
+    if (!isOnline.value) {
+      return {
+        ok: false,
+        error:
+          'Entry has not synced to the cloud yet. Stay online and retry from Settings → Data.',
+      }
+    }
+    if (!user.value?.id) {
+      return { ok: false, error: 'Not authenticated' }
+    }
+
+    const localEntry =
+      logEntries.value.find((e) => e.id === entryId) ||
+      (await getEntryFromIndexedDB(entryId).catch(() => null))
+
+    if (!localEntry) {
+      return {
+        ok: false,
+        error:
+          'Entry is missing locally and is not in the cloud. Re-open the entry and Save without Signing again.',
+      }
+    }
+
+    const insertPayload = buildDbPayloadFromLogEntry(localEntry as LogEntry, user.value.id, {
+      signaturePending: true,
+      pendingInstructorId: instructorId,
+    })
+
+    const { data: insertResult, error: insertError } = await (supabase
+      .from('log_entries') as any)
+      .insert(insertPayload)
+      .select()
+      .maybeSingle()
+
+    if (insertError) {
+      console.error('[ensureCloudPendingSignature] Repair insert failed:', insertError)
+      return {
+        ok: false,
+        error: insertError.message || 'Failed to upload entry to the cloud for signing',
+      }
+    }
+    if (!insertResult) {
+      return {
+        ok: false,
+        error: 'Insert returned no row (possible RLS or constraint issue)',
+      }
+    }
+
+    const repaired: LogEntry = {
+      ...(localEntry as LogEntry),
+      dataHash: insertResult.data_hash || undefined,
+      version: insertResult.version,
+      signaturePending: true,
+      pendingInstructorId: instructorId,
+      amendsEntryId: insertResult.amends_entry_id ?? (localEntry as LogEntry).amendsEntryId ?? null,
+    }
+    try {
+      await updateEntryInIndexedDB(repaired, { userId: user.value.id, synced: true })
+    } catch {
+      // non-fatal
+    }
+    logEntries.value = sortEntriesByDateAndOOOI(
+      logEntries.value.map((e) => (e.id === entryId ? repaired : e))
+    )
+    inCloud = true
+  }
+
+  if (!inCloud) {
+    return {
+      ok: false,
+      error:
+        'Entry has not synced to the cloud yet. Stay online and retry from Settings → Data.',
+    }
+  }
+
+  const markResult = await markSignaturePending(entryId, true, instructorId)
+  if (!markResult.success) {
+    return { ok: false, error: markResult.error }
+  }
+
+  const confirmResult = await confirmEntryPendingInCloud(entryId, instructorId)
+  if (!confirmResult.success) {
+    return { ok: false, error: confirmResult.error }
+  }
+
+  return { ok: true }
+}
+
 async function finalizeSaveWithSigningIntent(
   savedEntry: LogEntry,
   source: 'add' | 'edit'
@@ -8598,15 +9013,18 @@ async function finalizeSaveWithSigningIntent(
   }
 
   if (intent === 'later') {
-    // signature_pending is set on the save payload when intent is 'later'
+    const instructorId = signInstructorId.value || savedEntry.pendingInstructorId
+    const cloud = await ensureCloudPendingSignature(savedEntry.id, instructorId)
+    if (!cloud.ok) {
+      showToast(cloud.error, 6000)
+      prepareInlineEditFromEntry(savedEntry)
+      return
+    }
     showToast(
       source === 'edit' ? 'Entry updated — pending signature' : 'Entry saved — pending signature',
       3000
     )
-    if (!savedEntry.signaturePending) {
-      prepareInlineEditFromEntry(savedEntry)
-      await sendEntryForSigning()
-    } else if (source === 'edit') {
+    if (source === 'edit') {
       closeInlineEditDrawer()
     }
     clearFormSigningFields()
@@ -8637,6 +9055,16 @@ async function submitEntryWithIntent(intent: 'sign' | 'later' | 'none'): Promise
       return
     }
   }
+  if (intent === 'later') {
+    if (activeInstructorsForSigning.value.length === 0) {
+      showToast('Link an active instructor in Settings → Instructor Links first')
+      return
+    }
+    if (!signInstructorId.value) {
+      showToast('Select an instructor to Save without Signing')
+      return
+    }
+  }
   pendingSaveSigningIntent.value = intent
   await submitEntry()
 }
@@ -8657,6 +9085,16 @@ async function saveInlineEditWithIntent(intent: 'sign' | 'later' | 'none'): Prom
       } else {
         showToast('Select an instructor and enter their PIN to Save & Sign')
       }
+      return
+    }
+  }
+  if (intent === 'later') {
+    if (activeInstructorsForSigning.value.length === 0) {
+      showToast('Link an active instructor in Settings → Instructor Links first')
+      return
+    }
+    if (!signInstructorId.value) {
+      showToast('Select an instructor to Save without Signing')
       return
     }
   }
@@ -14232,6 +14670,11 @@ async function submitEntry(): Promise<void> {
       flagged: shouldFlag,
       isImported: false,
       signaturePending: pendingSaveSigningIntent.value === 'later',
+      pendingInstructorId:
+        pendingSaveSigningIntent.value === 'later'
+          ? (signInstructorId.value || null)
+          : null,
+      amendsEntryId: baseEntry.amendsEntryId ?? null,
     }
 
     const userId = user.value?.id
@@ -14282,16 +14725,20 @@ async function submitEntry(): Promise<void> {
       flagged: shouldFlag,
       is_imported: false,
       signature_pending: pendingSaveSigningIntent.value === 'later',
+      pending_instructor_id:
+        pendingSaveSigningIntent.value === 'later'
+          ? (signInstructorId.value || null)
+          : null,
+      amends_entry_id: entryToSave.amendsEntryId ?? null,
     }
 
     // Add to sync queue (will sync to Supabase when online)
     if (isAuthenticated.value && user.value) {
+      const awaitSync = pendingSaveSigningIntent.value === 'later'
       if (editingEntryId.value) {
-        // For updates, the ID is already included above
-        await addToQueue('update', entryId, dbEntry, userId)
+        await addToQueue('update', entryId, dbEntry, userId, { awaitSync })
       } else {
-        // For inserts, include the UUID so Supabase uses it
-        await addToQueue('insert', entryId, dbEntry, userId)
+        await addToQueue('insert', entryId, dbEntry, userId, { awaitSync })
       }
     }
 
@@ -14577,6 +15024,8 @@ function mapSupabaseRowToLogEntry(dbEntry: any): LogEntry {
     createdAt: dbEntry.created_at || undefined,
     updatedAt: dbEntry.updated_at || undefined,
     signaturePending: dbEntry.signature_pending === true,
+    pendingInstructorId: dbEntry.pending_instructor_id ?? null,
+    amendsEntryId: dbEntry.amends_entry_id ?? null,
     isImported: dbEntry.is_imported || false,
     importSource: dbEntry.import_source || undefined,
     importBatchId: dbEntry.import_batch_id || undefined,
@@ -15004,6 +15453,8 @@ function mapIdbEntryToLogEntry(
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
     signaturePending: entry.signaturePending === true,
+    pendingInstructorId: entry.pendingInstructorId ?? null,
+    amendsEntryId: entry.amendsEntryId ?? null,
     isImported: entry.isImported,
     importSource: entry.importSource,
     importBatchId: entry.importBatchId,
@@ -15836,6 +16287,7 @@ function passesCatalogAndSearchFilters(entry: LogEntry): boolean {
 const filteredEntries = computed(() => {
   const dateRange = getTotalsDateRange()
   const result = logEntries.value.filter((entry) => {
+    if (isEntrySuperseded(entry.id, logEntries.value)) return false
     if (!passesCatalogAndSearchFilters(entry)) return false
     if (dateRange && !entryMatchesTotalsDateRange(entry, dateRange)) return false
     return true
@@ -15905,7 +16357,7 @@ const hasAnyEntriesForActiveLogbook = computed(() =>
   logEntries.value.some((entry) => getEntryLogbookType(entry) === activeLogbook.value)
 )
 
-/** Totals and logbook list share the same filtered entry set. */
+/** Superseded originals are hidden from the list; filtered entries drive totals. */
 const entriesForTotals = computed(() => filteredEntries.value)
 
 const totals = computed(() => {

@@ -44,6 +44,7 @@
       v-else-if="currentFrame === 'roster'"
       :is-dark-mode="isDarkMode"
       :role="profile.role"
+      :is-active="open && currentFrame === 'roster'"
     />
 
     <SettingsChangeEmailView

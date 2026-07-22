@@ -111,7 +111,7 @@
                         getActionBadgeColor(log.action)
                       ]"
                     >
-                      {{ log.action }}
+                      {{ formatActionLabel(log.action) }}
                     </span>
                     <span :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                       {{ log.relativeTime }}
@@ -132,8 +132,14 @@
                 </div>
 
                 <!-- Summary -->
-                <p :class="['text-sm font-quicksand mb-3', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
-                  {{ log.change_summary || `${log.action} operation` }}
+                <p :class="['text-sm font-quicksand mb-1', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+                  {{ log.change_summary || `${formatActionLabel(log.action)} operation` }}
+                </p>
+                <p
+                  v-if="log.compliance_reason && (log.action === 'amend' || log.action === 'supersede')"
+                  :class="['text-xs font-quicksand mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+                >
+                  {{ log.compliance_reason }}
                 </p>
 
                 <!-- Timestamp -->
@@ -320,7 +326,7 @@
                       getActionBadgeColor(log.action)
                     ]"
                   >
-                    {{ log.action }}
+                    {{ formatActionLabel(log.action) }}
                   </span>
                   <span :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                     {{ log.relativeTime }}
@@ -341,8 +347,14 @@
               </div>
 
               <!-- Summary -->
-              <p :class="['text-sm font-quicksand mb-3', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
-                {{ log.change_summary || `${log.action} operation` }}
+              <p :class="['text-sm font-quicksand mb-1', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+                {{ log.change_summary || `${formatActionLabel(log.action)} operation` }}
+              </p>
+              <p
+                v-if="log.compliance_reason && (log.action === 'amend' || log.action === 'supersede')"
+                :class="['text-xs font-quicksand mb-3', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+              >
+                {{ log.compliance_reason }}
               </p>
 
               <!-- Timestamp -->
@@ -741,9 +753,17 @@ const getActionBadgeColor = (action: string) => {
     delete: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
     restore: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
     sign: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400',
-    export: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
+    export: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+    amend: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400',
+    supersede: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
   }
   return colors[action] || colors.update
+}
+
+const formatActionLabel = (action: string) => {
+  if (action === 'supersede') return 'Superseded'
+  if (action === 'amend') return 'Amended'
+  return action
 }
 
 // Get action timeline dot color
@@ -754,7 +774,9 @@ const getActionColor = (action: string) => {
     delete: 'bg-red-500 border-red-500',
     restore: 'bg-purple-500 border-purple-500',
     sign: 'bg-indigo-500 border-indigo-500',
-    export: 'bg-amber-500 border-amber-500'
+    export: 'bg-amber-500 border-amber-500',
+    amend: 'bg-cyan-500 border-cyan-500',
+    supersede: 'bg-orange-500 border-orange-500'
   }
   return colors[action] || colors.update
 }

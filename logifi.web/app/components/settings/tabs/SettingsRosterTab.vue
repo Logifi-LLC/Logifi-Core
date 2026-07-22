@@ -144,11 +144,70 @@
           </div>
         </div>
       </SettingsListGroup>
+
+      <SettingsListGroup title="Pending signatures" :is-dark-mode="isDarkMode">
+        <div
+          v-if="pendingSignatures.length === 0"
+          :class="[helper, 'px-4 py-6 text-center']"
+        >
+          No flights waiting for your signature.
+        </div>
+        <div
+          v-for="row in pendingSignatures"
+          :key="row.log_entry_id"
+          class="border-t px-4 py-3 first:border-t-0"
+          :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-semibold font-quicksand" :class="isDarkMode ? 'text-gray-100' : 'text-gray-900'">
+                {{ row.student_name?.trim() || 'Student' }}
+                <span
+                  v-if="row.amends_entry_id"
+                  :class="[
+                    'ml-2 rounded px-1.5 py-0.5 text-[10px] uppercase font-bold tracking-wide align-middle',
+                    isDarkMode ? 'bg-cyan-900/40 text-cyan-300' : 'bg-cyan-100 text-cyan-800',
+                  ]"
+                >
+                  Amended
+                </span>
+              </p>
+              <p :class="[helper, 'mt-0.5 text-xs']">
+                {{ formatPendingDate(row.date) }}
+                · {{ row.departure || '—' }} → {{ row.destination || '—' }}
+                · {{ row.registration || row.aircraft_make_model || 'Aircraft' }}
+              </p>
+              <p :class="[helper, 'mt-0.5 text-xs']">
+                Dual {{ formatHours(row.dual_received) }} · Total {{ formatHours(row.total_time) }}
+              </p>
+            </div>
+            <button
+              type="button"
+              :class="btnPrimary"
+              class="shrink-0"
+              :disabled="isLoading || isReviewLoading || isSigning"
+              @click="onReview(row.log_entry_id)"
+            >
+              {{ isReviewLoading && reviewingEntryId === row.log_entry_id ? 'Loading…' : 'Review' }}
+            </button>
+          </div>
+        </div>
+      </SettingsListGroup>
     </template>
 
     <p v-else :class="[helper, 'px-1']">
       Set your account role to Instructor or Dual in Pilot Profile to manage a student roster.
     </p>
+
+    <PendingSignatureReviewModal
+      :open="reviewOpen"
+      :is-dark-mode="isDarkMode"
+      :student-name="reviewStudentName"
+      :entry="reviewEntry"
+      :is-signing="isSigning"
+      @close="closeReview"
+      @sign="onSignFromReview"
+    />
   </div>
 </template>
 
@@ -156,20 +215,29 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import SettingsField from '../SettingsField.vue'
 import SettingsListGroup from '../SettingsListGroup.vue'
+import PendingSignatureReviewModal from '../PendingSignatureReviewModal.vue'
 import { useSettingsClasses } from '../useSettingsClasses'
 import { useRoster, type RosterRelationship } from '~/composables/useRoster'
+import { useFlightSigning } from '~/composables/useFlightSigning'
+import { useAuth } from '~/composables/useAuth'
 import { useToast } from '~/composables/useToast'
+import type { Database } from '~/types/database'
 import type { PilotAccountRole } from './SettingsProfileTab.vue'
+
+type LogEntryRow = Database['public']['Tables']['log_entries']['Row']
 
 const props = defineProps<{
   isDarkMode: boolean
   role: PilotAccountRole
+  /** True when the Instructor Links settings frame is visible (triggers refresh). */
+  isActive?: boolean
 }>()
 
 const { helper, btnPrimary, btnSecondary, destructiveRow } = useSettingsClasses(
   computed(() => props.isDarkMode)
 )
 const { showToast } = useToast()
+const { user } = useAuth()
 const {
   roster,
   instructors,
@@ -180,8 +248,20 @@ const {
   fetchStudentRoster,
   fetchInstructors
 } = useRoster()
+const {
+  pendingSignatures,
+  fetchPendingSignaturesForInstructor,
+  fetchPendingSignatureEntry,
+  signLogEntry
+} = useFlightSigning()
 
 const instructorEmail = ref('')
+const reviewingEntryId = ref<string | null>(null)
+const reviewOpen = ref(false)
+const reviewStudentName = ref<string | null>(null)
+const reviewEntry = ref<LogEntryRow | null>(null)
+const isReviewLoading = ref(false)
+const isSigning = ref(false)
 
 const isInstructorRole = computed(
   () => props.role === 'INSTRUCTOR' || props.role === 'DUAL'
@@ -219,14 +299,76 @@ function statusBadgeClass(status: string): string {
     : 'bg-amber-100 text-amber-800'
 }
 
+function formatPendingDate(date: string): string {
+  if (!date) return '—'
+  return date.slice(0, 10)
+}
+
+function formatHours(value: number | null | undefined): string {
+  const n = Number(value ?? 0)
+  if (!Number.isFinite(n)) return '0.0'
+  return n.toFixed(1)
+}
+
+function closeReview() {
+  reviewOpen.value = false
+  reviewingEntryId.value = null
+  reviewStudentName.value = null
+  reviewEntry.value = null
+}
+
+async function onReview(entryId: string) {
+  reviewingEntryId.value = entryId
+  isReviewLoading.value = true
+  try {
+    const result = await fetchPendingSignatureEntry(entryId)
+    if (!result.success) {
+      showToast(result.error)
+      reviewingEntryId.value = null
+      return
+    }
+    reviewStudentName.value = result.data.studentName
+    reviewEntry.value = result.data.entry
+    reviewOpen.value = true
+  } finally {
+    isReviewLoading.value = false
+  }
+}
+
+async function onSignFromReview(pin: string) {
+  const entryId = reviewingEntryId.value ?? reviewEntry.value?.id
+  const instructorId = user.value?.id
+  if (!entryId || !instructorId) {
+    showToast('You must be signed in to sign')
+    return
+  }
+  isSigning.value = true
+  try {
+    const result = await signLogEntry(entryId, instructorId, pin)
+    if (!result.success) {
+      showToast(result.error)
+      return
+    }
+    showToast('Flight signed')
+    closeReview()
+    await fetchPendingSignaturesForInstructor()
+  } finally {
+    isSigning.value = false
+  }
+}
+
 async function loadLists() {
-  const results = await Promise.all([
+  const tasks: Promise<{ success: boolean; error?: string }>[] = [
     fetchInstructors(),
-    isInstructorRole.value ? fetchStudentRoster() : Promise.resolve({ success: true as const, data: [] })
-  ])
+  ]
+  if (isInstructorRole.value) {
+    tasks.push(fetchStudentRoster())
+    tasks.push(fetchPendingSignaturesForInstructor())
+  }
+  const results = await Promise.all(tasks)
   const failed = results.find((r) => !r.success)
   if (failed && !failed.success) {
-    showToast(failed.error)
+    showToast(failed.error ?? 'Failed to load instructor links')
   }
 }
 
@@ -264,13 +406,22 @@ async function onRevoke(relationshipId: string, action: 'cancel' | 'decline' | '
 }
 
 onMounted(() => {
-  void loadLists()
+  if (props.isActive !== false) {
+    void loadLists()
+  }
 })
+
+watch(
+  () => props.isActive,
+  (active) => {
+    if (active) void loadLists()
+  }
+)
 
 watch(
   () => props.role,
   () => {
-    void loadLists()
+    if (props.isActive !== false) void loadLists()
   }
 )
 </script>

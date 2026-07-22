@@ -40,6 +40,8 @@ export type Database = {
           import_metadata: Record<string, any> | null
           fcv_flight_id: string | null
           signature_pending: boolean
+          pending_instructor_id: string | null
+          amends_entry_id: string | null
         }
         Insert: {
           id?: string
@@ -75,6 +77,8 @@ export type Database = {
           import_metadata?: Record<string, any> | null
           fcv_flight_id?: string | null
           signature_pending?: boolean
+          pending_instructor_id?: string | null
+          amends_entry_id?: string | null
         }
         Update: {
           id?: string
@@ -110,6 +114,8 @@ export type Database = {
           import_metadata?: Record<string, any> | null
           fcv_flight_id?: string | null
           signature_pending?: boolean
+          pending_instructor_id?: string | null
+          amends_entry_id?: string | null
         }
       }
       fcv_integrations: {
@@ -146,7 +152,7 @@ export type Database = {
           id: string
           entry_id: string
           user_id: string | null
-          action: 'create' | 'update' | 'delete' | 'sign' | 'export' | 'restore'
+          action: 'create' | 'update' | 'delete' | 'sign' | 'export' | 'restore' | 'amend' | 'supersede'
           old_data: Record<string, any> | null
           new_data: Record<string, any> | null
           changed_fields: string[] | null
@@ -162,7 +168,7 @@ export type Database = {
           id?: string
           entry_id: string
           user_id?: string | null
-          action: 'create' | 'update' | 'delete' | 'sign' | 'export' | 'restore'
+          action: 'create' | 'update' | 'delete' | 'sign' | 'export' | 'restore' | 'amend' | 'supersede'
           old_data?: Record<string, any> | null
           new_data?: Record<string, any> | null
           changed_fields?: string[] | null
@@ -671,6 +677,29 @@ export type Database = {
           p_pin: string
         }
         Returns: string
+      }
+      list_pending_signatures_for_instructor: {
+        Args: Record<string, never>
+        Returns: {
+          log_entry_id: string
+          student_id: string
+          student_name: string | null
+          date: string
+          departure: string
+          destination: string
+          registration: string
+          aircraft_make_model: string
+          dual_received: number
+          total_time: number
+          updated_at: string
+          amends_entry_id: string | null
+        }[]
+      }
+      get_pending_signature_entry: {
+        Args: {
+          p_entry_id: string
+        }
+        Returns: Record<string, unknown>
       }
     }
   }

@@ -109,6 +109,10 @@ export interface LogEntry {
   updatedAt?: string // ISO timestamp when entry was last updated
   /** Dual received time awaiting instructor signature (Send for Signing). */
   signaturePending?: boolean
+  /** Instructor targeted when student chose Save without Signing. */
+  pendingInstructorId?: string | null
+  /** When set, this entry amends (supersedes) the referenced signed entry. */
+  amendsEntryId?: string | null
   // Import tracking fields
   isImported?: boolean
   importSource?: string // 'csv', 'json', 'paper', etc.

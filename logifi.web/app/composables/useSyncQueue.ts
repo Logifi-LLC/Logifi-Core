@@ -20,8 +20,16 @@ const RETRY_DELAY_BASE = 1000 // 1 second base delay
 /** Shared across composable instances so dashboard and sync share the same active user. */
 const activeUserId = ref<string | null>(null)
 
+/** Serializes processQueue across all callers so awaitSync never no-ops mid-run. */
+let processChain: Promise<void> = Promise.resolve()
+
 export type ProcessQueueOptions = {
   silent?: boolean
+}
+
+export type AddToQueueOptions = {
+  /** When true, wait for immediate sync attempt after enqueue (use for pending-signature saves). */
+  awaitSync?: boolean
 }
 
 function browserReportsOnline(): boolean {
@@ -57,7 +65,8 @@ export const useSyncQueue = () => {
     operation: 'insert' | 'update' | 'delete',
     entryId: string,
     entryData?: any,
-    userId?: string
+    userId?: string,
+    options?: AddToQueueOptions
   ): Promise<void> => {
     const scopedUserId = userId ?? activeUserId.value
     if (!scopedUserId) {
@@ -70,7 +79,13 @@ export const useSyncQueue = () => {
 
       // If online, try immediate sync (silent — no spinner)
       if (isOnline.value) {
-        processQueue({ silent: true })
+        const syncRun = processQueue({ silent: true })
+        if (options?.awaitSync) {
+          await syncRun
+          await refreshQueueLength()
+        } else {
+          void syncRun
+        }
       }
     } catch (error) {
       console.error('Failed to add to sync queue:', error)
@@ -179,6 +194,9 @@ export const useSyncQueue = () => {
 
   /**
    * Find an existing log_entries row when a queued insert already landed (e.g. via import).
+   * When the queue item has a UUID, match by id only — never by date/route/tail.
+   * Amendments reuse the original flight's route fields with a new id; field matching
+   * would falsely treat them as duplicates and drop the insert from the queue.
    */
   const findExistingInsertRow = async (
     insertData: Record<string, unknown>,
@@ -198,7 +216,13 @@ export const useSyncQueue = () => {
         .select('*')
         .eq('id', candidateId)
         .maybeSingle()
-      if (data) return data
+      return data ?? null
+    }
+
+    // Legacy non-UUID local ids only: allow date/route/tail dedupe for imports.
+    // Skip when this payload is an amendment (same route as the signed original).
+    if (insertData.amends_entry_id) {
+      return null
     }
 
     if (
@@ -436,14 +460,11 @@ export const useSyncQueue = () => {
   }
 
   /**
-   * Process sync queue for the active user only
+   * Process sync queue for the active user only.
+   * Concurrent callers serialize on a shared chain so awaitSync never no-ops while another run is in flight.
    */
-  const processQueue = async (options?: ProcessQueueOptions): Promise<void> => {
+  const processQueueOnce = async (options?: ProcessQueueOptions): Promise<void> => {
     const silent = options?.silent ?? false
-
-    if (isProcessing.value) {
-      return
-    }
 
     await checkOnlineStatus()
     if (!isOnline.value && !browserReportsOnline()) {
@@ -465,7 +486,6 @@ export const useSyncQueue = () => {
       if (queue.length === 0) {
         resetSyncProgress()
         await refreshQueueLength()
-        isProcessing.value = false
         return
       }
 
@@ -481,7 +501,6 @@ export const useSyncQueue = () => {
       if (processableItems.length === 0) {
         resetSyncProgress()
         await refreshQueueLength()
-        isProcessing.value = false
         return
       }
 
@@ -513,7 +532,7 @@ export const useSyncQueue = () => {
         // Wait a bit before retrying failed items (silent)
         setTimeout(() => {
           if (isOnline.value) {
-            processQueue({ silent: true })
+            void processQueue({ silent: true })
           }
         }, 2000)
       }
@@ -528,6 +547,12 @@ export const useSyncQueue = () => {
     } finally {
       isProcessing.value = false
     }
+  }
+
+  const processQueue = async (options?: ProcessQueueOptions): Promise<void> => {
+    const run = () => processQueueOnce(options)
+    processChain = processChain.then(run, run)
+    await processChain
   }
 
   /**

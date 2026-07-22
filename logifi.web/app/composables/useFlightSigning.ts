@@ -4,6 +4,9 @@ import { useAuth } from '~/composables/useAuth'
 import type { Database } from '~/types/database'
 
 type FlightSignature = Database['public']['Tables']['flight_signatures']['Row']
+type LogEntryRow = Database['public']['Tables']['log_entries']['Row']
+type PendingSignatureRow =
+  Database['public']['Functions']['list_pending_signatures_for_instructor']['Returns'][number]
 
 type SigningResult<T> =
   | { success: true; data: T }
@@ -12,9 +15,17 @@ type SigningResult<T> =
 const isValidUUID = (id: string): boolean =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
 
+export type PendingSignatureForInstructor = PendingSignatureRow
+
+export type PendingSignatureEntryDetail = {
+  studentName: string | null
+  entry: LogEntryRow
+}
+
 export const useFlightSigning = () => {
   const { user } = useAuth()
   const signaturesByEntryId = ref<Record<string, FlightSignature>>({})
+  const pendingSignatures = ref<PendingSignatureForInstructor[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
@@ -86,6 +97,9 @@ export const useFlightSigning = () => {
       }
 
       await fetchSignaturesForEntries([entryId])
+      pendingSignatures.value = pendingSignatures.value.filter(
+        (row) => row.log_entry_id !== entryId
+      )
       return { success: true, data: { signatureId: data } }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to sign log entry'
@@ -96,9 +110,47 @@ export const useFlightSigning = () => {
     }
   }
 
+  const confirmEntryPendingInCloud = async (
+    entryId: string,
+    instructorId: string
+  ): Promise<SigningResult<true>> => {
+    try {
+      requireUserId()
+
+      if (!isValidUUID(entryId) || !isValidUUID(instructorId)) {
+        throw new Error('Entry must be synced to the cloud before confirming pending state')
+      }
+
+      const { data, error: fetchError } = await supabase
+        .from('log_entries')
+        .select('signature_pending, pending_instructor_id')
+        .eq('id', entryId)
+        .maybeSingle()
+
+      if (fetchError) throw fetchError
+      if (!data) {
+        throw new Error('Entry not found in cloud yet')
+      }
+      if (data.signature_pending !== true) {
+        throw new Error('Pending signature flag is not set in cloud')
+      }
+      if (data.pending_instructor_id !== instructorId) {
+        throw new Error('Instructor assignment does not match in cloud')
+      }
+
+      return { success: true, data: true }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to confirm pending signature in cloud'
+      error.value = errorMessage
+      return { success: false, error: errorMessage }
+    }
+  }
+
   const markSignaturePending = async (
     entryId: string,
-    pending = true
+    pending = true,
+    instructorId?: string | null
   ): Promise<SigningResult<true>> => {
     try {
       isLoading.value = true
@@ -109,9 +161,24 @@ export const useFlightSigning = () => {
         throw new Error('Entry must be synced to the cloud before marking pending')
       }
 
+      const payload: {
+        signature_pending: boolean
+        pending_instructor_id: string | null
+      } = {
+        signature_pending: pending,
+        pending_instructor_id: null
+      }
+
+      if (pending) {
+        if (!instructorId || !isValidUUID(instructorId)) {
+          throw new Error('Select an instructor to send for signing')
+        }
+        payload.pending_instructor_id = instructorId
+      }
+
       const { data, error: updateError } = await supabase
         .from('log_entries')
-        .update({ signature_pending: pending })
+        .update(payload)
         .eq('id', entryId)
         .eq('user_id', userId)
         .select('id')
@@ -125,6 +192,77 @@ export const useFlightSigning = () => {
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to update signature pending state'
+      error.value = errorMessage
+      return { success: false, error: errorMessage }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const fetchPendingSignaturesForInstructor = async (): Promise<
+    SigningResult<PendingSignatureForInstructor[]>
+  > => {
+    try {
+      isLoading.value = true
+      error.value = null
+      requireUserId()
+
+      const { data, error: rpcError } = await supabase.rpc(
+        'list_pending_signatures_for_instructor'
+      )
+
+      if (rpcError) throw rpcError
+
+      pendingSignatures.value = data ?? []
+      return { success: true, data: pendingSignatures.value }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to load pending signatures'
+      error.value = errorMessage
+      return { success: false, error: errorMessage }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const fetchPendingSignatureEntry = async (
+    entryId: string
+  ): Promise<SigningResult<PendingSignatureEntryDetail>> => {
+    try {
+      isLoading.value = true
+      error.value = null
+      requireUserId()
+
+      if (!isValidUUID(entryId)) {
+        throw new Error('Invalid entry id')
+      }
+
+      const { data, error: rpcError } = await supabase.rpc('get_pending_signature_entry', {
+        p_entry_id: entryId
+      })
+
+      if (rpcError) throw rpcError
+      if (!data || typeof data !== 'object') {
+        throw new Error('Entry not found or not available for review')
+      }
+
+      const payload = data as Record<string, unknown>
+      const entry = payload.entry
+      if (!entry || typeof entry !== 'object') {
+        throw new Error('Entry not found or not available for review')
+      }
+
+      return {
+        success: true,
+        data: {
+          studentName:
+            typeof payload.student_name === 'string' ? payload.student_name : null,
+          entry: entry as LogEntryRow
+        }
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to load entry for review'
       error.value = errorMessage
       return { success: false, error: errorMessage }
     } finally {
@@ -175,11 +313,15 @@ export const useFlightSigning = () => {
 
   return {
     signaturesByEntryId,
+    pendingSignatures,
     isLoading,
     error,
     setSigningPin,
     signLogEntry,
     markSignaturePending,
+    confirmEntryPendingInCloud,
+    fetchPendingSignaturesForInstructor,
+    fetchPendingSignatureEntry,
     fetchSignaturesForEntries,
     isEntrySigned
   }
