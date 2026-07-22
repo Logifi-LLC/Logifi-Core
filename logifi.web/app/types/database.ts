@@ -574,29 +574,70 @@ export type Database = {
         Row: {
           id: string
           log_entry_id: string
-          signer_id: string
+          signer_id: string | null
           signed_at: string
           flight_data_hash: string
           signature_hash: string
           drawn_signature_url: string | null
+          guest_name: string | null
+          guest_certificate_number: string | null
+          sign_method: 'roster_pin' | 'guest_drawn'
         }
         Insert: {
           id?: string
           log_entry_id: string
-          signer_id: string
+          signer_id?: string | null
           signed_at?: string
           flight_data_hash: string
           signature_hash: string
           drawn_signature_url?: string | null
+          guest_name?: string | null
+          guest_certificate_number?: string | null
+          sign_method?: 'roster_pin' | 'guest_drawn'
         }
         Update: {
           id?: string
           log_entry_id?: string
-          signer_id?: string
+          signer_id?: string | null
           signed_at?: string
           flight_data_hash?: string
           signature_hash?: string
           drawn_signature_url?: string | null
+          guest_name?: string | null
+          guest_certificate_number?: string | null
+          sign_method?: 'roster_pin' | 'guest_drawn'
+        }
+      }
+      guest_sign_sessions: {
+        Row: {
+          id: string
+          token: string
+          user_id: string
+          log_entry_id: string
+          status: 'pending' | 'completed' | 'expired' | 'cancelled'
+          expires_at: string
+          completed_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          token: string
+          user_id: string
+          log_entry_id: string
+          status?: 'pending' | 'completed' | 'expired' | 'cancelled'
+          expires_at: string
+          completed_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          token?: string
+          user_id?: string
+          log_entry_id?: string
+          status?: 'pending' | 'completed' | 'expired' | 'cancelled'
+          expires_at?: string
+          completed_at?: string | null
+          created_at?: string
         }
       }
       logbook_builder_templates: {
@@ -675,6 +716,24 @@ export type Database = {
           p_entry_id: string
           p_instructor_id: string
           p_pin: string
+        }
+        Returns: string
+      }
+      guest_sign_log_entry: {
+        Args: {
+          p_entry_id: string
+          p_guest_name: string
+          p_guest_certificate_number: string | null
+          p_drawn_signature_url: string
+        }
+        Returns: string
+      }
+      guest_sign_log_entry_for_session: {
+        Args: {
+          p_session_token: string
+          p_guest_name: string
+          p_guest_certificate_number: string | null
+          p_drawn_signature_url: string
         }
         Returns: string
       }

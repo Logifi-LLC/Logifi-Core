@@ -1756,13 +1756,25 @@
             <div
               v-if="isExpandedEntrySigned"
               :class="[
-                'rounded-lg border px-3 py-2 text-sm font-quicksand',
+                'rounded-lg border px-3 py-2 text-sm font-quicksand space-y-2',
                 isDarkMode
                   ? 'border-green-700/60 bg-green-900/20 text-green-200'
                   : 'border-green-200 bg-green-50 text-green-800'
               ]"
             >
-              Signed by instructor — this entry cannot be edited or deleted.
+              <p v-if="isExpandedGuestSigned">
+                Signed by {{ expandedSignatureMeta?.guest_name || 'guest instructor' }} (guest) — this entry cannot be edited or deleted.
+              </p>
+              <p v-else>
+                Signed by instructor — this entry cannot be edited or deleted.
+              </p>
+              <img
+                v-if="expandedGuestSignatureUrl"
+                :src="expandedGuestSignatureUrl"
+                alt="Guest instructor signature"
+                class="max-h-24 w-auto rounded border bg-white object-contain"
+                :class="isDarkMode ? 'border-green-800' : 'border-green-200'"
+              />
             </div>
             <div
               v-else-if="isExpandedEntryPending"
@@ -1773,7 +1785,7 @@
                   : 'border-amber-200 bg-amber-50 text-amber-900'
               ]"
             >
-              Pending instructor signature — use <strong>Send to instructor</strong> if they do not see it yet, or Save &amp; Sign below when ready.
+              Pending instructor signature — re-save with <strong>Save without Signing</strong> if they do not see it yet, or Save &amp; Sign when ready.
             </div>
 
             <div
@@ -1787,7 +1799,7 @@
                 Instructor signature
               </p>
               <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                Dual Received time is set. Enter the instructor PIN to Save &amp; Sign, or select an instructor and Save without Signing.
+                Dual Received time is set. Use a linked instructor (PIN) or a guest / fill-in instructor (drawn signature).
               </p>
               <label class="block text-sm">
                 <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Instructor</span>
@@ -1806,28 +1818,92 @@
                   >
                     {{ instructorDisplayName(row) }}
                   </option>
+                  <option :value="GUEST_SIGNER_VALUE">Guest / fill-in instructor</option>
                 </select>
               </label>
-              <label class="block text-sm">
-                <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Instructor signing PIN</span>
-                <input
-                  v-model="signPin"
-                  type="password"
-                  autocomplete="off"
-                  maxlength="12"
-                  placeholder="4–12 characters"
-                  :class="[
-                    'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
-                    isDarkMode ? 'border-gray-600 bg-gray-900 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
-                  ]"
-                />
-              </label>
-              <p
-                v-if="activeInstructorsForSigning.length === 0"
-                :class="['text-xs', isDarkMode ? 'text-amber-300' : 'text-amber-700']"
-              >
-                Link an instructor in Settings → Instructor Links to enable Save &amp; Sign.
-              </p>
+              <template v-if="isGuestSignerSelected">
+                <label class="block text-sm">
+                  <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Guest instructor name</span>
+                  <input
+                    v-model="guestSignerName"
+                    type="text"
+                    autocomplete="name"
+                    placeholder="Full name"
+                    :class="[
+                      'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                      isDarkMode ? 'border-gray-600 bg-gray-900 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
+                    ]"
+                  />
+                </label>
+                <label class="block text-sm">
+                  <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Certificate # (optional)</span>
+                  <input
+                    v-model="guestCertificateNumber"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="CFI / certificate number"
+                    :class="[
+                      'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                      isDarkMode ? 'border-gray-600 bg-gray-900 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
+                    ]"
+                  />
+                </label>
+                <div>
+                  <span :class="['block text-sm mb-1', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Signature</span>
+                  <SignaturePad
+                    ref="inlineGuestPadRef"
+                    :is-dark-mode="isDarkMode"
+                    :disabled="isSubmittingSign || isSavingInlineEdit"
+                    @change="(v) => (guestPadHasInk = v)"
+                  />
+                </div>
+                <div class="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    :disabled="guestQrCreating || isSavingInlineEdit || isSubmittingSign"
+                    :class="[
+                      'inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold border',
+                      isDarkMode
+                        ? 'border-cyan-700/60 bg-cyan-900/30 text-cyan-100 hover:bg-cyan-900/50'
+                        : 'border-cyan-300 bg-cyan-50 text-cyan-900 hover:bg-cyan-100',
+                      (guestQrCreating || isSavingInlineEdit) ? 'opacity-60 cursor-not-allowed' : ''
+                    ]"
+                    @click.stop="startGuestSignOnPhone"
+                  >
+                    <Icon v-if="guestQrCreating" name="ri:loader-4-line" class="animate-spin" size="16" />
+                    <Icon v-else name="ri:qr-code-line" size="16" />
+                    {{ guestQrCreating ? 'Creating QR…' : 'Sign on phone (QR)' }}
+                  </button>
+                </div>
+                <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                  Prefer a phone for a clearer signature. Laptop pad still works as a fallback.
+                </p>
+                <p v-if="guestQrError" :class="['text-xs', isDarkMode ? 'text-red-300' : 'text-red-600']">
+                  {{ guestQrError }}
+                </p>
+              </template>
+              <template v-else>
+                <label class="block text-sm">
+                  <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Instructor signing PIN</span>
+                  <input
+                    v-model="signPin"
+                    type="password"
+                    autocomplete="off"
+                    maxlength="12"
+                    placeholder="4–12 characters"
+                    :class="[
+                      'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                      isDarkMode ? 'border-gray-600 bg-gray-900 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
+                    ]"
+                  />
+                </label>
+                <p
+                  v-if="activeInstructorsForSigning.length === 0"
+                  :class="['text-xs', isDarkMode ? 'text-amber-300' : 'text-amber-700']"
+                >
+                  No linked instructors — choose Guest / fill-in, or link someone in Settings → Instructor Links.
+                </p>
+              </template>
             </div>
 
             <div
@@ -2641,7 +2717,7 @@
                   Amend entry
                 </button>
                 <button
-                  v-if="canSignExpandedEntry"
+                  v-if="canSignExpandedEntry && !isGuestSignerSelected"
                   type="button"
                   @click.stop="openSignEntryModal"
                   :class="[
@@ -2673,22 +2749,7 @@
                 </button>
                 <template v-if="!isExpandedEntrySigned && expandedEntryNeedsSignature">
                   <button
-                    v-if="isExpandedEntryPending"
-                    type="button"
-                    @click.stop="sendPendingEntryToInstructor"
-                    :disabled="isSavingInlineEdit || isSubmittingSign || isMarkingSignaturePending || !signInstructorId"
-                    :class="[
-                      'inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-semibold border',
-                      isDarkMode
-                        ? 'border-cyan-700/60 bg-cyan-900/30 text-cyan-100 hover:bg-cyan-900/50'
-                        : 'border-cyan-300 bg-cyan-50 text-cyan-900 hover:bg-cyan-100',
-                      (isSavingInlineEdit || isSubmittingSign || isMarkingSignaturePending || !signInstructorId) ? 'opacity-60 cursor-not-allowed' : ''
-                    ]"
-                  >
-                    <Icon v-if="isMarkingSignaturePending" name="ri:loader-4-line" class="animate-spin mr-2" size="16" />
-                    {{ isMarkingSignaturePending ? 'Sending…' : 'Send to instructor' }}
-                  </button>
-                  <button
+                    v-if="!isGuestSignerSelected"
                     type="button"
                     @click.stop="saveInlineEditWithIntent('later')"
                     :disabled="isSavingInlineEdit || isSubmittingSign || isMarkingSignaturePending"
@@ -2704,7 +2765,7 @@
                   </button>
                   <button
                     type="button"
-                    @click.stop="saveInlineEditWithIntent('sign')"
+                    @click.stop="saveInlineEditWithIntent(isGuestSignerSelected ? 'guest' : 'sign')"
                     :disabled="isSavingInlineEdit || isSubmittingSign || !canSaveAndSignInlineEntry"
                     :class="[
                       'inline-flex items-center justify-center px-4 py-2 rounded-lg text-sm font-bold shadow-lg',
@@ -2713,7 +2774,15 @@
                     ]"
                   >
                     <Icon v-if="isSavingInlineEdit || isSubmittingSign" name="ri:loader-4-line" class="animate-spin mr-2" size="16" />
-                    {{ isSubmittingSign ? 'Signing…' : isSavingInlineEdit ? 'Saving…' : 'Save & Sign' }}
+                    {{
+                      isSubmittingSign
+                        ? 'Signing…'
+                        : isSavingInlineEdit
+                          ? 'Saving…'
+                          : isGuestSignerSelected
+                            ? 'Sign with guest'
+                            : 'Save & Sign'
+                    }}
                   </button>
                 </template>
                 <button
@@ -2875,6 +2944,74 @@
               @click="showSignatureFinishModal = false"
             >
               Stay on entry
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Guest sign QR companion modal -->
+    <Teleport to="body">
+      <div
+        v-if="guestQrShowModal"
+        class="fixed inset-0 z-[85] flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="guest-sign-qr-title"
+      >
+        <div class="absolute inset-0 bg-black/50" @click="closeGuestSignQrModal" />
+        <div
+          :class="[
+            'relative z-10 w-full max-w-md rounded-2xl border p-5 shadow-xl font-quicksand space-y-4',
+            isDarkMode ? 'border-gray-700 bg-gray-900 text-gray-100' : 'border-gray-200 bg-white text-gray-900'
+          ]"
+        >
+          <h3 id="guest-sign-qr-title" class="text-lg font-semibold">Sign on phone</h3>
+          <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+            Have the guest instructor scan this QR code. They enter their name and draw a signature — no account needed.
+          </p>
+
+          <div v-if="guestQrCompleted" class="rounded-lg border px-3 py-2 text-sm border-green-600/40 bg-green-900/20 text-green-200">
+            Signature received — entry is locked.
+          </div>
+          <template v-else>
+            <div class="flex justify-center">
+              <img
+                v-if="guestQrDataUrl"
+                :src="guestQrDataUrl"
+                alt="Guest sign QR code"
+                class="h-[220px] w-[220px] rounded-lg bg-white p-2"
+              />
+            </div>
+            <p v-if="guestQrMobileUrl" :class="['text-xs break-all', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+              {{ guestQrMobileUrl }}
+            </p>
+            <p v-if="guestQrExpiresAt" :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
+              Expires {{ new Date(guestQrExpiresAt).toLocaleTimeString() }}
+              <span v-if="!guestQrSessionActive"> (expired)</span>
+            </p>
+            <p :class="['text-sm font-medium', isDarkMode ? 'text-cyan-200' : 'text-cyan-800']">
+              Waiting for signature…
+            </p>
+          </template>
+
+          <div class="flex flex-wrap gap-2 justify-end">
+            <button
+              v-if="guestQrMobileUrl && !guestQrCompleted"
+              type="button"
+              class="rounded-lg px-3 py-2 text-sm font-semibold border"
+              :class="isDarkMode ? 'border-gray-600 hover:bg-white/10' : 'border-gray-300 hover:bg-gray-100'"
+              @click="copyGuestSignQrUrl().then(() => showToast('Link copied'))"
+            >
+              Copy link
+            </button>
+            <button
+              type="button"
+              class="rounded-lg px-3 py-2 text-sm font-semibold"
+              :class="isDarkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'"
+              @click="guestQrCompleted ? (closeGuestSignQrModal(), resetGuestSignQr()) : closeGuestSignQrModal()"
+            >
+              {{ guestQrCompleted ? 'Done' : 'Close' }}
             </button>
           </div>
         </div>
@@ -3785,7 +3922,7 @@
                   Instructor signature
                 </p>
                 <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                  Dual Received time is set. Enter the instructor PIN to Save &amp; Sign, or select an instructor and Save without Signing.
+                  Dual Received time is set. Use a linked instructor (PIN) or a guest / fill-in instructor (drawn signature).
                 </p>
                 <label class="block text-sm">
                   <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Instructor</span>
@@ -3804,28 +3941,68 @@
                     >
                       {{ instructorDisplayName(row) }}
                     </option>
+                    <option :value="GUEST_SIGNER_VALUE">Guest / fill-in instructor</option>
                   </select>
                 </label>
-                <label class="block text-sm">
-                  <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Instructor signing PIN</span>
-                  <input
-                    v-model="signPin"
-                    type="password"
-                    autocomplete="off"
-                    maxlength="12"
-                    placeholder="4–12 characters"
-                    :class="[
-                      'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
-                      isDarkMode ? 'border-gray-600 bg-gray-900 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
-                    ]"
-                  />
-                </label>
-                <p
-                  v-if="activeInstructorsForSigning.length === 0"
-                  :class="['text-xs', isDarkMode ? 'text-amber-300' : 'text-amber-700']"
-                >
-                  Link an instructor in Settings → Instructor Links to enable Save &amp; Sign.
-                </p>
+                <template v-if="isGuestSignerSelected">
+                  <label class="block text-sm">
+                    <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Guest instructor name</span>
+                    <input
+                      v-model="guestSignerName"
+                      type="text"
+                      autocomplete="name"
+                      placeholder="Full name"
+                      :class="[
+                        'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                        isDarkMode ? 'border-gray-600 bg-gray-900 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
+                      ]"
+                    />
+                  </label>
+                  <label class="block text-sm">
+                    <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Certificate # (optional)</span>
+                    <input
+                      v-model="guestCertificateNumber"
+                      type="text"
+                      autocomplete="off"
+                      placeholder="CFI / certificate number"
+                      :class="[
+                        'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                        isDarkMode ? 'border-gray-600 bg-gray-900 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
+                      ]"
+                    />
+                  </label>
+                  <div>
+                    <span :class="['block text-sm mb-1', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Signature</span>
+                    <SignaturePad
+                      ref="addGuestPadRef"
+                      :is-dark-mode="isDarkMode"
+                      :disabled="isSubmittingSign || isSavingEntry"
+                      @change="(v) => (guestPadHasInk = v)"
+                    />
+                  </div>
+                </template>
+                <template v-else>
+                  <label class="block text-sm">
+                    <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Instructor signing PIN</span>
+                    <input
+                      v-model="signPin"
+                      type="password"
+                      autocomplete="off"
+                      maxlength="12"
+                      placeholder="4–12 characters"
+                      :class="[
+                        'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                        isDarkMode ? 'border-gray-600 bg-gray-900 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
+                      ]"
+                    />
+                  </label>
+                  <p
+                    v-if="activeInstructorsForSigning.length === 0"
+                    :class="['text-xs', isDarkMode ? 'text-amber-300' : 'text-amber-700']"
+                  >
+                    No linked instructors — choose Guest / fill-in, or link someone in Settings → Instructor Links.
+                  </p>
+                </template>
               </div>
 
               <div
@@ -3994,6 +4171,7 @@
                   </button>
                   <template v-else-if="!duplicateWarning && !validationWarning && newEntryNeedsSignature">
                     <button
+                      v-if="!isGuestSignerSelected"
                       type="button"
                       :disabled="isSavingEntry || isSubmittingSign || isMarkingSignaturePending"
                       :class="[
@@ -4017,10 +4195,18 @@
                           : 'bg-blue-600 text-white hover:bg-blue-700',
                         (isSavingEntry || isSubmittingSign || !canSaveAndSignNewEntry) ? 'opacity-60 cursor-not-allowed' : ''
                       ]"
-                      @click.prevent="submitEntryWithIntent('sign')"
+                      @click.prevent="submitEntryWithIntent(isGuestSignerSelected ? 'guest' : 'sign')"
                     >
                       <Icon v-if="isSavingEntry || isSubmittingSign" name="ri:loader-4-line" class="animate-spin mr-2" size="18" />
-                      {{ isSubmittingSign ? 'Signing…' : isSavingEntry ? 'Saving…' : 'Save & Sign' }}
+                      {{
+                        isSubmittingSign
+                          ? 'Signing…'
+                          : isSavingEntry
+                            ? 'Saving…'
+                            : isGuestSignerSelected
+                              ? 'Sign with guest'
+                              : 'Save & Sign'
+                      }}
                     </button>
                   </template>
                   <button
@@ -6725,11 +6911,29 @@ const { showToast } = useToast()
 const {
   fetchSignaturesForEntries,
   signLogEntry,
+  guestSignLogEntry,
+  getDrawnSignatureDisplayUrl,
   markSignaturePending,
   confirmEntryPendingInCloud,
+  signaturesByEntryId,
   isEntrySigned,
   isLoading: isFlightSigningLoading,
 } = useFlightSigning()
+const {
+  creatingSession: guestQrCreating,
+  sessionError: guestQrError,
+  mobileUrl: guestQrMobileUrl,
+  expiresAt: guestQrExpiresAt,
+  qrDataUrl: guestQrDataUrl,
+  completed: guestQrCompleted,
+  showModal: guestQrShowModal,
+  isSessionActive: guestQrSessionActive,
+  createSession: createGuestSignQrSession,
+  closeModal: closeGuestSignQrModal,
+  copyMobileUrl: copyGuestSignQrUrl,
+  reset: resetGuestSignQr,
+  entryId: guestQrEntryId,
+} = useGuestSignCompanion()
 const { instructors: rosterInstructors, fetchInstructors } = useRoster()
 const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync, retryFailed, reconcileSyncQueue, setActiveUserId, refreshQueueLength } = useSyncQueue()
 
@@ -7938,8 +8142,20 @@ const signInstructorId = ref('')
 const signPin = ref('')
 const isSubmittingSign = ref(false)
 const isMarkingSignaturePending = ref(false)
-/** Intent for the in-progress save: sign immediately, mark pending, or normal (no dual). */
-const pendingSaveSigningIntent = ref<'none' | 'sign' | 'later'>('none')
+/** Intent for the in-progress save: sign immediately, mark pending, guest drawn, or normal (no dual). */
+const pendingSaveSigningIntent = ref<'none' | 'sign' | 'later' | 'guest'>('none')
+
+/** Sentinel value for guest / fill-in instructor (not a roster UUID). */
+const GUEST_SIGNER_VALUE = '__guest__'
+const guestSignerName = ref('')
+const guestCertificateNumber = ref('')
+const guestPadHasInk = ref(false)
+const inlineGuestPadRef = ref<{ toBlob: (mime?: string) => Promise<Blob | null>; clear: () => void; hasInk: { value: boolean } } | null>(null)
+const addGuestPadRef = ref<{ toBlob: (mime?: string) => Promise<Blob | null>; clear: () => void; hasInk: { value: boolean } } | null>(null)
+const pendingGuestSignatureBlob = ref<Blob | null>(null)
+const expandedGuestSignatureUrl = ref<string | null>(null)
+
+const isGuestSignerSelected = computed(() => signInstructorId.value === GUEST_SIGNER_VALUE)
 
 /** UUID shape only — does NOT mean the row exists in Supabase. */
 const isValidEntryUUID = (id: string | null | undefined): boolean =>
@@ -8055,30 +8271,103 @@ const canSignExpandedEntry = computed(() => {
   if (!expandedEntryId.value || isExpandedEntrySigned.value) return false
   if (!isValidEntryUUID(expandedEntryId.value)) return false
   if (!expandedEntryNeedsSignature.value) return false
-  return activeInstructorsForSigning.value.length > 0
+  return true
 })
 
-const canSaveAndSignNewEntry = computed(() =>
-  newEntryNeedsSignature.value
-  && activeInstructorsForSigning.value.length > 0
-  && !!signInstructorId.value
-  && signPin.value.trim().length >= 4
-)
+const canSaveAndSignNewEntry = computed(() => {
+  if (!newEntryNeedsSignature.value) return false
+  if (isGuestSignerSelected.value) {
+    return guestSignerName.value.trim().length > 0 && guestPadHasInk.value
+  }
+  return (
+    activeInstructorsForSigning.value.length > 0
+    && !!signInstructorId.value
+    && signPin.value.trim().length >= 4
+  )
+})
 
-const canSaveAndSignInlineEntry = computed(() =>
-  expandedEntryNeedsSignature.value
-  && activeInstructorsForSigning.value.length > 0
-  && !!signInstructorId.value
-  && signPin.value.trim().length >= 4
+const canSaveAndSignInlineEntry = computed(() => {
+  if (!expandedEntryNeedsSignature.value) return false
+  if (isGuestSignerSelected.value) {
+    return guestSignerName.value.trim().length > 0 && guestPadHasInk.value
+  }
+  return (
+    activeInstructorsForSigning.value.length > 0
+    && !!signInstructorId.value
+    && signPin.value.trim().length >= 4
+  )
+})
+
+const expandedSignatureMeta = computed(() => {
+  const id = expandedEntryId.value
+  if (!id) return null
+  return signaturesByEntryId.value[id] ?? null
+})
+
+const isExpandedGuestSigned = computed(
+  () => expandedSignatureMeta.value?.sign_method === 'guest_drawn'
 )
 
 watch(newEntryNeedsSignature, (needs) => {
   if (needs && isEntryFormOpen.value) ensureDefaultSignInstructor()
 })
 
+watch(isGuestSignerSelected, (guest) => {
+  if (!guest) {
+    guestPadHasInk.value = false
+    resetGuestSignQr()
+  }
+})
+
+watch(guestQrCompleted, async (done) => {
+  if (!done) return
+  const id = guestQrEntryId.value || expandedEntryId.value
+  if (id) {
+    await fetchSignaturesForEntries([id])
+    setLocalSignaturePending(id, false)
+    if (user.value?.id) {
+      const local = logEntries.value.find((e) => e.id === id)
+      if (local) {
+        try {
+          await updateEntryInIndexedDB(
+            { ...local, signaturePending: false },
+            { userId: user.value.id }
+          )
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }
+  showToast('Entry signed by guest instructor')
+})
+
+async function startGuestSignOnPhone(): Promise<void> {
+  const id = expandedEntryId.value
+  if (!id) return
+  if (!(await isEntryCloudSynced(id))) {
+    showToast('Save the entry first (Confirm Changes) so it syncs, then open Sign on phone.', 6000)
+    return
+  }
+  const ok = await createGuestSignQrSession(id)
+  if (!ok && guestQrError.value) {
+    showToast(guestQrError.value, 6000)
+  }
+}
+
 watch(expandedEntryNeedsSignature, (needs) => {
   if (needs && expandedEntryId.value) ensureDefaultSignInstructor()
 })
+
+watch(
+  [expandedEntryId, () => expandedSignatureMeta.value?.drawn_signature_url, () => expandedSignatureMeta.value?.sign_method],
+  async () => {
+    expandedGuestSignatureUrl.value = null
+    const meta = expandedSignatureMeta.value
+    if (meta?.sign_method !== 'guest_drawn' || !meta.drawn_signature_url) return
+    expandedGuestSignatureUrl.value = await getDrawnSignatureDisplayUrl(meta.drawn_signature_url)
+  }
+)
 
 function instructorDisplayName(row: { profile: { full_name: string | null } | null }): string {
   return row.profile?.full_name?.trim() || 'Instructor'
@@ -8122,10 +8411,7 @@ function setLocalSignaturePending(
 
 async function openSignEntryModal(): Promise<void> {
   await fetchInstructors()
-  if (activeInstructorsForSigning.value.length === 0) {
-    showToast('Link an active instructor in Settings → Instructor Links first')
-    return
-  }
+  ensureDefaultSignInstructor()
   if (!(await isEntryCloudSynced(expandedEntryId.value))) {
     showToast('Entry must sync to the cloud before signing')
     return
@@ -8134,7 +8420,12 @@ async function openSignEntryModal(): Promise<void> {
     showToast('Signing is only available when Dual Received time is greater than zero')
     return
   }
-  signInstructorId.value = activeInstructorsForSigning.value[0]?.instructor_id ?? ''
+  if (!signInstructorId.value && activeInstructorsForSigning.value[0]) {
+    signInstructorId.value = activeInstructorsForSigning.value[0].instructor_id
+  }
+  if (!signInstructorId.value) {
+    signInstructorId.value = GUEST_SIGNER_VALUE
+  }
   signPin.value = ''
   showSignatureFinishModal.value = false
   showSignEntryModal.value = true
@@ -8205,44 +8496,6 @@ async function sendEntryForSigning(): Promise<void> {
     }
     showToast('Sent to instructor for signature')
     showSignatureFinishModal.value = false
-    closeInlineEditDrawer()
-  } finally {
-    isMarkingSignaturePending.value = false
-  }
-}
-
-/** Repair stuck local-pending entries so they appear in the instructor inbox. */
-async function sendPendingEntryToInstructor(): Promise<void> {
-  const entryId = expandedEntryId.value
-  if (!entryId || isExpandedEntrySigned.value) return
-  ensureDefaultSignInstructor()
-  const instructorId = signInstructorId.value
-  if (!instructorId) {
-    showToast('Select an instructor to Send to instructor')
-    return
-  }
-  isMarkingSignaturePending.value = true
-  try {
-    const cloud = await ensureCloudPendingSignature(entryId, instructorId)
-    if (!cloud.ok) {
-      showToast(cloud.error, 6000)
-      return
-    }
-    setLocalSignaturePending(entryId, true, instructorId)
-    if (user.value?.id) {
-      const local = logEntries.value.find((e) => e.id === entryId)
-      if (local) {
-        try {
-          await updateEntryInIndexedDB(
-            { ...local, signaturePending: true, pendingInstructorId: instructorId },
-            { userId: user.value.id }
-          )
-        } catch {
-          // ignore
-        }
-      }
-    }
-    showToast('Sent to instructor for signature')
     closeInlineEditDrawer()
   } finally {
     isMarkingSignaturePending.value = false
@@ -8962,6 +9215,12 @@ async function finalizeSaveWithSigningIntent(
   }
 
   if (intent === 'sign') {
+    if (isGuestSignerSelected.value) {
+      // Should have used 'guest' intent; fall through guard
+      showToast('Use Sign with guest for fill-in instructors')
+      prepareInlineEditFromEntry(savedEntry)
+      return
+    }
     showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', 2000)
     if (source === 'edit') {
       prepareInlineEditFromEntry(savedEntry)
@@ -9012,6 +9271,59 @@ async function finalizeSaveWithSigningIntent(
     return
   }
 
+  if (intent === 'guest') {
+    showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', 2000)
+    if (source === 'edit') {
+      prepareInlineEditFromEntry(savedEntry)
+    }
+    const blob = pendingGuestSignatureBlob.value
+    pendingGuestSignatureBlob.value = null
+    const name = guestSignerName.value.trim()
+    if (!blob || !name) {
+      showToast('Guest name and drawn signature are required')
+      prepareInlineEditFromEntry(savedEntry)
+      return
+    }
+    isSubmittingSign.value = true
+    try {
+      if (isOnline.value) {
+        await processQueue({ silent: true })
+        await new Promise((r) => setTimeout(r, 400))
+      }
+      const result = await guestSignLogEntry(
+        savedEntry.id,
+        name,
+        guestCertificateNumber.value.trim() || null,
+        blob
+      )
+      if (!result.success) {
+        showToast(result.error, 6000)
+        prepareInlineEditFromEntry(savedEntry)
+        return
+      }
+      setLocalSignaturePending(savedEntry.id, false)
+      if (user.value?.id) {
+        const local = logEntries.value.find((e) => e.id === savedEntry.id)
+        if (local) {
+          try {
+            await updateEntryInIndexedDB(
+              { ...local, signaturePending: false },
+              { userId: user.value.id }
+            )
+          } catch {
+            // ignore
+          }
+        }
+      }
+      showToast('Entry signed by guest instructor')
+      clearFormSigningFields()
+      closeInlineEditDrawer()
+    } finally {
+      isSubmittingSign.value = false
+    }
+    return
+  }
+
   if (intent === 'later') {
     const instructorId = signInstructorId.value || savedEntry.pendingInstructorId
     const cloud = await ensureCloudPendingSignature(savedEntry.id, instructorId)
@@ -9041,14 +9353,37 @@ async function finalizeSaveWithSigningIntent(
 
 function clearFormSigningFields(): void {
   signPin.value = ''
-  // keep instructor selection for convenience across entries
+  guestPadHasInk.value = false
+  pendingGuestSignatureBlob.value = null
+  inlineGuestPadRef.value?.clear()
+  addGuestPadRef.value?.clear()
+  // keep instructor / guest name selection for convenience across entries
 }
 
-async function submitEntryWithIntent(intent: 'sign' | 'later' | 'none'): Promise<void> {
+async function submitEntryWithIntent(intent: 'sign' | 'later' | 'none' | 'guest'): Promise<void> {
+  if (intent === 'guest') {
+    if (!canSaveAndSignNewEntry.value || !isGuestSignerSelected.value) {
+      showToast('Enter guest name and draw a signature to Sign with guest')
+      return
+    }
+    const blob = await addGuestPadRef.value?.toBlob('image/png')
+    if (!blob) {
+      showToast('Draw a signature before signing')
+      return
+    }
+    pendingGuestSignatureBlob.value = blob
+    pendingSaveSigningIntent.value = 'guest'
+    await submitEntry()
+    return
+  }
   if (intent === 'sign') {
+    if (isGuestSignerSelected.value) {
+      await submitEntryWithIntent('guest')
+      return
+    }
     if (!canSaveAndSignNewEntry.value) {
       if (activeInstructorsForSigning.value.length === 0) {
-        showToast('Link an active instructor in Settings → Instructor Links first')
+        showToast('Link an active instructor in Settings → Instructor Links, or choose Guest / fill-in')
       } else {
         showToast('Select an instructor and enter their PIN to Save & Sign')
       }
@@ -9056,6 +9391,10 @@ async function submitEntryWithIntent(intent: 'sign' | 'later' | 'none'): Promise
     }
   }
   if (intent === 'later') {
+    if (isGuestSignerSelected.value) {
+      showToast('Guest instructors cannot use Save without Signing — use Sign with guest instead')
+      return
+    }
     if (activeInstructorsForSigning.value.length === 0) {
       showToast('Link an active instructor in Settings → Instructor Links first')
       return
@@ -9077,11 +9416,30 @@ function onAddEntryFormSubmit(): void {
   void submitEntryWithIntent('none')
 }
 
-async function saveInlineEditWithIntent(intent: 'sign' | 'later' | 'none'): Promise<void> {
+async function saveInlineEditWithIntent(intent: 'sign' | 'later' | 'none' | 'guest'): Promise<void> {
+  if (intent === 'guest') {
+    if (!canSaveAndSignInlineEntry.value || !isGuestSignerSelected.value) {
+      showToast('Enter guest name and draw a signature to Sign with guest')
+      return
+    }
+    const blob = await inlineGuestPadRef.value?.toBlob('image/png')
+    if (!blob) {
+      showToast('Draw a signature before signing')
+      return
+    }
+    pendingGuestSignatureBlob.value = blob
+    pendingSaveSigningIntent.value = 'guest'
+    await saveInlineEdit()
+    return
+  }
   if (intent === 'sign') {
+    if (isGuestSignerSelected.value) {
+      await saveInlineEditWithIntent('guest')
+      return
+    }
     if (!canSaveAndSignInlineEntry.value) {
       if (activeInstructorsForSigning.value.length === 0) {
-        showToast('Link an active instructor in Settings → Instructor Links first')
+        showToast('Link an active instructor in Settings → Instructor Links, or choose Guest / fill-in')
       } else {
         showToast('Select an instructor and enter their PIN to Save & Sign')
       }
@@ -9089,6 +9447,10 @@ async function saveInlineEditWithIntent(intent: 'sign' | 'later' | 'none'): Prom
     }
   }
   if (intent === 'later') {
+    if (isGuestSignerSelected.value) {
+      showToast('Guest instructors cannot use Save without Signing — use Sign with guest instead')
+      return
+    }
     if (activeInstructorsForSigning.value.length === 0) {
       showToast('Link an active instructor in Settings → Instructor Links first')
       return
@@ -12065,9 +12427,12 @@ function maybeAutoOpenEntryFormForEmptyLogbook(): void {
 
 function ensureDefaultSignInstructor(): void {
   void fetchInstructors().then(() => {
-    if (!signInstructorId.value && activeInstructorsForSigning.value[0]) {
+    if (signInstructorId.value) return
+    if (activeInstructorsForSigning.value[0]) {
       signInstructorId.value = activeInstructorsForSigning.value[0].instructor_id
+      return
     }
+    signInstructorId.value = GUEST_SIGNER_VALUE
   })
 }
 

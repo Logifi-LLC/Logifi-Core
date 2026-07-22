@@ -1,10 +1,18 @@
 import type { LogEntry } from './logbookTypes'
 
-/** Dual Received time > 0 requires (or may receive) an instructor signature. */
+export type SignatureRequirementEntry = Pick<LogEntry, 'flightTime'> & {
+  isImported?: boolean | null
+}
+
+/**
+ * Dual Received time > 0 may receive an instructor signature.
+ * Imported history (Digifi / CSV / paper) never requires Logifi electronic signing.
+ */
 export function requiresInstructorSignature(
-  entry: Pick<LogEntry, 'flightTime'> | null | undefined
+  entry: SignatureRequirementEntry | null | undefined
 ): boolean {
   if (!entry?.flightTime) return false
+  if (entry.isImported === true) return false
   const dual = Number(entry.flightTime.dual ?? 0)
   return Number.isFinite(dual) && dual > 0
 }

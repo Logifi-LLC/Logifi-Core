@@ -270,6 +270,87 @@ export const useFlightSigning = () => {
     }
   }
 
+  const guestSignLogEntry = async (
+    entryId: string,
+    guestName: string,
+    guestCertificateNumber: string | null,
+    signatureBlob: Blob
+  ): Promise<SigningResult<{ signatureId: string; drawnSignatureUrl: string }>> => {
+    try {
+      isLoading.value = true
+      error.value = null
+      const userId = requireUserId()
+
+      if (!isValidUUID(entryId)) {
+        throw new Error('Entry must be synced to the cloud before signing')
+      }
+
+      const name = guestName.trim()
+      if (!name) {
+        throw new Error('Guest instructor name is required')
+      }
+      if (!signatureBlob || signatureBlob.size === 0) {
+        throw new Error('Draw a signature before signing')
+      }
+
+      const ext = signatureBlob.type === 'image/webp' ? 'webp' : 'png'
+      const storagePath = `${userId}/${entryId}.${ext}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('flight-signatures')
+        .upload(storagePath, signatureBlob, {
+          contentType: signatureBlob.type || 'image/png',
+          upsert: true,
+        })
+
+      if (uploadError) throw uploadError
+
+      const drawnSignatureUrl = storagePath
+      const cert = guestCertificateNumber?.trim() || null
+
+      const { data, error: rpcError } = await supabase.rpc('guest_sign_log_entry', {
+        p_entry_id: entryId,
+        p_guest_name: name,
+        p_guest_certificate_number: cert,
+        p_drawn_signature_url: drawnSignatureUrl,
+      })
+
+      if (rpcError) throw rpcError
+      if (!data) {
+        throw new Error('Failed to sign log entry with guest signature')
+      }
+
+      await fetchSignaturesForEntries([entryId])
+      return {
+        success: true,
+        data: { signatureId: data, drawnSignatureUrl },
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to guest-sign log entry'
+      error.value = errorMessage
+      return { success: false, error: errorMessage }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const getDrawnSignatureDisplayUrl = async (
+    storagePath: string | null | undefined
+  ): Promise<string | null> => {
+    if (!storagePath) return null
+    if (/^https?:\/\//i.test(storagePath)) return storagePath
+    try {
+      const { data, error: urlError } = await supabase.storage
+        .from('flight-signatures')
+        .createSignedUrl(storagePath, 60 * 60)
+      if (urlError) throw urlError
+      return data?.signedUrl ?? null
+    } catch {
+      return null
+    }
+  }
+
   const fetchSignaturesForEntries = async (
     entryIds: string[]
   ): Promise<SigningResult<Record<string, FlightSignature>>> => {
@@ -318,6 +399,8 @@ export const useFlightSigning = () => {
     error,
     setSigningPin,
     signLogEntry,
+    guestSignLogEntry,
+    getDrawnSignatureDisplayUrl,
     markSignaturePending,
     confirmEntryPendingInCloud,
     fetchPendingSignaturesForInstructor,
