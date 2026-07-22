@@ -7,6 +7,9 @@
 
     <SettingsListGroup title="Link an instructor" :is-dark-mode="isDarkMode">
       <div class="space-y-3 px-4 py-3">
+        <p :class="[helper, 'text-xs']">
+          Link any Logifi CFI you fly with. Mark one as Main. Use Guest / fill-in when they are not on Logifi.
+        </p>
         <SettingsField label="Instructor email" :is-dark-mode="isDarkMode">
           <template #default="{ inputClass }">
             <input
@@ -48,6 +51,15 @@
           <div class="min-w-0 flex-1">
             <p class="text-sm font-semibold font-quicksand" :class="isDarkMode ? 'text-gray-100' : 'text-gray-900'">
               {{ displayName(row) }}
+              <span
+                v-if="row.status === 'ACTIVE' && row.relationship_kind === 'main'"
+                :class="[
+                  'ml-2 rounded px-1.5 py-0.5 text-[10px] uppercase font-bold tracking-wide align-middle',
+                  isDarkMode ? 'bg-blue-900/40 text-blue-300' : 'bg-blue-100 text-blue-800',
+                ]"
+              >
+                Main
+              </span>
             </p>
             <p v-if="cfiLine(row)" :class="[helper, 'mt-0.5 text-xs']">{{ cfiLine(row) }}</p>
             <span
@@ -57,15 +69,27 @@
               {{ row.status }}
             </span>
           </div>
-          <button
-            type="button"
-            class="shrink-0 text-sm font-medium font-quicksand"
-            :class="destructiveRow"
-            :disabled="isLoading"
-            @click="onRevoke(row.id, row.status === 'PENDING' ? 'cancel' : 'remove')"
-          >
-            {{ row.status === 'PENDING' ? 'Cancel' : 'Remove' }}
-          </button>
+          <div class="flex shrink-0 flex-col items-end gap-2">
+            <button
+              v-if="row.status === 'ACTIVE' && row.relationship_kind !== 'main'"
+              type="button"
+              class="text-sm font-medium font-quicksand"
+              :class="isDarkMode ? 'text-blue-300 hover:text-blue-200' : 'text-blue-700 hover:text-blue-800'"
+              :disabled="isLoading"
+              @click="onSetMain(row.id)"
+            >
+              Set as Main
+            </button>
+            <button
+              type="button"
+              class="text-sm font-medium font-quicksand"
+              :class="destructiveRow"
+              :disabled="isLoading"
+              @click="onRevoke(row.id, row.status === 'PENDING' ? 'cancel' : 'remove')"
+            >
+              {{ row.status === 'PENDING' ? 'Cancel' : 'Remove' }}
+            </button>
+          </div>
         </div>
       </div>
     </SettingsListGroup>
@@ -129,6 +153,15 @@
             <div class="min-w-0 flex-1">
               <p class="text-sm font-semibold font-quicksand" :class="isDarkMode ? 'text-gray-100' : 'text-gray-900'">
                 {{ displayName(row) }}
+                <span
+                  v-if="row.relationship_kind === 'main'"
+                  :class="[
+                    'ml-2 rounded px-1.5 py-0.5 text-[10px] uppercase font-bold tracking-wide align-middle',
+                    isDarkMode ? 'bg-blue-900/40 text-blue-300' : 'bg-blue-100 text-blue-800',
+                  ]"
+                >
+                  Their Main
+                </span>
               </p>
               <p v-if="cfiLine(row)" :class="[helper, 'mt-0.5 text-xs']">{{ cfiLine(row) }}</p>
             </div>
@@ -243,6 +276,7 @@ const {
   instructors,
   isLoading,
   requestInstructorLink,
+  setMainInstructor,
   acceptStudentLink,
   revokeRelationship,
   fetchStudentRoster,
@@ -380,6 +414,15 @@ async function onRequestLink() {
   }
   instructorEmail.value = ''
   showToast('Link request sent')
+}
+
+async function onSetMain(relationshipId: string) {
+  const result = await setMainInstructor(relationshipId)
+  if (!result.success) {
+    showToast(result.error)
+    return
+  }
+  showToast('Main instructor updated')
 }
 
 async function onAccept(relationshipId: string) {

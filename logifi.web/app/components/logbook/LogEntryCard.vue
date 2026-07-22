@@ -39,7 +39,14 @@
 
         <div class="flex shrink-0 items-center gap-2">
           <Icon
-            v-if="isSigned"
+            v-if="entry.isVoid"
+            name="ri:prohibited-line"
+            size="18"
+            :class="isDarkMode ? 'text-rose-400' : 'text-rose-600'"
+            title="Voided entry"
+          />
+          <Icon
+            v-else-if="isSigned"
             name="ri:lock-line"
             size="18"
             :class="isDarkMode ? 'text-green-400' : 'text-green-600'"

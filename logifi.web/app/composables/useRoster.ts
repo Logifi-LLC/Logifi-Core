@@ -125,7 +125,7 @@ export const useRoster = () => {
       }
 
       const { data, error: rpcError } = await supabase.rpc('request_instructor_link', {
-        p_instructor_email: email
+        p_instructor_email: email,
       })
 
       if (rpcError) throw rpcError
@@ -138,6 +138,36 @@ export const useRoster = () => {
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to request instructor link'
+      error.value = errorMessage
+      return { success: false, error: errorMessage }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const setMainInstructor = async (
+    relationshipId: string
+  ): Promise<RosterResult<true>> => {
+    try {
+      isLoading.value = true
+      error.value = null
+      requireUserId()
+
+      if (!relationshipId) {
+        throw new Error('Relationship id is required')
+      }
+
+      const { error: rpcError } = await supabase.rpc('set_main_instructor', {
+        p_relationship_id: relationshipId,
+      })
+
+      if (rpcError) throw rpcError
+
+      await fetchInstructors()
+      return { success: true, data: true }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to set main instructor'
       error.value = errorMessage
       return { success: false, error: errorMessage }
     } finally {
@@ -227,6 +257,7 @@ export const useRoster = () => {
     isLoading,
     error,
     requestInstructorLink,
+    setMainInstructor,
     acceptStudentLink,
     revokeRelationship,
     fetchStudentRoster,

@@ -5,10 +5,19 @@ const props = withDefaults(
   defineProps<{
     isDarkMode?: boolean
     disabled?: boolean
+    /** Fixed canvas height in CSS pixels when fillParent is false. */
+    height?: number
+    /** When true, canvas fills its parent element's client height. */
+    fillParent?: boolean
+    /** Hide the hint text + Clear button (caller provides chrome). */
+    hideFooter?: boolean
   }>(),
   {
     isDarkMode: false,
     disabled: false,
+    height: 160,
+    fillParent: false,
+    hideFooter: false,
   }
 )
 
@@ -24,13 +33,29 @@ let lastX = 0
 let lastY = 0
 let ctx: CanvasRenderingContext2D | null = null
 
+function applyStrokeStyle(): void {
+  if (!ctx) return
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = props.fillParent ? 3 : 2.25
+  ctx.strokeStyle = props.isDarkMode ? '#f3f4f6' : '#111827'
+}
+
 function resizeCanvas(): void {
   const canvas = canvasRef.value
   if (!canvas) return
   const parent = canvas.parentElement
   const width = Math.max(280, parent?.clientWidth ?? 320)
-  const height = 160
+  const height = props.fillParent
+    ? Math.max(160, parent?.clientHeight ?? props.height)
+    : props.height
+  if (width <= 0 || height <= 0) return
+
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
+  const snapshot = hasInk.value && canvas.width > 0 && canvas.height > 0
+    ? canvas.toDataURL('image/png')
+    : null
+
   canvas.width = Math.floor(width * dpr)
   canvas.height = Math.floor(height * dpr)
   canvas.style.width = `${width}px`
@@ -38,13 +63,22 @@ function resizeCanvas(): void {
   ctx = canvas.getContext('2d')
   if (!ctx) return
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-  ctx.lineCap = 'round'
-  ctx.lineJoin = 'round'
-  ctx.lineWidth = 2.25
-  ctx.strokeStyle = props.isDarkMode ? '#f3f4f6' : '#111827'
-  // Clear visual state after resize
-  hasInk.value = false
-  emit('change', false)
+  applyStrokeStyle()
+
+  if (snapshot) {
+    const img = new Image()
+    img.onload = () => {
+      if (!ctx || canvasRef.value !== canvas) return
+      ctx.drawImage(img, 0, 0, width, height)
+      hasInk.value = true
+      emit('change', true)
+      applyStrokeStyle()
+    }
+    img.src = snapshot
+  } else {
+    hasInk.value = false
+    emit('change', false)
+  }
 }
 
 function pointerPos(e: PointerEvent): { x: number; y: number } {
@@ -112,6 +146,7 @@ defineExpose({
   clear,
   toBlob,
   hasInk,
+  resize: resizeCanvas,
 })
 
 onMounted(() => {
@@ -124,7 +159,7 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => props.isDarkMode,
+  () => [props.isDarkMode, props.height, props.fillParent] as const,
   () => {
     resizeCanvas()
   }
@@ -132,10 +167,11 @@ watch(
 </script>
 
 <template>
-  <div class="space-y-2">
+  <div :class="['space-y-2', fillParent ? 'flex h-full min-h-0 flex-col' : '']">
     <div
       :class="[
         'rounded-lg border overflow-hidden touch-none select-none',
+        fillParent ? 'min-h-0 flex-1' : '',
         isDarkMode ? 'border-gray-600 bg-gray-950' : 'border-gray-300 bg-white',
         disabled ? 'opacity-60 pointer-events-none' : '',
       ]"
@@ -150,7 +186,10 @@ watch(
         @pointercancel="onPointerUp"
       />
     </div>
-    <div class="flex items-center justify-between gap-2">
+    <div
+      v-if="!hideFooter"
+      class="flex items-center justify-between gap-2"
+    >
       <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
         {{ hasInk ? 'Signature captured' : 'Sign above with finger or stylus' }}
       </p>

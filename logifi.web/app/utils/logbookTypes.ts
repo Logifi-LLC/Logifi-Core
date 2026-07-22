@@ -113,6 +113,8 @@ export interface LogEntry {
   pendingInstructorId?: string | null
   /** When set, this entry amends (supersedes) the referenced signed entry. */
   amendsEntryId?: string | null
+  /** True when this amendment voids (withdraws) a signed original; dual time should be zero. */
+  isVoid?: boolean
   // Import tracking fields
   isImported?: boolean
   importSource?: string // 'csv', 'json', 'paper', etc.

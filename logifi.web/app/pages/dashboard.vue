@@ -1496,7 +1496,14 @@
                             <div :class="['flex items-center gap-1.5 font-semibold text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
                               <span>{{ formatDisplayDate(entry.date) }}</span>
                               <Icon
-                                v-if="isEntrySigned(entry.id)"
+                                v-if="entry.isVoid"
+                                name="ri:prohibited-line"
+                                size="14"
+                                :class="isDarkMode ? 'text-rose-400' : 'text-rose-600'"
+                                title="Voided entry"
+                              />
+                              <Icon
+                                v-else-if="isEntrySigned(entry.id)"
                                 name="ri:lock-line"
                                 size="14"
                                 :class="isDarkMode ? 'text-green-400' : 'text-green-600'"
@@ -1754,6 +1761,17 @@
           <div v-if="inlineEditEntry" class="grid gap-6 min-w-0 max-w-full w-full">
 
             <div
+              v-if="inlineEditEntry?.isVoid"
+              :class="[
+                'rounded-lg border px-3 py-2 text-sm font-quicksand',
+                isDarkMode
+                  ? 'border-rose-700/60 bg-rose-900/20 text-rose-200'
+                  : 'border-rose-200 bg-rose-50 text-rose-800'
+              ]"
+            >
+              Void entry — zeroed hours supersede the signed original (kept in audit history).
+            </div>
+            <div
               v-if="isExpandedEntrySigned"
               :class="[
                 'rounded-lg border px-3 py-2 text-sm font-quicksand space-y-2',
@@ -1763,10 +1781,10 @@
               ]"
             >
               <p v-if="isExpandedGuestSigned">
-                Signed by {{ expandedSignatureMeta?.guest_name || 'guest instructor' }} (guest) — this entry cannot be edited or deleted.
+                Signed by {{ expandedSignatureMeta?.guest_name || 'guest instructor' }} (guest) — this entry cannot be edited or deleted. Use Amend or Void if it was a mistake.
               </p>
               <p v-else>
-                Signed by instructor — this entry cannot be edited or deleted.
+                Signed by instructor — this entry cannot be edited or deleted. Use Amend or Void if it was a mistake.
               </p>
               <img
                 v-if="expandedGuestSignatureUrl"
@@ -1811,13 +1829,24 @@
                   ]"
                 >
                   <option disabled value="">Select instructor</option>
-                  <option
-                    v-for="row in activeInstructorsForSigning"
-                    :key="row.id"
-                    :value="row.instructor_id"
-                  >
-                    {{ instructorDisplayName(row) }}
-                  </option>
+                  <optgroup v-if="mainInstructorsForSigning.length" label="Main">
+                    <option
+                      v-for="row in mainInstructorsForSigning"
+                      :key="row.id"
+                      :value="row.instructor_id"
+                    >
+                      {{ instructorDisplayName(row) }} (Main)
+                    </option>
+                  </optgroup>
+                  <optgroup v-if="otherInstructorsForSigning.length" label="Instructors">
+                    <option
+                      v-for="row in otherInstructorsForSigning"
+                      :key="row.id"
+                      :value="row.instructor_id"
+                    >
+                      {{ instructorDisplayName(row) }}
+                    </option>
+                  </optgroup>
                   <option :value="GUEST_SIGNER_VALUE">Guest / fill-in instructor</option>
                 </select>
               </label>
@@ -1876,7 +1905,7 @@
                   </button>
                 </div>
                 <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                  Prefer a phone for a clearer signature. Laptop pad still works as a fallback.
+                  Saves the entry, then opens a QR for the guest’s phone.
                 </p>
                 <p v-if="guestQrError" :class="['text-xs', isDarkMode ? 'text-red-300' : 'text-red-600']">
                   {{ guestQrError }}
@@ -2717,6 +2746,20 @@
                   Amend entry
                 </button>
                 <button
+                  v-if="canVoidExpandedEntry"
+                  type="button"
+                  @click.stop="beginVoidSignedEntry"
+                  :class="[
+                    'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold font-quicksand transition-colors',
+                    isDarkMode
+                      ? 'border border-rose-700/60 bg-rose-900/30 text-rose-200 hover:bg-rose-900/50'
+                      : 'border border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100'
+                  ]"
+                >
+                  <Icon name="ri:prohibited-line" size="14" />
+                  Void entry
+                </button>
+                <button
                   v-if="canSignExpandedEntry && !isGuestSignerSelected"
                   type="button"
                   @click.stop="openSignEntryModal"
@@ -2838,13 +2881,24 @@
                 isDarkMode ? 'border-gray-600 bg-gray-800 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
               ]"
             >
-              <option
-                v-for="row in activeInstructorsForSigning"
-                :key="row.id"
-                :value="row.instructor_id"
-              >
-                {{ instructorDisplayName(row) }}
-              </option>
+              <optgroup v-if="mainInstructorsForSigning.length" label="Main">
+                <option
+                  v-for="row in mainInstructorsForSigning"
+                  :key="row.id"
+                  :value="row.instructor_id"
+                >
+                  {{ instructorDisplayName(row) }} (Main)
+                </option>
+              </optgroup>
+              <optgroup v-if="otherInstructorsForSigning.length" label="Instructors">
+                <option
+                  v-for="row in otherInstructorsForSigning"
+                  :key="row.id"
+                  :value="row.instructor_id"
+                >
+                  {{ instructorDisplayName(row) }}
+                </option>
+              </optgroup>
             </select>
           </label>
 
@@ -3934,13 +3988,24 @@
                     ]"
                   >
                     <option disabled value="">Select instructor</option>
-                    <option
-                      v-for="row in activeInstructorsForSigning"
-                      :key="row.id"
-                      :value="row.instructor_id"
-                    >
-                      {{ instructorDisplayName(row) }}
-                    </option>
+                    <optgroup v-if="mainInstructorsForSigning.length" label="Main">
+                      <option
+                        v-for="row in mainInstructorsForSigning"
+                        :key="row.id"
+                        :value="row.instructor_id"
+                      >
+                        {{ instructorDisplayName(row) }} (Main)
+                      </option>
+                    </optgroup>
+                    <optgroup v-if="otherInstructorsForSigning.length" label="Instructors">
+                      <option
+                        v-for="row in otherInstructorsForSigning"
+                        :key="row.id"
+                        :value="row.instructor_id"
+                      >
+                        {{ instructorDisplayName(row) }}
+                      </option>
+                    </optgroup>
                     <option :value="GUEST_SIGNER_VALUE">Guest / fill-in instructor</option>
                   </select>
                 </label>
@@ -3980,6 +4045,30 @@
                       @change="(v) => (guestPadHasInk = v)"
                     />
                   </div>
+                  <div class="flex flex-col sm:flex-row gap-2">
+                    <button
+                      type="button"
+                      :disabled="guestQrCreating || isSavingEntry || isSubmittingSign"
+                      :class="[
+                        'inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold border',
+                        isDarkMode
+                          ? 'border-cyan-700/60 bg-cyan-900/30 text-cyan-100 hover:bg-cyan-900/50'
+                          : 'border-cyan-300 bg-cyan-50 text-cyan-900 hover:bg-cyan-100',
+                        (guestQrCreating || isSavingEntry) ? 'opacity-60 cursor-not-allowed' : ''
+                      ]"
+                      @click.prevent="startGuestSignOnPhoneFromAdd"
+                    >
+                      <Icon v-if="guestQrCreating" name="ri:loader-4-line" class="animate-spin" size="16" />
+                      <Icon v-else name="ri:qr-code-line" size="16" />
+                      {{ guestQrCreating ? 'Creating QR…' : 'Sign on phone (QR)' }}
+                    </button>
+                  </div>
+                  <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                    Saves the entry, then opens a QR for the guest’s phone.
+                  </p>
+                  <p v-if="guestQrError" :class="['text-xs', isDarkMode ? 'text-red-300' : 'text-red-600']">
+                    {{ guestQrError }}
+                  </p>
                 </template>
                 <template v-else>
                   <label class="block text-sm">
@@ -6615,9 +6704,11 @@ import { useFlightSigning } from '../composables/useFlightSigning'
 import { useRoster } from '../composables/useRoster'
 import { requiresInstructorSignature } from '../utils/flightSigning'
 import {
+  buildVoidAmendment,
   getAmendmentFor,
   isEntrySuperseded,
 } from '../utils/logEntryAmendments'
+import { isRosterRelationshipSignable } from '../utils/rosterRelationships'
 import { withTimeout } from '../utils/promiseTimeout'
 import { apiFetch } from '../utils/apiFetch'
 import { useSyncQueue } from '../composables/useSyncQueue'
@@ -8143,7 +8234,7 @@ const signPin = ref('')
 const isSubmittingSign = ref(false)
 const isMarkingSignaturePending = ref(false)
 /** Intent for the in-progress save: sign immediately, mark pending, guest drawn, or normal (no dual). */
-const pendingSaveSigningIntent = ref<'none' | 'sign' | 'later' | 'guest'>('none')
+const pendingSaveSigningIntent = ref<'none' | 'sign' | 'later' | 'guest' | 'guest_qr'>('none')
 
 /** Sentinel value for guest / fill-in instructor (not a roster UUID). */
 const GUEST_SIGNER_VALUE = '__guest__'
@@ -8231,6 +8322,7 @@ function buildDbPayloadFromLogEntry(
     signature_pending: signaturePending,
     pending_instructor_id: pendingInstructorId,
     amends_entry_id: entry.amendsEntryId ?? null,
+    is_void: entry.isVoid === true,
     is_imported: entry.isImported ?? false,
     import_source: entry.importSource ?? null,
     import_batch_id: entry.importBatchId ?? null,
@@ -8240,7 +8332,15 @@ function buildDbPayloadFromLogEntry(
 }
 
 const activeInstructorsForSigning = computed(() =>
-  rosterInstructors.value.filter((row) => row.status === 'ACTIVE')
+  rosterInstructors.value.filter((row) => isRosterRelationshipSignable(row))
+)
+
+const mainInstructorsForSigning = computed(() =>
+  activeInstructorsForSigning.value.filter((row) => row.relationship_kind === 'main')
+)
+
+const otherInstructorsForSigning = computed(() =>
+  activeInstructorsForSigning.value.filter((row) => row.relationship_kind !== 'main')
 )
 
 const isExpandedEntrySigned = computed(() => isEntrySigned(expandedEntryId.value))
@@ -8252,6 +8352,8 @@ const canAmendExpandedEntry = computed(() => {
   if (getAmendmentFor(id, logEntries.value)) return false
   return true
 })
+
+const canVoidExpandedEntry = computed(() => canAmendExpandedEntry.value)
 
 const isExpandedEntryPending = computed(() => {
   if (isExpandedEntrySigned.value) return false
@@ -8343,16 +8445,18 @@ watch(guestQrCompleted, async (done) => {
 })
 
 async function startGuestSignOnPhone(): Promise<void> {
-  const id = expandedEntryId.value
-  if (!id) return
-  if (!(await isEntryCloudSynced(id))) {
-    showToast('Save the entry first (Confirm Changes) so it syncs, then open Sign on phone.', 6000)
-    return
-  }
-  const ok = await createGuestSignQrSession(id)
-  if (!ok && guestQrError.value) {
-    showToast(guestQrError.value, 6000)
-  }
+  pendingSaveSigningIntent.value = 'guest_qr'
+  await saveInlineEdit()
+}
+
+async function startGuestSignOnPhoneFromAdd(): Promise<void> {
+  pendingSaveSigningIntent.value = 'guest_qr'
+  await submitEntry()
+}
+
+function shouldAwaitSyncForSigningIntent(): boolean {
+  const intent = pendingSaveSigningIntent.value
+  return intent === 'later' || intent === 'guest_qr'
 }
 
 watch(expandedEntryNeedsSignature, (needs) => {
@@ -8419,6 +8523,9 @@ async function openSignEntryModal(): Promise<void> {
   if (!requiresInstructorSignature(inlineEditEntry.value)) {
     showToast('Signing is only available when Dual Received time is greater than zero')
     return
+  }
+  if (!signInstructorId.value && mainInstructorsForSigning.value[0]) {
+    signInstructorId.value = mainInstructorsForSigning.value[0].instructor_id
   }
   if (!signInstructorId.value && activeInstructorsForSigning.value[0]) {
     signInstructorId.value = activeInstructorsForSigning.value[0].instructor_id
@@ -8606,6 +8713,48 @@ function beginAmendSignedEntry(): void {
   showToast('Amendment draft created — correct and save. History will appear in the audit trail.')
 }
 
+async function beginVoidSignedEntry(): Promise<void> {
+  const original = inlineEditEntry.value
+  const originalId = expandedEntryId.value
+  if (!original || !originalId) return
+  if (!isEntrySigned(originalId)) {
+    showToast('Only signed entries can be voided')
+    return
+  }
+  if (isEntrySuperseded(originalId, logEntries.value)) {
+    showToast('This entry has already been superseded')
+    return
+  }
+  if (getAmendmentFor(originalId, logEntries.value)) {
+    showToast('An amendment already exists — edit or delete it first')
+    return
+  }
+
+  const reason = window.prompt(
+    'Reason for voiding this signed entry (required). The original stays in history; a zero-time void row replaces it in your logbook.'
+  )
+  if (reason === null) return
+  if (!reason.trim()) {
+    showToast('A void reason is required')
+    return
+  }
+
+  ensureIosCatalogIndex()
+  closeAuditTrailSidebar()
+  showSignatureFinishModal.value = false
+
+  const newId = generateEntryId()
+  const voidEntry = buildVoidAmendment(original, newId, reason)
+  voidEntry.date = normalizeDateForInput(original.date)
+
+  logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, voidEntry])
+  expandedEntryId.value = newId
+  inlineEditEntry.value = voidEntry
+  isInlineCommercialMode.value = false
+
+  await saveInlineEdit()
+}
+
 function ensureInlineOOOI(): void {
   if (!inlineEditEntry.value) return
   if (!inlineEditEntry.value.oooi) {
@@ -8697,6 +8846,7 @@ async function saveInlineEdit(): Promise<void> {
         ? (signInstructorId.value || null)
         : (inlineEditEntry.value.pendingInstructorId ?? null),
     amendsEntryId: inlineEditEntry.value.amendsEntryId ?? null,
+    isVoid: inlineEditEntry.value.isVoid === true,
   }
 
   if (inferLogbookType(updatedEntry) === 'simulator') {
@@ -8761,6 +8911,7 @@ async function saveInlineEdit(): Promise<void> {
             : (oldEntryData?.pending_instructor_id ?? updatedEntry.pendingInstructorId ?? null),
         amends_entry_id:
           updatedEntry.amendsEntryId ?? oldEntryData?.amends_entry_id ?? null,
+        is_void: updatedEntry.isVoid === true || oldEntryData?.is_void === true,
         is_imported: oldEntryData?.is_imported ?? false,
         import_source: oldEntryData?.import_source ?? null,
         import_batch_id: oldEntryData?.import_batch_id ?? null,
@@ -8772,7 +8923,7 @@ async function saveInlineEdit(): Promise<void> {
       if (!oldEntryData) {
         console.log('[SaveInlineEdit] Entry not in Supabase yet')
         const queueEntry = { ...dbEntry, id: targetId, user_id: user.value.id }
-        const awaitSync = pendingSaveSigningIntent.value === 'later'
+        const awaitSync = shouldAwaitSyncForSigningIntent()
 
         await checkOnlineStatus()
         if (isOnline.value) {
@@ -8802,6 +8953,7 @@ async function saveInlineEdit(): Promise<void> {
             signaturePending: insertResult.signature_pending === true,
             pendingInstructorId: insertResult.pending_instructor_id ?? null,
             amendsEntryId: insertResult.amends_entry_id ?? updatedEntry.amendsEntryId ?? null,
+            isVoid: insertResult.is_void === true || updatedEntry.isVoid === true,
           }
           await updateEntryInIndexedDB(savedEntry, { userId: user.value.id, synced: true })
           const existsLocally = logEntries.value.some((e) => e.id === targetId)
@@ -8845,7 +8997,7 @@ async function saveInlineEdit(): Promise<void> {
       if (!updateResult) {
         console.log('[SaveInlineEdit] Update returned 0 rows, saving to IndexedDB and queueing for sync')
         await updateEntryInIndexedDB(updatedEntry, { userId: user.value.id })
-        const awaitSync = pendingSaveSigningIntent.value === 'later'
+        const awaitSync = shouldAwaitSyncForSigningIntent()
         await addToQueue('update', targetId, dbEntry, user.value.id, { awaitSync })
         logEntries.value = sortEntriesByDateAndOOOI(
           logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
@@ -8925,6 +9077,7 @@ async function saveInlineEdit(): Promise<void> {
         signaturePending: dbEntryResult.signature_pending === true,
         pendingInstructorId: dbEntryResult.pending_instructor_id ?? null,
         amendsEntryId: dbEntryResult.amends_entry_id ?? null,
+        isVoid: dbEntryResult.is_void === true,
         isImported: dbEntryResult.is_imported || false,
         importSource: dbEntryResult.import_source || undefined,
         importBatchId: dbEntryResult.import_batch_id || undefined,
@@ -9164,6 +9317,7 @@ async function ensureCloudPendingSignature(
       signaturePending: true,
       pendingInstructorId: instructorId,
       amendsEntryId: insertResult.amends_entry_id ?? (localEntry as LogEntry).amendsEntryId ?? null,
+      isVoid: insertResult.is_void === true || (localEntry as LogEntry).isVoid === true,
     }
     try {
       await updateEntryInIndexedDB(repaired, { userId: user.value.id, synced: true })
@@ -9208,7 +9362,14 @@ async function finalizeSaveWithSigningIntent(
     requiresInstructorSignature(savedEntry) && !isEntrySigned(savedEntry.id)
 
   if (!needsSig) {
-    showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', 3000)
+    showToast(
+      savedEntry.isVoid
+        ? 'Entry voided — original remains in audit history'
+        : source === 'edit'
+          ? 'Entry updated'
+          : 'Entry saved',
+      3000
+    )
     if (source === 'edit') closeInlineEditDrawer()
     clearFormSigningFields()
     return
@@ -9267,6 +9428,27 @@ async function finalizeSaveWithSigningIntent(
       closeInlineEditDrawer()
     } finally {
       isSubmittingSign.value = false
+    }
+    return
+  }
+
+  if (intent === 'guest_qr') {
+    prepareInlineEditFromEntry(savedEntry)
+    signInstructorId.value = GUEST_SIGNER_VALUE
+    if (isOnline.value) {
+      await processQueue({ silent: true })
+      await new Promise((r) => setTimeout(r, 400))
+    }
+    if (!(await isEntryCloudSynced(savedEntry.id))) {
+      showToast(
+        'Could not sync the entry for phone signing. Check your connection and try again.',
+        6000
+      )
+      return
+    }
+    const ok = await createGuestSignQrSession(savedEntry.id)
+    if (!ok) {
+      showToast(guestQrError.value || 'Could not create phone signing session', 6000)
     }
     return
   }
@@ -12428,6 +12610,10 @@ function maybeAutoOpenEntryFormForEmptyLogbook(): void {
 function ensureDefaultSignInstructor(): void {
   void fetchInstructors().then(() => {
     if (signInstructorId.value) return
+    if (mainInstructorsForSigning.value[0]) {
+      signInstructorId.value = mainInstructorsForSigning.value[0].instructor_id
+      return
+    }
     if (activeInstructorsForSigning.value[0]) {
       signInstructorId.value = activeInstructorsForSigning.value[0].instructor_id
       return
@@ -15040,6 +15226,7 @@ async function submitEntry(): Promise<void> {
           ? (signInstructorId.value || null)
           : null,
       amendsEntryId: baseEntry.amendsEntryId ?? null,
+      isVoid: baseEntry.isVoid === true,
     }
 
     const userId = user.value?.id
@@ -15095,11 +15282,12 @@ async function submitEntry(): Promise<void> {
           ? (signInstructorId.value || null)
           : null,
       amends_entry_id: entryToSave.amendsEntryId ?? null,
+      is_void: entryToSave.isVoid === true,
     }
 
     // Add to sync queue (will sync to Supabase when online)
     if (isAuthenticated.value && user.value) {
-      const awaitSync = pendingSaveSigningIntent.value === 'later'
+      const awaitSync = shouldAwaitSyncForSigningIntent()
       if (editingEntryId.value) {
         await addToQueue('update', entryId, dbEntry, userId, { awaitSync })
       } else {
@@ -15391,6 +15579,7 @@ function mapSupabaseRowToLogEntry(dbEntry: any): LogEntry {
     signaturePending: dbEntry.signature_pending === true,
     pendingInstructorId: dbEntry.pending_instructor_id ?? null,
     amendsEntryId: dbEntry.amends_entry_id ?? null,
+    isVoid: dbEntry.is_void === true,
     isImported: dbEntry.is_imported || false,
     importSource: dbEntry.import_source || undefined,
     importBatchId: dbEntry.import_batch_id || undefined,
@@ -15820,6 +16009,7 @@ function mapIdbEntryToLogEntry(
     signaturePending: entry.signaturePending === true,
     pendingInstructorId: entry.pendingInstructorId ?? null,
     amendsEntryId: entry.amendsEntryId ?? null,
+    isVoid: entry.isVoid === true,
     isImported: entry.isImported,
     importSource: entry.importSource,
     importBatchId: entry.importBatchId,

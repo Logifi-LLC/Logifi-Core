@@ -22,4 +22,10 @@ describe('requiresInstructorSignature', () => {
       requiresInstructorSignature({ flightTime: dualTime(2), isImported: true })
     ).toBe(false)
   })
+
+  it('skips signing for void amendments', () => {
+    expect(
+      requiresInstructorSignature({ flightTime: dualTime(2), isVoid: true })
+    ).toBe(false)
+  })
 })

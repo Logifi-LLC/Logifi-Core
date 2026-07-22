@@ -1,4 +1,5 @@
 import type { LogEntry } from './logbookTypes'
+import { createEmptyFlightTime, createEmptyPerformance } from './logbookTypes'
 
 /** Entry that amends (supersedes) the given original id, if any. */
 export function getAmendmentFor(
@@ -6,6 +7,43 @@ export function getAmendmentFor(
   entries: readonly LogEntry[]
 ): LogEntry | undefined {
   return entries.find((e) => e.amendsEntryId === entryId)
+}
+
+/**
+ * Build a zero-time void amendment that supersedes a signed original.
+ * Does not require instructor signature (dual = 0, isVoid = true).
+ */
+export function buildVoidAmendment(
+  original: LogEntry,
+  newId: string,
+  reason: string
+): LogEntry {
+  const trimmedReason = reason.trim()
+  const voidNote = trimmedReason
+    ? `VOIDED: ${trimmedReason}`
+    : 'VOIDED: Created in error'
+  const priorRemarks = (original.remarks || '').trim()
+  return {
+    ...original,
+    id: newId,
+    amendsEntryId: original.id,
+    isVoid: true,
+    signaturePending: false,
+    pendingInstructorId: null,
+    dataHash: undefined,
+    version: undefined,
+    createdAt: undefined,
+    updatedAt: undefined,
+    flightTime: createEmptyFlightTime(),
+    performance: createEmptyPerformance(),
+    categoryClassTime: null,
+    oooi: undefined,
+    flagged: false,
+    remarks: priorRemarks ? `${voidNote}\n\n${priorRemarks}` : voidNote,
+    tags: Array.isArray(original.tags)
+      ? Array.from(new Set([...original.tags, 'Void']))
+      : ['Void'],
+  }
 }
 
 /** True when another entry in the logbook amends this one. */

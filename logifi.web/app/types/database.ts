@@ -42,6 +42,7 @@ export type Database = {
           signature_pending: boolean
           pending_instructor_id: string | null
           amends_entry_id: string | null
+          is_void: boolean
         }
         Insert: {
           id?: string
@@ -79,6 +80,7 @@ export type Database = {
           signature_pending?: boolean
           pending_instructor_id?: string | null
           amends_entry_id?: string | null
+          is_void?: boolean
         }
         Update: {
           id?: string
@@ -116,6 +118,7 @@ export type Database = {
           signature_pending?: boolean
           pending_instructor_id?: string | null
           amends_entry_id?: string | null
+          is_void?: boolean
         }
       }
       fcv_integrations: {
@@ -553,6 +556,8 @@ export type Database = {
           student_id: string
           instructor_id: string
           status: 'PENDING' | 'ACTIVE' | 'REVOKED'
+          relationship_kind: 'main' | 'linked'
+          expires_at: string | null
           created_at: string
         }
         Insert: {
@@ -560,6 +565,8 @@ export type Database = {
           student_id: string
           instructor_id: string
           status?: 'PENDING' | 'ACTIVE' | 'REVOKED'
+          relationship_kind?: 'main' | 'linked'
+          expires_at?: string | null
           created_at?: string
         }
         Update: {
@@ -567,6 +574,8 @@ export type Database = {
           student_id?: string
           instructor_id?: string
           status?: 'PENDING' | 'ACTIVE' | 'REVOKED'
+          relationship_kind?: 'main' | 'linked'
+          expires_at?: string | null
           created_at?: string
         }
       }
@@ -692,6 +701,12 @@ export type Database = {
           p_instructor_email: string
         }
         Returns: string
+      }
+      set_main_instructor: {
+        Args: {
+          p_relationship_id: string
+        }
+        Returns: undefined
       }
       get_roster_member_profile: {
         Args: {
