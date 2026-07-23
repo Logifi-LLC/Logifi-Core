@@ -1,41 +1,47 @@
 FOCUS: App — get it ready for users
 
 RELEASE ORDER
-1. App (now) — logbook, offline, Digifi Eye, user-ready polish
+1. App (now) — logbook polish, offline (deferred)
 2. Digifi web — Pages, QR companion, mock credits for testers
 3. FC View integration
-4. Endorsements & signatures (after app is user-ready)
+4. (done early) Endorsements & instructor signing — see DONE
 
 ────────────────────────────────────────
 APP NOW
 ────────────────────────────────────────
 
-1. OFFLINE LOGBOOK — investigate & fix if needed
+1. OFFLINE LOGBOOK — altitude auth/sync hardening done; cache gap still open
    Status: Partially working today.
    - Signed-in users load from IndexedDB first, then sync from Supabase when online.
    - Full logbook is available offline ONLY if it was previously synced to IndexedDB on that device.
    - First visit with empty cache + no internet = empty logbook (gap to fix).
-   - iOS list shows ~100 cards at a time (display-only; full set is in memory) and auto-loads more on scroll — not missing from cloud.
    - Cloud fetch uses 1000-row batches; progressive first paint shows 100 then background sync.
-   - Action: Verify offline-at-altitude scenario; ensure full logbook caches locally after first online sync; fix any gaps.
+   - Done: offline session snapshot, pause auto-refresh when unreachable, unauthenticated health probe,
+     sync gated on real cloud reachability (not navigator.onLine alone).
+   - Still open: cold-start empty cache; verify on device at altitude / after landing.
 
-2. DIGIFI EYE — test and make it work
-   - iOS session pairing / Capacitor API routing (was parked; now priority)
-   - Test: QR scan from Add Pages → capture upload on phone
-   - See: logifi.web/app/pages/digifi-eye.vue, docs/ios-testflight.md
-
-3. TALK TO ABBY — marketing
+2. DEVICE / SIGNING SMOKE (when ready) — void survives refresh; amend; guest QR; main CFI; paper + e-sign endorsements
 
 ────────────────────────────────────────
 DONE / GOOD
 ────────────────────────────────────────
+- Digifi Eye — good enough for public (pairing / capture path shipped)
 - Stripe + Opennode (Lightning) — working as planned (payment branch)
 - Murray responded — still slammed; not available for testing yet
+- Instructor portal Phases 1–7 + guest drawn / QR phone signing
+- Void signed entry via superseding amendment (migrations 00066+)
+- Main CFI among linked instructors (migration 00068+; no substitute expiry)
+- Void persist + orphan amendment recovery (save reports success; rollback on fail)
+- AC 61-65H endorsements (A.1–A.92): request / issue / PIN sign; Settings → Endorsements
+- Official CFI signature block + Active Student dossier (Main summary + endorsements; migrations 00069–00070)
+- Paper / imported endorsements (manual record; Main sees as Paper; migration 00071)
 
 ────────────────────────────────────────
 LATER (after app is user-ready)
 ────────────────────────────────────────
-- Endorsements & signatures
+- Offline logbook cache gaps (from APP NOW #1)
+- Retire instructor (soft end vs Remove) + optional Main-switch grace
+- Digifi/OCR for paper endorsements; endorsement PDF export
 - Manual and FC View imports in the same day
 - Digifi web tester sign-off (Murray when available)
 - Merge payment branch → dev after Digifi web test sign-off

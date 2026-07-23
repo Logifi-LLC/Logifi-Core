@@ -330,7 +330,7 @@
               placeholder="4–12 characters"
               :disabled="isSigning"
               :class="[
-                'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                'mt-1 w-full rounded-lg border px-3 py-2 text-base',
                 isDarkMode
                   ? 'border-gray-600 bg-gray-800 text-gray-100'
                   : 'border-gray-300 bg-white text-gray-900'

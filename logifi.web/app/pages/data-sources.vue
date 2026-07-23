@@ -4,7 +4,10 @@
       'min-h-screen transition-colors duration-300 font-quicksand',
       isFromLanding
         ? 'relative overflow-x-hidden bg-[#e4e8e7] text-gray-900'
-        : 'bg-gray-100 text-gray-900 dark:bg-gray-950 dark:text-gray-100'
+        : [
+            'bg-gray-100 text-gray-900 dark:bg-gray-950 dark:text-gray-100',
+            isIos ? 'overflow-x-hidden' : '',
+          ],
     ]"
   >
     <TechnicalTopographyBg v-if="isFromLanding" />
@@ -12,39 +15,69 @@
     <MarketingHeader v-if="isFromLanding" active-page="data-sources" @open-auth="openAuth" />
 
     <!-- App header (dashboard / default) -->
-    <header v-else class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b border-white/10 bg-white/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/90">
-      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+    <header
+      v-else
+      :class="[
+        'fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b border-white/10 bg-white/5 backdrop-blur-md dark:border-gray-800 dark:bg-gray-900/90',
+        isIos ? 'pt-[env(safe-area-inset-top)]' : '',
+      ]"
+    >
+      <div
+        :class="[
+          'max-w-7xl mx-auto flex items-center justify-between',
+          isIos ? 'px-3 h-14' : 'px-4 sm:px-6 lg:px-8 h-20',
+        ]"
+      >
         <NuxtLink
           to="/"
-          class="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors dark:text-gray-300 dark:hover:text-white"
+          class="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors dark:text-gray-300 dark:hover:text-white min-w-0"
         >
           <img
             src="/images/logifi-logo.png"
             alt="Logifi"
-            class="h-32 w-auto brightness-0 dark:invert"
+            :class="[
+              'w-auto brightness-0 dark:invert',
+              isIos ? 'h-8' : 'h-32',
+            ]"
           />
         </NuxtLink>
         <button
           type="button"
-          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-800"
+          :class="[
+            'inline-flex items-center gap-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-800 shrink-0',
+            isIos ? 'px-2.5 py-1.5' : 'px-4 py-2',
+          ]"
           @click="goBack"
         >
           <Icon name="ri:arrow-left-line" size="18" />
-          {{ backLabel }}
+          <span>{{ isIos ? 'Back' : backLabel }}</span>
         </button>
       </div>
     </header>
 
-    <main :class="['pb-16 px-4 sm:px-6 lg:px-8', isFromLanding ? 'pt-32' : 'pt-24']">
+    <main
+      :class="[
+        isFromLanding ? 'pt-32 pb-16 px-4 sm:px-6 lg:px-8' : '',
+        !isFromLanding && isIos ? 'pt-[calc(3.5rem+env(safe-area-inset-top))] pb-16 px-3' : '',
+        !isFromLanding && !isIos ? 'pt-24 pb-16 px-4 sm:px-6 lg:px-8' : '',
+      ]"
+    >
       <div
         :class="[
           'max-w-4xl mx-auto prose prose-gray',
+          isIos && !isFromLanding ? 'break-words overflow-x-hidden max-w-full' : '',
           isFromLanding
             ? 'relative overflow-hidden rounded-[28px] border border-white/15 bg-white/10 backdrop-blur-md shadow-[0_0_42px_-12px_rgba(59,130,246,0.24),0_0_56px_-18px_rgba(37,99,235,0.14)] p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8'
             : '',
         ]"
       >
-        <h1 :class="['text-3xl font-bold font-quicksand mb-2', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">
+        <h1
+          :class="[
+            'font-bold font-quicksand mb-2',
+            isIos && !isFromLanding ? 'text-2xl' : 'text-3xl',
+            isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white',
+          ]"
+        >
           Data sources &amp; third-party APIs
         </h1>
         <p :class="['mb-8', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-600 dark:text-gray-400']">
@@ -79,12 +112,15 @@
             <p :class="['text-sm mb-4', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-600 dark:text-gray-400']">
               Disconnecting will immediately delete your FC View access and refresh tokens from our servers. You will need to reconnect to import future flights.
             </p>
-            <div class="flex items-center gap-3">
+            <div :class="['flex gap-3', isIos ? 'flex-col items-stretch' : 'items-center']">
               <button
                 type="button"
                 @click="disconnectFcv"
                 :disabled="isDisconnecting"
-                class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-red-800/70 dark:text-red-400 dark:hover:bg-red-950/40"
+                :class="[
+                  'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-red-800/70 dark:text-red-400 dark:hover:bg-red-950/40',
+                  isIos ? 'w-full' : '',
+                ]"
               >
                 <Icon name="ri:link-unlink" size="16" />
                 {{ isDisconnecting ? 'Disconnecting...' : 'Disconnect FC View' }}
@@ -169,6 +205,7 @@
 import { ref, computed, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from '#imports'
 import { useAuth } from '~/composables/useAuth'
+import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
 import FcvApiDisclaimers from '~/components/fcv/FcvApiDisclaimers.vue'
 import AuthModal from '~/components/AuthModal.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
@@ -179,6 +216,7 @@ const route = useRoute()
 const router = useRouter()
 const { isAuthenticated, session } = useAuth()
 const { theme, applyDocumentTheme } = useTheme()
+const { isIos } = useCapacitorPlatform()
 
 const isFromLanding = computed(() => route.query.from === 'landing')
 

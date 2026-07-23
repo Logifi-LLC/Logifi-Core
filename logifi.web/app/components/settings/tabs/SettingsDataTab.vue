@@ -201,10 +201,13 @@ const { helper } = useSettingsClasses(computed(() => props.isDarkMode))
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const syncBadgeClass = computed(() => {
-  if (!props.isOnline) {
+  if (props.syncStatusText === 'Checking…') {
+    return props.isDarkMode ? 'text-gray-400' : 'text-gray-500'
+  }
+  if (!props.isOnline || props.syncStatusText === 'Offline') {
     return props.isDarkMode ? 'text-red-400' : 'text-red-700'
   }
-  if (props.isSyncing) {
+  if (props.isSyncing || props.syncStatusText === 'Syncing') {
     return props.isDarkMode ? 'text-yellow-400' : 'text-yellow-700'
   }
   return props.isDarkMode ? 'text-green-400' : 'text-green-700'

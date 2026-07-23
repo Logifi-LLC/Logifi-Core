@@ -1,6 +1,5 @@
 import { ref, computed } from 'vue'
 import { supabase } from '~/lib/supabase'
-import type { LogEntry } from '~/utils/logbookTypes'
 import {
   addToSyncQueue,
   getSyncQueue,
@@ -32,8 +31,13 @@ export type AddToQueueOptions = {
   awaitSync?: boolean
 }
 
-function browserReportsOnline(): boolean {
-  return typeof navigator !== 'undefined' ? navigator.onLine : true
+/** Local session identity — avoids network Auth round-trips via getUser(). */
+async function getLocalAuthUserId(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session?.user?.id) return session.user.id
+
+  // Fall back to active sync scope when SDK storage was wiped mid-flight.
+  return activeUserId.value
 }
 
 export const useSyncQueue = () => {
@@ -271,14 +275,14 @@ export const useSyncQueue = () => {
       insertData.user_id = item.userId
     }
 
-    const { data: { user: authUser } } = await supabase.auth.getUser()
-    if (!authUser?.id) {
+    const authUserId = await getLocalAuthUserId()
+    if (!authUserId) {
       throw new Error('Not authenticated – cannot sync insert')
     }
-    if (item.userId && authUser.id !== item.userId) {
+    if (item.userId && authUserId !== item.userId) {
       throw new Error('Active session does not match queued item user – skipping cross-account sync')
     }
-    if (insertData.user_id !== authUser.id) {
+    if (insertData.user_id !== authUserId) {
       throw new Error('Queued insert user_id does not match active session')
     }
 
@@ -325,11 +329,11 @@ export const useSyncQueue = () => {
       throw new Error('Entry data missing for update operation')
     }
 
-    const { data: { user: authUser } } = await supabase.auth.getUser()
-    if (!authUser?.id) {
+    const authUserId = await getLocalAuthUserId()
+    if (!authUserId) {
       throw new Error('Not authenticated – cannot sync update')
     }
-    if (item.userId && authUser.id !== item.userId) {
+    if (item.userId && authUserId !== item.userId) {
       throw new Error('Active session does not match queued item user – skipping cross-account sync')
     }
 
@@ -442,11 +446,11 @@ export const useSyncQueue = () => {
    * Sync delete operation
    */
   const syncDelete = async (item: SyncQueueEntry): Promise<boolean> => {
-    const { data: { user: authUser } } = await supabase.auth.getUser()
-    if (!authUser?.id) {
+    const authUserId = await getLocalAuthUserId()
+    if (!authUserId) {
       throw new Error('Not authenticated – cannot sync delete')
     }
-    if (item.userId && authUser.id !== item.userId) {
+    if (item.userId && authUserId !== item.userId) {
       throw new Error('Active session does not match queued item user – skipping cross-account sync')
     }
 
@@ -457,13 +461,13 @@ export const useSyncQueue = () => {
 
     if (error) {
       if (error.code === 'PGRST116') {
-        await insertLogEntryTombstone(authUser.id, item.entryId)
+        await insertLogEntryTombstone(authUserId, item.entryId)
         return true
       }
       throw error
     }
 
-    await insertLogEntryTombstone(authUser.id, item.entryId)
+    await insertLogEntryTombstone(authUserId, item.entryId)
     return true
   }
 
@@ -475,7 +479,11 @@ export const useSyncQueue = () => {
     const silent = options?.silent ?? false
 
     await checkOnlineStatus()
-    if (!isOnline.value && !browserReportsOnline()) {
+    // Gate only on cloud reachability — browser onLine alone must not start doomed syncs.
+    if (!isOnline.value) {
+      if (silent) {
+        resetSyncProgress()
+      }
       return
     }
 
@@ -550,6 +558,7 @@ export const useSyncQueue = () => {
       if (!silent) {
         updateSyncProgress(0, 0, 'error', syncError.value)
       } else {
+        // Silent background drains fail quietly — leave pending count, don't sticky-error the badge.
         resetSyncProgress()
       }
     } finally {
@@ -576,11 +585,11 @@ export const useSyncQueue = () => {
     void (async () => {
       await checkOnlineStatus()
       const userId = activeUserId.value
-      if (userId) {
+      if (userId && isOnline.value) {
         await reconcileSyncQueue(userId)
-      }
-      if (isOnline.value || browserReportsOnline()) {
         await processQueue({ silent: true })
+      } else if (userId) {
+        await refreshQueueLength()
       }
     })()
   }
@@ -597,6 +606,10 @@ export const useSyncQueue = () => {
     if (!userId) return
 
     await checkOnlineStatus()
+    if (!isOnline.value) {
+      return
+    }
+
     await reconcileSyncQueue(userId)
 
     const queue = await getSyncQueue(userId)
@@ -609,9 +622,7 @@ export const useSyncQueue = () => {
       })
     }
 
-    if (isOnline.value || browserReportsOnline()) {
-      await processQueue()
-    }
+    await processQueue()
   }
 
   const clearQueue = async (): Promise<void> => {

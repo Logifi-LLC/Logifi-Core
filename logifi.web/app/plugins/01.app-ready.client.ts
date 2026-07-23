@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core'
+import { lockNativeViewportZoom } from '~/composables/useCapacitorPlatform'
 
 const FALLBACK_MS = 4000
 
@@ -23,6 +24,8 @@ export async function markAppReady(): Promise<void> {
 }
 
 export default defineNuxtPlugin((nuxtApp) => {
+  lockNativeViewportZoom()
+
   const { initAuth } = useAuth()
   void initAuth()
 

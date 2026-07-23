@@ -1921,7 +1921,7 @@
                     maxlength="12"
                     placeholder="4–12 characters"
                     :class="[
-                      'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                      'mt-1 w-full rounded-lg border px-3 py-2 text-base',
                       isDarkMode ? 'border-gray-600 bg-gray-900 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
                     ]"
                   />
@@ -2911,7 +2911,7 @@
               maxlength="12"
               placeholder="4–12 characters"
               :class="[
-                'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                'mt-1 w-full rounded-lg border px-3 py-2 text-base',
                 isDarkMode ? 'border-gray-600 bg-gray-800 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
               ]"
               @keydown.enter.prevent="submitSignEntry"
@@ -4080,7 +4080,7 @@
                       maxlength="12"
                       placeholder="4–12 characters"
                       :class="[
-                        'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                        'mt-1 w-full rounded-lg border px-3 py-2 text-base',
                         isDarkMode ? 'border-gray-600 bg-gray-900 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
                       ]"
                     />
@@ -4418,36 +4418,44 @@
     <Teleport to="body">
     <div
       v-if="showForm8710Modal"
-      class="app-modal-overlay flex items-start justify-center px-4 py-8"
+      :class="[
+        'app-modal-overlay flex justify-center',
+        isIos ? 'items-stretch p-0' : 'items-start px-4 py-8',
+      ]"
     >
       <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="showForm8710Modal = false"></div>
       <div
         :class="[
-          'relative w-full max-w-4xl overflow-y-auto rounded-3xl border shadow-2xl transition-colors duration-300 max-h-[90vh] p-6 sm:p-8 space-y-6',
+          'relative w-full overflow-y-auto border shadow-2xl transition-colors duration-300 space-y-6',
+          isIos
+            ? 'max-w-none max-h-[100dvh] h-[100dvh] rounded-none p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]'
+            : 'max-w-4xl max-h-[90vh] rounded-3xl p-6 sm:p-8',
           isDarkMode 
             ? 'bg-gray-900 border-gray-700 text-gray-100' 
             : 'bg-gray-100 border-gray-200 text-gray-900'
         ]"
       >
-        <div class="flex items-center justify-between">
-          <div>
-            <h2 class="text-2xl font-semibold font-quicksand">
-              Generate FAA Form 8710-1
-            </h2>
-            <p :class="['text-sm mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-              Pre-fill form with your logbook data
-            </p>
+        <div :class="['flex gap-3', isIos ? 'flex-col' : 'items-center justify-between']">
+          <div class="flex items-start justify-between gap-3 min-w-0">
+            <div class="min-w-0 flex-1">
+              <h2 :class="[isIos ? 'text-lg' : 'text-2xl', 'font-semibold font-quicksand']">
+                Generate FAA Form 8710-1
+              </h2>
+              <p :class="['text-sm mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                Pre-fill form with your logbook data
+              </p>
+            </div>
+            <button
+              @click="showForm8710Modal = false"
+              :class="[
+                'rounded-full p-2 transition-colors shrink-0',
+                isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+              ]"
+              aria-label="Close"
+            >
+              <Icon name="ri:close-line" size="22" />
+            </button>
           </div>
-          <button
-            @click="showForm8710Modal = false"
-            :class="[
-              'rounded-full p-2 transition-colors',
-              isDarkMode ? 'text-gray-400 hover:text-white hover:bg-white/10' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
-            ]"
-            aria-label="Close"
-          >
-            <Icon name="ri:close-line" size="22" />
-          </button>
         </div>
 
         <!-- Warnings -->
@@ -4480,7 +4488,8 @@
         <!-- Preview Section -->
         <div
           :class="[
-            'rounded-2xl border p-6 space-y-4',
+            'rounded-2xl border space-y-4',
+            isIos ? 'p-4' : 'p-6',
             isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm'
           ]"
         >
@@ -4594,11 +4603,12 @@
         </div>
 
         <!-- Action Buttons -->
-        <div class="flex gap-3 justify-end">
+        <div :class="['flex gap-3', isIos ? 'flex-col-reverse' : 'justify-end']">
           <button
             @click="showForm8710Modal = false"
             :class="[
               'px-4 py-2 rounded-lg font-quicksand transition-colors',
+              isIos ? 'w-full text-center' : '',
               isDarkMode ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20' : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
             ]"
           >
@@ -4608,6 +4618,7 @@
             @click="showForm8710View = true; showForm8710Modal = false"
             :class="[
               'px-4 py-2 rounded-lg font-quicksand transition-colors flex items-center gap-2',
+              isIos ? 'w-full justify-center' : '',
               isDarkMode ? 'bg-purple-600 hover:bg-purple-500 text-white' : 'bg-purple-600 hover:bg-purple-700 text-white'
             ]"
           >
@@ -4626,23 +4637,34 @@
       class="app-modal-overlay overflow-y-auto"
       :class="isDarkMode ? 'bg-gray-900' : 'bg-gray-100'"
     >
-      <div class="min-h-screen p-4 sm:p-6 lg:p-8">
-        <div class="max-w-6xl mx-auto">
+      <div :class="['min-h-screen min-w-0', isIos ? 'p-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]' : 'p-4 sm:p-6 lg:p-8']">
+        <div class="max-w-6xl mx-auto min-w-0">
           <!-- Header -->
-          <div class="flex items-center justify-between mb-6 print:hidden">
-            <div>
-              <h1 :class="['text-3xl font-bold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+          <div
+            :class="[
+              'mb-6 print:hidden',
+              isIos
+                ? 'sticky top-0 z-20 -mx-3 px-3 py-3 flex flex-col gap-3 border-b backdrop-blur-md'
+                : 'flex items-center justify-between',
+              isIos
+                ? (isDarkMode ? 'bg-gray-900/95 border-gray-700' : 'bg-gray-100/95 border-gray-200')
+                : '',
+            ]"
+          >
+            <div class="min-w-0">
+              <h1 :class="[isIos ? 'text-xl' : 'text-3xl', 'font-bold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
                 FAA Form 8710-1
               </h1>
               <p :class="['text-sm mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
                 Airman Certificate and/or Rating Application
               </p>
             </div>
-            <div class="flex gap-3">
+            <div :class="['flex gap-3', isIos ? 'flex-col w-full' : '']">
               <button
                 @click="printForm8710"
                 :class="[
                   'px-4 py-2 rounded-lg font-quicksand transition-colors flex items-center gap-2',
+                  isIos ? 'w-full justify-center' : '',
                   isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
                 ]"
               >
@@ -4653,6 +4675,7 @@
                 @click="showForm8710View = false"
                 :class="[
                   'px-4 py-2 rounded-lg font-quicksand transition-colors',
+                  isIos ? 'w-full text-center' : '',
                   isDarkMode ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20' : 'bg-gray-200 hover:bg-gray-300 text-gray-900'
                 ]"
               >
@@ -4664,14 +4687,15 @@
           <!-- Form Content -->
           <div
             :class="[
-              'rounded-2xl border p-6 sm:p-8 space-y-8 print:p-0 print:border-0 print:rounded-none print:shadow-none',
+              'rounded-2xl border space-y-8 print:p-0 print:border-0 print:rounded-none print:shadow-none min-w-0',
+              isIos ? 'p-3' : 'p-6 sm:p-8',
               isDarkMode ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40 print:bg-white print:text-black print:shadow-none' : 'bg-white border-gray-300'
             ]"
             id="form8710-content"
           >
             <!-- Section I: Application Information -->
             <div class="space-y-4">
-              <h2 :class="['text-xl font-bold border-b pb-2', isDarkMode ? 'text-white border-gray-600 print:text-black print:border-gray-400' : 'text-gray-900 border-gray-300']">
+              <h2 :class="[isIos ? 'text-lg' : 'text-xl', 'font-bold border-b pb-2', isDarkMode ? 'text-white border-gray-600 print:text-black print:border-gray-400' : 'text-gray-900 border-gray-300']">
                 I. APPLICATION INFORMATION
               </h2>
               
@@ -4726,11 +4750,14 @@
 
             <!-- Section II: Recent Experience -->
             <div class="space-y-4">
-              <h2 :class="['text-xl font-bold border-b pb-2', isDarkMode ? 'text-white border-gray-600 print:text-black print:border-gray-400' : 'text-gray-900 border-gray-300']">
+              <h2 :class="[isIos ? 'text-lg' : 'text-xl', 'font-bold border-b pb-2', isDarkMode ? 'text-white border-gray-600 print:text-black print:border-gray-400' : 'text-gray-900 border-gray-300']">
                 II. RECENT EXPERIENCE
               </h2>
               
-              <div class="overflow-x-auto">
+              <p v-if="isIos" :class="['text-xs print:hidden', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                Swipe to see all columns
+              </p>
+              <div :class="['overflow-x-auto min-w-0', isIos ? '-mx-3 px-3' : '']">
                 <table class="w-full border-collapse">
                   <thead>
                     <tr :class="isDarkMode ? 'bg-gray-700 print:bg-gray-200' : 'bg-gray-100'">
@@ -4774,11 +4801,14 @@
 
             <!-- Section III: Record of Pilot Time -->
             <div class="space-y-4">
-              <h2 :class="['text-xl font-bold border-b pb-2', isDarkMode ? 'text-white border-gray-600 print:text-black print:border-gray-400' : 'text-gray-900 border-gray-300']">
+              <h2 :class="[isIos ? 'text-lg' : 'text-xl', 'font-bold border-b pb-2', isDarkMode ? 'text-white border-gray-600 print:text-black print:border-gray-400' : 'text-gray-900 border-gray-300']">
                 III. RECORD OF PILOT TIME
               </h2>
               
-              <div class="overflow-x-auto">
+              <p v-if="isIos" :class="['text-xs print:hidden', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                Swipe to see all columns
+              </p>
+              <div :class="['overflow-x-auto min-w-0', isIos ? '-mx-3 px-3' : '']">
                 <table class="w-full border-collapse text-xs">
                   <thead>
                     <tr :class="isDarkMode ? 'bg-gray-700 print:bg-gray-200' : 'bg-gray-100'">
@@ -6281,42 +6311,56 @@
   <Teleport to="body">
   <div
     v-if="showExportDialog"
-    class="app-modal-overlay flex items-center justify-center p-4"
+    :class="[
+      'app-modal-overlay flex items-center justify-center',
+      isIos ? 'p-0' : 'p-4',
+    ]"
     @click.self="closeExportDialog"
   >
     <div
       :class="[
-        'relative w-full max-w-4xl max-h-[90vh] rounded-2xl border shadow-2xl transition-colors duration-300 flex flex-col',
+        'relative w-full flex flex-col border shadow-2xl transition-colors duration-300',
+        isIos
+          ? 'max-w-none max-h-[100dvh] h-[100dvh] rounded-none pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]'
+          : 'max-w-4xl max-h-[90vh] rounded-2xl',
         isDarkMode 
           ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40' 
           : 'bg-white border-gray-200 shadow-sm'
       ]"
       @click.stop
     >
-      <div class="flex items-center justify-between p-6 border-b flex-shrink-0" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
-        <div>
-          <h3 :class="['text-xl font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
-            Export Logbook
-          </h3>
-          <p :class="['text-sm font-quicksand mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-            Choose what to export and review the entries before downloading.
-          </p>
+      <div
+        :class="[
+          'flex border-b flex-shrink-0',
+          isIos ? 'flex-col gap-2 p-4' : 'items-center justify-between p-6',
+          isDarkMode ? 'border-gray-700' : 'border-gray-300',
+        ]"
+      >
+        <div class="flex items-start justify-between gap-3 min-w-0">
+          <div class="min-w-0 flex-1">
+            <h3 :class="[isIos ? 'text-lg' : 'text-xl', 'font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+              Export Logbook
+            </h3>
+            <p :class="['text-sm font-quicksand mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+              Choose what to export and review the entries before downloading.
+            </p>
+          </div>
+          <button
+            @click="closeExportDialog"
+            :class="[
+              'p-1 rounded-lg transition-colors shrink-0',
+              isDarkMode 
+                ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
+                : 'text-gray-500 hover:text-gray-700 hover:bg-gray-300'
+            ]"
+            aria-label="Close"
+          >
+            <Icon name="ri:close-line" size="24" />
+          </button>
         </div>
-        <button
-          @click="closeExportDialog"
-          :class="[
-            'p-1 rounded-lg transition-colors',
-            isDarkMode 
-              ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-300'
-          ]"
-          aria-label="Close"
-        >
-          <Icon name="ri:close-line" size="24" />
-        </button>
       </div>
 
-      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+      <div :class="['flex-1 overflow-y-auto space-y-6 min-h-0', isIos ? 'p-4' : 'p-6']">
         <!-- Scope -->
         <div>
           <h4 :class="['text-lg font-semibold font-quicksand mb-3', isDarkMode ? 'text-white' : 'text-gray-900']">
@@ -6343,7 +6387,7 @@
           <div v-if="exportScope === 'month'" class="mt-3 flex flex-wrap items-center gap-3">
             <select
               v-model.number="exportMonth.month"
-              :class="['rounded border px-2 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
+              :class="[isIos ? 'w-full' : '', 'rounded border px-2 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
             >
               <option v-for="m in 12" :key="m" :value="m">{{ ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m - 1] }}</option>
             </select>
@@ -6352,21 +6396,21 @@
               type="number"
               min="1900"
               max="2100"
-              :class="['w-24 rounded border px-2 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
+              :class="[isIos ? 'w-full' : 'w-24', 'rounded border px-2 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
               placeholder="Year"
             />
           </div>
-          <div v-if="exportScope === 'dateRange'" class="mt-3 flex flex-wrap items-center gap-3">
+          <div v-if="exportScope === 'dateRange'" :class="['mt-3 flex flex-wrap items-center gap-3', isIos ? 'flex-col items-stretch' : '']">
             <input
               v-model="exportDateStart"
               type="date"
-              :class="['rounded border px-2 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
+              :class="[isIos ? 'w-full' : '', 'rounded border px-2 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
             />
-            <span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">to</span>
+            <span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500', isIos ? 'self-center' : '']">to</span>
             <input
               v-model="exportDateEnd"
               type="date"
-              :class="['rounded border px-2 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
+              :class="[isIos ? 'w-full' : '', 'rounded border px-2 py-1.5 text-sm font-quicksand', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
             />
           </div>
           <div v-if="exportScope === 'aircraft'" class="mt-3 max-h-40 overflow-y-auto rounded-lg border p-2" :class="[isDarkMode ? 'border-gray-700 bg-gray-900/30' : 'border-gray-300 bg-gray-50']">
@@ -6486,14 +6530,14 @@
                 ]"
                 @click="toggleExportPreviewEntry(entry.id)"
               >
-                <div class="flex items-center justify-between">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-3">
-                      <div :class="['text-sm font-bold font-mono', isDarkMode ? 'text-white' : 'text-gray-900']">{{ formatDisplayDate(entry.date) }}</div>
-                      <div :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">{{ entry.registration }}</div>
-                      <div :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">{{ entry.aircraftMakeModel }}</div>
+                <div class="flex items-center justify-between gap-2 min-w-0">
+                  <div class="flex-1 min-w-0">
+                    <div :class="['flex gap-2 min-w-0', isIos ? 'flex-col items-start' : 'items-center gap-3']">
+                      <div :class="['text-sm font-bold font-mono shrink-0', isDarkMode ? 'text-white' : 'text-gray-900']">{{ formatDisplayDate(entry.date) }}</div>
+                      <div :class="['text-sm font-quicksand shrink-0', isDarkMode ? 'text-gray-300' : 'text-gray-700']">{{ entry.registration }}</div>
+                      <div :class="['text-sm font-quicksand min-w-0 truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">{{ entry.aircraftMakeModel }}</div>
                     </div>
-                    <div class="flex items-center gap-2 mt-1">
+                    <div class="flex items-center gap-2 mt-1 flex-wrap">
                       <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">{{ entry.departure }} → {{ entry.destination }}</div>
                       <div :class="['text-xs font-mono', isDarkMode ? 'text-blue-400' : 'text-blue-600']">{{ (entry.flightTime.total ?? 0).toFixed(1) }}h</div>
                     </div>
@@ -6501,7 +6545,7 @@
                   <Icon 
                     :name="expandedExportPreviewEntries.has(entry.id) ? 'ri:arrow-up-s-line' : 'ri:arrow-down-s-line'" 
                     size="20" 
-                    :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+                    :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500', 'shrink-0']"
                   />
                 </div>
                 <div v-if="expandedExportPreviewEntries.has(entry.id)" class="mt-3 pt-3 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
@@ -6527,11 +6571,18 @@
         </div>
       </div>
 
-      <div class="flex items-center justify-end gap-3 p-6 border-t flex-shrink-0" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
+      <div
+        :class="[
+          'flex flex-shrink-0 border-t',
+          isIos ? 'flex-col-reverse gap-2 p-4' : 'items-center justify-end gap-3 p-6',
+          isDarkMode ? 'border-gray-700' : 'border-gray-300',
+        ]"
+      >
         <button
           @click="closeExportDialog"
           :class="[
             'px-4 py-2 rounded-lg font-quicksand transition-colors',
+            isIos ? 'w-full text-center' : '',
             isDarkMode 
               ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20' 
               : 'bg-gray-300 hover:bg-gray-400 text-gray-900'
@@ -6544,6 +6595,7 @@
           @click="handleExportCsv(exportFilteredEntries); closeExportDialog()"
           :class="[
             'px-4 py-2 rounded-lg font-quicksand transition-colors flex items-center gap-2',
+            isIos ? 'w-full justify-center' : '',
             !exportPreviewStatistics || exportFilteredEntries.length === 0
               ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
               : 'bg-blue-600 hover:bg-blue-700 text-white'
@@ -6557,6 +6609,7 @@
           @click="exportToJSON(exportFilteredEntries); closeExportDialog()"
           :class="[
             'px-4 py-2 rounded-lg font-quicksand transition-colors flex items-center gap-2',
+            isIos ? 'w-full justify-center' : '',
             !exportPreviewStatistics || exportFilteredEntries.length === 0
               ? (isDarkMode ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-gray-300 text-gray-400 cursor-not-allowed')
               : 'bg-blue-600 hover:bg-blue-700 text-white'
@@ -6997,7 +7050,7 @@ const { validateEntry: validateEntryIntegrity } = useDataIntegrity()
 const { validateEntry: validateFlightTimeEntry, validationErrors, validationWarnings, hasErrors, hasWarnings, clearValidation } = useValidation()
 
 // Offline support
-const { isOnline, isSyncing, syncProgress, updateSyncProgress, checkOnlineStatus } = useOffline()
+const { isOnline, connectivityReady, isSyncing, syncProgress, updateSyncProgress, checkOnlineStatus } = useOffline()
 const { showToast } = useToast()
 const {
   fetchSignaturesForEntries,
@@ -7068,18 +7121,21 @@ const {
 
 // Computed properties for offline UI
 const syncStatusIcon = computed(() => {
+  if (!connectivityReady.value) return 'ri:loader-4-line'
   if (!isOnline.value) return 'ri:wifi-off-line'
   if (isSyncing.value) return 'ri:loader-4-line'
   return 'ri:wifi-line'
 })
 
 const syncStatusText = computed(() => {
+  if (!connectivityReady.value) return 'Checking…'
   if (!isOnline.value) return 'Offline'
   if (isSyncing.value) return 'Syncing'
   return 'Online'
 })
 
 const syncStatusTitle = computed(() => {
+  if (!connectivityReady.value) return 'Checking connectivity…'
   if (!isOnline.value) return 'Offline'
   if (isSyncing.value) return 'Syncing...'
   return 'Online'
@@ -7282,6 +7338,19 @@ watch(
       }
       await onUserSessionReady(newUserId)
     } else {
+      // At altitude the SDK may wipe tokens; keep local logbook if we still have
+      // an offline identity snapshot (useAuth normally retains session — this is a safety net).
+      const { readOfflineSessionSnapshot } = await import('~/utils/cachedSupabaseSession')
+      const offlineSnapshot = readOfflineSessionSnapshot()
+      const cloudOffline =
+        !connectivityReady.value ||
+        !isOnline.value ||
+        (typeof navigator !== 'undefined' && navigator.onLine === false)
+      if (cloudOffline && offlineSnapshot?.user?.id) {
+        console.warn('[dashboard] Ignoring null auth while offline; keeping local session UX')
+        return
+      }
+
       stopBackgroundSync()
       setActiveUserId(null)
       logEntries.value = []
@@ -7369,8 +7438,8 @@ onMounted(async () => {
 function handleAppResume(): void {
   if (document.visibilityState !== 'visible') return
   if (!isAuthenticated.value || !user.value || isProcessing.value) return
-  void processQueue({ silent: true })
   if (!isOnline.value) return
+  void processQueue({ silent: true })
   if (!isMigrating.value) {
     void loadEntries({ mode: 'delta', skipIfFresh: true })
   }

@@ -1,8 +1,15 @@
 import { ref, computed } from 'vue'
 import type { User, Session } from '@supabase/supabase-js'
 import { supabase, isSupabaseAvailable } from '~/lib/supabase'
-import { readCachedSupabaseSession } from '~/utils/cachedSupabaseSession'
+import {
+  readBestCachedSession,
+  readCachedSupabaseSession,
+  readOfflineSessionSnapshot,
+  writeOfflineSessionSnapshot,
+  clearOfflineSessionSnapshot,
+} from '~/utils/cachedSupabaseSession'
 import { withTimeout } from '~/utils/promiseTimeout'
+import { useOffline } from './useOffline'
 
 // Shared state across all instances of useAuth
 const globalUser = ref<User | null>(null)
@@ -12,10 +19,56 @@ const globalError = ref<string | null>(null)
 const isPasswordRecoverySession = ref(false)
 let authInitialized = false
 let authStateSubscription: { unsubscribe: () => void } | null = null
+/** True while an explicit user-initiated signOut is in flight. */
+let explicitSignOutInProgress = false
+
+function browserReportsOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false
+}
+
+function shouldRetainSessionOffline(): boolean {
+  if (explicitSignOutInProgress) return false
+  if (browserReportsOffline()) return true
+  try {
+    const { isOnline, connectivityReady } = useOffline()
+    if (!connectivityReady.value) return true
+    return !isOnline.value
+  } catch {
+    return browserReportsOffline()
+  }
+}
+
+function applySession(next: Session | null) {
+  globalSession.value = next
+  globalUser.value = next?.user ?? null
+  if (next?.access_token && next.refresh_token) {
+    writeOfflineSessionSnapshot(next)
+  }
+}
+
+function retainOfflineSession(reason: string): boolean {
+  if (!shouldRetainSessionOffline()) return false
+
+  const snapshot =
+    globalSession.value ??
+    readOfflineSessionSnapshot() ??
+    readCachedSupabaseSession() ??
+    readBestCachedSession()
+
+  if (!snapshot?.user || !snapshot.access_token) {
+    return false
+  }
+
+  console.warn(`[useAuth] Retaining offline session after ${reason}`)
+  globalSession.value = snapshot
+  globalUser.value = snapshot.user
+  writeOfflineSessionSnapshot(snapshot)
+  return true
+}
 
 if (typeof window !== 'undefined') {
   try {
-    const cachedSession = readCachedSupabaseSession()
+    const cachedSession = readBestCachedSession()
     if (cachedSession) {
       globalSession.value = cachedSession
       globalUser.value = cachedSession.user ?? null
@@ -51,7 +104,7 @@ export const useAuth = () => {
     try {
       error.value = null
 
-      const cachedSession = readCachedSupabaseSession()
+      const cachedSession = readBestCachedSession()
       if (cachedSession) {
         session.value = cachedSession
         user.value = cachedSession.user ?? null
@@ -73,15 +126,27 @@ export const useAuth = () => {
               isPasswordRecoverySession.value = false
             }
             if (event === 'SIGNED_OUT') {
+              if (retainOfflineSession('SIGNED_OUT')) {
+                return
+              }
               console.log('User signed out')
               isPasswordRecoverySession.value = false
               user.value = null
               session.value = null
+              clearOfflineSessionSnapshot()
               return
             }
 
-            session.value = newSession
-            user.value = newSession?.user ?? null
+            if (!newSession) {
+              if (retainOfflineSession(`${event}:null-session`)) {
+                return
+              }
+              session.value = null
+              user.value = null
+              return
+            }
+
+            applySession(newSession)
 
             if (event === 'TOKEN_REFRESHED') {
               console.log('Token refreshed successfully')
@@ -102,8 +167,12 @@ export const useAuth = () => {
           throw sessionError
         }
 
-        session.value = currentSession
-        user.value = currentSession?.user ?? null
+        if (currentSession) {
+          applySession(currentSession)
+        } else if (!retainOfflineSession('getSession-null')) {
+          session.value = null
+          user.value = null
+        }
       }
 
       authInitialized = true
@@ -112,7 +181,7 @@ export const useAuth = () => {
       error.value = err instanceof Error ? err.message : 'Failed to initialize authentication'
 
       if (!session.value) {
-        const cachedSession = readCachedSupabaseSession()
+        const cachedSession = readBestCachedSession()
         if (cachedSession) {
           session.value = cachedSession
           user.value = cachedSession.user ?? null
@@ -125,6 +194,53 @@ export const useAuth = () => {
       authInitialized = true
     } finally {
       isLoading.value = false
+    }
+  }
+
+  /**
+   * Re-inject app snapshot into the SDK after a wipe, then resume auto-refresh.
+   * Call when cloud connectivity returns.
+   */
+  const restoreSessionAfterReconnect = async (): Promise<boolean> => {
+    if (!isSupabaseAvailable()) return false
+
+    try {
+      const { data: { session: current } } = await supabase.auth.getSession()
+      if (current?.access_token) {
+        applySession(current)
+        return true
+      }
+
+      const snapshot = readOfflineSessionSnapshot() ?? session.value
+      if (!snapshot?.access_token || !snapshot.refresh_token) {
+        return false
+      }
+
+      const { data, error: setError } = await supabase.auth.setSession({
+        access_token: snapshot.access_token,
+        refresh_token: snapshot.refresh_token,
+      })
+
+      if (setError) {
+        console.warn('[useAuth] setSession after reconnect failed:', setError.message)
+        // Keep offline snapshot for local UX; true sign-out only on explicit logout.
+        if (shouldRetainSessionOffline() || browserReportsOffline()) {
+          applySession(snapshot)
+          return true
+        }
+        return false
+      }
+
+      if (data.session) {
+        applySession(data.session)
+        return true
+      }
+
+      applySession(snapshot)
+      return true
+    } catch (err) {
+      console.warn('[useAuth] restoreSessionAfterReconnect failed:', err)
+      return retainOfflineSession('restore-failed')
     }
   }
 
@@ -151,7 +267,9 @@ export const useAuth = () => {
         throw signUpError
       }
 
-      if (data.user) {
+      if (data.user && data.session) {
+        applySession(data.session)
+      } else if (data.user) {
         user.value = data.user
         session.value = data.session
       }
@@ -190,8 +308,7 @@ export const useAuth = () => {
       }
 
       if (data.user && data.session) {
-        user.value = data.user
-        session.value = data.session
+        applySession(data.session)
       }
 
       return { success: true, user: data.user, session: data.session }
@@ -207,9 +324,12 @@ export const useAuth = () => {
 
   // Sign out current user
   const signOut = async () => {
+    explicitSignOutInProgress = true
     try {
       isLoading.value = true
       error.value = null
+
+      clearOfflineSessionSnapshot()
 
       const { error: signOutError } = await supabase.auth.signOut()
 
@@ -225,8 +345,13 @@ export const useAuth = () => {
       const errorMessage = err instanceof Error ? err.message : 'Failed to sign out'
       error.value = errorMessage
       console.error('Sign out error:', err)
+      // Still clear local state on explicit logout even if network signOut fails.
+      user.value = null
+      session.value = null
+      clearOfflineSessionSnapshot()
       return { success: false, error: errorMessage }
     } finally {
+      explicitSignOutInProgress = false
       isLoading.value = false
     }
   }
@@ -335,8 +460,7 @@ export const useAuth = () => {
       }
 
       if (data.session) {
-        session.value = data.session
-        user.value = data.session.user
+        applySession(data.session)
       }
 
       return { success: true, session: data.session }
@@ -362,7 +486,22 @@ export const useAuth = () => {
     resetPassword,
     completePasswordReset,
     refreshSession,
+    restoreSessionAfterReconnect,
     initAuth,
   }
 }
 
+/** Test-only: reset module singletons between vitest cases. */
+export function __resetAuthForTests() {
+  if (authStateSubscription) {
+    authStateSubscription.unsubscribe()
+    authStateSubscription = null
+  }
+  authInitialized = false
+  explicitSignOutInProgress = false
+  isPasswordRecoverySession.value = false
+  globalUser.value = null
+  globalSession.value = null
+  globalIsLoading.value = true
+  globalError.value = null
+}

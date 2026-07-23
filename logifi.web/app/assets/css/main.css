@@ -14,6 +14,13 @@
   z-index: 90;
 }
 
+/* Prevent iOS WKWebView focus-zoom on form controls (<16px triggers auto-zoom). */
+html.capacitor-ios input:not([type='checkbox']):not([type='radio']):not([type='range']),
+html.capacitor-ios select,
+html.capacitor-ios textarea {
+  font-size: 16px !important;
+}
+
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }

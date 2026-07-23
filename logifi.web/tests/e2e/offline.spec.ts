@@ -62,17 +62,16 @@ test.describe('Offline Functionality', () => {
 
     const storageKey = `sb-${new URL(supabaseUrl!).hostname.split('.')[0]}-auth-token`
     await page.addInitScript(({ key }) => {
-      localStorage.setItem(
-        key,
-        JSON.stringify({
-          access_token: 'offline-test-token',
-          refresh_token: 'offline-test-refresh',
-          expires_in: 3600,
-          expires_at: Math.floor(Date.now() / 1000) + 3600,
-          token_type: 'bearer',
-          user: { id: 'offline-user', email: 'offline@example.com' },
-        })
-      )
+      const session = {
+        access_token: 'offline-test-token',
+        refresh_token: 'offline-test-refresh',
+        expires_in: 3600,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        token_type: 'bearer',
+        user: { id: 'offline-user', email: 'offline@example.com' },
+      }
+      localStorage.setItem(key, JSON.stringify(session))
+      localStorage.setItem('logifi-offline-session', JSON.stringify(session))
     }, { key: storageKey })
 
     await page.route('**/*supabase.co/**', async (route) => {
@@ -85,6 +84,34 @@ test.describe('Offline Functionality', () => {
 
     await expect(page.locator('#app-splash')).toHaveCount(0, { timeout: 10000 })
     await expect(page.getByText('Loading Logifi…')).not.toBeVisible({ timeout: 10000 })
+  })
+
+  test('does not treat browser-online alone as cloud-online for sync status', async ({ page, context }) => {
+    await page.goto('/dashboard')
+    await page.waitForLoadState('domcontentloaded')
+
+    // Block Supabase while leaving navigator.onLine true (altitude-like).
+    await page.route('**/auth/v1/health**', (route) => route.abort())
+    await page.route('**/*supabase.co/**', (route) => route.abort())
+    await page.evaluate(() => window.dispatchEvent(new Event('online')))
+
+    const settingsButton = page.getByRole('button', { name: /settings/i }).first()
+    if (!(await settingsButton.count())) {
+      test.skip(true, 'Settings button not available')
+      return
+    }
+    await settingsButton.click()
+
+    const statusIndicator = page.locator('[data-testid="online-status"]').first()
+    if (!(await statusIndicator.count())) {
+      test.skip(true, 'Online status indicator not available')
+      return
+    }
+
+    await expect(statusIndicator).toContainText(/Offline|Checking/i, { timeout: 15000 })
+    // Keep context online so we are not testing navigator.onLine===false.
+    expect(await page.evaluate(() => navigator.onLine)).toBe(true)
+    await context.setOffline(false)
   })
 
   test('sync queue can be inspected after offline save attempt', async ({ page, context }) => {
