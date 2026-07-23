@@ -5,7 +5,7 @@ import { scanLogbookImage } from '../../server/utils/digifiExtractor'
 vi.mock('../../server/utils/digifiGemini', () => ({
   scanLogbookImageWithGemini: vi.fn(async () => ({
     rows: [],
-    modelUsed: 'gemini-3.5-flash',
+    modelUsed: 'gemini-3.6-flash',
     providerUsed: 'gemini',
     strategyUsed: 'page-overview',
     chunkCount: 0,
@@ -13,7 +13,7 @@ vi.mock('../../server/utils/digifiGemini', () => ({
     rescueRecoveredCount: 0,
     duplicateRowIndices: [],
     fallbackUsed: false,
-    modelsAttempted: ['gemini-3.5-flash'],
+    modelsAttempted: ['gemini-3.6-flash'],
     apiCallCount: 1,
     timings: { primaryMs: 1, rescueMs: 0, totalMs: 1 },
   })),
@@ -73,7 +73,7 @@ describe('scanLogbookImage factory', () => {
     vi.stubGlobal('useRuntimeConfig', () => ({
       geminiApiKey: '',
       anthropicApiKey: '',
-      digifiModel: 'gemini-3.5-flash',
+      digifiModel: 'gemini-3.6-flash',
       digifiModelFallbacks: '',
       digifiEnableCapacityModelFallback: '',
       digifiMaxScansPerDay: 10,
@@ -86,7 +86,7 @@ describe('scanLogbookImage factory', () => {
   })
 
   it('calls Gemini adapter when model is gemini and key is set', async () => {
-    process.env.NUXT_DIGIFI_MODEL = 'gemini-3.5-flash'
+    process.env.NUXT_DIGIFI_MODEL = 'gemini-3.6-flash'
     process.env.GEMINI_API_KEY = 'test-gemini'
     delete process.env.ANTHROPIC_API_KEY
 

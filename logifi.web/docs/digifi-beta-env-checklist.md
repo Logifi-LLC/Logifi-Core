@@ -17,9 +17,9 @@ Compare these between local `.env` and the beta host (Coolify, Vercel, etc.):
 
 | Variable | Default if unset | Notes |
 |----------|------------------|-------|
-| `DIGIFI_MODEL` / `NUXT_DIGIFI_MODEL` | `gemini-3.5-flash` | Weaker or legacy models reduce OCR quality. Use `claude-sonnet-4-6` for Claude A/B tests (requires `ANTHROPIC_API_KEY`). Retired ids like `claude-3-5-sonnet-20241022` are auto-mapped to `claude-sonnet-4-6`. |
-| `DIGIFI_ENABLE_CAPACITY_MODEL_FALLBACK` | `true` | On 429/503, may fall back to `gemini-3-flash-preview` (logged server-side). |
-| `DIGIFI_MODEL_FALLBACKS` | (empty) | Comma-separated extra models when capacity fallback is on. |
+| `DIGIFI_MODEL` / `NUXT_DIGIFI_MODEL` | `gemini-3.6-flash` | Weaker or legacy models reduce OCR quality. Use `gemini-3.5-flash` or `claude-sonnet-4-6` for A/B tests (Claude requires `ANTHROPIC_API_KEY`). Retired ids like `claude-3-5-sonnet-20241022` are auto-mapped to `claude-sonnet-4-6`. |
+| `DIGIFI_ENABLE_CAPACITY_MODEL_FALLBACK` | `true` | On 429/503, may fall back to `gemini-3.5-flash` (logged server-side). |
+| `DIGIFI_MODEL_FALLBACKS` | (empty) | Comma-separated extra models when capacity fallback is on. Default chain adds `gemini-3.5-flash` if unset. |
 | `DIGIFI_SEND_ROW_BANDS` | `true` | Set to `false` only if intentionally disabling client row-band crops (`disableRowBandsToGemini`). |
 | `DIGIFI_ENABLE_RESCUE_SCAN` | `false` | Second Gemini pass for missing rows; costs extra latency/credits. |
 | `DIGIFI_GEMINI_MEDIA_RESOLUTION` | `MEDIA_RESOLUTION_HIGH` | `LOW` reduces accuracy. |

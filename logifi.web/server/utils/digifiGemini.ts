@@ -2,6 +2,7 @@ import {
   buildDigifiThinkingConfig,
   computeDigifiMaxOutputTokens,
   getDigifiEnv,
+  omitsDigifiGeminiSamplingParams,
   resolveDigifiMediaResolution,
   resolveDigifiThinkingLevel,
   shouldTryNextDigifiModel,
@@ -92,14 +93,19 @@ async function callGeminiRowsOnModel(
 
   const thinkingConfig = buildDigifiThinkingConfig(model, generation.thinkingLevel)
 
+  const generationConfig: Record<string, unknown> = {
+    maxOutputTokens: generation.maxOutputTokens,
+    mediaResolution: generation.mediaResolution,
+    thinkingConfig,
+  }
+  // 3.6 Flash deprecates sampling params (ignored now; may 400 later). Keep 0.1 for older Gemini.
+  if (!omitsDigifiGeminiSamplingParams(model)) {
+    generationConfig.temperature = 0.1
+  }
+
   const body = {
     contents: [{ parts }],
-    generationConfig: {
-      temperature: 0.1,
-      maxOutputTokens: generation.maxOutputTokens,
-      mediaResolution: generation.mediaResolution,
-      thinkingConfig,
-    },
+    generationConfig,
   }
 
   let lastError: DigifiExtractorError | null = null

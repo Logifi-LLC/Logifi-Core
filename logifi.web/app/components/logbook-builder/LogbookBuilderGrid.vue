@@ -1237,9 +1237,14 @@ function getDigifiCellMeta(rowIdx: number, colId: string) {
 
 function getDigifiSuggestions(rowIdx: number, colId: string, fieldKey: string | null) {
   if (fieldKey === 'pilots') return builderPilotSuggestions.value
-  if (fieldKey !== 'identification') return []
   const fromMeta = getDigifiCellMeta(rowIdx, colId)?.candidates?.map((candidate) => candidate.value) ?? []
-  return Array.from(new Set([...fromMeta, ...identificationUsedOnPage.value]))
+  if (fieldKey === 'identification') {
+    return Array.from(new Set([...fromMeta, ...identificationUsedOnPage.value]))
+  }
+  if (fieldKey === 'departure' || fieldKey === 'destination' || fieldKey === 'route') {
+    return Array.from(new Set(fromMeta))
+  }
+  return []
 }
 
 function getDigifiCellTitle(rowIdx: number, colId: string): string | undefined {

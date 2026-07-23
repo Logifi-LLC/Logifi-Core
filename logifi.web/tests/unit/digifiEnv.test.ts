@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   buildDigifiModelChain,
   buildDigifiThinkingConfig,
+  DEFAULT_GEMINI_DIGIFI_MODEL,
   inferDigifiProvider,
   isDigifiConfigured,
   normalizeDigifiModelId,
+  omitsDigifiGeminiSamplingParams,
   resolveDigifiThinkingLevel,
   shouldTryNextDigifiModel,
 } from '../../server/utils/digifiEnv'
@@ -13,29 +15,38 @@ describe('buildDigifiModelChain', () => {
   it('puts primary first and dedupes fallbacks', () => {
     expect(
       buildDigifiModelChain(
-        'gemini-3.5-flash',
-        ['gemini-3-flash-preview', 'gemini-3.5-flash'],
-        ['gemini-3.1-flash-lite', 'gemini-3-flash-preview']
+        'gemini-3.6-flash',
+        ['gemini-3.5-flash', 'gemini-3.6-flash'],
+        ['gemini-3.1-flash-lite', 'gemini-3.5-flash']
       )
-    ).toEqual(['gemini-3.5-flash', 'gemini-3-flash-preview'])
+    ).toEqual(['gemini-3.6-flash', 'gemini-3.5-flash'])
   })
 
   it('uses defaults when no configured fallbacks', () => {
     expect(
-      buildDigifiModelChain('gemini-3.1-pro', [], ['gemini-3.5-flash', 'gemini-3-flash-preview'])
-    ).toEqual(['gemini-3.1-pro', 'gemini-3.5-flash', 'gemini-3-flash-preview'])
+      buildDigifiModelChain('gemini-3.1-pro', [], ['gemini-3.5-flash'])
+    ).toEqual(['gemini-3.1-pro', 'gemini-3.5-flash'])
   })
 
-  it('default capacity fallback chain is 3.5 flash then 3 flash preview', () => {
+  it('default capacity fallback chain is 3.6 flash then 3.5 flash', () => {
     expect(
-      buildDigifiModelChain('gemini-3.5-flash', [], ['gemini-3-flash-preview'])
-    ).toEqual(['gemini-3.5-flash', 'gemini-3-flash-preview'])
+      buildDigifiModelChain(DEFAULT_GEMINI_DIGIFI_MODEL, [], ['gemini-3.5-flash'])
+    ).toEqual(['gemini-3.6-flash', 'gemini-3.5-flash'])
   })
 
-  it('normalizes legacy Pro ids to 3.5 flash', () => {
+  it('normalizes legacy Pro ids to 3.5 flash (not 3.6)', () => {
     expect(normalizeDigifiModelId('gemini-3.1-pro')).toBe('gemini-3.5-flash')
     expect(normalizeDigifiModelId('gemini-3.1-pro-preview')).toBe('gemini-3.5-flash')
     expect(normalizeDigifiModelId('gemini-3.5-flash')).toBe('gemini-3.5-flash')
+    expect(normalizeDigifiModelId('gemini-3.6-flash')).toBe('gemini-3.6-flash')
+  })
+})
+
+describe('omitsDigifiGeminiSamplingParams', () => {
+  it('omits temperature for Gemini 3.6 models only', () => {
+    expect(omitsDigifiGeminiSamplingParams('gemini-3.6-flash')).toBe(true)
+    expect(omitsDigifiGeminiSamplingParams('gemini-3.5-flash')).toBe(false)
+    expect(omitsDigifiGeminiSamplingParams('gemini-3-flash-preview')).toBe(false)
   })
 })
 
@@ -46,7 +57,7 @@ describe('inferDigifiProvider', () => {
   })
 
   it('defaults to gemini for non-claude models', () => {
-    expect(inferDigifiProvider('gemini-3.5-flash')).toBe('gemini')
+    expect(inferDigifiProvider('gemini-3.6-flash')).toBe('gemini')
   })
 })
 
@@ -76,14 +87,14 @@ describe('resolveDigifiThinkingLevel', () => {
 })
 
 describe('buildDigifiThinkingConfig', () => {
-  it('uses thinkingLevel low for Gemini 3.5 Flash (REST thinkingConfig)', () => {
-    expect(buildDigifiThinkingConfig('gemini-3.5-flash', 'low')).toEqual({
+  it('uses thinkingLevel low for Gemini 3.6 Flash (REST thinkingConfig)', () => {
+    expect(buildDigifiThinkingConfig('gemini-3.6-flash', 'low')).toEqual({
       thinkingLevel: 'low',
     })
   })
 
   it('uses thinkingLevel for other Gemini 3.x models', () => {
-    expect(buildDigifiThinkingConfig('gemini-3-flash-preview', 'low')).toEqual({
+    expect(buildDigifiThinkingConfig('gemini-3.5-flash', 'low')).toEqual({
       thinkingLevel: 'low',
     })
   })
@@ -102,7 +113,7 @@ describe('isDigifiConfigured', () => {
     vi.stubGlobal('useRuntimeConfig', () => ({
       geminiApiKey: '',
       anthropicApiKey: '',
-      digifiModel: 'gemini-3.5-flash',
+      digifiModel: 'gemini-3.6-flash',
       digifiModelFallbacks: '',
       digifiEnableCapacityModelFallback: '',
       digifiMaxScansPerDay: 10,
@@ -115,7 +126,7 @@ describe('isDigifiConfigured', () => {
   })
 
   it('requires gemini key for gemini models', () => {
-    process.env.NUXT_DIGIFI_MODEL = 'gemini-3.5-flash'
+    process.env.NUXT_DIGIFI_MODEL = 'gemini-3.6-flash'
     process.env.GEMINI_API_KEY = 'test-gemini'
     delete process.env.ANTHROPIC_API_KEY
     expect(isDigifiConfigured()).toBe(true)

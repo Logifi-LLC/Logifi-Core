@@ -329,7 +329,7 @@ export function useLogbookBuilderDigifi() {
       const rowWarning = formatDigifiScanWarning(diagnostics, rowCount.value)
       const reviewWarning =
         (result.reviewMessages?.length ?? 0) > 0
-          ? `${result.reviewRequiredCount ?? result.reviewMessages?.length ?? 0} identification value(s) need review.`
+          ? `${result.reviewRequiredCount ?? result.reviewMessages?.length ?? 0} identification/airport value(s) need review.`
           : null
       const fallbackWarning =
         result.fallbackUsed && (result.modelsAttempted?.length ?? 0) > 1

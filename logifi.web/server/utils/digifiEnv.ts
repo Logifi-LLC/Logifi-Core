@@ -11,8 +11,11 @@ const pick = (...candidates: unknown[]) => {
 import type { DigifiExtractorErrorCode, DigifiProvider } from './digifiExtractorTypes'
 
 /** Stay in the Gemini 3.x line — avoid silent downgrade to 2.x (much weaker for logbook OCR). */
-/** Used only when 3.5 Flash hits capacity/outage (429/503/etc.), not for weak OCR. */
-const DEFAULT_MODEL_FALLBACKS = ['gemini-3-flash-preview']
+/** Used only when 3.6 Flash hits capacity/outage (429/503/etc.), not for weak OCR. */
+const DEFAULT_MODEL_FALLBACKS = ['gemini-3.5-flash']
+
+/** Paid-tier Digifi default (Gemini path). */
+export const DEFAULT_GEMINI_DIGIFI_MODEL = 'gemini-3.6-flash'
 
 /** Current Anthropic Sonnet with vision — retired 3.5 snapshots map here. */
 export const DEFAULT_CLAUDE_DIGIFI_MODEL = 'claude-sonnet-4-6'
@@ -29,7 +32,11 @@ export function inferDigifiProvider(modelId: string): DigifiProvider {
   return 'gemini'
 }
 
-/** Paid-tier default is gemini-3.5-flash; map legacy Pro ids to 3.5 Flash. */
+/**
+ * Paid-tier default is gemini-3.6-flash.
+ * Legacy Pro ids map to 3.5 Flash (not 3.6) so env A/B against 3.5 stays intentional.
+ * Do not auto-remap gemini-3.5-flash → 3.6.
+ */
 export function normalizeDigifiModelId(model: string): string {
   const trimmed = model.trim()
   if (
@@ -41,6 +48,14 @@ export function normalizeDigifiModelId(model: string): string {
   const claudeAlias = CLAUDE_MODEL_ALIASES[trimmed.toLowerCase()]
   if (claudeAlias) return claudeAlias
   return trimmed
+}
+
+/**
+ * Gemini 3.6 Flash deprecates temperature/topP/topK (ignored now; may 400 later).
+ * @see https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash
+ */
+export function omitsDigifiGeminiSamplingParams(model: string): boolean {
+  return /gemini-3\.6/i.test(model.trim())
 }
 
 /** Flash-Lite is excluded from automatic fallbacks (poor logbook OCR). */
@@ -73,7 +88,7 @@ export function buildDigifiModelChain(
   return chain
 }
 
-/** Primary gemini-3.5-flash; optional fallbacks when enableCapacityModelFallback is true. */
+/** Primary gemini-3.6-flash; optional fallbacks when enableCapacityModelFallback is true. */
 export function getDigifiModelChain(): string[] {
   const env = getDigifiEnv()
   if (inferDigifiProvider(env.model) === 'anthropic') {
@@ -128,7 +143,7 @@ export function getDigifiEnv() {
         process.env.NUXT_DIGIFI_MODEL,
         process.env.DIGIFI_MODEL,
         config.digifiModel
-      ) || 'gemini-3.5-flash'
+      ) || DEFAULT_GEMINI_DIGIFI_MODEL
     ),
     modelFallbacks: modelFallbacksRaw ? parseModelList(modelFallbacksRaw) : [],
     maxScansPerDay: Math.max(
@@ -158,7 +173,7 @@ export function getDigifiEnv() {
         )
       )
     ),
-    /** When true (default), try gemini-3-flash-preview if 3.5 is unavailable (429/503/404). */
+    /** When true (default), try gemini-3.5-flash if 3.6 is unavailable (429/503/404). */
     enableCapacityModelFallback:
       capacityFallbackRaw === ''
         ? true
@@ -266,7 +281,7 @@ export function digifiModelUnavailableMessage(env = getDigifiEnv()): string {
   if (provider === 'anthropic') {
     return `The Claude scan model (${env.model}) is not available on this API key. Set NUXT_DIGIFI_MODEL=${DEFAULT_CLAUDE_DIGIFI_MODEL} in .env and restart the dev server.`
   }
-  return 'The AI scan model is not available on this API key. Restart the dev server after pulling latest config, or set NUXT_DIGIFI_MODEL=gemini-3.5-flash in .env.'
+  return `The AI scan model is not available on this API key. Restart the dev server after pulling latest config, or set NUXT_DIGIFI_MODEL=${DEFAULT_GEMINI_DIGIFI_MODEL} in .env.`
 }
 
 const GEMINI_THINKING_LEVELS = ['minimal', 'low', 'medium', 'high'] as const
@@ -287,7 +302,7 @@ function parseClaudeTemperature(value: string): number {
 }
 
 /**
- * Gemini 3.x (incl. 3.5 Flash): thinkingConfig.thinkingLevel only — never mix with thinkingBudget.
+ * Gemini 3.x (incl. 3.5 / 3.6 Flash): thinkingConfig.thinkingLevel only — never mix with thinkingBudget.
  * Gemini 2.5: thinkingBudget 0 (2.5 does not use thinkingLevel).
  * @see https://ai.google.dev/gemini-api/docs/thinking
  */

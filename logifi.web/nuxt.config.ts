@@ -91,7 +91,7 @@ export default defineNuxtConfig({
     // Digifi paper logbook scan (server-only)
     geminiApiKey: process.env.GEMINI_API_KEY || '',
     anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
-    digifiModel: process.env.NUXT_DIGIFI_MODEL || process.env.DIGIFI_MODEL || 'gemini-3.5-flash',
+    digifiModel: process.env.NUXT_DIGIFI_MODEL || process.env.DIGIFI_MODEL || 'gemini-3.6-flash',
     digifiModelFallbacks: process.env.NUXT_DIGIFI_MODEL_FALLBACKS || process.env.DIGIFI_MODEL_FALLBACKS || '',
     digifiEnableCapacityModelFallback: process.env.NUXT_DIGIFI_ENABLE_CAPACITY_MODEL_FALLBACK || '',
     digifiMaxScansPerDay: parseInt(process.env.NUXT_DIGIFI_MAX_SCANS_PER_DAY || process.env.DIGIFI_MAX_SCANS_PER_DAY || '10', 10) || 10,

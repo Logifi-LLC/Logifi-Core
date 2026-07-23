@@ -2,9 +2,9 @@ import {
   buildDigifiFeedbackContextFromRow,
   buildDigifiFeedbackContextKey,
   normalizeDigifiAircraftText,
-  normalizeDigifiFeedbackValue,
   normalizeDigifiRegistrationKey,
   type DigifiCorrectionFeedbackContext,
+  type DigifiCorrectionFeedbackRow,
 } from '../../app/utils/digifiFeedback'
 import {
   buildAircraftTailIndex,
@@ -17,28 +17,25 @@ import type {
   DigifiScanRow,
   DigifiTemplateColumn,
 } from '../../app/utils/digifiTypes'
+import {
+  buildDigifiAirportIndex,
+  loadAirportCorrectionFeedbackRows,
+  loadCatalogAirportRows,
+  personalizeDigifiAirportCells,
+} from './digifiAirportPersonalization'
 
 interface LogEntryPersonalizationRow {
   registration: string | null
   aircraft_make_model: string | null
   aircraft_category_class: string | null
+  departure?: string | null
+  destination?: string | null
+  route?: string | null
   updated_at?: string | null
 }
 
 interface CatalogAircraftRow {
   entity_id: string | null
-}
-
-export interface DigifiCorrectionFeedbackRow {
-  field_key: string | null
-  raw_value: string | null
-  raw_value_key: string | null
-  corrected_value: string | null
-  corrected_value_key: string | null
-  context_key: string | null
-  context: Record<string, unknown> | null
-  sample_count: number | null
-  last_corrected_at: string | null
 }
 
 interface RegistrationCandidateRecord {
@@ -50,6 +47,8 @@ interface RegistrationCandidateRecord {
   catalogCount: number
   lastSeenAt: string | null
 }
+
+export type { DigifiCorrectionFeedbackRow } from '../../app/utils/digifiFeedback'
 
 export interface DigifiRegistrationIndex {
   registrations: RegistrationCandidateRecord[]
@@ -189,7 +188,7 @@ async function loadRegistrationHistory(
     const to = from + HISTORY_BATCH_SIZE - 1
     const { data, error } = await (supabase
       .from('log_entries') as any)
-      .select('registration, aircraft_make_model, aircraft_category_class, updated_at')
+      .select('registration, aircraft_make_model, aircraft_category_class, departure, destination, route, updated_at')
       .eq('user_id', userId)
       .range(from, to)
 
@@ -608,7 +607,14 @@ export async function personalizeDigifiScanRows(options: {
 }): Promise<DigifiPersonalizationResult> {
   const rowsWithMeta = buildBaseCellMetaRows(options.rows, options.normalizedRows, options.columns)
   const identificationColumn = options.columns.find((column) => column.fieldKey === 'identification')
-  if (!identificationColumn) {
+  const hasAirportColumns = options.columns.some(
+    (column) =>
+      column.fieldKey === 'departure' ||
+      column.fieldKey === 'destination' ||
+      column.fieldKey === 'route'
+  )
+
+  if (!identificationColumn && !hasAirportColumns) {
     return {
       rows: rowsWithMeta,
       reviewMessages: [],
@@ -616,50 +622,82 @@ export async function personalizeDigifiScanRows(options: {
     }
   }
 
-  const [historyRows, catalogRows, feedbackRows] = await Promise.all([
-    loadRegistrationHistory(options.supabase, options.userId),
-    loadCatalogAircraftRows(options.supabase, options.userId),
-    loadCorrectionFeedbackRows(options.supabase, options.userId),
-  ])
-  const index = buildDigifiRegistrationIndex({
-    historyRows,
-    catalogRows,
-    feedbackRows,
-  })
-  const tailIndex = buildAircraftTailIndex(historyRows)
+  const [historyRows, catalogRows, feedbackRows, airportCatalogRows, airportFeedbackRows] =
+    await Promise.all([
+      loadRegistrationHistory(options.supabase, options.userId),
+      identificationColumn
+        ? loadCatalogAircraftRows(options.supabase, options.userId)
+        : Promise.resolve([]),
+      identificationColumn
+        ? loadCorrectionFeedbackRows(options.supabase, options.userId)
+        : Promise.resolve([]),
+      hasAirportColumns
+        ? loadCatalogAirportRows(options.supabase, options.userId)
+        : Promise.resolve([]),
+      hasAirportColumns
+        ? loadAirportCorrectionFeedbackRows(options.supabase, options.userId)
+        : Promise.resolve([]),
+    ])
 
   const reviewMessages: string[] = []
   let reviewRequiredCount = 0
 
-  for (const row of rowsWithMeta) {
-    const currentValue = row.cells[identificationColumn.id] ?? ''
-    if (!currentValue.trim()) continue
-    const context = buildDigifiFeedbackContextFromRow(row, options.columns)
-    const meta = resolveDigifiRegistration(
-      {
-        rawValue: row.cellMeta?.[identificationColumn.id]?.rawValue ?? currentValue,
-        normalizedValue: currentValue,
-        context,
-      },
-      index
-    )
-    row.cells[identificationColumn.id] = meta.resolvedValue
-    row.cellMeta = {
-      ...(row.cellMeta ?? {}),
-      [identificationColumn.id]: meta,
-    }
+  if (identificationColumn) {
+    const index = buildDigifiRegistrationIndex({
+      historyRows,
+      catalogRows,
+      feedbackRows,
+    })
+    const tailIndex = buildAircraftTailIndex(historyRows)
 
-    if (meta.resolvedValue.trim()) {
-      backfillDigifiAircraftFromTail(row, meta.resolvedValue, tailIndex, options.columns)
-    }
-
-    if (meta.needsReview) {
-      reviewRequiredCount += 1
-      const candidatePreview = (meta.candidates ?? []).slice(0, 3).map((candidate) => candidate.value).join(', ')
-      reviewMessages.push(
-        `Row ${row.rowIndex + 1}: review identification "${meta.rawValue || currentValue}"${candidatePreview ? ` (${candidatePreview})` : ''}.`
+    for (const row of rowsWithMeta) {
+      const currentValue = row.cells[identificationColumn.id] ?? ''
+      if (!currentValue.trim()) continue
+      const context = buildDigifiFeedbackContextFromRow(row, options.columns)
+      const meta = resolveDigifiRegistration(
+        {
+          rawValue: row.cellMeta?.[identificationColumn.id]?.rawValue ?? currentValue,
+          normalizedValue: currentValue,
+          context,
+        },
+        index
       )
+      row.cells[identificationColumn.id] = meta.resolvedValue
+      row.cellMeta = {
+        ...(row.cellMeta ?? {}),
+        [identificationColumn.id]: meta,
+      }
+
+      if (meta.resolvedValue.trim()) {
+        backfillDigifiAircraftFromTail(row, meta.resolvedValue, tailIndex, options.columns)
+      }
+
+      if (meta.needsReview) {
+        reviewRequiredCount += 1
+        const candidatePreview = (meta.candidates ?? [])
+          .slice(0, 3)
+          .map((candidate) => candidate.value)
+          .join(', ')
+        reviewMessages.push(
+          `Row ${row.rowIndex + 1}: review identification "${meta.rawValue || currentValue}"${candidatePreview ? ` (${candidatePreview})` : ''}.`
+        )
+      }
     }
+  }
+
+  if (hasAirportColumns) {
+    const airportIndex = buildDigifiAirportIndex({
+      historyRows,
+      catalogRows: airportCatalogRows,
+      feedbackRows: airportFeedbackRows,
+    })
+    const airportResult = personalizeDigifiAirportCells({
+      rows: rowsWithMeta,
+      columns: options.columns,
+      index: airportIndex,
+    })
+    reviewRequiredCount += airportResult.reviewRequiredCount
+    reviewMessages.push(...airportResult.reviewMessages)
   }
 
   return {

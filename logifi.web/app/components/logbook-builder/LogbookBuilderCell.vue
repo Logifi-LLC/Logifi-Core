@@ -114,7 +114,12 @@ export default defineComponent({
 
     const listId = computed(() => {
       if (!props.suggestions || !props.suggestions.length) return undefined
-      if (props.fieldKey === 'identification') {
+      if (
+        props.fieldKey === 'identification' ||
+        props.fieldKey === 'departure' ||
+        props.fieldKey === 'destination' ||
+        props.fieldKey === 'route'
+      ) {
         return `suggestions-${props.fieldKey}-${props.builderRow}-${props.builderCol}`
       }
       return undefined
