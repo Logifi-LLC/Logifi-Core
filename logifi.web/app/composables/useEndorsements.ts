@@ -32,6 +32,15 @@ export type CreateEndorsementInput = {
   fieldValues: Record<string, string>
 }
 
+export type RecordImportedEndorsementInput = {
+  template: EndorsementTemplate
+  fieldValues: Record<string, string>
+  instructorFullName: string
+  cfiNumber?: string
+  cfiExpiration?: string | null
+  paperSignedAt: string
+}
+
 export const useEndorsements = () => {
   const { user } = useAuth()
   const asStudent = ref<EndorsementRow[]>([])
@@ -215,6 +224,56 @@ export const useEndorsements = () => {
     }
   }
 
+  const recordImportedEndorsement = async (
+    input: RecordImportedEndorsementInput
+  ): Promise<EndorsementResult<string>> => {
+    try {
+      isLoading.value = true
+      error.value = null
+      requireUserId()
+      const name = input.instructorFullName.trim()
+      if (!name) throw new Error('Paper instructor name is required')
+      if (!input.paperSignedAt.trim()) throw new Error('Paper endorsement date is required')
+
+      const missing = missingEndorsementFields(input.template.body, input.fieldValues)
+      if (missing.length > 0) {
+        throw new Error(`Fill required fields: ${missing.join(', ')}`)
+      }
+      const rendered = renderEndorsementBody(input.template.body, input.fieldValues)
+      if (rendered.includes('{{')) {
+        throw new Error('All endorsement fields must be filled before saving')
+      }
+      const expiresAt = computeEndorsementExpiresAt(
+        input.template,
+        new Date(input.paperSignedAt)
+      )
+
+      const { data, error: rpcError } = await supabase.rpc('record_imported_endorsement', {
+        p_template_code: input.template.code,
+        p_title: input.template.title,
+        p_regulation_refs: input.template.regulationRefs,
+        p_body_template: input.template.body,
+        p_field_values: input.fieldValues,
+        p_rendered_body: rendered,
+        p_instructor_full_name: name,
+        p_cfi_number: input.cfiNumber?.trim() || null,
+        p_cfi_expiration: input.cfiExpiration?.trim() || null,
+        p_paper_signed_at: input.paperSignedAt,
+        p_expires_at: expiresAt,
+      })
+      if (rpcError) throw rpcError
+      await fetchMyEndorsements()
+      return { success: true, data: data as string }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to record paper endorsement'
+      error.value = errorMessage
+      return { success: false, error: errorMessage }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   const fetchStudentLogbookSummary = async (
     studentId: string
   ): Promise<EndorsementResult<StudentLogbookSummary>> => {
@@ -285,6 +344,7 @@ export const useEndorsements = () => {
     issueEndorsement,
     signEndorsement,
     cancelEndorsement,
+    recordImportedEndorsement,
     fetchStudentLogbookSummary,
     fetchStudentEndorsementsAsInstructor,
   }

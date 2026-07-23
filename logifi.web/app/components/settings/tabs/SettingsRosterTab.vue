@@ -253,12 +253,20 @@
                     <span
                       :class="[
                         'rounded px-1.5 py-0.5 text-[10px] uppercase font-bold tracking-wide',
-                        endorsement.instructor_id === user?.id
-                          ? (isDarkMode ? 'bg-green-900/40 text-green-300' : 'bg-green-100 text-green-800')
-                          : (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'),
+                        isPaperImportedEndorsement(endorsement)
+                          ? (isDarkMode ? 'bg-purple-900/40 text-purple-300' : 'bg-purple-100 text-purple-800')
+                          : endorsement.instructor_id === user?.id
+                            ? (isDarkMode ? 'bg-green-900/40 text-green-300' : 'bg-green-100 text-green-800')
+                            : (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'),
                       ]"
                     >
-                      {{ endorsement.instructor_id === user?.id ? 'You' : 'Other CFI' }}
+                      {{
+                        isPaperImportedEndorsement(endorsement)
+                          ? 'Paper'
+                          : endorsement.instructor_id === user?.id
+                            ? 'You'
+                            : 'Other CFI'
+                      }}
                     </span>
                   </div>
                   <p
@@ -365,7 +373,7 @@ import {
 } from '~/composables/useEndorsements'
 import { useAuth } from '~/composables/useAuth'
 import { useToast } from '~/composables/useToast'
-import { formatEndorsementSignatureBlock } from '~/utils/endorsementSignature'
+import { formatEndorsementSignatureBlock, isPaperImportedEndorsement } from '~/utils/endorsementSignature'
 import type { Database } from '~/types/database'
 import type { PilotAccountRole } from './SettingsProfileTab.vue'
 

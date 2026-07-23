@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatEndorsementSignatureBlock } from '../endorsementSignature'
+import { formatEndorsementSignatureBlock, isPaperImportedEndorsement } from '../endorsementSignature'
 
 describe('formatEndorsementSignatureBlock', () => {
   it('formats a full official signature line', () => {
@@ -23,5 +23,10 @@ describe('formatEndorsementSignatureBlock', () => {
     })
     expect(line).toContain('(name not recorded)')
     expect(line).toContain('4170037CFI')
+  })
+
+  it('detects paper imports', () => {
+    expect(isPaperImportedEndorsement({ status: 'imported', is_imported: true })).toBe(true)
+    expect(isPaperImportedEndorsement({ status: 'signed', is_imported: false })).toBe(false)
   })
 })

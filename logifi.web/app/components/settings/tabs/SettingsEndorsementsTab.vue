@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-6">
     <p :class="helper">
-      AC 61-65H Appendix A sample endorsements. Request from a linked instructor, or issue and PIN-sign as an instructor.
+      AC 61-65H Appendix A sample endorsements. Request or issue for Logifi PIN signing, or record historical paper endorsements (not electronically signed).
     </p>
 
     <!-- Compose / request -->
@@ -11,12 +11,14 @@
           <template #default="{ inputClass }">
             <select v-model="composeMode" :class="inputClass" :disabled="isBusy">
               <option value="request">Request (as student)</option>
+              <option value="paper">Record from paper</option>
               <option v-if="isInstructorRole" value="issue">Issue (as instructor)</option>
             </select>
           </template>
         </SettingsField>
 
         <SettingsField
+          v-if="composeMode !== 'paper'"
           :label="composeMode === 'issue' ? 'Student' : 'Instructor'"
           :is-dark-mode="isDarkMode"
         >
@@ -33,6 +35,53 @@
             </select>
           </template>
         </SettingsField>
+
+        <template v-if="composeMode === 'paper'">
+          <SettingsField label="Paper CFI name" :is-dark-mode="isDarkMode">
+            <template #default="{ inputClass }">
+              <input
+                v-model="paperCfiName"
+                type="text"
+                placeholder="As written in the logbook"
+                :class="inputClass"
+                :disabled="isBusy"
+              />
+            </template>
+          </SettingsField>
+          <SettingsField label="Paper endorsement date" :is-dark-mode="isDarkMode">
+            <template #default="{ inputClass }">
+              <input
+                v-model="paperSignedAt"
+                type="date"
+                :class="inputClass"
+                :disabled="isBusy"
+              />
+            </template>
+          </SettingsField>
+          <SettingsField label="CFI certificate # (optional)" :is-dark-mode="isDarkMode">
+            <template #default="{ inputClass }">
+              <input
+                v-model="paperCfiNumber"
+                type="text"
+                :class="inputClass"
+                :disabled="isBusy"
+              />
+            </template>
+          </SettingsField>
+          <SettingsField label="CFI expiration (optional)" :is-dark-mode="isDarkMode">
+            <template #default="{ inputClass }">
+              <input
+                v-model="paperCfiExpiration"
+                type="date"
+                :class="inputClass"
+                :disabled="isBusy"
+              />
+            </template>
+          </SettingsField>
+          <p :class="[helper, 'text-xs']">
+            Recorded as imported history — not Logifi PIN-signed. Your Main instructor can view these read-only.
+          </p>
+        </template>
 
         <SettingsField label="Category" :is-dark-mode="isDarkMode">
           <template #default="{ inputClass }">
@@ -118,7 +167,9 @@
               ? 'Working…'
               : composeMode === 'issue'
                 ? 'Create draft'
-                : 'Request endorsement'
+                : composeMode === 'paper'
+                  ? 'Save paper endorsement'
+                  : 'Request endorsement'
           }}
         </button>
       </div>
@@ -257,7 +308,7 @@
             </p>
           </div>
           <button
-            v-if="row.status === 'pending' || row.status === 'draft'"
+            v-if="row.status === 'pending' || row.status === 'draft' || row.status === 'imported'"
             type="button"
             class="shrink-0 text-sm font-medium font-quicksand"
             :class="destructiveRow"
@@ -343,7 +394,7 @@ import {
   placeholderLabel,
   renderEndorsementBody,
 } from '~/utils/endorsementCatalog'
-import { formatEndorsementSignatureBlock } from '~/utils/endorsementSignature'
+import { formatEndorsementSignatureBlock, isPaperImportedEndorsement } from '~/utils/endorsementSignature'
 import type { PilotAccountRole } from './SettingsProfileTab.vue'
 
 const props = defineProps<{
@@ -367,6 +418,7 @@ const {
   issueEndorsement,
   signEndorsement,
   cancelEndorsement,
+  recordImportedEndorsement,
 } = useEndorsements()
 const {
   instructors,
@@ -375,8 +427,12 @@ const {
   fetchStudentRoster,
 } = useRoster()
 
-const composeMode = ref<'request' | 'issue'>('request')
+const composeMode = ref<'request' | 'issue' | 'paper'>('request')
 const counterpartyId = ref('')
+const paperCfiName = ref('')
+const paperSignedAt = ref('')
+const paperCfiNumber = ref('')
+const paperCfiExpiration = ref('')
 const categoryFilter = ref('')
 const templateSearch = ref('')
 const selectedCode = ref('')
@@ -428,8 +484,13 @@ const previewBody = computed(() => {
 })
 
 const canSubmit = computed(() => {
-  if (!counterpartyId.value || !selectedTemplate.value) return false
-  return !selectedTemplate.value.placeholders.some((k) => !(fieldValues[k] || '').trim())
+  if (!selectedTemplate.value) return false
+  const fieldsOk = !selectedTemplate.value.placeholders.some((k) => !(fieldValues[k] || '').trim())
+  if (!fieldsOk) return false
+  if (composeMode.value === 'paper') {
+    return !!paperCfiName.value.trim() && !!paperSignedAt.value.trim()
+  }
+  return !!counterpartyId.value
 })
 
 watch(
@@ -482,11 +543,19 @@ function isExpired(row: EndorsementRow): boolean {
 }
 
 function statusLabel(row: EndorsementRow): string {
+  if (isPaperImportedEndorsement(row)) {
+    return isExpired(row) ? 'PAPER / IMPORTED (expired)' : 'PAPER / IMPORTED'
+  }
   if (row.status === 'signed' && isExpired(row)) return 'SIGNED (expired)'
   return row.status.toUpperCase()
 }
 
 function statusBadgeClass(row: EndorsementRow): string {
+  if (isPaperImportedEndorsement(row)) {
+    return props.isDarkMode
+      ? 'bg-purple-900/40 text-purple-300'
+      : 'bg-purple-100 text-purple-800'
+  }
   if (row.status === 'signed') {
     if (isExpired(row)) {
       return props.isDarkMode
@@ -508,7 +577,31 @@ function statusBadgeClass(row: EndorsementRow): string {
 }
 
 async function onSubmitCompose() {
-  if (!selectedTemplate.value || !counterpartyId.value) return
+  if (!selectedTemplate.value) return
+
+  if (composeMode.value === 'paper') {
+    const result = await recordImportedEndorsement({
+      template: selectedTemplate.value,
+      fieldValues: { ...fieldValues },
+      instructorFullName: paperCfiName.value,
+      cfiNumber: paperCfiNumber.value,
+      cfiExpiration: paperCfiExpiration.value || null,
+      paperSignedAt: paperSignedAt.value,
+    })
+    if (!result.success) {
+      showToast(result.error)
+      return
+    }
+    showToast('Paper endorsement recorded')
+    selectedCode.value = ''
+    paperCfiName.value = ''
+    paperSignedAt.value = ''
+    paperCfiNumber.value = ''
+    paperCfiExpiration.value = ''
+    return
+  }
+
+  if (!counterpartyId.value) return
   const input = {
     counterpartyId: counterpartyId.value,
     template: selectedTemplate.value,
