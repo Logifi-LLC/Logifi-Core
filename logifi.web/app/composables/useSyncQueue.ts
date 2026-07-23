@@ -219,10 +219,18 @@ export const useSyncQueue = () => {
       return data ?? null
     }
 
-    // Legacy non-UUID local ids only: allow date/route/tail dedupe for imports.
-    // Skip when this payload is an amendment (same route as the signed original).
+    // Amendments: unique on (user_id, amends_entry_id) — recover the existing row.
     if (insertData.amends_entry_id) {
-      return null
+      let amendQuery = supabase
+        .from('log_entries')
+        .select('*')
+        .eq('amends_entry_id', insertData.amends_entry_id as string)
+        .limit(1)
+      if (typeof insertData.user_id === 'string' && insertData.user_id) {
+        amendQuery = amendQuery.eq('user_id', insertData.user_id)
+      }
+      const { data: amendRow } = await amendQuery.maybeSingle()
+      return amendRow ?? null
     }
 
     if (

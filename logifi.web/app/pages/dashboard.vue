@@ -8713,6 +8713,46 @@ function beginAmendSignedEntry(): void {
   showToast('Amendment draft created — correct and save. History will appear in the audit trail.')
 }
 
+/** Load cloud amendment for a signed original when local state is missing it. */
+async function fetchRemoteAmendmentForOriginal(originalId: string): Promise<LogEntry | null> {
+  if (!isAuthenticated.value || !user.value) return null
+  await checkOnlineStatus()
+  if (!isOnline.value) return null
+  const { data, error } = await (supabase.from('log_entries') as any)
+    .select('*')
+    .eq('user_id', user.value.id)
+    .eq('amends_entry_id', originalId)
+    .maybeSingle()
+  if (error || !data) return null
+  return mapSupabaseRowToLogEntry(data)
+}
+
+async function adoptEntryIntoLocalState(entry: LogEntry, replaceDraftId?: string): Promise<void> {
+  if (user.value) {
+    try {
+      await updateEntryInIndexedDB(entry, { userId: user.value.id, synced: true })
+    } catch {
+      // non-fatal
+    }
+    if (replaceDraftId && replaceDraftId !== entry.id) {
+      try {
+        await deleteEntryFromIndexedDB(replaceDraftId)
+      } catch {
+        // ignore
+      }
+    }
+  }
+  logEntries.value = sortEntriesByDateAndOOOI([
+    ...logEntries.value.filter(
+      (e) =>
+        e.id !== entry.id &&
+        e.id !== replaceDraftId &&
+        !(entry.amendsEntryId && e.amendsEntryId === entry.amendsEntryId)
+    ),
+    entry,
+  ])
+}
+
 async function beginVoidSignedEntry(): Promise<void> {
   const original = inlineEditEntry.value
   const originalId = expandedEntryId.value
@@ -8730,6 +8770,20 @@ async function beginVoidSignedEntry(): Promise<void> {
     return
   }
 
+  // Orphan recovery: amendment exists in cloud but not in local memory
+  const remoteExisting = await fetchRemoteAmendmentForOriginal(originalId)
+  if (remoteExisting) {
+    await adoptEntryIntoLocalState(remoteExisting)
+    showToast(
+      remoteExisting.isVoid
+        ? 'This entry was already voided — restored from the cloud'
+        : 'An amendment already exists — restored from the cloud',
+      5000
+    )
+    prepareInlineEditFromEntry(remoteExisting)
+    return
+  }
+
   const reason = window.prompt(
     'Reason for voiding this signed entry (required). The original stays in history; a zero-time void row replaces it in your logbook.'
   )
@@ -8743,16 +8797,49 @@ async function beginVoidSignedEntry(): Promise<void> {
   closeAuditTrailSidebar()
   showSignatureFinishModal.value = false
 
+  // Snapshot for rollback if cloud/IDB persist fails
+  const originalSnapshot = JSON.parse(JSON.stringify(original)) as LogEntry
+  const priorCommercialMode = isInlineCommercialMode.value
+
   const newId = generateEntryId()
   const voidEntry = buildVoidAmendment(original, newId, reason)
   voidEntry.date = normalizeDateForInput(original.date)
 
+  // Optimistic UI — roll back if saveInlineEdit does not persist
   logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, voidEntry])
   expandedEntryId.value = newId
   inlineEditEntry.value = voidEntry
   isInlineCommercialMode.value = false
 
-  await saveInlineEdit()
+  const saved = await saveInlineEdit()
+  if (saved) return
+
+  // Race / orphan: unique constraint may mean another amendment won — adopt it
+  const recovered = await fetchRemoteAmendmentForOriginal(originalId)
+  if (recovered) {
+    await adoptEntryIntoLocalState(recovered, newId)
+    showToast(
+      recovered.isVoid
+        ? 'This entry was already voided — restored from the cloud'
+        : 'An amendment already exists — restored from the cloud',
+      5000
+    )
+    prepareInlineEditFromEntry(recovered)
+    return
+  }
+
+  logEntries.value = sortEntriesByDateAndOOOI(
+    logEntries.value.filter((e) => e.id !== newId)
+  )
+  try {
+    await deleteEntryFromIndexedDB(newId)
+  } catch {
+    // ignore — may never have been written
+  }
+  expandedEntryId.value = originalId
+  inlineEditEntry.value = originalSnapshot
+  isInlineCommercialMode.value = priorCommercialMode
+  showToast('Could not void entry — changes were not saved', 6000)
 }
 
 function ensureInlineOOOI(): void {
@@ -8771,11 +8858,11 @@ function toggleInlineOOOIMode(): void {
   isInlineCommercialMode.value = next
 }
 
-async function saveInlineEdit(): Promise<void> {
-  if (!inlineEditEntry.value || isSavingInlineEdit.value) return
+async function saveInlineEdit(): Promise<boolean> {
+  if (!inlineEditEntry.value || isSavingInlineEdit.value) return false
   if (isEntrySigned(inlineEditEntry.value.id) || isEntrySigned(expandedEntryId.value)) {
     showToast('Signed entries cannot be edited')
-    return
+    return false
   }
   isSavingInlineEdit.value = true
 
@@ -8783,11 +8870,11 @@ async function saveInlineEdit(): Promise<void> {
   // Basic validation: date always required; aircraft/ident required only when not logging simulator time
   if (!inlineEditEntry.value.date) {
     alert('Date is required.')
-    return
+    return false
   }
   if (!isLoggingSimTime(inlineEditEntry.value) && !(inlineEditEntry.value.registration || '').trim()) {
     alert('Aircraft Identification is required for flight entries.')
-    return
+    return false
   }
 
   applyTailResolutionToEntry(inlineEditEntry.value)
@@ -8935,15 +9022,41 @@ async function saveInlineEdit(): Promise<void> {
 
           if (insertError) {
             console.error('[SaveInlineEdit] Direct insert error:', insertError)
+            const msg = String(insertError.message || '')
+            const details = String(insertError.details || '')
+            const isAmendUniqueViolation =
+              insertError.code === '23505' &&
+              (msg.includes('idx_log_entries_one_amendment_per_original') ||
+                details.includes('amends_entry_id'))
+            if (
+              insertError.code === '23505' &&
+              updatedEntry.amendsEntryId
+            ) {
+              const { data: existingAmend } = await (supabase.from('log_entries') as any)
+                .select('*')
+                .eq('user_id', user.value.id)
+                .eq('amends_entry_id', updatedEntry.amendsEntryId)
+                .maybeSingle()
+              if (existingAmend) {
+                const savedEntry = mapSupabaseRowToLogEntry(existingAmend)
+                await adoptEntryIntoLocalState(savedEntry, targetId)
+                expandedEntryId.value = savedEntry.id
+                inlineEditEntry.value = savedEntry
+                afterInlineSaveSuccess(savedEntry)
+                return true
+              }
+            }
             showToast(
-              insertError.message || 'Failed to save entry to the cloud. Check your connection and try again.',
+              isAmendUniqueViolation
+                ? 'An amendment for this entry already exists in the cloud'
+                : (insertError.message || 'Failed to save entry to the cloud. Check your connection and try again.'),
               6000
             )
-            return
+            return false
           }
           if (!insertResult) {
             showToast('Insert returned no row (possible RLS or constraint issue)', 6000)
-            return
+            return false
           }
 
           const savedEntry: LogEntry = {
@@ -8955,6 +9068,7 @@ async function saveInlineEdit(): Promise<void> {
             amendsEntryId: insertResult.amends_entry_id ?? updatedEntry.amendsEntryId ?? null,
             isVoid: insertResult.is_void === true || updatedEntry.isVoid === true,
           }
+          // Only mark synced when the remote row actually exists
           await updateEntryInIndexedDB(savedEntry, { userId: user.value.id, synced: true })
           const existsLocally = logEntries.value.some((e) => e.id === targetId)
           logEntries.value = sortEntriesByDateAndOOOI(
@@ -8963,7 +9077,7 @@ async function saveInlineEdit(): Promise<void> {
               : [...logEntries.value, savedEntry]
           )
           afterInlineSaveSuccess(savedEntry)
-          return
+          return true
         }
 
         await updateEntryInIndexedDB(updatedEntry, { userId: user.value.id, synced: false })
@@ -8975,7 +9089,7 @@ async function saveInlineEdit(): Promise<void> {
             : [...logEntries.value, updatedEntry]
         )
         afterInlineSaveSuccess(updatedEntry)
-        return
+        return true
       }
 
       console.log('[SaveInlineEdit] Updating entry in database:', targetId)
@@ -8996,14 +9110,14 @@ async function saveInlineEdit(): Promise<void> {
       // 0 rows updated (e.g. RLS): persist locally and queue for sync
       if (!updateResult) {
         console.log('[SaveInlineEdit] Update returned 0 rows, saving to IndexedDB and queueing for sync')
-        await updateEntryInIndexedDB(updatedEntry, { userId: user.value.id })
+        await updateEntryInIndexedDB(updatedEntry, { userId: user.value.id, synced: false })
         const awaitSync = shouldAwaitSyncForSigningIntent()
         await addToQueue('update', targetId, dbEntry, user.value.id, { awaitSync })
         logEntries.value = sortEntriesByDateAndOOOI(
           logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
         )
         afterInlineSaveSuccess(updatedEntry)
-        return
+        return true
       }
       
       console.log('[SaveInlineEdit] Entry updated successfully in database:', updateResult)
@@ -9185,6 +9299,11 @@ async function saveInlineEdit(): Promise<void> {
       // Verification is already done - we have the data from updateResult
       // No need to reload, we already updated local state with the returned data
       console.log('[SaveInlineEdit] Save complete - entry persisted and local state updated')
+      try {
+        await updateEntryInIndexedDB(entry, { userId: user.value.id, synced: true })
+      } catch {
+        // non-fatal — cloud already has the row
+      }
     } catch (error: unknown) {
       const err = error as { message?: string; code?: string; details?: string }
       console.error('[SaveInlineEdit] Error saving entry to Supabase:', error)
@@ -9194,7 +9313,7 @@ async function saveInlineEdit(): Promise<void> {
       console.error('[SaveInlineEdit] Full error JSON:', JSON.stringify(error, null, 2))
       const userMessage = err?.message ?? (typeof error === 'string' ? error : 'Error saving entry. Please try again.')
       alert(userMessage)
-      return
+      return false
     }
   } else {
     // Fallback to localStorage - just update local state
@@ -9211,6 +9330,7 @@ async function saveInlineEdit(): Promise<void> {
 
   const savedLocal = logEntries.value.find((e) => e.id === targetId) ?? updatedEntry
   afterInlineSaveSuccess(savedLocal)
+  return true
   } finally {
     isSavingInlineEdit.value = false
   }
