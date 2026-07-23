@@ -47,6 +47,13 @@
       :is-active="open && currentFrame === 'roster'"
     />
 
+    <SettingsEndorsementsTab
+      v-else-if="currentFrame === 'endorsements'"
+      :is-dark-mode="isDarkMode"
+      :role="profile.role"
+      :is-active="open && currentFrame === 'endorsements'"
+    />
+
     <SettingsChangeEmailView
       v-else-if="currentFrame === 'account-email'"
       v-model:account-email="accountEmailModel"
@@ -145,6 +152,7 @@ import SettingsChangePasswordView from './SettingsChangePasswordView.vue'
 import SettingsProfileTab, { type PilotProfileForm } from './tabs/SettingsProfileTab.vue'
 import SettingsAccountTab from './tabs/SettingsAccountTab.vue'
 import SettingsRosterTab from './tabs/SettingsRosterTab.vue'
+import SettingsEndorsementsTab from './tabs/SettingsEndorsementsTab.vue'
 import SettingsDigifiTab from './tabs/SettingsDigifiTab.vue'
 import SettingsPreferencesTab from './tabs/SettingsPreferencesTab.vue'
 import SettingsUpdatesTab from './tabs/SettingsUpdatesTab.vue'

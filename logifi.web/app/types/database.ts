@@ -579,6 +579,68 @@ export type Database = {
           created_at?: string
         }
       }
+      endorsements: {
+        Row: {
+          id: string
+          student_id: string
+          instructor_id: string
+          template_code: string
+          regulation_refs: string
+          title: string
+          body_template: string
+          field_values: Record<string, string>
+          rendered_body: string
+          status: 'draft' | 'pending' | 'signed' | 'cancelled'
+          expires_at: string | null
+          signed_at: string | null
+          signature_hash: string | null
+          cfi_number: string | null
+          cfi_expiration: string | null
+          instructor_full_name: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          student_id: string
+          instructor_id: string
+          template_code: string
+          regulation_refs?: string
+          title: string
+          body_template: string
+          field_values?: Record<string, string>
+          rendered_body?: string
+          status?: 'draft' | 'pending' | 'signed' | 'cancelled'
+          expires_at?: string | null
+          signed_at?: string | null
+          signature_hash?: string | null
+          cfi_number?: string | null
+          cfi_expiration?: string | null
+          instructor_full_name?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          student_id?: string
+          instructor_id?: string
+          template_code?: string
+          regulation_refs?: string
+          title?: string
+          body_template?: string
+          field_values?: Record<string, string>
+          rendered_body?: string
+          status?: 'draft' | 'pending' | 'signed' | 'cancelled'
+          expires_at?: string | null
+          signed_at?: string | null
+          signature_hash?: string | null
+          cfi_number?: string | null
+          cfi_expiration?: string | null
+          instructor_full_name?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       flight_signatures: {
         Row: {
           id: string
@@ -733,6 +795,79 @@ export type Database = {
           p_pin: string
         }
         Returns: string
+      }
+      request_endorsement: {
+        Args: {
+          p_instructor_id: string
+          p_template_code: string
+          p_title: string
+          p_regulation_refs: string
+          p_body_template: string
+          p_field_values: Record<string, string>
+          p_rendered_body: string
+          p_expires_at?: string | null
+        }
+        Returns: string
+      }
+      issue_endorsement: {
+        Args: {
+          p_student_id: string
+          p_template_code: string
+          p_title: string
+          p_regulation_refs: string
+          p_body_template: string
+          p_field_values: Record<string, string>
+          p_rendered_body: string
+          p_expires_at?: string | null
+        }
+        Returns: string
+      }
+      sign_endorsement: {
+        Args: {
+          p_endorsement_id: string
+          p_pin: string
+        }
+        Returns: string
+      }
+      get_student_logbook_summary_for_instructor: {
+        Args: {
+          p_student_id: string
+        }
+        Returns: {
+          entry_count: number
+          total_time: number
+          dual_received: number
+          pic: number
+          last_flight_date: string | null
+        }[]
+      }
+      list_endorsements_for_student_as_instructor: {
+        Args: {
+          p_student_id: string
+        }
+        Returns: {
+          id: string
+          student_id: string
+          instructor_id: string
+          template_code: string
+          regulation_refs: string
+          title: string
+          rendered_body: string
+          status: string
+          expires_at: string | null
+          signed_at: string | null
+          signature_hash: string | null
+          cfi_number: string | null
+          cfi_expiration: string | null
+          instructor_full_name: string | null
+          created_at: string
+        }[]
+      }
+      cancel_endorsement: {
+        Args: {
+          p_endorsement_id: string
+        }
+        Returns: undefined
       }
       guest_sign_log_entry: {
         Args: {

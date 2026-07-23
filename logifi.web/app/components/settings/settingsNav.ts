@@ -1,4 +1,4 @@
-export type SettingsTabId = 'profile' | 'account' | 'roster' | 'preferences' | 'digifi' | 'updates' | 'data' | 'compliance'
+export type SettingsTabId = 'profile' | 'account' | 'roster' | 'endorsements' | 'preferences' | 'digifi' | 'updates' | 'data' | 'compliance'
 
 export type SettingsStackFrame = 'root' | SettingsTabId | 'account-email' | 'account-password'
 
@@ -31,6 +31,13 @@ export const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     icon: 'ri:team-line',
     group: 'You',
     subtitle: 'Students & instructors',
+  },
+  {
+    id: 'endorsements',
+    label: 'Endorsements',
+    icon: 'ri:file-list-3-line',
+    group: 'You',
+    subtitle: 'AC 61-65H logbook endorsements',
   },
   {
     id: 'preferences',

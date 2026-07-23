@@ -150,8 +150,16 @@
           :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'"
         >
           <div class="flex items-start justify-between gap-3">
-            <div class="min-w-0 flex-1">
+            <button
+              type="button"
+              class="min-w-0 flex-1 text-left"
+              :disabled="isLoading"
+              @click="toggleStudentDossier(row)"
+            >
               <p class="text-sm font-semibold font-quicksand" :class="isDarkMode ? 'text-gray-100' : 'text-gray-900'">
+                <span class="mr-1 inline-block w-3 text-center opacity-70">{{
+                  expandedStudentId === row.student_id ? '▾' : '▸'
+                }}</span>
                 {{ displayName(row) }}
                 <span
                   v-if="row.relationship_kind === 'main'"
@@ -164,7 +172,7 @@
                 </span>
               </p>
               <p v-if="cfiLine(row)" :class="[helper, 'mt-0.5 text-xs']">{{ cfiLine(row) }}</p>
-            </div>
+            </button>
             <button
               type="button"
               class="shrink-0 text-sm font-medium font-quicksand"
@@ -174,6 +182,104 @@
             >
               Remove
             </button>
+          </div>
+
+          <div
+            v-if="expandedStudentId === row.student_id"
+            class="mt-3 space-y-3 pl-4"
+          >
+            <p v-if="dossierLoading" :class="[helper, 'text-xs']">Loading dossier…</p>
+            <p v-else-if="dossierError" :class="[helper, 'text-xs text-red-500']">{{ dossierError }}</p>
+
+            <template v-else>
+              <div
+                v-if="row.relationship_kind === 'main' && dossierSummary"
+                :class="[
+                  'grid grid-cols-2 gap-2 rounded border p-3 text-xs font-quicksand sm:grid-cols-5',
+                  isDarkMode ? 'border-white/10 bg-black/20' : 'border-gray-200 bg-gray-50',
+                ]"
+              >
+                <div>
+                  <p :class="helper">Entries</p>
+                  <p class="font-semibold">{{ dossierSummary.entry_count }}</p>
+                </div>
+                <div>
+                  <p :class="helper">Total</p>
+                  <p class="font-semibold">{{ formatHours(dossierSummary.total_time) }}</p>
+                </div>
+                <div>
+                  <p :class="helper">Dual</p>
+                  <p class="font-semibold">{{ formatHours(dossierSummary.dual_received) }}</p>
+                </div>
+                <div>
+                  <p :class="helper">PIC</p>
+                  <p class="font-semibold">{{ formatHours(dossierSummary.pic) }}</p>
+                </div>
+                <div>
+                  <p :class="helper">Last flight</p>
+                  <p class="font-semibold">{{ formatPendingDate(dossierSummary.last_flight_date) }}</p>
+                </div>
+              </div>
+
+              <p
+                v-else-if="row.relationship_kind !== 'main'"
+                :class="[helper, 'text-xs']"
+              >
+                Full logbook summary is available to this student’s Main instructor. You can view endorsements you signed.
+              </p>
+
+              <div>
+                <p class="mb-2 text-xs font-semibold uppercase tracking-wide font-quicksand" :class="helper">
+                  {{ row.relationship_kind === 'main' ? 'Signed endorsements' : 'Your signed endorsements' }}
+                </p>
+                <div
+                  v-if="dossierEndorsements.length === 0"
+                  :class="[helper, 'text-xs']"
+                >
+                  No signed endorsements yet.
+                </div>
+                <div
+                  v-for="endorsement in dossierEndorsements"
+                  :key="endorsement.id"
+                  :class="[
+                    'mb-2 rounded border p-2 last:mb-0',
+                    isDarkMode ? 'border-white/10 bg-black/15' : 'border-gray-200 bg-white',
+                  ]"
+                >
+                  <div class="flex flex-wrap items-center gap-2">
+                    <p class="text-xs font-semibold font-quicksand" :class="isDarkMode ? 'text-gray-100' : 'text-gray-900'">
+                      {{ endorsement.template_code }} · {{ endorsement.title.replace(/^A\.\d+\s+/, '') }}
+                    </p>
+                    <span
+                      :class="[
+                        'rounded px-1.5 py-0.5 text-[10px] uppercase font-bold tracking-wide',
+                        endorsement.instructor_id === user?.id
+                          ? (isDarkMode ? 'bg-green-900/40 text-green-300' : 'bg-green-100 text-green-800')
+                          : (isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'),
+                      ]"
+                    >
+                      {{ endorsement.instructor_id === user?.id ? 'You' : 'Other CFI' }}
+                    </span>
+                  </div>
+                  <p
+                    :class="[
+                      'mt-2 rounded border px-2 py-1.5 text-[11px] font-mono whitespace-pre-wrap',
+                      isDarkMode ? 'border-white/15 bg-black/30 text-gray-100' : 'border-gray-300 bg-gray-50 text-gray-900',
+                    ]"
+                  >
+                    {{ formatEndorsementSignatureBlock(endorsement) }}
+                  </p>
+                  <p
+                    :class="[
+                      'mt-2 text-xs font-quicksand whitespace-pre-wrap line-clamp-4',
+                      isDarkMode ? 'text-gray-300' : 'text-gray-700',
+                    ]"
+                  >
+                    {{ endorsement.rendered_body }}
+                  </p>
+                </div>
+              </div>
+            </template>
           </div>
         </div>
       </SettingsListGroup>
@@ -252,8 +358,14 @@ import PendingSignatureReviewModal from '../PendingSignatureReviewModal.vue'
 import { useSettingsClasses } from '../useSettingsClasses'
 import { useRoster, type RosterRelationship } from '~/composables/useRoster'
 import { useFlightSigning } from '~/composables/useFlightSigning'
+import {
+  useEndorsements,
+  type StudentDossierEndorsement,
+  type StudentLogbookSummary,
+} from '~/composables/useEndorsements'
 import { useAuth } from '~/composables/useAuth'
 import { useToast } from '~/composables/useToast'
+import { formatEndorsementSignatureBlock } from '~/utils/endorsementSignature'
 import type { Database } from '~/types/database'
 import type { PilotAccountRole } from './SettingsProfileTab.vue'
 
@@ -288,6 +400,10 @@ const {
   fetchPendingSignatureEntry,
   signLogEntry
 } = useFlightSigning()
+const {
+  fetchStudentLogbookSummary,
+  fetchStudentEndorsementsAsInstructor,
+} = useEndorsements()
 
 const instructorEmail = ref('')
 const reviewingEntryId = ref<string | null>(null)
@@ -296,6 +412,12 @@ const reviewStudentName = ref<string | null>(null)
 const reviewEntry = ref<LogEntryRow | null>(null)
 const isReviewLoading = ref(false)
 const isSigning = ref(false)
+
+const expandedStudentId = ref<string | null>(null)
+const dossierLoading = ref(false)
+const dossierError = ref<string | null>(null)
+const dossierSummary = ref<StudentLogbookSummary | null>(null)
+const dossierEndorsements = ref<StudentDossierEndorsement[]>([])
 
 const isInstructorRole = computed(
   () => props.role === 'INSTRUCTOR' || props.role === 'DUAL'
@@ -333,7 +455,7 @@ function statusBadgeClass(status: string): string {
     : 'bg-amber-100 text-amber-800'
 }
 
-function formatPendingDate(date: string): string {
+function formatPendingDate(date: string | null | undefined): string {
   if (!date) return '—'
   return date.slice(0, 10)
 }
@@ -342,6 +464,43 @@ function formatHours(value: number | null | undefined): string {
   const n = Number(value ?? 0)
   if (!Number.isFinite(n)) return '0.0'
   return n.toFixed(1)
+}
+
+async function toggleStudentDossier(row: RosterRelationship) {
+  if (expandedStudentId.value === row.student_id) {
+    expandedStudentId.value = null
+    dossierSummary.value = null
+    dossierEndorsements.value = []
+    dossierError.value = null
+    return
+  }
+
+  expandedStudentId.value = row.student_id
+  dossierLoading.value = true
+  dossierError.value = null
+  dossierSummary.value = null
+  dossierEndorsements.value = []
+
+  try {
+    const isMain = row.relationship_kind === 'main'
+    if (isMain) {
+      const summaryResult = await fetchStudentLogbookSummary(row.student_id)
+      if (!summaryResult.success) {
+        dossierError.value = summaryResult.error
+        return
+      }
+      dossierSummary.value = summaryResult.data
+    }
+
+    const endorsementsResult = await fetchStudentEndorsementsAsInstructor(row.student_id)
+    if (!endorsementsResult.success) {
+      dossierError.value = endorsementsResult.error
+      return
+    }
+    dossierEndorsements.value = endorsementsResult.data
+  } finally {
+    dossierLoading.value = false
+  }
 }
 
 function closeReview() {
