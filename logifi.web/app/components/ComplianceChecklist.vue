@@ -245,14 +245,14 @@ const ac120Requirements: Requirement[] = [
   {
     id: 'electronic-signatures',
     name: 'Electronic Signatures',
-    status: 'deferred',
-    statusText: 'Deferred to Phase 2'
+    status: 'complete',
+    statusText: 'Complete - PIN roster and guest drawn/QR signing'
   },
   {
     id: 'non-repudiation',
     name: 'Non-Repudiation',
-    status: 'partial',
-    statusText: 'Partial - audit trail provides some'
+    status: 'complete',
+    statusText: 'Complete - append-only signatures with amend/void'
   }
 ]
 

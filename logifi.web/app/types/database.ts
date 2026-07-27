@@ -934,6 +934,13 @@ export type Database = {
         }
         Returns: Record<string, unknown>
       }
+      restore_log_entry_revision: {
+        Args: {
+          p_entry_id: string
+          p_version: number
+        }
+        Returns: undefined
+      }
     }
   }
 }

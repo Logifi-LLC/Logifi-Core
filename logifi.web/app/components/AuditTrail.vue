@@ -72,6 +72,15 @@
         </div>
 
         <div v-else class="space-y-4">
+          <div
+            v-if="entryIsSigned"
+            :class="[
+              'p-3 rounded-lg border text-xs font-quicksand',
+              isDarkMode ? 'bg-amber-900/20 border-amber-700/50 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-800'
+            ]"
+          >
+            This entry is signed. Restore is disabled — use amend or void to correct it.
+          </div>
           <!-- Timeline -->
           <div class="relative">
             <div
@@ -222,6 +231,15 @@
     class="min-w-0 max-w-full"
   >
       <!-- Entry Metadata (Import Info & Integrity) -->
+      <div
+        v-if="entryIsSigned"
+        :class="[
+          'mb-4 p-3 rounded-lg border text-xs font-quicksand',
+          isDarkMode ? 'bg-amber-900/20 border-amber-700/50 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-800'
+        ]"
+      >
+        This entry is signed. Restore is disabled — use amend or void to correct it.
+      </div>
       <div v-if="entryMetadata" class="mb-4 space-y-3">
         <!-- Import Source Info -->
         <div v-if="entryMetadata.isImported" class="p-3 rounded border" :class="[isDarkMode ? 'bg-blue-900/20 border-blue-700/50' : 'bg-blue-50 border-blue-200']">
@@ -486,7 +504,7 @@
           Restore to this version?
         </h3>
         <p :class="['text-sm font-quicksand mb-4', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
-          This will restore the entry to the selected version. A new audit log entry will be created to track this restore operation.
+          This restores the entry to the selected version and records a restore event in the audit trail. Signed entries cannot be restored.
         </p>
         <div class="flex gap-3 justify-end">
           <button
@@ -565,6 +583,8 @@ const entryMetadata = ref<{
   originalEntryDate: string | null
 } | null>(null)
 
+const entryIsSigned = ref(false)
+
 const showRestoreConfirm = ref(false)
 const pendingRestore = ref<{ entryId: string; version: number; log: AuditLogWithDisplay } | null>(null)
 
@@ -572,6 +592,7 @@ const pendingRestore = ref<{ entryId: string; version: number; log: AuditLogWith
 watch(() => [props.isOpen, props.entryId, props.localEntry], async ([isOpen, entryId, localEntry]) => {
   if (isOpen && entryId && typeof entryId === 'string') {
     console.log('[AuditTrail] Loading audit logs for entry:', entryId)
+    entryIsSigned.value = false
     await getAuditLogs(entryId, localEntry)
     await getEntryRevisions(entryId, localEntry)
     
@@ -610,6 +631,15 @@ watch(() => [props.isOpen, props.entryId, props.localEntry], async ([isOpen, ent
         .select('is_imported, import_source, import_metadata, original_entry_date')
         .eq('id', supabaseId)
         .maybeSingle()
+
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(supabaseId)) {
+        const { data: signature } = await supabase
+          .from('flight_signatures')
+          .select('id')
+          .eq('log_entry_id', supabaseId)
+          .maybeSingle()
+        entryIsSigned.value = !!signature
+      }
       
       // Handle case where entry doesn't exist in Supabase yet
       if (metadataError) {
@@ -763,6 +793,7 @@ const getActionBadgeColor = (action: string) => {
 const formatActionLabel = (action: string) => {
   if (action === 'supersede') return 'Superseded'
   if (action === 'amend') return 'Amended'
+  if (action === 'restore') return 'Restored'
   return action
 }
 
@@ -808,11 +839,14 @@ const confirmRestore = async () => {
 
 // Check if we can restore to this version
 const canRestoreVersion = (log: AuditLogWithDisplay, index: number) => {
+  // Signed entries are immutable — amend/void only
+  if (entryIsSigned.value) return false
+
   // Can restore if:
-  // 1. It's an update action with old_data
+  // 1. It's an update/restore action with old_data
   // 2. There's a revision available for this version
   // 3. It's not the most recent entry (can't restore to current)
-  if (log.action !== 'update' || index === 0 || !log.old_data) {
+  if ((log.action !== 'update' && log.action !== 'restore') || index === 0 || !log.old_data) {
     return false
   }
   

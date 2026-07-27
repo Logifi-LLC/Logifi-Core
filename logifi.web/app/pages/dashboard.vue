@@ -1181,7 +1181,7 @@
                       • Capture conditions (night, instrument, simulated) and training specifics required for recent experience.
                     </li>
                     <li>
-                      • AC&nbsp;120-78B reminders: maintain data integrity, protect revision history, and record signer identity (signatures coming soon).
+                      • AC&nbsp;120-78B reminders: maintain data integrity, protect revision history, and record signer identity (electronic signatures supported).
                     </li>
                   </ul>
                 </div>

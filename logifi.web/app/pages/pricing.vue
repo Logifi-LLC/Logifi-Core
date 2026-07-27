@@ -23,8 +23,8 @@
         <div class="border-t border-white/20 pt-8 dark:border-white/20">
           <p class="text-sm font-bold uppercase tracking-wide text-blue-600 dark:text-blue-600">Digifi Credits</p>
           <p class="text-gray-800 mt-2 text-lg leading-relaxed dark:text-gray-800">
-            Every account starts with <strong class="text-gray-950 dark:text-gray-900">{{ welcomeCredits }} free Digifi spreads</strong>
-            (about {{ welcomeCredits * 2 }} logbook pages). Scan a few spreads, review and import them, and Digifi starts learning your aircraft and handwriting. Re-scanning the same spread is always free.
+            Every account starts with <strong class="text-gray-950 dark:text-gray-900">{{ welcomeCredits }} free Digifi spreads</strong>.
+            Scan a few spreads, review and import them, and Digifi starts learning your aircraft and handwriting. Re-scanning the same spread is always free.
           </p>
           <p class="text-gray-800 mt-4 text-lg leading-relaxed dark:text-gray-800">
             <strong class="text-gray-950 dark:text-gray-900">1 credit = 1 logbook spread</strong> (left + right pages).

@@ -3,7 +3,7 @@ FOCUS: App — get it ready for users
 RELEASE ORDER
 1. App (now) — logbook polish, offline (deferred)
 2. Digifi web — Pages, QR companion, mock credits for testers
-3. FC View integration
+3. Bypass FC View — own Flica API (FC View developer unresponsive)
 4. (done early) Endorsements & instructor signing — see DONE
 
 ────────────────────────────────────────

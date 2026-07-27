@@ -1,0 +1,517 @@
+================================================================================
+LOGIFI-CORE — TECHNICAL CONTEXT FOR EXTERNAL ASSISTANTS
+================================================================================
+Purpose: Give Gemini (or any assistant) a detailed technical picture of what
+exists in the Logifi-Core repository without sharing the full codebase.
+Focus: architecture, stack, schema domains, APIs, features, and current gaps.
+Not focus: marketing, business positioning, or community governance.
+
+Last oriented roughly to mid/late 2026 development state (migrations through
+20240101000071; Nuxt 4 SPA + Capacitor iOS + Supabase).
+
+
+--------------------------------------------------------------------------------
+1. WHAT THIS PROJECT IS (TECHNICALLY)
+--------------------------------------------------------------------------------
+Logifi-Core is a digital flight logbook application with:
+
+  - A Vue/Nuxt SPA (primary product UI)
+  - Supabase (Postgres + Auth + Storage + RLS) as cloud backend
+  - IndexedDB as local-first cache + offline sync queue
+  - Nitro HTTP API routes for privileged / third-party work (Digifi OCR,
+    FC View OAuth, credits/payments, guest-sign helpers, lookups)
+  - Capacitor 8 iOS shell wrapping the static Nuxt build
+  - Postgres SECURITY DEFINER RPCs for signing, roster, endorsements
+
+It is AC 120-78B–oriented: audit trail, SHA-256 entry integrity hashing,
+revisions, exports, and immutable signed rows (amend/void rather than edit).
+
+
+--------------------------------------------------------------------------------
+2. REPOSITORY LAYOUT
+--------------------------------------------------------------------------------
+Not a Turborepo/Nx monorepo. Practical layout:
+
+  Logifi-Core/
+    logifi.web/          Primary app (Nuxt 4 SPA, Nitro APIs, migrations, tests)
+    ios/                 Capacitor iOS native project (io.logifi.app)
+    scripts/             iOS branding generate/verify helpers
+    docs/                FCV gate packs, iOS TestFlight, OSS UI guardrails
+    capacitor.config.json
+      webDir = logifi.web/.output/public
+    Root package.json    Capacitor orchestration; also re-exports logifi.web/app
+                         as an “engine” package (composables/utils/types)
+
+Inside logifi.web/:
+  app/                   Pages, components, composables, middleware, plugins, types
+  server/api/            Nitro REST handlers
+  server/utils/          Digifi, FCV, credits, lookups helpers
+  server/data/           FAA / airport JSON and related static data
+  shared/                Isomorphic import/export/sync helpers (client + server)
+  supabase/migrations/   Postgres schema evolution (numbered SQL files)
+  tests/                 Vitest unit + Playwright e2e
+  public/, scripts/      Static assets; aircraft DB download / iOS data prep
+
+There are NO Supabase Edge Functions in-repo (no supabase/functions/).
+
+
+--------------------------------------------------------------------------------
+3. TECH STACK
+--------------------------------------------------------------------------------
+Language:        TypeScript
+UI:              Vue 3 + Nuxt 4 (ssr: false — SPA)
+Styling:         Tailwind CSS v4 (@tailwindcss/vite), Quicksand font, @nuxt/icon
+Cloud DB/Auth:   Supabase (Postgres, Auth, Storage, RLS, PostgREST, RPC)
+Local DB:        IndexedDB (cache + sync queue)
+Validation:      Zod
+Dates / night:   Luxon, suncalc
+Payments:        Stripe; Lightning via OpenNode (optional BTCPay mentioned)
+Digifi AI:       Gemini and/or Anthropic Claude (server-only API keys)
+Mobile:          Capacitor 8 iOS only (App, Browser, SplashScreen, BarcodeScanner)
+Lookups:         @nwpr/airport-codes; local FAA aircraft JSON; navaid/airport data
+Tests:           Vitest + happy-dom; Playwright e2e
+Deploy:          Static Nuxt output; Vercel (nuxtjs) documented; Netlify also noted
+
+Root package self-description: “Logifi engine: composables, validation, utils
+for logbook apps” with exports for ., ./composables, ./utils, ./types.
+
+
+--------------------------------------------------------------------------------
+4. HIGH-LEVEL ARCHITECTURE
+--------------------------------------------------------------------------------
+
+  [ Capacitor iOS ]  OR  [ Browser ]
+            |                    |
+            v                    v
+     Static Nuxt SPA (.output/public)
+            |
+            +-- IndexedDB (offline cache + sync queue)
+            |
+            +-- Supabase JS client
+            |     Auth, PostgREST table access, RPC, Storage
+            |
+            +-- Nitro API (when hosted; Cap uses NUXT_PUBLIC_API_BASE)
+                  /api/digifi/*, /api/fcv/*, /api/credits/*,
+                  /api/guest-sign/*, lookups, feedback
+
+Patterns:
+  - Local-first: load IndexedDB first, merge remote log_entries when online.
+  - Privileged domain ops (signing, endorsements, roster links) go through
+    Postgres SECURITY DEFINER RPCs — not free-form client table writes.
+  - Digifi / FCV / payments / some guest-sign flows need a Node host running
+    Nitro; the Capacitor app points API calls at NUXT_PUBLIC_API_BASE.
+  - iOS release path: branding → prepare iOS data → nuxt generate → cap sync ios
+    (npm scripts like cap:sync / cap:run:ios at root).
+
+
+--------------------------------------------------------------------------------
+5. AUTHENTICATION & AUTHORIZATION
+--------------------------------------------------------------------------------
+Provider: Supabase Auth (@supabase/supabase-js)
+
+Client:
+  - app/lib/supabase.ts — lazy createClient<Database>, persistSession,
+    autoRefreshToken, detectSessionInUrl
+  - app/composables/useAuth.ts — email/password signup/signin, Google OAuth,
+    password reset; global session refs; offline session snapshot retention
+    (cachedSupabaseSession); recovery route /reset-password
+
+Middleware:
+  - app/middleware/auth.global.ts — initAuth() every route
+  - iOS: marketing / often skipped toward /dashboard (or /auth/callback)
+
+Deep links:
+  - plugins/02.capacitor-auth-deeplink.client.ts for Cap auth + FCV return
+
+RLS:
+  - Table policies keyed on auth.uid()
+  - Many sensitive tables revoke direct client writes; mutations via RPCs
+  - Server routes: client Bearer JWT; some ops use SUPABASE_SERVICE_ROLE_KEY
+    (FCV token store, Digifi uploads, guest-sign completion)
+
+
+--------------------------------------------------------------------------------
+6. FRONTEND STRUCTURE
+--------------------------------------------------------------------------------
+Framework: Nuxt 4 file-based routing, SPA mode.
+
+Major pages (among others):
+  /                      Marketing landing
+  /dashboard             Main logbook surface (very large page — catalogs,
+                         filters, entry CRUD, settings entry points)
+  /logbook-builder       Digifi / paper-grid builder UI
+  /digifi-eye            Digifi scanning UI
+  /digifi-capture/[token] Phone companion capture for Digifi QR flow
+  /guest-sign/[token]    Guest instructor drawn-signature flow
+  /integrations          Integrations (incl. FCV)
+  /data-sources
+  /pricing
+  /developers, /privacy, /terms, /feedback
+  /auth/callback, /reset-password
+
+State: composable singletons (Nuxt auto-import). No Pinia/Vuex apparent.
+  Important composables include useAuth, useCurrency, useValidation,
+  useSyncQueue, useOffline, useRoster, useFlightSigning, useEndorsements,
+  useTheme, etc.
+
+UI component areas:
+  logbook/, logbook-builder/, settings/ (+ tabs), digifi/, fcv/, ios/,
+  SignaturePad.vue
+
+Settings tabs include:
+  Account, Profile, Preferences, Data, Digifi, Compliance, Roster,
+  Endorsements, Updates
+
+Guardrails doc: docs/oss-ui-and-architecture-guardrails.md
+  Prefer shells/cards; pages as orchestration; avoid composables barrel inside
+  composables/ (Nuxt auto-import); package barrel at composables-barrel.ts
+
+
+--------------------------------------------------------------------------------
+7. DATABASE — CORE TABLES & DOMAINS
+--------------------------------------------------------------------------------
+Migrations live in: logifi.web/supabase/migrations/
+Typed client (hand-maintained): logifi.web/app/types/database.ts
+Note: SCHEMA.md documents early migrations only; later domains are in SQL +
+database.ts.
+
+Core / compliance:
+  log_entries
+    Flights / sim entries. JSONB fields such as flight_time, performance, oooi.
+    Integrity: data_hash, version. Import provenance. logbook_type
+    (flight | simulator). fcv_flight_id. signature_pending /
+    pending_instructor_id. amends_entry_id. is_void.
+  audit_logs              AC 120-78B change trail
+  entry_revisions         Version snapshots
+  user_profiles           1:1 with auth.users; role; CFI fields; signing_pin_hash;
+                          credits
+  crew_profiles
+  import_batches
+  exports, archives
+  catalog_entity_tags, user_tag_presets
+  logbook_builder_templates
+  log_entry_deletions     Soft-delete / sync tombstones
+
+Integrations / Digifi / billing:
+  fcv_integrations
+  digifi_scan_sessions, digifi_correction_feedback, digifi_spread_charges
+  digifi_capture_sessions, digifi_capture_photos
+  credit_transactions
+
+Instructor / signing / endorsements:
+  instructor_student_relationships
+  flight_signatures       Append-only signatures per entry
+  guest_sign_sessions     QR guest-sign tokens
+  endorsements            AC 61-65H endorsement records
+
+Storage:
+  Private bucket flight-signatures (guest drawn ink)
+
+
+--------------------------------------------------------------------------------
+8. MIGRATION THEMES (CHRONOLOGICAL)
+--------------------------------------------------------------------------------
+00001–00011   Core logbook, audit, hashing/revisions, exports, profiles,
+              imports, RLS
+00021–00029   Hash/trigger consolidation, security (search_path, RLS fixes)
+00030–00041   Tags, logbook_type, catalog tags, EMB/ERJ family keys,
+              logbook builder templates, blank approaches cleanup
+00042–00043   FC View integrations + fcv_flight_id on entries
+00044–00054   Digifi scans/capture/feedback, credits, spread charges,
+              welcome credits, security advisor
+00055         log_entry_deletions + indexes
+00056–00060   Instructor roster, flight_signatures, signing RPCs,
+              pending signature inbox
+00061–00063   Amendments / supersede audit actions
+00064–00065   Guest drawn signatures + guest sign sessions
+00066         Void signed entries (is_void)
+00067–00068   Substitute CFI evolved to main/linked (no expiry)
+00069–00071   Endorsements; signature block + dossier RPCs;
+              paper/imported endorsements
+
+Also: production-migrations-044-054.sql helper for bundled prod apply.
+
+
+--------------------------------------------------------------------------------
+9. DOMAIN CONCEPTS (AS IMPLEMENTED IN CODE)
+--------------------------------------------------------------------------------
+CFI
+  Instructor certificate fields on user_profiles (cfi_number, cfi_expiration);
+  snapshotted onto signatures / endorsements when signing.
+
+Roles
+  user_profiles.role — STUDENT / INSTRUCTOR / DUAL (and related usage)
+
+Main vs linked instructor
+  instructor_student_relationships.relationship_kind ∈ {main, linked}
+  Replaces earlier primary/substitute + expiry model (post-00068).
+  set_main_instructor RPC.
+
+Flight signature
+  One append-only flight_signatures row per entry.
+  Methods include roster_pin and guest_drawn.
+
+Signature pending
+  Student requests instructor sign; instructor sees pending inbox via RPCs.
+
+Amendment / supersede
+  New log_entries row with amends_entry_id pointing at signed original.
+  Used for display/totals replacement instead of mutating signed data.
+
+Void
+  is_void amendment that supersedes a signed entry (zeroing/superseding)
+  without requiring a dual-sign gate on the void itself.
+
+Endorsement
+  AC 61-65H catalog (endorsementCatalog.ts, A.1–A.92).
+  Statuses: draft | pending | signed | cancelled | imported.
+  Flows: request / issue / PIN sign / cancel / import paper record.
+
+Dossier
+  Instructor view of a Main student’s logbook summary + endorsements
+  (get_student_logbook_summary_for_instructor,
+   list_endorsements_for_student_as_instructor).
+
+Paper / imported endorsement
+  is_imported + import_source (e.g. paper_manual); no PIN signing.
+
+Digifi
+  AI paper-logbook OCR into builder grid; credit-metered; companion phone
+  capture via QR token sessions.
+
+FC View / FCV
+  External logbook OAuth import; tokens in fcv_integrations; entries tagged
+  with fcv_flight_id.
+
+OOOI
+  Out / Off / On / In times stored as JSONB on entries.
+
+AC 120-78B
+  Compliance framing for audit, integrity hashing, exports, archival.
+
+Logbook type
+  flight vs simulator on entries.
+
+
+--------------------------------------------------------------------------------
+10. KEY FEATURE AREAS (WHAT EXISTS)
+--------------------------------------------------------------------------------
+A. Logbook CRUD + offline
+  IndexedDB + useSyncQueue. Dashboard megapage. Progressive remote fetch
+  (batches; first paint then background sync). Offline session snapshot;
+  sync gated on real cloud reachability (not navigator.onLine alone).
+
+B. Compliance
+  Audit logs, SHA-256 hashes, entry revisions, exports (CSV/JSON/Form 8710).
+
+C. Currency / validation
+  useCurrency / currencyCalculator — Part 61.57 (90-day passenger/night,
+  6-month instrument, annual). useValidation for Part 61-ish entry checks.
+
+D. Import / export
+  shared/logbookDataBridge — CSV/JSON, Logten, etc.; Digifi builder import.
+
+E. Digifi (paper OCR)
+  Pages: /logbook-builder, /digifi-eye, /digifi-capture/[token]
+  Server: /api/digifi/scan, capture/*, spread/[id]
+  Credits ledger + Stripe/Lightning checkout APIs; mock credits for testers.
+
+F. FC View sync
+  OAuth + /api/fcv/* (auth, callback, status, fetch, import, disconnect,
+  check-duplicates, last-entry-date).
+
+G. Instructor roster
+  request_instructor_link, set_main_instructor, get_roster_member_profile
+  Settings → Roster; useRoster composable.
+
+H. Flight signing (PIN)
+  set_signing_pin, sign_log_entry
+  Pending inbox: list_pending_signatures_for_instructor,
+  get_pending_signature_entry
+
+I. Guest signing
+  Co-located pad + QR phone flow.
+  guest_sign_sessions; guest_sign_log_entry*; /guest-sign/[token]
+  /api/guest-sign/session, /api/guest-sign/complete
+  Drawn ink in Storage bucket flight-signatures
+
+J. Amendments / void
+  amends_entry_id, is_void; signed rows treated as immutable
+
+K. Endorsements
+  Settings → Endorsements; catalog-driven AC 61-65H
+  RPCs: request_endorsement, issue_endorsement, sign_endorsement,
+  cancel_endorsement, record_imported_endorsement
+  Official CFI signature block + Active Student dossier
+
+L. Lookups
+  /api/lookup-aircraft, lookup-airport, lookup-airman, lookup-location,
+  classify-locations
+
+
+--------------------------------------------------------------------------------
+11. API / BACKEND PATTERNS (THREE LANES)
+--------------------------------------------------------------------------------
+Lane A — Supabase PostgREST
+  Direct .from('…') for owned rows where RLS allows (entries select/update
+  patterns, relationship reads, etc.).
+
+Lane B — Supabase RPC (preferred for privileged domain)
+  Roster, signing, guest sign, endorsements, integrity validation, dossier.
+  Examples:
+    request_instructor_link, set_main_instructor, get_roster_member_profile
+    set_signing_pin, sign_log_entry, list_pending_signatures_for_instructor,
+    get_pending_signature_entry, guest_sign_log_entry,
+    guest_sign_log_entry_for_session
+    request_endorsement, issue_endorsement, sign_endorsement,
+    cancel_endorsement, record_imported_endorsement
+    get_student_logbook_summary_for_instructor,
+    list_endorsements_for_student_as_instructor
+    validate_entry_integrity
+  Triggers handle audit / hash / revision / profile auto-create.
+
+Lane C — Nitro REST (logifi.web/server/api/)
+  /api/digifi/scan
+  /api/digifi/capture/*  (session, upload, photos, sessions, token get)
+  /api/digifi/spread/[spreadId]
+  /api/fcv/*             (auth, callback, status, fetch, import, disconnect,
+                          check-duplicates, last-entry-date)
+  /api/credits/*         (balance, transactions, add-mock,
+                          checkout/stripe|lightning, webhooks)
+  /api/guest-sign/session, /api/guest-sign/complete
+  /api/lookup-*, /api/classify-locations, /api/feedback
+
+Not used: Next.js server actions; no Edge Functions directory.
+
+
+--------------------------------------------------------------------------------
+12. MOBILE (iOS)
+--------------------------------------------------------------------------------
+- Capacitor 8, app id io.logifi.app
+- iOS project under ios/; no first-party Android project in-repo
+- Static Nuxt bundle synced via root cap:sync / cap:run:ios
+- Plugins: SplashScreen, Browser, BarcodeScanner (Digifi QR), App
+- Auth + FCV return via deep-link plugin
+- Offline aircraft DB: update-aircraft-db script → copied into static bundle
+- Docs: docs/ios-testflight.md
+
+
+--------------------------------------------------------------------------------
+13. ENV / INFRA (CATEGORIES)
+--------------------------------------------------------------------------------
+Template: logifi.web/env.example
+
+Public Supabase:   NUXT_PUBLIC_SUPABASE_URL, NUXT_PUBLIC_SUPABASE_ANON_KEY
+Cap API base:      NUXT_PUBLIC_API_BASE
+FCV OAuth:         FCV_CLIENT_ID/SECRET + authorize/token/API/redirect URLs
+Digifi AI:         GEMINI_API_KEY and/or ANTHROPIC_API_KEY (+ model envs)
+Service role:      SUPABASE_SERVICE_ROLE_KEY
+Payments:          Stripe secret/publishable/webhook; OpenNode / BTCPay
+Dev HTTPS:         NUXT_DEV_HTTPS_KEY/CERT (mkcert; FCV wants https)
+UI flags:          FCV label, companion capture origin, lightning enabled, etc.
+
+Deploy: static SPA + Nitro on Vercel Nuxt adapter (or similar Node host).
+Migrations applied via Supabase CLI / dashboard.
+
+
+--------------------------------------------------------------------------------
+14. TESTING
+--------------------------------------------------------------------------------
+Unit / integration: Vitest (vitest.config.ts, happy-dom)
+  Locations: app/**/__tests__, shared/__tests__, server/**/__tests__,
+  tests/unit/*
+
+E2E: Playwright
+  tests/e2e/ — import, export, offline, compliance specs (and related)
+
+Docs: TESTING.md
+Commands (from logifi.web): test, test:e2e, test:watch, test:coverage
+
+Coverage emphasis historically: Digifi parsing/billing, FCV mapping, credits,
+currency/validation, flight signing, endorsements, IndexedDB/sync,
+logbook builder grid.
+
+
+--------------------------------------------------------------------------------
+15. CURRENT ENGINEERING STATE / KNOWN GAPS (FROM PROJECT NOTES)
+--------------------------------------------------------------------------------
+Working / shipped (technical):
+  - Digifi Eye pairing/capture path in usable shape
+  - Stripe + OpenNode Lightning on payment branch
+  - Instructor portal phases through guest drawn / QR phone signing
+  - Void signed entry via superseding amendment
+  - Main CFI among linked instructors (no substitute expiry)
+  - AC 61-65H endorsements request/issue/PIN sign; paper imported records
+  - Official CFI signature block + Active Student dossier
+  - Offline session snapshot + reachability-gated sync hardening
+
+Still open / deferred:
+  - Offline cold-start gap: first visit with empty IndexedDB + no network =
+    empty logbook (full offline only if previously synced on that device)
+  - Device/signing smoke checklist: void refresh, amend, guest QR, main CFI,
+    paper + e-sign endorsements
+  - Later: retire instructor soft-end; Digifi OCR for paper endorsements;
+    endorsement PDF export; same-day manual + FCV imports; Digifi web tester
+    sign-off; merge payment → dev → main carefully
+
+Branches of note:
+  - dev — app work / Digifi web testing
+  - payment — Stripe + Lightning (merge into dev after Digifi web sign-off)
+  - main — stable; do not merge payment → main until dev is stable with payments
+
+
+--------------------------------------------------------------------------------
+16. IMPORTANT FILE / PATH INDEX
+--------------------------------------------------------------------------------
+Config / env:
+  logifi.web/nuxt.config.ts
+  logifi.web/env.example
+  capacitor.config.json
+
+Auth:
+  logifi.web/app/composables/useAuth.ts
+  logifi.web/app/lib/supabase.ts
+  logifi.web/app/middleware/auth.global.ts
+
+Schema:
+  logifi.web/supabase/migrations/*
+  logifi.web/app/types/database.ts
+
+Signing / roster / endorsements:
+  useFlightSigning.ts, useRoster.ts, useEndorsements.ts
+  migrations 00056–00071
+
+Digifi server:
+  logifi.web/server/api/digifi/*
+  logifi.web/server/utils/digifi*
+
+Offline:
+  logifi.web/app/utils/indexedDB.ts
+  useSyncQueue.ts, useOffline.ts
+
+Mobile:
+  ios/, capacitor.config.json, root Cap npm scripts
+
+Living status notes:
+  TODO.txt (offline gaps, branch merge notes)
+
+
+--------------------------------------------------------------------------------
+17. HOW TO HELP WHEN THE USER ASKS QUESTIONS AWAY FROM THE REPO
+--------------------------------------------------------------------------------
+When assisting without the codebase:
+  - Prefer answers consistent with the architecture above (SPA + IndexedDB +
+    Supabase RPC + Nitro for Digifi/FCV/payments).
+  - Treat signed flight data as immutable; prefer amendment/void patterns.
+  - Treat roster/signing/endorsements as RPC-first, RLS-restricted domains.
+  - Do not invent Edge Functions; server logic is Nitro or Postgres RPCs.
+  - iOS is Capacitor wrapping static Nuxt; Android is not a first-party app.
+  - Offline is real but incomplete on cold empty cache.
+  - If proposing schema changes, continue the 20240101000NNN migration style
+    and SECURITY DEFINER RPC patterns used for privileged writes.
+  - If proposing UI work, dashboard.vue is the main logbook surface and is
+    already very large; prefer composables/components over further bloating
+    the page when possible.
+
+End of technical context.
+================================================================================

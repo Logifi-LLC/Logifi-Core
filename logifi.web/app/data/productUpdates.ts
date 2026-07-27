@@ -19,7 +19,7 @@ export const PRODUCT_UPDATES: ProductUpdate[] = [
     title: 'Welcome Digifi spreads',
     tagline: 'Your first 10 spreads are on us',
     summary:
-      'Every new account includes 10 free Digifi spreads (~20 logbook pages) so you can try paper scanning, build your aircraft catalog, and see Digifi improve as you import.',
+      'Every new account includes 10 free Digifi spreads so you can try paper scanning, build your aircraft catalog, and see Digifi improve as you import.',
     bullets: [
       'Your first 10 spreads are on us—no purchase required to get started.',
       'Corrections you make before import help future scans recognize your tails and aircraft.',

@@ -233,73 +233,51 @@ export const useAuditTrail = () => {
     }
   }
 
-  // Restore an entry to a specific revision version
+  // Restore an entry to a specific revision version (unsigned entries only)
   const restoreRevision = async (entryId: string, version: number, localEntry?: any) => {
     try {
       isLoading.value = true
       error.value = null
 
-      // Try to find the UUID if entryId is not a UUID
       const supabaseId = await findEntryUUID(entryId, localEntry) || entryId
-
-      // First, get the revision data
-      const { data: revision, error: revisionError } = await supabase
-        .from('entry_revisions')
-        .select('*')
-        .eq('entry_id', supabaseId)
-        .eq('version', version)
-        .single()
-
-      if (revisionError || !revision) {
-        throw new Error('Revision not found')
+      if (!isValidUUID(supabaseId)) {
+        throw new Error('Entry is not synced to the cloud yet')
       }
 
-      // Extract entry data from revision
-      const entryData = revision.entry_data as any
+      const { data: signature, error: signatureError } = await supabase
+        .from('flight_signatures')
+        .select('id')
+        .eq('log_entry_id', supabaseId)
+        .maybeSingle()
 
-      // Update the entry with revision data
-      // Exclude fields that shouldn't be restored (id, user_id, created_at, version, data_hash)
-      const { error: updateError } = await supabase
-        .from('log_entries')
-        .update({
-          date: entryData.date,
-          role: entryData.role,
-          aircraft_category_class: entryData.aircraft_category_class,
-          category_class_time: entryData.category_class_time,
-          aircraft_make_model: entryData.aircraft_make_model,
-          registration: entryData.registration,
-          flight_number: entryData.flight_number,
-          departure: entryData.departure,
-          destination: entryData.destination,
-          route: entryData.route,
-          training_elements: entryData.training_elements,
-          training_instructor: entryData.training_instructor,
-          instructor_certificate: entryData.instructor_certificate,
-          flight_conditions: entryData.flight_conditions || [],
-          remarks: entryData.remarks,
-          flight_time: entryData.flight_time,
-          performance: entryData.performance,
-          oooi: entryData.oooi,
-          flagged: entryData.flagged,
-          // Preserve import tracking fields
-          is_imported: entryData.is_imported,
-          import_source: entryData.import_source,
-          import_batch_id: entryData.import_batch_id,
-          original_entry_date: entryData.original_entry_date,
-          import_metadata: entryData.import_metadata
-        })
-        .eq('id', supabaseId)
-
-      if (updateError) {
-        throw updateError
+      if (signatureError) {
+        throw signatureError
       }
 
-      // Refresh audit logs to show the restore action
-      await getAuditLogs(entryId)
+      if (signature) {
+        throw new Error('Signed log entries cannot be restored; use amend or void instead')
+      }
+
+      const { error: rpcError } = await supabase.rpc('restore_log_entry_revision', {
+        p_entry_id: supabaseId,
+        p_version: version
+      })
+
+      if (rpcError) {
+        throw new Error(rpcError.message || 'Failed to restore revision')
+      }
+
+      await getAuditLogs(entryId, localEntry)
+      await getEntryRevisions(entryId, localEntry)
 
       return { success: true }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to restore revision'
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'object' && err !== null && 'message' in err && typeof (err as { message: unknown }).message === 'string'
+            ? (err as { message: string }).message
+            : 'Failed to restore revision'
       error.value = errorMessage
       console.error('Error restoring revision:', err)
       return { success: false, error: errorMessage }
