@@ -12032,32 +12032,6 @@ const airportInfoError = ref<string | null>(null)
 
 // Airport names cache for display in catalog
 const airportNames = ref<Record<string, string>>({})
-const airportNamesLoading = new Set<string>()
-
-async function ensureAirportNameLoaded(code: string): Promise<void> {
-  const normalized = code.trim().toUpperCase()
-  if (!normalized || airportNamesLoading.has(normalized)) {
-    return
-  }
-  if (airportNames.value[normalized]) {
-    return
-  }
-
-  airportNamesLoading.add(normalized)
-  try {
-    const info = await lookupAirport(normalized)
-    if (info?.name) {
-      airportNames.value = { ...airportNames.value, [normalized]: info.name }
-    } else {
-      airportNames.value = { ...airportNames.value, [normalized]: '' }
-    }
-  } catch (error) {
-    airportNames.value = { ...airportNames.value, [normalized]: '' }
-    console.warn(`Failed to load airport name for ${normalized}:`, error)
-  } finally {
-    airportNamesLoading.delete(normalized)
-  }
-}
 
 const AIRPORT_HYDRATE_CONCURRENCY = 5
 const airportHydratePendingNames: Record<string, string> = {}
@@ -17229,28 +17203,23 @@ watchEffect(() => {
   })()
 })
 
-// Lazy load airport names for display in catalog
+// Hydrate airport names for display in catalog
 watch(
   [
     isCatalogDrawerOpen,
     iosCatalogBuilt,
     iosCatalogBuilding,
-    () => catalogOpenState.airports,
     () => catalogSearchTerms.airports,
     () => catalogs.value.airports.length,
   ],
   () => {
     if (isCapacitorNative()) {
       if (!isCatalogDrawerOpen.value || !iosCatalogBuilt.value || iosCatalogBuilding.value) return
-      if (!catalogOpenState.airports) return
-      const codes = getFilteredCatalogItems('airports').slice(0, 60)
-      enqueueAirportNamesForHydration(codes)
+      enqueueAirportNamesForHydration(getFilteredCatalogItems('airports'))
       return
     }
 
-    catalogs.value.airports.forEach((code) => {
-      void ensureAirportNameLoaded(code)
-    })
+    enqueueAirportNamesForHydration(catalogs.value.airports)
   }
 )
 
