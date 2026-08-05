@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   analyzeDigifiScanRows,
   formatDigifiScanWarning,
+  hasPipeJoinedCellValues,
 } from '../../app/utils/digifiScanDiagnostics'
 
 describe('digifiScanDiagnostics', () => {
@@ -61,5 +62,41 @@ describe('digifiScanDiagnostics', () => {
     expect(d.duplicateRowIndices).toEqual([0])
     expect(d.emptyRowIndices).toEqual([1])
     expect(formatDigifiScanWarning(d, 2)).toContain('read more than once')
+  })
+
+  it('flags under-count with pipe-joined remarks as likely cross-row merge', () => {
+    const rows = [
+      {
+        rowIndex: 0,
+        cells: {
+          total: '1.3',
+          remarks: 'Braden Korte | Checkride Prep | Chance for holds WERBU | WDOMY',
+        },
+      },
+      {
+        rowIndex: 1,
+        cells: {
+          total: '1.3',
+          remarks: 'Braden Korte Checkride Prep',
+        },
+      },
+    ]
+    const d = analyzeDigifiScanRows(rows, 3)
+    expect(d.rowsReturned).toBe(2)
+    expect(d.missingRowIndices).toEqual([2])
+    expect(hasPipeJoinedCellValues(rows)).toBe(true)
+    const msg = formatDigifiScanWarning(d, 3, rows)
+    expect(msg).toContain('Expected 3')
+    expect(msg).toContain('adjacent flight lines may have been merged')
+    expect(msg).toContain('identical')
+  })
+
+  it('does not flag pipe-joined remarks when row count matches', () => {
+    const rows = [
+      { rowIndex: 0, cells: { remarks: 'line one | line two' } },
+      { rowIndex: 1, cells: { remarks: 'solo' } },
+    ]
+    const d = analyzeDigifiScanRows(rows, 2)
+    expect(formatDigifiScanWarning(d, 2, rows)).toBeNull()
   })
 })

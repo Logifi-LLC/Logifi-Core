@@ -30,6 +30,8 @@ describe('buildPageSpecificRules', () => {
     expect(rules).toContain('Never merge remarks from two different flight lines')
     expect(rules).toContain('horizontal ruled lines')
     expect(rules).toContain('rowCount is flight lines only')
+    expect(rules).toContain('Adjacent rows with the same total or PIC time')
+    expect(rules).toContain('three 1.3 lines')
   })
 
   it('adds two-page right column guidance', () => {
@@ -57,6 +59,8 @@ describe('buildScanPrompt', () => {
     expect(prompt).toContain('RIGHT page of a two-page spread')
     expect(prompt).toContain('Totals and footer rows')
     expect(prompt).toContain('Extract rowIndex 0 through 12')
+    expect(prompt).toContain('Identical duration values across consecutive lines')
+    expect(prompt).toContain('keep a distinct rowIndex for each ruled band')
   })
 
   it('includes remarks-focused band hint when row bands and remarks column present', () => {

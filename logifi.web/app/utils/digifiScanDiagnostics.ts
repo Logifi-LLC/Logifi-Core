@@ -9,6 +9,13 @@ export interface DigifiScanRowDiagnostics {
   hasGaps: boolean
 }
 
+/** True when any cell value contains the in-box remarks join separator. */
+export function hasPipeJoinedCellValues(scanRows: DigifiScanRow[]): boolean {
+  return scanRows.some((row) =>
+    Object.values(row.cells ?? {}).some((value) => (value ?? '').includes(' | '))
+  )
+}
+
 /** Compare scan output to expected row count for UI warnings. */
 export function analyzeDigifiScanRows(
   scanRows: DigifiScanRow[],
@@ -48,7 +55,8 @@ export function analyzeDigifiScanRows(
 
 export function formatDigifiScanWarning(
   diagnostics: DigifiScanRowDiagnostics,
-  expectedRowCount: number
+  expectedRowCount: number,
+  scanRows?: DigifiScanRow[]
 ): string | null {
   const { rowsReturned, missingRowIndices, duplicateRowIndices, emptyRowIndices, hasGaps } = diagnostics
   if (
@@ -64,6 +72,11 @@ export function formatDigifiScanWarning(
     parts.push(
       `Expected ${expectedRowCount} rows but the scan returned ${rowsReturned}. Check that Rows is set to ${expectedRowCount} and scan with a clearer photo.`
     )
+    if (scanRows && hasPipeJoinedCellValues(scanRows)) {
+      parts.push(
+        'A remarks cell contains " | " while rows are missing — adjacent flight lines may have been merged into one cell (common when consecutive times look identical). Split them onto separate rows or re-scan.'
+      )
+    }
   }
   if (missingRowIndices.length > 0) {
     const preview = missingRowIndices.slice(0, 5).map((i) => i + 1).join(', ')

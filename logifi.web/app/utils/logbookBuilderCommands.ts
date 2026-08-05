@@ -178,6 +178,89 @@ export function clearRangeCells(
   return updates
 }
 
+export function cellInRange(range: SelectionRange, row: number, col: number): boolean {
+  return (
+    row >= range.startRow &&
+    row <= range.endRow &&
+    col >= range.startCol &&
+    col <= range.endCol
+  )
+}
+
+/** Translate a selection by deltas, clamping so the full block stays in-bounds. */
+export function translateRange(
+  source: SelectionRange,
+  deltaRow: number,
+  deltaCol: number,
+  maxRow: number,
+  maxCol: number,
+): SelectionRange | null {
+  const height = source.endRow - source.startRow + 1
+  const width = source.endCol - source.startCol + 1
+  if (height <= 0 || width <= 0) return null
+  if (height > maxRow + 1 || width > maxCol + 1) return null
+
+  const startRow = Math.max(0, Math.min(source.startRow + deltaRow, maxRow - height + 1))
+  const startCol = Math.max(0, Math.min(source.startCol + deltaCol, maxCol - width + 1))
+  return {
+    startRow,
+    endRow: startRow + height - 1,
+    startCol,
+    endCol: startCol + width - 1,
+  }
+}
+
+export function rangesEqual(a: SelectionRange, b: SelectionRange): boolean {
+  return (
+    a.startRow === b.startRow &&
+    a.endRow === b.endRow &&
+    a.startCol === b.startCol &&
+    a.endCol === b.endCol
+  )
+}
+
+/** Copy source values into dest (same shape assumed via offsets from dest origin). */
+export function copyRangeUpdates(
+  source: SelectionRange,
+  dest: SelectionRange,
+  getValue: (row: number, col: number) => string,
+): Array<{ row: number; col: number; value: string }> {
+  const values = buildValuesMatrix(source, getValue)
+  const updates: Array<{ row: number; col: number; value: string }> = []
+  for (let rOff = 0; rOff < values.length; rOff++) {
+    const destRow = dest.startRow + rOff
+    if (destRow > dest.endRow) break
+    const rowVals = values[rOff] ?? []
+    for (let cOff = 0; cOff < rowVals.length; cOff++) {
+      const destCol = dest.startCol + cOff
+      if (destCol > dest.endCol) break
+      updates.push({ row: destRow, col: destCol, value: rowVals[cOff] ?? '' })
+    }
+  }
+  return updates
+}
+
+/**
+ * Move source into dest: write dest from a snapshot, then clear source cells
+ * not covered by dest (safe for overlapping shift-by-one repairs).
+ */
+export function moveRangeUpdates(
+  source: SelectionRange,
+  dest: SelectionRange,
+  getValue: (row: number, col: number) => string,
+): Array<{ row: number; col: number; value: string }> {
+  if (rangesEqual(source, dest)) return []
+  const updates = copyRangeUpdates(source, dest, getValue)
+  for (let r = source.startRow; r <= source.endRow; r++) {
+    for (let c = source.startCol; c <= source.endCol; c++) {
+      if (!cellInRange(dest, r, c)) {
+        updates.push({ row: r, col: c, value: '' })
+      }
+    }
+  }
+  return updates
+}
+
 export function isPrintableKey(e: KeyboardEvent): boolean {
   if (e.ctrlKey || e.metaKey || e.altKey) return false
   return e.key.length === 1

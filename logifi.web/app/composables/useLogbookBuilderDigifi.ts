@@ -326,7 +326,7 @@ export function useLogbookBuilderDigifi() {
               hasGaps: result.hasGaps ?? false,
             }
           : analyzeDigifiScanRows(result.rows, rowCount.value)
-      const rowWarning = formatDigifiScanWarning(diagnostics, rowCount.value)
+      const rowWarning = formatDigifiScanWarning(diagnostics, rowCount.value, result.rows)
       const reviewWarning =
         (result.reviewMessages?.length ?? 0) > 0
           ? `${result.reviewRequiredCount ?? result.reviewMessages?.length ?? 0} identification/airport value(s) need review.`

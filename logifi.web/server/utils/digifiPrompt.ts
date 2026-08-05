@@ -102,6 +102,7 @@ const REMARKS_ROW_RULES = `Remarks (critical):
 - Each rowIndex is exactly one physical flight line on the paper, bounded by horizontal ruled lines above and below.
 - Join with " | " only for multiple handwritten lines inside the same remarks box on the same flight line.
 - Never merge remarks from two different flight lines into one rowIndex.
+- Adjacent rows with the same total or PIC time (e.g. three 1.3 lines in a row) are still separate rowIndex values — do not join their remarks with " | " or skip a rowIndex.
 - Remarks ink below the ruled line under row N belongs to row N+1, not row N.
 - If handwriting crosses a ruled line, split at the line — never assign both sides to one rowIndex.
 - Transcribe only ink inside the remarks box for that row (not time or landing columns in the same band).
@@ -206,6 +207,7 @@ ${bandHint}
 Extract rowIndex 0 through ${meta.rowCount - 1} (top to bottom). rowIndex 0 is the first flight line below the header; rowIndex 1 is the second line, and so on.
 Include every flight line that has any readable handwriting in date, aircraft, identification, or remarks — do not skip sparse or light lines.
 If unsure between two physical lines, use separate rowIndex values rather than merging lines.
+Identical duration values across consecutive lines (same total/PIC time) do not mean those lines are one flight — keep a distinct rowIndex for each ruled band.
 Exclude footer/carry/totals summary rows from row indices.
 
 ${TSV_FORMAT_RULES}

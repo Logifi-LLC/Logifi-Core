@@ -18,6 +18,12 @@ export const DIGIFI_COMMON_MISTAKE_CHECKLIST: DigifiCommonMistakeChecklistItem[]
       'Remarks should stay within one flight line. If text from two rows merged or split across lines, check the ruled lines on the photo and re-scan or fix manually.',
   },
   {
+    id: 'same-duration',
+    title: 'Same-duration consecutive rows',
+    hint:
+      'Several flights with the same time (e.g. three 1.3 lines) can collapse into fewer rows with remarks joined by " | ". Confirm each paper line has its own grid row.',
+  },
+  {
     id: 'route',
     title: 'From / To / Route',
     hint:
@@ -53,4 +59,5 @@ export const DIGIFI_COMMON_MISTAKE_PROMPT_RULES = [
   'When both Dual Given and Dual Received columns exist, read each value under its printed column header — do not shift into the neighbor cell.',
   'Never transcribe the bottom totals, brought forward, or carried forward summary row as a flight line.',
   'Remarks: one rowIndex per flight line — use horizontal ruled lines as boundaries; never merge remarks from adjacent rows.',
+  'Consecutive rows with identical total/PIC times (e.g. three 1.3 lines) are still separate flights — never skip a rowIndex or join their remarks with " | ".',
 ].join(' ')

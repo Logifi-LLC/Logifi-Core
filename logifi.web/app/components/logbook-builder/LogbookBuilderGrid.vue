@@ -5,7 +5,7 @@ import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { DEFAULT_COLUMN_WIDTH, isBuilderSelectField } from '~/utils/logbookBuilderTypes'
 import {
   buildValuesMatrix,
-  clearRangeCells,
+  copyRangeUpdates,
   fillDownRange,
   fillRightRange,
   findEdgeInDirection,
@@ -14,10 +14,13 @@ import {
   isPrintableKey,
   matrixToTsv,
   parseTsvMatrix,
+  rangesEqual,
   selectionOrActive,
+  translateRange,
   type ActiveCell,
   type SelectionRange,
 } from '~/utils/logbookBuilderCommands'
+import type { DigifiScanCellMeta } from '~/utils/digifiTypes'
 import type { LogbookColumnConfig } from '~/utils/logbookTypes'
 import LogbookBuilderCell from './LogbookBuilderCell.vue'
 import LogbookBuilderHeader from './LogbookBuilderHeader.vue'
@@ -44,6 +47,7 @@ const {
   activeRowIndex,
   setActiveRowIndex,
   noteDigifiCellManualEdit,
+  setDigifiCellMeta,
   pushUndoSnapshot,
   undo,
   redo,
@@ -68,15 +72,35 @@ type DragFillState = {
   isDragging: boolean
 }
 
+type DragMoveState = {
+  baseRange: SelectionRange
+  previewDestRange: SelectionRange | null
+  originCell: ActiveCell
+  copy: boolean
+  isDragging: boolean
+}
+
 type ClipboardPayload = {
   width: number
   height: number
   values: string[][]
+  /** Parallel to values; present for in-app cut/copy so Digifi tints can follow paste. */
+  meta?: (DigifiScanCellMeta | null)[][]
+}
+
+type CellMutation = {
+  row: number
+  col: number
+  value?: string
+  /** undefined = leave meta alone; null = clear */
+  meta?: DigifiScanCellMeta | null
+  noteManualEdit?: boolean
 }
 
 const activeCell = ref<ActiveCell | null>(null)
 const activeSelection = ref<SelectionRange | null>(null)
 const dragFill = ref<DragFillState | null>(null)
+const dragMove = ref<DragMoveState | null>(null)
 const clipboard = ref<ClipboardPayload | null>(null)
 const isDraggingSelection = ref(false)
 const selectionAnchor = ref<ActiveCell | null>(null)
@@ -213,9 +237,34 @@ function isSelectionRightEdge(rowIdx: number, colIdx: number): boolean {
   return colIdx === sel.endCol && rowIdx >= sel.startRow && rowIdx <= sel.endRow
 }
 
+function cloneDigifiMeta(meta: DigifiScanCellMeta | null | undefined): DigifiScanCellMeta | null {
+  if (!meta) return null
+  return {
+    ...meta,
+    candidates: meta.candidates?.map((c) => ({ ...c })),
+  }
+}
+
+function getMetaAt(rowIdx: number, colIdx: number): DigifiScanCellMeta | null {
+  const col = visibleColumns.value[colIdx]
+  if (!col) return null
+  return cloneDigifiMeta(rows.value[rowIdx]?.digifiCellMeta?.[col.id] ?? null)
+}
+
+function buildMetaMatrix(range: SelectionRange): (DigifiScanCellMeta | null)[][] {
+  const matrix: (DigifiScanCellMeta | null)[][] = []
+  for (let r = range.startRow; r <= range.endRow; r++) {
+    const rowMeta: (DigifiScanCellMeta | null)[] = []
+    for (let c = range.startCol; c <= range.endCol; c++) {
+      rowMeta.push(getMetaAt(r, c))
+    }
+    matrix.push(rowMeta)
+  }
+  return matrix
+}
+
 function applyFillFromActiveToRange(range: SelectionRange, source: ActiveCell | null) {
   if (!source) return
-  pushUndoSnapshot()
   const cols = visibleColumns.value
   const sourceCol = cols[source.colIndex]
   if (!sourceCol) return
@@ -223,36 +272,74 @@ function applyFillFromActiveToRange(range: SelectionRange, source: ActiveCell | 
   if (!sourceRow?.cells) return
   const sourceValue = sourceRow.cells[sourceCol.id] ?? ''
 
+  const mutations: CellMutation[] = []
   for (let r = range.startRow; r <= range.endRow; r++) {
     for (let c = range.startCol; c <= range.endCol; c++) {
       if (r === source.rowIndex && c === source.colIndex) continue
-      const col = cols[c]
-      if (!col) continue
-      setCell(r, col.id, sourceValue)
+      mutations.push({ row: r, col: c, value: sourceValue, noteManualEdit: true })
     }
   }
+  applyGridMutations(mutations)
 }
 
 function applyBlockCopy(base: SelectionRange, dest: SelectionRange) {
-  pushUndoSnapshot()
-  const cols = visibleColumns.value
-  for (let r = dest.startRow; r <= dest.endRow; r++) {
-    const rowOffset = r - dest.startRow
-    const srcRow = base.startRow + rowOffset
-    if (srcRow < base.startRow || srcRow > base.endRow) continue
-    const srcRowData = rows.value[srcRow]
-    if (!srcRowData?.cells) continue
-    for (let c = dest.startCol; c <= dest.endCol; c++) {
-      const colOffset = c - dest.startCol
-      const srcCol = base.startCol + colOffset
-      if (srcCol < base.startCol || srcCol > base.endCol) continue
-      const destCol = cols[c]
-      const srcColDef = cols[srcCol]
-      if (!destCol || !srcColDef) continue
-      const value = srcRowData.cells[srcColDef.id] ?? ''
-      setCell(r, destCol.id, value)
+  applyGridMutations(
+    copyRangeUpdates(base, dest, getValueAt).map((u) => ({
+      ...u,
+      noteManualEdit: true,
+    })),
+  )
+}
+
+/** Move (default) or copy a block. Move relocates digifiCellMeta; copy does not. */
+function applyBlockMove(source: SelectionRange, dest: SelectionRange, copy: boolean) {
+  if (rangesEqual(source, dest)) return
+
+  const values = buildValuesMatrix(source, getValueAt)
+  const metaMatrix = copy ? null : buildMetaMatrix(source)
+  const mutations: CellMutation[] = []
+
+  for (let rOff = 0; rOff < values.length; rOff++) {
+    const destRow = dest.startRow + rOff
+    if (destRow > dest.endRow) break
+    const rowVals = values[rOff] ?? []
+    for (let cOff = 0; cOff < rowVals.length; cOff++) {
+      const destCol = dest.startCol + cOff
+      if (destCol > dest.endCol) break
+      if (copy) {
+        mutations.push({
+          row: destRow,
+          col: destCol,
+          value: rowVals[cOff] ?? '',
+          noteManualEdit: true,
+        })
+      } else {
+        mutations.push({
+          row: destRow,
+          col: destCol,
+          value: rowVals[cOff] ?? '',
+          meta: cloneDigifiMeta(metaMatrix?.[rOff]?.[cOff] ?? null),
+        })
+      }
     }
   }
+
+  if (!copy) {
+    for (let r = source.startRow; r <= source.endRow; r++) {
+      for (let c = source.startCol; c <= source.endCol; c++) {
+        if (
+          r < dest.startRow ||
+          r > dest.endRow ||
+          c < dest.startCol ||
+          c > dest.endCol
+        ) {
+          mutations.push({ row: r, col: c, value: '', meta: null })
+        }
+      }
+    }
+  }
+
+  applyGridMutations(mutations)
 }
 
 function computeDestRange(base: SelectionRange, target: ActiveCell): SelectionRange | null {
@@ -370,18 +457,12 @@ function isActiveSelectColumn(): boolean {
   return focus != null && isSelectColumn(focus.colIndex)
 }
 
-function isPlainTextColumn(col: LogbookColumnConfig | undefined): boolean {
-  if (!col) return false
-  if (isBuilderSelectField(col)) return false
-  if (col.fieldKey === 'pilots') return false
-  return true
-}
-
+/** Select/pilots open editors on click; plain text uses navigate + drag-select. */
 function isClickToEditColumn(col: LogbookColumnConfig | undefined): boolean {
   if (!col) return false
   if (isBuilderSelectField(col)) return true
   if (col.fieldKey === 'pilots') return true
-  return isPlainTextColumn(col)
+  return false
 }
 
 function isGridChromeMouseTarget(target: EventTarget | null): boolean {
@@ -389,6 +470,7 @@ function isGridChromeMouseTarget(target: EventTarget | null): boolean {
   return (
     target.closest('thead') != null ||
     target.closest('[aria-label="Drag to fill"]') != null ||
+    target.closest('[aria-label="Drag to move"]') != null ||
     target.closest('.cursor-col-resize') != null
   )
 }
@@ -527,41 +609,73 @@ function moveEnter(shift: boolean) {
   navigateToCell(nextRow, focus.colIndex, false)
 }
 
-function applyCellUpdates(updates: Array<{ row: number; col: number; value: string }>) {
-  if (updates.length === 0) return
+function applyGridMutations(mutations: CellMutation[]) {
+  if (mutations.length === 0) return
   pushUndoSnapshot()
-  for (const { row, col, value } of updates) {
-    const colDef = visibleColumns.value[col]
+  for (const m of mutations) {
+    const colDef = visibleColumns.value[m.col]
     if (!colDef) continue
-    setCell(row, colDef.id, value)
-    noteDigifiCellManualEdit(row, colDef.id, value)
+    if (m.value !== undefined) {
+      setCell(m.row, colDef.id, m.value)
+      if (m.noteManualEdit) noteDigifiCellManualEdit(m.row, colDef.id, m.value)
+    }
+    if (m.meta !== undefined) {
+      setDigifiCellMeta(m.row, colDef.id, m.meta)
+    }
   }
+}
+
+function applyCellUpdates(updates: Array<{ row: number; col: number; value: string }>) {
+  applyGridMutations(
+    updates.map((u) => ({
+      row: u.row,
+      col: u.col,
+      value: u.value,
+      noteManualEdit: true,
+    })),
+  )
+}
+
+function clearRangeWithMeta(range: SelectionRange) {
+  const mutations: CellMutation[] = []
+  for (let r = range.startRow; r <= range.endRow; r++) {
+    for (let c = range.startCol; c <= range.endCol; c++) {
+      mutations.push({ row: r, col: c, value: '', meta: null })
+    }
+  }
+  applyGridMutations(mutations)
 }
 
 function copySelection(cut: boolean) {
   const range = getCommandSelection()
   const values = buildValuesMatrix(range, getValueAt)
+  const meta = buildMetaMatrix(range)
   clipboard.value = {
     width: range.endCol - range.startCol + 1,
     height: range.endRow - range.startRow + 1,
     values,
+    meta,
   }
   const tsv = matrixToTsv(values)
   if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
     navigator.clipboard.writeText(tsv).catch(() => {})
   }
   if (cut) {
-    applyCellUpdates(clearRangeCells(range))
+    clearRangeWithMeta(range)
   }
 }
 
 function pasteAtActiveCell() {
   const anchor = activeCell.value ?? { rowIndex: 0, colIndex: 0 }
-  const applyMatrix = (matrix: string[][]) => {
+
+  const applyMatrix = (
+    matrix: string[][],
+    metaMatrix?: (DigifiScanCellMeta | null)[][] | null,
+  ) => {
     if (!matrix.length) return
-    pushUndoSnapshot()
     const maxRow = rows.value.length - 1
     const maxCol = visibleColumns.value.length - 1
+    const mutations: CellMutation[] = []
     for (let rOff = 0; rOff < matrix.length; rOff++) {
       const destRow = anchor.rowIndex + rOff
       if (destRow > maxRow) break
@@ -569,11 +683,25 @@ function pasteAtActiveCell() {
       for (let cOff = 0; cOff < rowVals.length; cOff++) {
         const destCol = anchor.colIndex + cOff
         if (destCol > maxCol) break
-        const colDef = visibleColumns.value[destCol]
-        if (!colDef) continue
-        onCellInput(destRow, colDef.id, rowVals[cOff] ?? '')
+        const value = rowVals[cOff] ?? ''
+        if (metaMatrix) {
+          mutations.push({
+            row: destRow,
+            col: destCol,
+            value,
+            meta: cloneDigifiMeta(metaMatrix[rOff]?.[cOff] ?? null),
+          })
+        } else {
+          mutations.push({ row: destRow, col: destCol, value, noteManualEdit: true })
+        }
       }
     }
+    applyGridMutations(mutations)
+  }
+
+  const applyInternalClipboard = () => {
+    if (!clipboard.value) return
+    applyMatrix(clipboard.value.values, clipboard.value.meta ?? null)
   }
 
   if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
@@ -581,22 +709,31 @@ function pasteAtActiveCell() {
       .readText()
       .then((text) => {
         const matrix = parseTsvMatrix(text)
-        if (matrix.length && (matrix[0]?.length ?? 0) > 0) {
+        const hasTsv = matrix.length > 0 && (matrix[0]?.length ?? 0) > 0
+        if (hasTsv && clipboard.value) {
+          // Prefer in-memory payload (with Digifi meta) when TSV matches our last copy/cut.
+          const sameAsInternal = matrixToTsv(clipboard.value.values) === matrixToTsv(matrix)
+          if (sameAsInternal && clipboard.value.meta) {
+            applyMatrix(clipboard.value.values, clipboard.value.meta)
+            return
+          }
+        }
+        if (hasTsv) {
           applyMatrix(matrix)
-        } else if (clipboard.value) {
-          applyMatrix(clipboard.value.values)
+        } else {
+          applyInternalClipboard()
         }
       })
       .catch(() => {
-        if (clipboard.value) applyMatrix(clipboard.value.values)
+        applyInternalClipboard()
       })
-  } else if (clipboard.value) {
-    applyMatrix(clipboard.value.values)
+  } else {
+    applyInternalClipboard()
   }
 }
 
 function clearCommandSelection() {
-  applyCellUpdates(clearRangeCells(getCommandSelection()))
+  clearRangeWithMeta(getCommandSelection())
 }
 
 function onCellFocus(rowIdx: number, colIdx: number) {
@@ -826,6 +963,81 @@ function onFillHandleMouseDown(event: MouseEvent) {
       applyBlockCopy(baseRange, destRange)
       activeSelection.value = unionRanges(baseRange, destRange)
     }
+  }
+
+  document.addEventListener('mousemove', handleMouseMove)
+  document.addEventListener('mouseup', handleMouseUp)
+}
+
+/** Drag selection border to move (Cmd/Ctrl = copy). Dest is a translated block. */
+function onSelectionBorderMouseDown(event: MouseEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  if (gridMode.value === 'edit') commitAndExitEdit()
+
+  const base = getCommandSelection()
+  const origin = findCellFromPoint(event.clientX, event.clientY) ?? activeCell.value
+  if (!origin) return
+
+  dragMove.value = {
+    baseRange: base,
+    previewDestRange: base,
+    originCell: origin,
+    copy: event.metaKey || event.ctrlKey,
+    isDragging: true,
+  }
+  activeSelection.value = base
+  enterNavigateMode()
+  focusGridContainer()
+  document.body.style.cursor = dragMove.value.copy ? 'copy' : 'move'
+  document.body.style.userSelect = 'none'
+
+  const handleMouseMove = (e: MouseEvent) => {
+    const state = dragMove.value
+    if (!state || !state.isDragging) return
+    const cell = findCellFromPoint(e.clientX, e.clientY)
+    if (!cell) return
+    const maxRow = Math.max(0, rows.value.length - 1)
+    const maxCol = Math.max(0, visibleColumns.value.length - 1)
+    const deltaRow = cell.rowIndex - state.originCell.rowIndex
+    const deltaCol = cell.colIndex - state.originCell.colIndex
+    const dest = translateRange(state.baseRange, deltaRow, deltaCol, maxRow, maxCol)
+    state.previewDestRange = dest
+    if (dest) {
+      activeSelection.value = state.copy
+        ? unionRanges(state.baseRange, dest)
+        : dest
+    } else {
+      activeSelection.value = state.baseRange
+    }
+  }
+
+  const handleMouseUp = () => {
+    document.removeEventListener('mousemove', handleMouseMove)
+    document.removeEventListener('mouseup', handleMouseUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+
+    const state = dragMove.value
+    dragMove.value = null
+    if (!state || !state.isDragging) return
+
+    const dest = state.previewDestRange
+    if (!dest || rangesEqual(state.baseRange, dest)) {
+      activeSelection.value = state.baseRange
+      activeCell.value = {
+        rowIndex: state.baseRange.startRow,
+        colIndex: state.baseRange.startCol,
+      }
+      selectionAnchor.value = activeCell.value
+      return
+    }
+
+    applyBlockMove(state.baseRange, dest, state.copy)
+    activeSelection.value = dest
+    activeCell.value = { rowIndex: dest.startRow, colIndex: dest.startCol }
+    selectionAnchor.value = activeCell.value
+    setActiveRowIndex(dest.startRow)
   }
 
   document.addEventListener('mousemove', handleMouseMove)
@@ -1502,10 +1714,38 @@ defineExpose({
               >
                 {{ digifiCellState(rowIdx, col.id) === 'review' ? '?' : 'AI' }}
               </span>
+              <span
+                v-if="isSelectionTopEdge(rowIdx, colIdx)"
+                class="absolute inset-x-0 top-0 z-10 h-1.5 -translate-y-1/2 cursor-move"
+                aria-label="Drag to move"
+                title="Drag to move (⌘/Ctrl = copy)"
+                @mousedown="onSelectionBorderMouseDown"
+              />
+              <span
+                v-if="isSelectionBottomEdge(rowIdx, colIdx)"
+                class="absolute inset-x-0 bottom-0 z-10 h-1.5 translate-y-1/2 cursor-move"
+                aria-label="Drag to move"
+                title="Drag to move (⌘/Ctrl = copy)"
+                @mousedown="onSelectionBorderMouseDown"
+              />
+              <span
+                v-if="isSelectionLeftEdge(rowIdx, colIdx)"
+                class="absolute inset-y-0 left-0 z-10 w-1.5 -translate-x-1/2 cursor-move"
+                aria-label="Drag to move"
+                title="Drag to move (⌘/Ctrl = copy)"
+                @mousedown="onSelectionBorderMouseDown"
+              />
+              <span
+                v-if="isSelectionRightEdge(rowIdx, colIdx)"
+                class="absolute inset-y-0 right-0 z-10 w-1.5 translate-x-1/2 cursor-move"
+                aria-label="Drag to move"
+                title="Drag to move (⌘/Ctrl = copy)"
+                @mousedown="onSelectionBorderMouseDown"
+              />
               <button
                 v-if="isHandleCell(rowIdx, colIdx)"
                 type="button"
-                class="absolute bottom-0 right-0 h-2 w-2 translate-x-1/2 translate-y-1/2 rounded-sm border border-blue-500 bg-blue-500 hover:bg-blue-600 dark:border-blue-300 dark:bg-blue-300 dark:hover:bg-blue-200 cursor-crosshair z-10"
+                class="absolute bottom-0 right-0 h-2 w-2 translate-x-1/2 translate-y-1/2 rounded-sm border border-blue-500 bg-blue-500 hover:bg-blue-600 dark:border-blue-300 dark:bg-blue-300 dark:hover:bg-blue-200 cursor-crosshair z-20"
                 aria-label="Drag to fill"
                 @mousedown="onFillHandleMouseDown"
               />
@@ -1567,10 +1807,38 @@ defineExpose({
               >
                 {{ digifiCellState(rowIdx, col.id) === 'review' ? '?' : 'AI' }}
               </span>
+              <span
+                v-if="isSelectionTopEdge(rowIdx, splitIndex + colIdx)"
+                class="absolute inset-x-0 top-0 z-10 h-1.5 -translate-y-1/2 cursor-move"
+                aria-label="Drag to move"
+                title="Drag to move (⌘/Ctrl = copy)"
+                @mousedown="onSelectionBorderMouseDown"
+              />
+              <span
+                v-if="isSelectionBottomEdge(rowIdx, splitIndex + colIdx)"
+                class="absolute inset-x-0 bottom-0 z-10 h-1.5 translate-y-1/2 cursor-move"
+                aria-label="Drag to move"
+                title="Drag to move (⌘/Ctrl = copy)"
+                @mousedown="onSelectionBorderMouseDown"
+              />
+              <span
+                v-if="isSelectionLeftEdge(rowIdx, splitIndex + colIdx)"
+                class="absolute inset-y-0 left-0 z-10 w-1.5 -translate-x-1/2 cursor-move"
+                aria-label="Drag to move"
+                title="Drag to move (⌘/Ctrl = copy)"
+                @mousedown="onSelectionBorderMouseDown"
+              />
+              <span
+                v-if="isSelectionRightEdge(rowIdx, splitIndex + colIdx)"
+                class="absolute inset-y-0 right-0 z-10 w-1.5 translate-x-1/2 cursor-move"
+                aria-label="Drag to move"
+                title="Drag to move (⌘/Ctrl = copy)"
+                @mousedown="onSelectionBorderMouseDown"
+              />
               <button
                 v-if="isHandleCell(rowIdx, splitIndex + colIdx)"
                 type="button"
-                class="absolute bottom-0 right-0 h-2 w-2 translate-x-1/2 translate-y-1/2 rounded-sm border border-blue-500 bg-blue-500 hover:bg-blue-600 dark:border-blue-300 dark:bg-blue-300 dark:hover:bg-blue-200 cursor-crosshair z-10"
+                class="absolute bottom-0 right-0 h-2 w-2 translate-x-1/2 translate-y-1/2 rounded-sm border border-blue-500 bg-blue-500 hover:bg-blue-600 dark:border-blue-300 dark:bg-blue-300 dark:hover:bg-blue-200 cursor-crosshair z-20"
                 aria-label="Drag to fill"
                 @mousedown="onFillHandleMouseDown"
               />
@@ -1627,10 +1895,38 @@ defineExpose({
               >
                 {{ digifiCellState(rowIdx, col.id) === 'review' ? '?' : 'AI' }}
               </span>
+              <span
+                v-if="isSelectionTopEdge(rowIdx, colIdx)"
+                class="absolute inset-x-0 top-0 z-10 h-1.5 -translate-y-1/2 cursor-move"
+                aria-label="Drag to move"
+                title="Drag to move (⌘/Ctrl = copy)"
+                @mousedown="onSelectionBorderMouseDown"
+              />
+              <span
+                v-if="isSelectionBottomEdge(rowIdx, colIdx)"
+                class="absolute inset-x-0 bottom-0 z-10 h-1.5 translate-y-1/2 cursor-move"
+                aria-label="Drag to move"
+                title="Drag to move (⌘/Ctrl = copy)"
+                @mousedown="onSelectionBorderMouseDown"
+              />
+              <span
+                v-if="isSelectionLeftEdge(rowIdx, colIdx)"
+                class="absolute inset-y-0 left-0 z-10 w-1.5 -translate-x-1/2 cursor-move"
+                aria-label="Drag to move"
+                title="Drag to move (⌘/Ctrl = copy)"
+                @mousedown="onSelectionBorderMouseDown"
+              />
+              <span
+                v-if="isSelectionRightEdge(rowIdx, colIdx)"
+                class="absolute inset-y-0 right-0 z-10 w-1.5 translate-x-1/2 cursor-move"
+                aria-label="Drag to move"
+                title="Drag to move (⌘/Ctrl = copy)"
+                @mousedown="onSelectionBorderMouseDown"
+              />
               <button
                 v-if="isHandleCell(rowIdx, colIdx)"
                 type="button"
-                class="absolute bottom-0 right-0 h-2 w-2 translate-x-1/2 translate-y-1/2 rounded-sm border border-blue-500 bg-blue-500 hover:bg-blue-600 dark:border-blue-300 dark:bg-blue-300 dark:hover:bg-blue-200 cursor-crosshair z-10"
+                class="absolute bottom-0 right-0 h-2 w-2 translate-x-1/2 translate-y-1/2 rounded-sm border border-blue-500 bg-blue-500 hover:bg-blue-600 dark:border-blue-300 dark:bg-blue-300 dark:hover:bg-blue-200 cursor-crosshair z-20"
                 aria-label="Drag to fill"
                 @mousedown="onFillHandleMouseDown"
               />

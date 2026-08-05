@@ -5,11 +5,12 @@ import {
 } from '../../app/utils/digifiCommonMistakes'
 
 describe('digifiCommonMistakes', () => {
-  it('exports six checklist items', () => {
-    expect(DIGIFI_COMMON_MISTAKE_CHECKLIST).toHaveLength(6)
+  it('exports seven checklist items', () => {
+    expect(DIGIFI_COMMON_MISTAKE_CHECKLIST).toHaveLength(7)
     expect(DIGIFI_COMMON_MISTAKE_CHECKLIST.map((item) => item.id)).toEqual([
       'totals',
       'remarks',
+      'same-duration',
       'route',
       'landings',
       'instrument',
@@ -25,6 +26,11 @@ describe('digifiCommonMistakes', () => {
   it('includes prompt rules for remarks boundaries', () => {
     expect(DIGIFI_COMMON_MISTAKE_PROMPT_RULES).toContain('ruled lines')
     expect(DIGIFI_COMMON_MISTAKE_PROMPT_RULES).toContain('adjacent rows')
+  })
+
+  it('includes prompt rules for identical consecutive durations', () => {
+    expect(DIGIFI_COMMON_MISTAKE_PROMPT_RULES).toContain('identical total/PIC times')
+    expect(DIGIFI_COMMON_MISTAKE_PROMPT_RULES).toContain('three 1.3 lines')
   })
 
   it('includes prompt rules for Gemini', () => {

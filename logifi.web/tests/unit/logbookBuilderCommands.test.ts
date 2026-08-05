@@ -1,15 +1,20 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildValuesMatrix,
+  cellInRange,
   clearRangeCells,
+  copyRangeUpdates,
   fillDownRange,
   fillRightRange,
   findEdgeInDirection,
   findLastUsedCell,
   matrixToTsv,
+  moveRangeUpdates,
   normalizeSelectionRange,
   parseTsvMatrix,
+  rangesEqual,
   selectionOrActive,
+  translateRange,
 } from '../../app/utils/logbookBuilderCommands'
 
 describe('logbookBuilderCommands', () => {
@@ -93,5 +98,78 @@ describe('logbookBuilderCommands', () => {
 
   it('findLastUsedCell returns bottom-rightmost non-empty', () => {
     expect(findLastUsedCell(2, 2, getValue)).toEqual({ rowIndex: 2, colIndex: 0 })
+  })
+
+  it('cellInRange and rangesEqual', () => {
+    const range = { startRow: 0, endRow: 1, startCol: 0, endCol: 1 }
+    expect(cellInRange(range, 1, 1)).toBe(true)
+    expect(cellInRange(range, 2, 0)).toBe(false)
+    expect(rangesEqual(range, { ...range })).toBe(true)
+    expect(rangesEqual(range, { ...range, endRow: 2 })).toBe(false)
+  })
+
+  it('translateRange clamps the full block in-bounds', () => {
+    const source = { startRow: 0, endRow: 1, startCol: 0, endCol: 1 }
+    expect(translateRange(source, 1, 0, 2, 2)).toEqual({
+      startRow: 1,
+      endRow: 2,
+      startCol: 0,
+      endCol: 1,
+    })
+    expect(translateRange(source, 10, 10, 2, 2)).toEqual({
+      startRow: 1,
+      endRow: 2,
+      startCol: 1,
+      endCol: 2,
+    })
+  })
+
+  it('copyRangeUpdates writes dest from source snapshot', () => {
+    const source = { startRow: 0, endRow: 0, startCol: 0, endCol: 1 }
+    const dest = { startRow: 2, endRow: 2, startCol: 0, endCol: 1 }
+    expect(copyRangeUpdates(source, dest, getValue)).toEqual([
+      { row: 2, col: 0, value: 'A' },
+      { row: 2, col: 1, value: 'B' },
+    ])
+  })
+
+  it('moveRangeUpdates is a no-op when source equals dest', () => {
+    const range = { startRow: 0, endRow: 0, startCol: 0, endCol: 0 }
+    expect(moveRangeUpdates(range, range, getValue)).toEqual([])
+  })
+
+  it('moveRangeUpdates clears vacated cells on non-overlapping move', () => {
+    const source = { startRow: 0, endRow: 0, startCol: 0, endCol: 1 }
+    const dest = { startRow: 2, endRow: 2, startCol: 0, endCol: 1 }
+    const updates = moveRangeUpdates(source, dest, getValue)
+    expect(updates).toContainEqual({ row: 2, col: 0, value: 'A' })
+    expect(updates).toContainEqual({ row: 2, col: 1, value: 'B' })
+    expect(updates).toContainEqual({ row: 0, col: 0, value: '' })
+    expect(updates).toContainEqual({ row: 0, col: 1, value: '' })
+  })
+
+  it('moveRangeUpdates handles vertical shift-by-1 overlap', () => {
+    // Simulate rows 0-1 moving down one: A,B / '',C → row1 gets A,B; row0 cleared; row2 gets '',C
+    const source = { startRow: 0, endRow: 1, startCol: 0, endCol: 1 }
+    const dest = { startRow: 1, endRow: 2, startCol: 0, endCol: 1 }
+    const updates = moveRangeUpdates(source, dest, getValue)
+    expect(updates).toContainEqual({ row: 1, col: 0, value: 'A' })
+    expect(updates).toContainEqual({ row: 1, col: 1, value: 'B' })
+    expect(updates).toContainEqual({ row: 2, col: 0, value: '' })
+    expect(updates).toContainEqual({ row: 2, col: 1, value: 'C' })
+    expect(updates).toContainEqual({ row: 0, col: 0, value: '' })
+    expect(updates).toContainEqual({ row: 0, col: 1, value: '' })
+    // Overlapping cell (1,0)/(1,1) must not be cleared after write
+    expect(updates.filter((u) => u.row === 1 && u.col === 0 && u.value === '')).toHaveLength(0)
+  })
+
+  it('moveRangeUpdates handles horizontal shift-by-1 overlap', () => {
+    const source = { startRow: 0, endRow: 0, startCol: 0, endCol: 1 }
+    const dest = { startRow: 0, endRow: 0, startCol: 1, endCol: 2 }
+    const updates = moveRangeUpdates(source, dest, getValue)
+    expect(updates).toContainEqual({ row: 0, col: 1, value: 'A' })
+    expect(updates).toContainEqual({ row: 0, col: 2, value: 'B' })
+    expect(updates).toContainEqual({ row: 0, col: 0, value: '' })
+    expect(updates.filter((u) => u.row === 0 && u.col === 1 && u.value === '')).toHaveLength(0)
   })
 })
