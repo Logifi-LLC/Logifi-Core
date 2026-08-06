@@ -80,6 +80,30 @@
         <!-- Social Login -->
         <div class="space-y-3">
           <button
+            @click="handleAppleSignIn"
+            :disabled="isLoading"
+            class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl border transition-all font-bold text-sm font-quicksand"
+            :class="[
+              isDarkMode
+                ? 'border-gray-700 bg-black text-white hover:bg-gray-900'
+                : 'border-gray-900 bg-black text-white hover:bg-gray-900',
+              isLoading ? 'opacity-50 cursor-not-allowed' : ''
+            ]"
+          >
+            <Icon
+              v-if="!isLoading"
+              name="ri:apple-fill"
+              size="18"
+            />
+            <Icon
+              v-else
+              name="ri:loader-4-line"
+              size="18"
+              class="animate-spin"
+            />
+            {{ isLoading ? 'Connecting...' : 'Continue with Apple' }}
+          </button>
+          <button
             @click="handleGoogleSignIn"
             :disabled="isLoading"
             class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl border transition-all font-bold text-sm font-quicksand"
@@ -255,7 +279,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useAuth } from '~/composables/useAuth'
-import { resetIosInputZoom } from '~/composables/useCapacitorPlatform'
+import { isCapacitorIos, resetIosInputZoom } from '~/composables/useCapacitorPlatform'
 import { WELCOME_CREDITS } from '../../shared/creditsWelcome'
 
 const welcomeCredits = WELCOME_CREDITS
@@ -280,7 +304,15 @@ function handleBackdropClick() {
   }
 }
 
-const { signUp, signIn, signInWithGoogle, resetPassword, isLoading: authLoading, error: authErrorState } = useAuth()
+const {
+  signUp,
+  signIn,
+  signInWithGoogle,
+  signInWithApple,
+  resetPassword,
+  isLoading: authLoading,
+  error: authErrorState,
+} = useAuth()
 
 const activeTab = ref<'signin' | 'signup'>('signin')
 const email = ref('')
@@ -369,6 +401,28 @@ const handleForgotPassword = async () => {
   if (result.success) {
     successMessage.value = 'Password reset link sent. Please check your email.'
   } else if (result.error) {
+    authError.value = result.error
+  }
+}
+
+// Handle Apple sign in
+const handleAppleSignIn = async () => {
+  if (isLoading.value) return
+
+  authError.value = null
+  successMessage.value = null
+
+  const result = await signInWithApple()
+  if ('cancelled' in result && result.cancelled) return
+  if (result.success) {
+    // Native iOS returns a session immediately; web OAuth redirects away.
+    if (isCapacitorIos()) {
+      successMessage.value = 'Signed in successfully!'
+      completeAuthSuccess(800)
+    }
+    return
+  }
+  if (result.error) {
     authError.value = result.error
   }
 }

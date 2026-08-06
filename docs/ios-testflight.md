@@ -65,7 +65,8 @@ After local iOS works, enable TestFlight pieces **one at a time** (`cap:sync` + 
 
 1. [Developer → Identifiers](https://developer.apple.com/account/resources/identifiers/list)
 2. Confirm **App ID** `io.logifi.app` exists (matches `capacitor.config.json`)
-3. Camera access is declared in `Info.plist` (`NSCameraUsageDescription`) — no App ID toggle required
+3. Enable **Sign In with Apple** on that App ID (required for Guideline 4.8 — see [apple-sign-in-setup.md](./apple-sign-in-setup.md))
+4. Camera access is declared in `Info.plist` (`NSCameraUsageDescription`) — no App ID toggle required
 
 ### 1.3 App Store Connect app record
 

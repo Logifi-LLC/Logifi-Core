@@ -3,6 +3,11 @@ FOCUS: App — get it ready for users
 RELEASE ORDER
 1. App (now) — logbook polish, offline (deferred)
 2. Digifi web — Pages, QR companion, mock credits for testers
+   DIGIFI GRID EDITING (pain from real use)
+   - Problem: right page skipped a row / merged rows; fixing misaligned cells is hard without spreadsheet UX.
+   - Need: multi-cell / multi-row select, copy-paste, cut, and drag-drop (like Excel / Google Sheets).
+   - Cut / drag must leave the source empty (move, not duplicate).
+   - Goal workflow: select the correct block of rows/columns, then paste or drag into the correct position to repair alignment.
 3. Bypass FC View — own Flica API (FC View developer unresponsive)
 4. (done early) Endorsements & instructor signing — see DONE
 
@@ -26,6 +31,7 @@ APP NOW
 DONE / GOOD
 ────────────────────────────────────────
 - Digifi Eye — good enough for public (pairing / capture path shipped)
+- Digifi same-duration row-merge glitch — prompt + diagnostics (identical times stay separate rows; warn on under-count + " | " remarks)
 - Stripe + Opennode (Lightning) — working as planned (payment branch)
 - Murray responded — still slammed; not available for testing yet
 - Instructor portal Phases 1–7 + guest drawn / QR phone signing

@@ -537,3 +537,23 @@ export async function migrateLegacyLocalData(currentUserId: string): Promise<voi
 export async function getActiveUserId(): Promise<string | null> {
   return (await getMetadata(METADATA_ACTIVE_USER_ID)) as string | null
 }
+
+/**
+ * Remove all IndexedDB log entries and sync-queue rows for a user (account deletion).
+ */
+export async function clearAllDataForUser(userId: string): Promise<void> {
+  const entries = await getAllIDBLogEntriesForUser(userId)
+  for (const entry of entries) {
+    await deleteEntryFromIndexedDB(entry.id)
+  }
+
+  const queue = await getSyncQueue(userId)
+  for (const item of queue) {
+    await removeFromSyncQueue(item.id)
+  }
+
+  const active = await getActiveUserId()
+  if (active === userId) {
+    await setMetadata(METADATA_ACTIVE_USER_ID, null)
+  }
+}

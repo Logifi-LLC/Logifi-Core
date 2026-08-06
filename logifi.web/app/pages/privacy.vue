@@ -133,7 +133,10 @@
         <section class="mb-10">
           <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">9. Your Rights</h2>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
-            Depending on where you live, you may have the right to access, correct, delete, or export your personal data, or to object to or restrict certain processing. You can often manage your account and data through the Service; for other requests, contact us at
+            Depending on where you live, you may have the right to access, correct, delete, or export your personal data, or to object to or restrict certain processing.
+            To permanently delete your Logifi account and associated personal data, open the app or website, go to
+            <strong>Settings → Account → Delete account</strong>, and confirm. Deletion is self-serve and does not require contacting support.
+            For other privacy requests, contact us at
             <a href="mailto:info@logifi.io" class="text-blue-600 hover:underline dark:text-blue-400">info@logifi.io</a>.
           </p>
           <p :class="['leading-relaxed', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">

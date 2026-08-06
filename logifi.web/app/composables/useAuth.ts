@@ -9,7 +9,31 @@ import {
   clearOfflineSessionSnapshot,
 } from '~/utils/cachedSupabaseSession'
 import { withTimeout } from '~/utils/promiseTimeout'
+import {
+  buildAuthCallbackUrl,
+  buildResetPasswordUrl,
+} from '~/utils/authRedirectOrigin'
+import { isCapacitorIos } from './useCapacitorPlatform'
 import { useOffline } from './useOffline'
+
+function isAppleSignInCancellation(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+  const anyErr = err as {
+    code?: string | number
+    message?: string
+    errorMessage?: string
+  }
+  const code = String(anyErr.code ?? '')
+  const message = `${anyErr.message ?? ''} ${anyErr.errorMessage ?? ''}`.toLowerCase()
+  return (
+    code === '1001' ||
+    code === 'ERR_CANCELED' ||
+    code === 'USER_CANCELLED' ||
+    message.includes('cancel') ||
+    message.includes('canceled') ||
+    message.includes('cancelled')
+  )
+}
 
 // Shared state across all instances of useAuth
 const globalUser = ref<User | null>(null)
@@ -252,10 +276,7 @@ export const useAuth = () => {
 
       // Confirmation emails must redirect here so detectSessionInUrl can persist the session.
       // Add this URL (and localhost) under Supabase → Authentication → URL Configuration → Redirect URLs.
-      const emailRedirectTo =
-        typeof window !== 'undefined'
-          ? `${window.location.origin}/auth/callback`
-          : undefined
+      const emailRedirectTo = buildAuthCallbackUrl()
 
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
@@ -356,17 +377,63 @@ export const useAuth = () => {
     }
   }
 
+  /**
+   * Permanently delete the current account via server (service-role) then clear local state.
+   */
+  const deleteAccount = async () => {
+    const userId = user.value?.id
+    const token = getAccessToken()
+    if (!userId || !token) {
+      return { success: false as const, error: 'You must be signed in to delete your account' }
+    }
+
+    try {
+      isLoading.value = true
+      error.value = null
+
+      const { apiFetch } = await import('~/utils/apiFetch')
+      await apiFetch<{ success: true }>('/api/account/delete', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      try {
+        const { clearAllDataForUser } = await import('~/utils/indexedDB')
+        await clearAllDataForUser(userId)
+      } catch (localErr) {
+        console.warn('[useAuth] Failed to clear local data after account delete:', localErr)
+      }
+
+      explicitSignOutInProgress = true
+      clearOfflineSessionSnapshot()
+      user.value = null
+      session.value = null
+      try {
+        await supabase.auth.signOut({ scope: 'local' })
+      } catch {
+        // Server already deleted the user; local wipe is enough.
+      }
+
+      return { success: true as const }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to delete account'
+      error.value = errorMessage
+      console.error('Delete account error:', err)
+      return { success: false as const, error: errorMessage }
+    } finally {
+      explicitSignOutInProgress = false
+      isLoading.value = false
+    }
+  }
+
   // Sign in with Google (OAuth)
   const signInWithGoogle = async () => {
     try {
       isLoading.value = true
       error.value = null
 
-      // Build redirect URL to the auth callback route
-      const redirectTo =
-        typeof window !== 'undefined'
-          ? `${window.location.origin}/auth/callback`
-          : undefined
+      const redirectTo = buildAuthCallbackUrl()
 
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -392,16 +459,77 @@ export const useAuth = () => {
     }
   }
 
+  /**
+   * Sign in with Apple.
+   * iOS Capacitor: native ASAuthorization → signInWithIdToken.
+   * Web (and other platforms): Supabase OAuth (requires Services ID in Supabase).
+   */
+  const signInWithApple = async () => {
+    try {
+      isLoading.value = true
+      error.value = null
+
+      if (isCapacitorIos()) {
+        const { SocialLogin } = await import('@capgo/capacitor-social-login')
+        await SocialLogin.initialize({ apple: {} })
+        const response = await SocialLogin.login({
+          provider: 'apple',
+          options: {},
+        })
+        const idToken = response.result?.idToken
+        if (!idToken) {
+          throw new Error('Apple Sign In did not return an identity token')
+        }
+
+        const { data, error: idTokenError } = await supabase.auth.signInWithIdToken({
+          provider: 'apple',
+          token: idToken,
+        })
+
+        if (idTokenError) {
+          throw idTokenError
+        }
+
+        if (data.session) {
+          applySession(data.session)
+        }
+
+        return { success: true as const }
+      }
+
+      const redirectTo = buildAuthCallbackUrl()
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo,
+        },
+      })
+
+      if (oauthError) {
+        throw oauthError
+      }
+
+      return { success: true as const }
+    } catch (err) {
+      if (isAppleSignInCancellation(err)) {
+        return { success: false as const, error: undefined, cancelled: true as const }
+      }
+      const errorMessage = err instanceof Error ? err.message : 'Failed to sign in with Apple'
+      error.value = errorMessage
+      console.error('Apple sign-in error:', err)
+      return { success: false as const, error: errorMessage }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   // Send password reset email
   const resetPassword = async (email: string) => {
     try {
       isLoading.value = true
       error.value = null
 
-      const redirectTo =
-        typeof window !== 'undefined'
-          ? `${window.location.origin}/reset-password`
-          : undefined
+      const redirectTo = buildResetPasswordUrl()
 
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo,
@@ -482,7 +610,9 @@ export const useAuth = () => {
     signUp,
     signIn,
     signOut,
+    deleteAccount,
     signInWithGoogle,
+    signInWithApple,
     resetPassword,
     completePasswordReset,
     refreshSession,

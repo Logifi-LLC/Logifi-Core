@@ -4365,6 +4365,7 @@
       :fcv-connected="dashboardFcvConnected"
       @close="closeSettings"
       @logout="handleLogout"
+      @account-deleted="handleAccountDeleted"
       @pop="popSettingsFrame"
       @push="pushSettingsFrame"
       @open-currency="showCurrencyDashboard = true"
@@ -7263,6 +7264,23 @@ const handleLogout = async () => {
   stopBackgroundSync()
   setActiveUserId(null)
   await authSignOut()
+  logEntries.value = []
+  closeSettings()
+  dashboardFcvConnected.value = false
+  showFcvFetchPanel.value = false
+  if (isIos.value) {
+    showAuthModal.value = true
+    router.push('/dashboard')
+  } else {
+    showAuthModal.value = false
+    router.push('/?from=app')
+  }
+}
+
+/** After server-side account deletion — local auth already cleared. */
+const handleAccountDeleted = () => {
+  stopBackgroundSync()
+  setActiveUserId(null)
   logEntries.value = []
   closeSettings()
   dashboardFcvConnected.value = false

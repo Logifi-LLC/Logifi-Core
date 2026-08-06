@@ -23,7 +23,7 @@ export const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     label: 'Account',
     icon: 'ri:shield-user-line',
     group: 'You',
-    subtitle: 'Email, password, credits',
+    subtitle: 'Email, password, delete account',
   },
   {
     id: 'roster',

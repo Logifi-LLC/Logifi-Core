@@ -38,6 +38,7 @@
       :user-email="userEmail"
       @push-email="$emit('push', 'account-email')"
       @push-password="$emit('push', 'account-password')"
+      @account-deleted="$emit('account-deleted')"
     />
 
     <SettingsRosterTab
@@ -215,6 +216,7 @@ const confirmPasswordModel = defineModel<string>('confirmNewPassword', { require
 defineEmits<{
   close: []
   logout: []
+  'account-deleted': []
   pop: []
   push: [frame: SettingsStackFrame]
   'open-currency': []

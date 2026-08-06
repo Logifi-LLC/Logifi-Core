@@ -11,6 +11,7 @@ Use this after you receive a TestFlight invite for **Logifi** (`io.logifi.app`).
 
 ## Sign in
 
+- **Continue with Apple** — native Sign in with Apple on iPhone/iPad
 - **Email + password** — create an account or sign in with existing Logifi credentials
 - **Continue with Google** — uses Safari; you return to the app after approving access
 

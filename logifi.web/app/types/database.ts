@@ -754,6 +754,12 @@ export type Database = {
       // Views will be added here
     }
     Functions: {
+      purge_user_data_for_account_deletion: {
+        Args: {
+          p_user_id: string
+        }
+        Returns: undefined
+      }
       validate_entry_integrity: {
         Args: {
           entry_uuid: string
