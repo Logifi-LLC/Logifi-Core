@@ -129,6 +129,7 @@
       :fcv-connected="fcvConnected"
       @retry-sync="$emit('retry-sync')"
       @sync-now="$emit('sync-now')"
+      @force-full-sync="$emit('force-full-sync')"
       @import-dragover="$emit('import-dragover')"
       @import-dragenter="$emit('import-dragenter')"
       @import-dragleave="$emit('import-dragleave')"
@@ -235,6 +236,7 @@ defineEmits<{
   'reset-logbook-layout': []
   'retry-sync': []
   'sync-now': []
+  'force-full-sync': []
   'import-dragover': []
   'import-dragenter': []
   'import-dragleave': []

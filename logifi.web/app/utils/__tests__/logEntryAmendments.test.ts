@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildVoidAmendment } from '../logEntryAmendments'
+import { buildSupersededIdSet, buildVoidAmendment, isEntrySuperseded } from '../logEntryAmendments'
 import type { LogEntry } from '../logbookTypes'
 import { createEmptyFlightTime, createEmptyPerformance } from '../logbookTypes'
 import {
@@ -37,6 +37,18 @@ describe('buildVoidAmendment', () => {
     expect(voided.flightTime.total).toBeNull()
     expect(voided.remarks).toContain('VOIDED: Created in error')
     expect(voided.tags).toContain('Void')
+  })
+})
+
+describe('buildSupersededIdSet', () => {
+  it('collects amended original ids in O(n)', () => {
+    const amendment = { ...sample, id: 'amend-1', amendsEntryId: 'orig-1' }
+    const other = { ...sample, id: 'other-1' }
+    const set = buildSupersededIdSet([sample, amendment, other])
+    expect(set.has('orig-1')).toBe(true)
+    expect(set.has('other-1')).toBe(false)
+    expect(set.has('amend-1')).toBe(false)
+    expect(isEntrySuperseded('orig-1', [sample, amendment, other])).toBe(true)
   })
 })
 

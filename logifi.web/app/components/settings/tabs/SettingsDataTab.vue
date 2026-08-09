@@ -45,6 +45,20 @@
           Retry failed sync
         </button>
       </div>
+      <div v-if="isOnline" class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
+        <button
+          type="button"
+          :disabled="isSyncing"
+          class="text-sm font-medium font-quicksand disabled:opacity-50"
+          :class="isDarkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-900'"
+          @click="$emit('force-full-sync')"
+        >
+          Force full sync
+        </button>
+        <p :class="[helper, 'mt-1 text-xs']">
+          Re-downloads your entire logbook. Use only if entries look out of date after a normal sync.
+        </p>
+      </div>
     </SettingsListGroup>
 
     <SettingsListGroup title="Import" :is-dark-mode="isDarkMode">
@@ -184,6 +198,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'retry-sync': []
   'sync-now': []
+  'force-full-sync': []
   'import-dragover': []
   'import-dragenter': []
   'import-dragleave': []

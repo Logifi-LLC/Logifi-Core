@@ -560,7 +560,7 @@
                   />
                 </label>
                 <div
-                    v-if="(section.key !== 'aircraft' && getFilteredCatalogItemsForSection(section.key).length === 0) || (section.key === 'aircraft' && getFilteredAircraftFamilies().length === 0)"
+                    v-if="(section.key !== 'aircraft' && filteredCatalogItemsBySection[section.key].length === 0) || (section.key === 'aircraft' && filteredAircraftFamiliesList.length === 0)"
                   :class="['text-xs italic font-quicksand', isDarkMode ? 'text-gray-500' : 'text-gray-400']"
                 >
                   No records yet.
@@ -569,7 +569,7 @@
                   <!-- Aircraft: family tree -->
                   <template v-if="section.key === 'aircraft'">
                     <ul :class="['catalog-section-scroll space-y-2 text-sm max-h-56 overflow-y-auto pr-1 font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
-                      <li v-for="fam in getFilteredAircraftFamilies()" :key="'fam-' + fam" class="space-y-1">
+                      <li v-for="fam in filteredAircraftFamiliesList" :key="'fam-' + fam" class="space-y-1">
                         <div class="flex items-center justify-between">
                           <div class="flex items-center gap-2">
                             <input
@@ -612,7 +612,7 @@
                         </div>
                         <ul v-show="familyOpenState[fam]" class="ml-7 space-y-1">
                           <li
-                            v-for="item in getFilteredAircraftItems(fam)"
+                            v-for="item in (filteredAircraftItemsByFamily[fam] || [])"
                             :key="'fam-item-' + fam + '-' + item"
                             class="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
                             @click="showAircraftInfo(item)"
@@ -644,7 +644,7 @@
                   ]"
                 >
                   <li
-                    v-for="item in getFilteredCatalogItemsForSection(section.key)"
+                    v-for="item in filteredCatalogItemsBySection[section.key]"
                     :key="`${section.key}-${item}`"
                     :class="[
                       'flex items-center gap-2 min-w-0',
@@ -1404,7 +1404,7 @@
 
             <LogEntryList
               v-else-if="isIos"
-              :entries="iosDisplayedEntries"
+              :entries="displayedEntries"
               :is-dark-mode="isDarkMode"
               :visible-detail-fields="visibleDetailFields"
               :show-remarks-footer="showRemarksFooter"
@@ -1471,7 +1471,7 @@
                       : 'divide-gray-200 bg-gray-100 text-gray-600'
                   ]"
                 >
-                  <template v-for="entry in filteredEntries" :key="entry.id">
+                  <template v-for="entry in displayedEntries" :key="entry.id">
                     <tr
                       :class="[
                         'transition-all duration-200 border-l-4 cursor-pointer',
@@ -1632,8 +1632,8 @@
             </div>
 
             <div
-              v-if="isIos && filteredEntries.length > iosVisibleEntryCount"
-              ref="iosLoadMoreSentinelRef"
+              v-if="filteredEntries.length > visibleEntryCount"
+              ref="entriesLoadMoreSentinelRef"
               class="mt-4 flex flex-col items-center gap-1 py-3"
               aria-live="polite"
             >
@@ -1643,7 +1643,7 @@
                   isDarkMode ? 'text-gray-500' : 'text-gray-400'
                 ]"
               >
-                Showing {{ iosDisplayedEntries.length }} of {{ filteredEntries.length }}
+                Showing {{ displayedEntries.length }} of {{ filteredEntries.length }}
               </p>
             </div>
       </div>
@@ -4389,6 +4389,7 @@
       @reset-logbook-layout="resetColumnConfig"
       @retry-sync="retryFailed()"
       @sync-now="refreshDashboardData()"
+      @force-full-sync="forceFullDashboardSync()"
       @import-dragover="handleImportDragOver"
       @import-dragenter="handleImportDragEnter"
       @import-dragleave="handleImportDragLeave"
@@ -6758,6 +6759,7 @@ import { useFlightSigning } from '../composables/useFlightSigning'
 import { useRoster } from '../composables/useRoster'
 import { requiresInstructorSignature } from '../utils/flightSigning'
 import {
+  buildSupersededIdSet,
   buildVoidAmendment,
   getAmendmentFor,
   isEntrySuperseded,
@@ -7193,10 +7195,11 @@ const iosSyncMessage = ref('')
 const iosSyncBannerVisible = ref(false)
 let iosSyncSuccessTimer: ReturnType<typeof setTimeout> | null = null
 
-const IOS_ENTRIES_PAGE_SIZE = 100
+const ENTRIES_PAGE_SIZE = 100
 const CACHE_FRESH_MS = 5 * 60 * 1000
 const LOG_ENTRIES_SIDE_EFFECT_DEBOUNCE_MS = 400
 const IOS_CATALOG_DEBOUNCE_MS = 400
+const SEARCH_DEBOUNCE_MS = 300
 
 type InboundSyncMode = 'auto' | 'delta' | 'full'
 
@@ -7208,9 +7211,11 @@ interface LoadEntriesOptions {
 
 let logEntriesSideEffectTimer: ReturnType<typeof setTimeout> | null = null
 let iosCatalogDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
-const iosVisibleEntryCount = ref(IOS_ENTRIES_PAGE_SIZE)
+const visibleEntryCount = ref(ENTRIES_PAGE_SIZE)
 const logEntries = ref<LogEntry[]>([])
+const supersededIdSet = computed(() => buildSupersededIdSet(logEntries.value))
 
 const aircraftTailIndex = computed(() => buildAircraftTailIndex(logEntries.value))
 
@@ -7465,7 +7470,11 @@ function handleAppResume(): void {
 
 // Cleanup scroll event listener on unmount
 onUnmounted(() => {
-  teardownIosLoadMoreObserver()
+  teardownEntriesLoadMoreObserver()
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+    searchDebounceTimer = null
+  }
   if (isBrowser) {
     const scrollTarget = isIos.value ? rootScrollContainerRef.value : window
     if (scrollTarget) {
@@ -8257,6 +8266,14 @@ const setXcTimeManuallySet = (value: boolean) => {
   xcTimeManuallySet.value = value
 }
 const searchTerm = ref('')
+const debouncedSearchTerm = ref('')
+watch(searchTerm, (value) => {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    debouncedSearchTerm.value = value
+    searchDebounceTimer = null
+  }, SEARCH_DEBOUNCE_MS)
+})
 const validationError = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 const duplicateWarning = ref<{ matches: LogEntry[] } | null>(null)
@@ -12858,12 +12875,19 @@ function getFilteredCatalogItems(key: Exclude<CatalogKey, 'aircraft'>): string[]
   return items.filter((item) => item.toLowerCase().includes(query))
 }
 
-function getFilteredCatalogItemsForSection(key: CatalogKey): string[] {
-  if (key === 'aircraft') return []
-  return getFilteredCatalogItems(key)
-}
+const filteredCatalogItemsBySection = computed(() => {
+  const airports = getFilteredCatalogItems('airports')
+  const pilots = getFilteredCatalogItems('pilots')
+  const categoryClass = getFilteredCatalogItems('categoryClass')
+  return {
+    aircraft: [] as string[],
+    airports,
+    pilots,
+    categoryClass,
+  } satisfies Record<CatalogKey, string[]>
+})
 
-function getFilteredAircraftFamilies(): string[] {
+const filteredAircraftFamiliesList = computed(() => {
   const families = catalogs.value.families || []
   const query = normalizedCatalogSearch('aircraft')
   if (!query) return families
@@ -12873,16 +12897,27 @@ function getFilteredAircraftFamilies(): string[] {
     const items = catalogs.value.familyToItems?.[fam] || []
     return items.some((item) => item.toLowerCase().includes(query))
   })
-}
+})
 
-function getFilteredAircraftItems(fam: string): string[] {
-  const items = catalogs.value.familyToItems?.[fam] || []
+const filteredAircraftItemsByFamily = computed(() => {
   const query = normalizedCatalogSearch('aircraft')
-  if (!query) return items
-  const display = (catalogs.value.familyDisplayName?.[fam] ?? fam).toLowerCase()
-  if (display.includes(query) || fam.toLowerCase().includes(query)) return items
-  return items.filter((item) => item.toLowerCase().includes(query))
-}
+  const map: Record<string, string[]> = {}
+  const families = catalogs.value.families || []
+  for (const fam of families) {
+    const items = catalogs.value.familyToItems?.[fam] || []
+    if (!query) {
+      map[fam] = items
+      continue
+    }
+    const display = (catalogs.value.familyDisplayName?.[fam] ?? fam).toLowerCase()
+    if (display.includes(query) || fam.toLowerCase().includes(query)) {
+      map[fam] = items
+    } else {
+      map[fam] = items.filter((item) => item.toLowerCase().includes(query))
+    }
+  }
+  return map
+})
 
 function formatOOOIInput(value: string): string {
   // Remove non-digits and limit to 4 characters
@@ -16357,7 +16392,7 @@ async function maybeConsolidateAircraftByTail(): Promise<void> {
   }
 }
 
-async function refreshDashboardData(): Promise<void> {
+async function refreshDashboardData(options?: { forceFull?: boolean }): Promise<void> {
   if (isDashboardRefreshing.value) return
   isDashboardRefreshing.value = true
 
@@ -16378,7 +16413,9 @@ async function refreshDashboardData(): Promise<void> {
     const queueBefore = queueLength.value
     const countBefore = logEntries.value.length
 
-    const removed = await loadEntries({ mode: 'full' })
+    const removed = await loadEntries({
+      mode: options?.forceFull ? 'full' : 'delta',
+    })
     await reconcileSyncQueue(user.value.id)
     await processQueue()
     await refreshQueueLength()
@@ -16404,6 +16441,9 @@ async function refreshDashboardData(): Promise<void> {
     } else if (queueCleared) {
       await new Promise((resolve) => setTimeout(resolve, 300))
       showToast('Synced')
+    } else if (options?.forceFull) {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      showToast('Full sync complete')
     }
   } catch (err) {
     console.error('[refreshDashboardData]', err)
@@ -16411,6 +16451,10 @@ async function refreshDashboardData(): Promise<void> {
   } finally {
     isDashboardRefreshing.value = false
   }
+}
+
+async function forceFullDashboardSync(): Promise<void> {
+  await refreshDashboardData({ forceFull: true })
 }
 
 async function prepareLogbookForFcvImport(): Promise<void> {
@@ -16949,19 +16993,46 @@ function getEntryLogbookType(entry: LogEntry): 'flight' | 'simulator' {
   return simTime > 0 && airplaneTotal === 0 ? 'simulator' : 'flight'
 }
 
-function passesCatalogAndSearchFilters(entry: LogEntry): boolean {
-  const term = searchTerm.value.trim().toLowerCase()
-  const activeAircraft = new Set(getActiveFilterKeys(selectedFilters.aircraft).map(k => k.toUpperCase()))
-  const activeAirports = new Set(getActiveFilterKeys(selectedFilters.airports).map(k => k.toUpperCase()))
-  const activePilots = new Set(getActiveFilterKeys(selectedFilters.pilots))
-  const activeConditions = new Set(getActiveFilterKeys(selectedFilters.conditions))
-  const activeFamilies = new Set(getActiveFilterKeys(selectedFilters.families))
-  const activeCategoryClass = new Set(getActiveFilterKeys(selectedFilters.categoryClass).map(k => k.toUpperCase()))
+interface CatalogFilterContext {
+  term: string
+  activeAircraft: Set<string>
+  activeAirports: Set<string>
+  activePilots: Set<string>
+  activeConditions: Set<string>
+  activeFamilies: Set<string>
+  activeCategoryClass: Set<string>
+  activeTags: string[]
+  flagged: boolean
+  activeLogbookType: 'flight' | 'simulator'
+  classifiedAirports: Set<string>
+}
 
-  if (getEntryLogbookType(entry) !== activeLogbook.value) return false
+function buildCatalogFilterContext(): CatalogFilterContext {
+  return {
+    term: debouncedSearchTerm.value.trim().toLowerCase(),
+    activeAircraft: new Set(getActiveFilterKeys(selectedFilters.aircraft).map((k) => k.toUpperCase())),
+    activeAirports: new Set(getActiveFilterKeys(selectedFilters.airports).map((k) => k.toUpperCase())),
+    activePilots: new Set(getActiveFilterKeys(selectedFilters.pilots)),
+    activeConditions: new Set(getActiveFilterKeys(selectedFilters.conditions)),
+    activeFamilies: new Set(getActiveFilterKeys(selectedFilters.families)),
+    activeCategoryClass: new Set(
+      getActiveFilterKeys(selectedFilters.categoryClass).map((k) => k.toUpperCase())
+    ),
+    activeTags: getActiveFilterKeys(selectedFilters.tags),
+    flagged: selectedFilters.flagged,
+    activeLogbookType: activeLogbook.value,
+    classifiedAirports: classifiedRouteAirportSet.value,
+  }
+}
+
+function entryPassesCatalogAndSearchFilters(
+  entry: LogEntry,
+  ctx: CatalogFilterContext
+): boolean {
+  if (getEntryLogbookType(entry) !== ctx.activeLogbookType) return false
 
   const matchesTerm =
-    term.length === 0 ||
+    ctx.term.length === 0 ||
     [
       entry.aircraftMakeModel,
       entry.registration,
@@ -16973,112 +17044,115 @@ function passesCatalogAndSearchFilters(entry: LogEntry): boolean {
     ]
       .join(' ')
       .toLowerCase()
-      .includes(term)
+      .includes(ctx.term)
 
   if (!matchesTerm) return false
 
-  if (activeAircraft.size > 0) {
+  if (ctx.activeAircraft.size > 0) {
     const reg = (entry.registration || '').toUpperCase()
-    if (!activeAircraft.has(reg)) return false
+    if (!ctx.activeAircraft.has(reg)) return false
   }
 
-  if (activeAirports.size > 0) {
-    const entryCodes = getEntryAirportCodes(entry, classifiedRouteAirportSet.value)
-    if (!entryCodes.some((code) => activeAirports.has(code))) return false
+  if (ctx.activeAirports.size > 0) {
+    const entryCodes = getEntryAirportCodes(entry, ctx.classifiedAirports)
+    if (!entryCodes.some((code) => ctx.activeAirports.has(code))) return false
   }
 
-  if (activePilots.size > 0) {
+  if (ctx.activePilots.size > 0) {
     const pilotName = entry.trainingElements || ''
-    if (!activePilots.has(pilotName)) return false
+    if (!ctx.activePilots.has(pilotName)) return false
   }
 
-  if (activeConditions.size > 0) {
+  if (ctx.activeConditions.size > 0) {
     const entryConds = new Set((entry.flightConditions || []) as string[])
-    for (const cond of activeConditions) {
+    for (const cond of ctx.activeConditions) {
       if (!entryConds.has(cond)) return false
     }
   }
 
-  if (activeFamilies.size > 0) {
+  if (ctx.activeFamilies.size > 0) {
     const fam = effectiveFamilyKeyForEntry(entry)
-    if (!fam || !activeFamilies.has(fam)) return false
+    if (!fam || !ctx.activeFamilies.has(fam)) return false
   }
 
-  if (activeCategoryClass.size > 0) {
+  if (ctx.activeCategoryClass.size > 0) {
     const catClass = (entry.aircraftCategoryClass || '').trim().toUpperCase()
-    if (!activeCategoryClass.has(catClass)) return false
+    if (!ctx.activeCategoryClass.has(catClass)) return false
   }
 
-  if (selectedFilters.flagged && !entry.flagged) return false
+  if (ctx.flagged && !entry.flagged) return false
 
-  const activeTags = getActiveFilterKeys(selectedFilters.tags)
-  if (activeTags.length > 0) {
+  if (ctx.activeTags.length > 0) {
     const entryTagSet = new Set(entry.tags || [])
-    if (!activeTags.every((tag) => entryTagSet.has(tag))) return false
+    if (!ctx.activeTags.every((tag) => entryTagSet.has(tag))) return false
   }
 
   return true
 }
 
+function passesCatalogAndSearchFilters(entry: LogEntry): boolean {
+  return entryPassesCatalogAndSearchFilters(entry, buildCatalogFilterContext())
+}
+
 const filteredEntries = computed(() => {
   const dateRange = getTotalsDateRange()
+  const ctx = buildCatalogFilterContext()
+  const superseded = supersededIdSet.value
   const result = logEntries.value.filter((entry) => {
-    if (isEntrySuperseded(entry.id, logEntries.value)) return false
-    if (!passesCatalogAndSearchFilters(entry)) return false
+    if (superseded.has(entry.id)) return false
+    if (!entryPassesCatalogAndSearchFilters(entry, ctx)) return false
     if (dateRange && !entryMatchesTotalsDateRange(entry, dateRange)) return false
     return true
   })
   return sortEntriesByDateAndOOOI(result)
 })
 
-const iosDisplayedEntries = computed(() =>
-  isIos.value ? filteredEntries.value.slice(0, iosVisibleEntryCount.value) : filteredEntries.value
+const displayedEntries = computed(() =>
+  filteredEntries.value.slice(0, visibleEntryCount.value)
 )
 
-const iosLoadMoreSentinelRef = ref<HTMLElement | null>(null)
-let iosLoadMoreObserver: IntersectionObserver | undefined
+const entriesLoadMoreSentinelRef = ref<HTMLElement | null>(null)
+let entriesLoadMoreObserver: IntersectionObserver | undefined
 
-function loadMoreIosEntries(): void {
-  if (iosVisibleEntryCount.value >= filteredEntries.value.length) return
-  iosVisibleEntryCount.value += IOS_ENTRIES_PAGE_SIZE
+function loadMoreDisplayedEntries(): void {
+  if (visibleEntryCount.value >= filteredEntries.value.length) return
+  visibleEntryCount.value += ENTRIES_PAGE_SIZE
 }
 
-function teardownIosLoadMoreObserver(): void {
-  iosLoadMoreObserver?.disconnect()
-  iosLoadMoreObserver = undefined
+function teardownEntriesLoadMoreObserver(): void {
+  entriesLoadMoreObserver?.disconnect()
+  entriesLoadMoreObserver = undefined
 }
 
-function setupIosLoadMoreObserver(): void {
-  teardownIosLoadMoreObserver()
-  if (!isIos.value || typeof IntersectionObserver === 'undefined') return
-  const root = rootScrollContainerRef.value
-  const sentinel = iosLoadMoreSentinelRef.value
-  if (!root || !sentinel) return
+function setupEntriesLoadMoreObserver(): void {
+  teardownEntriesLoadMoreObserver()
+  if (typeof IntersectionObserver === 'undefined') return
+  const sentinel = entriesLoadMoreSentinelRef.value
+  if (!sentinel) return
+  const root = isIos.value ? rootScrollContainerRef.value : null
+  if (isIos.value && !root) return
 
-  iosLoadMoreObserver = new IntersectionObserver(
+  entriesLoadMoreObserver = new IntersectionObserver(
     (entries) => {
       if (!entries.some((entry) => entry.isIntersecting)) return
-      if (iosVisibleEntryCount.value >= filteredEntries.value.length) return
-      loadMoreIosEntries()
-      // Re-observe after DOM grows; fires again if sentinel is still near the viewport.
-      nextTick(() => setupIosLoadMoreObserver())
+      if (visibleEntryCount.value >= filteredEntries.value.length) return
+      loadMoreDisplayedEntries()
+      nextTick(() => setupEntriesLoadMoreObserver())
     },
     { root, rootMargin: '160px 0px', threshold: 0 }
   )
-  iosLoadMoreObserver.observe(sentinel)
+  entriesLoadMoreObserver.observe(sentinel)
 }
 
-watch(iosLoadMoreSentinelRef, (el) => {
-  if (el) setupIosLoadMoreObserver()
-  else teardownIosLoadMoreObserver()
+watch(entriesLoadMoreSentinelRef, (el) => {
+  if (el) setupEntriesLoadMoreObserver()
+  else teardownEntriesLoadMoreObserver()
 })
 
 watch(
-  [searchTerm, activeLogbook, totalsTimeMode, totalsCustomStart, totalsCustomEnd, selectedFilters],
+  [debouncedSearchTerm, activeLogbook, totalsTimeMode, totalsCustomStart, totalsCustomEnd, selectedFilters],
   () => {
-    if (isIos.value) {
-      iosVisibleEntryCount.value = IOS_ENTRIES_PAGE_SIZE
-    }
+    visibleEntryCount.value = ENTRIES_PAGE_SIZE
   },
   { deep: true }
 )

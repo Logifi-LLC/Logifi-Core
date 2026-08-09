@@ -46,6 +46,19 @@ export function buildVoidAmendment(
   }
 }
 
+/** IDs of originals that have been amended (superseded) by another entry. */
+export function buildSupersededIdSet(
+  entries: readonly LogEntry[]
+): Set<string> {
+  const superseded = new Set<string>()
+  for (const entry of entries) {
+    if (entry.amendsEntryId) {
+      superseded.add(entry.amendsEntryId)
+    }
+  }
+  return superseded
+}
+
 /** True when another entry in the logbook amends this one. */
 export function isEntrySuperseded(
   entryId: string,

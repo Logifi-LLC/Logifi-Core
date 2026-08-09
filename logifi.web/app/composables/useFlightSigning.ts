@@ -364,16 +364,20 @@ export const useFlightSigning = () => {
         return { success: true, data: signaturesByEntryId.value }
       }
 
-      const { data, error: fetchError } = await supabase
-        .from('flight_signatures')
-        .select('*')
-        .in('log_entry_id', uuids)
-
-      if (fetchError) throw fetchError
-
+      const SIGNATURE_IN_CHUNK = 200
       const next = { ...signaturesByEntryId.value }
-      for (const row of data ?? []) {
-        next[row.log_entry_id] = row
+      for (let i = 0; i < uuids.length; i += SIGNATURE_IN_CHUNK) {
+        const chunk = uuids.slice(i, i + SIGNATURE_IN_CHUNK)
+        const { data, error: fetchError } = await supabase
+          .from('flight_signatures')
+          .select('*')
+          .in('log_entry_id', chunk)
+
+        if (fetchError) throw fetchError
+
+        for (const row of data ?? []) {
+          next[row.log_entry_id] = row
+        }
       }
       signaturesByEntryId.value = next
       return { success: true, data: next }

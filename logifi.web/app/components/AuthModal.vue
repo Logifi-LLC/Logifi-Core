@@ -80,6 +80,7 @@
         <!-- Social Login -->
         <div class="space-y-3">
           <button
+            v-if="showAppleSignIn"
             @click="handleAppleSignIn"
             :disabled="isLoading"
             class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl border transition-all font-bold text-sm font-quicksand"
@@ -320,6 +321,8 @@ const password = ref('')
 const authError = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 const isLoading = computed(() => authLoading.value)
+/** Native Apple Sign In works on the iOS app only; web OAuth is not configured. */
+const showAppleSignIn = isCapacitorIos()
 
 // Watch for auth errors from composable
 watch(authErrorState, (newError) => {

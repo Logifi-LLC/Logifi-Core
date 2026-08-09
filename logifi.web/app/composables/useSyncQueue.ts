@@ -129,9 +129,12 @@ export const useSyncQueue = () => {
         const userId = item.userId ?? activeUserId.value
         if (item.operation === 'insert' && insertedData && insertedData.id && userId) {
           try {
-            const { getAllEntriesFromIndexedDB, updateEntryInIndexedDB } = await import('~/utils/indexedDB')
-            const localEntries = await getAllEntriesFromIndexedDB(userId)
-            const localEntry = localEntries.find((e) => e.id === item.entryId)
+            const {
+              getEntryFromIndexedDB,
+              updateEntryInIndexedDB,
+              deleteEntryFromIndexedDB,
+            } = await import('~/utils/indexedDB')
+            const localEntry = await getEntryFromIndexedDB(item.entryId)
 
             if (localEntry) {
               if (insertedData.id !== item.entryId) {
@@ -144,6 +147,14 @@ export const useSyncQueue = () => {
                   },
                   { userId, synced: true }
                 )
+                // Old local id may remain if keyPath changed via put with new id
+                if (item.entryId !== insertedData.id) {
+                  try {
+                    await deleteEntryFromIndexedDB(item.entryId)
+                  } catch {
+                    // non-fatal if already replaced
+                  }
+                }
               } else {
                 await updateEntryInIndexedDB(
                   {
@@ -214,10 +225,13 @@ export const useSyncQueue = () => {
           ? item.entryId
           : null
 
+    // Enough for queue reconcile + IDB hash/version patching after insert.
+    const existingColumns = 'id, data_hash, version'
+
     if (candidateId) {
       const { data } = await supabase
         .from('log_entries')
-        .select('*')
+        .select(existingColumns)
         .eq('id', candidateId)
         .maybeSingle()
       return data ?? null
@@ -227,7 +241,7 @@ export const useSyncQueue = () => {
     if (insertData.amends_entry_id) {
       let amendQuery = supabase
         .from('log_entries')
-        .select('*')
+        .select(existingColumns)
         .eq('amends_entry_id', insertData.amends_entry_id as string)
         .limit(1)
       if (typeof insertData.user_id === 'string' && insertData.user_id) {
@@ -245,7 +259,7 @@ export const useSyncQueue = () => {
     ) {
       const { data } = await supabase
         .from('log_entries')
-        .select('*')
+        .select(existingColumns)
         .eq('date', insertData.date as string)
         .eq('registration', insertData.registration as string)
         .eq('departure', insertData.departure as string)
@@ -531,8 +545,9 @@ export const useSyncQueue = () => {
         }
         await processQueueItem(item)
 
+        // Small yield between items to keep the UI responsive without serializing drains.
         if (i < processableItems.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 100))
+          await new Promise((resolve) => setTimeout(resolve, 16))
         }
       }
 

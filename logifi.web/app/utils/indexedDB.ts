@@ -233,6 +233,7 @@ export async function getAllEntriesFromIndexedDB(userId: string): Promise<LogEnt
 
 /**
  * Get all IndexedDB entries for a user including sync metadata.
+ * Uses the `userId` index when available; falls back to full scan + filter.
  */
 export async function getAllIDBLogEntriesForUser(userId: string): Promise<IDBLogEntry[]> {
   const db = await getDB()
@@ -240,13 +241,27 @@ export async function getAllIDBLogEntriesForUser(userId: string): Promise<IDBLog
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(['log_entries'], 'readonly')
     const store = transaction.objectStore('log_entries')
-    const request = store.getAll()
 
-    request.onsuccess = () => {
-      const entries: IDBLogEntry[] = request.result || []
-      resolve(entries.filter((entry) => entry._userId === userId))
+    const readAllAndFilter = () => {
+      const request = store.getAll()
+      request.onsuccess = () => {
+        const entries: IDBLogEntry[] = request.result || []
+        resolve(entries.filter((entry) => entry._userId === userId))
+      }
+      request.onerror = () => reject(new Error(`Failed to get entries: ${request.error?.message}`))
     }
-    request.onerror = () => reject(new Error(`Failed to get entries: ${request.error?.message}`))
+
+    if (store.indexNames.contains('userId')) {
+      const index = store.index('userId')
+      const request = index.getAll(userId)
+      request.onsuccess = () => {
+        resolve((request.result || []) as IDBLogEntry[])
+      }
+      request.onerror = () => reject(new Error(`Failed to get entries by user: ${request.error?.message}`))
+      return
+    }
+
+    readAllAndFilter()
   })
 }
 

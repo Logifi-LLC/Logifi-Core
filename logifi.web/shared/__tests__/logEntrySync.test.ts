@@ -3,6 +3,7 @@ import type { LogEntry } from '../../app/utils/logbookTypes'
 import {
   applyTombstoneDeletions,
   computeRemoteSyncWatermark,
+  DELTA_FALLBACK_THRESHOLD,
   mergeWatermarks,
   subtractOverlapFromIso,
 } from '../logEntrySync'
@@ -56,6 +57,10 @@ function buildEntry(id: string, updatedAt?: string): LogEntry {
 }
 
 describe('logEntrySync utilities', () => {
+  it('uses a high delta fallback threshold so moderate imports stay on the delta path', () => {
+    expect(DELTA_FALLBACK_THRESHOLD).toBeGreaterThanOrEqual(2000)
+  })
+
   it('subtractOverlapFromIso moves the watermark back in time', () => {
     const result = subtractOverlapFromIso('2026-01-01T01:00:00.000Z', 60_000)
     expect(result).toBe('2026-01-01T00:59:00.000Z')

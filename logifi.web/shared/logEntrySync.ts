@@ -5,7 +5,7 @@ import type { SyncQueueItemLike } from './logEntryMerge'
 export const DELTA_OVERLAP_MS = 60_000
 
 /** If a delta pull returns this many rows, fall back to a full reconcile. */
-export const DELTA_FALLBACK_THRESHOLD = 500
+export const DELTA_FALLBACK_THRESHOLD = 2000
 
 export interface LogEntryDeletionTombstone {
   entryId: string
