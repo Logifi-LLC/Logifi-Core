@@ -44,7 +44,9 @@ DECLARE
     'guest_sign_log_entry_for_session'
   ];
   helpers text[] := ARRAY[
-    'endorsement_active_relationship',
+    'endorsement_active_relationship'
+  ];
+  rls_helpers text[] := ARRAY[
     'instructor_relationship_is_signable'
   ];
   client_rpcs text[] := ARRAY[
@@ -73,7 +75,7 @@ BEGIN
     FROM pg_proc p
     JOIN pg_namespace n ON p.pronamespace = n.oid
     WHERE n.nspname = 'public'
-      AND p.proname = ANY (client_rpcs || service_only || helpers)
+      AND p.proname = ANY (client_rpcs || service_only || helpers || rls_helpers)
   LOOP
     EXECUTE format(
       'REVOKE ALL ON FUNCTION public.%I(%s) FROM PUBLIC, anon',
@@ -84,6 +86,13 @@ BEGIN
     IF r.proname = ANY (helpers) THEN
       EXECUTE format(
         'REVOKE ALL ON FUNCTION public.%I(%s) FROM authenticated',
+        r.proname,
+        r.args
+      );
+    ELSIF r.proname = ANY (rls_helpers) THEN
+      -- Used from RLS (runs as the current user), not only from SECURITY DEFINER RPCs.
+      EXECUTE format(
+        'GRANT EXECUTE ON FUNCTION public.%I(%s) TO authenticated',
         r.proname,
         r.args
       );
