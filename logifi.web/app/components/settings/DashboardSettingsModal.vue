@@ -135,6 +135,7 @@
       @import-dragleave="$emit('import-dragleave')"
       @import-drop="$emit('import-drop', $event)"
       @import-file="$emit('import-file', $event)"
+      @import-provider-file="$emit('import-provider-file', $event)"
       @export-logbook="$emit('export-logbook')"
       @generate-8710="$emit('generate-8710')"
       @import-fcv="$emit('import-fcv')"
@@ -162,6 +163,7 @@ import SettingsDataTab from './tabs/SettingsDataTab.vue'
 import SettingsComplianceTab from './tabs/SettingsComplianceTab.vue'
 import type { SettingsStackFrame } from './settingsNav'
 import type { LogbookColumnConfig, LogbookColumnKey } from '~/utils/logbookTypes'
+import type { ImportProviderKey } from '../../../shared/import'
 import type { EntryCardPreset, EntryCardPresetId } from '~/utils/entryCardPresets'
 
 defineOptions({ inheritAttrs: false })
@@ -242,6 +244,7 @@ defineEmits<{
   'import-dragleave': []
   'import-drop': [event: DragEvent]
   'import-file': [file: File]
+  'import-provider-file': [payload: { file: File; provider: ImportProviderKey }]
   'export-logbook': []
   'generate-8710': []
   'import-fcv': []

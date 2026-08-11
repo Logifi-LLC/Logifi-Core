@@ -146,4 +146,84 @@ describe('entriesDuplicateMatch', () => {
     const hood = { ...base, simulatedInstrument: 0.5 }
     expect(entriesDuplicateMatch(night, hood)).toBe(false)
   })
+
+  it('does not match same-day same-route flights whose totals differ by 0.1h', () => {
+    const a = {
+      date: '2025-08-16',
+      registration: 'N278DC',
+      departure: 'KSMD',
+      destination: 'KSMD',
+      flightTimeTotal: 1.1 as number | null,
+    }
+    const b = { ...a, flightTimeTotal: 1.2 }
+    expect(entriesDuplicateMatch(a, b)).toBe(false)
+    expect(entriesDuplicateMatch(b, a)).toBe(false)
+  })
+
+  it('still matches identical rows including rounded FCV totals', () => {
+    const row = {
+      date: '2025-08-16',
+      registration: 'N278DC',
+      departure: 'KSMD',
+      destination: 'KSMD',
+      role: 'PIC',
+      flightTimeTotal: 1.1 as number | null,
+      pic: 1.1,
+      dayLandings: 1,
+    }
+    expect(entriesDuplicateMatch(row, { ...row })).toBe(true)
+  })
+
+  it('splits same date/tail/route when PIC time differs', () => {
+    const a = {
+      date: '2025-08-16',
+      registration: 'N278DC',
+      departure: 'KSMD',
+      destination: 'KSMD',
+      flightTimeTotal: 1.2 as number | null,
+      pic: 1.2,
+    }
+    const b = { ...a, pic: 0 }
+    expect(entriesDuplicateMatch(a, b)).toBe(false)
+  })
+
+  it('splits same date/tail/route when landings differ', () => {
+    const a = {
+      date: '2025-08-16',
+      registration: 'N278DC',
+      departure: 'KSMD',
+      destination: 'KSMD',
+      flightTimeTotal: 1.2 as number | null,
+      dayLandings: 3,
+    }
+    const b = { ...a, dayLandings: 1 }
+    expect(entriesDuplicateMatch(a, b)).toBe(false)
+  })
+
+  it('splits same date/tail/route when role differs', () => {
+    const a = {
+      date: '2025-08-16',
+      registration: 'N278DC',
+      departure: 'KSMD',
+      destination: 'KSMD',
+      role: 'PIC',
+      flightTimeTotal: 1.2 as number | null,
+    }
+    const b = { ...a, role: 'Dual Received' }
+    expect(entriesDuplicateMatch(a, b)).toBe(false)
+  })
+
+  it('still requires totals when both sides have matching OOOI out (standard mode)', () => {
+    const a = {
+      date: '2025-08-16',
+      registration: 'N278DC',
+      departure: 'KSMD',
+      destination: 'KSMD',
+      oooiOut: '08:00',
+      flightTimeTotal: 1.1 as number | null,
+    }
+    const b = { ...a, flightTimeTotal: 1.2 }
+    expect(entriesDuplicateMatch(a, b, 'standard')).toBe(false)
+    expect(entriesDuplicateMatch(a, b, 'importLeg')).toBe(true)
+  })
 })

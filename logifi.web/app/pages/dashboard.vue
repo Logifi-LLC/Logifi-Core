@@ -4395,6 +4395,7 @@
       @import-dragleave="handleImportDragLeave"
       @import-drop="handleImportDrop"
       @import-file="handleSettingsImportFile"
+      @import-provider-file="handleSettingsProviderImportFile"
       @export-logbook="openExportDialog"
       @generate-8710="showForm8710Modal = true"
       @import-fcv="handleOpenFcvImportFromSettings"
@@ -6173,7 +6174,7 @@
               Found {{ importPreviewStatistics.duplicates }} duplicate {{ importPreviewStatistics.duplicates === 1 ? 'entry' : 'entries' }} that match existing entries in your logbook.
             </p>
             <p :class="['text-sm font-quicksand mt-2', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
-              Duplicates are detected based on date and registration. Importing duplicates may create duplicate entries in your logbook.
+              Duplicates are rows that match an existing flight on date, tail, route, role, times, and landings. Remarks and tags are ignored. Importing duplicates may create duplicate entries in your logbook.
             </p>
           </div>
         </div>
@@ -6771,7 +6772,7 @@ import { useSyncQueue } from '../composables/useSyncQueue'
 import { useExport } from '../composables/useExport'
 import { logbookDataBridgeService } from '../../shared/logbookDataBridge'
 import { downloadExport } from '../utils/logbookDownload'
-import type { ExportDestination } from '../../shared/logbookDataBridge/types'
+import type { BridgeSource, ExportDestination } from '../../shared/logbookDataBridge/types'
 import {
   EXPORT_DESTINATION_HINTS,
   EXPORT_DESTINATION_LABELS,
@@ -6779,6 +6780,12 @@ import {
 import { findFieldValue, mapRawRowToLogEntry } from '../../shared/logbookDataBridge/importMappers'
 import { applyLogtenCrewFields } from '../utils/logbookImportEnrichments'
 import { parseBridgeFile } from '../../shared/logbookDataBridge/fileParser'
+import {
+  enrichForeFlightEntries,
+  mergeIncomingTags,
+  providerKeyToBridgeSource,
+  type ImportProviderKey,
+} from '../../shared/import'
 import {
   enrichLogtenDynamicExportRow,
   applyLogtenDynamicRoleAndTime,
@@ -10139,9 +10146,10 @@ interface ImportStatistics {
 
 interface ImportMetadata {
   fileName: string
-  fileType: 'CSV' | 'JSON'
+  fileType: 'CSV' | 'TSV' | 'JSON'
   importedAt: string
   detectedSource?: string
+  selectedProvider?: string | null
   bridgeWarnings?: string[]
 }
 
@@ -11007,9 +11015,12 @@ function getImporterPilotName(): string {
   return fromMeta
 }
 
-async function normalizeImportedEntry(rawEntry: Record<string, any>): Promise<LogEntry | null> {
+async function normalizeImportedEntry(
+  rawEntry: Record<string, any>,
+  source?: BridgeSource
+): Promise<LogEntry | null> {
   try {
-    const entry = mapRawRowToLogEntry(rawEntry, { generateId: generateEntryId })
+    const entry = mapRawRowToLogEntry(rawEntry, { generateId: generateEntryId, source })
     if (!entry) return null
 
     const isLogtenDynamic = isLogtenDynamicExportHeaders(Object.keys(rawEntry))
@@ -11325,8 +11336,30 @@ async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statist
   return { statistics, validEntries, duplicates, errors }
 }
 
-async function importEntries(entries: LogEntry[], importDuplicates: boolean = false, importWithErrorsFlag: boolean = false): Promise<{ imported: number; skipped: number; flaggedDuplicates: number; errors: string[] }> {
-  const result = { imported: 0, skipped: 0, flaggedDuplicates: 0, errors: [] as string[] }
+async function persistImportedEntryTags(entry: LogEntry, tags: string[]): Promise<void> {
+  entry.tags = tags
+  if (!isAuthenticated.value || !user.value) return
+  try {
+    const { error } = await (supabase.from('log_entries') as any)
+      .update({ tags })
+      .eq('id', entry.id)
+      .eq('user_id', user.value.id)
+    if (error) {
+      console.error('[importEntries] Failed to persist tags:', entry.id, error)
+    }
+  } catch (err) {
+    console.error('[importEntries] Failed to persist tags:', entry.id, err)
+  }
+  try {
+    await updateEntryInIndexedDB(entry, { synced: true, userId: user.value.id })
+  } catch (idbErr) {
+    console.warn('[importEntries] IndexedDB tag update failed:', idbErr)
+  }
+}
+
+async function importEntries(entries: LogEntry[], importDuplicates: boolean = false, importWithErrorsFlag: boolean = false): Promise<{ imported: number; skipped: number; flaggedDuplicates: number; tagsUpdated: number; errors: string[] }> {
+  const result = { imported: 0, skipped: 0, flaggedDuplicates: 0, tagsUpdated: 0, errors: [] as string[] }
+  const importedTagPresets = new Set<string>()
   
   // Determine import source from metadata
   const importSource = importPreviewMetadata.value?.fileType?.toLowerCase() || 'unknown'
@@ -11418,6 +11451,19 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
     // Check for duplicates
     const matches = findDuplicateEntries(entry, logEntries.value)
     if (matches.length > 0 && !importDuplicates) {
+      const incomingTags = Array.isArray(entry.tags) ? entry.tags : []
+      if (incomingTags.length > 0) {
+        for (const match of matches) {
+          const merged = mergeIncomingTags(match.tags, incomingTags)
+          if (merged.length === (match.tags || []).filter(Boolean).length) continue
+          await persistImportedEntryTags(match, merged)
+          result.tagsUpdated++
+          for (const tag of incomingTags) {
+            const trimmed = tag.trim()
+            if (trimmed) importedTagPresets.add(trimmed)
+          }
+        }
+      }
       result.skipped++
       continue
     }
@@ -11449,6 +11495,7 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
           instructor_certificate: entry.instructorCertificate || null,
           flight_conditions: entry.flightConditions || [],
           remarks: entry.remarks || null,
+          tags: Array.isArray(entry.tags) ? entry.tags.filter(Boolean) : [],
           logbook_type: entry.logbookType ?? 'flight',
           flight_time: entry.flightTime,
           performance: entry.performance,
@@ -11501,6 +11548,10 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
         }
         logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
         result.imported++
+        for (const tag of entry.tags || []) {
+          const trimmed = tag.trim()
+          if (trimmed) importedTagPresets.add(trimmed)
+        }
       } catch (error) {
         console.error('Error saving imported entry:', error)
         result.errors.push(`Entry ${entry.date} ${entry.registration}: ${error instanceof Error ? error.message : 'Failed to save'}`)
@@ -11522,7 +11573,15 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
       }
       logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
       result.imported++
+      for (const tag of entry.tags || []) {
+        const trimmed = tag.trim()
+        if (trimmed) importedTagPresets.add(trimmed)
+      }
     }
+  }
+
+  for (const tag of importedTagPresets) {
+    await addTagPreset(tag)
   }
   
   // Update import batch statistics if batch was created
@@ -11557,9 +11616,21 @@ async function proceedWithImport(includeDuplicates: boolean): Promise<void> {
     importWithErrors.value
   )
 
+  if (result.imported === 0 && result.tagsUpdated === 0 && result.errors.length === 0) {
+    const total = importPreviewStatistics.value.totalEntries
+    alert(
+      `Nothing new to import. Check "Import duplicate entries and flag them for review" to add all ${total} rows (duplicates will be flagged).`
+    )
+    cancelImport()
+    return
+  }
+
   let message = `Import complete!\n\nImported: ${result.imported} ${result.imported === 1 ? 'entry' : 'entries'}`
   if (result.flaggedDuplicates > 0) {
     message += ` (${result.flaggedDuplicates} flagged as duplicates)`
+  }
+  if (result.tagsUpdated > 0) {
+    message += `\nUpdated tags on ${result.tagsUpdated} existing ${result.tagsUpdated === 1 ? 'entry' : 'entries'}`
   }
   if (result.skipped > 0) {
     message += `\nSkipped (duplicates): ${result.skipped} ${result.skipped === 1 ? 'entry' : 'entries'}`
@@ -11577,13 +11648,6 @@ async function proceedWithImport(includeDuplicates: boolean): Promise<void> {
 
 async function handleSkipDuplicatesImport(): Promise<void> {
   if (!importPreviewStatistics.value) return
-  if (importPreviewToImportCount.value === 0) {
-    const total = importPreviewStatistics.value.totalEntries
-    alert(
-      `Nothing new to import. Check "Import duplicate entries and flag them for review" to add all ${total} rows (duplicates will be flagged).`
-    )
-    return
-  }
   await proceedWithImport(false)
 }
 
@@ -11626,12 +11690,13 @@ async function handleCSVImport(event: Event): Promise<void> {
   }
 }
 
-async function processCSVFile(file: File): Promise<void> {
+async function processCSVFile(file: File, provider?: ImportProviderKey): Promise<void> {
   try {
     const text = await file.text()
-    const parsed = parseBridgeFile(text)
+    const sourceOverride = provider ? providerKeyToBridgeSource(provider) : undefined
+    const parsed = parseBridgeFile(text, sourceOverride)
 
-    console.log('Parsed CSV rows:', parsed.rows.length, 'source:', parsed.source)
+    console.log('Parsed CSV rows:', parsed.rows.length, 'source:', parsed.source, 'provider:', provider ?? 'auto')
     if (parsed.rows.length > 0 && parsed.rows[0]) {
       console.log('First row headers:', Object.keys(parsed.rows[0]))
       console.log('First row sample:', parsed.rows[0])
@@ -11643,16 +11708,18 @@ async function processCSVFile(file: File): Promise<void> {
     }
 
     const entries: LogEntry[] = []
+    const acceptedRawRows: Record<string, string>[] = []
     const rejectedRows: { row: any; reason: string }[] = []
 
     for (let i = 0; i < parsed.rows.length; i++) {
       const row = parsed.rows[i]
       if (!row) continue
 
-      const entry = await normalizeImportedEntry(row)
+      const entry = await normalizeImportedEntry(row, parsed.source)
       if (entry) {
         entry.importSource = parsed.source
         entries.push(entry)
+        acceptedRawRows.push(row)
       } else {
         let reason = 'Unknown reason'
         const dateValue = findFieldValue(row, [
@@ -11692,6 +11759,15 @@ async function processCSVFile(file: File): Promise<void> {
       }
     }
 
+    // WHY: ForeFlight flight rows often omit type/class; join Aircraft Table by AircraftID.
+    // Custom hour tags / FAA flags also live in enrich — run even without hangar rows.
+    if (provider === 'foreflight' || parsed.source === 'foreflight') {
+      enrichForeFlightEntries(entries, acceptedRawRows, {
+        aircraftRows: parsed.aircraftRows,
+        headers: parsed.headers,
+      })
+    }
+
     console.log(`Processed ${parsed.rows.length} rows: ${entries.length} valid, ${rejectedRows.length} rejected`)
 
     if (entries.length === 0) {
@@ -11716,10 +11792,12 @@ async function processCSVFile(file: File): Promise<void> {
       fileType: parsed.delimiter === '\t' ? 'TSV' : 'CSV',
       importedAt: new Date().toISOString(),
       detectedSource: parsed.source,
+      selectedProvider: provider ?? null,
       bridgeWarnings: [
         ...(parsed.skippedAircraftRows > 0
           ? [`Skipped ${parsed.skippedAircraftRows} aircraft table row(s)`]
           : []),
+        ...(provider ? [`Provider forced: ${provider}`] : []),
       ],
     }
     importDuplicatesFlagged.value = false
@@ -11861,7 +11939,7 @@ async function handleImportDrop(event: DragEvent): Promise<void> {
   console.log('File dropped:', fileName, 'Type:', file.type)
   
   // Determine file type and route to appropriate handler
-  if (fileName.endsWith('.csv') || fileName.endsWith('.txt') || file.type === 'text/csv' || file.type === 'text/plain') {
+  if (fileName.endsWith('.csv') || fileName.endsWith('.txt') || fileName.endsWith('.tsv') || file.type === 'text/csv' || file.type === 'text/plain') {
     console.log('Processing as CSV/Tab-delimited')
     await processCSVFile(file)
   } else if (fileName.endsWith('.json') || file.type === 'application/json') {
@@ -11875,12 +11953,33 @@ async function handleImportDrop(event: DragEvent): Promise<void> {
 async function handleSettingsImportFile(file: File): Promise<void> {
   const fileName = file.name.toLowerCase()
 
-  if (fileName.endsWith('.csv') || fileName.endsWith('.txt') || file.type === 'text/csv' || file.type === 'text/plain') {
+  if (fileName.endsWith('.csv') || fileName.endsWith('.txt') || fileName.endsWith('.tsv') || file.type === 'text/csv' || file.type === 'text/plain') {
     await processCSVFile(file)
   } else if (fileName.endsWith('.json') || file.type === 'application/json') {
     await processJSONFile(file)
   } else {
     alert(`Please choose a CSV, TSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`)
+  }
+}
+
+async function handleSettingsProviderImportFile(payload: {
+  file: File
+  provider: ImportProviderKey
+}): Promise<void> {
+  const { file, provider } = payload
+  const fileName = file.name.toLowerCase()
+
+  if (
+    fileName.endsWith('.csv') ||
+    fileName.endsWith('.txt') ||
+    fileName.endsWith('.tsv') ||
+    file.type === 'text/csv' ||
+    file.type === 'text/plain' ||
+    file.type === 'text/tab-separated-values'
+  ) {
+    await processCSVFile(file, provider)
+  } else {
+    alert(`Please choose a CSV, TSV, or TXT file for provider import. Received: ${file.type || 'unknown type'}`)
   }
 }
 

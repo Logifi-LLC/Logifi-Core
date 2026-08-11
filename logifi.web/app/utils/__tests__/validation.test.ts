@@ -4,6 +4,7 @@ import {
   validateFlightTime,
   validateCrossCountry,
   validatePart61RequiredFields,
+  validateAirportCode,
   parseRouteAirportCodes,
   getEntryAirportCodes,
   getCatalogAirportCodes,
@@ -598,6 +599,32 @@ describe('validation', () => {
       expect(warnings.length).toBe(0)
     })
 
+    it('warns instead of erroring when NO TAIL has an empty role', () => {
+      const entry = createTestEntry({
+        registration: 'NO TAIL',
+        role: '',
+        aircraftMakeModel: 'Unknown',
+        aircraftCategoryClass: 'ASEL',
+      })
+
+      const results = validatePart61RequiredFields(entry)
+      const roleResults = results.filter((r) => r.field === 'role')
+      expect(roleResults).toHaveLength(1)
+      expect(roleResults[0]?.type).toBe('warning')
+      expect(results.filter((r) => r.type === 'error' && r.field === 'role')).toHaveLength(0)
+    })
+
+    it('still errors when a known tail has an empty role', () => {
+      const entry = createTestEntry({
+        registration: 'N12345',
+        role: '',
+      })
+
+      const results = validatePart61RequiredFields(entry)
+      const roleErrors = results.filter((r) => r.type === 'error' && r.field === 'role')
+      expect(roleErrors.length).toBeGreaterThan(0)
+    })
+
     it('should warn when night time is logged without night flight condition', () => {
       const entry = createTestEntry({
         flightConditions: [],
@@ -619,6 +646,27 @@ describe('validation', () => {
       const warnings = results.filter(r => r.type === 'warning' && r.field === 'flightConditions')
       expect(warnings.length).toBe(1)
       expect(warnings[0]?.message).toContain('Night time is logged')
+    })
+  })
+
+  describe('validateAirportCode', () => {
+    it('accepts ICAO, IATA, and FAA location IDs', () => {
+      expect(validateAirportCode('KORD', 'destination')).toEqual([])
+      expect(validateAirportCode('ORD', 'destination')).toEqual([])
+      expect(validateAirportCode('C62', 'destination')).toEqual([])
+      expect(validateAirportCode('0G6', 'departure')).toEqual([])
+    })
+
+    it('rejects too-short or punctuated codes', () => {
+      const short = validateAirportCode('C6', 'destination')
+      expect(short[0]?.type).toBe('error')
+      const punctuated = validateAirportCode('AB-1', 'destination')
+      expect(punctuated[0]?.type).toBe('error')
+    })
+
+    it('warns for UNKNOWN', () => {
+      const results = validateAirportCode('UNKNOWN', 'departure')
+      expect(results[0]?.type).toBe('warning')
     })
   })
 })

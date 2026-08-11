@@ -1,5 +1,6 @@
 import type { LogEntry, FlightTimeBreakdown } from './logbookTypes'
 import { sortEntriesByDateAndOOOI } from '../../shared/oooiSort'
+import { FOREFLIGHT_MISSING_TAIL } from '../../shared/logbookDataBridge/importMappers'
 
 export interface ValidationResult {
   type: 'error' | 'warning'
@@ -766,11 +767,15 @@ export function validatePart61RequiredFields(entry: LogEntry): ValidationResult[
   const roleNorm = role.toUpperCase().replace(/\s+/g, ' ')
 
   if (!role || role === '') {
+    const isUnknownTail =
+      (entry.registration || '').trim().toUpperCase() === FOREFLIGHT_MISSING_TAIL
     results.push({
-      type: 'error',
+      type: isUnknownTail ? 'warning' : 'error',
       field: 'role',
       message: 'Type of pilot experience or training is required per 14 CFR Part 61.51(b)',
-      suggestion: 'Please select your role for this flight (PIC, SIC, Student, Instructor, Dual Received, etc.)'
+      suggestion: isUnknownTail
+        ? 'This flight was imported without a tail number; add a role when known (PIC, Dual Received, etc.)'
+        : 'Please select your role for this flight (PIC, SIC, Student, Instructor, Dual Received, etc.)'
     })
   } else if (!validRoles.some(r => roleNorm.includes(r.toUpperCase().replace(/\s+/g, ' ')))) {
     results.push({
@@ -860,9 +865,9 @@ export function validateDateFormat(date: string | null | undefined): ValidationR
 }
 
 /**
- * Validate airport code format
- * Accepts ICAO (4 letters) or IATA (3 letters) format
- * Allows "UNKNOWN" with a warning
+ * Validate airport code format.
+ * Accepts ICAO (4 letters), IATA (3 letters), or FAA location IDs
+ * (3–4 alphanumeric, e.g. C62, 0G6). Allows "UNKNOWN" with a warning.
  */
 export function validateAirportCode(
   code: string | null | undefined, 
@@ -888,26 +893,26 @@ export function validateAirportCode(
     return results
   }
 
-  // ICAO format: exactly 4 uppercase letters
+  // ICAO: 4 letters. IATA: 3 letters. FAA LID: 3–4 alphanumeric (C62, 0G6).
   const icaoPattern = /^[A-Z]{4}$/
-  // IATA format: exactly 3 uppercase letters
   const iataPattern = /^[A-Z]{3}$/
+  const faaLidPattern = /^[A-Z0-9]{3,4}$/
 
-  if (icaoPattern.test(trimmedCode)) {
-    // Valid ICAO code
+  if (
+    icaoPattern.test(trimmedCode) ||
+    iataPattern.test(trimmedCode) ||
+    faaLidPattern.test(trimmedCode)
+  ) {
     return results
-  } else if (iataPattern.test(trimmedCode)) {
-    // Valid IATA code
-    return results
-  } else {
-    // Invalid format
-    results.push({
-      type: 'error',
-      field: field,
-      message: `${fieldName} airport code "${code}" is not in a valid format`,
-      suggestion: 'Airport codes should be 3 letters (IATA, e.g., ORD) or 4 letters (ICAO, e.g., KORD)'
-    })
   }
+
+  results.push({
+    type: 'error',
+    field: field,
+    message: `${fieldName} airport code "${code}" is not in a valid format`,
+    suggestion:
+      'Airport codes should be 3–4 letters/digits (IATA ORD, ICAO KORD, or FAA C62 / 0G6)'
+  })
 
   return results
 }

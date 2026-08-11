@@ -292,6 +292,103 @@ describe('logbookDataBridge importMappers', () => {
     expect(entry?.performance.approachCount).toBe(2)
   })
 
+  it('infers Dual Received when PIC is empty and DualReceived is set', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        Date: '2022-04-01',
+        AircraftID: '',
+        From: 'KPIE',
+        To: 'KPIE',
+        TotalTime: '2.0',
+        PIC: '0.0',
+        DualReceived: '2.0',
+      },
+      { source: 'foreflight' }
+    )
+    expect(entry?.registration).toBe('NO TAIL')
+    expect(entry?.role).toBe('Dual Received')
+    expect(entry?.flightTime.dual).toBe(2)
+  })
+
+  it('infers Instructor when only DualGiven is set', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        Date: '2024-06-13',
+        AircraftID: 'N172P',
+        From: 'KIND',
+        To: 'KORD',
+        TotalTime: '1.5',
+        PIC: '0',
+        DualGiven: '1.5',
+      },
+      { source: 'foreflight' }
+    )
+    expect(entry?.role).toBe('Instructor')
+  })
+
+  it('imports ForeFlight blank AircraftID as NO TAIL', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        Date: '2022-10-21',
+        AircraftID: '',
+        From: 'KPIE',
+        To: 'KPIE',
+        TotalTime: '2.0',
+      },
+      { source: 'foreflight' }
+    )
+    expect(entry?.registration).toBe('NO TAIL')
+    expect(entry?.flightTime.total).toBe(2)
+  })
+
+  it('does not treat SimulatedFlight 0.0 as simulator', () => {
+    const zero = mapRawRowToLogEntry(
+      {
+        Date: '2024-06-13',
+        AircraftID: 'N172P',
+        From: 'KIND',
+        To: 'KORD',
+        TotalTime: '1.5',
+        SimulatedFlight: '0.0',
+      },
+      { source: 'foreflight' }
+    )
+    expect(zero?.logbookType).not.toBe('simulator')
+
+    const sim = mapRawRowToLogEntry(
+      {
+        Date: '2024-06-13',
+        AircraftID: 'N172P',
+        From: 'KIND',
+        To: 'KORD',
+        TotalTime: '1.5',
+        SimulatedFlight: '1.2',
+      },
+      { source: 'foreflight' }
+    )
+    expect(sim?.logbookType).toBe('simulator')
+  })
+
+  it('maps ForeFlight Approach1 and Approach2 slots', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        Date: '2024-06-13',
+        AircraftID: 'N172P',
+        From: 'KGWB',
+        To: 'KGWB',
+        TotalTime: '1.2',
+        Approach1: '1;ILS OR LOC RWY 27;27;KGWB;;CIRCLE',
+        Approach2: '1;RNAV (GPS) RWY 09;09;KGWB;;',
+      },
+      { source: 'foreflight' }
+    )
+    expect(entry?.performance.approaches).toEqual([
+      { type: 'ILS OR LOC RWY 27', count: 1 },
+      { type: 'RNAV (GPS) RWY 09', count: 1 },
+    ])
+    expect(entry?.performance.approachCount).toBe(2)
+  })
+
   it('maps numeric Holds from ForeFlight-style exports', () => {
     const entry = mapRawRowToLogEntry(
       {
@@ -526,6 +623,28 @@ describe('logbookDataBridge export', () => {
 })
 
 describe('logbookDataBridge ingest', () => {
+  it('parses ForeFlight dual-section CSV with comma-blank hangar rows', () => {
+    const csv = [
+      'ForeFlight Logbook Import,Do not delete',
+      ',,,,,,,,',
+      'Aircraft Table,,,,,,,,',
+      'AircraftID,Make,Model,aircraftClass (FAA)',
+      'N172P,Cessna,172,airplane_single_engine_land',
+      ',,,,,,,,',
+      'N660DC,Diamond,DA-20-C1,airplane_single_engine_land',
+      'Flights Table,,,,,,,,',
+      'Date,AircraftID,From,To,TotalTime,PIC',
+      '2024-06-13,N172P,KIND,KORD,1.5,1.5',
+      '2023-08-12,N660DC,KSMD,KSMD,1.0,1.0',
+    ].join('\n')
+
+    const parsed = parseBridgeFile(csv)
+    expect(parsed.source).toBe('foreflight')
+    expect(parsed.rows).toHaveLength(2)
+    expect(parsed.aircraftRows?.some((r) => r.AircraftID === 'N660DC')).toBe(true)
+    expect(parsed.rows[0]?.AircraftID).toBe('N172P')
+  })
+
   it('parses ForeFlight dual-section CSV and imports flights only', () => {
     const csv = [
       'AircraftID,Make,Model',

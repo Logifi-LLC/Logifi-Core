@@ -67,7 +67,8 @@ export function isForeFlightAircraftHeader(headers: string[]): boolean {
 function rowsFromSection(
   lines: string[],
   startIndex: number,
-  delimiter: string
+  delimiter: string,
+  options?: { stopOnBlank?: boolean; stopOnForeFlightSectionHeaders?: boolean }
 ): { headers: string[]; rows: Record<string, string>[]; nextIndex: number } | null {
   const headerLine = lines[startIndex]
   if (!headerLine?.trim()) return null
@@ -79,10 +80,26 @@ function rowsFromSection(
   let i = startIndex + 1
   for (; i < lines.length; i++) {
     const line = lines[i]
-    if (!line?.trim()) continue
+    // WHY: ForeFlight CSVs separate Aircraft Table and Flights Table with a blank
+    // row. Only stop there for ForeFlight section parsing — LogTen Dynamic exports
+    // may include blank separator rows between flight data rows.
+    if (!line?.trim()) {
+      if (options?.stopOnBlank && rows.length > 0) break
+      continue
+    }
 
     const values = parseCSVLine(line, delimiter).map(normalizeCell)
     if (values.every((v) => !v)) continue
+
+    if (options?.stopOnForeFlightSectionHeaders && rows.length > 0) {
+      const maybeHeaders = values.map(normalizeHeader)
+      if (
+        isForeFlightFlightsHeader(maybeHeaders) ||
+        isForeFlightAircraftHeader(maybeHeaders)
+      ) {
+        break
+      }
+    }
 
     const row: Record<string, string> = {}
     headers.forEach((header, index) => {
@@ -94,6 +111,73 @@ function rowsFromSection(
   return { headers, rows, nextIndex: i }
 }
 
+function isForeFlightSectionTitle(values: string[]): boolean {
+  const first = (values[0] || '').trim().toLowerCase()
+  return first === 'aircraft table' || first === 'flights table'
+}
+
+/** FAA-style ForeFlight hangar columns when the Aircraft Table header row is missing. */
+const FOREFLIGHT_FAA_AIRCRAFT_HEADERS = [
+  'AircraftID',
+  'TypeCode',
+  'Year',
+  'Make',
+  'Model',
+  'GearType',
+  'EngineType',
+  'equipType (FAA)',
+  'aircraftClass (FAA)',
+] as const
+
+function isLikelyForeFlightHangarId(id: string): boolean {
+  const t = id.trim()
+  if (!t) return false
+  if (/^N[A-Z0-9]{1,6}$/i.test(t)) return true
+  if (/no\s*tail/i.test(t)) return true
+  return false
+}
+
+function isLikelyForeFlightHangarRow(values: string[]): boolean {
+  if (isForeFlightSectionTitle(values)) return false
+  const headers = values.map(normalizeHeader)
+  if (isForeFlightFlightsHeader(headers) || isForeFlightAircraftHeader(headers)) return false
+  if (!isLikelyForeFlightHangarId(values[0] || '')) return false
+  const typeCode = (values[1] || '').trim()
+  const make = (values[3] || '').trim()
+  const model = (values[4] || '').trim()
+  const blob = values.join(' ').toLowerCase()
+  return (
+    Boolean(typeCode || make || model) ||
+    blob.includes('airplane_') ||
+    blob.includes('rotorcraft')
+  )
+}
+
+function parseHeaderlessAircraftRows(
+  lines: string[],
+  flightsHeaderIndex: number,
+  delimiter: string
+): { headers: string[]; rows: Record<string, string>[] } | undefined {
+  const headers = [...FOREFLIGHT_FAA_AIRCRAFT_HEADERS]
+  const rows: Record<string, string>[] = []
+
+  for (let i = 0; i < flightsHeaderIndex; i++) {
+    const line = lines[i]
+    if (!line?.trim()) continue
+    const values = parseCSVLine(line, delimiter).map(normalizeCell)
+    if (values.every((v) => !v)) continue
+    if (!isLikelyForeFlightHangarRow(values)) continue
+
+    const row: Record<string, string> = {}
+    headers.forEach((header, index) => {
+      row[header] = values[index] || ''
+    })
+    rows.push(row)
+  }
+
+  return rows.length > 0 ? { headers, rows } : undefined
+}
+
 function findForeFlightSections(lines: string[]): {
   aircraft?: { headers: string[]; rows: Record<string, string>[] }
   flights?: { headers: string[]; rows: Record<string, string>[]; delimiter: string }
@@ -103,15 +187,51 @@ function findForeFlightSections(lines: string[]): {
     | { headers: string[]; rows: Record<string, string>[]; delimiter: string }
     | undefined
 
+  // WHY: ForeFlight exports use comma-filled "blank" rows and a "Flights Table"
+  // banner. A single forward scan that assigns i = nextIndex then i++ skips the
+  // Date header. Scan aircraft and flights independently.
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
     if (!line?.trim()) continue
 
     const delimiter = detectDelimiter(line)
     const headers = parseCSVLine(line, delimiter).map(normalizeHeader)
+    if (isForeFlightSectionTitle(headers)) continue
+
+    if (isForeFlightAircraftHeader(headers)) {
+      const parsed = rowsFromSection(lines, i, delimiter, {
+        stopOnBlank: false,
+        stopOnForeFlightSectionHeaders: true,
+      })
+      if (parsed) {
+        aircraftSection = {
+          headers: parsed.headers,
+          rows: parsed.rows.filter((row) => {
+            const id = (row.AircraftID || row['Aircraft ID'] || '').trim().toLowerCase()
+            return id !== 'aircraft table' && id !== 'flights table'
+          }),
+        }
+      }
+      break
+    }
+  }
+
+  let flightsHeaderIndex = -1
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (!line?.trim()) continue
+
+    const delimiter = detectDelimiter(line)
+    const headers = parseCSVLine(line, delimiter).map(normalizeHeader)
+    if (isForeFlightSectionTitle(headers)) continue
 
     if (isForeFlightFlightsHeader(headers) && !isLogtenDynamicExportHeaders(headers)) {
-      const parsed = rowsFromSection(lines, i, delimiter)
+      flightsHeaderIndex = i
+      const parsed = rowsFromSection(lines, i, delimiter, {
+        stopOnBlank: true,
+        stopOnForeFlightSectionHeaders: true,
+      })
       if (parsed) {
         flightsSection = {
           headers: parsed.headers,
@@ -121,14 +241,14 @@ function findForeFlightSections(lines: string[]): {
       }
       break
     }
+  }
 
-    if (isForeFlightAircraftHeader(headers)) {
-      const parsed = rowsFromSection(lines, i, delimiter)
-      if (parsed) {
-        aircraftSection = { headers: parsed.headers, rows: parsed.rows }
-        i = parsed.nextIndex
-      }
-    }
+  if (!aircraftSection && flightsHeaderIndex > 0 && flightsSection) {
+    aircraftSection = parseHeaderlessAircraftRows(
+      lines,
+      flightsHeaderIndex,
+      flightsSection.delimiter
+    )
   }
 
   return { aircraft: aircraftSection, flights: flightsSection }

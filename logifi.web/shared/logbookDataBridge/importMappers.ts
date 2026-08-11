@@ -1,6 +1,7 @@
 import {
   createEmptyFlightTime,
   createEmptyPerformance,
+  type ApproachRecord,
   type LogEntry,
 } from '../../app/utils/logbookTypes'
 import type { BridgeSource } from './types'
@@ -102,21 +103,67 @@ function findDate(rawEntry: Record<string, unknown>): string | null {
   return parseImportDate(dateValue)
 }
 
-function normalizeCategoryClassLabel(value: string): string {
+/** ForeFlight flights with a blank AircraftID keep hours under this placeholder. */
+export const FOREFLIGHT_MISSING_TAIL = 'NO TAIL'
+
+export function normalizeCategoryClassLabel(value: string): string {
   if (!value) return ''
   const v = value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
-  if (/(^| )asel( |$)/.test(v) || v.includes('airplane sel')) return 'ASEL'
+  if (
+    /(^| )asel( |$)/.test(v) ||
+    v.includes('airplane sel') ||
+    v.includes('single engine land')
+  ) {
+    return 'ASEL'
+  }
   if (
     /(^| )amel( |$)/.test(v) ||
     v.includes('airplane mel') ||
-    v.includes('multi engine land')
+    v.includes('multi engine land') ||
+    v.includes('multiengine land')
   ) {
     return 'AMEL'
   }
-  if (/(^| )ases( |$)/.test(v)) return 'ASES'
-  if (/(^| )ames( |$)/.test(v)) return 'AMES'
+  if (
+    /(^| )ases( |$)/.test(v) ||
+    v.includes('airplane ses') ||
+    v.includes('single engine sea')
+  ) {
+    return 'ASES'
+  }
+  if (
+    /(^| )ames( |$)/.test(v) ||
+    v.includes('airplane mes') ||
+    v.includes('multi engine sea') ||
+    v.includes('multiengine sea')
+  ) {
+    return 'AMES'
+  }
   if (v.includes('rotor') || v.includes('helicopter')) return 'HELI'
   return value.trim()
+}
+
+const MULTI_ENGINE_TYPE_CODES = /^(DA42|DA62|PA44|PA34|PA23|PA31|BE58|BE76|C310|C340|C402|C414|C421)/i
+
+/** Infer ASEL/AMEL from ForeFlight TypeCode or make/model when FAA class is blank. */
+export function inferCategoryClassFromAircraftHints(
+  typeCode: string,
+  makeModel: string
+): string {
+  const blob = `${typeCode} ${makeModel}`.toLowerCase()
+  if (!blob.trim()) return ''
+  if (
+    blob.includes('helicopter') ||
+    blob.includes('rotor') ||
+    /\br22\b|\br44\b|\br66\b/.test(blob)
+  ) {
+    return 'HELI'
+  }
+  if (MULTI_ENGINE_TYPE_CODES.test(typeCode.trim()) || /\bda-?42\b|\bda-?62\b/.test(blob)) {
+    return 'AMEL'
+  }
+  if (typeCode.trim() || makeModel.trim()) return 'ASEL'
+  return ''
 }
 
 function extractBaseModelName(model: string): string {
@@ -187,6 +234,62 @@ function defaultGenerateId(): string {
   return `import-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
+function collectApproachRecords(rawEntry: Record<string, unknown>): {
+  approaches: ApproachRecord[]
+  approachCount: number | null
+  approachType: string | null
+} {
+  const collected: ApproachRecord[] = []
+
+  for (let i = 1; i <= 6; i++) {
+    const raw = findFieldValue(rawEntry, [
+      `Approach${i}`,
+      `Approach ${i}`,
+      `flight_selectedApproach${i}`,
+    ])
+    if (!raw) continue
+    const parsed = parseLogtenApproach1(raw)
+    if (parsed && parsed.count > 0) {
+      collected.push({ type: parsed.type, count: parsed.count })
+      continue
+    }
+    const count = normalizeImportNumber(raw)
+    if (count != null && count > 0) {
+      collected.push({ type: 'Unknown', count })
+    }
+  }
+
+  if (collected.length === 0) {
+    const approachRaw = findFieldValue(rawEntry, [
+      'Instrument Approaches',
+      'Approaches',
+      'approachCount',
+    ])
+    const parsedApproach = parseLogtenApproach1(approachRaw)
+    const approachType =
+      findFieldValue(rawEntry, ['Approach Type', 'approachType', 'ApproachType']) ||
+      parsedApproach?.type ||
+      null
+    const approachCount =
+      parsedApproach?.count ?? normalizeImportNumber(approachRaw) ?? null
+    if ((approachCount ?? 0) > 0) {
+      collected.push({
+        type: (approachType || '').trim() || 'Unknown',
+        count: approachCount ?? 1,
+      })
+    } else if (approachType) {
+      collected.push({ type: approachType, count: 1 })
+    }
+  }
+
+  const total = collected.reduce((sum, item) => sum + item.count, 0)
+  return {
+    approaches: collected,
+    approachCount: total > 0 ? total : null,
+    approachType: collected[0]?.type ?? null,
+  }
+}
+
 export function mapRawRowToLogEntry(
   rawEntry: Record<string, unknown>,
   options?: { source?: BridgeSource; generateId?: () => string }
@@ -194,8 +297,14 @@ export function mapRawRowToLogEntry(
   const dateStr = findDate(rawEntry)
   if (!dateStr) return null
 
-  const registration = findRegistration(rawEntry)
-  if (!registration) return null
+  let registration = findRegistration(rawEntry)
+  if (!registration) {
+    if (options?.source === 'foreflight') {
+      registration = FOREFLIGHT_MISSING_TAIL
+    } else {
+      return null
+    }
+  }
 
   const { departure, destination, route } = parseRouteFields(rawEntry)
   const picTime =
@@ -208,6 +317,23 @@ export function mapRawRowToLogEntry(
     normalizeImportNumber(
       findFieldValue(rawEntry, ['flight_sic', 'SIC', 'sic']) || rawEntry.flight_sic
     ) ?? 0
+  const dualReceivedTime = normalizeImportNumber(
+    findFieldValue(rawEntry, [
+      'flight_dualReceived',
+      'DualReceived',
+      'Dual Received',
+      'dual',
+    ])
+  )
+  const dualGivenTime = normalizeImportNumber(
+    findFieldValue(rawEntry, [
+      'flight_dualGiven',
+      'DualGiven',
+      'Dual Given',
+      'CFI',
+      'cfi',
+    ])
+  )
 
   const hasLogtenOOOI = !!(
     findFieldValue(rawEntry, ['flight_actualDepartureTime']) ||
@@ -225,27 +351,13 @@ export function mapRawRowToLogEntry(
   ])
   const combinedModel = make && model ? `${make} ${model}`.trim() : model
 
-  const simulatedFlight = findFieldValue(rawEntry, ['SimulatedFlight', 'simulatedflight'])
-  const logbookType = simulatedFlight ? ('simulator' as const) : undefined
+  const simulatedHours = normalizeImportNumber(
+    findFieldValue(rawEntry, ['SimulatedFlight', 'simulatedflight'])
+  )
+  const logbookType =
+    simulatedHours != null && simulatedHours > 0 ? ('simulator' as const) : undefined
 
-  const approachRaw = findFieldValue(rawEntry, [
-    'flight_selectedApproach1',
-    'flight_selectedApproach2',
-    'Approach 1',
-    'approach 1',
-    'Instrument Approaches',
-    'Approaches',
-    'approachCount',
-  ])
-  const parsedApproach = parseLogtenApproach1(approachRaw)
-  const approachCount =
-    parsedApproach?.count ??
-    normalizeImportNumber(approachRaw) ??
-    null
-  const approachType =
-    findFieldValue(rawEntry, ['Approach Type', 'approachType', 'ApproachType']) ||
-    parsedApproach?.type ||
-    null
+  const { approaches, approachCount, approachType } = collectApproachRecords(rawEntry)
 
   const entry: LogEntry = {
     id: (options?.generateId ?? defaultGenerateId)(),
@@ -253,6 +365,8 @@ export function mapRawRowToLogEntry(
     role: (() => {
       if (picTime > 0) return 'PIC'
       if (sicTime > 0) return 'SIC'
+      if ((dualReceivedTime ?? 0) > 0) return 'Dual Received'
+      if ((dualGivenTime ?? 0) > 0) return 'Instructor'
       return findFieldValue(rawEntry, ['Role', 'role', 'ROLE']) || ''
     })(),
     aircraftCategoryClass: normalizeCategoryClassLabel(
@@ -335,14 +449,7 @@ export function mapRawRowToLogEntry(
       sic: normalizeImportNumber(
         findFieldValue(rawEntry, ['flight_sic', 'SIC', 'sic'])
       ),
-      dual: normalizeImportNumber(
-        findFieldValue(rawEntry, [
-          'flight_dualReceived',
-          'DualReceived',
-          'Dual Received',
-          'dual',
-        ])
-      ),
+      dual: dualReceivedTime,
       solo: normalizeImportNumber(
         findFieldValue(rawEntry, ['flight_solo', 'Solo', 'Solo Time', 'solo'])
       ),
@@ -365,15 +472,7 @@ export function mapRawRowToLogEntry(
           'imc',
         ])
       ),
-      dualGiven: normalizeImportNumber(
-        findFieldValue(rawEntry, [
-          'flight_dualGiven',
-          'DualGiven',
-          'Dual Given',
-          'CFI',
-          'cfi',
-        ])
-      ),
+      dualGiven: dualGivenTime,
       crossCountry: normalizeImportNumber(
         findFieldValue(rawEntry, [
           'flight_crossCountry',
@@ -393,8 +492,34 @@ export function mapRawRowToLogEntry(
     },
     performance: {
       ...createEmptyPerformance(),
+      /**
+       * WHY (MyFlightBook): Exports include both total `Landings` and
+       * `FS Day Landings` / `FS Night Landings`. Prefer FS columns so night
+       * full-stops are not stuffed into dayLandings via the generic Landings alias.
+       * HOW: Alias order — FS / provider-specific first, total Landings last.
+       */
+      dayTakeoffs: normalizeImportNumber(
+        findFieldValue(rawEntry, [
+          'DayTakeoffs',
+          'Day Takeoffs',
+          'daytakeoffs',
+          'Day T/O',
+          'day t/o',
+        ])
+      ),
+      nightTakeoffs: normalizeImportNumber(
+        findFieldValue(rawEntry, [
+          'NightTakeoffs',
+          'Night Takeoffs',
+          'nighttakeoffs',
+          'Night T/O',
+          'night t/o',
+        ])
+      ),
       dayLandings: normalizeImportNumber(
         findFieldValue(rawEntry, [
+          'FS Day Landings',
+          'fs day landings',
           'flight_dayLandings',
           'DayLandingsFullStop',
           'Day Landings',
@@ -406,6 +531,8 @@ export function mapRawRowToLogEntry(
       ),
       nightLandings: normalizeImportNumber(
         findFieldValue(rawEntry, [
+          'FS Night Landings',
+          'fs night landings',
           'flight_nightLandings',
           'NightLandingsFullStop',
           'Night Landings',
@@ -415,13 +542,7 @@ export function mapRawRowToLogEntry(
       ),
       approachCount,
       approachType,
-      approaches: (() => {
-        const count = approachCount ?? 0
-        const type = (approachType || '').trim() || 'Unknown'
-        if (count > 0) return [{ type, count }]
-        if (type !== 'Unknown') return [{ type, count: 1 }]
-        return []
-      })(),
+      approaches,
       holdingProcedures: normalizeImportHoldCount(
         findFieldValue(rawEntry, ['Holding Procedures', 'Holds', 'Hold', 'hold'])
       ),

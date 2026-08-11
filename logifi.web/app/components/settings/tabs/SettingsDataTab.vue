@@ -67,27 +67,27 @@
         @dragover.prevent="$emit('import-dragover')"
         @dragenter.prevent="$emit('import-dragenter')"
         @dragleave="$emit('import-dragleave')"
-        @drop.prevent="$emit('import-drop', $event)"
+        @drop.prevent="onImportDrop"
       >
         <SettingsListRow
-          label="Import file"
-          subtitle="CSV, TSV, or JSON"
+          label="Import from provider"
+          subtitle="ForeFlight, MyFlightBook, LogTen, or CSV"
           icon="ri:upload-cloud-2-line"
           :is-dark-mode="isDarkMode"
-          :show-chevron="false"
-          @click="fileInputRef?.click()"
-        />
-        <input
-          ref="fileInputRef"
-          type="file"
-          accept=".csv,.txt,.tsv,.json,text/csv,text/plain,application/json"
-          class="hidden"
-          @change="onFileSelected"
+          :show-chevron="true"
+          @click="openImportModal()"
         />
         <p :class="[helper, 'mt-2 px-1 text-xs']">
-          Duplicates (same date and registration) are skipped. Drag and drop also works on desktop.
+          Choose your logbook software for guided export. Files are parsed on-device. Duplicates (same date and registration) are skipped.
         </p>
       </div>
+      <LogbookImportModal
+        :is-open="showImportModal"
+        :is-dark-mode="isDarkMode"
+        :pending-file="pendingImportFile"
+        @close="closeImportModal"
+        @import-provider-file="onProviderFile"
+      />
       <div class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
         <button
           type="button"
@@ -181,6 +181,8 @@ import SettingsListGroup from '../SettingsListGroup.vue'
 import SettingsListRow from '../SettingsListRow.vue'
 import { useSettingsClasses } from '../useSettingsClasses'
 import FcvSync from '~/components/fcv/FcvSync.vue'
+import LogbookImportModal from '~/components/import/LogbookImportModal.vue'
+import type { ImportProviderKey } from '../../../../shared/import'
 
 const props = defineProps<{
   isDarkMode: boolean
@@ -204,6 +206,7 @@ const emit = defineEmits<{
   'import-dragleave': []
   'import-drop': [event: DragEvent]
   'import-file': [file: File]
+  'import-provider-file': [payload: { file: File; provider: ImportProviderKey }]
   'export-logbook': []
   'generate-8710': []
   'import-fcv': []
@@ -211,9 +214,10 @@ const emit = defineEmits<{
 }>()
 
 const showImportGuide = ref(false)
+const showImportModal = ref(false)
+const pendingImportFile = ref<File | null>(null)
 
 const { helper } = useSettingsClasses(computed(() => props.isDarkMode))
-const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const syncBadgeClass = computed(() => {
   if (props.syncStatusText === 'Checking…') {
@@ -228,12 +232,30 @@ const syncBadgeClass = computed(() => {
   return props.isDarkMode ? 'text-green-400' : 'text-green-700'
 })
 
-function onFileSelected(e: Event) {
-  const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
+function openImportModal(file?: File | null) {
+  pendingImportFile.value = file ?? null
+  showImportModal.value = true
+}
 
-  emit('import-file', file)
-  input.value = ''
+function closeImportModal() {
+  showImportModal.value = false
+  pendingImportFile.value = null
+}
+
+function onProviderFile(payload: { file: File; provider: ImportProviderKey }) {
+  emit('import-provider-file', payload)
+  closeImportModal()
+}
+
+function onImportDrop(event: DragEvent) {
+  // Handle locally so dashboard does not auto-parse without a provider.
+  const file = event.dataTransfer?.files?.[0]
+  if (!file) return
+  const name = file.name.toLowerCase()
+  if (name.endsWith('.json')) {
+    emit('import-file', file)
+    return
+  }
+  openImportModal(file)
 }
 </script>

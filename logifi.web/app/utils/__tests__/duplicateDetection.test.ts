@@ -99,4 +99,13 @@ describe('duplicateDetection', () => {
 
     expect(findDuplicateEntries(entry, [existing])).toHaveLength(1)
   })
+
+  it('does not treat same-day same-route flights with different totals as duplicates', () => {
+    const entry = buildEntry('candidate')
+    entry.flightTime = { ...entry.flightTime, total: 1.1, pic: 1.1 }
+    const existing = buildEntry('existing')
+    existing.flightTime = { ...existing.flightTime, total: 1.2, pic: 1.2 }
+
+    expect(findDuplicateEntries(entry, [existing])).toHaveLength(0)
+  })
 })

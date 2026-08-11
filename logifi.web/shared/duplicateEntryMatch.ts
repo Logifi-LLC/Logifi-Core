@@ -1,18 +1,17 @@
 import { canonicalizeAirportCodeForMatch } from './airportCodeCanonical'
 
-/**
- * Max difference in logged total time for two rows to still count as the same leg.
- * ~6 minutes covers FCV block (e.g. 1.35h) vs hand-entered rounded totals (e.g. 1.4h) and float noise.
- */
-export const FLIGHT_TOTAL_HOURS_EPSILON = 0.1
-
 export interface DuplicateEntryMatchShape {
   date: string
   registration: string
   departure: string
   destination: string
   oooiOut?: string | null
+  role?: string | null
   flightTimeTotal?: number | null
+  pic?: number | null
+  sic?: number | null
+  dual?: number | null
+  solo?: number | null
   /** Night hours — part of import duplicate fingerprint */
   night?: number | null
   /** NVG hours — part of import duplicate fingerprint */
@@ -21,24 +20,53 @@ export interface DuplicateEntryMatchShape {
   actualInstrument?: number | null
   /** Simulated instrument (hood) hours */
   simulatedInstrument?: number | null
+  dualGiven?: number | null
+  crossCountry?: number | null
+  dayTakeoffs?: number | null
+  nightTakeoffs?: number | null
+  dayLandings?: number | null
+  nightLandings?: number | null
+  approachCount?: number | null
+  holdingProcedures?: number | null
 }
 
 /**
- * - `standard`: full rules including approximate total time when OOOI out is not decisive (in-app duplicate hints).
+ * - `standard`: same date, tail, route, role, rounded flight-time buckets, and performance counts.
+ *   OOOI out is an extra constraint when both sides have it (in-app + CSV import duplicate hints).
  * - `importLeg`: same calendar date + tail + canonical route; if both rows have OOOI out, they must match; otherwise
  *   total time is ignored so FC View block vs hand-entered hours does not miss a duplicate.
  */
 export type DuplicateMatchMode = 'standard' | 'importLeg'
 
-const TIME_BREAKDOWN_KEYS = [
+const FLIGHT_TIME_KEYS = [
+  'flightTimeTotal',
+  'pic',
+  'sic',
+  'dual',
+  'solo',
   'night',
   'nvg',
   'actualInstrument',
   'simulatedInstrument',
+  'dualGiven',
+  'crossCountry',
+] as const satisfies readonly (keyof DuplicateEntryMatchShape)[]
+
+const PERFORMANCE_COUNT_KEYS = [
+  'dayTakeoffs',
+  'nightTakeoffs',
+  'dayLandings',
+  'nightLandings',
+  'approachCount',
+  'holdingProcedures',
 ] as const satisfies readonly (keyof DuplicateEntryMatchShape)[]
 
 function normalizeRegistrationForMatch(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
+function normalizeRoleForMatch(value: string | null | undefined): string {
+  return (value || '').trim().toUpperCase()
 }
 
 function normalizeTimeField(value: number | null | undefined): number {
@@ -48,8 +76,11 @@ function normalizeTimeField(value: number | null | undefined): number {
   return Math.round(value * 10) / 10
 }
 
-function totalsMatchApproximately(a: number, b: number): boolean {
-  return Math.abs(a - b) <= FLIGHT_TOTAL_HOURS_EPSILON
+function normalizeCountField(value: number | null | undefined): number {
+  if (value === null || value === undefined || typeof value !== 'number' || !Number.isFinite(value)) {
+    return 0
+  }
+  return Math.round(value)
 }
 
 /** Parse OOOI out to minutes since midnight; accepts `HHMM`, `HH:MM`, etc. */
@@ -96,19 +127,21 @@ function airportFieldForMatch(value: string | undefined): string {
   return canonicalizeAirportCodeForMatch(raw)
 }
 
-function isBothRouteUnknown(entry: DuplicateEntryMatchShape, existing: DuplicateEntryMatchShape): boolean {
-  return (
-    airportFieldForMatch(entry.departure) === 'UNKNOWN' &&
-    airportFieldForMatch(entry.destination) === 'UNKNOWN' &&
-    airportFieldForMatch(existing.departure) === 'UNKNOWN' &&
-    airportFieldForMatch(existing.destination) === 'UNKNOWN'
-  )
+/** Night, NVG, PIC, and other hour buckets must match after 0.1h rounding (null/undefined → 0). */
+function flightTimeBucketsMatch(entry: DuplicateEntryMatchShape, existing: DuplicateEntryMatchShape): boolean {
+  for (const key of FLIGHT_TIME_KEYS) {
+    if (normalizeTimeField(entry[key] as number | null | undefined) !==
+      normalizeTimeField(existing[key] as number | null | undefined)) {
+      return false
+    }
+  }
+  return true
 }
 
-/** Night, NVG, actual, and hood must match exactly (null/undefined → 0). */
-function timeBreakdownMatches(entry: DuplicateEntryMatchShape, existing: DuplicateEntryMatchShape): boolean {
-  for (const key of TIME_BREAKDOWN_KEYS) {
-    if (normalizeTimeField(entry[key]) !== normalizeTimeField(existing[key])) {
+function performanceCountsMatch(entry: DuplicateEntryMatchShape, existing: DuplicateEntryMatchShape): boolean {
+  for (const key of PERFORMANCE_COUNT_KEYS) {
+    if (normalizeCountField(entry[key] as number | null | undefined) !==
+      normalizeCountField(existing[key] as number | null | undefined)) {
       return false
     }
   }
@@ -152,35 +185,21 @@ export function entriesDuplicateMatch(
 
   const existingOut = existing.oooiOut
   const entryOut = entry.oooiOut
-  if (existingOut && entryOut) {
-    return oooiOutMatches(existingOut, entryOut)
+  if (existingOut && entryOut && !oooiOutMatches(existingOut, entryOut)) {
+    return false
   }
 
   if (mode === 'importLeg') {
     return true
   }
 
-  if (!timeBreakdownMatches(entry, existing)) {
+  if (normalizeRoleForMatch(entry.role) !== normalizeRoleForMatch(existing.role)) {
     return false
   }
 
-  const existingTotal = existing.flightTimeTotal
-  const entryTotal = entry.flightTimeTotal
-  if (
-    existingTotal !== null &&
-    existingTotal !== undefined &&
-    entryTotal !== null &&
-    entryTotal !== undefined &&
-    typeof existingTotal === 'number' &&
-    typeof entryTotal === 'number'
-  ) {
-    const entryNorm = normalizeTimeField(entryTotal)
-    const existingNorm = normalizeTimeField(existingTotal)
-    if (isBothRouteUnknown(entry, existing)) {
-      return entryNorm === existingNorm
-    }
-    return totalsMatchApproximately(entryNorm, existingNorm)
+  if (!flightTimeBucketsMatch(entry, existing)) {
+    return false
   }
 
-  return true
+  return performanceCountsMatch(entry, existing)
 }

@@ -6,24 +6,46 @@ import {
   type DuplicateEntryMatchShape,
 } from '../../shared/duplicateEntryMatch'
 
+function approachCountForMatch(entry: LogEntry): number | null {
+  const approaches = entry.performance?.approaches
+  if (Array.isArray(approaches) && approaches.length > 0) {
+    return approaches.reduce((sum, record) => sum + (record.count || 0), 0)
+  }
+  return entry.performance?.approachCount ?? null
+}
+
 function logEntryToDuplicateShape(entry: LogEntry): DuplicateEntryMatchShape {
   const ft = entry.flightTime
+  const perf = entry.performance
   return {
     date: entry.date,
     registration: entry.registration,
     departure: entry.departure,
     destination: entry.destination,
     oooiOut: entry.oooi?.out,
+    role: entry.role,
     flightTimeTotal: ft?.total ?? null,
+    pic: ft?.pic ?? null,
+    sic: ft?.sic ?? null,
+    dual: ft?.dual ?? null,
+    solo: ft?.solo ?? null,
     night: ft?.night ?? null,
     nvg: ft?.nvg ?? null,
     actualInstrument: ft?.actualInstrument ?? null,
     simulatedInstrument: ft?.simulatedInstrument ?? null,
+    dualGiven: ft?.dualGiven ?? null,
+    crossCountry: ft?.crossCountry ?? null,
+    dayTakeoffs: perf?.dayTakeoffs ?? null,
+    nightTakeoffs: perf?.nightTakeoffs ?? null,
+    dayLandings: perf?.dayLandings ?? null,
+    nightLandings: perf?.nightLandings ?? null,
+    approachCount: approachCountForMatch(entry),
+    holdingProcedures: perf?.holdingProcedures ?? null,
   }
 }
 
 /**
- * Check if two entries are duplicates based on date, registration, airports, and times
+ * Check if two entries are the same logged flight (date, tail, route, role, times, performance).
  */
 export function isDuplicateEntry(entry: LogEntry, existingEntry: LogEntry): boolean {
   return entriesDuplicateMatch(
