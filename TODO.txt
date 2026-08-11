@@ -27,6 +27,12 @@ APP NOW
 
 2. DEVICE / SIGNING SMOKE (when ready) — void survives refresh; amend; guest QR; main CFI; paper + e-sign endorsements
 
+3. FLIGHT SIGNATURES FETCH — URL too long on large logbooks (live dashboard)
+   - refreshFlightSignatures / fetchSignaturesForEntries sends all entry IDs in one PostgREST .in() GET.
+   - Huge URL → net::ERR_FAILED (often looks like CORS). Crew profiles still load; signature badges may miss.
+   - Fix: batch .in() queries (e.g. 50–100 IDs) or server RPC / join so IDs aren’t all in the query string.
+   - Touch: useFlightSigning.ts, dashboard.vue (refreshFlightSignatures); check AuditTrail paths too.
+
 ────────────────────────────────────────
 DONE / GOOD
 ────────────────────────────────────────

@@ -196,6 +196,10 @@ All migrations are stored in `logifi.web/supabase/migrations/` and should be run
 14. **20240101000023_combine_revision_and_hash_triggers.sql**: Combine revision and hash triggers
 15. **20240101000024_remove_debug_features.sql**: Remove debug features and cleanup
 
+Later files in `logifi.web/supabase/migrations/` continue this sequence through `20260811171011_security_advisor_function_grants.sql` (PUBLIC/anon EXECUTE sweep on Logifi SECURITY DEFINER RPCs).
+
+**Not in this repo (shared-project leftovers):** `get_logifi_analytics`, `get_logifi_analytics_timeseries`, `capture_analytics_snapshot`, `analytics_snapshots`, and Auth leaked-password protection (Supabase Dashboard → Authentication → Attack protection).
+
 ## Triggers
 
 ### update_log_entries_updated_at
