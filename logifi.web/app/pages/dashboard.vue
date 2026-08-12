@@ -17880,7 +17880,7 @@ function computePilotProfileStats(): PilotProfileStats {
     const routeLabel = buildRouteLabel(entry)
     routeCounts[routeLabel] = (routeCounts[routeLabel] || 0) + 1
 
-    const family = normalizeAircraftFamily(entry.aircraftMakeModel.trim())
+    const family = effectiveFamilyKeyForEntry(entry)
     if (family) {
       familyCounts[family] = (familyCounts[family] || 0) + 1
     }
@@ -18106,16 +18106,13 @@ function normalizeDateForInput(date: string): string {
   return ''
 }
 
-// Computed property for most used aircraft family
+// Computed property for most used aircraft (catalog family label, same as Aircraft catalog)
 const mostUsedAircraft = computed(() => {
   const familyCounts: Record<string, number> = {}
   entriesForTotals.value.forEach((entry) => {
-    const makeModel = entry.aircraftMakeModel.trim()
-    if (makeModel) {
-      const family = normalizeAircraftFamily(makeModel)
-      if (family) {
-        familyCounts[family] = (familyCounts[family] || 0) + 1
-      }
+    const family = effectiveFamilyKeyForEntry(entry)
+    if (family) {
+      familyCounts[family] = (familyCounts[family] || 0) + 1
     }
   })
   if (Object.keys(familyCounts).length === 0) return null
