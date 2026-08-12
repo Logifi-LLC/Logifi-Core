@@ -3,7 +3,7 @@ import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import type { FcvMappedEntry } from '../../utils/fcvMap'
 import {
   logEntryRowToExistingForDedup,
-  findHeuristicMatchForFcvFlight,
+  partitionFcvPreviewDuplicates,
 } from '../../utils/fcvPreviewDuplicates'
 
 interface Body {

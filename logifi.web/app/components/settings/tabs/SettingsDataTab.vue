@@ -137,8 +137,8 @@
     <SettingsListGroup title="Integrations" :is-dark-mode="isDarkMode">
       <SettingsListRow
         v-if="fcvConnected"
-        label="Import from FC View"
-        subtitle="Pull new flights into logbook"
+        label="Import airline schedule"
+        subtitle="Pull new flights from FLICA into logbook"
         icon="ri:download-cloud-2-line"
         :is-dark-mode="isDarkMode"
         @click="$emit('import-fcv')"
@@ -152,7 +152,7 @@
         @click="$emit('close')"
       />
       <div class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
-        <FcvSync mode="connect" :is-dark-mode="isDarkMode" show-rollout-label />
+        <FcvSync mode="connect" :is-dark-mode="isDarkMode" @connection-changed="$emit('flica-connection-changed', $event)" />
       </div>
     </SettingsListGroup>
 
@@ -210,6 +210,7 @@ const emit = defineEmits<{
   'export-logbook': []
   'generate-8710': []
   'import-fcv': []
+  'flica-connection-changed': [{ connected: boolean }]
   close: []
 }>()
 

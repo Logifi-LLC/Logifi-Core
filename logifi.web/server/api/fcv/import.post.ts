@@ -84,12 +84,19 @@ interface CrewReviewCandidate {
   strategy: 'ambiguous' | 'unresolved'
 }
 
+function resolveImportSource(aligned: FcvMappedEntry): string {
+  const src = typeof aligned.import_source === 'string' ? aligned.import_source.trim() : ''
+  if (src === 'flica_aerodatabox' || src === 'fc_view') return src
+  return 'fc_view'
+}
+
 function buildFcvInsertEntry(
   userId: string,
   aligned: FcvMappedEntry,
   batchId: string,
   fcvId: string,
-  familyTagsById: Map<string, string[]>
+  familyTagsById: Map<string, string[]>,
+  importSource: string
 ): Database['public']['Tables']['log_entries']['Insert'] {
   return {
     user_id: userId,
@@ -123,7 +130,7 @@ function buildFcvInsertEntry(
       return mergedTags.length > 0 ? mergedTags : undefined
     })(),
     is_imported: true,
-    import_source: 'fc_view',
+    import_source: importSource,
     import_batch_id: batchId,
     original_entry_date: aligned.original_entry_date,
     import_metadata: aligned.import_metadata,
@@ -138,7 +145,8 @@ async function linkFcvFlightToExistingEntry(
   aligned: FcvMappedEntry,
   fcvId: string,
   batchId: string,
-  familyTagsById: Map<string, string[]>
+  familyTagsById: Map<string, string[]>,
+  importSource: string
 ): Promise<boolean> {
   const { data: existing, error } = await supabase
     .from('log_entries')
@@ -193,7 +201,7 @@ async function linkFcvFlightToExistingEntry(
         : existing.flight_conditions ?? ['ifr'],
     tags: mergedTags.length > 0 ? mergedTags : existingTags.length > 0 ? existingTags : undefined,
     is_imported: true,
-    import_source: 'fc_view',
+    import_source: importSource,
     import_batch_id: batchId,
     original_entry_date: aligned.original_entry_date,
     import_metadata: aligned.import_metadata,
@@ -346,16 +354,18 @@ export default defineEventHandler(async (event) => {
     familyTagsById.set(familyId, existing)
   }
 
+  const batchImportSource = resolveImportSource(flights[0] ?? { import_source: 'fc_view' })
+
   const { data: batch, error: batchError } = await supabase
     .from('import_batches')
     .insert({
       user_id: userId,
-      source_type: 'fc_view',
+      source_type: batchImportSource,
       total_entries: flights.length,
       successful_imports: 0,
       duplicates_skipped: 0,
       errors: 0,
-      import_metadata: { source: 'fc_view' },
+      import_metadata: { source: batchImportSource },
     })
     .select('id')
     .single()
@@ -407,12 +417,14 @@ export default defineEventHandler(async (event) => {
       crewManualOverrideName:
         typeof crewNameOverrides[fcvId] === 'string' ? crewNameOverrides[fcvId].trim() : null,
     })
+    const importSource = resolveImportSource(aligned)
 
     const { data: existing } = await supabase
       .from('log_entries')
       .select('id')
       .eq('user_id', userId)
       .eq('fcv_flight_id', fcvId)
+      .eq('import_source', importSource)
       .maybeSingle()
 
     if (existing) {
@@ -440,7 +452,8 @@ export default defineEventHandler(async (event) => {
           aligned,
           fcvId,
           batchId,
-          familyTagsById
+          familyTagsById,
+          importSource
         )
         if (didLink) {
           linked++
@@ -464,7 +477,14 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    const entry = buildFcvInsertEntry(userId, aligned, batchId, fcvId, familyTagsById)
+    const entry = buildFcvInsertEntry(
+      userId,
+      aligned,
+      batchId,
+      fcvId,
+      familyTagsById,
+      importSource
+    )
 
     const { error: insertErr } = await supabase.from('log_entries').insert(entry)
     if (insertErr) {

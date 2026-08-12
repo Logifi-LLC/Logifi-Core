@@ -9,41 +9,33 @@
       </p>
 
       <nav class="flex flex-wrap gap-3 mb-10 text-sm font-medium">
-        <a href="#fcv" class="text-blue-600 hover:underline dark:text-blue-600">Flight Crew View</a>
+        <a href="#schedule" class="text-blue-600 hover:underline dark:text-blue-600">Airline schedule</a>
         <span class="text-gray-400">·</span>
         <a href="#gemini" class="text-blue-600 hover:underline dark:text-blue-600">Google Gemini (Digifi)</a>
       </nav>
 
-      <!-- Flight Crew View -->
-      <section id="fcv" class="scroll-mt-28 mb-10">
+      <!-- Airline schedule (FLICA) -->
+      <section id="schedule" class="scroll-mt-28 mb-10">
         <div class="flex flex-wrap items-center gap-3 mb-4">
-          <h2 class="text-2xl font-bold text-gray-950 m-0 drop-shadow-sm dark:text-gray-900">Flight Crew View Import</h2>
-          <span
-            v-if="fcvUiShowPill"
-            class="shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900"
-          >
-            {{ fcvUiPillText }}
-          </span>
+          <h2 class="text-2xl font-bold text-gray-950 m-0 drop-shadow-sm dark:text-gray-900">Airline schedule import</h2>
         </div>
         <p class="text-gray-800 mb-6 text-lg font-medium dark:text-gray-700">
-          Logifi can connect to Flight Crew View so you can preview and import your FC View flight
-          history into your logbook (when the integration is enabled for your account).
+          Connect your airline FLICA portal to preview and import scheduled flights into your logbook.
         </p>
 
         <div
           class="relative overflow-hidden rounded-[28px] border border-white/15 bg-white/10 backdrop-blur-md shadow-[0_0_42px_-12px_rgba(59,130,246,0.24),0_0_56px_-18px_rgba(37,99,235,0.14)] p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8"
         >
-          <FcvApiDisclaimers class="not-prose mb-8" tone="marketing" />
           <div class="prose prose-gray max-w-none text-gray-800 space-y-4 dark:text-gray-800">
             <h3 class="text-xl font-bold text-gray-950 font-quicksand mt-0 dark:text-gray-900">What this integration does</h3>
             <p class="text-lg leading-relaxed">
-              After you authorize Logifi with Flight Crew View, our servers fetch flights you choose by
-              date range. You review a preview (including optional duplicate warnings) before import.
-              Imports are intended to be idempotent using stable flight identifiers from FC View.
+              After you connect FLICA in Settings, Logifi fetches schedule legs for the date range you choose.
+              You review a preview (including optional duplicate warnings) before import. Imports are intended
+              to be idempotent using stable flight identifiers.
             </p>
             <p class="text-lg leading-relaxed">
               This is for
-              <strong class="text-gray-950 dark:text-gray-900">logbook record-keeping only</strong>. Logifi does not use FC View data for flight
+              <strong class="text-gray-950 dark:text-gray-900">logbook record-keeping only</strong>. Logifi does not use schedule data for flight
               planning, dispatch, weather or NOTAM briefing, or any operational decision-making.
             </p>
             <p class="text-lg leading-relaxed">
@@ -75,7 +67,7 @@
             <p class="text-lg leading-relaxed">
               Scan images are stored in our private storage bucket for up to
               <strong class="text-gray-950 dark:text-gray-900">24 hours</strong> (for support), then deleted.
-              We do not send FC View tokens, authorization codes, or passkeys to Gemini or any other AI provider.
+              We do not send airline portal credentials or schedule tokens to Gemini or any other AI provider.
             </p>
             <p class="text-lg leading-relaxed">
               Digifi scanning uses a pay-per-spread credit model. Every account includes
@@ -109,16 +101,14 @@
 
 <script setup lang="ts">
 import { ref, onBeforeUnmount, watch } from 'vue'
-import FcvApiDisclaimers from '~/components/fcv/FcvApiDisclaimers.vue'
-import { useFcvUiLabel } from '~/composables/useFcvUiLabel'
 import AuthModal from '~/components/AuthModal.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
 import MarketingSecondaryPageShell from '~/components/MarketingSecondaryPageShell.vue'
 
-const { showPill: fcvUiShowPill, pillText: fcvUiPillText } = useFcvUiLabel()
 const { theme, applyDocumentTheme } = useTheme()
 
+/** Marketing shell stays light (matches home); restore saved theme when leaving. */
 if (import.meta.client) {
   applyDocumentTheme('light')
   onBeforeUnmount(() => {
@@ -147,7 +137,7 @@ useHead({
     {
       name: 'description',
       content:
-        'Logifi integrations: Flight Crew View logbook import and Google Gemini for Digifi paper scanning.',
+        'Logifi integrations: airline schedule import via FLICA and Google Gemini for Digifi paper scanning.',
     },
   ],
 })

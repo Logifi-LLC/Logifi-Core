@@ -139,6 +139,7 @@
       @export-logbook="$emit('export-logbook')"
       @generate-8710="$emit('generate-8710')"
       @import-fcv="$emit('import-fcv')"
+      @flica-connection-changed="$emit('flica-connection-changed', $event)"
       @close="$emit('close')"
     />
 
@@ -248,6 +249,7 @@ defineEmits<{
   'export-logbook': []
   'generate-8710': []
   'import-fcv': []
+  'flica-connection-changed': [{ connected: boolean }]
 }>()
 
 const currentFrame = computed(() => props.stack[props.stack.length - 1] ?? 'root')

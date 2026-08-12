@@ -314,7 +314,7 @@
       ]"
     >
       <section
-        v-show="showFcvFetchPanel && dashboardFcvConnected && !isIos"
+        v-show="showFcvFetchPanel && !isIos"
         ref="fcvFetchSectionRef"
         :class="[
           'mr-auto mb-8 w-full rounded-2xl border p-4 sm:p-6 space-y-4',
@@ -324,10 +324,10 @@
         <div class="flex items-start justify-between gap-4">
           <div>
             <h3 :class="['text-base sm:text-lg font-semibold font-quicksand', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
-              FC View Fetch
+              Airline schedule
             </h3>
             <p :class="['text-sm mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
-              Fetch and import FC View flights from your dashboard.
+              Fetch and import flights from FLICA into your logbook.
             </p>
           </div>
           <button
@@ -343,7 +343,6 @@
         </div>
 
         <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
-          <FcvApiDisclaimers :is-dark-mode="isDarkMode" tone="dashboard" />
           <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
             <NuxtLink
               to="/data-sources?from=dashboard"
@@ -353,12 +352,15 @@
             </NuxtLink>
           </p>
           <FcvSync
+            :key="`flica-fetch-${dashboardFcvConnected ? 'on' : 'off'}-${showFcvFetchPanel ? 'open' : 'closed'}`"
             mode="fetch"
             :is-dark-mode="isDarkMode"
+            :external-connected="dashboardFcvConnected"
             :before-duplicate-check="prepareLogbookForFcvImport"
             :pending-sync-count="queueLength"
             :catalog-person-names="catalogPersonNames"
             @imported="handleFcvImported"
+            @connection-changed="handleFlicaConnectionChanged"
           />
           <p
             v-if="fcvImportMessage"
@@ -369,11 +371,11 @@
         </div>
       </section>
 
-      <!-- iOS: fullscreen FC View import sheet -->
+      <!-- iOS: fullscreen airline schedule import sheet -->
       <Teleport to="body">
         <Transition name="fade">
           <div
-            v-if="isIos && showFcvFetchPanel && dashboardFcvConnected"
+            v-if="isIos && showFcvFetchPanel"
             class="fixed inset-0 z-[65] flex flex-col font-quicksand"
             :class="isDarkMode ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'"
           >
@@ -382,7 +384,7 @@
               :class="isDarkMode ? 'border-gray-800 bg-gray-900/95' : 'border-gray-200 bg-gray-50/95'"
             >
               <div class="flex items-center justify-between gap-3">
-                <h2 class="text-base font-semibold font-quicksand">Import from FC View</h2>
+                <h2 class="text-base font-semibold font-quicksand">Airline schedule</h2>
                 <button
                   type="button"
                   class="rounded-lg px-2 py-1.5 text-sm font-semibold font-quicksand transition-colors"
@@ -395,21 +397,23 @@
               <p
                 :class="['text-xs mt-1 font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-600']"
               >
-                Pull new flights into your logbook. Review before importing.
+                Pull new flights from FLICA into your logbook. Review before importing.
               </p>
             </header>
             <div
               class="flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-4"
             >
-              <FcvApiDisclaimers :is-dark-mode="isDarkMode" tone="dashboard" />
               <FcvSync
+                :key="`flica-ios-${dashboardFcvConnected ? 'on' : 'off'}`"
                 mode="fetch"
                 compact
                 :is-dark-mode="isDarkMode"
+                :external-connected="dashboardFcvConnected"
                 :before-duplicate-check="prepareLogbookForFcvImport"
                 :pending-sync-count="queueLength"
                 :catalog-person-names="catalogPersonNames"
                 @imported="handleFcvImported"
+                @connection-changed="handleFlicaConnectionChanged"
               />
             </div>
           </div>
@@ -906,11 +910,11 @@
                           ? 'border-blue-500/40 bg-blue-600/15 text-blue-300 hover:bg-blue-600/30'
                           : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100',
                       ]"
-                      aria-label="Import from FC View"
+                      aria-label="Import airline schedule"
                       @click="openFcvFetchSection"
                     >
                       <Icon name="ri:download-cloud-2-line" size="16" class="shrink-0" />
-                      FC View
+                      Schedule
                     </button>
                   </div>
                   <div class="flex flex-wrap items-center gap-2">
@@ -4399,6 +4403,7 @@
       @export-logbook="openExportDialog"
       @generate-8710="showForm8710Modal = true"
       @import-fcv="handleOpenFcvImportFromSettings"
+      @flica-connection-changed="handleFlicaConnectionChanged"
     />
 
     <input
@@ -6818,7 +6823,6 @@ import LogEntryList from '../components/logbook/LogEntryList.vue'
 import ProductUpdateHeadline from '../components/ProductUpdateHeadline.vue'
 import { useProductUpdates } from '../composables/useProductUpdates'
 import type { SettingsStackFrame, SettingsTabId } from '../components/settings/settingsNav'
-import FcvApiDisclaimers from '../components/fcv/FcvApiDisclaimers.vue'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '../utils/migrateLocalStorage'
 import { findDuplicateEntries, checkDuplicatesWithLocalFallback } from '../utils/duplicateDetection'
 import {
@@ -7243,12 +7247,10 @@ function effectiveFamilyKeyForEntry(entry: {
 
 // Logout function
 const router = useRouter()
-const route = useRoute()
 
-/** Header “FC View Fetch” only when FC View OAuth is connected (see `/api/fcv/status`). */
+/** Header fetch CTA when FLICA is connected (see `/api/flica/status`). */
 const dashboardFcvConnected = ref(false)
 const showFcvFetchPanel = ref(false)
-const fcvImportPromptHandled = ref(false)
 
 async function refreshDashboardFcvStatus(): Promise<void> {
   if (!isAuthenticated.value) {
@@ -7261,8 +7263,9 @@ async function refreshDashboardFcvStatus(): Promise<void> {
     return
   }
   try {
-    const data = await apiFetch<{ connected: boolean }>('/api/fcv/status', {
+    const data = await apiFetch<{ connected: boolean }>('/api/flica/status', {
       headers: { Authorization: `Bearer ${token}` },
+      query: { airlineCode: 'RJET' },
     })
     dashboardFcvConnected.value = Boolean(data?.connected)
   } catch {
@@ -7413,25 +7416,9 @@ watch(isMigrating, (migrating, wasMigrating) => {
   }
 })
 
-watch(
-  [() => route.query.fcv, isAuthenticated, () => session.value?.access_token],
-  async ([val, authed, token]) => {
-    if (val !== 'connected' || !authed || !token || fcvImportPromptHandled.value) return
-    await refreshDashboardFcvStatus()
-    if (!dashboardFcvConnected.value) return
-    fcvImportPromptHandled.value = true
-    if (isIos.value) {
-      closeSettings()
-      await openFcvFetchSection()
-    }
-  },
-  { immediate: true }
-)
-
 watch(dashboardFcvConnected, (c) => {
   if (!c) {
     showFcvFetchPanel.value = false
-    fcvImportPromptHandled.value = false
   }
 })
 
@@ -8321,6 +8308,7 @@ const scrollToTop = (): void => {
 
 const openFcvFetchSection = async (): Promise<void> => {
   showFcvFetchPanel.value = true
+  await refreshDashboardFcvStatus()
   if (isIos.value) return
   await nextTick()
   fcvFetchSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -8333,6 +8321,15 @@ function closeFcvFetchUi(): void {
 function handleOpenFcvImportFromSettings(): void {
   closeSettings()
   void openFcvFetchSection()
+}
+
+function handleFlicaConnectionChanged(payload: { connected: boolean }): void {
+  dashboardFcvConnected.value = !!payload?.connected
+  if (payload?.connected) {
+    showFcvFetchPanel.value = true
+  } else {
+    showFcvFetchPanel.value = false
+  }
 }
 const isInlineCommercialMode = ref(false)
 const editingEntryId = ref<string | null>(null)
@@ -16663,8 +16660,8 @@ async function handleFcvImported(payload: {
   }
   const summary =
     parts.length > 0
-      ? `FC View import complete: ${parts.join(', ')}.`
-      : 'FC View import complete.'
+      ? `Schedule import complete: ${parts.join(', ')}.`
+      : 'Schedule import complete.'
   fcvImportMessage.value = summary
   if (isIos.value) {
     showToast(summary, 5000)

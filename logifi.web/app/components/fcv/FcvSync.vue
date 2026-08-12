@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useAuth } from '~/composables/useAuth'
-import { useFcvUiLabel } from '~/composables/useFcvUiLabel'
-import { useRoute } from 'vue-router'
-import FcvApiDisclaimers from '~/components/fcv/FcvApiDisclaimers.vue'
 import { apiFetch } from '~/utils/apiFetch'
-import { isCapacitorNative } from '~/composables/useCapacitorPlatform'
 import {
   buildFcvImportRequestPayload,
   countUnresolvedDuplicateActions,
@@ -22,16 +18,21 @@ const props = withDefaults(
   defineProps<{
     isDarkMode: boolean
     mode?: 'connect' | 'fetch' | 'full'
-    /** When true and `NUXT_PUBLIC_FCV_UI_LABEL` is set, show Beta / Coming soon (Settings → Data & Sync only). */
+    /** @deprecated No longer shown; kept for call-site compatibility. */
     showRolloutLabel?: boolean
     /** Sync local logbook to server before duplicate check (e.g. process queue + reload). */
     beforeDuplicateCheck?: () => Promise<void>
-    /** Unsynced entries on this device; shown as a warning before FC View import. */
+    /** Unsynced entries on this device; shown as a warning before schedule import. */
     pendingSyncCount?: number
     /** Mobile / iOS sheet: primary "Import new flights" CTA, collapsible date range, fullscreen preview. */
     compact?: boolean
     /** Full pilot catalog display names for crew pickers during import preview. */
     catalogPersonNames?: string[]
+    /**
+     * Parent knows FLICA is connected (e.g. dashboard after Settings connect).
+     * Triggers a status refresh so fetch-mode instances pick up the connection.
+     */
+    externalConnected?: boolean
   }>(),
   {
     mode: 'full',
@@ -39,10 +40,12 @@ const props = withDefaults(
     pendingSyncCount: 0,
     compact: false,
     catalogPersonNames: () => [],
+    externalConnected: undefined,
   }
 )
 const emit = defineEmits<{
   imported: [{ imported: number; linked: number; skipped: number; importBatchId?: string }]
+  'connection-changed': [{ connected: boolean }]
 }>()
 
 interface FcvMappedEntry {
@@ -98,18 +101,14 @@ interface HeuristicMatchInfo {
 }
 
 const { session, isAuthenticated } = useAuth()
-const { showPill, pillText } = useFcvUiLabel()
 
-const showFcvRolloutBlock = computed(() => props.showRolloutLabel && showPill.value)
 const pendingSyncCount = computed(() => Math.max(0, props.pendingSyncCount ?? 0))
 
-const fcvUiPillClass = computed(() =>
-  props.isDarkMode
-    ? 'shrink-0 rounded-md border border-amber-700/50 bg-amber-950/40 px-2 py-0.5 text-xs font-semibold text-amber-100'
-    : 'shrink-0 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900'
-)
-
 const connected = ref<boolean>(false)
+const flicaUsername = ref<string | null>(null)
+const connectingFlica = ref(false)
+const flicaUserIdInput = ref('')
+const flicaPasswordInput = ref('')
 const loadingStatus = ref(false)
 const disconnecting = ref(false)
 const loadingFetch = ref(false)
@@ -126,26 +125,26 @@ const showAdvancedDateRange = ref(false)
 
 const previewFlights = ref<FcvMappedEntry[]>([])
 const showPreviewModal = ref(false)
-/** Heuristic match (date/tail/route/OOOI) — not already stored by FC View flight id. */
+/** Heuristic match (date/tail/route/OOOI) — not already stored by external flight id. */
 const heuristicDuplicateIndices = ref<Set<number>>(new Set())
-/** Exact `fcv_flight_id` already present in logbook (import would skip). */
+/** Exact external flight id already present in logbook (import would skip). */
 const alreadyImportedIndices = ref<Set<number>>(new Set())
 const includeDuplicatesInImport = ref(false)
 const includeAlreadyImportedInImport = ref(false)
 const heuristicMatches = ref<HeuristicMatchInfo[]>([])
 const flightRowActions = ref<Record<string, FcvFlightAction>>({})
-/** Per-row include in import, keyed by `fcv_flight_id`. */
+/** Per-row include in import, keyed by external flight id. */
 const selectedFcvFlightIds = ref<Set<string>>(new Set())
-/** When "Since last entry" hid rows that are already in the logbook (FC View id). */
+/** When "Since last entry" hid rows that are already in the logbook. */
 const sinceLastEntryOmittedAlreadyImported = ref(0)
 const expandedEnrichmentRows = ref<Set<number>>(new Set())
 const perFlightEnrichment = ref<Record<number, FlightEnrichment>>({})
 const crewReviewCandidates = ref<CrewReviewCandidate[]>([])
-/** Crew review state keyed by exact FC View `raw_name` so rows with the same string stay in sync. */
+/** Crew review state keyed by exact imported `raw_name` so rows with the same string stay in sync. */
 const crewResolutionMode = ref<Record<string, CrewOverrideMode>>({})
 const crewPickSelection = ref<Record<string, string>>({})
 const crewRenameText = ref<Record<string, string>>({})
-/** Editable other-pilot name per FC View flight id in import preview. */
+/** Editable other-pilot name per flight id in import preview. */
 const perFlightCrewName = ref<Record<string, string>>({})
 /** Full catalog from server when crew review is required (fallback path). */
 const crewReviewCatalogNames = ref<string[]>([])
@@ -286,65 +285,94 @@ async function checkStatus() {
   loadingStatus.value = true
   error.value = null
   try {
-    const data = await apiFetch<{ connected: boolean }>('/api/fcv/status', {
+    const flica = await apiFetch<{
+      connected: boolean
+      username?: string
+      airlineCode?: string
+    }>('/api/flica/status', {
       headers: authHeaders(),
+      query: { airlineCode: 'RJET' },
     })
-    connected.value = data.connected
+    connected.value = !!flica.connected
+    flicaUsername.value = flica.username ?? null
   } catch (e) {
     connected.value = false
-    error.value = e instanceof Error ? e.message : 'Failed to check FC View status'
+    flicaUsername.value = null
+    error.value = e instanceof Error ? e.message : 'Failed to check FLICA status'
   } finally {
     loadingStatus.value = false
   }
 }
 
-async function connectFcv() {
+watch(
+  () => props.externalConnected,
+  (v) => {
+    if (v === true && !connected.value && isAuthenticated.value) {
+      void checkStatus()
+    }
+  }
+)
+
+async function connectFlica() {
+  if (!isAuthenticated.value || connectingFlica.value) return
+  const username = flicaUserIdInput.value.trim()
+  const password = flicaPasswordInput.value
+  if (!username || !password) {
+    error.value = 'Enter your FLICA User ID and password.'
+    return
+  }
+  connectingFlica.value = true
   error.value = null
   try {
-    const native = isCapacitorNative()
-    const data = await apiFetch<{ redirectUrl: string }>('/api/fcv/auth', {
-      headers: authHeaders(),
-      query: native ? { platform: 'ios' } : undefined,
+    const data = await apiFetch<{
+      success: boolean
+      connected: boolean
+      username?: string
+    }>('/api/flica/connect', {
+      method: 'POST',
+      headers: {
+        ...authHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: {
+        username,
+        password,
+        airlineCode: 'RJET',
+      },
     })
-    if (!data?.redirectUrl) return
-    if (native) {
-      // Open OAuth in an in-app browser so the app's WebView stays alive; the server
-      // callback returns via the io.logifi.app:// deep link, which reopens the app.
-      const { Browser } = await import('@capacitor/browser')
-      await Browser.open({ url: data.redirectUrl })
-    } else {
-      window.location.href = data.redirectUrl
-    }
-  } catch (e: unknown) {
-    const status =
-      e &&
-      typeof e === 'object' &&
-      'statusCode' in e &&
-      typeof (e as { statusCode: unknown }).statusCode === 'number'
-        ? (e as { statusCode: number }).statusCode
-        : undefined
-    if (status === 503) {
-      error.value =
-        'FC View connection isn’t available right now. Please try again later.'
-      return
-    }
-    error.value = e instanceof Error ? e.message : 'Failed to start FC View connection'
+    connected.value = !!data?.connected || !!data?.success
+    flicaUsername.value = data?.username ?? username
+    flicaPasswordInput.value = ''
+    emit('connection-changed', { connected: connected.value })
+  } catch (e) {
+    connected.value = false
+    error.value = e instanceof Error ? e.message : 'Failed to connect FLICA'
+  } finally {
+    connectingFlica.value = false
   }
 }
 
-async function disconnectFcv() {
+async function disconnectFlica() {
   if (!isAuthenticated.value || disconnecting.value) return
   disconnecting.value = true
   error.value = null
   try {
-    await apiFetch<{ success: boolean }>('/api/fcv/disconnect', {
+    await apiFetch<{ success: boolean }>('/api/flica/disconnect', {
       method: 'POST',
-      headers: authHeaders(),
+      headers: {
+        ...authHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: { airlineCode: 'RJET' },
     })
     connected.value = false
+    flicaUsername.value = null
+    flicaUserIdInput.value = ''
+    flicaPasswordInput.value = ''
     resetPreviewImportState()
+    emit('connection-changed', { connected: false })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to disconnect FC View'
+    error.value = e instanceof Error ? e.message : 'Failed to disconnect FLICA'
   } finally {
     disconnecting.value = false
   }
@@ -594,7 +622,8 @@ function heuristicMatchForIndex(index: number): HeuristicMatchInfo | null {
 
 function existingEntrySourceLabel(match: HeuristicMatchInfo): string {
   if (!match.isImported) return 'Manual entry'
-  if (match.importSource === 'fc_view') return 'FC View entry'
+  if (match.importSource === 'fc_view') return 'Previously imported entry'
+  if (match.importSource === 'flica_aerodatabox') return 'Previously imported schedule entry'
   return 'Imported entry'
 }
 
@@ -624,13 +653,17 @@ function canLinkHeuristicMatch(match: HeuristicMatchInfo | null): boolean {
 
 async function fetchFlights(opts?: { hideAlreadyImportedFromFcView?: boolean }) {
   if (!isAuthenticated.value) return
+  if (!connected.value) {
+    error.value = 'Connect FLICA first.'
+    return
+  }
   loadingFetch.value = true
   error.value = null
   previewFlights.value = []
   sinceLastEntryOmittedAlreadyImported.value = 0
   try {
     const data = await apiFetch<{ success: boolean; flights: FcvMappedEntry[]; count: number }>(
-      '/api/fcv/fetch',
+      '/api/airline-sync/fetch-flica',
       {
         method: 'POST',
         headers: {
@@ -642,6 +675,7 @@ async function fetchFlights(opts?: { hideAlreadyImportedFromFcView?: boolean }) 
           dateTo: dateTo.value || new Date().toISOString().slice(0, 10),
           includeDeadheads: includeDeadheads.value,
           includeScheduled: includeScheduled.value,
+          airlineCode: 'RJET',
         },
       }
     )
@@ -703,7 +737,7 @@ async function fetchFlights(opts?: { hideAlreadyImportedFromFcView?: boolean }) 
       showPreviewModal.value = true
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to fetch flights from FC View'
+    error.value = e instanceof Error ? e.message : 'Failed to fetch flights from schedule'
   } finally {
     loadingFetch.value = false
   }
@@ -917,12 +951,11 @@ const importCount = computed(() => flightsToImport.value.length)
 const isConnectOnly = computed(() => props.mode === 'connect')
 const isFetchOnly = computed(() => props.mode === 'fetch')
 const isCompactFetch = computed(() => props.compact && isFetchOnly.value)
-const showConnectCta = computed(() => !isFetchOnly.value && !connected.value)
+/** Show credentials form whenever FLICA is not connected (including fetch panel). */
+const showConnectCta = computed(() => !loadingStatus.value && !connected.value)
 const showFetchControls = computed(() => !isConnectOnly.value && connected.value)
 const showConnectManage = computed(() => isConnectOnly.value && connected.value)
-const showFetchNeedsConnection = computed(
-  () => isFetchOnly.value && !loadingStatus.value && !connected.value
-)
+const showFetchNeedsConnection = computed(() => false)
 
 const totalTime = computed(() => {
   let t = 0
@@ -962,7 +995,7 @@ function formatOooiPreview(f: FcvMappedEntry): string {
   return parts.length ? `OOOI ${parts.join(' · ')}` : ''
 }
 
-/** Other pilot from FC View (`training_*`); your leg role for quick scan of similar legs. */
+/** Other pilot (`training_*`); your leg role for quick scan of similar legs. */
 function formatCrewPreviewLine(f: FcvMappedEntry): string {
   const nameRaw = f.training_elements
   const name = typeof nameRaw === 'string' ? nameRaw.trim() : ''
@@ -1010,28 +1043,6 @@ watch(includeAlreadyImportedInImport, (on) => {
 onMounted(() => {
   if (isAuthenticated.value) checkStatus()
 })
-
-const route = useRoute()
-watch(
-  [() => route.query.fcv, isAuthenticated, () => session.value?.access_token],
-  ([val, authed, token]) => {
-    if (val === 'error') {
-      const reason = route.query.reason
-      error.value =
-        typeof reason === 'string' && reason.trim()
-          ? reason
-          : 'FC View connection failed. Please verify your FC View client setup and try again.'
-      return
-    }
-
-    // OAuth redirect can arrive before session/token is ready; status fetch needs Bearer token.
-    if (val === 'connected' && authed && token) {
-      error.value = null
-      checkStatus()
-    }
-  },
-  { immediate: true }
-)
 
 /** Logifi brand: plane blue + sun (warm gradient on hover). */
 const btnConnectFcvClass = computed(() =>
@@ -1097,9 +1108,8 @@ const previewModalOverlayClass = computed(() =>
             isDarkMode ? 'text-gray-300' : 'text-gray-700',
           ]"
         >
-          Pull from FC View
+          Airline schedule sync
         </h4>
-        <span v-if="showFcvRolloutBlock" :class="fcvUiPillClass">{{ pillText }}</span>
       </div>
     </div>
 
@@ -1116,28 +1126,59 @@ const previewModalOverlayClass = computed(() =>
       </p>
     </template>
     <template v-else-if="showConnectCta">
-      <FcvApiDisclaimers class="mb-4" :is-dark-mode="isDarkMode" tone="dashboard" />
       <p :class="['text-sm mb-4', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
-        Connect your FC View account to import flights into your logbook.
+        Connect your FLICA account to import flights into your logbook. Use your FLICA User ID
+        (e.g. RPA624619) or employee number.
       </p>
-      <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-        <button
-          type="button"
-          :class="btnConnectFcvClass"
-          :disabled="!isAuthenticated"
-          @click="connectFcv"
+      <form class="space-y-3 max-w-md" @submit.prevent="connectFlica">
+        <label
+          :class="[
+            'block text-sm font-medium',
+            isDarkMode ? 'text-gray-300' : 'text-gray-700',
+          ]"
         >
-          <Icon name="ri:external-link-line" size="18" class="shrink-0" />
-          Connect FC View
+          <span class="mb-1 block">FLICA User ID</span>
+          <input
+            v-model="flicaUserIdInput"
+            type="text"
+            autocomplete="username"
+            placeholder="RPA624619"
+            :class="[inputClass, 'w-full']"
+          />
+        </label>
+        <label
+          :class="[
+            'block text-sm font-medium',
+            isDarkMode ? 'text-gray-300' : 'text-gray-700',
+          ]"
+        >
+          <span class="mb-1 block">Password</span>
+          <input
+            v-model="flicaPasswordInput"
+            type="password"
+            autocomplete="current-password"
+            :class="[inputClass, 'w-full']"
+          />
+        </label>
+        <button
+          type="submit"
+          :class="btnConnectFcvClass"
+          :disabled="!isAuthenticated || connectingFlica"
+        >
+          <Icon name="ri:link" size="18" class="shrink-0" />
+          {{ connectingFlica ? 'Connecting…' : 'Connect FLICA' }}
         </button>
-      </div>
+      </form>
     </template>
     <template v-else-if="showFetchControls && !(compact && showPreviewModal)">
       <p
         v-if="!isCompactFetch"
         :class="['text-sm mb-4', isDarkMode ? 'text-gray-400' : 'text-gray-600']"
       >
-        Choose a date range and fetch flights to preview before importing.
+        Choose a date range and fetch flights from FLICA to preview before importing.
+        <span v-if="flicaUsername" :class="isDarkMode ? 'text-gray-500' : 'text-gray-500'">
+          Connected as {{ flicaUsername }}.
+        </span>
       </p>
       <div class="space-y-4">
         <template v-if="isCompactFetch">
@@ -1328,11 +1369,22 @@ const previewModalOverlayClass = computed(() =>
             }}
           </button>
         </div>
+        <div v-if="!isCompactFetch" class="flex flex-wrap items-center gap-3 pt-1">
+          <button
+            type="button"
+            :class="btnOutlineClass"
+            :disabled="disconnecting"
+            @click="disconnectFlica"
+          >
+            {{ disconnecting ? 'Disconnecting…' : 'Disconnect FLICA' }}
+          </button>
+        </div>
       </div>
     </template>
     <template v-else-if="showConnectManage">
       <p :class="['text-sm mb-4', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
-        FC View is connected. You can disconnect at any time.
+        FLICA is connected<span v-if="flicaUsername"> as {{ flicaUsername }}</span>. You can
+        disconnect at any time.
       </p>
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-wrap">
         <button
@@ -1344,17 +1396,12 @@ const previewModalOverlayClass = computed(() =>
               ? 'border-red-800/70 text-red-400 hover:bg-red-950/40'
               : 'border-red-200 text-red-600 hover:bg-red-50',
           ]"
-          @click="disconnectFcv"
+          @click="disconnectFlica"
         >
           <Icon name="ri:link-unlink" size="18" class="shrink-0" />
-          {{ disconnecting ? 'Disconnecting…' : 'Disconnect FC View' }}
+          {{ disconnecting ? 'Disconnecting…' : 'Disconnect FLICA' }}
         </button>
       </div>
-    </template>
-    <template v-else-if="showFetchNeedsConnection">
-      <p :class="['text-sm', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
-        Connect FC View in Settings under Data & Sync before fetching flights.
-      </p>
     </template>
 
     <!-- Preview modal (inline on iOS compact; teleported modal on desktop) -->
@@ -1386,7 +1433,7 @@ const previewModalOverlayClass = computed(() =>
               :class="['text-xs mt-1', isDarkMode ? 'text-slate-400' : 'text-slate-600']"
             >
               {{ sinceLastEntryOmittedAlreadyImported }} flight(s) already in your logbook were not
-              shown (Since last entry only lists new FC View flights).
+              shown (Since last entry only lists new flights).
             </p>
             <div v-if="previewFlights.length > 0" class="flex flex-wrap gap-2 mt-2">
               <button
@@ -1571,7 +1618,7 @@ const previewModalOverlayClass = computed(() =>
                 isDarkMode ? 'text-slate-400' : 'text-slate-600',
               ]"
             >
-              Already in logbook from FC View
+              Already in logbook
             </span>
             <span
               v-else-if="isHeuristicDuplicateRow(idx)"
@@ -1629,7 +1676,7 @@ const previewModalOverlayClass = computed(() =>
                     :checked="flightRowAction(f.fcv_flight_id) === 'link'"
                     @change="setFlightRowAction(f.fcv_flight_id, 'link')"
                   />
-                  <span>Link to existing entry (enrich with FC View data)</span>
+                  <span>Link to existing entry (enrich with schedule data)</span>
                 </label>
                 <label
                   :class="[
@@ -1662,7 +1709,7 @@ const previewModalOverlayClass = computed(() =>
                 v-if="crewRawNameHasMultipleFlights(crewRawKey(f.fcv_flight_id))"
                 :class="['text-[11px] leading-snug', isDarkMode ? 'text-orange-100/80' : 'text-orange-800']"
               >
-                Flights with this same FC View name share one choice below.
+                Flights with this same crew name share one choice below.
               </p>
               <fieldset class="space-y-2">
                 <legend class="sr-only">How to save this crew name</legend>
@@ -1762,7 +1809,7 @@ const previewModalOverlayClass = computed(() =>
                   />
                 </label>
                 <p :class="['text-[11px] leading-snug', isDarkMode ? 'text-orange-100/85' : 'text-orange-800']">
-                  Adds this person to your catalog for future FC View imports.
+                  Adds this person to your catalog for future schedule imports.
                 </p>
               </div>
               <div v-else class="space-y-1">
@@ -1776,7 +1823,7 @@ const previewModalOverlayClass = computed(() =>
                   {{ crewCandidateByFlightId(f.fcv_flight_id)?.raw_name }}
                 </p>
                 <p :class="['text-[11px] leading-snug', isDarkMode ? 'text-orange-100/85' : 'text-orange-800']">
-                  Uses the FC View spelling exactly. Does not add a catalog person.
+                  Uses the imported spelling exactly. Does not add a catalog person.
                 </p>
               </div>
               <p
@@ -1906,7 +1953,7 @@ const previewModalOverlayClass = computed(() =>
               v-if="alreadyImportedCount > 0"
               :class="isDarkMode ? 'text-slate-400' : 'text-slate-600'"
             >
-              {{ alreadyImportedCount }} flight(s) already imported from FC View (import would skip these).
+              {{ alreadyImportedCount }} flight(s) already imported (import would skip these).
             </p>
             <p
               v-if="heuristicDuplicateCount > 0"
@@ -1963,7 +2010,7 @@ const previewModalOverlayClass = computed(() =>
                 type="checkbox"
                 :class="['rounded shrink-0', isDarkMode ? 'border-gray-600' : 'border-gray-300']"
               />
-              <span>Include flights already imported from FC View</span>
+              <span>Include flights already imported</span>
             </label>
           </div>
           <div class="flex gap-2 shrink-0">

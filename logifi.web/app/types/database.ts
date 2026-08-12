@@ -150,6 +150,50 @@ export type Database = {
           updated_at?: string
         }
       }
+      flica_integrations: {
+        Row: {
+          id: string
+          user_id: string
+          airline_code: string
+          portal_host: string
+          username: string
+          password_ciphertext: string
+          password_nonce: string
+          key_version: number
+          last_ok_at: string | null
+          last_error: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          airline_code?: string
+          portal_host?: string
+          username: string
+          password_ciphertext: string
+          password_nonce: string
+          key_version?: number
+          last_ok_at?: string | null
+          last_error?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          airline_code?: string
+          portal_host?: string
+          username?: string
+          password_ciphertext?: string
+          password_nonce?: string
+          key_version?: number
+          last_ok_at?: string | null
+          last_error?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       audit_logs: {
         Row: {
           id: string
