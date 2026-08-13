@@ -79,6 +79,8 @@ const FCV_TYPE_TO_CANONICAL: Record<string, string> = {
   E175: 'ERJ-175',
   ERJ175: 'ERJ-175',
   EMB175: 'ERJ-175',
+  /** Republic FLICA Base/Equip code for E175. */
+  EM7: 'ERJ-175',
   E170: 'ERJ-170',
   ERJ170: 'ERJ-170',
   EMB170: 'ERJ-170',

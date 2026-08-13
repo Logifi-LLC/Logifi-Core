@@ -151,6 +151,140 @@ describe('FcvSync proactive pilot editing', () => {
   })
 })
 
+describe('FcvSync fetch omits already-in-logbook', () => {
+  beforeEach(() => {
+    apiFetchMock.mockReset()
+  })
+
+  it('hides already-imported flights from Fetch preview and reports count', async () => {
+    apiFetchMock.mockImplementation(async (url: string, init?: { body?: unknown }) => {
+      if (url === '/api/flica/status') return { connected: true, username: 'RPA1' }
+      if (url === '/api/airline-sync/fetch-flica') {
+        return {
+          success: true,
+          flights: [
+            buildPreviewFlight({
+              fcv_flight_id: 'FLICA_OLD',
+              date: '2026-08-10',
+              flight_number: '5772',
+              departure: 'LGA',
+              destination: 'DCA',
+            }),
+            buildPreviewFlight({
+              fcv_flight_id: 'FLICA_20260812_4442_LGA',
+              date: '2026-08-12',
+              flight_number: '4442',
+              departure: 'LGA',
+              destination: 'RIC',
+            }),
+            buildPreviewFlight({
+              fcv_flight_id: 'FLICA_20260812_4442_RIC',
+              date: '2026-08-12',
+              flight_number: '4442',
+              departure: 'RIC',
+              destination: 'LGA',
+            }),
+          ],
+          count: 3,
+        }
+      }
+      if (url === '/api/fcv/check-duplicates') {
+        const body = init?.body as { flights?: Array<{ fcv_flight_id?: string }> } | undefined
+        const flights = body?.flights ?? []
+        if (flights.length === 3) {
+          return {
+            duplicateFcvFlightIds: [],
+            duplicateIndices: [0],
+            alreadyImportedIndices: [0],
+            heuristicDuplicateIndices: [],
+            alreadyImportedFcvFlightIds: ['FLICA_OLD'],
+            heuristicMatches: [],
+          }
+        }
+        return {
+          duplicateFcvFlightIds: [],
+          duplicateIndices: [],
+          alreadyImportedIndices: [],
+          heuristicDuplicateIndices: [],
+          alreadyImportedFcvFlightIds: [],
+          heuristicMatches: [],
+        }
+      }
+      return {}
+    })
+
+    const wrapper = mountFcvSync()
+    const setupState = getSetupState(wrapper)
+    setupState.connected = true
+    await nextTick()
+
+    const fetchFlights = setupState.fetchFlights as () => Promise<void>
+    await fetchFlights()
+    await nextTick()
+
+    const preview = setupState.previewFlights as Array<{ fcv_flight_id: string }>
+    expect(preview.map((f) => f.fcv_flight_id)).toEqual([
+      'FLICA_20260812_4442_LGA',
+      'FLICA_20260812_4442_RIC',
+    ])
+    expect(setupState.sinceLastEntryOmittedAlreadyImported).toBe(1)
+    expect(wrapper.text()).toContain('1 flight(s) already in your logbook were not shown')
+  })
+
+  it('shows Enriched 0/N when AeroDataBox returns no usable hits', async () => {
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/flica/status') return { connected: true, username: 'RPA1' }
+      if (url === '/api/airline-sync/fetch-flica') {
+        return {
+          success: true,
+          flights: [
+            buildPreviewFlight({
+              fcv_flight_id: 'FLICA_20260812_4442_LGA',
+              date: '2026-08-12',
+              flight_number: '4442',
+              departure: 'LGA',
+              destination: 'RIC',
+              aircraft_make_model: 'ERJ-175',
+              registration: '',
+            }),
+          ],
+          count: 1,
+          enrichAttempted: 2,
+          enrichedCount: 0,
+          enrichDetail: '0/2 no usable AeroDataBox hit (YX204 AA204 4442-204)',
+          warning:
+            'Could not enrich flights from AeroDataBox. 0/2 no usable AeroDataBox hit (YX204 AA204 4442-204). Preview shows FLICA schedule times only.',
+        }
+      }
+      if (url === '/api/fcv/check-duplicates') {
+        return {
+          duplicateFcvFlightIds: [],
+          duplicateIndices: [],
+          alreadyImportedIndices: [],
+          heuristicDuplicateIndices: [],
+          alreadyImportedFcvFlightIds: [],
+          heuristicMatches: [],
+        }
+      }
+      return {}
+    })
+
+    const wrapper = mountFcvSync()
+    const setupState = getSetupState(wrapper)
+    setupState.connected = true
+    await nextTick()
+
+    const fetchFlights = setupState.fetchFlights as () => Promise<void>
+    await fetchFlights()
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Enriched 0/2')
+    expect(wrapper.text()).toContain('YX204')
+    expect(wrapper.text()).toContain('AA204')
+    expect(wrapper.text()).toContain('4442-204')
+  })
+})
+
 describe('FcvSync import teardown', () => {
   beforeEach(() => {
     apiFetchMock.mockReset()

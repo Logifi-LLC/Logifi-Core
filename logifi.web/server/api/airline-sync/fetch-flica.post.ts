@@ -1,6 +1,10 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
-import { fetchFlightActuals } from '../../utils/aeroDataBox'
+import {
+  isAeroDataBoxConfigured,
+  isUsableAeroDataBoxHit,
+  lookupFlightActuals,
+} from '../../utils/aeroDataBox'
 import { mapAirlineLegToFcvMappedEntry } from '../../utils/airlineLeg'
 import type { AirlineLeg } from '../../utils/airlineLeg'
 import {
@@ -25,44 +29,158 @@ interface FetchFlicaBody {
   airlineCode?: string
 }
 
-const ENRICH_CONCURRENCY = 3
-
-async function enrichLegWithAeroDataBox(leg: AirlineLeg, todayYmd: string): Promise<AirlineLeg> {
+async function enrichLegWithAeroDataBox(
+  leg: AirlineLeg,
+  dateTo: string,
+  airlineCode: string
+): Promise<{
+  leg: AirlineLeg
+  attempted: boolean
+  enriched: boolean
+  detail: string | null
+  authRejected: boolean
+  rateLimited: boolean
+}> {
   const date = leg.scheduled_out_local?.slice(0, 10) ?? ''
-  if (!date || date > todayYmd) return leg
+  if (!date || date > dateTo) {
+    return {
+      leg,
+      attempted: false,
+      enriched: false,
+      detail: null,
+      authRejected: false,
+      rateLimited: false,
+    }
+  }
+  if (!isAeroDataBoxConfigured()) {
+    return {
+      leg,
+      attempted: false,
+      enriched: false,
+      detail: null,
+      authRejected: false,
+      rateLimited: false,
+    }
+  }
 
-  const actuals = await fetchFlightActuals(
+  const lookup = await lookupFlightActuals(
     leg.flight_number,
     date,
     leg.dep_airport,
-    leg.arr_airport
+    leg.arr_airport,
+    airlineCode
   )
-  if (!actuals) return leg
+  if (lookup.authRejected) {
+    return {
+      leg,
+      attempted: true,
+      enriched: false,
+      detail: lookup.detail,
+      authRejected: true,
+      rateLimited: false,
+    }
+  }
+  if (lookup.rateLimited) {
+    return {
+      leg,
+      attempted: true,
+      enriched: false,
+      detail: lookup.detail,
+      authRejected: false,
+      rateLimited: true,
+    }
+  }
+  if (!lookup.actuals || !isUsableAeroDataBoxHit(lookup.actuals)) {
+    return {
+      leg,
+      attempted: true,
+      enriched: false,
+      detail: lookup.detail,
+      authRejected: false,
+      rateLimited: false,
+    }
+  }
 
   return {
-    ...leg,
-    fcv_tail_number: actuals.registration ?? leg.fcv_tail_number,
-    fcv_aircraft_type: actuals.aircraftType ?? leg.fcv_aircraft_type,
-    actual_out_local: actuals.actualOutLocal ?? leg.actual_out_local,
-    actual_in_local: actuals.actualInLocal ?? leg.actual_in_local,
-    actual_off_local: actuals.actualOffLocal ?? leg.actual_off_local,
-    actual_on_local: actuals.actualOnLocal ?? leg.actual_on_local,
+    leg: {
+      ...leg,
+      fcv_tail_number: lookup.actuals.registration ?? leg.fcv_tail_number,
+      fcv_aircraft_type: lookup.actuals.aircraftType ?? leg.fcv_aircraft_type,
+      actual_out_local: lookup.actuals.actualOutLocal ?? leg.actual_out_local,
+      actual_in_local: lookup.actuals.actualInLocal ?? leg.actual_in_local,
+      actual_off_local: lookup.actuals.actualOffLocal ?? leg.actual_off_local,
+      actual_on_local: lookup.actuals.actualOnLocal ?? leg.actual_on_local,
+    },
+    attempted: true,
+    enriched: true,
+    detail: lookup.detail,
+    authRejected: false,
+    rateLimited: false,
   }
 }
 
 async function enrichLegsSequential(
   legs: AirlineLeg[],
-  todayYmd: string
-): Promise<AirlineLeg[]> {
+  dateTo: string,
+  airlineCode: string
+): Promise<{
+  legs: AirlineLeg[]
+  enrichAttempted: number
+  enrichedCount: number
+  enrichDetail: string | null
+  authRejected: boolean
+}> {
   const out: AirlineLeg[] = []
-  for (let i = 0; i < legs.length; i += ENRICH_CONCURRENCY) {
-    const chunk = legs.slice(i, i + ENRICH_CONCURRENCY)
-    const enriched = await Promise.all(
-      chunk.map((leg) => enrichLegWithAeroDataBox(leg, todayYmd))
-    )
-    out.push(...enriched)
+  let enrichAttempted = 0
+  let enrichedCount = 0
+  let authRejected = false
+  let rateLimited = false
+  const details: string[] = []
+
+  for (const leg of legs) {
+    const date = leg.scheduled_out_local?.slice(0, 10) ?? ''
+    const eligible = Boolean(date && date <= dateTo && isAeroDataBoxConfigured())
+    if (!eligible) {
+      out.push(leg)
+      continue
+    }
+    if (rateLimited) {
+      out.push(leg)
+      enrichAttempted++
+      continue
+    }
+
+    const r = await enrichLegWithAeroDataBox(leg, dateTo, airlineCode)
+    out.push(r.leg)
+    if (r.attempted) enrichAttempted++
+    if (r.enriched) enrichedCount++
+    if (r.authRejected) authRejected = true
+    if (r.rateLimited) rateLimited = true
+    if (r.detail) details.push(r.detail)
   }
-  return out
+
+  const last = details[details.length - 1] ?? null
+  const multiStatus = details.find((d) => /\s/.test(d))
+  const shown = multiStatus ?? last
+  let enrichDetail: string | null = null
+  if (authRejected) {
+    enrichDetail = 'AeroDataBox rejected the API key'
+  } else if (rateLimited) {
+    const ratio = `${enrichedCount}/${enrichAttempted}`
+    enrichDetail = shown ? `${ratio} (${shown} rate limited)` : `${ratio} rate limited`
+  } else if (enrichAttempted > 0) {
+    const ratio = `${enrichedCount}/${enrichAttempted}`
+    if (enrichedCount === 0) {
+      enrichDetail = shown
+        ? `${ratio} no usable AeroDataBox hit (${shown})`
+        : `${ratio} no usable AeroDataBox hit`
+    } else if (shown) {
+      enrichDetail = `${ratio} (${shown})`
+    } else {
+      enrichDetail = ratio
+    }
+  }
+  return { legs: out, enrichAttempted, enrichedCount, enrichDetail, authRejected }
 }
 
 /**
@@ -197,10 +315,29 @@ export default defineEventHandler(async (event) => {
     todayYmd,
   })
 
-  const enriched = await enrichLegsSequential(filtered, todayYmd)
+  const {
+    legs: enriched,
+    enrichAttempted,
+    enrichedCount,
+    enrichDetail,
+    authRejected,
+  } = await enrichLegsSequential(filtered, dateTo, portal.airlineCode)
   const mapped: FcvMappedEntry[] = enriched.map(mapAirlineLegToFcvMappedEntry)
 
   const warningParts: string[] = []
+  if (!isAeroDataBoxConfigured() && filtered.length > 0) {
+    warningParts.push(
+      'Schedule enrichment is not configured (AERODATABOX_API_KEY). Tail and actual times were not added.'
+    )
+  } else if (authRejected) {
+    warningParts.push('AeroDataBox rejected the API key. Tail and actual times were not added.')
+  } else if (enrichAttempted > 0 && enrichedCount === 0) {
+    warningParts.push(
+      enrichDetail
+        ? `Could not enrich flights from AeroDataBox. ${enrichDetail}. Preview shows FLICA schedule times only.`
+        : `Could not enrich ${enrichAttempted} flight(s) from AeroDataBox. Preview shows FLICA schedule times only.`
+    )
+  }
   if (parsed.length === 0) {
     warningParts.push(
       `FLICA schedule HTML loaded (${htmlSummary.bytes} bytes, ${htmlSummary.tripCount} trip header(s), L7G13=${htmlSummary.hasL7G13 ? 'yes' : 'no'}, 4442=${htmlSummary.has4442 ? 'yes' : 'no'}) but no flight legs were recognized.` +
@@ -234,6 +371,9 @@ export default defineEventHandler(async (event) => {
     excludedOutsideRange,
     excludedScheduled,
     htmlBytes: htmlSummary.bytes,
+    enrichAttempted,
+    enrichedCount,
+    enrichDetail: enrichDetail ?? undefined,
     warning: warningParts.length > 0 ? warningParts.join(' ') : undefined,
   }
 })

@@ -6,6 +6,7 @@ import {
   buildFcvImportRequestPayload,
   countUnresolvedDuplicateActions,
   defaultSelectedFcvFlightIds,
+  omitAlreadyInLogbookPreviewFlights,
   type FcvFlightAction,
 } from '~/utils/fcvImportPayload'
 import {
@@ -129,6 +130,9 @@ const previewFlights = ref<FcvMappedEntry[]>([])
 const showPreviewModal = ref(false)
 /** Server-side note when fetch returned 0 (or filtered everything). */
 const fetchWarning = ref<string | null>(null)
+const enrichAttempted = ref(0)
+const enrichCount = ref(0)
+const enrichDetail = ref<string | null>(null)
 /** Heuristic match (date/tail/route/OOOI) — not already stored by external flight id. */
 const heuristicDuplicateIndices = ref<Set<number>>(new Set())
 /** Exact external flight id already present in logbook (import would skip). */
@@ -543,6 +547,9 @@ function resolveCrewOverrideMode(editedName: string, rawName: string): CrewOverr
 function resetPreviewImportState() {
   showPreviewModal.value = false
   fetchWarning.value = null
+  enrichAttempted.value = 0
+  enrichCount.value = 0
+  enrichDetail.value = null
   previewFlights.value = []
   sinceLastEntryOmittedAlreadyImported.value = 0
   heuristicDuplicateIndices.value = new Set()
@@ -674,7 +681,7 @@ function canLinkHeuristicMatch(match: HeuristicMatchInfo | null): boolean {
   return !!match && !match.isImported
 }
 
-async function fetchFlights(opts?: { hideAlreadyImportedFromFcView?: boolean }) {
+async function fetchFlights() {
   if (!isAuthenticated.value) return
   if (!connected.value) {
     error.value = 'Connect FLICA first.'
@@ -684,6 +691,9 @@ async function fetchFlights(opts?: { hideAlreadyImportedFromFcView?: boolean }) 
   error.value = null
   previewFlights.value = []
   sinceLastEntryOmittedAlreadyImported.value = 0
+  enrichAttempted.value = 0
+  enrichCount.value = 0
+  enrichDetail.value = null
   try {
     const data = await apiFetch<{
       success: boolean
@@ -695,6 +705,9 @@ async function fetchFlights(opts?: { hideAlreadyImportedFromFcView?: boolean }) 
       excludedDeadheads?: number
       excludedOutsideRange?: number
       excludedScheduled?: number
+      enrichAttempted?: number
+      enrichedCount?: number
+      enrichDetail?: string
     }>('/api/airline-sync/fetch-flica', {
         method: 'POST',
         headers: {
@@ -711,6 +724,18 @@ async function fetchFlights(opts?: { hideAlreadyImportedFromFcView?: boolean }) 
       })
     if (data?.success && Array.isArray(data.flights)) {
       fetchWarning.value = typeof data.warning === 'string' && data.warning.trim() ? data.warning.trim() : null
+      enrichAttempted.value =
+        typeof data.enrichAttempted === 'number' && Number.isFinite(data.enrichAttempted)
+          ? data.enrichAttempted
+          : 0
+      enrichCount.value =
+        typeof data.enrichedCount === 'number' && Number.isFinite(data.enrichedCount)
+          ? data.enrichedCount
+          : 0
+      enrichDetail.value =
+        typeof data.enrichDetail === 'string' && data.enrichDetail.trim()
+          ? data.enrichDetail.trim()
+          : null
       includeDuplicatesInImport.value = false
       includeAlreadyImportedInImport.value = false
       heuristicDuplicateIndices.value = new Set()
@@ -731,30 +756,14 @@ async function fetchFlights(opts?: { hideAlreadyImportedFromFcView?: boolean }) 
       try {
         dup = await requestCheckDuplicates(flightsForPreview)
 
-        if (opts?.hideAlreadyImportedFromFcView) {
-          const dropIds = new Set(
-            (dup.alreadyImportedFcvFlightIds ?? [])
-              .map((id) => String(id).trim())
-              .filter((s) => s.length > 0)
-          )
-          const dropIdx = new Set(dup.alreadyImportedIndices ?? [])
-          let filtered = flightsForPreview
-          if (dropIds.size > 0) {
-            filtered = flightsForPreview.filter(
-              (f) => !dropIds.has(String(f.fcv_flight_id ?? '').trim())
-            )
-          } else if (dropIdx.size > 0) {
-            filtered = flightsForPreview.filter((_, i) => !dropIdx.has(i))
-          }
-          if (filtered.length < flightsForPreview.length) {
-            sinceLastEntryOmittedAlreadyImported.value =
-              flightsForPreview.length - filtered.length
-            flightsForPreview = filtered
-            dup =
-              flightsForPreview.length > 0
-                ? await requestCheckDuplicates(flightsForPreview)
-                : { ...emptyDupResponse }
-          }
+        const omitted = omitAlreadyInLogbookPreviewFlights(flightsForPreview, dup)
+        if (omitted.omitted > 0) {
+          sinceLastEntryOmittedAlreadyImported.value = omitted.omitted
+          flightsForPreview = omitted.flights
+          dup =
+            flightsForPreview.length > 0
+              ? await requestCheckDuplicates(flightsForPreview)
+              : { ...emptyDupResponse }
         }
 
         previewFlights.value = flightsForPreview
@@ -786,7 +795,7 @@ async function fetchSinceLastEntry() {
     const from = typeof latest?.date === 'string' && latest.date.trim() ? latest.date : today
     dateFrom.value = from
     dateTo.value = today
-    await fetchFlights({ hideAlreadyImportedFromFcView: true })
+    await fetchFlights()
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to fetch since last entry'
   } finally {
@@ -1482,10 +1491,19 @@ const previewModalOverlayClass = computed(() =>
               :class="['text-xs mt-1', isDarkMode ? 'text-slate-400' : 'text-slate-600']"
             >
               {{ sinceLastEntryOmittedAlreadyImported }} flight(s) already in your logbook were not
-              shown (Since last entry only lists new flights).
+              shown.
             </p>
             <p
-              v-if="fetchWarning"
+              v-if="enrichAttempted > 0 || fetchWarning"
+              :class="['text-xs mt-1', isDarkMode ? 'text-amber-300' : 'text-amber-800']"
+            >
+              <template v-if="enrichAttempted > 0">
+                Enriched {{ enrichCount }}/{{ enrichAttempted }}<span v-if="enrichDetail"> — {{ enrichDetail }}</span>
+              </template>
+              <template v-else>{{ fetchWarning }}</template>
+            </p>
+            <p
+              v-if="fetchWarning && enrichAttempted > 0"
               :class="['text-xs mt-1', isDarkMode ? 'text-amber-300' : 'text-amber-800']"
             >
               {{ fetchWarning }}

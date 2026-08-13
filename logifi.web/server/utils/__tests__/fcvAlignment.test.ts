@@ -4,8 +4,15 @@ import {
   buildAlignmentIndex,
   buildCatalogPersonAlignmentSeeds,
   normalizeCrewNameForMatching,
+  normalizeFcvAircraftType,
   resolveCrewName,
 } from '../fcvAlignment'
+
+describe('normalizeFcvAircraftType', () => {
+  it('maps Republic FLICA EM7 to ERJ-175', () => {
+    expect(normalizeFcvAircraftType('EM7')).toBe('ERJ-175')
+  })
+})
 
 describe('normalizeCrewNameForMatching', () => {
   it('normalizes LAST, FIRST formatting into FIRST LAST key', () => {

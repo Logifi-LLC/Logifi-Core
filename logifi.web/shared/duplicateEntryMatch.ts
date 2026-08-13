@@ -6,6 +6,8 @@ export interface DuplicateEntryMatchShape {
   departure: string
   destination: string
   oooiOut?: string | null
+  /** Airline flight number when known (e.g. 4442 or YX4442). */
+  flightNumber?: string | null
   role?: string | null
   flightTimeTotal?: number | null
   pic?: number | null

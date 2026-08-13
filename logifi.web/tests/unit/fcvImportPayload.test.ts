@@ -3,11 +3,26 @@ import {
   buildFcvImportRequestPayload,
   countUnresolvedDuplicateActions,
   defaultSelectedFcvFlightIds,
+  omitAlreadyInLogbookPreviewFlights,
 } from '../../app/utils/fcvImportPayload'
 
 function flight(id: string) {
   return { fcv_flight_id: id, date: '2026-01-01' }
 }
+
+describe('omitAlreadyInLogbookPreviewFlights', () => {
+  it('omits exact-id and heuristic matches and reports count', () => {
+    const preview = [flight('a'), flight('b'), flight('c'), flight('d')]
+    const result = omitAlreadyInLogbookPreviewFlights(preview, {
+      alreadyImportedIndices: [0],
+      alreadyImportedFcvFlightIds: ['a'],
+      heuristicDuplicateIndices: [2],
+      duplicateIndices: [0, 2],
+    })
+    expect(result.omitted).toBe(2)
+    expect(result.flights.map((f) => f.fcv_flight_id)).toEqual(['b', 'd'])
+  })
+})
 
 describe('defaultSelectedFcvFlightIds', () => {
   it('selects clean flights only by default', () => {

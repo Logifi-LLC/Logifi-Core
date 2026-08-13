@@ -101,7 +101,7 @@ export default defineEventHandler(async (event) => {
     const { data: rows, error } = await supabase
       .from('log_entries')
       .select(
-        'id, date, registration, departure, destination, flight_time, oooi, is_imported, import_source, fcv_flight_id'
+        'id, date, registration, departure, destination, flight_time, oooi, is_imported, import_source, fcv_flight_id, flight_number'
       )
       .eq('user_id', userId)
       .in('date', dates)

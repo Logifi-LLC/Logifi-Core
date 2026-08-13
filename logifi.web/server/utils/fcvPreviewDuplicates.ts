@@ -1,6 +1,8 @@
 import type { FcvMappedEntry } from './fcvMap'
+import { canonicalizeAirportCodeForMatch } from '../../shared/airportCodeCanonical'
 import {
   entriesDuplicateMatch,
+  normalizeOooiOutForMatch,
   type DuplicateEntryMatchShape,
 } from '../../shared/duplicateEntryMatch'
 
@@ -32,6 +34,10 @@ export function fcvMappedToMatchShape(f: FcvMappedEntry): DuplicateEntryMatchSha
   const oooi = f.oooi as { out?: unknown } | null
   const out =
     typeof oooi?.out === 'string' && oooi.out.trim() !== '' ? oooi.out : null
+  const flightNumber =
+    typeof f.flight_number === 'string' && f.flight_number.trim()
+      ? f.flight_number.trim()
+      : null
 
   return {
     date: f.date,
@@ -40,6 +46,7 @@ export function fcvMappedToMatchShape(f: FcvMappedEntry): DuplicateEntryMatchSha
     destination: f.destination,
     oooiOut: out,
     flightTimeTotal: total,
+    flightNumber,
   }
 }
 
@@ -50,6 +57,7 @@ export function logEntryRowToMatchShape(row: {
   destination: string
   flight_time: unknown
   oooi: unknown
+  flight_number?: string | null
 }): DuplicateEntryMatchShape {
   const ft = row.flight_time as { total?: unknown } | null
   const raw = ft?.total
@@ -62,6 +70,10 @@ export function logEntryRowToMatchShape(row: {
   const oooi = row.oooi as { out?: unknown } | null
   const out =
     typeof oooi?.out === 'string' && oooi.out.trim() !== '' ? oooi.out : null
+  const flightNumber =
+    typeof row.flight_number === 'string' && row.flight_number.trim()
+      ? row.flight_number.trim()
+      : null
 
   return {
     date: row.date,
@@ -70,6 +82,7 @@ export function logEntryRowToMatchShape(row: {
     destination: row.destination,
     oooiOut: out,
     flightTimeTotal: total,
+    flightNumber,
   }
 }
 
@@ -84,6 +97,7 @@ export function logEntryRowToExistingForDedup(row: {
   is_imported?: boolean | null
   import_source?: string | null
   fcv_flight_id?: string | null
+  flight_number?: string | null
 }): ExistingLogEntryForDedup {
   return {
     id: row.id,
@@ -97,11 +111,73 @@ export function logEntryRowToExistingForDedup(row: {
   }
 }
 
+function airportFieldForMatch(value: string | undefined): string {
+  const raw = (value || 'UNKNOWN').trim().toUpperCase()
+  if (raw === '' || raw === 'UNKNOWN') return raw
+  return canonicalizeAirportCodeForMatch(raw)
+}
+
+function normalizeRegistrationForMatch(value: string | null | undefined): string {
+  return (value || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
+function normalizeFlightNumberForMatch(value: string | null | undefined): string {
+  return (value || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
+function flightNumbersCompatible(
+  preview: string | null | undefined,
+  existing: string | null | undefined
+): boolean {
+  const a = normalizeFlightNumberForMatch(preview)
+  const b = normalizeFlightNumberForMatch(existing)
+  if (!a || !b) return true
+  if (a === b) return true
+  const digitsA = a.replace(/^[A-Z]+/, '')
+  const digitsB = b.replace(/^[A-Z]+/, '')
+  return Boolean(digitsA && digitsB && /^\d+$/.test(digitsA) && digitsA === digitsB)
+}
+
+function oooiOutCompatible(
+  preview: string | null | undefined,
+  existing: string | null | undefined
+): boolean {
+  const a = preview?.trim()
+  const b = existing?.trim()
+  if (!a || !b) return true
+  const an = normalizeOooiOutForMatch(a)
+  const bn = normalizeOooiOutForMatch(b)
+  if (an !== null && bn !== null) return an === bn
+  return a === b
+}
+
+/**
+ * FLICA preview rows often have no tail yet. Match date + route, plus flight number
+ * and OOOI out when both sides have them. Existing N-number is ignored.
+ */
+function emptyTailScheduleLegMatch(
+  preview: DuplicateEntryMatchShape,
+  existing: DuplicateEntryMatchShape
+): boolean {
+  if (preview.date !== existing.date) return false
+  if (
+    airportFieldForMatch(preview.departure) !== airportFieldForMatch(existing.departure) ||
+    airportFieldForMatch(preview.destination) !== airportFieldForMatch(existing.destination)
+  ) {
+    return false
+  }
+  if (!flightNumbersCompatible(preview.flightNumber, existing.flightNumber)) return false
+  return oooiOutCompatible(preview.oooiOut, existing.oooiOut)
+}
+
 export function findHeuristicMatchForFcvFlight(
   f: FcvMappedEntry,
   existing: ExistingLogEntryForDedup[]
 ): ExistingLogEntryForDedup | null {
   const previewShape = fcvMappedToMatchShape(f)
+  if (!normalizeRegistrationForMatch(previewShape.registration)) {
+    return existing.find((ex) => emptyTailScheduleLegMatch(previewShape, ex.shape)) ?? null
+  }
   return (
     existing.find((ex) => entriesDuplicateMatch(previewShape, ex.shape, 'importLeg')) ?? null
   )

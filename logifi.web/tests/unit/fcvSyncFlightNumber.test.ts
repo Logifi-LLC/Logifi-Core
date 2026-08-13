@@ -79,6 +79,20 @@ describe('FcvSync preview OOOI', () => {
 
     expect(wrapper.text()).toContain('OOOI 13:27 · 14:00 · 14:55 · 15:01')
   })
+
+  it('shows all four OOOI clocks when out/off/on/in are present', async () => {
+    const wrapper = mountFcvSync()
+    const setupState = (wrapper.vm as { $: { setupState: Record<string, unknown> } }).$.setupState
+
+    primePreviewModal(setupState, [
+      buildPreviewFlight({
+        oooi: { out: '1059', off: '1110', on: '1220', in: '1226', isZulu: false },
+      }),
+    ])
+    await nextTick()
+
+    expect(wrapper.text()).toContain('OOOI 10:59 · 11:10 · 12:20 · 12:26')
+  })
 })
 
 describe('FcvSync preview flight number', () => {
