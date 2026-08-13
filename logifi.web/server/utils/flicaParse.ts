@@ -16,13 +16,19 @@ const MONTH_MAP: Record<string, number> = {
   DEC: 12,
 }
 
-const TRIP_HEADER_RE = /^L[\dA-Z]+\s*:\s*(\d{1,2})([A-Z]{3})\b/i
-const LEG_LINE_RE =
-  /^(?:(MO|TU|WE|TH|FR|SA|SU)\s*)?(\d{1,2})\s+(\*\s+)?(\d{3,4})\s+([A-Z]{3})-([A-Z]{3})(\d{4})?(.*)$/i
+/** Republic pairing ids are L + digit + rest (L7G13, L7513). Avoids matching "Location:". */
+const TRIP_RE = /(L\d[\dA-Z]*)\s*:\s*(\d{1,2})([A-Z]{3})\b/gi
+const EQUIP_RE = /Base\/Equip:\s*[A-Z]{3}\/([A-Z0-9]+)/gi
+const CREW_START_RE = /\bCA\s+\d{5,7}\s+/gi
 const CREW_LINE_RE =
   /^CA\s+(\d+)\s+(.+?)(?:\s+FO\s+(\d+)\s+(.+))?$/i
+/**
+ * Refrigerator-list leg. DOW optional; DH may be blank, *, or a 1-letter flag (C).
+ * Route may be LGA-RIC, LGA - RIC, or separate cells LGA RIC. Times may glue to the route.
+ */
+const LEG_RE =
+  /\b(?:(MO|TU|WE|TH|FR|SA|SU)\s+)?(\d{1,2})\s+(\*\s+)?(?:[A-Z]\s+)?(\d{3,4})\s+([A-Z]{3})\s*-?\s*([A-Z]{3})(\d{4})?((?:\s+\d{4}){0,4})/gi
 const LAST_UPDATED_YEAR_RE = /Last Updated[\s\S]*?(\d{4})/i
-const EQUIP_RE = /Base\/Equip:\s*[A-Z]{3}\/([A-Z0-9]+)/i
 
 export interface FlicaParseOptions {
   /** Default year when schedule text omits it (YYYY). */
@@ -114,26 +120,143 @@ function normalizeRoleFromPosition(position: string): 'PIC' | 'SIC' {
   return 'PIC'
 }
 
-function isSkippableActivityLine(line: string): boolean {
-  const u = line.toUpperCase()
-  if (u.startsWith('GDO')) return true
-  if (u.startsWith('PCM')) return true
-  if (u.startsWith('ACTIVITY')) return true
-  if (u.startsWith('D-END')) return true
-  if (u.startsWith('TOTAL:')) return true
-  if (u.startsWith('OPERATES:')) return true
-  if (u.startsWith('BASE/EQUIP')) return true
-  if (u.startsWith('DY ')) return true
-  if (u.includes('DEPLARRLBLK')) return true
-  if (u.startsWith('BLOCK ')) return true
-  if (u.startsWith('CREDIT ')) return true
-  if (u.startsWith('YTD ')) return true
-  if (u.startsWith('DAYS OFF')) return true
-  if (u.startsWith('SCHEDULE OPTIONS')) return true
-  if (u.startsWith('HTTP')) return true
-  if (u.includes('FLICA.NET')) return true
-  if (u.includes('--')) return true
-  return false
+function decodeBasicEntities(s: string): string {
+  return s
+    .replace(/&nbsp;|&#160;|&#x0*A0;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#(\d+);/g, (_, n) => {
+      const code = parseInt(n, 10)
+      return Number.isFinite(code) ? String.fromCharCode(code) : _
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => {
+      const code = parseInt(h, 16)
+      return Number.isFinite(code) ? String.fromCharCode(code) : _
+    })
+}
+
+/**
+ * Collapse FLICA HTML tables into text. Classic CGI omits </tr></td> and pads with &nbsp;.
+ */
+export function flicaHtmlToText(htmlOrText: string): string {
+  let s = htmlOrText
+  if (/<[a-z!?/]/i.test(s)) {
+    s = s
+      .replace(/<script[\s\S]*?<\/script>/gi, '\n')
+      .replace(/<style[\s\S]*?<\/style>/gi, '\n')
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+      .replace(/<\s*\/?\s*(tr|p|div|li|h[1-6]|pre|table|blockquote)\b[^>]*>/gi, '\n')
+      .replace(/<\s*\/?\s*(td|th)\b[^>]*>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+  }
+  return decodeBasicEntities(s)
+    .replace(/\r/g, '\n')
+    .replace(/\t/g, ' ')
+    .replace(/[\u00a0\u2007\u202f\ufeff\ufffd]+/g, ' ')
+    .replace(/[ ]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .trim()
+}
+
+export interface FlicaHtmlSummary {
+  bytes: number
+  tripCount: number
+  hasL7G13: boolean
+  has4442: boolean
+  textChars: number
+  sample: string
+}
+
+/** Redacted parse diagnostics for fetch/probe warnings (no cookies/HTML dump). */
+export function summarizeFlicaHtml(htmlOrText: string): FlicaHtmlSummary {
+  const text = flicaHtmlToText(htmlOrText)
+  const trips = text.match(/L\d[\dA-Z]*\s*:/gi) ?? []
+  let sampleStart = text.search(/L\d[\dA-Z]*\s*:/i)
+  if (sampleStart < 0) {
+    sampleStart = text.search(/\b(?:MO|TU|WE|TH|FR|SA|SU)\s+\d{1,2}\b/i)
+  }
+  if (sampleStart < 0) sampleStart = 0
+  const sample = text
+    .slice(sampleStart, sampleStart + 360)
+    .replace(/\s+/g, ' ')
+    .trim()
+  return {
+    bytes: htmlOrText.length,
+    tripCount: trips.length,
+    hasL7G13: /L7G13/i.test(htmlOrText) || /L7G13/i.test(text),
+    has4442: /\b4442\b/.test(htmlOrText) || /\b4442\b/.test(text),
+    textChars: text.length,
+    sample,
+  }
+}
+
+type ParseHit =
+  | { kind: 'trip'; index: number; id: string; day: number; monthAbbr: string }
+  | { kind: 'equip'; index: number; equip: string }
+  | { kind: 'crew'; index: number; crew: AirlineLegCrewMember[] }
+  | {
+      kind: 'leg'
+      index: number
+      dayNum: number
+      isDeadhead: boolean
+      flightNumber: string
+      dep: string
+      arr: string
+      gluedDep: string | null
+      remainder: string
+    }
+
+function collectHits(text: string): ParseHit[] {
+  const hits: ParseHit[] = []
+
+  for (const m of text.matchAll(TRIP_RE)) {
+    if (m.index == null) continue
+    hits.push({
+      kind: 'trip',
+      index: m.index,
+      id: m[1].toUpperCase(),
+      day: parseInt(m[2], 10),
+      monthAbbr: m[3].toUpperCase(),
+    })
+  }
+
+  for (const m of text.matchAll(EQUIP_RE)) {
+    if (m.index == null) continue
+    hits.push({ kind: 'equip', index: m.index, equip: m[1].toUpperCase() })
+  }
+
+  for (const m of text.matchAll(CREW_START_RE)) {
+    if (m.index == null) continue
+    const line = text
+      .slice(m.index)
+      .split('\n')[0]
+      ?.replace(/\s+L\d[\dA-Z]*\s*:.*/, '')
+      ?.trim()
+    if (!line) continue
+    const crew = parseCrewLine(line)
+    if (crew.length) hits.push({ kind: 'crew', index: m.index, crew })
+  }
+
+  for (const m of text.matchAll(LEG_RE)) {
+    if (m.index == null) continue
+    hits.push({
+      kind: 'leg',
+      index: m.index,
+      dayNum: parseInt(m[2], 10),
+      isDeadhead: Boolean(m[3]),
+      flightNumber: m[4],
+      dep: m[5].toUpperCase(),
+      arr: m[6].toUpperCase(),
+      gluedDep: m[7] ?? null,
+      remainder: m[8] ?? '',
+    })
+  }
+
+  hits.sort((a, b) => a.index - b.index || a.kind.localeCompare(b.kind))
+  return hits
 }
 
 /**
@@ -143,12 +266,7 @@ export function parseFlicaSchedule(
   htmlOrText: string,
   options: FlicaParseOptions = {}
 ): AirlineLeg[] {
-  const text = htmlOrText
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\r/g, '\n')
-    .replace(/\t/g, ' ')
-    .replace(/[ \u00a0]+/g, ' ')
-    .trim()
+  const text = flicaHtmlToText(htmlOrText)
 
   if (!text) return []
 
@@ -160,84 +278,63 @@ export function parseFlicaSchedule(
   }
 
   const year = inferYear(text, options.defaultYear)
-  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean)
-
   const legs: AirlineLeg[] = []
   let currentTrip: string | null = null
   let currentMonthAbbr: string | null = null
   let currentCrew: AirlineLegCrewMember[] = []
   let currentEquip: string | null = null
-  let pendingCrewHeader = false
 
-  for (const line of lines) {
-    if (/^crew:\s*$/i.test(line)) {
-      pendingCrewHeader = true
-      continue
-    }
-
-    if (pendingCrewHeader) {
-      currentCrew = parseCrewLine(line)
-      pendingCrewHeader = false
-      const role = detectOwnRole(currentCrew, opts)
-      for (const leg of legs) {
-        if (leg.trip_number === currentTrip) {
-          leg.crew = [...currentCrew]
-          leg.role = role
-        }
+  const applyCrewToCurrentTrip = (crew: AirlineLegCrewMember[]) => {
+    currentCrew = crew
+    const role = detectOwnRole(currentCrew, opts)
+    for (const leg of legs) {
+      if (leg.trip_number === currentTrip) {
+        leg.crew = [...currentCrew]
+        leg.role = role
       }
-      continue
     }
+  }
 
-    const tripMatch = line.match(TRIP_HEADER_RE)
-    if (tripMatch) {
-      currentTrip = line.split(':')[0]?.trim() ?? null
-      currentMonthAbbr = tripMatch[2].toUpperCase()
+  for (const hit of collectHits(text)) {
+    if (hit.kind === 'trip') {
+      currentTrip = hit.id
+      currentMonthAbbr = hit.monthAbbr
       currentCrew = []
       currentEquip = null
       continue
     }
-
-    const equipMatch = line.match(EQUIP_RE)
-    if (equipMatch) {
-      currentEquip = equipMatch[1].toUpperCase()
+    if (hit.kind === 'equip') {
+      currentEquip = hit.equip
+      continue
+    }
+    if (hit.kind === 'crew') {
+      applyCrewToCurrentTrip(hit.crew)
       continue
     }
 
-    if (isSkippableActivityLine(line)) continue
-
-    const legMatch = line.match(LEG_LINE_RE)
-    if (!legMatch) continue
-
-    const dayNum = parseInt(legMatch[2], 10)
     const monthAbbr = currentMonthAbbr ?? 'JAN'
-    const dateYmd = ymdFromDayMonthYear(dayNum, monthAbbr, year)
+    const dateYmd = ymdFromDayMonthYear(hit.dayNum, monthAbbr, year)
     if (!dateYmd) continue
+    if (hit.dep === hit.arr) continue
+    if (hit.dep.length !== 3 || hit.arr.length !== 3) continue
 
-    const isDeadhead = Boolean(legMatch[3])
-    const flightNumber = legMatch[4]
-    const dep = legMatch[5].toUpperCase()
-    const arr = legMatch[6].toUpperCase()
-    const gluedDep = legMatch[7] ?? null
-    const remainder = legMatch[8] ?? ''
-    const nums = remainder.match(/\b\d{4}\b/g) ?? []
-    const depHhmm = gluedDep ?? nums[0] ?? null
-    const arrHhmm = gluedDep ? (nums[0] ?? null) : (nums[1] ?? null)
-    const blockHhmm = gluedDep ? (nums[1] ?? null) : (nums[2] ?? null)
+    const nums = hit.remainder.match(/\b\d{4}\b/g) ?? []
+    const depHhmm = hit.gluedDep ?? nums[0] ?? null
+    const arrHhmm = hit.gluedDep ? (nums[0] ?? null) : (nums[1] ?? null)
+    const blockHhmm = hit.gluedDep ? (nums[1] ?? null) : (nums[2] ?? null)
     const blockMinutes = parseBlockMinutes(blockHhmm)
-
     const scheduledOut = hhmmToLocalDatetime(dateYmd, depHhmm)
     const scheduledIn = hhmmToLocalDatetime(dateYmd, arrHhmm)
-
     const role = detectOwnRole(currentCrew, opts)
 
     legs.push({
-      external_flight_id: buildExternalFlightId(dateYmd, flightNumber, dep),
+      external_flight_id: buildExternalFlightId(dateYmd, hit.flightNumber, hit.dep),
       import_source: 'flica_aerodatabox',
-      flight_number: flightNumber,
+      flight_number: hit.flightNumber,
       trip_number: currentTrip,
       role,
-      dep_airport: dep,
-      arr_airport: arr,
+      dep_airport: hit.dep,
+      arr_airport: hit.arr,
       scheduled_out_local: scheduledOut,
       scheduled_in_local: scheduledIn,
       actual_out_local: null,
@@ -247,13 +344,71 @@ export function parseFlicaSchedule(
       fcv_tail_number: '',
       fcv_aircraft_type: currentEquip ?? '',
       crew: [...currentCrew],
-      is_deadhead: isDeadhead,
+      is_deadhead: hit.isDeadhead,
       block_minutes: blockMinutes,
       aircraft_category_class: 'AIRPLANE',
     })
   }
 
   return legs
+}
+
+export interface AirlineLegFilterStats {
+  filtered: AirlineLeg[]
+  excludedDeadheads: number
+  excludedOutsideRange: number
+  excludedScheduled: number
+}
+
+export function filterAirlineLegsWithStats(
+  legs: AirlineLeg[],
+  opts: {
+    dateFrom?: string
+    dateTo?: string
+    includeDeadheads?: boolean
+    includeScheduled?: boolean
+    todayYmd?: string
+  } = {}
+): AirlineLegFilterStats {
+  const today = opts.todayYmd ?? new Date().toISOString().slice(0, 10)
+  const filtered: AirlineLeg[] = []
+  let excludedDeadheads = 0
+  let excludedOutsideRange = 0
+  let excludedScheduled = 0
+
+  for (const leg of legs) {
+    const date = leg.scheduled_out_local?.slice(0, 10) ?? ''
+    if (opts.dateFrom && date && date < opts.dateFrom) {
+      excludedOutsideRange++
+      continue
+    }
+    if (opts.dateTo && date && date > opts.dateTo) {
+      excludedOutsideRange++
+      continue
+    }
+    if (!opts.includeDeadheads && leg.is_deadhead) {
+      excludedDeadheads++
+      continue
+    }
+    if (
+      !opts.includeScheduled &&
+      date &&
+      date > today &&
+      !leg.actual_off_local &&
+      !leg.actual_out_local
+    ) {
+      excludedScheduled++
+      continue
+    }
+    filtered.push(leg)
+  }
+
+  return {
+    filtered,
+    excludedDeadheads,
+    excludedOutsideRange,
+    excludedScheduled,
+  }
 }
 
 export function filterAirlineLegs(
@@ -266,22 +421,5 @@ export function filterAirlineLegs(
     todayYmd?: string
   } = {}
 ): AirlineLeg[] {
-  const today =
-    opts.todayYmd ?? new Date().toISOString().slice(0, 10)
-  return legs.filter((leg) => {
-    const date = leg.scheduled_out_local?.slice(0, 10) ?? ''
-    if (opts.dateFrom && date && date < opts.dateFrom) return false
-    if (opts.dateTo && date && date > opts.dateTo) return false
-    if (!opts.includeDeadheads && leg.is_deadhead) return false
-    if (
-      !opts.includeScheduled &&
-      date &&
-      date > today &&
-      !leg.actual_off_local &&
-      !leg.actual_out_local
-    ) {
-      return false
-    }
-    return true
-  })
+  return filterAirlineLegsWithStats(legs, opts).filtered
 }

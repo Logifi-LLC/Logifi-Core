@@ -111,6 +111,8 @@ const flicaUserIdInput = ref('')
 const flicaPasswordInput = ref('')
 const loadingStatus = ref(false)
 const disconnecting = ref(false)
+const probingMenu = ref(false)
+const menuProbeJson = ref<string | null>(null)
 const loadingFetch = ref(false)
 const loadingSinceLast = ref(false)
 const loadingImport = ref(false)
@@ -125,6 +127,8 @@ const showAdvancedDateRange = ref(false)
 
 const previewFlights = ref<FcvMappedEntry[]>([])
 const showPreviewModal = ref(false)
+/** Server-side note when fetch returned 0 (or filtered everything). */
+const fetchWarning = ref<string | null>(null)
 /** Heuristic match (date/tail/route/OOOI) — not already stored by external flight id. */
 const heuristicDuplicateIndices = ref<Set<number>>(new Set())
 /** Exact external flight id already present in logbook (import would skip). */
@@ -378,6 +382,24 @@ async function disconnectFlica() {
   }
 }
 
+async function diagnoseFlicaMenu() {
+  if (!isAuthenticated.value || probingMenu.value) return
+  probingMenu.value = true
+  error.value = null
+  menuProbeJson.value = null
+  try {
+    const data = await apiFetch<{ success: boolean; probe: unknown }>('/api/flica/probe-menu', {
+      method: 'POST',
+      headers: authHeaders(),
+    })
+    menuProbeJson.value = JSON.stringify(data.probe, null, 2)
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to diagnose FLICA menu'
+  } finally {
+    probingMenu.value = false
+  }
+}
+
 type FcvDupCheckResponse = {
   duplicateFcvFlightIds: string[]
   duplicateIndices: number[]
@@ -520,6 +542,7 @@ function resolveCrewOverrideMode(editedName: string, rawName: string): CrewOverr
 
 function resetPreviewImportState() {
   showPreviewModal.value = false
+  fetchWarning.value = null
   previewFlights.value = []
   sinceLastEntryOmittedAlreadyImported.value = 0
   heuristicDuplicateIndices.value = new Set()
@@ -662,9 +685,17 @@ async function fetchFlights(opts?: { hideAlreadyImportedFromFcView?: boolean }) 
   previewFlights.value = []
   sinceLastEntryOmittedAlreadyImported.value = 0
   try {
-    const data = await apiFetch<{ success: boolean; flights: FcvMappedEntry[]; count: number }>(
-      '/api/airline-sync/fetch-flica',
-      {
+    const data = await apiFetch<{
+      success: boolean
+      flights: FcvMappedEntry[]
+      count: number
+      warning?: string
+      parsedCount?: number
+      filteredCount?: number
+      excludedDeadheads?: number
+      excludedOutsideRange?: number
+      excludedScheduled?: number
+    }>('/api/airline-sync/fetch-flica', {
         method: 'POST',
         headers: {
           ...authHeaders(),
@@ -677,9 +708,9 @@ async function fetchFlights(opts?: { hideAlreadyImportedFromFcView?: boolean }) 
           includeScheduled: includeScheduled.value,
           airlineCode: 'RJET',
         },
-      }
-    )
+      })
     if (data?.success && Array.isArray(data.flights)) {
+      fetchWarning.value = typeof data.warning === 'string' && data.warning.trim() ? data.warning.trim() : null
       includeDuplicatesInImport.value = false
       includeAlreadyImportedInImport.value = false
       heuristicDuplicateIndices.value = new Set()
@@ -1373,12 +1404,30 @@ const previewModalOverlayClass = computed(() =>
           <button
             type="button"
             :class="btnOutlineClass"
+            :disabled="probingMenu || disconnecting"
+            @click="diagnoseFlicaMenu"
+          >
+            <Icon name="ri:bug-line" size="18" />
+            {{ probingMenu ? 'Diagnosing…' : 'Diagnose FLICA menu' }}
+          </button>
+          <button
+            type="button"
+            :class="btnOutlineClass"
             :disabled="disconnecting"
             @click="disconnectFlica"
           >
             {{ disconnecting ? 'Disconnecting…' : 'Disconnect FLICA' }}
           </button>
         </div>
+        <pre
+          v-if="menuProbeJson"
+          :class="[
+            'mt-2 max-h-64 overflow-auto rounded-lg border p-3 text-[11px] font-mono whitespace-pre-wrap break-all',
+            isDarkMode
+              ? 'border-gray-700 bg-gray-900 text-gray-300'
+              : 'border-gray-200 bg-gray-50 text-gray-800',
+          ]"
+        >{{ menuProbeJson }}</pre>
       </div>
     </template>
     <template v-else-if="showConnectManage">
@@ -1435,6 +1484,12 @@ const previewModalOverlayClass = computed(() =>
               {{ sinceLastEntryOmittedAlreadyImported }} flight(s) already in your logbook were not
               shown (Since last entry only lists new flights).
             </p>
+            <p
+              v-if="fetchWarning"
+              :class="['text-xs mt-1', isDarkMode ? 'text-amber-300' : 'text-amber-800']"
+            >
+              {{ fetchWarning }}
+            </p>
             <div v-if="previewFlights.length > 0" class="flex flex-wrap gap-2 mt-2">
               <button
                 type="button"
@@ -1476,6 +1531,12 @@ const previewModalOverlayClass = computed(() =>
           </button>
         </div>
         <div :class="compact ? 'p-4 space-y-3' : 'flex-1 overflow-y-auto p-4 space-y-3'">
+          <p
+            v-if="previewFlights.length === 0"
+            :class="['text-sm py-6 text-center', isDarkMode ? 'text-gray-400' : 'text-gray-600']"
+          >
+            {{ fetchWarning || 'No flights in this range. Adjust dates or filters and try again.' }}
+          </p>
           <div
             v-for="(f, idx) in previewFlights"
             :key="`${f.fcv_flight_id || 'row'}-${idx}`"

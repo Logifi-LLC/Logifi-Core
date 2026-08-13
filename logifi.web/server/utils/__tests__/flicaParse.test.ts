@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { filterAirlineLegs, parseFlicaSchedule } from '../flicaParse'
+import {
+  flicaHtmlToText,
+  filterAirlineLegs,
+  filterAirlineLegsWithStats,
+  parseFlicaSchedule,
+} from '../flicaParse'
 
 const FLICA_FIXTURE = `
 August Schedule
@@ -21,6 +26,94 @@ GDO : 01AUG
 ActivityStart DateStart TimeEnd DateEnd TimeCredit
 GDO 01AUG 02:00 03AUG 23:59 0000
 `
+
+/** Ground-truth trip from live RJET schedule (Aug 12, 2026). */
+const L7G13_FIXTURE = `
+August Schedule
+DEREK FARMER
+(624619)
+Last Updated Aug 12, 2026 09:51:14 EDT
+L7G13 : 12AUG  ONLY ON WED  BSE REPT: 1019L
+Operates: Aug 12 Only
+Base/Equip: LGA/EM7 CA01
+WE 12  4442 LGA-RIC 1059 1226 0127 0044 A21
+WE 12  4442 RIC-LGA 1310 1426 0116 A21
+D-END: 1441L
+Total: 0243 0000 0412 0422/0407
+Crew:
+CA 624619 FARMER, DEREK
+`
+
+const L7G13_HTML_FIXTURE = `
+<html><body>
+<div>L7G13 : 12AUG ONLY ON WED BSE REPT: 1019L</div>
+<div>Base/Equip: LGA/EM7 CA01</div>
+<table>
+<tr><td>WE</td><td>12</td><td></td><td></td><td>4442</td><td>LGA-RIC</td><td>1059</td><td>1226</td><td>0127</td></tr>
+<tr><td>WE</td><td>12</td><td></td><td></td><td>4442</td><td>RIC-LGA</td><td>1310</td><td>1426</td><td>0116</td></tr>
+</table>
+<br>Crew:<br>
+CA 624619 FARMER, DEREK
+</body></html>
+`
+
+/** Classic FLICA CGI: ISO-8859-1, omitted </tr></td>, &nbsp; padding, FONT wrappers. */
+const L7G13_FLICA_CGI_HTML = `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html>
+<head><meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<title>Schedule Detail</title></head>
+<body>
+<table border=0 cellpadding=0 cellspacing=0>
+<tr><td colspan=12><font size=2><b>L7G13 : 12AUG&nbsp;&nbsp;ONLY ON WED&nbsp;&nbsp;BSE REPT: 1019L</b></font>
+<tr><td colspan=12><font size=2>Base/Equip: LGA/EM7 CA01</font>
+<tr>
+<td><font size=2>WE</font>
+<td><font size=2>12</font>
+<td><font size=2>&nbsp;</font>
+<td><font size=2>4442</font>
+<td><font size=2>LGA-RIC</font>
+<td><font size=2>1059</font>
+<td><font size=2>1226</font>
+<td><font size=2>0127</font>
+<tr>
+<td><font size=2>WE</font>
+<td><font size=2>12</font>
+<td><font size=2>&nbsp;</font>
+<td><font size=2>4442</font>
+<td><font size=2>RIC-LGA</font>
+<td><font size=2>1310</font>
+<td><font size=2>1426</font>
+<td><font size=2>0116</font>
+<tr><td colspan=12>Crew:
+<tr><td colspan=12>CA 624619 FARMER, DEREK
+</table>
+</body></html>
+`
+
+const L7G13_SPLIT_ROUTE_HTML = `
+<div>L7G13 : 12AUG</div>
+<div>Base/Equip: LGA/EM7</div>
+<table>
+<tr><td>WE</td><td>12</td><td>&nbsp;</td><td>4442</td><td>LGA</td><td>RIC</td><td>1059</td><td>1226</td><td>0127</td></tr>
+<tr><td>WE</td><td>12</td><td>&nbsp;</td><td>4442</td><td>RIC</td><td>LGA</td><td>1310</td><td>1426</td><td>0116</td></tr>
+</table>
+`
+
+function expectL7G13Turn(legs: ReturnType<typeof parseFlicaSchedule>) {
+  expect(legs).toHaveLength(2)
+  expect(legs.map((l) => l.external_flight_id)).toEqual([
+    'FLICA_20260812_4442_LGA',
+    'FLICA_20260812_4442_RIC',
+  ])
+  expect(legs[0].trip_number).toBe('L7G13')
+  expect(legs[0].dep_airport).toBe('LGA')
+  expect(legs[0].arr_airport).toBe('RIC')
+  expect(legs[0].is_deadhead).toBe(false)
+  expect(legs[0].scheduled_out_local).toBe('2026-08-12 10:59:00')
+  expect(legs[1].dep_airport).toBe('RIC')
+  expect(legs[1].arr_airport).toBe('LGA')
+  expect(legs[1].scheduled_out_local).toBe('2026-08-12 13:10:00')
+}
 
 describe('parseFlicaSchedule', () => {
   it('parses trip legs and skips GDO blocks', () => {
@@ -48,6 +141,34 @@ describe('parseFlicaSchedule', () => {
     expect(legs.some((l) => l.flight_number === '5686')).toBe(true)
     expect(legs.some((l) => l.flight_number.startsWith('GDO'))).toBe(false)
   })
+
+  it('parses L7G13 Aug 12 turn (4442 LGA-RIC / RIC-LGA)', () => {
+    expectL7G13Turn(parseFlicaSchedule(L7G13_FIXTURE))
+  })
+
+  it('parses L7G13 from table HTML with cell breaks', () => {
+    expectL7G13Turn(parseFlicaSchedule(L7G13_HTML_FIXTURE, { defaultYear: 2026 }))
+  })
+
+  it('parses L7G13 from classic FLICA CGI (unclosed tags + &nbsp;)', () => {
+    const text = flicaHtmlToText(L7G13_FLICA_CGI_HTML)
+    expect(text).toMatch(/WE\s+12\s+4442\s+LGA-RIC/)
+    expectL7G13Turn(parseFlicaSchedule(L7G13_FLICA_CGI_HTML, { defaultYear: 2026 }))
+  })
+
+  it('parses L7G13 when DPS and ARS are separate table cells', () => {
+    expectL7G13Turn(parseFlicaSchedule(L7G13_SPLIT_ROUTE_HTML, { defaultYear: 2026 }))
+  })
+
+  it('uses defaultYear when Last Updated year is missing', () => {
+    const text = `
+L7G13 : 12AUG
+Base/Equip: LGA/EM7 CA01
+WE 12  4442 LGA-RIC 1059 1226 0127
+`
+    const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
+    expect(legs[0]?.scheduled_out_local?.startsWith('2026-08-12')).toBe(true)
+  })
 })
 
 describe('filterAirlineLegs', () => {
@@ -65,5 +186,16 @@ describe('filterAirlineLegs', () => {
       includeDeadheads: true,
     })
     expect(filtered.every((l) => l.scheduled_out_local?.startsWith('2026-08-04'))).toBe(true)
+  })
+
+  it('reports exclusion counts', () => {
+    const stats = filterAirlineLegsWithStats(legs, {
+      includeDeadheads: false,
+      dateFrom: '2026-08-01',
+      dateTo: '2026-08-31',
+    })
+    expect(stats.excludedDeadheads).toBeGreaterThan(0)
+    expect(stats.filtered.every((l) => !l.is_deadhead)).toBe(true)
+    expect(stats.filtered.length + stats.excludedDeadheads).toBe(legs.length)
   })
 })

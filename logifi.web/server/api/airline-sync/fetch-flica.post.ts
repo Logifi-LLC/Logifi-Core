@@ -3,7 +3,11 @@ import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import { fetchFlightActuals } from '../../utils/aeroDataBox'
 import { mapAirlineLegToFcvMappedEntry } from '../../utils/airlineLeg'
 import type { AirlineLeg } from '../../utils/airlineLeg'
-import { filterAirlineLegs, parseFlicaSchedule } from '../../utils/flicaParse'
+import {
+  filterAirlineLegsWithStats,
+  parseFlicaSchedule,
+  summarizeFlicaHtml,
+} from '../../utils/flicaParse'
 import {
   fetchScheduleHtml,
   loginFlica,
@@ -169,8 +173,23 @@ export default defineEventHandler(async (event) => {
   }
 
   const todayYmd = new Date().toISOString().slice(0, 10)
-  const parsed = parseFlicaSchedule(scheduleHtml)
-  const filtered = filterAirlineLegs(parsed, {
+  const defaultYear = parseInt(dateFrom.slice(0, 4), 10)
+  const htmlSummary = summarizeFlicaHtml(scheduleHtml)
+  console.info('[flica] schedule html', {
+    bytes: htmlSummary.bytes,
+    trips: htmlSummary.tripCount,
+    hasL7G13: htmlSummary.hasL7G13,
+    has4442: htmlSummary.has4442,
+  })
+  const parsed = parseFlicaSchedule(scheduleHtml, {
+    defaultYear: Number.isFinite(defaultYear) ? defaultYear : undefined,
+  })
+  const {
+    filtered,
+    excludedDeadheads,
+    excludedOutsideRange,
+    excludedScheduled,
+  } = filterAirlineLegsWithStats(parsed, {
     dateFrom,
     dateTo,
     includeDeadheads: body.includeDeadheads === true,
@@ -181,9 +200,40 @@ export default defineEventHandler(async (event) => {
   const enriched = await enrichLegsSequential(filtered, todayYmd)
   const mapped: FcvMappedEntry[] = enriched.map(mapAirlineLegToFcvMappedEntry)
 
+  const warningParts: string[] = []
+  if (parsed.length === 0) {
+    warningParts.push(
+      `FLICA schedule HTML loaded (${htmlSummary.bytes} bytes, ${htmlSummary.tripCount} trip header(s), L7G13=${htmlSummary.hasL7G13 ? 'yes' : 'no'}, 4442=${htmlSummary.has4442 ? 'yes' : 'no'}) but no flight legs were recognized.` +
+        (htmlSummary.sample ? ` Sample: "${htmlSummary.sample}"` : '')
+    )
+  } else if (mapped.length === 0) {
+    const bits: string[] = []
+    if (excludedDeadheads > 0) {
+      bits.push(`${excludedDeadheads} deadhead(s) — enable Include deadheads`)
+    }
+    if (excludedOutsideRange > 0) {
+      bits.push(`${excludedOutsideRange} outside your date range`)
+    }
+    if (excludedScheduled > 0) {
+      bits.push(`${excludedScheduled} future scheduled — enable Include scheduled`)
+    }
+    warningParts.push(
+      bits.length > 0
+        ? `Parsed ${parsed.length} leg(s) but none to import (${bits.join('; ')}).`
+        : `Parsed ${parsed.length} leg(s) but none matched your filters.`
+    )
+  }
+
   return {
     success: true,
     flights: mapped,
     count: mapped.length,
+    parsedCount: parsed.length,
+    filteredCount: filtered.length,
+    excludedDeadheads,
+    excludedOutsideRange,
+    excludedScheduled,
+    htmlBytes: htmlSummary.bytes,
+    warning: warningParts.length > 0 ? warningParts.join(' ') : undefined,
   }
 })
