@@ -359,6 +359,7 @@
             :before-duplicate-check="prepareLogbookForFcvImport"
             :pending-sync-count="queueLength"
             :catalog-person-names="catalogPersonNames"
+            :tail-catalog-family-by-tail="tailCatalogFamilyByTail"
             @imported="handleFcvImported"
             @connection-changed="handleFlicaConnectionChanged"
           />
@@ -412,6 +413,7 @@
                 :before-duplicate-check="prepareLogbookForFcvImport"
                 :pending-sync-count="queueLength"
                 :catalog-person-names="catalogPersonNames"
+                :tail-catalog-family-by-tail="tailCatalogFamilyByTail"
                 @imported="handleFcvImported"
                 @connection-changed="handleFlicaConnectionChanged"
               />
@@ -1540,7 +1542,7 @@
                         </template>
                         <template v-else-if="col.key === 'fromTo'">
                           <div :class="['font-semibold text-sm truncate', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                            {{ entry.departure }} → {{ entry.destination }}
+                            {{ formatEntryAirportCode(entry, entry.departure) }} → {{ formatEntryAirportCode(entry, entry.destination) }}
                           </div>
                           <div v-if="entry.route" :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                             {{ entry.route }}
@@ -1614,17 +1616,7 @@
                           <div class="truncate">{{ entry.trainingElements || '—' }}</div>
                         </template>
                         <template v-else-if="col.key === 'total'">
-                          <span
-                            :class="[
-                              entry.importSource === 'fc_view'
-                                ? (isDarkMode ? 'text-amber-400' : 'text-amber-600')
-                                : entry.importSource === 'logbook_builder'
-                                  ? (isDarkMode ? 'text-green-400' : 'text-green-600')
-                                  : entry.isImported && entry.importSource !== 'localStorage'
-                                    ? (isDarkMode ? 'text-red-400' : 'text-red-600')
-                                    : (isDarkMode ? 'text-blue-400' : 'text-blue-600')
-                            ]"
-                          >
+                          <span :class="getTotalTimeColorClass(entry, isDarkMode)">
                             {{ formatNumber(entry.flightTime.total) }}
                           </span>
                         </template>
@@ -5084,7 +5076,7 @@
         </div>
       </div>
 
-            <div v-if="currentAircraftInfo.year || currentAircraftInfo.engineType || currentAircraftInfo.category" class="grid grid-cols-2 gap-4">
+            <div v-if="currentAircraftInfo.year || aircraftEngineTypeLabel(currentAircraftInfo) || currentAircraftInfo.category" class="grid grid-cols-2 gap-4">
               <div v-if="currentAircraftInfo.year">
                 <div :class="['text-sm font-semibold font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                   Year
@@ -5093,12 +5085,18 @@
                   {{ currentAircraftInfo.year }}
                 </div>
               </div>
-              <div v-if="currentAircraftInfo.engineType">
+              <div v-if="aircraftEngineTypeLabel(currentAircraftInfo)">
                 <div :class="['text-sm font-semibold font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                   Engine Type
                 </div>
                 <div :class="['text-base font-quicksand', isDarkMode ? 'text-gray-200' : 'text-gray-700']">
-                  {{ currentAircraftInfo.engineType }}
+                  {{ aircraftEngineTypeLabel(currentAircraftInfo) }}
+                </div>
+                <div
+                  v-if="aircraftEngineClassLabel(currentAircraftInfo)"
+                  :class="['text-sm font-quicksand mt-0.5', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+                >
+                  {{ aircraftEngineClassLabel(currentAircraftInfo) }}
                 </div>
               </div>
               <div v-if="currentAircraftInfo.category || derivedAircraftCategoryDisplay(currentAircraftInfo)">
@@ -5117,8 +5115,14 @@
               </div>
               <div :class="['text-base font-quicksand', isDarkMode ? 'text-gray-200' : 'text-gray-700']">
                 {{ currentAircraftInfo.owner }}
-        </div>
-      </div>
+              </div>
+              <div
+                v-if="currentAircraftInfo.city || currentAircraftInfo.state"
+                :class="['text-sm font-quicksand mt-0.5', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+              >
+                {{ [currentAircraftInfo.city, currentAircraftInfo.state].filter(Boolean).join(', ') }}
+              </div>
+            </div>
 
             <!-- Tags for this aircraft (applied to all entries with this registration, autofill on new entries) -->
             <div v-if="isAuthenticated && currentAircraftInfo?.registration" class="pt-4 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
@@ -5159,9 +5163,28 @@
               </div>
             </div>
 
-            <div v-if="currentAircraftInfo.source" class="pt-4 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
-              <div :class="['text-xs font-quicksand italic', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
+            <div
+              v-if="currentAircraftInfo.source || currentAircraftInfo.asOf || currentAircraftInfo.ownerCheckedAt"
+              class="pt-4 border-t space-y-0.5"
+              :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']"
+            >
+              <div
+                v-if="currentAircraftInfo.source"
+                :class="['text-xs font-quicksand italic', isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+              >
                 Source: {{ currentAircraftInfo.source }}
+              </div>
+              <div
+                v-if="currentAircraftInfo.asOf"
+                :class="['text-xs font-quicksand italic', isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+              >
+                FAA registry as of {{ currentAircraftInfo.asOf }}
+              </div>
+              <div
+                v-if="currentAircraftInfo.ownerCheckedAt"
+                :class="['text-xs font-quicksand italic', isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+              >
+                {{ aircraftOwnerCheckedLabel(currentAircraftInfo.ownerCheckedAt) }}
               </div>
             </div>
       </div>
@@ -6712,9 +6735,14 @@ import type {
 } from '../utils/logbookTypes'
 import { useAircraftLookup } from '../composables/useAircraftLookup'
 import type { AircraftInfo } from '../composables/useAircraftLookup'
+import { aircraftEngineDisplay } from '../../shared/aircraftLookupLocal'
 import { useAirportLookup } from '../composables/useAirportLookup'
 import type { AirportInfo } from '../composables/useAirportLookup'
 import { getPilotInitialsFromName } from '../utils/pilotProfile'
+import {
+  formatEntryAirportCode,
+  getTotalTimeColorClass,
+} from '../utils/entryFieldDisplay'
 import {
   validateCrossCountry,
   computeCrossCountryDistanceNm,
@@ -6827,6 +6855,7 @@ import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '../utils/m
 import { findDuplicateEntries, checkDuplicatesWithLocalFallback } from '../utils/duplicateDetection'
 import {
   ACCOUNT_SCOPED_STORAGE_KEYS,
+  DEVICE_GLOBAL_STORAGE_KEYS,
   getScopedItem,
   migrateAllGlobalKeysToScoped,
   setScopedItem,
@@ -7231,6 +7260,7 @@ const supersededIdSet = computed(() => buildSupersededIdSet(logEntries.value))
 const aircraftTailIndex = computed(() => buildAircraftTailIndex(logEntries.value))
 
 const tailCatalogFamilyMap = computed(() => buildTailCatalogFamilyMap(logEntries.value))
+const tailCatalogFamilyByTail = computed(() => Object.fromEntries(tailCatalogFamilyMap.value))
 const iosTailCatalogFamilyMap = shallowRef<Map<string, string>>(new Map())
 
 function refreshIosTailCatalogFamilyMap(): void {
@@ -12121,7 +12151,7 @@ function savePilotProfileToSupabase(): void {
 }
 
 // Aircraft lookup
-const { lookupAircraft } = useAircraftLookup()
+const { lookupAircraft, lookupAircraftDetails } = useAircraftLookup()
 const showAircraftModal = ref(false)
 const currentAircraftInfo = ref<AircraftInfo | null>(null)
 const aircraftModalNewTagInput = ref('')
@@ -12525,6 +12555,22 @@ function derivedAircraftCategoryDisplay(info: { category?: string; make?: string
   return derived || ''
 }
 
+function aircraftOwnerCheckedLabel(ownerCheckedAt: string): string {
+  const checked = ownerCheckedAt.slice(0, 10)
+  const today = new Date().toISOString().slice(0, 10)
+  return checked === today ? 'Owner checked today' : `Owner checked ${checked}`
+}
+
+function aircraftEngineTypeLabel(info: AircraftInfo | null): string {
+  const display = aircraftEngineDisplay(info)
+  return display.model || display.type || ''
+}
+
+function aircraftEngineClassLabel(info: AircraftInfo | null): string {
+  const display = aircraftEngineDisplay(info)
+  return display.model && display.type ? display.type : ''
+}
+
 // Category/Class normalization and autofill helpers
 function normalizeCategoryClassLabel(value: string): string {
   if (!value) return ''
@@ -12623,12 +12669,7 @@ function deriveCategoryFromTextShort(text: string): string {
 
 function deriveCategoryFromInfoShort(info: any, fallbackMakeModel: string): string {
   const category = (info?.category || '').toLowerCase()
-  const engineType = (info?.engineType || '').toLowerCase()
-  
-  // Log for debugging
-  console.log('Deriving category from:', { category, engineType, make: info?.make, model: info?.model })
-  
-  // Check category field first
+
   if (category.includes('single') && (category.includes('land') || category.includes('fixed'))) return 'ASEL'
   if (category.includes('single') && (category.includes('sea') || category.includes('amphib'))) return 'ASES'
   if (category.includes('multi') && (category.includes('land') || category.includes('fixed'))) return 'AMEL'
@@ -12643,21 +12684,12 @@ function deriveCategoryFromInfoShort(info: any, fallbackMakeModel: string): stri
     if (category.includes('sea') || category.includes('amphib')) return 'WSC-S'
     return 'WSC-L'
   }
-  
-  // Check engine type for multi-engine indicators
-  if (engineType.includes('multi') || engineType.includes('twin') || /\d+\s*engines?/.test(engineType)) {
-    const isSea = category.includes('sea') || category.includes('amphib') || engineType.includes('sea')
-    return isSea ? 'AMES' : 'AMEL'
-  }
-  
-  // Fall back to text analysis of make/model
-  const derived = deriveCategoryFromTextShort(`${info?.make || ''} ${info?.model || ''} ${fallbackMakeModel || ''}`)
-  console.log('Derived from text:', derived)
-  return derived
+
+  return deriveCategoryFromTextShort(`${info?.make || ''} ${info?.model || ''} ${fallbackMakeModel || ''}`)
 }
 
 function normalizeAndAutofillCategories(): void {
-  const cacheRaw = isBrowser ? window.localStorage.getItem('logifi://aircraft-cache') : null
+  const cacheRaw = isBrowser ? window.localStorage.getItem(DEVICE_GLOBAL_STORAGE_KEYS.AIRCRAFT_CACHE) : null
   let cache: Record<string, any> = {}
   if (cacheRaw) {
     try { cache = JSON.parse(cacheRaw) as Record<string, any> } catch { cache = {} }
@@ -13575,7 +13607,7 @@ async function showAircraftInfo(registration: string): Promise<void> {
   console.log('Looking up aircraft:', registration, '-> cleaned:', cleanRegistration)
 
   try {
-    const info = await lookupAircraft(cleanRegistration)
+    const info = await lookupAircraftDetails(cleanRegistration)
     console.log('Aircraft lookup result:', info)
     if (info) {
       currentAircraftInfo.value = info
@@ -14156,20 +14188,12 @@ function deriveCategoryFromText(text: string): string {
 
 function deriveCategoryFromInfo(info: any, fallbackMakeModel: string): string {
   const category = (info?.category || '').toLowerCase()
-  const engineType = (info?.engineType || '').toLowerCase()
-  
-  // Check category field first
+
   if (category.includes('single') && (category.includes('land') || category.includes('fixed'))) return 'Airplane SEL'
   if (category.includes('single') && (category.includes('sea') || category.includes('amphib'))) return 'Airplane SES'
   if (category.includes('multi') && (category.includes('land') || category.includes('fixed'))) return 'Airplane MEL'
   if (category.includes('multi') && (category.includes('sea') || category.includes('amphib'))) return 'Airplane MES'
-  
-  // Check engine type for multi-engine indicators
-  if (engineType.includes('multi') || engineType.includes('twin') || /\d+\s*engines?/.test(engineType)) {
-    const isSea = category.includes('sea') || category.includes('amphib') || engineType.includes('sea')
-    return isSea ? 'Airplane MES' : 'Airplane MEL'
-  }
-  
+
   return deriveCategoryFromText(`${info?.make || ''} ${info?.model || ''} ${fallbackMakeModel || ''}`)
 }
 
@@ -14180,7 +14204,7 @@ async function tryPopulateAircraftCategory(registration: string): Promise<void> 
     // 1) Try local aircraft cache created during exports
     let derived = ''
     if (isBrowser) {
-      const cacheRaw = window.localStorage.getItem('logifi://aircraft-cache')
+      const cacheRaw = window.localStorage.getItem(DEVICE_GLOBAL_STORAGE_KEYS.AIRCRAFT_CACHE)
       if (cacheRaw) {
         try {
           const cache = JSON.parse(cacheRaw) as Record<string, any>
@@ -14219,7 +14243,7 @@ async function tryPopulateAircraftCategoryForInline(registration: string): Promi
     if (!reg) return
     let derived = ''
     if (isBrowser) {
-      const cacheRaw = window.localStorage.getItem('logifi://aircraft-cache')
+      const cacheRaw = window.localStorage.getItem(DEVICE_GLOBAL_STORAGE_KEYS.AIRCRAFT_CACHE)
       if (cacheRaw) {
         try {
           const cache = JSON.parse(cacheRaw) as Record<string, any>

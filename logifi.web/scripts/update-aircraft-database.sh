@@ -13,7 +13,7 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "📋 Next steps:"
     echo "   1. Review the changes: git diff server/data/aircraft-database.json"
-    echo "   2. Commit: git add server/data/aircraft-database.json"
+    echo "   2. Commit: git add server/data/aircraft-database.json server/data/aircraft-database-meta.json"
     echo "   3. Push: git commit -m 'Update aircraft database - $(date +%Y-%m)' && git push"
     echo ""
 else

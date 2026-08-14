@@ -7,6 +7,8 @@ import {
   lookupFlightActuals,
   resetAeroDataBoxClientStateForTests,
   setAeroDataBoxMinIntervalForTests,
+  clearAeroDataBoxRateLimitForTests,
+  summarizeAeroLookupDetails,
 } from '../aeroDataBox'
 
 vi.mock('../aeroDataBoxEnv', () => ({
@@ -75,8 +77,8 @@ describe('fetchFlightActuals', () => {
     expect(result).toEqual({
       registration: 'N12345',
       aircraftType: 'E75',
-      actualOutLocal: '2026-08-04 06:08:00',
-      actualInLocal: '2026-08-04 07:15:00',
+      actualOutLocal: null,
+      actualInLocal: null,
       actualOffLocal: '2026-08-04 06:20:00',
       actualOnLocal: '2026-08-04 07:05:00',
     })
@@ -136,12 +138,13 @@ describe('fetchFlightActuals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await fetchFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    const result = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
       'https://aerodatabox.p.rapidapi.com/flights/number/YX4442/2026-08-12?dateLocalRole=Both'
     )
-    expect(result?.registration).toBe('N123YX')
+    expect(result.actuals?.registration).toBe('N123YX')
+    expect(result.detail).toBe('YX200')
   })
 
   it('skips YX schedule-only 200 and uses AA4442 tail + actuals', async () => {
@@ -193,13 +196,14 @@ describe('fetchFlightActuals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await fetchFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    const result = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/YX4442/')
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('dateLocalRole=Both')
     expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/AA4442/'))).toBe(true)
-    expect(result?.registration).toBe('N999AA')
-    expect(result?.actualOutLocal).toBe('2026-08-12 11:02:00')
-    expect(result?.actualOffLocal).toBe('2026-08-12 11:14:00')
+    expect(result.actuals?.registration).toBe('N999AA')
+    expect(result.actuals?.actualOutLocal).toBeNull()
+    expect(result.actuals?.actualOffLocal).toBe('2026-08-12 11:14:00')
+    expect(result.detail).toBe('YX200s RPA204 AA200')
   })
 
   it('falls back to AA4442 when YX 204s', async () => {
@@ -228,10 +232,11 @@ describe('fetchFlightActuals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await fetchFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    const result = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/YX4442/')
     expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/AA4442/'))).toBe(true)
-    expect(result?.registration).toBe('N999AA')
+    expect(result.actuals?.registration).toBe('N999AA')
+    expect(result.detail).toBe('YX204 RPA204 AA200')
   })
 
   it('retries AA4442 Both 204 then Departure 200 with tail', async () => {
@@ -360,7 +365,79 @@ describe('fetchFlightActuals', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(result.actuals).toBeNull()
     expect(result.rateLimited).toBe(true)
-    expect(result.detail).toMatch(/429/)
+    expect(result.detail).toBe('HTTP 429')
+  })
+
+  it('does not cache HTTP 429 so a later lookup can retry', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 429 })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => [
+          {
+            departure: {
+              airport: { iata: 'LGA' },
+              actualTimeLocal: '2026-08-12 11:02:00',
+            },
+            arrival: {
+              airport: { iata: 'RIC' },
+              actualTimeLocal: '2026-08-12 12:30:00',
+            },
+            aircraft: { reg: 'N421YX' },
+          },
+        ],
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const first = await lookupFlightActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
+    expect(first.rateLimited).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    clearAeroDataBoxRateLimitForTests()
+    const second = await lookupFlightActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(second.rateLimited).toBe(false)
+    expect(second.actuals?.registration).toBe('N421YX')
+  })
+
+  it('on YX 404 skips remaining YX URL variants and tries the next prefix', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+      const u = String(url)
+      if (u.includes('/YX4442/')) {
+        return { ok: false, status: 404 }
+      }
+      if (u.includes('/RPA4442/')) {
+        return { ok: false, status: 404 }
+      }
+      if (u.includes('/AA4442/') && u.includes('dateLocalRole=Both')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [
+            {
+              departure: {
+                airport: { iata: 'LGA' },
+                actualTimeLocal: '2026-08-12 11:02:00',
+              },
+              arrival: {
+                airport: { iata: 'RIC' },
+                actualTimeLocal: '2026-08-12 12:30:00',
+              },
+              aircraft: { reg: 'N999AA' },
+            },
+          ],
+        }
+      }
+      return { ok: false, status: 404 }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    const yxCalls = fetchMock.mock.calls.filter((c) => String(c[0]).includes('/YX4442/'))
+    expect(yxCalls).toHaveLength(1)
+    expect(result.actuals?.registration).toBe('N999AA')
   })
 
   it('reuses cached URL JSON for the opposite route without a second fetch', async () => {
@@ -404,9 +481,9 @@ describe('fetchFlightActuals', () => {
     const inbound = await fetchFlightActuals('AA4442', '2026-08-12', 'RIC', 'LGA')
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(outbound?.registration).toBe('N421YX')
-    expect(outbound?.actualOutLocal).toBe('2026-08-12 11:02:00')
+    expect(outbound?.actualOutLocal).toBeNull()
     expect(outbound?.actualOffLocal).toBe('2026-08-12 11:14:00')
-    expect(inbound?.actualOutLocal).toBe('2026-08-12 13:12:00')
+    expect(inbound?.actualOutLocal).toBeNull()
     expect(inbound?.actualOnLocal).toBe('2026-08-12 14:18:00')
   })
 })
@@ -433,7 +510,7 @@ describe('extractAeroDataBoxActuals', () => {
     expect(isUsableAeroDataBoxHit(actuals)).toBe(false)
   })
 
-  it('reads revisedTime.local and runwayTime.local for full OOOI', () => {
+  it('ignores revisedTime and keeps only runway Off/On', () => {
     const actuals = extractAeroDataBoxActuals({
       departure: {
         airport: { iata: 'LGA' },
@@ -450,10 +527,34 @@ describe('extractAeroDataBoxActuals', () => {
       aircraft: { reg: 'N421YX' },
     })
     expect(actuals.registration).toBe('N421YX')
-    expect(actuals.actualOutLocal).toBe('2026-08-12 11:02:00')
+    expect(actuals.actualOutLocal).toBeNull()
     expect(actuals.actualOffLocal).toBe('2026-08-12 11:10:00')
     expect(actuals.actualOnLocal).toBe('2026-08-12 12:20:00')
-    expect(actuals.actualInLocal).toBe('2026-08-12 12:26:00')
+    expect(actuals.actualInLocal).toBeNull()
+    expect(isUsableAeroDataBoxHit(actuals)).toBe(true)
+  })
+
+  it('does not copy runwayTime onto gate Out/In when they match', () => {
+    const actuals = extractAeroDataBoxActuals({
+      departure: {
+        airport: { iata: 'LGA' },
+        scheduledTime: { local: '2026-08-12 10:59:00' },
+        revisedTime: { local: '2026-08-12 11:29:00' },
+        runwayTime: { local: '2026-08-12 11:29:00' },
+      },
+      arrival: {
+        airport: { iata: 'RIC' },
+        scheduledTime: { local: '2026-08-12 12:26:00' },
+        revisedTime: { local: '2026-08-12 12:24:00' },
+        runwayTime: { local: '2026-08-12 12:24:00' },
+      },
+      aircraft: { reg: 'N421YX', modelCode: 'E75' },
+    })
+    expect(actuals.registration).toBe('N421YX')
+    expect(actuals.actualOutLocal).toBeNull()
+    expect(actuals.actualOffLocal).toBe('2026-08-12 11:29:00')
+    expect(actuals.actualOnLocal).toBe('2026-08-12 12:24:00')
+    expect(actuals.actualInLocal).toBeNull()
     expect(isUsableAeroDataBoxHit(actuals)).toBe(true)
   })
 
@@ -474,5 +575,40 @@ describe('extractAeroDataBoxActuals', () => {
     expect(actuals.actualOffLocal).toBeNull()
     expect(actuals.actualOnLocal).toBeNull()
     expect(isUsableAeroDataBoxHit(actuals)).toBe(false)
+  })
+})
+
+describe('summarizeAeroLookupDetails', () => {
+  it('returns a single winner without a miss trail', () => {
+    expect(summarizeAeroLookupDetails(['YX200', 'YX200', 'YX200'])).toBe('YX200')
+  })
+
+  it('appends a shared miss trail for the same winner', () => {
+    expect(
+      summarizeAeroLookupDetails([
+        'YX204 RPA204 AA200',
+        'YX204 RPA204 AA200',
+        'YX204 RPA204 AA200',
+      ])
+    ).toBe('AA200 after YX204 RPA204')
+  })
+
+  it('counts mixed winners without a miss trail', () => {
+    expect(
+      summarizeAeroLookupDetails(['AA200', 'AA200', 'AA200', '4442-200', '4442-200'])
+    ).toBe('AA200×3 4442-200×2')
+  })
+
+  it('dedupes identical miss trails when nothing hit', () => {
+    expect(
+      summarizeAeroLookupDetails([
+        'YX204 AA204 4442-204',
+        'YX204 AA204 4442-204',
+      ])
+    ).toBe('YX204 AA204 4442-204')
+  })
+
+  it('returns null for an empty list', () => {
+    expect(summarizeAeroLookupDetails([])).toBeNull()
   })
 })

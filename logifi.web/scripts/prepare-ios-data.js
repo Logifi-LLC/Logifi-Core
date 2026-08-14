@@ -6,8 +6,10 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, '..')
 const serverDb = path.join(root, 'server/data/aircraft-database.json')
+const serverMeta = path.join(root, 'server/data/aircraft-database-meta.json')
 const publicDir = path.join(root, 'public/data')
 const publicDb = path.join(publicDir, 'aircraft-database.json')
+const publicMeta = path.join(publicDir, 'aircraft-database-meta.json')
 
 if (!existsSync(serverDb)) {
   console.log('Aircraft database not found — downloading FAA data...')
@@ -24,3 +26,7 @@ if (!existsSync(serverDb)) {
 mkdirSync(publicDir, { recursive: true })
 copyFileSync(serverDb, publicDb)
 console.log(`Copied aircraft database to ${publicDb}`)
+if (existsSync(serverMeta)) {
+  copyFileSync(serverMeta, publicMeta)
+  console.log(`Copied aircraft database meta to ${publicMeta}`)
+}

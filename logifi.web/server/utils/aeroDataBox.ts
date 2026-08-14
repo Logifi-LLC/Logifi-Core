@@ -70,14 +70,23 @@ const ADB_DEFAULT_MIN_INTERVAL_MS = 1000
 let minIntervalMs = ADB_DEFAULT_MIN_INTERVAL_MS
 let lastFetchStartedAt = 0
 let throttleTail: Promise<void> = Promise.resolve()
+let rateLimitedUntilMs = 0
 const urlCache = new Map<string, CachedHttp>()
 
-/** Test-only: clear throttle clock and URL cache. */
+const RATE_LIMIT_COOLDOWN_MS = 60_000
+
+/** Test-only: clear throttle clock, cooldown, and URL cache. */
 export function resetAeroDataBoxClientStateForTests(): void {
   lastFetchStartedAt = 0
   throttleTail = Promise.resolve()
   urlCache.clear()
   minIntervalMs = ADB_DEFAULT_MIN_INTERVAL_MS
+  rateLimitedUntilMs = 0
+}
+
+/** Test-only: allow another lookup after a 429 without clearing the URL cache. */
+export function clearAeroDataBoxRateLimitForTests(): void {
+  rateLimitedUntilMs = 0
 }
 
 /** Test-only: 0 skips the 1 req/s wait so multi-prefix tests stay fast. */
@@ -148,16 +157,6 @@ function localTimeFromUnknown(value: unknown): string | null {
   return null
 }
 
-/** Gate Out/In: revisedTime.local → actualTime.local → actualTimeLocal. Never scheduled/estimated. */
-function pickGateLocal(movement: AeroMovement | undefined): string | null {
-  if (!movement) return null
-  return (
-    localTimeFromUnknown(movement.revisedTime) ||
-    localTimeFromUnknown(movement.actualTime) ||
-    localTimeFromUnknown(movement.actualTimeLocal)
-  )
-}
-
 /** Runway Off/On: runwayTime.local → runwayTimeLocal → actualRunwayLocal. */
 function pickRunwayLocal(movement: AeroMovement | undefined): string | null {
   if (!movement) return null
@@ -174,7 +173,7 @@ function nonEmptyString(value: unknown): string | null {
   return t ? t : null
 }
 
-/** Exported for tests: real actuals only — never scheduled/estimated clocks. */
+/** Tail + ADS-B runway times only. FIDS revisedTime is not airline gate Out/In. */
 export function extractAeroDataBoxActuals(record: AeroFlightRecord): AeroDataBoxActuals {
   const dep = record.departure
   const arr = record.arrival
@@ -188,8 +187,8 @@ export function extractAeroDataBoxActuals(record: AeroFlightRecord): AeroDataBox
       nonEmptyString(record.registration),
     aircraftType:
       nonEmptyString(aircraft?.modelCode) || nonEmptyString(aircraft?.model),
-    actualOutLocal: pickGateLocal(dep),
-    actualInLocal: pickGateLocal(arr),
+    actualOutLocal: null,
+    actualInLocal: null,
     actualOffLocal: pickRunwayLocal(dep),
     actualOnLocal: pickRunwayLocal(arr),
   }
@@ -270,6 +269,64 @@ export function compactAeroLookupStatus(
   return `${label}${sep}${status}`
 }
 
+function isUsableHitStatusToken(token: string): boolean {
+  return token.endsWith('200')
+}
+
+function parseLookupTrail(detail: string): { winner: string | null; missTrail: string | null } {
+  const tokens = detail.trim().split(/\s+/).filter(Boolean)
+  if (!tokens.length) return { winner: null, missTrail: null }
+  const last = tokens[tokens.length - 1]!
+  if (isUsableHitStatusToken(last)) {
+    const miss = tokens.slice(0, -1).join(' ')
+    return { winner: last, missTrail: miss || null }
+  }
+  return { winner: null, missTrail: tokens.join(' ') }
+}
+
+/**
+ * Collapse per-leg lookup details for the Fetch banner.
+ * Hits: `AA200`, `AA200 after YX204 RPA204`, or `AA200×3 4442-200×2`.
+ * Misses: unique miss trails joined with `; `.
+ */
+export function summarizeAeroLookupDetails(details: string[]): string | null {
+  const trimmed = details.map((d) => d.trim()).filter(Boolean)
+  if (!trimmed.length) return null
+
+  const parsed = trimmed.map(parseLookupTrail)
+  const hits = parsed.filter((p) => p.winner)
+
+  if (hits.length === 0) {
+    return [...new Set(trimmed)].join('; ')
+  }
+
+  const order: string[] = []
+  const counts = new Map<string, number>()
+  for (const hit of hits) {
+    const winner = hit.winner!
+    if (!counts.has(winner)) order.push(winner)
+    counts.set(winner, (counts.get(winner) ?? 0) + 1)
+  }
+  order.sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0))
+
+  const winnerParts = order
+    .map((status) => {
+      const n = counts.get(status) ?? 0
+      return order.length > 1 ? `${status}×${n}` : status
+    })
+    .join(' ')
+
+  if (order.length === 1) {
+    const trails = new Set(hits.map((h) => h.missTrail ?? ''))
+    if (trails.size === 1) {
+      const trail = [...trails][0]
+      if (trail) return `${winnerParts} after ${trail}`
+    }
+  }
+
+  return winnerParts
+}
+
 function outcomeKind(o: OnceOutcome): 'ok' | 'empty' | 'schedule' | 'auth' {
   if (o.authRejected) return 'auth'
   if (o.usable) return 'ok'
@@ -283,8 +340,6 @@ function candidateUrlVariants(apiHost: string, searchNumber: string, date: strin
   return [
     `${base}/${date}?dateLocalRole=Both`,
     `${base}/${date}?dateLocalRole=Departure`,
-    `${base}/${date}`,
-    `${base}/${date}/${date}?dateLocalRole=Both`,
   ]
 }
 
@@ -346,7 +401,8 @@ async function fetchAdbHttp(
     }
 
     const stored: CachedHttp = { status: res.status, ok: res.ok, data }
-    urlCache.set(url, stored)
+    const cacheable = res.status === 200 || res.status === 204 || res.status === 404
+    if (cacheable) urlCache.set(url, stored)
     return stored
   } catch {
     return { status: 0, ok: false, data: null }
@@ -441,6 +497,15 @@ export async function lookupFlightActuals(
     return { actuals: null, authRejected: false, rateLimited: false, detail: null }
   }
 
+  if (Date.now() < rateLimitedUntilMs) {
+    return {
+      actuals: null,
+      authRejected: false,
+      rateLimited: true,
+      detail: 'HTTP 429 cooldown',
+    }
+  }
+
   const candidates = aeroDataBoxFlightNumberCandidates(num, airlineCode)
   const statuses: string[] = []
 
@@ -465,21 +530,24 @@ export async function lookupFlightActuals(
         }
       }
       if (outcome.rateLimited) {
+        rateLimitedUntilMs = Date.now() + RATE_LIMIT_COOLDOWN_MS
         return {
           actuals: null,
           authRejected: false,
           rateLimited: true,
-          detail: compactAeroLookupStatus(candidate, outcome.status),
+          detail: 'HTTP 429',
         }
       }
       if (outcome.usable && outcome.actuals) {
+        statuses.push(compactAeroLookupStatus(candidate, outcome.status, 'ok'))
         return {
           actuals: outcome.actuals,
           authRejected: false,
           rateLimited: false,
-          detail: compactAeroLookupStatus(candidate, outcome.status, 'ok'),
+          detail: statuses.join(' '),
         }
       }
+      if (outcome.status === 404) break
     }
     if (last) {
       statuses.push(compactAeroLookupStatus(candidate, last.status, outcomeKind(last)))

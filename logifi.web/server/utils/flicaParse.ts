@@ -19,9 +19,8 @@ const MONTH_MAP: Record<string, number> = {
 /** Republic pairing ids are L + digit + rest (L7G13, L7513). Avoids matching "Location:". */
 const TRIP_RE = /(L\d[\dA-Z]*)\s*:\s*(\d{1,2})([A-Z]{3})\b/gi
 const EQUIP_RE = /Base\/Equip:\s*[A-Z]{3}\/([A-Z0-9]+)/gi
-const CREW_START_RE = /\bCA\s+\d{5,7}\s+/gi
-const CREW_LINE_RE =
-  /^CA\s+(\d+)\s+(.+?)(?:\s+FO\s+(\d+)\s+(.+))?$/i
+const CREW_START_RE = /\b(?:CA|FO)\s+\d{5,7}\s+/gi
+const CREW_PAIR_RE = /\b(CA|FO)\s+(\d{5,7})\s+(.+?)(?=\s+(?:CA|FO)\s+\d{5,7}\b|$)/gi
 /**
  * Refrigerator-list leg. DOW optional; DH may be blank, *, or a 1-letter flag (C).
  * Route may be LGA-RIC, LGA - RIC, or separate cells LGA RIC. Times may glue to the route.
@@ -83,16 +82,17 @@ function buildExternalFlightId(dateYmd: string, flightNumber: string, dep: strin
 }
 
 function parseCrewLine(line: string): AirlineLegCrewMember[] {
-  const m = line.match(CREW_LINE_RE)
-  if (!m) return []
   const crew: AirlineLegCrewMember[] = []
-  const caName = m[2]?.trim()
-  if (caName) {
-    crew.push({ position: 'CA', name: caName, employeeId: m[1] })
-  }
-  const foName = m[4]?.trim()
-  if (foName) {
-    crew.push({ position: 'FO', name: foName, employeeId: m[3] })
+  const seen = new Set<string>()
+  for (const m of line.matchAll(CREW_PAIR_RE)) {
+    const position = m[1].toUpperCase()
+    const employeeId = m[2]
+    const name = m[3].trim().replace(/[.,;]+$/, '').trim()
+    if (!name) continue
+    const key = `${position}:${employeeId}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    crew.push({ position, name, employeeId })
   }
   return crew
 }
@@ -100,7 +100,7 @@ function parseCrewLine(line: string): AirlineLegCrewMember[] {
 function detectOwnRole(
   crew: AirlineLegCrewMember[],
   opts: FlicaParseOptions
-): 'PIC' | 'SIC' {
+): 'PIC' | 'SIC' | null {
   const selfId = opts.selfEmployeeId
   const selfLast = opts.selfLastName?.toUpperCase()
   for (const m of crew) {
@@ -111,7 +111,7 @@ function detectOwnRole(
       return normalizeRoleFromPosition(m.position)
     }
   }
-  return 'PIC'
+  return null
 }
 
 function normalizeRoleFromPosition(position: string): 'PIC' | 'SIC' {
@@ -228,16 +228,21 @@ function collectHits(text: string): ParseHit[] {
     hits.push({ kind: 'equip', index: m.index, equip: m[1].toUpperCase() })
   }
 
+  const seenCrewLineStarts = new Set<number>()
   for (const m of text.matchAll(CREW_START_RE)) {
     if (m.index == null) continue
+    const nl = text.lastIndexOf('\n', m.index)
+    const lineStart = nl === -1 ? 0 : nl + 1
+    if (seenCrewLineStarts.has(lineStart)) continue
+    seenCrewLineStarts.add(lineStart)
     const line = text
-      .slice(m.index)
+      .slice(lineStart)
       .split('\n')[0]
       ?.replace(/\s+L\d[\dA-Z]*\s*:.*/, '')
       ?.trim()
     if (!line) continue
     const crew = parseCrewLine(line)
-    if (crew.length) hits.push({ kind: 'crew', index: m.index, crew })
+    if (crew.length) hits.push({ kind: 'crew', index: lineStart, crew })
   }
 
   for (const m of text.matchAll(LEG_RE)) {
@@ -286,7 +291,7 @@ export function parseFlicaSchedule(
 
   const applyCrewToCurrentTrip = (crew: AirlineLegCrewMember[]) => {
     currentCrew = crew
-    const role = detectOwnRole(currentCrew, opts)
+    const role = detectOwnRole(currentCrew, opts) ?? ''
     for (const leg of legs) {
       if (leg.trip_number === currentTrip) {
         leg.crew = [...currentCrew]
@@ -325,7 +330,7 @@ export function parseFlicaSchedule(
     const blockMinutes = parseBlockMinutes(blockHhmm)
     const scheduledOut = hhmmToLocalDatetime(dateYmd, depHhmm)
     const scheduledIn = hhmmToLocalDatetime(dateYmd, arrHhmm)
-    const role = detectOwnRole(currentCrew, opts)
+    const role = detectOwnRole(currentCrew, opts) ?? ''
 
     legs.push({
       external_flight_id: buildExternalFlightId(dateYmd, hit.flightNumber, hit.dep),

@@ -173,6 +173,38 @@ export function resolveAircraftByTail(
   }
 }
 
+/**
+ * Rewrite FCV/FLICA preview make/model to the catalog family when the N-number
+ * is already in the logbook. Unknown tails keep the vendor/normalized type.
+ */
+export function applyCatalogFamilyToFcvPreview<
+  T extends { registration?: string | null; aircraft_make_model?: string | null }
+>(
+  flights: T[],
+  tailFamilyByTail: Map<string, string> | Record<string, string> | null | undefined
+): T[] {
+  if (!tailFamilyByTail) return flights
+  const lookup =
+    tailFamilyByTail instanceof Map
+      ? tailFamilyByTail
+      : new Map(
+          Object.entries(tailFamilyByTail).map(([key, value]) => [
+            normalizeAircraftTailKey(key),
+            value,
+          ])
+        )
+  if (lookup.size === 0) return flights
+
+  return flights.map((flight) => {
+    const tailKey = normalizeAircraftTailKey(flight.registration ?? '')
+    if (!tailKey) return flight
+    const family = (lookup.get(tailKey) ?? '').trim()
+    if (!family || family.toLowerCase() === 'unknown') return flight
+    if ((flight.aircraft_make_model ?? '').trim() === family) return flight
+    return { ...flight, aircraft_make_model: family }
+  })
+}
+
 /** Catalog family for an entry: mode make/model for known tails, else exact make/model. */
 export function effectiveCatalogFamilyKey(
   entry: { aircraftMakeModel?: string | null; registration?: string | null },

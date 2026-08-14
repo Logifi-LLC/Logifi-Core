@@ -1,3 +1,11 @@
+import { toCatalogAirportCode } from '../../shared/airportCodeCanonical'
+import {
+  parseAirlineOwnSeat,
+  pickOppositeCrew,
+  type AirlineOwnSeat,
+  type ListedCrewMember,
+  type OwnRoleUnmatchedReason,
+} from '../../shared/airlineOwnRole'
 import type { FcvFlight, FcvMappedEntry, FcvMappedOooi } from './fcvMap'
 import {
   gateDurationHoursFromFcvLocalPair,
@@ -43,13 +51,19 @@ export interface AirlineLeg {
   aircraft_category_class?: string
 }
 
-function normalizeRole(raw: unknown): 'PIC' | 'SIC' {
-  if (typeof raw !== 'string') return 'PIC'
-  const v = raw.trim().toLowerCase()
-  if (!v) return 'PIC'
-  if (v === 'fo' || v === 'sic' || v.includes('first officer')) return 'SIC'
-  if (v === 'ca' || v === 'capt' || v === 'pic' || v.includes('captain')) return 'PIC'
-  return 'PIC'
+function listedCrewFromLeg(leg: AirlineLeg): ListedCrewMember[] {
+  return leg.crew
+    .filter((m) => m.name.trim().length > 0)
+    .map((m) => ({ position: m.position, name: m.name }))
+}
+
+function unmatchedReasonForLeg(
+  leg: AirlineLeg,
+  ownRole: AirlineOwnSeat | null
+): OwnRoleUnmatchedReason | null {
+  if (ownRole) return null
+  if (leg.import_source === 'fc_view') return 'unknown_role'
+  return listedCrewFromLeg(leg).length === 0 ? 'no_crew' : 'not_on_crew'
 }
 
 function blockMinutesToHours(minutes: number | null): number | null {
@@ -96,12 +110,12 @@ function buildFlightTimeForLeg(
   blockHours: number | null,
   dep: string,
   arr: string,
-  role: 'PIC' | 'SIC'
+  role: AirlineOwnSeat | null
 ): Record<string, unknown> {
   if (blockHours == null) return {}
   const ft: Record<string, unknown> = { total: blockHours }
   if (role === 'SIC') ft.sic = blockHours
-  else ft.pic = blockHours
+  else if (role === 'PIC') ft.pic = blockHours
   if (airportsQualifyForXc(dep, arr) && blockHours > 0) {
     ft.crossCountry = blockHours
   }
@@ -116,17 +130,11 @@ function buildFlightConditions(xcHours: number | null): string[] {
 
 function extractOtherCrewFromLeg(
   leg: AirlineLeg,
-  ownRole: 'PIC' | 'SIC'
+  ownRole: AirlineOwnSeat
 ): { name: string; label: 'Captain' | 'First Officer'; rawName: string } | null {
-  const label: 'Captain' | 'First Officer' =
-    ownRole === 'PIC' ? 'First Officer' : 'Captain'
-  const oppositeRole = ownRole === 'PIC' ? 'SIC' : 'PIC'
-  const members = leg.crew.filter((m) => m.name.trim().length > 0)
-  if (!members.length) return null
-
-  const opposite = members.find((m) => normalizeRole(m.position) === oppositeRole)
-  const pick = opposite ?? members[0]
-  return { name: pick.name, label, rawName: pick.name }
+  const picked = pickOppositeCrew(listedCrewFromLeg(leg), ownRole)
+  if (!picked) return null
+  return { name: picked.name, label: picked.label, rawName: picked.name }
 }
 
 function primaryDepartureLocal(leg: AirlineLeg): string | null {
@@ -213,7 +221,14 @@ export function fcvFlightToAirlineLeg(flight: FcvFlight): AirlineLeg {
       flight.trip_number != null && String(flight.trip_number).trim()
         ? String(flight.trip_number).trim()
         : null,
-    role: String(flight.role ?? flight.pilot_role ?? 'PIC').trim() || 'PIC',
+    role: String(
+      flight.role ??
+        flight.pilot_role ??
+        flight.crew_position ??
+        flight.position ??
+        flight.duty_role ??
+        ''
+    ).trim(),
     dep_airport: String(flight.dep_airport_icao ?? flight.dep_airport ?? '').trim(),
     arr_airport: String(flight.arr_airport_icao ?? flight.arr_airport ?? '').trim(),
     scheduled_out_local:
@@ -254,8 +269,8 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
   const registration = normalizeRegistrationDisplay(leg.fcv_tail_number)
   const aircraftType = normalizeFcvAircraftType(leg.fcv_aircraft_type)
   const sourceCategory = String(leg.aircraft_category_class ?? 'AIRPLANE').trim()
-  const dep = leg.dep_airport.trim()
-  const arr = leg.arr_airport.trim()
+  const dep = toCatalogAirportCode(leg.dep_airport)
+  const arr = toCatalogAirportCode(leg.arr_airport)
   const fn = leg.flight_number.trim() || null
 
   let originalEntryDate: string | null = null
@@ -267,8 +282,10 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
 
   const oooi = buildOooiFromLeg(leg)
   const tags = leg.is_deadhead ? ['Deadhead'] : []
-  const ownRole = normalizeRole(leg.role)
-  const otherCrew = extractOtherCrewFromLeg(leg, ownRole)
+  const ownRole = parseAirlineOwnSeat(leg.role)
+  const unmatchedReason = unmatchedReasonForLeg(leg, ownRole)
+  const crewListed = listedCrewFromLeg(leg)
+  const otherCrew = ownRole ? extractOtherCrewFromLeg(leg, ownRole) : null
   const flight_time = buildFlightTimeForLeg(blockHours, dep, arr, ownRole)
   const xcRaw = flight_time.crossCountry
   const xcHours =
@@ -280,7 +297,7 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
   return {
     fcv_flight_id: fcvId,
     date: date || '',
-    role: ownRole,
+    role: ownRole ?? '',
     aircraft_category_class: mapAircraftCategoryClass(sourceCategory),
     category_class_time: blockHours,
     aircraft_make_model: aircraftType || 'Unknown',
@@ -305,6 +322,10 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
       external_flight_id: fcvId,
       is_deadhead: leg.is_deadhead,
       trip_number: leg.trip_number,
+      ...(unmatchedReason
+        ? { own_role_unmatched: true, own_role_unmatched_reason: unmatchedReason }
+        : {}),
+      crew_listed: crewListed,
       normalized: {
         registration_key: normalizeRegistrationKey(registration),
         aircraft_type: aircraftType || null,

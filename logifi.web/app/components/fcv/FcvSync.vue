@@ -10,8 +10,19 @@ import {
   type FcvFlightAction,
 } from '~/utils/fcvImportPayload'
 import {
+  applySeatToFlightTime,
+  formatListedCrewHint,
+  isOwnRoleUnmatchedMetadata,
+  parseAirlineOwnSeat,
+  pickOppositeCrew,
+  type AirlineOwnSeat,
+  type ListedCrewMember,
+  type OwnRoleUnmatchedReason,
+} from '../../../shared/airlineOwnRole'
+import {
   catalogContainsPersonName,
 } from '../../../shared/catalogPersonNames'
+import { applyCatalogFamilyToFcvPreview } from '../../../shared/aircraftTailIndex'
 import { OOOI_FIELD_ORDER } from '~/utils/logbookTypes'
 
 /** Must match dashboard theme; avoid `dark:` here so OS dark mode does not fight white settings cards. */
@@ -30,6 +41,11 @@ const props = withDefaults(
     /** Full pilot catalog display names for crew pickers during import preview. */
     catalogPersonNames?: string[]
     /**
+     * Normalized tail → catalog family (mode make/model). Known N-numbers in
+     * preview use this family instead of the vendor aircraft string.
+     */
+    tailCatalogFamilyByTail?: Record<string, string>
+    /**
      * Parent knows FLICA is connected (e.g. dashboard after Settings connect).
      * Triggers a status refresh so fetch-mode instances pick up the connection.
      */
@@ -41,6 +57,7 @@ const props = withDefaults(
     pendingSyncCount: 0,
     compact: false,
     catalogPersonNames: () => [],
+    tailCatalogFamilyByTail: () => ({}),
     externalConnected: undefined,
   }
 )
@@ -750,7 +767,10 @@ async function fetchFlights() {
       crewPickSelection.value = {}
       crewRenameText.value = {}
 
-      let flightsForPreview = data.flights
+      let flightsForPreview = applyCatalogFamilyToFcvPreview(
+        data.flights,
+        props.tailCatalogFamilyByTail
+      )
       let dup: FcvDupCheckResponse
 
       try {
@@ -805,6 +825,10 @@ async function fetchSinceLastEntry() {
 
 async function confirmImport() {
   if (flightsToImportWithIndex.value.length === 0) return
+  if (unmatchedOwnRoleCount.value > 0) {
+    error.value = 'Choose PIC or SIC for flights where your seat could not be matched.'
+    return
+  }
   loadingImport.value = true
   error.value = null
   try {
@@ -968,9 +992,89 @@ const unresolvedCrewReviewCount = computed(
   () => crewReviewCandidates.value.filter((c) => !isCrewReviewRowResolved(c)).length
 )
 
+function listedCrewFromMappedFlight(f: FcvMappedEntry): ListedCrewMember[] {
+  const meta = f.import_metadata
+  if (!meta || typeof meta !== 'object') return []
+  const listed = (meta as { crew_listed?: unknown }).crew_listed
+  if (!Array.isArray(listed)) return []
+  return listed
+    .map((m) => {
+      if (!m || typeof m !== 'object') return null
+      const rec = m as { name?: unknown; position?: unknown }
+      const name = typeof rec.name === 'string' ? rec.name : ''
+      const position = typeof rec.position === 'string' ? rec.position : ''
+      return name.trim() ? { name, position } : null
+    })
+    .filter((m): m is ListedCrewMember => m != null)
+}
+
+function unmatchedReasonFromFlight(f: FcvMappedEntry): OwnRoleUnmatchedReason | null {
+  const meta = f.import_metadata
+  if (!meta || typeof meta !== 'object') return null
+  const reason = (meta as { own_role_unmatched_reason?: unknown }).own_role_unmatched_reason
+  if (reason === 'not_on_crew' || reason === 'no_crew' || reason === 'unknown_role') return reason
+  return null
+}
+
+function isFlightOwnRoleUnmatched(f: FcvMappedEntry): boolean {
+  if (isOwnRoleUnmatchedMetadata(f.import_metadata)) return true
+  return parseAirlineOwnSeat(f.role) == null
+}
+
+function applyOwnSeatToFlight(f: FcvMappedEntry, role: AirlineOwnSeat): FcvMappedEntry {
+  const ft = applySeatToFlightTime({ ...((f.flight_time ?? {}) as Record<string, unknown>) }, role)
+  const crew = listedCrewFromMappedFlight(f)
+  const picked = pickOppositeCrew(crew, role)
+  const existingName =
+    typeof f.training_elements === 'string' && f.training_elements.trim()
+      ? f.training_elements.trim()
+      : null
+  const otherName = picked?.name ?? existingName
+  const metaRaw = f.import_metadata
+  const meta =
+    metaRaw && typeof metaRaw === 'object' ? { ...(metaRaw as Record<string, unknown>) } : {}
+  delete meta.own_role_unmatched
+  delete meta.own_role_unmatched_reason
+  const otherLabel = otherName
+    ? picked?.label ?? (role === 'PIC' ? 'First Officer' : 'Captain')
+    : null
+  return {
+    ...f,
+    role,
+    flight_time: ft,
+    training_elements: otherName,
+    training_instructor: otherLabel,
+    import_metadata: meta,
+  }
+}
+
+function setFlightOwnSeat(fcvFlightId: string, role: AirlineOwnSeat) {
+  const id = fcvFlightId.trim()
+  if (!id) return
+  previewFlights.value = previewFlights.value.map((f) =>
+    fcvIdFromFlight(f) === id ? applyOwnSeatToFlight(f, role) : f
+  )
+}
+
+function applyOwnSeatToAllUnmatched(role: AirlineOwnSeat) {
+  previewFlights.value = previewFlights.value.map((f) => {
+    if (!isFlightSelected(fcvIdFromFlight(f))) return f
+    if (!isFlightOwnRoleUnmatched(f)) return f
+    return applyOwnSeatToFlight(f, role)
+  })
+}
+
+function unmatchedCrewHint(f: FcvMappedEntry): string {
+  return formatListedCrewHint(listedCrewFromMappedFlight(f), unmatchedReasonFromFlight(f))
+}
+
 const flightsToImport = computed(() => {
   return previewFlights.value.filter((f) => isFlightSelected(fcvIdFromFlight(f)))
 })
+
+const unmatchedOwnRoleCount = computed(
+  () => flightsToImport.value.filter((f) => isFlightOwnRoleUnmatched(f)).length
+)
 
 const flightsToImportWithIndex = computed(() => {
   return previewFlights.value
@@ -1533,7 +1637,40 @@ const previewModalOverlayClass = computed(() =>
               >
                 Deselect all
               </button>
+              <template v-if="unmatchedOwnRoleCount > 0">
+                <button
+                  type="button"
+                  :class="[
+                    'text-xs font-medium rounded-md px-2 py-1 transition-colors',
+                    isDarkMode
+                      ? 'text-blue-300 hover:bg-gray-800'
+                      : 'text-blue-700 hover:bg-blue-50',
+                  ]"
+                  @click="applyOwnSeatToAllUnmatched('PIC')"
+                >
+                  Apply PIC to all unmatched
+                </button>
+                <button
+                  type="button"
+                  :class="[
+                    'text-xs font-medium rounded-md px-2 py-1 transition-colors',
+                    isDarkMode
+                      ? 'text-blue-300 hover:bg-gray-800'
+                      : 'text-blue-700 hover:bg-blue-50',
+                  ]"
+                  @click="applyOwnSeatToAllUnmatched('SIC')"
+                >
+                  Apply SIC to all unmatched
+                </button>
+              </template>
             </div>
+            <p
+              v-if="unmatchedOwnRoleCount > 0"
+              :class="['text-xs mt-2', isDarkMode ? 'text-orange-300' : 'text-orange-800']"
+            >
+              We could not tell if you were Captain or First Officer on
+              {{ unmatchedOwnRoleCount }} flight(s).
+            </p>
           </div>
           <button
             type="button"
@@ -1689,6 +1826,52 @@ const previewModalOverlayClass = computed(() =>
               >
                 Search your full pilot catalog or type a new name.
               </p>
+            </div>
+            <div
+              v-if="isFlightSelected(f.fcv_flight_id) && isFlightOwnRoleUnmatched(f)"
+              class="w-full basis-full mt-2 space-y-2"
+            >
+              <p
+                :class="['text-xs font-medium', isDarkMode ? 'text-orange-300' : 'text-orange-800']"
+              >
+                Choose your seat
+              </p>
+              <p :class="['text-[11px] leading-snug', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                {{ unmatchedCrewHint(f) }}
+              </p>
+              <fieldset class="flex flex-wrap gap-3">
+                <legend class="sr-only">Your seat on this flight</legend>
+                <label
+                  :class="[
+                    'flex items-center gap-2 cursor-pointer select-none text-xs',
+                    isDarkMode ? 'text-gray-200' : 'text-gray-800',
+                  ]"
+                >
+                  <input
+                    type="radio"
+                    class="shrink-0"
+                    :name="`own-seat-${f.fcv_flight_id}`"
+                    :value="'PIC'"
+                    @change="setFlightOwnSeat(f.fcv_flight_id, 'PIC')"
+                  />
+                  PIC (Captain)
+                </label>
+                <label
+                  :class="[
+                    'flex items-center gap-2 cursor-pointer select-none text-xs',
+                    isDarkMode ? 'text-gray-200' : 'text-gray-800',
+                  ]"
+                >
+                  <input
+                    type="radio"
+                    class="shrink-0"
+                    :name="`own-seat-${f.fcv_flight_id}`"
+                    :value="'SIC'"
+                    @change="setFlightOwnSeat(f.fcv_flight_id, 'SIC')"
+                  />
+                  SIC (First Officer)
+                </label>
+              </fieldset>
             </div>
             <span
               v-if="isAlreadyImportedRow(idx)"
@@ -2063,6 +2246,13 @@ const previewModalOverlayClass = computed(() =>
             >
               {{ unresolvedCrewReviewCount }} of {{ crewReviewCount }} crew name match(es) still need review.
             </p>
+            <p
+              v-if="unmatchedOwnRoleCount > 0"
+              :class="isDarkMode ? 'text-orange-300' : 'text-orange-800'"
+            >
+              We could not tell if you were Captain or First Officer on
+              {{ unmatchedOwnRoleCount }} flight(s).
+            </p>
             <label
               v-if="heuristicDuplicateCount > 0"
               :class="[
@@ -2103,7 +2293,7 @@ const previewModalOverlayClass = computed(() =>
             <button
               type="button"
               class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-quicksand font-medium transition-all bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 shadow-sm"
-              :disabled="loadingImport || importCount === 0 || unresolvedCrewReviewCount > 0 || unresolvedDuplicateActionCount > 0"
+              :disabled="loadingImport || importCount === 0 || unresolvedCrewReviewCount > 0 || unresolvedDuplicateActionCount > 0 || unmatchedOwnRoleCount > 0"
               @click="confirmImport"
             >
               {{ loadingImport ? 'Importing…' : `Import ${importCount} flight(s)` }}

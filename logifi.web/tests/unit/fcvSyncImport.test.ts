@@ -51,12 +51,16 @@ function buildPreviewFlight(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function mountFcvSync(catalogPersonNames: string[] = ['John Smith', 'Amy Beta']) {
+function mountFcvSync(
+  catalogPersonNames: string[] = ['John Smith', 'Amy Beta'],
+  extraProps: Record<string, unknown> = {}
+) {
   return mount(FcvSync, {
     props: {
       isDarkMode: false,
       mode: 'fetch',
       catalogPersonNames,
+      ...extraProps,
     },
     global: {
       stubs: {
@@ -283,6 +287,108 @@ describe('FcvSync fetch omits already-in-logbook', () => {
     expect(wrapper.text()).toContain('AA204')
     expect(wrapper.text()).toContain('4442-204')
   })
+
+  it('shows which AeroDataBox prefix hit on the enrich banner', async () => {
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/flica/status') return { connected: true, username: 'RPA1' }
+      if (url === '/api/airline-sync/fetch-flica') {
+        return {
+          success: true,
+          flights: [
+            buildPreviewFlight({
+              fcv_flight_id: 'FLICA_20260812_4442_LGA',
+              date: '2026-08-12',
+              flight_number: '4442',
+              departure: 'LGA',
+              destination: 'RIC',
+              aircraft_make_model: 'ERJ-175',
+              registration: 'N421YX',
+            }),
+          ],
+          count: 1,
+          enrichAttempted: 2,
+          enrichedCount: 2,
+          enrichDetail: '2/2 (AA200 after YX204 RPA204)',
+        }
+      }
+      if (url === '/api/fcv/check-duplicates') {
+        return {
+          duplicateFcvFlightIds: [],
+          duplicateIndices: [],
+          alreadyImportedIndices: [],
+          heuristicDuplicateIndices: [],
+          alreadyImportedFcvFlightIds: [],
+          heuristicMatches: [],
+        }
+      }
+      return {}
+    })
+
+    const wrapper = mountFcvSync()
+    const setupState = getSetupState(wrapper)
+    setupState.connected = true
+    await nextTick()
+
+    const fetchFlights = setupState.fetchFlights as () => Promise<void>
+    await fetchFlights()
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Enriched 2/2')
+    expect(wrapper.text()).toContain('AA200 after YX204 RPA204')
+  })
+
+  it('shows catalog family for a known N-number instead of vendor EMBRAER 175', async () => {
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/flica/status') return { connected: true, username: 'RPA1' }
+      if (url === '/api/airline-sync/fetch-flica') {
+        return {
+          success: true,
+          flights: [
+            buildPreviewFlight({
+              fcv_flight_id: 'FLICA_20260812_4442_LGA',
+              date: '2026-08-12',
+              flight_number: '4442',
+              departure: 'LGA',
+              destination: 'RIC',
+              aircraft_make_model: 'EMBRAER 175',
+              registration: 'N421YX',
+            }),
+          ],
+          count: 1,
+        }
+      }
+      if (url === '/api/fcv/check-duplicates') {
+        return {
+          duplicateFcvFlightIds: [],
+          duplicateIndices: [],
+          alreadyImportedIndices: [],
+          heuristicDuplicateIndices: [],
+          alreadyImportedFcvFlightIds: [],
+          heuristicMatches: [],
+        }
+      }
+      return {}
+    })
+
+    const wrapper = mountFcvSync(['John Smith', 'Amy Beta'], {
+      tailCatalogFamilyByTail: { N421YX: 'ERJ170/175' },
+    })
+    const setupState = getSetupState(wrapper)
+    setupState.connected = true
+    await nextTick()
+
+    const fetchFlights = setupState.fetchFlights as () => Promise<void>
+    await fetchFlights()
+    await nextTick()
+
+    const preview = setupState.previewFlights as Array<{
+      aircraft_make_model: string
+      registration: string
+    }>
+    expect(preview[0]?.aircraft_make_model).toBe('ERJ170/175')
+    expect(wrapper.text()).toContain('ERJ170/175 (N421YX)')
+    expect(wrapper.text()).not.toContain('EMBRAER 175')
+  })
 })
 
 describe('FcvSync import teardown', () => {
@@ -347,5 +453,79 @@ describe('FcvSync import teardown', () => {
     expect(setupState.crewReviewCatalogNames).toEqual(['Amy Beta', 'John Smith'])
     expect(setupState.showPreviewModal).toBe(true)
     expect(wrapper.emitted('imported')).toBeFalsy()
+  })
+})
+
+describe('FcvSync unmatched own seat', () => {
+  beforeEach(() => {
+    apiFetchMock.mockReset()
+  })
+
+  function unmatchedFlight(overrides: Record<string, unknown> = {}) {
+    return buildPreviewFlight({
+      role: '',
+      flight_time: { total: 1.6, crossCountry: 1.6 },
+      training_elements: null,
+      training_instructor: null,
+      import_metadata: {
+        own_role_unmatched: true,
+        own_role_unmatched_reason: 'not_on_crew',
+        crew_listed: [
+          { position: 'CA', name: 'FARMER, DEREK' },
+          { position: 'FO', name: 'SUTTON, DREW' },
+        ],
+      },
+      ...overrides,
+    })
+  }
+
+  it('counts selected unmatched seats and disables import until resolved', async () => {
+    const wrapper = mountFcvSync()
+    const setupState = getSetupState(wrapper)
+    setupState.previewFlights = [unmatchedFlight()]
+    setupState.showPreviewModal = true
+    setupState.selectedFcvFlightIds = new Set(['fcv-1'])
+    await nextTick()
+
+    const isUnmatched = setupState.isFlightOwnRoleUnmatched as (f: {
+      role: string
+      import_metadata?: unknown
+    }) => boolean
+    expect(isUnmatched((setupState.previewFlights as Array<{ role: string }>)[0])).toBe(true)
+    expect(wrapper.text()).toContain(
+      'We could not tell if you were Captain or First Officer on 1 flight(s).'
+    )
+  })
+
+  it('applying SIC updates role, SIC time, and Captain label', async () => {
+    const wrapper = mountFcvSync()
+    const setupState = getSetupState(wrapper)
+    setupState.previewFlights = [unmatchedFlight()]
+    setupState.showPreviewModal = true
+    setupState.selectedFcvFlightIds = new Set(['fcv-1'])
+    await nextTick()
+
+    const applyAll = setupState.applyOwnSeatToAllUnmatched as (role: 'PIC' | 'SIC') => void
+    applyAll('SIC')
+    await nextTick()
+
+    const flights = setupState.previewFlights as Array<{
+      role: string
+      flight_time: Record<string, unknown>
+      training_elements: string | null
+      training_instructor: string | null
+      import_metadata: Record<string, unknown>
+    }>
+    expect(flights[0]?.role).toBe('SIC')
+    expect(flights[0]?.flight_time).toMatchObject({ total: 1.6, sic: 1.6 })
+    expect(flights[0]?.flight_time.pic).toBeUndefined()
+    expect(flights[0]?.training_elements).toBe('FARMER, DEREK')
+    expect(flights[0]?.training_instructor).toBe('Captain')
+    expect(flights[0]?.import_metadata.own_role_unmatched).toBeUndefined()
+    const isUnmatched = setupState.isFlightOwnRoleUnmatched as (f: {
+      role: string
+      import_metadata?: unknown
+    }) => boolean
+    expect(isUnmatched(flights[0])).toBe(false)
   })
 })

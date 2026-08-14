@@ -4,9 +4,14 @@ import {
   isAeroDataBoxConfigured,
   isUsableAeroDataBoxHit,
   lookupFlightActuals,
+  summarizeAeroLookupDetails,
 } from '../../utils/aeroDataBox'
 import { mapAirlineLegToFcvMappedEntry } from '../../utils/airlineLeg'
 import type { AirlineLeg } from '../../utils/airlineLeg'
+import {
+  logEntryRowToExistingForDedup,
+  partitionFcvPreviewDuplicates,
+} from '../../utils/fcvPreviewDuplicates'
 import {
   filterAirlineLegsWithStats,
   parseFlicaSchedule,
@@ -122,7 +127,8 @@ async function enrichLegWithAeroDataBox(
 async function enrichLegsSequential(
   legs: AirlineLeg[],
   dateTo: string,
-  airlineCode: string
+  airlineCode: string,
+  skipIndices: Set<number> = new Set()
 ): Promise<{
   legs: AirlineLeg[]
   enrichAttempted: number
@@ -137,16 +143,16 @@ async function enrichLegsSequential(
   let rateLimited = false
   const details: string[] = []
 
-  for (const leg of legs) {
+  for (let i = 0; i < legs.length; i++) {
+    const leg = legs[i]!
     const date = leg.scheduled_out_local?.slice(0, 10) ?? ''
     const eligible = Boolean(date && date <= dateTo && isAeroDataBoxConfigured())
-    if (!eligible) {
+    if (!eligible || skipIndices.has(i)) {
       out.push(leg)
       continue
     }
     if (rateLimited) {
       out.push(leg)
-      enrichAttempted++
       continue
     }
 
@@ -159,15 +165,13 @@ async function enrichLegsSequential(
     if (r.detail) details.push(r.detail)
   }
 
-  const last = details[details.length - 1] ?? null
-  const multiStatus = details.find((d) => /\s/.test(d))
-  const shown = multiStatus ?? last
+  const shown = summarizeAeroLookupDetails(details)
   let enrichDetail: string | null = null
   if (authRejected) {
     enrichDetail = 'AeroDataBox rejected the API key'
   } else if (rateLimited) {
-    const ratio = `${enrichedCount}/${enrichAttempted}`
-    enrichDetail = shown ? `${ratio} (${shown} rate limited)` : `${ratio} rate limited`
+    enrichDetail =
+      'AeroDataBox rate limit (HTTP 429). Stopped early — wait a minute and fetch again.'
   } else if (enrichAttempted > 0) {
     const ratio = `${enrichedCount}/${enrichAttempted}`
     if (enrichedCount === 0) {
@@ -181,6 +185,67 @@ async function enrichLegsSequential(
     }
   }
   return { legs: out, enrichAttempted, enrichedCount, enrichDetail, authRejected }
+}
+
+const FCV_ID_IN_CHUNK = 120
+
+/**
+ * Skip AeroDataBox for legs already in the logbook so Fetch does not burn quota on hidden rows.
+ * Returns an empty set if the logbook query fails so enrichment still runs.
+ */
+async function loadEnrichSkipIndices(
+  supabase: ReturnType<typeof getSupabaseClient>,
+  userId: string,
+  legs: AirlineLeg[]
+): Promise<Set<number>> {
+  if (legs.length === 0) return new Set()
+
+  const flights = legs.map(mapAirlineLegToFcvMappedEntry)
+  const dates = [
+    ...new Set(flights.map((f) => f.date).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))),
+  ]
+  const previewFcvIds = [
+    ...new Set(
+      flights.map((f) => String(f.fcv_flight_id ?? '').trim()).filter((id) => id.length > 0)
+    ),
+  ]
+
+  const existingFcvIds = new Set<string>()
+  for (let i = 0; i < previewFcvIds.length; i += FCV_ID_IN_CHUNK) {
+    const chunk = previewFcvIds.slice(i, i + FCV_ID_IN_CHUNK)
+    const { data, error } = await supabase
+      .from('log_entries')
+      .select('fcv_flight_id')
+      .eq('user_id', userId)
+      .in('fcv_flight_id', chunk)
+    if (error) {
+      console.error('fetch-flica skip-enrich fcv_flight_id query:', error)
+      return new Set()
+    }
+    for (const row of data ?? []) {
+      const id = typeof row.fcv_flight_id === 'string' ? row.fcv_flight_id.trim() : ''
+      if (id) existingFcvIds.add(id)
+    }
+  }
+
+  let existingEntries: ReturnType<typeof logEntryRowToExistingForDedup>[] = []
+  if (dates.length > 0) {
+    const { data: rows, error } = await supabase
+      .from('log_entries')
+      .select(
+        'id, date, registration, departure, destination, flight_time, oooi, is_imported, import_source, fcv_flight_id, flight_number'
+      )
+      .eq('user_id', userId)
+      .in('date', dates)
+    if (error) {
+      console.error('fetch-flica skip-enrich log_entries query:', error)
+      return new Set()
+    }
+    existingEntries = (rows ?? []).map((row) => logEntryRowToExistingForDedup(row))
+  }
+
+  const part = partitionFcvPreviewDuplicates(flights, existingEntries, existingFcvIds)
+  return new Set(part.duplicateIndices)
 }
 
 /**
@@ -315,13 +380,14 @@ export default defineEventHandler(async (event) => {
     todayYmd,
   })
 
+  const skipEnrich = await loadEnrichSkipIndices(supabase, userId, filtered)
   const {
     legs: enriched,
     enrichAttempted,
     enrichedCount,
     enrichDetail,
     authRejected,
-  } = await enrichLegsSequential(filtered, dateTo, portal.airlineCode)
+  } = await enrichLegsSequential(filtered, dateTo, portal.airlineCode, skipEnrich)
   const mapped: FcvMappedEntry[] = enriched.map(mapAirlineLegToFcvMappedEntry)
 
   const warningParts: string[] = []

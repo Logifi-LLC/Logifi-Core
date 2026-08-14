@@ -2,7 +2,6 @@ import type { FcvMappedEntry } from './fcvMap'
 import { canonicalizeAirportCodeForMatch } from '../../shared/airportCodeCanonical'
 import {
   entriesDuplicateMatch,
-  normalizeOooiOutForMatch,
   type DuplicateEntryMatchShape,
 } from '../../shared/duplicateEntryMatch'
 
@@ -117,12 +116,12 @@ function airportFieldForMatch(value: string | undefined): string {
   return canonicalizeAirportCodeForMatch(raw)
 }
 
-function normalizeRegistrationForMatch(value: string | null | undefined): string {
+function normalizeFlightNumberForMatch(value: string | null | undefined): string {
   return (value || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 }
 
-function normalizeFlightNumberForMatch(value: string | null | undefined): string {
-  return (value || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+function hasFlightNumber(shape: DuplicateEntryMatchShape): boolean {
+  return Boolean(normalizeFlightNumberForMatch(shape.flightNumber))
 }
 
 function flightNumbersCompatible(
@@ -138,36 +137,28 @@ function flightNumbersCompatible(
   return Boolean(digitsA && digitsB && /^\d+$/.test(digitsA) && digitsA === digitsB)
 }
 
-function oooiOutCompatible(
-  preview: string | null | undefined,
-  existing: string | null | undefined
+function sameCanonicalRoute(
+  preview: DuplicateEntryMatchShape,
+  existing: DuplicateEntryMatchShape
 ): boolean {
-  const a = preview?.trim()
-  const b = existing?.trim()
-  if (!a || !b) return true
-  const an = normalizeOooiOutForMatch(a)
-  const bn = normalizeOooiOutForMatch(b)
-  if (an !== null && bn !== null) return an === bn
-  return a === b
+  return (
+    airportFieldForMatch(preview.departure) === airportFieldForMatch(existing.departure) &&
+    airportFieldForMatch(preview.destination) === airportFieldForMatch(existing.destination)
+  )
 }
 
 /**
- * FLICA preview rows often have no tail yet. Match date + route, plus flight number
- * and OOOI out when both sides have them. Existing N-number is ignored.
+ * Schedule identity: same date + canonical route + compatible flight number.
+ * Tail and OOOI are ignored so AeroDataBox actuals still match hand-entered / scheduled logbook rows.
  */
-function emptyTailScheduleLegMatch(
+function scheduleLegMatch(
   preview: DuplicateEntryMatchShape,
   existing: DuplicateEntryMatchShape
 ): boolean {
   if (preview.date !== existing.date) return false
-  if (
-    airportFieldForMatch(preview.departure) !== airportFieldForMatch(existing.departure) ||
-    airportFieldForMatch(preview.destination) !== airportFieldForMatch(existing.destination)
-  ) {
-    return false
-  }
-  if (!flightNumbersCompatible(preview.flightNumber, existing.flightNumber)) return false
-  return oooiOutCompatible(preview.oooiOut, existing.oooiOut)
+  if (!sameCanonicalRoute(preview, existing)) return false
+  if (!hasFlightNumber(preview) && !hasFlightNumber(existing)) return false
+  return flightNumbersCompatible(preview.flightNumber, existing.flightNumber)
 }
 
 export function findHeuristicMatchForFcvFlight(
@@ -175,11 +166,14 @@ export function findHeuristicMatchForFcvFlight(
   existing: ExistingLogEntryForDedup[]
 ): ExistingLogEntryForDedup | null {
   const previewShape = fcvMappedToMatchShape(f)
-  if (!normalizeRegistrationForMatch(previewShape.registration)) {
-    return existing.find((ex) => emptyTailScheduleLegMatch(previewShape, ex.shape)) ?? null
-  }
+  const scheduleHit = existing.find((ex) => scheduleLegMatch(previewShape, ex.shape))
+  if (scheduleHit) return scheduleHit
+
   return (
-    existing.find((ex) => entriesDuplicateMatch(previewShape, ex.shape, 'importLeg')) ?? null
+    existing.find((ex) => {
+      if (hasFlightNumber(previewShape) || hasFlightNumber(ex.shape)) return false
+      return entriesDuplicateMatch(previewShape, ex.shape, 'importLeg')
+    }) ?? null
   )
 }
 

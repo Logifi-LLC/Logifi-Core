@@ -1,8 +1,24 @@
+import { toCatalogAirportCode } from '../../shared/airportCodeCanonical'
 import {
   getTotalApproachCount,
   type LogbookColumnKey,
   type LogEntry,
 } from './logbookTypes'
+
+function isAirlineScheduleImport(source: string | undefined): boolean {
+  return source === 'fc_view' || source === 'flica_aerodatabox'
+}
+
+/** Display airport codes in catalog ICAO form for airline-imported entries (LGA → KLGA). */
+export function formatEntryAirportCode(
+  entry: Pick<LogEntry, 'importSource'>,
+  code: string | null | undefined
+): string {
+  const raw = (code ?? '').trim()
+  if (!raw) return raw
+  if (isAirlineScheduleImport(entry.importSource)) return toCatalogAirportCode(raw)
+  return raw
+}
 
 const CONDITION_OPTIONS = [
   { value: 'nightVfr', label: 'Night' },
@@ -156,7 +172,9 @@ export function getEntryFieldDisplay(entry: LogEntry, key: LogbookColumnKey): En
     case 'flightNumber':
       return { text: entry.flightNumber || '—', isEmpty: !entry.flightNumber }
     case 'fromTo': {
-      const route = `${entry.departure} → ${entry.destination}`
+      const dep = formatEntryAirportCode(entry, entry.departure)
+      const dest = formatEntryAirportCode(entry, entry.destination)
+      const route = `${dep} → ${dest}`
       const text = entry.route ? `${route} (${entry.route})` : route
       return { text, isEmpty: !entry.departure && !entry.destination }
     }
@@ -200,7 +218,7 @@ export function getEntryFieldDisplay(entry: LogEntry, key: LogbookColumnKey): En
 }
 
 export function getTotalTimeColorClass(entry: LogEntry, isDarkMode: boolean): string {
-  if (entry.importSource === 'fc_view') {
+  if (isAirlineScheduleImport(entry.importSource)) {
     return isDarkMode ? 'text-amber-400' : 'text-amber-600'
   }
   if (entry.importSource === 'logbook_builder') {

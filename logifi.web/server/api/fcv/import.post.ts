@@ -1,5 +1,6 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { isRecognizedAirlineSeat } from '../../../shared/airlineOwnRole'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import type { FcvMappedEntry } from '../../utils/fcvMap'
 import type { Database } from '../../../app/types/database'
@@ -249,6 +250,14 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 400,
       statusMessage: 'No flights to import',
+    })
+  }
+
+  const unmatchedSeat = flights.some((f) => !isRecognizedAirlineSeat(f.role))
+  if (unmatchedSeat) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Choose PIC or SIC for flights where your seat could not be matched',
     })
   }
 

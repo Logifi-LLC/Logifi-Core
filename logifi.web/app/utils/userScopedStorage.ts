@@ -26,7 +26,7 @@ export const DEVICE_GLOBAL_STORAGE_KEYS = {
   THEME_LEGACY: 'theme',
   CLOCK_FORMAT: 'logifi-clock-format',
   CLOCK_ZONE: 'logifi-clock-zone',
-  AIRCRAFT_CACHE: 'logifi://aircraft-cache',
+  AIRCRAFT_CACHE: 'logifi://aircraft-cache-v2',
   AIRPORT_CACHE: 'logifi://airport-cache',
   UPDATES_DISMISSED: 'logifi-updates-dismissed-id',
 } as const

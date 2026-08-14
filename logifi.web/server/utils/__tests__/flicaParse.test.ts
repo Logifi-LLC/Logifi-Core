@@ -142,6 +142,82 @@ describe('parseFlicaSchedule', () => {
     expect(legs.some((l) => l.flight_number.startsWith('GDO'))).toBe(false)
   })
 
+  it('maps FO crew slot to SIC when the schedule belongs to the first officer', () => {
+    const text = `
+August Schedule
+DREW SUTTON
+(627385)
+Last Updated Aug 12, 2026 09:51:14 EDT
+L7513 : 04AUG  EXCEPT SUN SAT  BSE REPT: 0520L
+Base/Equip: LGA/EM7 CA01FO01
+TU 04  5772 DCA-LGA0812 0953 0141 0029 8879
+Crew:
+CA 624619 FARMER, DEREK FO 627385 SUTTON, DREW
+`
+    const legs = parseFlicaSchedule(text)
+    expect(legs[0]?.role).toBe('SIC')
+    expect(legs[0]?.crew.some((c) => c.position === 'FO' && c.employeeId === '627385')).toBe(true)
+  })
+
+  it('parses FO-first crew lines and still matches SIC', () => {
+    const text = `
+August Schedule
+DREW SUTTON
+(627385)
+L7513 : 04AUG
+Base/Equip: LGA/EM7
+TU 04  5772 DCA-LGA0812 0953 0141
+Crew:
+FO 627385 SUTTON, DREW CA 624619 FARMER, DEREK
+`
+    const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
+    expect(legs[0]?.role).toBe('SIC')
+    expect(legs[0]?.crew.map((c) => c.position)).toEqual(['FO', 'CA'])
+  })
+
+  it('parses FO-only crew lines as SIC for that employee', () => {
+    const text = `
+August Schedule
+DREW SUTTON
+(627385)
+L7513 : 04AUG
+TU 04  5772 DCA-LGA0812 0953 0141
+Crew:
+FO 627385 SUTTON, DREW
+`
+    const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
+    expect(legs[0]?.role).toBe('SIC')
+    expect(legs[0]?.crew).toEqual([
+      { position: 'FO', name: 'SUTTON, DREW', employeeId: '627385' },
+    ])
+  })
+
+  it('leaves role empty when there is no crew line', () => {
+    const text = `
+L7G13 : 12AUG
+Base/Equip: LGA/EM7 CA01
+WE 12  4442 LGA-RIC 1059 1226 0127
+`
+    const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
+    expect(legs[0]?.role).toBe('')
+    expect(legs[0]?.crew).toEqual([])
+  })
+
+  it('leaves role empty when the header pilot is not on the crew line', () => {
+    const text = `
+August Schedule
+DEREK FARMER
+(624619)
+L7513 : 04AUG
+TU 04  5772 DCA-LGA0812 0953 0141
+Crew:
+CA 111111 OTHER, PILOT FO 222222 SOMEONE, ELSE
+`
+    const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
+    expect(legs[0]?.role).toBe('')
+    expect(legs[0]?.crew).toHaveLength(2)
+  })
+
   it('parses L7G13 Aug 12 turn (4442 LGA-RIC / RIC-LGA)', () => {
     expectL7G13Turn(parseFlicaSchedule(L7G13_FIXTURE))
   })
