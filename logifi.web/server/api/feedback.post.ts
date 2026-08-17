@@ -8,13 +8,31 @@ interface FeedbackPayload {
   website?: string
 }
 
+function discordPayload(type: string, subject: string, message: string, email: string) {
+  const lines = [
+    `**Type:** ${type}`,
+    `**Subject:** ${subject}`,
+    email ? `**Email:** ${email}` : '',
+    '',
+    message,
+  ].filter(Boolean)
+
+  return { content: lines.join('\n') }
+}
+
+function slackPayload(type: string, subject: string, message: string, email: string) {
+  const lines = [
+    `*Type:* ${type}`,
+    `*Subject:* ${subject}`,
+    email ? `*Email:* ${email}` : '',
+    '',
+    message,
+  ].filter(Boolean)
+
+  return { text: lines.join('\n') }
+}
+
 export default defineEventHandler(async (event) => {
-  const webhookUrl = process.env.DISCORD_FEEDBACK_WEBHOOK
-
-  if (!webhookUrl) {
-    return { success: false, notConfigured: true }
-  }
-
   const body = (await readBody(event)) as FeedbackPayload
 
   const subject = (body.subject || '').trim()
@@ -35,15 +53,19 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const lines = [
-    `**Type:** ${type}`,
-    `**Subject:** ${subject}`,
-    email ? `**Email:** ${email}` : '',
-    '',
-    message,
-  ].filter(Boolean)
+  const webhookUrl =
+    type === 'bug'
+      ? process.env.SLACK_BUGS_WEBHOOK
+      : process.env.DISCORD_FEEDBACK_WEBHOOK
 
-  const content = lines.join('\n')
+  if (!webhookUrl) {
+    return { success: false, notConfigured: true }
+  }
+
+  const payload =
+    type === 'bug'
+      ? slackPayload(type, subject, message, email)
+      : discordPayload(type, subject, message, email)
 
   try {
     const res = await fetch(webhookUrl, {
@@ -51,7 +73,7 @@ export default defineEventHandler(async (event) => {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify(payload),
     })
 
     if (!res.ok) {
@@ -66,5 +88,4 @@ export default defineEventHandler(async (event) => {
       statusMessage: 'Failed to send feedback',
     })
   }
-}
-)
+})

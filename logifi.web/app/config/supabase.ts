@@ -3,7 +3,8 @@
 // With ssr: false, runtimeConfig is the proper way to access env vars
 //
 // Redirect URLs: In the Supabase dashboard (Authentication → URL Configuration), allow each
-// app origin’s `/auth/callback` (e.g. http://localhost:3000/auth/callback and production URL)
+// app origin’s `/auth/callback` (e.g. http://localhost:3000/auth/callback, production URL,
+// and native io.logifi.app://auth/callback / io.logifi.app://reset-password)
 // so email verification, OAuth, and password-reset links can return to the app.
 
 // Get config from runtimeConfig (Nuxt's way - reads from .env automatically)

@@ -13,7 +13,7 @@ import {
   buildAuthCallbackUrl,
   buildResetPasswordUrl,
 } from '~/utils/authRedirectOrigin'
-import { isCapacitorIos } from './useCapacitorPlatform'
+import { isCapacitorIos, isCapacitorNative } from './useCapacitorPlatform'
 import { useOffline } from './useOffline'
 
 function isAppleSignInCancellation(err: unknown): boolean {
@@ -434,11 +434,13 @@ export const useAuth = () => {
       error.value = null
 
       const redirectTo = buildAuthCallbackUrl()
+      const native = isCapacitorNative()
 
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo,
+          skipBrowserRedirect: native,
         },
       })
 
@@ -446,8 +448,17 @@ export const useAuth = () => {
         throw oauthError
       }
 
-      // On success, Supabase will redirect using the configured Site URL / redirect URL.
-      // The /auth/callback route handles the post-login flow.
+      if (native) {
+        if (!data?.url) {
+          throw new Error('Google sign-in did not return an OAuth URL')
+        }
+        const { Browser } = await import('@capacitor/browser')
+        await Browser.open({ url: data.url })
+      }
+
+      // Web: Supabase redirects to /auth/callback.
+      // Native: Capacitor Browser opens Google; the custom-scheme deeplink
+      // (io.logifi.app://auth/callback) returns into the app.
       return { success: true }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to sign in with Google'
