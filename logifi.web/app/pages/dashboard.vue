@@ -1148,52 +1148,8 @@
                   </button>
                 </div>
               </Transition>
-              <Transition
-                enter-active-class="transition ease-out duration-300"
-                enter-from-class="opacity-0 -translate-y-2"
-                enter-to-class="opacity-100 translate-y-0"
-                leave-active-class="transition ease-in duration-200"
-                leave-from-class="opacity-100 translate-y-0"
-                leave-to-class="opacity-0 -translate-y-2"
-              >
-                <div
-                  v-if="showRegulatorySnapshot"
-                  :class="[
-                    'relative p-6 rounded-2xl border text-left transition-colors duration-300',
-                    isDarkMode
-                      ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40'
-                      : 'bg-white border-gray-200 shadow-sm'
-                  ]"
-                >
-                  <button
-                    type="button"
-                    class="absolute right-4 top-4 rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/10 dark:hover:text-gray-200 transition-colors"
-                    aria-label="Dismiss"
-                    @click="dismissSnapshot"
-                  >
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                  <h2 :class="['text-lg font-quicksand font-semibold mb-4 pr-10', isDarkMode ? 'text-white' : 'text-gray-900']">
-                    Regulatory Snapshot
-                  </h2>
-                  <ul :class="['space-y-2 text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-600']">
-                    <li>
-                      • Track dates, aircraft identification, departure/destination, and total time to satisfy
-                      61.51(b) recordkeeping.
-                    </li>
-                    <li>
-                      • Capture conditions (night, instrument, simulated) and training specifics required for recent experience.
-                    </li>
-                    <li>
-                      • AC&nbsp;120-78B reminders: maintain data integrity, protect revision history, and record signer identity (electronic signatures supported).
-                    </li>
-                  </ul>
-                </div>
-              </Transition>
               <div
-                v-if="!showLatestBanner && !showRegulatorySnapshot"
+                v-if="!showLatestBanner"
                 class="flex items-center justify-center"
               >
                 <button
@@ -1220,9 +1176,6 @@
                 <h2 :class="['text-2xl font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
                   Logbook
             </h2>
-            <p :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
-                  Entries are stored locally in this browser to align with AC&nbsp;120-78B data integrity expectations. Export and secured archival features will follow the signing workflow.
-            </p>
       </div>
               <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end w-full lg:w-auto">
                 <div class="relative w-full sm:w-60">
@@ -1401,7 +1354,7 @@
                 No entries in {{ dateRangeFilterSummary }}. Adjust the date range in Totals Overview above, or choose <strong>All time</strong> to see every entry.
               </template>
               <template v-else-if="!hasAnyEntriesForActiveLogbook">
-                No entries recorded yet. Add your first flight above to begin building your digital logbook.
+                No entries yet.
               </template>
               <template v-else>
                 No entries match your current filters. Clear sidebar filters or search to see more entries.
@@ -7191,10 +7144,6 @@ const {
   dismissLatest,
   restoreLatestBanner,
 } = useProductUpdates()
-const showRegulatorySnapshot = ref(true)
-function dismissSnapshot() {
-  showRegulatorySnapshot.value = false
-}
 function openSettings(tab?: SettingsTabId) {
   if (isIos.value && isCatalogDrawerOpen.value) {
     closeCatalogDrawer()

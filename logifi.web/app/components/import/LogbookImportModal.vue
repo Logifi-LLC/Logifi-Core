@@ -14,6 +14,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   'import-provider-file': [payload: { file: File; provider: ImportProviderKey }]
+  'request-transfer': []
 }>()
 
 type Step = 1 | 2
@@ -201,6 +202,21 @@ function onDragLeave() {
               </div>
             </button>
           </div>
+          <p
+            v-if="step === 1"
+            class="text-center text-xs"
+            :class="isDarkMode ? 'text-gray-400' : 'text-gray-500'"
+          >
+            Messy export or not sure?
+            <button
+              type="button"
+              class="font-medium underline"
+              :class="isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'"
+              @click="emit('request-transfer')"
+            >
+              Request a reviewed transfer
+            </button>
+          </p>
 
           <!-- Step 2: instructions + dropzone -->
           <div v-else class="space-y-4">

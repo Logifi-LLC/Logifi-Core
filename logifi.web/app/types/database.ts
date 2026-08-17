@@ -121,6 +121,35 @@ export type Database = {
           is_void?: boolean
         }
       }
+      logbook_transfer_requests: {
+        Row: {
+          id: string
+          user_id: string
+          email: string
+          source_app: string | null
+          note: string | null
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          email: string
+          source_app?: string | null
+          note?: string | null
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          email?: string
+          source_app?: string | null
+          note?: string | null
+          status?: string
+          created_at?: string
+        }
+      }
       fcv_integrations: {
         Row: {
           id: string

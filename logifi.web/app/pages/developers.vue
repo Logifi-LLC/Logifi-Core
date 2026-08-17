@@ -143,7 +143,7 @@
               isFromLanding ? 'text-lg text-gray-800 dark:text-gray-700 font-medium' : ['text-lg', effectiveDark ? 'text-gray-400' : 'text-gray-600']
             ]"
           >
-            Logifi-Core is open source software built by pilots, for pilots. Join our community and help shape the future of digital flight logging.
+            Logifi-Core is open source. View the repo, report issues, or contribute.
           </p>
         </div>
 
