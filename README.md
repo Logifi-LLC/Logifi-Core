@@ -48,14 +48,9 @@ See [SETUP_INSTRUCTIONS.md](SETUP_INSTRUCTIONS.md) for detailed setup instructio
 - **[SCHEMA.md](SCHEMA.md)** - Database schema documentation
 - **[API.md](API.md)** - API reference for developers
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment and testing guide (Vercel, Netlify, local tunnels)
-- **[RELEASE_NOTES.md](RELEASE_NOTES.md)** - Phase 1 release notes
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history
-- **[PHASE1_ROADMAP.md](PHASE1_ROADMAP.md)** - Development roadmap and future plans
+- **[TODO.txt](TODO.txt)** - Current product work
 - **[docs/oss-ui-and-architecture-guardrails.md](docs/oss-ui-and-architecture-guardrails.md)** - UI and code-structure contribution guardrails
-- **[docs/fcv-gate-b-pilot-request.md](docs/fcv-gate-b-pilot-request.md)** - FCV Gate B pilot request narrative and email template
-- **[docs/fcv-gate-b-artifact-pack.md](docs/fcv-gate-b-artifact-pack.md)** - FCV submission artifact and evidence checklist
-- **[docs/fcv-gate-b-submission-checklist.md](docs/fcv-gate-b-submission-checklist.md)** - FCV submission and follow-up tracker template
-- **[docs/fcv-pilot-operations-runbook.md](docs/fcv-pilot-operations-runbook.md)** - Pilot onboarding/offboarding and incident runbook
 
 ## Testing
 
@@ -71,7 +66,7 @@ See [TESTING.md](TESTING.md) for detailed testing documentation.
 
 ## Technology Stack
 
-- **Frontend**: Nuxt 3, Vue 3, TypeScript, Tailwind CSS
+- **Frontend**: Nuxt 4, Vue 3, TypeScript, Tailwind CSS
 - **Backend**: Supabase (PostgreSQL)
 - **Storage**: IndexedDB (local) + Supabase (cloud)
 - **Testing**: Vitest, Playwright
@@ -95,7 +90,7 @@ This project thrives because of the collective efforts of pilots and developers 
 
 ## Roadmap
 
-See [PHASE1_ROADMAP.md](PHASE1_ROADMAP.md) for the complete development roadmap and upcoming features.
+Current work lives in [TODO.txt](TODO.txt). Product direction (in your own words) lives in [BUSINESS_CONTEXT.md](BUSINESS_CONTEXT.md).
 
 ## License
 

@@ -1,0 +1,12 @@
+---
+description: Read local founder check-in notes before product or priority advice
+alwaysApply: true
+---
+
+# Founder notes
+
+If `FOUNDER.md` exists at the repo root, read it before product, roadmap, or priority advice. It is local-only and must never be committed or pushed.
+
+Treat it as private context (who Derek talked to, morale, weekly focus). Do not quote named people in public copy, PRs, or commit messages.
+
+Do not update `TODO.txt` from these notes unless Derek explicitly asks.

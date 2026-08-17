@@ -1,0 +1,29 @@
+---
+description: Logifi UI — Robinhood-style dashboard, existing shells, short copy, light/dark
+globs: logifi.web/app/{pages,components}/**/*.{vue,ts}
+alwaysApply: false
+---
+
+# UI conventions
+
+Layout target: **overview first, side panel, scrolling entries** (Robinhood-style). Do not invent a new IA. `dashboard.vue` is already the logbook surface — extract components/composables instead of adding more logic to that file.
+
+## Use what exists
+
+- iOS secondary pages: `IosAppPageShell`
+- Settings: `SettingsStackShell`, `SettingsSection`, `SettingsListGroup`, `SettingsRow` / `SettingsListRow`
+- Entries: `LogEntryList` / `LogEntryCard`
+- Font: `font-quicksand`. Theme: `isDarkMode` with `gray-950` / `gray-50` (and the matching border tokens already on those screens). Respect light and dark on every touched page.
+- `docs/oss-ui-and-architecture-guardrails.md` names `AppPageShell` / `AppCard` — those primitives are **not** in the tree. Do not invent them; reuse the shells above.
+
+```vue
+<!-- ❌ BAD: new page with a long empty-state essay and one-off hex backgrounds -->
+<p class="text-sm">Welcome to your Digifi journey! Here you can seamlessly...</p>
+
+<!-- ✅ GOOD: short chrome, same shell as nearby screens -->
+<IosAppPageShell title="Digifi Eye">
+  <p class="text-sm text-gray-500">No scans yet.</p>
+</IosAppPageShell>
+```
+
+Keep helper text optional and one line. New pages must not look like a different product.

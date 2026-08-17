@@ -1,0 +1,29 @@
+---
+description: API and data lanes — PostgREST vs RPC vs Nitro, signed-row immutability, migrations
+globs: logifi.web/{server,supabase,app/composables,app/types}/**/*.{ts,sql}
+alwaysApply: false
+---
+
+# API and data
+
+Three lanes. Do not add Supabase Edge Functions.
+
+| Lane | When |
+| --- | --- |
+| PostgREST `.from()` | User-owned rows where RLS already allows it |
+| **RPC** (`SECURITY DEFINER`) | Roster, signing, guest sign, endorsements, integrity, dossier, account purge |
+| Nitro `server/api/` | Digifi, FCV, Flica, credits, lookups, guest-sign HTTP, feedback |
+
+Nitro handlers: `getUserIdFromEvent` + Bearer JWT. Use the service-role client only when RLS cannot. Capacitor has no Nitro — browser `$fetch` stays same-origin; native uses `apiFetch` / `NUXT_PUBLIC_API_BASE`.
+
+**Signed flights and signatures are append-only.** Amend (`amends_entry_id`) or void (`is_void`). Do not UPDATE/DELETE signed rows from the client.
+
+```ts
+// ❌ BAD: mutate a signed entry
+await supabase.from('log_entries').update(patch).eq('id', signedId)
+
+// ✅ GOOD: privileged domain goes through RPC
+await supabase.rpc('sign_log_entry', { p_entry_id: entryId, p_pin: pin })
+```
+
+Migrations: next `20240101000NNN_*.sql`, `SET search_path`, update `app/types/database.ts`. Do not send huge `.in()` ID lists in one GET (flight signatures already break that way). Credits are a ledger — do not invent a balance field.

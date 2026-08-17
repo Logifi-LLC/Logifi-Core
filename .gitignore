@@ -24,6 +24,9 @@ logs
 .env.*
 !.env.example
 
+# Founder check-in log (local only — never commit)
+FOUNDER.md
+
 # mkcert / local HTTPS for Nuxt dev (see logifi.web/env.example)
 logifi.web/certs/*.pem
 
@@ -31,3 +34,4 @@ logifi.web/certs/*.pem
 ReleasableAircraft.zip
 faa-data/
 logifi.web/public/data/aircraft-database.json
+logifi.web/public/data/aircraft-database-meta.json

@@ -1,0 +1,24 @@
+---
+description: Local-first offline — IndexedDB first, reachability-gated sync, no stuck offline banner
+globs: logifi.web/app/{composables/useOffline.ts,composables/useSyncQueue.ts,composables/useAuth.ts,utils/indexedDB.ts,utils/cachedSupabaseSession.ts,pages/dashboard.vue}
+alwaysApply: false
+---
+
+# Offline and sync
+
+Local-first: read IndexedDB first, then merge remote `log_entries` when cloud is reachable. Writes go to IndexedDB immediately; `useSyncQueue` ships them when online.
+
+`useOffline().isOnline` is **Supabase reachability** (auth health probe), not `navigator.onLine`. Do not process the sync queue unless that flag is true. Keep the offline session snapshot (`cachedSupabaseSession`); do not treat a missing SDK session as logout while offline.
+
+```ts
+// ❌ BAD
+if (navigator.onLine) await processQueue()
+
+// ✅ GOOD
+const { isOnline } = useOffline()
+if (isOnline.value) await processQueue({ silent: true })
+```
+
+Offline is a normal cockpit state. Do not leave a persistent “Offline” banner that never clears. Sync status (iOS banner, pull-to-sync) should be brief and dismissible.
+
+Known gap: first visit with **empty IndexedDB and no network** shows an empty logbook. Do not “fix” that by blocking the UI on cloud. Full offline requires a prior successful sync on that device.
