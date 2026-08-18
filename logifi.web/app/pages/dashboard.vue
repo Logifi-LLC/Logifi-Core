@@ -352,7 +352,7 @@
             </NuxtLink>
           </p>
           <FcvSync
-            :key="`flica-fetch-${dashboardFcvConnected ? 'on' : 'off'}-${showFcvFetchPanel ? 'open' : 'closed'}`"
+            :key="`flica-fetch-${showFcvFetchPanel ? 'open' : 'closed'}`"
             mode="fetch"
             :is-dark-mode="isDarkMode"
             :external-connected="dashboardFcvConnected"
@@ -405,7 +405,7 @@
               class="flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-4"
             >
               <FcvSync
-                :key="`flica-ios-${dashboardFcvConnected ? 'on' : 'off'}`"
+                key="flica-ios-sheet"
                 mode="fetch"
                 compact
                 :is-dark-mode="isDarkMode"

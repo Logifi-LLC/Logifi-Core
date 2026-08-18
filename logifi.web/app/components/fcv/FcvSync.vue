@@ -145,9 +145,6 @@ const previewFlights = ref<FcvMappedEntry[]>([])
 const showPreviewModal = ref(false)
 /** Server-side note when fetch returned 0 (or filtered everything). */
 const fetchWarning = ref<string | null>(null)
-const enrichAttempted = ref(0)
-const enrichCount = ref(0)
-const enrichDetail = ref<string | null>(null)
 /** Heuristic match (date/tail/route/OOOI) — not already stored by external flight id. */
 const heuristicDuplicateIndices = ref<Set<number>>(new Set())
 /** Exact external flight id already present in logbook (import would skip). */
@@ -303,6 +300,25 @@ function authHeaders(): Record<string, string> {
   return { Authorization: `Bearer ${token}` }
 }
 
+function messageFromApiError(e: unknown, fallback: string): string {
+  if (e && typeof e === 'object') {
+    const rec = e as { data?: unknown; statusCode?: number; statusMessage?: string; message?: string }
+    const data = rec.data
+    if (data && typeof data === 'object') {
+      const d = data as { statusMessage?: unknown; message?: unknown }
+      if (typeof d.statusMessage === 'string' && d.statusMessage.trim()) return d.statusMessage.trim()
+      if (typeof d.message === 'string' && d.message.trim()) return d.message.trim()
+    }
+    if (typeof rec.statusMessage === 'string' && rec.statusMessage.trim()) return rec.statusMessage.trim()
+    if (rec.statusCode === 404) {
+      return 'FLICA API not found on this server. Rebuild iOS against the `dev` API (NUXT_PUBLIC_API_BASE=https://dev.logifi.io), not production.'
+    }
+    if (typeof rec.message === 'string' && rec.message.trim()) return rec.message.trim()
+  }
+  if (e instanceof Error && e.message.trim()) return e.message.trim()
+  return fallback
+}
+
 async function checkStatus() {
   if (!isAuthenticated.value) return
   loadingStatus.value = true
@@ -321,7 +337,7 @@ async function checkStatus() {
   } catch (e) {
     connected.value = false
     flicaUsername.value = null
-    error.value = e instanceof Error ? e.message : 'Failed to check FLICA status'
+    error.value = messageFromApiError(e, 'Failed to check FLICA status')
   } finally {
     loadingStatus.value = false
   }
@@ -369,7 +385,7 @@ async function connectFlica() {
     emit('connection-changed', { connected: connected.value })
   } catch (e) {
     connected.value = false
-    error.value = e instanceof Error ? e.message : 'Failed to connect FLICA'
+    error.value = messageFromApiError(e, 'Failed to connect FLICA')
   } finally {
     connectingFlica.value = false
   }
@@ -544,9 +560,6 @@ function resolveCrewOverrideMode(editedName: string, rawName: string): CrewOverr
 function resetPreviewImportState() {
   showPreviewModal.value = false
   fetchWarning.value = null
-  enrichAttempted.value = 0
-  enrichCount.value = 0
-  enrichDetail.value = null
   previewFlights.value = []
   sinceLastEntryOmittedAlreadyImported.value = 0
   heuristicDuplicateIndices.value = new Set()
@@ -688,9 +701,6 @@ async function fetchFlights() {
   error.value = null
   previewFlights.value = []
   sinceLastEntryOmittedAlreadyImported.value = 0
-  enrichAttempted.value = 0
-  enrichCount.value = 0
-  enrichDetail.value = null
   try {
     const data = await apiFetch<{
       success: boolean
@@ -702,9 +712,6 @@ async function fetchFlights() {
       excludedDeadheads?: number
       excludedOutsideRange?: number
       excludedScheduled?: number
-      enrichAttempted?: number
-      enrichedCount?: number
-      enrichDetail?: string
     }>('/api/airline-sync/fetch-flica', {
         method: 'POST',
         headers: {
@@ -721,18 +728,6 @@ async function fetchFlights() {
       })
     if (data?.success && Array.isArray(data.flights)) {
       fetchWarning.value = typeof data.warning === 'string' && data.warning.trim() ? data.warning.trim() : null
-      enrichAttempted.value =
-        typeof data.enrichAttempted === 'number' && Number.isFinite(data.enrichAttempted)
-          ? data.enrichAttempted
-          : 0
-      enrichCount.value =
-        typeof data.enrichedCount === 'number' && Number.isFinite(data.enrichedCount)
-          ? data.enrichedCount
-          : 0
-      enrichDetail.value =
-        typeof data.enrichDetail === 'string' && data.enrichDetail.trim()
-          ? data.enrichDetail.trim()
-          : null
       includeDuplicatesInImport.value = false
       includeAlreadyImportedInImport.value = false
       heuristicDuplicateIndices.value = new Set()
@@ -1254,7 +1249,12 @@ const previewModalOverlayClass = computed(() =>
         Connect your FLICA account to import flights into your logbook. Use your FLICA User ID
         (e.g. RPA624619) or employee number.
       </p>
-      <form class="space-y-3 max-w-md" @submit.prevent="connectFlica">
+      <form
+        class="space-y-3 max-w-md"
+        action="#"
+        method="post"
+        @submit.prevent="connectFlica"
+      >
         <label
           :class="[
             'block text-sm font-medium',
@@ -1285,9 +1285,10 @@ const previewModalOverlayClass = computed(() =>
           />
         </label>
         <button
-          type="submit"
+          type="button"
           :class="btnConnectFcvClass"
           :disabled="!isAuthenticated || connectingFlica"
+          @click="connectFlica"
         >
           <Icon name="ri:link" size="18" class="shrink-0" />
           {{ connectingFlica ? 'Connecting…' : 'Connect FLICA' }}
@@ -1560,16 +1561,7 @@ const previewModalOverlayClass = computed(() =>
               shown.
             </p>
             <p
-              v-if="enrichAttempted > 0 || fetchWarning"
-              :class="['text-xs mt-1', isDarkMode ? 'text-amber-300' : 'text-amber-800']"
-            >
-              <template v-if="enrichAttempted > 0">
-                Enriched {{ enrichCount }}/{{ enrichAttempted }}<span v-if="enrichDetail"> — {{ enrichDetail }}</span>
-              </template>
-              <template v-else>{{ fetchWarning }}</template>
-            </p>
-            <p
-              v-if="fetchWarning && enrichAttempted > 0"
+              v-if="fetchWarning"
               :class="['text-xs mt-1', isDarkMode ? 'text-amber-300' : 'text-amber-800']"
             >
               {{ fetchWarning }}

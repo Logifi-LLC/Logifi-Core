@@ -27,6 +27,16 @@ APP NOW
    - Fix: batch .in() queries (e.g. 50–100 IDs) or server RPC / join so IDs aren’t all in the query string.
    - Touch: useFlightSigning.ts, dashboard.vue (refreshFlightSignatures); check AuditTrail paths too.
 
+4. AUTOFI ON iOS — after `dev` is on `main`
+   - TestFlight talks to production (`www.logifi.io`), not the `dev` preview. Wait for the merge.
+   - Production: `/api/flica/*` live, `FLICA_CREDENTIALS_KEY` set, `flica_integrations` table exists.
+   - Then: `NUXT_PUBLIC_API_BASE=https://www.logifi.io`, `npm run cap:sync`, new TestFlight.
+   - Smoke: Connect FLICA (no white screen), fetch today’s pairing (AC-swap legs + PIC from end crew).
+
+5. iOS LOGBOOK CARDS — rework
+   - Derek has a new card design in mind. Don’t invent a layout first — sketch with him, then implement.
+   - Scope: entry cards on the iOS dashboard/list (spacing, hierarchy, what shows at a glance). Match existing iOS shells, not a new SaaS look.
+
 ────────────────────────────────────────
 LATER (after app is user-ready)
 ────────────────────────────────────────

@@ -62,7 +62,7 @@ export default defineNuxtConfig({
     public: {
       supabaseUrl: process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
       supabaseAnonKey: process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY,
-      /** Production API base for Capacitor static builds (Digifi, FC View, lookups). */
+      /** API origin for Capacitor static builds. TestFlight-from-dev: https://dev.logifi.io. App Store: https://www.logifi.io. */
       apiBase: process.env.NUXT_PUBLIC_API_BASE || '',
       /** `off` | `beta` | `coming_soon` — see useFcvUiLabel (integrations page + Settings connect UI only). */
       fcvUiLabel: process.env.NUXT_PUBLIC_FCV_UI_LABEL || 'off',

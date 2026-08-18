@@ -235,7 +235,7 @@ describe('FcvSync fetch omits already-in-logbook', () => {
     expect(wrapper.text()).toContain('1 flight(s) already in your logbook were not shown')
   })
 
-  it('shows Enriched 0/N when AeroDataBox returns no usable hits', async () => {
+  it('shows a warning when AeroDataBox returns no usable hits', async () => {
     apiFetchMock.mockImplementation(async (url: string) => {
       if (url === '/api/flica/status') return { connected: true, username: 'RPA1' }
       if (url === '/api/airline-sync/fetch-flica') {
@@ -282,13 +282,14 @@ describe('FcvSync fetch omits already-in-logbook', () => {
     await fetchFlights()
     await nextTick()
 
-    expect(wrapper.text()).toContain('Enriched 0/2')
+    expect(wrapper.text()).not.toContain('Enriched')
+    expect(wrapper.text()).toContain('Could not enrich flights from AeroDataBox')
     expect(wrapper.text()).toContain('YX204')
     expect(wrapper.text()).toContain('AA204')
     expect(wrapper.text()).toContain('4442-204')
   })
 
-  it('shows which AeroDataBox prefix hit on the enrich banner', async () => {
+  it('does not show an enrich banner when AeroDataBox hits', async () => {
     apiFetchMock.mockImplementation(async (url: string) => {
       if (url === '/api/flica/status') return { connected: true, username: 'RPA1' }
       if (url === '/api/airline-sync/fetch-flica') {
@@ -333,8 +334,8 @@ describe('FcvSync fetch omits already-in-logbook', () => {
     await fetchFlights()
     await nextTick()
 
-    expect(wrapper.text()).toContain('Enriched 2/2')
-    expect(wrapper.text()).toContain('AA200 after YX204 RPA204')
+    expect(wrapper.text()).not.toContain('Enriched')
+    expect(wrapper.text()).not.toContain('AA200 after YX204 RPA204')
   })
 
   it('shows catalog family for a known N-number instead of vendor EMBRAER 175', async () => {
