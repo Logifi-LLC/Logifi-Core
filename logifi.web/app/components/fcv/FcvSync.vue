@@ -129,8 +129,6 @@ const flicaUserIdInput = ref('')
 const flicaPasswordInput = ref('')
 const loadingStatus = ref(false)
 const disconnecting = ref(false)
-const probingMenu = ref(false)
-const menuProbeJson = ref<string | null>(null)
 const loadingFetch = ref(false)
 const loadingSinceLast = ref(false)
 const loadingImport = ref(false)
@@ -400,24 +398,6 @@ async function disconnectFlica() {
     error.value = e instanceof Error ? e.message : 'Failed to disconnect FLICA'
   } finally {
     disconnecting.value = false
-  }
-}
-
-async function diagnoseFlicaMenu() {
-  if (!isAuthenticated.value || probingMenu.value) return
-  probingMenu.value = true
-  error.value = null
-  menuProbeJson.value = null
-  try {
-    const data = await apiFetch<{ success: boolean; probe: unknown }>('/api/flica/probe-menu', {
-      method: 'POST',
-      headers: authHeaders(),
-    })
-    menuProbeJson.value = JSON.stringify(data.probe, null, 2)
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to diagnose FLICA menu'
-  } finally {
-    probingMenu.value = false
   }
 }
 
@@ -1517,30 +1497,12 @@ const previewModalOverlayClass = computed(() =>
           <button
             type="button"
             :class="btnOutlineClass"
-            :disabled="probingMenu || disconnecting"
-            @click="diagnoseFlicaMenu"
-          >
-            <Icon name="ri:bug-line" size="18" />
-            {{ probingMenu ? 'Diagnosing…' : 'Diagnose FLICA menu' }}
-          </button>
-          <button
-            type="button"
-            :class="btnOutlineClass"
             :disabled="disconnecting"
             @click="disconnectFlica"
           >
             {{ disconnecting ? 'Disconnecting…' : 'Disconnect FLICA' }}
           </button>
         </div>
-        <pre
-          v-if="menuProbeJson"
-          :class="[
-            'mt-2 max-h-64 overflow-auto rounded-lg border p-3 text-[11px] font-mono whitespace-pre-wrap break-all',
-            isDarkMode
-              ? 'border-gray-700 bg-gray-900 text-gray-300'
-              : 'border-gray-200 bg-gray-50 text-gray-800',
-          ]"
-        >{{ menuProbeJson }}</pre>
       </div>
     </template>
     <template v-else-if="showConnectManage">

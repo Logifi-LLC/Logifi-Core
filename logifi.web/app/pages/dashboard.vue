@@ -912,11 +912,11 @@
                           ? 'border-blue-500/40 bg-blue-600/15 text-blue-300 hover:bg-blue-600/30'
                           : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100',
                       ]"
-                      aria-label="Import airline schedule"
+                      aria-label="Open Autofi"
                       @click="openFcvFetchSection"
                     >
                       <Icon name="ri:download-cloud-2-line" size="16" class="shrink-0" />
-                      Schedule
+                      Autofi
                     </button>
                   </div>
                   <div class="flex flex-wrap items-center gap-2">

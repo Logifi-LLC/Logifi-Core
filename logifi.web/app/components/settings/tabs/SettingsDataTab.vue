@@ -153,7 +153,7 @@
     <SettingsListGroup title="Integrations" :is-dark-mode="isDarkMode">
       <SettingsListRow
         v-if="fcvConnected"
-        label="Import airline schedule"
+        label="Import airline schedule (Autofi)"
         subtitle="Pull new flights from FLICA into logbook"
         icon="ri:download-cloud-2-line"
         :is-dark-mode="isDarkMode"
