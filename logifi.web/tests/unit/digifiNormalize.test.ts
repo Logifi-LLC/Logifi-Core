@@ -109,3 +109,44 @@ describe('digifiNormalize', () => {
     expect(rows[0].cells.c2).toBe('1.2')
   })
 })
+
+describe('normalizeScanRows year rollover', () => {
+  const dateOnlyColumns = [{ id: 'dt', label: 'Date', fieldKey: 'date' as const, order: 0 }]
+
+  it('January row after December row gets defaultYear + 1', () => {
+    const rows = normalizeScanRows(
+      [
+        { rowIndex: 0, cells: { dt: '12/28' } },
+        { rowIndex: 1, cells: { dt: '12/31' } },
+        { rowIndex: 2, cells: { dt: '1/5' } },
+      ],
+      dateOnlyColumns,
+      2022
+    )
+    expect(rows[0].cells.dt).toBe('2022-12-28')
+    expect(rows[1].cells.dt).toBe('2022-12-31')
+    expect(rows[2].cells.dt).toBe('2023-01-05')
+  })
+
+  it('January row with no prior date gets defaultYear (no rollover)', () => {
+    const rows = normalizeScanRows(
+      [{ rowIndex: 0, cells: { dt: '1/5' } }],
+      dateOnlyColumns,
+      2023
+    )
+    expect(rows[0].cells.dt).toBe('2023-01-05')
+  })
+
+  it('full four-digit year in date is never overridden by rollover', () => {
+    const rows = normalizeScanRows(
+      [
+        { rowIndex: 0, cells: { dt: '12/31' } },
+        { rowIndex: 1, cells: { dt: '1/5/2023' } },
+      ],
+      dateOnlyColumns,
+      2022
+    )
+    expect(rows[0].cells.dt).toBe('2022-12-31')
+    expect(rows[1].cells.dt).toBe('2023-01-05')
+  })
+})

@@ -23,18 +23,18 @@ describe('validatePurchase', () => {
 })
 
 describe('calculatePurchaseTotal', () => {
-  it('computes stripe total at $0.40 per page', () => {
+  it('computes stripe total at $0.50 per page', () => {
     const result = calculatePurchaseTotal('stripe', 25)
     expect(result.valid).toBe(true)
-    expect(result.totalCents).toBe(25 * 40)
-    expect(result.rateCentsPerPage).toBe(40)
+    expect(result.totalCents).toBe(25 * 50)
+    expect(result.rateCentsPerPage).toBe(50)
   })
 
-  it('computes lightning total at $0.30 per page', () => {
+  it('computes lightning total at $0.40 per page', () => {
     const result = calculatePurchaseTotal('lightning', 10)
     expect(result.valid).toBe(true)
-    expect(result.totalCents).toBe(300)
-    expect(result.rateCentsPerPage).toBe(30)
+    expect(result.totalCents).toBe(400)
+    expect(result.rateCentsPerPage).toBe(40)
   })
 
   it('returns error when below stripe minimum', () => {

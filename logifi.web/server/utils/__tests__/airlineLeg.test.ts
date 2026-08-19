@@ -74,7 +74,8 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
     expect(entry.training_elements).toBe('SUTTON, DREW')
     expect(entry.flight_conditions).toContain('ifr')
     expect(entry.flight_conditions).toContain('crossCountry')
-    expect(entry.oooi?.out).toBe('0608')
+    expect(entry.oooi?.out).toBe('0605')
+    expect(entry.oooi?.in).toBe('0712')
     expect(entry.oooi?.off).toBe('0620')
   })
 
@@ -173,6 +174,36 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
   })
 
   it('keeps FLICA scheduled Out/In when AeroDataBox only has runway times', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20260819_4349_LGA',
+      import_source: 'flica_aerodatabox',
+      flight_number: '4349',
+      trip_number: 'L7H18',
+      role: 'PIC',
+      dep_airport: 'LGA',
+      arr_airport: 'ATL',
+      scheduled_out_local: '2026-08-19 11:44:00',
+      scheduled_in_local: '2026-08-19 13:52:00',
+      actual_out_local: '2026-08-19 11:50:00',
+      actual_in_local: '2026-08-19 14:30:00',
+      actual_off_local: '2026-08-19 11:59:00',
+      actual_on_local: '2026-08-19 13:46:00',
+      fcv_tail_number: 'N421YX',
+      fcv_aircraft_type: 'E75',
+      crew: [],
+      is_deadhead: false,
+      block_minutes: 128,
+    })
+    expect(entry.oooi).toEqual({
+      out: '1144',
+      off: '1159',
+      on: '1346',
+      in: '1352',
+      isZulu: false,
+    })
+  })
+
+  it('keeps FLICA scheduled Out/In when AeroDataBox only has runway times (RIC turn)', () => {
     const entry = mapAirlineLegToFcvMappedEntry({
       external_flight_id: 'FLICA_20260812_4442_RIC',
       import_source: 'flica_aerodatabox',

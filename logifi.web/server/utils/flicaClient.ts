@@ -765,14 +765,18 @@ export async function fetchScheduleHtml(
         if (warm404) continue
         warmHtml = warm.html
         warmFinalUrl = warm.finalUrl
-        if (htmlHasParseableScheduleLegs(warmHtml)) return warmHtml
+        // Do not return the warm stub here — it is ~2KB with template/scheduled times.
+        // The GO=1 follow-up (~65KB) has updated actual gate times for completed legs.
       } catch {
         continue
       }
 
       const goToken =
         extractFlicaToken(warmHtml) || extractFlicaToken(warmPath) || token
-      if (!goToken) continue
+      if (!goToken) {
+        if (warmHtml && htmlHasParseableScheduleLegs(warmHtml)) return warmHtml
+        continue
+      }
       token = goToken
 
       const goPath = `/full/scheduledetail.cgi?GO=1&token=${goToken}&BlockDate=${block}&JUNK=${Date.now()}`
@@ -797,8 +801,10 @@ export async function fetchScheduleHtml(
           return go.html
         }
       } catch {
-        continue
+        /* fall through to warm stub */
       }
+
+      if (warmHtml && htmlHasParseableScheduleLegs(warmHtml)) return warmHtml
     }
   }
 

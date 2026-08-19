@@ -1,7 +1,7 @@
 export type PaymentMethod = 'stripe' | 'lightning'
 
-export const STRIPE_RATE_CENTS = 40
-export const LIGHTNING_RATE_CENTS = 30
+export const STRIPE_RATE_CENTS = 50
+export const LIGHTNING_RATE_CENTS = 40
 export const STRIPE_MIN_PAGES = 25
 export const LIGHTNING_MIN_PAGES = 1
 export const MAX_CREDITS_PER_PURCHASE = 10_000

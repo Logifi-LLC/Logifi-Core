@@ -124,7 +124,14 @@ export function normalizeRemarks(val: string): string {
     .trim()
 }
 
-function normalizeDate(val: string, defaultYear: number | null): string {
+function parseIsoDateParts(iso: string): { y: number; m: number; d: number } | null {
+  const parts = iso.split('-').map(Number)
+  if (parts.length !== 3 || parts.some((p) => !Number.isFinite(p))) return null
+  const [y, m, d] = parts
+  return { y, m, d }
+}
+
+function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: string | null): string {
   const s = val.trim()
   if (!s) return ''
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) return s
@@ -137,7 +144,16 @@ function normalizeDate(val: string, defaultYear: number | null): string {
     const m = parseInt(slashParts[0], 10)
     const d = parseInt(slashParts[1], 10)
     if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      return `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      let y = year
+      if (lastDateIso) {
+        const last = parseIsoDateParts(lastDateIso)
+        if (last) {
+          const candidateTime = new Date(y, m - 1, d).getTime()
+          const lastTime = new Date(last.y, last.m - 1, last.d).getTime()
+          if (candidateTime <= lastTime) y = year + 1
+        }
+      }
+      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     }
   }
   if (slashParts.length === 3) {
@@ -165,14 +181,15 @@ export function normalizeCellValue(
   value: string,
   fieldKey: LogbookColumnKey | null,
   defaultYear: number | null,
-  categoryClassValue?: string
+  categoryClassValue?: string,
+  lastDateIso?: string | null
 ): string {
   const trimmed = (value ?? '').trim()
   if (!trimmed) return ''
   if (fieldKey === 'remarks') return normalizeRemarks(trimmed)
   let v = trimmed.replace(/\s+/g, ' ')
   if (!fieldKey) return v
-  if (fieldKey === 'date') return normalizeDate(v, defaultYear)
+  if (fieldKey === 'date') return normalizeDate(v, defaultYear, lastDateIso)
   if (fieldKey === 'identification') return normalizeDigifiRegistrationKey(v)
   if (fieldKey && AIRPORT_KEYS.has(fieldKey)) return normalizeAirport(v, fieldKey)
   if (NUMERIC_KEYS.has(fieldKey) || (fieldKey === 'categoryClass' && categoryClassValue)) {
@@ -187,6 +204,8 @@ export function normalizeScanRows(
   defaultYear: number | null
 ): Array<{ rowIndex: number; cells: Record<string, string>; tags?: string[] }> {
   const colById = new Map(columns.map((c) => [c.id, c]))
+  const dateCol = columns.find((c) => c.fieldKey === 'date')
+  let lastDateIso: string | null = null
   return rows.map((row) => {
     const reconciledRaw = reconcileRowAirports(row.cells, columns)
     const cells: Record<string, string> = {}
@@ -197,9 +216,11 @@ export function normalizeScanRows(
         raw,
         col?.fieldKey ?? null,
         defaultYear,
-        col?.categoryClassValue
+        col?.categoryClassValue,
+        col?.fieldKey === 'date' ? lastDateIso : undefined
       )
     }
+    if (dateCol && cells[dateCol.id]) lastDateIso = cells[dateCol.id]
     return {
       rowIndex: row.rowIndex,
       cells,

@@ -111,7 +111,7 @@ useHead({
     {
       name: 'description',
       content:
-        'Logifi is free. Every account includes 10 free Digifi spreads. Additional scanning uses pay-per-spread credits ($0.30–$0.40).',
+        'Logifi is free. Every account includes 10 free Digifi spreads. Additional scanning uses pay-per-spread credits ($0.40–$0.50).',
     },
   ],
 })

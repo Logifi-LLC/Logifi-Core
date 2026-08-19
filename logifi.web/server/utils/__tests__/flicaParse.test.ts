@@ -478,6 +478,25 @@ describe('filterAirlineLegs', () => {
     expect(filtered.every((l) => !l.is_deadhead)).toBe(true)
   })
 
+  it('parses updated FLICA gate times for a completed leg (4349 LGA-ATL)', () => {
+    const text = `
+August Schedule
+DEREK FARMER
+(624619)
+Last Updated Aug 19, 2026 14:00:00 EDT
+L7H18 : 19AUG
+Base/Equip: LGA/EM7 CA01FO01
+WE 19   4349 LGA-ATL 1144 1352 0208
+Crew:
+CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
+`
+    const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
+    const leg = legs.find((l) => l.flight_number === '4349')
+    expect(leg?.scheduled_out_local).toBe('2026-08-19 11:44:00')
+    expect(leg?.scheduled_in_local).toBe('2026-08-19 13:52:00')
+    expect(leg?.block_minutes).toBe(128)
+  })
+
   it('reports exclusion counts', () => {
     const stats = filterAirlineLegsWithStats(legs, {
       includeDeadheads: false,
