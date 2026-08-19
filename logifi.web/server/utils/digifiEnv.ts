@@ -51,11 +51,11 @@ export function normalizeDigifiModelId(model: string): string {
 }
 
 /**
- * Gemini 3.6 Flash deprecates temperature/topP/topK (ignored now; may 400 later).
+ * Gemini 3.6+ Flash deprecates temperature/topP/topK (ignored now; may 400 later).
  * @see https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash
  */
 export function omitsDigifiGeminiSamplingParams(model: string): boolean {
-  return /gemini-3\.6/i.test(model.trim())
+  return /gemini-3\.[67]/i.test(model.trim())
 }
 
 /** Flash-Lite is excluded from automatic fallbacks (poor logbook OCR). */
@@ -106,10 +106,13 @@ export function shouldTryNextDigifiModel(errorCode: DigifiExtractorErrorCode): b
 
 /** OCR: keep internal reasoning low so visible TSV fits maxOutputTokens (thinking shares the budget on 3.x). */
 export function resolveDigifiThinkingLevel(
-  envLevel?: DigifiGeminiThinkingLevel
+  envLevel?: DigifiGeminiThinkingLevel,
+  model?: string
 ): DigifiGeminiThinkingLevel {
   const level = envLevel ?? 'low'
   if (level === 'high' || level === 'medium') return 'low'
+  // Gemini 3.7 only supports low/medium/high — clamp 'minimal' to 'low'
+  if (level === 'minimal' && model && /gemini-3\.7/i.test(model)) return 'low'
   return level
 }
 

@@ -48,6 +48,10 @@ describe('omitsDigifiGeminiSamplingParams', () => {
     expect(omitsDigifiGeminiSamplingParams('gemini-3.5-flash')).toBe(false)
     expect(omitsDigifiGeminiSamplingParams('gemini-3-flash-preview')).toBe(false)
   })
+
+  it('also omits temperature for Gemini 3.7 models', () => {
+    expect(omitsDigifiGeminiSamplingParams('gemini-3.7-flash')).toBe(true)
+  })
 })
 
 describe('inferDigifiProvider', () => {
@@ -83,6 +87,18 @@ describe('resolveDigifiThinkingLevel', () => {
     expect(resolveDigifiThinkingLevel('high')).toBe('low')
     expect(resolveDigifiThinkingLevel('medium')).toBe('low')
     expect(resolveDigifiThinkingLevel('minimal')).toBe('minimal')
+  })
+
+  it('clamps minimal to low for Gemini 3.7 (unsupported level)', () => {
+    expect(resolveDigifiThinkingLevel('minimal', 'gemini-3.7-flash')).toBe('low')
+  })
+
+  it('keeps minimal as-is for Gemini 3.6 (supported)', () => {
+    expect(resolveDigifiThinkingLevel('minimal', 'gemini-3.6-flash')).toBe('minimal')
+  })
+
+  it('still clamps high to low for Gemini 3.7', () => {
+    expect(resolveDigifiThinkingLevel('high', 'gemini-3.7-flash')).toBe('low')
   })
 })
 

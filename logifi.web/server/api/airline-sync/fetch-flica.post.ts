@@ -111,8 +111,8 @@ async function enrichLegWithAeroDataBox(
       ...leg,
       fcv_tail_number: lookup.actuals.registration ?? leg.fcv_tail_number,
       fcv_aircraft_type: lookup.actuals.aircraftType ?? leg.fcv_aircraft_type,
-      actual_out_local: lookup.actuals.actualOutLocal ?? leg.actual_out_local,
-      actual_in_local: lookup.actuals.actualInLocal ?? leg.actual_in_local,
+      // Do not copy actual_out_local / actual_in_local from AeroDataBox — FLICA gate
+      // times (scheduled_out/in) are ground truth and are already actual for completed flights.
       actual_off_local: lookup.actuals.actualOffLocal ?? leg.actual_off_local,
       actual_on_local: lookup.actuals.actualOnLocal ?? leg.actual_on_local,
     },
@@ -355,7 +355,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 502, statusMessage: message })
   }
 
-  const todayYmd = new Date().toISOString().slice(0, 10)
+  const nowDate = new Date()
+  const nowIso = nowDate.toISOString()
+  // Build a local-time "now" string (YYYY-MM-DDTHH:MM) so it can be compared
+  // directly against scheduled_out_local, which is always in local (pilot) time.
+  // toISOString() is UTC and must not be used for that comparison.
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const nowLocalDatetime = `${nowDate.getFullYear()}-${pad(nowDate.getMonth() + 1)}-${pad(nowDate.getDate())}T${pad(nowDate.getHours())}:${pad(nowDate.getMinutes())}`
+  const todayYmd = nowLocalDatetime.slice(0, 10)
   const defaultYear = parseInt(dateFrom.slice(0, 4), 10)
   const htmlSummary = summarizeFlicaHtml(scheduleHtml)
   console.info('[flica] schedule html', {
@@ -378,6 +385,7 @@ export default defineEventHandler(async (event) => {
     includeDeadheads: body.includeDeadheads === true,
     includeScheduled: body.includeScheduled === true,
     todayYmd,
+    nowIso: nowLocalDatetime,
   })
 
   const skipEnrich = await loadEnrichSkipIndices(supabase, userId, filtered)

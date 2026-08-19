@@ -587,9 +587,16 @@ export function filterAirlineLegsWithStats(
     includeDeadheads?: boolean
     includeScheduled?: boolean
     todayYmd?: string
+    /**
+     * Local datetime string for "now" in `YYYY-MM-DDTHH:MM` format (NOT UTC).
+     * Must be in the same timezone as `scheduled_out_local` so the comparison is
+     * apples-to-apples. Used to exclude today's not-yet-departed legs.
+     */
+    nowIso?: string
   } = {}
 ): AirlineLegFilterStats {
-  const today = opts.todayYmd ?? new Date().toISOString().slice(0, 10)
+  const now = opts.nowIso ?? new Date().toISOString()
+  const today = opts.todayYmd ?? now.slice(0, 10)
   const filtered: AirlineLeg[] = []
   let excludedDeadheads = 0
   let excludedOutsideRange = 0
@@ -609,15 +616,14 @@ export function filterAirlineLegsWithStats(
       excludedDeadheads++
       continue
     }
-    if (
-      !opts.includeScheduled &&
-      date &&
-      date > today &&
-      !leg.actual_off_local &&
-      !leg.actual_out_local
-    ) {
-      excludedScheduled++
-      continue
+    if (!opts.includeScheduled && date && !leg.actual_off_local && !leg.actual_out_local) {
+      const scheduledOut = (leg.scheduled_out_local ?? '').replace(' ', 'T')
+      const isFuture =
+        date > today || (date === today && scheduledOut > now.slice(0, 16))
+      if (isFuture) {
+        excludedScheduled++
+        continue
+      }
     }
     filtered.push(leg)
   }
@@ -632,13 +638,7 @@ export function filterAirlineLegsWithStats(
 
 export function filterAirlineLegs(
   legs: AirlineLeg[],
-  opts: {
-    dateFrom?: string
-    dateTo?: string
-    includeDeadheads?: boolean
-    includeScheduled?: boolean
-    todayYmd?: string
-  } = {}
+  opts: Parameters<typeof filterAirlineLegsWithStats>[1]
 ): AirlineLeg[] {
   return filterAirlineLegsWithStats(legs, opts).filtered
 }

@@ -488,4 +488,48 @@ describe('filterAirlineLegs', () => {
     expect(stats.filtered.every((l) => !l.is_deadhead)).toBe(true)
     expect(stats.filtered.length + stats.excludedDeadheads).toBe(legs.length)
   })
+
+  it('excludes a same-day leg that has not yet departed when nowIso is before its scheduled departure', () => {
+    // Aug 19 pairing: 4669 STL-LGA departs 0600, 4349 LGA-ATL departs 1150.
+    // "Now" is 09:30 local — 4669 already gone, 4349 not yet departed.
+    // nowIso must be a LOCAL datetime string (same tz as scheduled_out_local), not UTC.
+    const pairing = parseFlicaSchedule(THREE_DAY_PAIRING_TSV, { defaultYear: 2026 })
+    const stats = filterAirlineLegsWithStats(pairing, {
+      dateFrom: '2026-08-19',
+      dateTo: '2026-08-19',
+      includeDeadheads: false,
+      includeScheduled: false,
+      todayYmd: '2026-08-19',
+      nowIso: '2026-08-19T09:30',
+    })
+    expect(stats.filtered.map((l) => l.flight_number)).toEqual(['4669'])
+    expect(stats.excludedScheduled).toBe(1)
+  })
+
+  it('includes a same-day leg that has not yet departed when includeScheduled is true', () => {
+    const pairing = parseFlicaSchedule(THREE_DAY_PAIRING_TSV, { defaultYear: 2026 })
+    const filtered = filterAirlineLegs(pairing, {
+      dateFrom: '2026-08-19',
+      dateTo: '2026-08-19',
+      includeDeadheads: false,
+      includeScheduled: true,
+      todayYmd: '2026-08-19',
+      nowIso: '2026-08-19T09:30',
+    })
+    expect(filtered.map((l) => l.flight_number)).toEqual(['4669', '4349'])
+  })
+
+  it('excludes all same-day legs not yet departed when nowIso is before the first departure', () => {
+    const pairing = parseFlicaSchedule(THREE_DAY_PAIRING_TSV, { defaultYear: 2026 })
+    const stats = filterAirlineLegsWithStats(pairing, {
+      dateFrom: '2026-08-19',
+      dateTo: '2026-08-19',
+      includeDeadheads: false,
+      includeScheduled: false,
+      todayYmd: '2026-08-19',
+      nowIso: '2026-08-19T04:00',
+    })
+    expect(stats.filtered).toHaveLength(0)
+    expect(stats.excludedScheduled).toBe(2)
+  })
 })
