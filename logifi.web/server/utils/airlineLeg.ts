@@ -8,8 +8,6 @@ import {
 } from '../../shared/airlineOwnRole'
 import type { FcvFlight, FcvMappedEntry, FcvMappedOooi } from './fcvMap'
 import {
-  gateDurationHoursFromFcvLocalPair,
-  parseFcvBlockToHours,
   parseFcvLocalDatetimeToHHMM,
   resolveFcvBlockHours,
 } from './fcvMap'
@@ -343,4 +341,4 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
   }
 }
 
-export { hhmmToLocalDatetime, gateDurationHoursFromFcvLocalPair, parseFcvBlockToHours }
+export { hhmmToLocalDatetime }
