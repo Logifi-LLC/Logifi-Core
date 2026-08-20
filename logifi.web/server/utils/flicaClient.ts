@@ -600,6 +600,31 @@ export function htmlHasParseableScheduleLegs(html: string): boolean {
   }
 }
 
+/**
+ * GO=1 refrigerator HTML is ~65KB with updated gate times.
+ * The BlockDate warm stub is ~2KB and still has bid/template DEPL/ARRL.
+ */
+export const FLICA_IMPORTABLE_SCHEDULE_MIN_BYTES = 10_000
+
+function isWarmScheduleStub(html: string): boolean {
+  const head = html.slice(0, 4000)
+  if (
+    /<meta[^>]+http-equiv\s*=\s*['"]?refresh/i.test(head) &&
+    /scheduledetail\.cgi/i.test(head)
+  ) {
+    return true
+  }
+  if (/Location:\s*\S*scheduledetail\.cgi\?[^"'>\s]*GO=1/i.test(head)) return true
+  return false
+}
+
+/** True for GO=1 schedule HTML that is safe to parse for Autofi Out/In. */
+export function isImportableScheduleHtml(html: string): boolean {
+  if (!html || isWarmScheduleStub(html)) return false
+  if (html.length < FLICA_IMPORTABLE_SCHEDULE_MIN_BYTES) return false
+  return htmlHasParseableScheduleLegs(html) || /L\d[\dA-Z]*\s*:/i.test(html)
+}
+
 function redactTokenInUrl(url: string): string {
   return url.replace(/([?&]token=)[^&]+/gi, '$1REDACTED')
 }
@@ -774,13 +799,13 @@ export async function fetchScheduleHtml(
       const goToken =
         extractFlicaToken(warmHtml) || extractFlicaToken(warmPath) || token
       if (!goToken) {
-        if (warmHtml && htmlHasParseableScheduleLegs(warmHtml)) return warmHtml
+        // Never import the warm stub — it still has scheduled DEPL/ARRL.
         continue
       }
       token = goToken
 
-      const goPath = `/full/scheduledetail.cgi?GO=1&token=${goToken}&BlockDate=${block}&JUNK=${Date.now()}`
-      try {
+      const fetchGo = async (tkn: string) => {
+        const goPath = `/full/scheduledetail.cgi?GO=1&token=${tkn}&BlockDate=${block}&JUNK=${Date.now()}`
         const go = await session.request(goPath, {
           method: 'GET',
           headers: {
@@ -789,22 +814,31 @@ export async function fetchScheduleHtml(
           },
         })
         pagesScanned++
-        if (looksLikeLoginPage(go.html, go.finalUrl)) continue
         recordAttempt(goPath, go.html, go.response.status)
+        return go
+      }
+
+      try {
+        let go = await fetchGo(goToken)
+        if (looksLikeLoginPage(go.html, go.finalUrl)) continue
         const go404 =
           go.response.status === 404 ||
           /404\s*-\s*file or directory not found/i.test(go.html)
         if (go404) continue
-        if (htmlHasParseableScheduleLegs(go.html)) return go.html
-        // Large schedule pages should still be returned for the API parser.
-        if (go.html.length > 10000 && /L\d[\dA-Z]*\s*:/i.test(go.html)) {
-          return go.html
-        }
-      } catch {
-        /* fall through to warm stub */
-      }
+        if (isImportableScheduleHtml(go.html)) return go.html
 
-      if (warmHtml && htmlHasParseableScheduleLegs(warmHtml)) return warmHtml
+        // Retry once if GO=1 returned a stub/refresh that includes a newer token.
+        const retryToken = extractFlicaToken(go.html) || goToken
+        go = await fetchGo(retryToken)
+        if (looksLikeLoginPage(go.html, go.finalUrl)) continue
+        const retry404 =
+          go.response.status === 404 ||
+          /404\s*-\s*file or directory not found/i.test(go.html)
+        if (retry404) continue
+        if (isImportableScheduleHtml(go.html)) return go.html
+      } catch {
+        /* try the next warm candidate — never fall back to scheduled stub */
+      }
     }
   }
 

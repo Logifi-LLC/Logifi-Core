@@ -266,8 +266,12 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
   const date = localCalendarDateFromDatetime(depLocal)
 
   const fcvShape = legAsFcvFlightShape(leg)
+  const fromFlicaBlock = blockMinutesToHours(leg.block_minutes)
+  const fromGate = resolveFcvBlockHours(fcvShape)
   const blockHours =
-    resolveFcvBlockHours(fcvShape) ?? blockMinutesToHours(leg.block_minutes)
+    leg.import_source === 'flica_aerodatabox'
+      ? fromFlicaBlock ?? fromGate
+      : fromGate ?? fromFlicaBlock
 
   const registration = normalizeRegistrationDisplay(leg.fcv_tail_number)
   const aircraftType = normalizeFcvAircraftType(leg.fcv_aircraft_type)
