@@ -2,12 +2,16 @@ import { describe, expect, it, vi, afterEach } from 'vitest'
 import {
   decodeFlicaHtmlBytes,
   extractFlicaToken,
+  fetchScheduleHtml,
   flicaBlockDate,
   findScheduleDetailLinks,
   findScheduleMonthLinks,
   htmlLooksLikeScheduleDetail,
+  isImportableScheduleHtml,
   loginFlica,
   FlicaClientError,
+  FlicaSession,
+  FLICA_IMPORTABLE_SCHEDULE_MIN_BYTES,
 } from '../flicaClient'
 import { parseFlicaSchedule } from '../flicaParse'
 
@@ -282,5 +286,138 @@ describe('parse after scrape fixture', () => {
   it('parses schedule detail HTML text into legs', () => {
     const legs = parseFlicaSchedule(SCHEDULE_FIXTURE)
     expect(legs.some((l) => l.flight_number === '5770')).toBe(true)
+  })
+})
+
+const WARM_TOKEN = '000000006BF24E6901DD2A95679A3936'
+const GO_TOKEN = '000000006BF24E6901DD2A99B0E9780E'
+
+const LEFT_MENU_HTML = `
+<html><body>
+<a href="scheduledetail.cgi?BlockDate=0826&token=${WARM_TOKEN}">August</a>
+</body></html>
+`
+
+const WARM_SCHEDULE_HTML = `
+<html><body>
+<a href="/full/scheduledetail.cgi?GO=1&token=${GO_TOKEN}&BlockDate=0826&JUNK=1">go</a>
+L7H18 : 18AUG
+Base/Equip: LGA/EM7 CA01FO01
+TH 20  4809 ATL-LGA 0609 0825 0216
+TH 20  4584 LGA-RIC 0912 1047 0135
+TH 20  4584 RIC-LGA 1117 1239 0122
+Crew:
+CA 624619 FARMER, DEREK
+</body></html>
+`
+
+const GO_ACTUALS_HTML = padScheduleHtml(
+  `
+<html><body>
+<div>L7H18 : 18AUG</div>
+<div>Last Updated Aug 20, 2026 14:00:00 EDT</div>
+<div>Base/Equip: LGA/EM7 CA01FO01</div>
+<div>TH 20 * 4809 ATL-LGA 0606 0809 0203</div>
+<div>TH 20  4584 LGA-RIC 0908 1103 0155</div>
+<div>TH 20  4584 RIC-LGA 1141 1256</div>
+<div>Crew:</div>
+<div>CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE</div>
+</body></html>
+`,
+  FLICA_IMPORTABLE_SCHEDULE_MIN_BYTES
+)
+
+function padScheduleHtml(body: string, minBytes: number): string {
+  if (body.length >= minBytes) return body
+  const pad = `<div>${'&nbsp;'.repeat(Math.ceil((minBytes - body.length) / 6))}</div>`
+  return body.replace('</body></html>', `${pad}</body></html>`)
+}
+
+function htmlResponse(html: string, status = 200) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: () => null, getSetCookie: () => [] },
+    text: async () => html,
+  }
+}
+
+describe('isImportableScheduleHtml', () => {
+  it('rejects a small parseable warm stub with scheduled times', () => {
+    expect(WARM_SCHEDULE_HTML.length).toBeLessThan(FLICA_IMPORTABLE_SCHEDULE_MIN_BYTES)
+    expect(isImportableScheduleHtml(WARM_SCHEDULE_HTML)).toBe(false)
+  })
+
+  it('rejects a meta-refresh warm page even if padded', () => {
+    const html = padScheduleHtml(
+      `<html><head><meta http-equiv="refresh" content="0;url=scheduledetail.cgi?GO=1"></head>
+      <body>Location: /full/scheduledetail.cgi?GO=1&token=abc</body></html>`,
+      FLICA_IMPORTABLE_SCHEDULE_MIN_BYTES
+    )
+    expect(isImportableScheduleHtml(html)).toBe(false)
+  })
+
+  it('accepts a large GO=1 body with completed gate times', () => {
+    expect(isImportableScheduleHtml(GO_ACTUALS_HTML)).toBe(true)
+  })
+})
+
+describe('fetchScheduleHtml', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function stubFlicaPages(opts: { goHtml: string; goStatus?: number }) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url: string) => {
+        const u = String(url)
+        if (u.includes('mainmenu.cgi')) {
+          return htmlResponse('<html><body>Crewmember Menu Schedules</body></html>')
+        }
+        if (u.includes('leftmenu.cgi')) {
+          return htmlResponse(LEFT_MENU_HTML)
+        }
+        if (u.includes('scheduledetail.cgi') && /[?&]GO=1(?:&|$)/i.test(u)) {
+          return htmlResponse(opts.goHtml, opts.goStatus ?? 200)
+        }
+        if (u.includes('scheduledetail.cgi')) {
+          return htmlResponse(WARM_SCHEDULE_HTML)
+        }
+        return htmlResponse('<html></html>')
+      })
+    )
+  }
+
+  it('returns GO=1 HTML with completed times, not the warm scheduled stub', async () => {
+    stubFlicaPages({ goHtml: GO_ACTUALS_HTML })
+    const session = new FlicaSession('rpa.flica.net')
+    const html = await fetchScheduleHtml(session, {
+      dateFrom: '2026-08-20',
+      dateTo: '2026-08-20',
+    })
+    expect(html).toContain('0606')
+    expect(html).toContain('0809')
+    expect(html).not.toBe(WARM_SCHEDULE_HTML)
+    const legs = parseFlicaSchedule(html, { defaultYear: 2026 })
+    expect(legs.find((l) => l.flight_number === '4809')?.scheduled_out_local).toBe(
+      '2026-08-20 06:06:00'
+    )
+  })
+
+  it('throws instead of importing the warm stub when GO=1 is empty', async () => {
+    stubFlicaPages({ goHtml: '' })
+    const session = new FlicaSession('rpa.flica.net')
+    await expect(
+      fetchScheduleHtml(session, { dateFrom: '2026-08-20', dateTo: '2026-08-20' })
+    ).rejects.toMatchObject({ code: 'schedule_not_found' } satisfies Partial<FlicaClientError>)
+  })
+
+  it('throws instead of importing scheduled times when GO=1 returns the warm-sized stub', async () => {
+    stubFlicaPages({ goHtml: WARM_SCHEDULE_HTML })
+    const session = new FlicaSession('rpa.flica.net')
+    await expect(
+      fetchScheduleHtml(session, { dateFrom: '2026-08-20', dateTo: '2026-08-20' })
+    ).rejects.toMatchObject({ code: 'schedule_not_found' } satisfies Partial<FlicaClientError>)
   })
 })

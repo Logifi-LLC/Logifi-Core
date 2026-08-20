@@ -478,6 +478,42 @@ describe('filterAirlineLegs', () => {
     expect(filtered.every((l) => !l.is_deadhead)).toBe(true)
   })
 
+  it('parses updated FLICA gate times for a completed Aug 20 pairing (4809 / 4584)', () => {
+    const text = `
+August Schedule
+DEREK FARMER
+(624619)
+Last Updated Aug 20, 2026 14:00:00 EDT
+L7H18 : 18AUG  TUE-THU  BSE REPT: 0515L
+Base/Equip: LGA/EM7 CA01FO01
+TH	20	 	*	4809	ATL-LGA	0606	0809	 0203	0059	B48
+TH	20	 	 	4584	LGA-RIC	0908	1103	 0155	0038	C64
+TH	20	 	 	4584	RIC-LGA	1141	1256
+Crew:
+CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
+`
+    const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
+    const atlLga = legs.find((l) => l.flight_number === '4809')
+    expect(atlLga?.scheduled_out_local).toBe('2026-08-20 06:06:00')
+    expect(atlLga?.scheduled_in_local).toBe('2026-08-20 08:09:00')
+    expect(atlLga?.block_minutes).toBe(123)
+    expect(atlLga?.is_deadhead).toBe(false)
+
+    const lgaRic = legs.find(
+      (l) => l.flight_number === '4584' && l.dep_airport === 'LGA'
+    )
+    expect(lgaRic?.scheduled_out_local).toBe('2026-08-20 09:08:00')
+    expect(lgaRic?.scheduled_in_local).toBe('2026-08-20 11:03:00')
+    expect(lgaRic?.block_minutes).toBe(115)
+
+    const ricLga = legs.find(
+      (l) => l.flight_number === '4584' && l.dep_airport === 'RIC'
+    )
+    expect(ricLga?.scheduled_out_local).toBe('2026-08-20 11:41:00')
+    expect(ricLga?.scheduled_in_local).toBe('2026-08-20 12:56:00')
+    expect(ricLga?.block_minutes).toBeNull()
+  })
+
   it('parses updated FLICA gate times for a completed leg (4349 LGA-ATL)', () => {
     const text = `
 August Schedule

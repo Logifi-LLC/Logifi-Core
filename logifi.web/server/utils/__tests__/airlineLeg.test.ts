@@ -201,6 +201,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       in: '1352',
       isZulu: false,
     })
+    expect((entry.flight_time as Record<string, unknown>).total).toBe(2.1)
   })
 
   it('keeps FLICA scheduled Out/In when AeroDataBox only has runway times (RIC turn)', () => {
@@ -233,6 +234,72 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
     })
     expect(entry.departure).toBe('KRIC')
     expect(entry.destination).toBe('KLGA')
+  })
+
+  it('keeps completed FLICA Out/In and block when AeroDataBox has Off/On (4809 ATL-LGA)', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20260820_4809_ATL',
+      import_source: 'flica_aerodatabox',
+      flight_number: '4809',
+      trip_number: 'L7H18',
+      role: 'PIC',
+      dep_airport: 'ATL',
+      arr_airport: 'LGA',
+      scheduled_out_local: '2026-08-20 06:06:00',
+      scheduled_in_local: '2026-08-20 08:09:00',
+      actual_out_local: '2026-08-20 06:09:00',
+      actual_in_local: '2026-08-20 08:25:00',
+      actual_off_local: '2026-08-20 06:22:00',
+      actual_on_local: '2026-08-20 08:04:00',
+      fcv_tail_number: 'N648RW',
+      fcv_aircraft_type: 'E75',
+      crew: [
+        { position: 'CA', name: 'FARMER, DEREK' },
+        { position: 'FO', name: 'JOHNS, LUKE' },
+      ],
+      is_deadhead: false,
+      block_minutes: 123,
+    })
+    expect(entry.oooi).toEqual({
+      out: '0606',
+      off: '0622',
+      on: '0804',
+      in: '0809',
+      isZulu: false,
+    })
+    expect((entry.flight_time as Record<string, unknown>).total).toBe(2.1)
+    expect(entry.category_class_time).toBe(2.1)
+  })
+
+  it('uses FLICA Out→In hours when the pairing omits the block column', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20260820_4584_RIC',
+      import_source: 'flica_aerodatabox',
+      flight_number: '4584',
+      trip_number: 'L7H18',
+      role: 'PIC',
+      dep_airport: 'RIC',
+      arr_airport: 'LGA',
+      scheduled_out_local: '2026-08-20 11:41:00',
+      scheduled_in_local: '2026-08-20 12:56:00',
+      actual_out_local: null,
+      actual_in_local: null,
+      actual_off_local: null,
+      actual_on_local: null,
+      fcv_tail_number: '',
+      fcv_aircraft_type: 'EM7',
+      crew: [],
+      is_deadhead: false,
+      block_minutes: null,
+    })
+    expect(entry.oooi).toEqual({
+      out: '1141',
+      off: null,
+      on: null,
+      in: '1256',
+      isZulu: false,
+    })
+    expect((entry.flight_time as Record<string, unknown>).total).toBe(1.3)
   })
 
   it('tags deadhead legs', () => {
