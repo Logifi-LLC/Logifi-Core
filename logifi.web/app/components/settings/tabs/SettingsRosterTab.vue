@@ -540,7 +540,7 @@ async function onSignFromReview(pin: string) {
   const entryId = reviewingEntryId.value ?? reviewEntry.value?.id
   const instructorId = user.value?.id
   if (!entryId || !instructorId) {
-    showToast('You must be signed in to sign', { type: 'success' })
+    showToast('You must be signed in to sign', { type: 'error' })
     return
   }
   isSigning.value = true

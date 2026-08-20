@@ -3,9 +3,11 @@ import {
   calculatePassengerCurrency,
   calculateNightCurrency,
   calculateInstrumentCurrency,
-  calculateAnnualRequirements
+  calculateAnnualRequirements,
+  formatCurrencyChip,
+  formatCurrencyChipDate,
 } from '../currencyCalculator'
-import type { LogEntry } from '../logbookTypes'
+import type { CurrencyStatus, LogEntry } from '../logbookTypes'
 
 describe('currencyCalculator', () => {
   const createTestEntry = (overrides: Partial<LogEntry>): LogEntry => ({
@@ -332,6 +334,81 @@ describe('currencyCalculator', () => {
       const result = calculateAnnualRequirements(entries, today)
       
       expect(result.qualifyingEntries.length).toBe(1)
+    })
+  })
+
+  describe('formatCurrencyChip', () => {
+    const ref = new Date('2026-04-01T12:00:00')
+
+    function status(partial: Partial<CurrencyStatus>): CurrencyStatus {
+      return {
+        isCurrent: true,
+        daysRemaining: 60,
+        expirationDate: new Date('2026-04-12T12:00:00'),
+        status: 'current',
+        qualifyingEntries: [],
+        ...partial,
+      }
+    }
+
+    it('formats current chips with short date', () => {
+      expect(formatCurrencyChip('passenger', status({}), ref)).toBe('90-day ✓ until Apr 12')
+      expect(formatCurrencyChip('night', status({}), ref)).toBe('Night ✓ until Apr 12')
+      expect(formatCurrencyChip('instrument', status({}), ref)).toBe('IFR ✓ until Apr 12')
+    })
+
+    it('includes year when expiration is not this year', () => {
+      expect(
+        formatCurrencyChip(
+          'instrument',
+          status({ expirationDate: new Date('2027-10-03T12:00:00') }),
+          ref
+        )
+      ).toBe('IFR ✓ until Oct 3, 2027')
+    })
+
+    it('formats expiring soon with day counts', () => {
+      expect(
+        formatCurrencyChip(
+          'night',
+          status({ status: 'expiring_soon', daysRemaining: 8, isCurrent: true }),
+          ref
+        )
+      ).toBe('Night expires in 8 days')
+      expect(
+        formatCurrencyChip(
+          'passenger',
+          status({ status: 'expiring_soon', daysRemaining: 1, isCurrent: true }),
+          ref
+        )
+      ).toBe('90-day expires in 1 day')
+      expect(
+        formatCurrencyChip(
+          'instrument',
+          status({ status: 'expiring_soon', daysRemaining: 0, isCurrent: true }),
+          ref
+        )
+      ).toBe('IFR expires today')
+    })
+
+    it('formats expired', () => {
+      expect(
+        formatCurrencyChip(
+          'passenger',
+          status({ status: 'expired', isCurrent: false, daysRemaining: 0 }),
+          ref
+        )
+      ).toBe('90-day expired')
+    })
+
+    it('formats null currency as em dash', () => {
+      expect(formatCurrencyChip('passenger', null, ref)).toBe('90-day —')
+    })
+
+    it('formatCurrencyChipDate omits same-year', () => {
+      // Local noon avoids UTC date-string timezone shift (Apr 11 vs Apr 12).
+      expect(formatCurrencyChipDate(new Date(2026, 3, 12, 12), ref)).toBe('Apr 12')
+      expect(formatCurrencyChipDate(new Date(2027, 3, 12, 12), ref)).toBe('Apr 12, 2027')
     })
   })
 })

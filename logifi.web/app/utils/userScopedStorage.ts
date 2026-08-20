@@ -12,6 +12,7 @@ export const ACCOUNT_SCOPED_STORAGE_KEYS = {
   ENTRY_CARD_PRESET: 'logifi-entry-card-preset',
   ACTIVE_LOGBOOK: 'logifi-active-logbook',
   TOTALS_METRICS: 'logifi-totals-metrics',
+  SHOW_CURRENCY_CHIPS: 'logifi-show-currency-chips',
   BUILDER_DRAFT: 'logifi-logbook-builder-draft',
   BUILDER_DEFAULT_ROLE: 'logifi-logbook-builder-default-role',
   AIRCRAFT_TAIL_CONSOLIDATION: 'logifi://aircraft-tail-consolidation-v3',

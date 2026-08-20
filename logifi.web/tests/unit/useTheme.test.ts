@@ -1,28 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 
-function mockMatchMedia(matches: boolean) {
-  const listeners = new Set<(event?: unknown) => void>()
-  const media = {
-    matches,
-    media: '(prefers-color-scheme: dark)',
-    addEventListener: vi.fn((_event: string, cb: (event?: unknown) => void) => {
-      listeners.add(cb)
-    }),
-    removeEventListener: vi.fn((_event: string, cb: (event?: unknown) => void) => {
-      listeners.delete(cb)
-    }),
-    addListener: vi.fn((cb: (event?: unknown) => void) => listeners.add(cb)),
-    removeListener: vi.fn((cb: (event?: unknown) => void) => listeners.delete(cb)),
-    setMatches(next: boolean) {
-      media.matches = next
-      listeners.forEach((cb) => cb())
-    },
-  }
-  window.matchMedia = vi.fn().mockImplementation(() => media) as unknown as typeof window.matchMedia
-  return media
-}
-
 async function loadUseTheme() {
   vi.resetModules()
   const state = new Map<string, ReturnType<typeof ref>>()
@@ -46,11 +24,10 @@ describe('useTheme', () => {
     vi.resetModules()
   })
 
-  it('defaults to system and does not persist light on first visit', async () => {
-    mockMatchMedia(false)
+  it('defaults to light and does not persist on first visit', async () => {
     const { useTheme } = await loadUseTheme()
     const { theme, isDark } = useTheme()
-    expect(theme.value).toBe('system')
+    expect(theme.value).toBe('light')
     expect(isDark.value).toBe(false)
     expect(localStorage.getItem('logifi-theme')).toBeNull()
     expect(document.documentElement.classList.contains('light')).toBe(true)
@@ -58,7 +35,6 @@ describe('useTheme', () => {
 
   it('honors a stored light or dark preference', async () => {
     localStorage.setItem('logifi-theme', 'dark')
-    mockMatchMedia(false)
     const { useTheme } = await loadUseTheme()
     const { theme, isDark } = useTheme()
     expect(theme.value).toBe('dark')
@@ -66,31 +42,44 @@ describe('useTheme', () => {
     expect(document.documentElement.classList.contains('dark')).toBe(true)
   })
 
-  it('follows prefers-color-scheme when preference is system', async () => {
-    mockMatchMedia(true)
+  it('migrates leftover system preference to light', async () => {
+    localStorage.setItem('logifi-theme', 'system')
+    localStorage.setItem('theme', 'system')
     const { useTheme } = await loadUseTheme()
     const { theme, isDark } = useTheme()
-    expect(theme.value).toBe('system')
-    expect(isDark.value).toBe(true)
-    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(theme.value).toBe('light')
+    expect(isDark.value).toBe(false)
+    expect(localStorage.getItem('logifi-theme')).toBe('light')
+    expect(localStorage.getItem('theme')).toBe('light')
+    expect(document.documentElement.classList.contains('light')).toBe(true)
   })
 
-  it('updates live when the OS appearance changes', async () => {
-    const media = mockMatchMedia(false)
+  it('ignores OS prefers-color-scheme', async () => {
+    window.matchMedia = vi.fn().mockImplementation(() => ({
+      matches: true,
+      media: '(prefers-color-scheme: dark)',
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia
+
     const { useTheme } = await loadUseTheme()
     const { theme, isDark } = useTheme()
+    expect(theme.value).toBe('light')
     expect(isDark.value).toBe(false)
-
-    media.setMatches(true)
-    expect(theme.value).toBe('system')
-    expect(isDark.value).toBe(true)
-    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(document.documentElement.classList.contains('light')).toBe(true)
   })
 
   it('persists an explicit choice', async () => {
-    mockMatchMedia(true)
     const { useTheme } = await loadUseTheme()
     const { setTheme, theme, isDark } = useTheme()
+    setTheme('dark')
+    expect(theme.value).toBe('dark')
+    expect(isDark.value).toBe(true)
+    expect(localStorage.getItem('logifi-theme')).toBe('dark')
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+
     setTheme('light')
     expect(theme.value).toBe('light')
     expect(isDark.value).toBe(false)

@@ -339,3 +339,53 @@ export function calculateAnnualRequirements(
     qualifyingEntries
   }
 }
+
+/** Short labels for dashboard currency chips. */
+export type CurrencyChipKind = 'passenger' | 'night' | 'instrument'
+
+const CURRENCY_CHIP_LABELS: Record<CurrencyChipKind, string> = {
+  passenger: '90-day',
+  night: 'Night',
+  instrument: 'IFR',
+}
+
+/**
+ * Format an expiration date for chip copy: "Apr 12" or "Apr 12, 2027" when not this year.
+ */
+export function formatCurrencyChipDate(date: Date, referenceDate: Date = new Date()): string {
+  const exp = date instanceof Date ? date : new Date(date)
+  const ref = referenceDate instanceof Date ? referenceDate : new Date(referenceDate)
+  const includeYear = exp.getFullYear() !== ref.getFullYear()
+  return exp.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    ...(includeYear ? { year: 'numeric' } : {}),
+  })
+}
+
+/**
+ * Compact chip label for passenger / night / instrument currency.
+ * Examples: "90-day ✓ until Apr 12", "Night expires in 8 days", "IFR expired"
+ */
+export function formatCurrencyChip(
+  kind: CurrencyChipKind,
+  currency: CurrencyStatus | null | undefined,
+  referenceDate: Date = new Date()
+): string {
+  const label = CURRENCY_CHIP_LABELS[kind]
+  if (!currency) return `${label} —`
+
+  if (currency.status === 'expired' || !currency.isCurrent) {
+    return `${label} expired`
+  }
+
+  if (currency.status === 'expiring_soon') {
+    const days = currency.daysRemaining ?? 0
+    if (days <= 0) return `${label} expires today`
+    if (days === 1) return `${label} expires in 1 day`
+    return `${label} expires in ${days} days`
+  }
+
+  const until = formatCurrencyChipDate(currency.expirationDate, referenceDate)
+  return `${label} ✓ until ${until}`
+}

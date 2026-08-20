@@ -648,6 +648,6 @@ async function onCancel(id: string) {
     showToast(result.error, { type: 'error' })
     return
   }
-  showToast('Endorsement cancelled')
+  showToast('Endorsement cancelled', { type: 'info' })
 }
 </script>

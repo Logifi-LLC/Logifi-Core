@@ -55,7 +55,9 @@ async function handleImport() {
       showConfirm.value = false
       confirmResult.value = null
     } else if (result.imported > 0) {
-      showToast('Imported. Your catalog is growing — future Digifi scans will recognize more of your aircraft.')
+      showToast('Imported. Your catalog is growing — future Digifi scans will recognize more of your aircraft.', {
+        type: 'success',
+      })
       await navigateTo('/dashboard')
     }
   } catch (e: any) {

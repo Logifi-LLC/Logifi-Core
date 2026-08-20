@@ -109,7 +109,7 @@
                 <div
                   v-for="(feature, i) in standardFeatures"
                   :key="i"
-                  class="md:col-span-2 bg-white/10 backdrop-blur-md p-8 rounded-3xl border border-white/15 flex flex-col md:h-full shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)]"
+                  class="md:col-span-3 bg-white/10 backdrop-blur-md p-8 rounded-3xl border border-white/15 flex flex-col md:h-full shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)]"
                 >
                   <div class="w-12 h-12 bg-blue-50/70 rounded-xl flex items-center justify-center text-blue-600 mb-6 dark:bg-blue-50/70 dark:text-blue-600">
                     <Icon :name="feature.icon" size="24" />
@@ -127,12 +127,7 @@
                 <div
                   v-for="(feature, i) in featuresToCome"
                   :key="i"
-                  :class="[
-                    'bg-white/10 backdrop-blur-md p-8 rounded-3xl border border-white/15 flex flex-col md:h-full shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)]',
-                    i === 0 ? 'md:col-span-6' : '',
-                    i === 1 ? 'md:col-span-3' : '',
-                    i === 2 ? 'md:col-span-3' : '',
-                  ]"
+                  class="md:col-span-3 bg-white/10 backdrop-blur-md p-8 rounded-3xl border border-white/15 flex flex-col md:h-full shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)]"
                 >
                   <div class="w-12 h-12 bg-blue-50/70 rounded-xl flex items-center justify-center text-blue-600 mb-6 dark:bg-blue-50/70 dark:text-blue-600">
                     <Icon :name="feature.icon" size="24" />
@@ -233,32 +228,34 @@ const standardFeatures = [
   },
   {
     title: 'AC 120-78B design',
-    description: 'Signed rows are amended or voided, not edited. Audit trail and export follow AC 120-78B.',
+    description:
+      'Signed rows are amended or voided, not edited. Audit trail, signatures, and export follow AC 120-78B.',
     icon: 'ri:shield-check-line',
   },
   {
     title: 'Import & export',
-    description: 'Import CSV yourself, or request a reviewed transfer. Export PDF or CSV when you need to.',
+    description:
+      'Import CSV yourself, or request a reviewed transfer. Export CSV, JSON, or Form 8710 when you need to.',
     icon: 'ri:file-download-line',
+  },
+  {
+    title: 'iOS app',
+    description: 'Log flights, check currency, and scan pages from your phone.',
+    icon: 'ri:smartphone-line',
   },
 ] as const
 
 const featuresToCome = [
   {
-    title: 'Mobile App',
-    description: 'A native iOS app for your logbook on the go—log flights, check currency, and capture Digifi scans from your phone.',
-    icon: 'ri:smartphone-line'
-  },
-  {
     title: 'Student/Instructor Portals',
     description: 'Dedicated portals for flight training with progress tracking and collaborative logbook management.',
-    icon: 'ri:user-star-line'
+    icon: 'ri:user-star-line',
   },
   {
     title: 'Community feedback',
     description: 'Suggest features on GitHub or Discord.',
-    icon: 'ri:community-line'
-  }
+    icon: 'ri:community-line',
+  },
 ] as const
 
 </script>

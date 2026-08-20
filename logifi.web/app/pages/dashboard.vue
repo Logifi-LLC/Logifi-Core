@@ -5,7 +5,7 @@
     isIos
       ? 'h-dvh overflow-y-auto overscroll-y-contain transition-colors duration-300 font-quicksand'
       : 'min-h-screen overflow-y-auto transition-colors duration-300 font-quicksand',
-    theme === 'dark' ? 'bg-gray-950' : 'bg-gray-50'
+    isDarkMode ? 'bg-gray-950' : 'bg-gray-50'
   ]"
 >
   <!-- Auth Modal -->
@@ -438,7 +438,7 @@
             ref="catalogDrawerRef"
             :class="[
             'flex-shrink-0 rounded-2xl border text-left font-quicksand transition-all duration-300 flex flex-col',
-            theme === 'dark'
+            isDarkMode
               ? 'bg-gray-900 border-white/10 text-gray-200 shadow-md shadow-black/40'
               : 'bg-gray-100 border-gray-200 text-gray-800 shadow-sm',
             isIos
@@ -505,7 +505,7 @@
               v-if="isIos && iosCatalogBuilding"
               :class="[
                 'rounded-xl border px-4 py-8 text-center text-sm font-quicksand',
-                theme === 'dark'
+                isDarkMode
                   ? 'bg-white/5 border-white/10 text-gray-400'
                   : 'bg-white border-gray-200 text-gray-500'
               ]"
@@ -518,7 +518,7 @@
               :key="section.key"
               :class="[
                 'rounded-xl border px-4 py-4 transition-colors duration-300',
-                theme === 'dark'
+                isDarkMode
                   ? 'bg-white/5 border-white/10 shadow-sm shadow-black/20'
                   : 'bg-white border-gray-200 shadow-sm'
               ]"
@@ -1087,7 +1087,15 @@
                   </div>
                 </div>
     </div>
-              <Transition
+              <CurrencyStatusChips
+                v-if="showCurrencyChips && hasAnyEntriesForActiveLogbook"
+                :passenger-currency="passengerCurrency"
+                :night-currency="nightCurrency"
+                :instrument-currency="instrumentCurrency"
+                :is-dark-mode="isDarkMode"
+                @open="showCurrencyDashboard = true"
+              />
+<Transition
                 enter-active-class="transition ease-out duration-300"
                 enter-from-class="opacity-0 -translate-y-2"
                 enter-to-class="opacity-100 translate-y-0"
@@ -1343,18 +1351,25 @@
 
             <div
               v-if="filteredEntries.length === 0"
-                      :class="[
-                'mt-6 rounded-2xl border border-dashed p-10 text-center font-quicksand transition-colors duration-300',
-                      isDarkMode 
-                  ? 'bg-gray-900 border-white/10 text-gray-400 shadow-md shadow-black/40' 
-                  : 'bg-gray-100 border-gray-300 text-gray-500'
-                    ]"
+              :class="[
+                'mt-6 rounded-2xl border border-dashed font-quicksand transition-colors duration-300',
+                !hasAnyEntriesForActiveLogbook ? 'p-6' : 'p-10 text-center',
+                isDarkMode
+                  ? 'bg-gray-900 border-white/10 text-gray-400 shadow-md shadow-black/40'
+                  : 'bg-gray-100 border-gray-300 text-gray-500',
+              ]"
             >
               <template v-if="entriesHiddenOnlyByDateRange">
                 No entries in {{ dateRangeFilterSummary }}. Adjust the date range in Totals Overview above, or choose <strong>All time</strong> to see every entry.
               </template>
               <template v-else-if="!hasAnyEntriesForActiveLogbook">
-                No entries yet.
+                <LogbookEmptyState
+                  :is-dark-mode="isDarkMode"
+                  :is-simulator="activeLogbook === 'simulator'"
+                  @add-entry="toggleEntryForm()"
+                  @import-csv="showDashboardImportModal = true"
+                  @scan-digifi="openDigifiFromEmptyState"
+                />
               </template>
               <template v-else>
                 No entries match your current filters. Clear sidebar filters or search to see more entries.
@@ -4303,6 +4318,7 @@
       :clock-zone="clockZone"
       :available-metrics="availableTotalsMetrics"
       :selected-metrics="selectedTotalsMetrics"
+      :show-currency-chips="showCurrencyChips"
       :is-online="isOnline"
       :is-syncing="isSyncing"
       :sync-error="syncError"
@@ -4324,6 +4340,7 @@
       @set-clock-format="setClockFormat"
       @set-clock-zone="setClockZone"
       @toggle-metric="toggleTotalsMetric"
+      @toggle-currency-chips="toggleShowCurrencyChips"
       :logbook-layout-presets="logbookLayoutPresets"
       :active-logbook-layout-preset-id="activePresetId"
       :logbook-layout-picker-fields="pickerFields"
@@ -4349,6 +4366,14 @@
       @generate-8710="showForm8710Modal = true"
       @import-fcv="handleOpenFcvImportFromSettings"
       @flica-connection-changed="handleFlicaConnectionChanged"
+    />
+
+    <LogbookImportModal
+      :is-open="showDashboardImportModal"
+      :is-dark-mode="isDarkMode"
+      @close="showDashboardImportModal = false"
+      @import-provider-file="onDashboardImportProviderFile"
+      @request-transfer="onDashboardImportRequestTransfer"
     />
 
     <input
@@ -6800,7 +6825,10 @@ import IntegrityStatus from '../components/IntegrityStatus.vue'
 import ComplianceChecklist from '../components/ComplianceChecklist.vue'
 import CurrencyDashboard from '../components/CurrencyDashboard.vue'
 import DashboardSettingsModal from '../components/settings/DashboardSettingsModal.vue'
+import CurrencyStatusChips from '../components/logbook/CurrencyStatusChips.vue'
+import LogbookEmptyState from '../components/logbook/LogbookEmptyState.vue'
 import LogEntryList from '../components/logbook/LogEntryList.vue'
+import LogbookImportModal from '../components/import/LogbookImportModal.vue'
 import ProductUpdateHeadline from '../components/ProductUpdateHeadline.vue'
 import { useProductUpdates } from '../composables/useProductUpdates'
 import type { SettingsStackFrame, SettingsTabId } from '../components/settings/settingsNav'
@@ -7320,6 +7348,7 @@ async function onUserSessionReady(userId: string): Promise<void> {
 
   loadPilotProfilePrefs()
   loadSelectedTotalsMetrics()
+  loadShowCurrencyChips()
   loadColumnConfig()
   loadActiveLogbook()
   maybeAutoOpenEntryFormForEmptyLogbook()
@@ -7967,6 +7996,27 @@ const defaultSelectedMetrics: TotalsMetricKey[] = [
 
 // Selected metrics for Totals Overview (persisted in localStorage)
 const selectedTotalsMetrics = ref<TotalsMetricKey[]>(defaultSelectedMetrics)
+
+/** Preference: show currency chips under Totals Overview (default on). */
+const showCurrencyChips = ref(true)
+
+function loadShowCurrencyChips(): void {
+  if (!isBrowser) return
+  const saved = readUserScopedLocal(ACCOUNT_SCOPED_STORAGE_KEYS.SHOW_CURRENCY_CHIPS, true)
+  if (saved === '0' || saved === 'false') showCurrencyChips.value = false
+  else if (saved === '1' || saved === 'true') showCurrencyChips.value = true
+}
+
+function saveShowCurrencyChips(): void {
+  if (!isBrowser) return
+  writeUserScopedLocal(ACCOUNT_SCOPED_STORAGE_KEYS.SHOW_CURRENCY_CHIPS, showCurrencyChips.value ? '1' : '0')
+}
+
+function toggleShowCurrencyChips(): void {
+  showCurrencyChips.value = !showCurrencyChips.value
+  saveShowCurrencyChips()
+}
+
 
 // Load selected metrics from localStorage
 function loadSelectedTotalsMetrics(): void {
@@ -9996,6 +10046,26 @@ const csvFileInput = ref<HTMLInputElement | null>(null)
 // Form 8710 state
 const showForm8710Modal = ref(false)
 const showCurrencyDashboard = ref(false)
+const showDashboardImportModal = ref(false)
+
+function openDigifiFromEmptyState(): void {
+  showDashboardImportModal.value = false
+  if (isIos.value) {
+    void router.push('/digifi-eye')
+  } else {
+    void router.push({ path: '/logbook-builder', query: { digifi: 'open' } })
+  }
+}
+
+function onDashboardImportProviderFile(payload: { file: File; provider: ImportProviderKey }): void {
+  showDashboardImportModal.value = false
+  void handleSettingsProviderImportFile(payload)
+}
+
+function onDashboardImportRequestTransfer(): void {
+  showDashboardImportModal.value = false
+  openSettings('data')
+}
 const showForm8710View = ref(false)
 const form8710PreviewData = ref<Form8710Data | null>(null)
 const form8710Warnings = computed<string[]>(() => {
@@ -16482,7 +16552,8 @@ async function refreshDashboardData(options?: { forceFull?: boolean }): Promise<
     if (removed > 0) {
       await new Promise((resolve) => setTimeout(resolve, 300))
       showToast(
-        `Removed ${removed} ${removed === 1 ? 'entry' : 'entries'} deleted elsewhere`
+        `Removed ${removed} ${removed === 1 ? 'entry' : 'entries'} deleted elsewhere`,
+        { type: 'info' }
       )
     } else if (added > 0) {
       await new Promise((resolve) => setTimeout(resolve, 300))
@@ -16617,7 +16688,7 @@ async function handleFcvImported(payload: {
       : 'Schedule import complete.'
   fcvImportMessage.value = summary
   if (isIos.value) {
-    showToast(summary, 5000)
+    showToast(summary, { type: 'success', duration: 5000 })
   }
 }
 
@@ -16768,7 +16839,7 @@ async function testSupabaseConnection() {
     
     console.log('✅ Supabase connection successful!')
     console.log('Table exists, row count:', count)
-    showToast(`✅ Supabase connection successful!\n\nTable accessible. Row count: ${count ?? 0}`, { type: 'success' })
+    showToast(`Supabase connection successful!\n\nTable accessible. Row count: ${count ?? 0}`, { type: 'success' })
     return { success: true, data, count }
   } catch (err) {
     console.error('❌ Supabase test error:', err)

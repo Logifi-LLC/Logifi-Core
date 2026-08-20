@@ -93,6 +93,7 @@
       :clock-zone="clockZone"
       :available-metrics="availableMetrics"
       :selected-metrics="selectedMetrics"
+      :show-currency-chips="showCurrencyChips"
       :logbook-layout-presets="logbookLayoutPresets"
       :active-logbook-layout-preset-id="activeLogbookLayoutPresetId"
       :logbook-layout-picker-fields="logbookLayoutPickerFields"
@@ -101,6 +102,7 @@
       @set-clock-format="$emit('set-clock-format', $event)"
       @set-clock-zone="$emit('set-clock-zone', $event)"
       @toggle-metric="$emit('toggle-metric', $event)"
+      @toggle-currency-chips="$emit('toggle-currency-chips')"
       @apply-logbook-layout-preset="$emit('apply-logbook-layout-preset', $event)"
       @toggle-logbook-layout-field="$emit('toggle-logbook-layout-field', $event)"
       @logbook-layout-drag-start="$emit('logbook-layout-drag-start', $event)"
@@ -194,6 +196,7 @@ const props = defineProps<{
   clockZone: 'UTC' | 'Local'
   availableMetrics: { key: string; label: string }[]
   selectedMetrics: string[]
+  showCurrencyChips: boolean
   isIos: boolean
   logbookLayoutPresets: readonly EntryCardPreset[]
   activeLogbookLayoutPresetId: EntryCardPresetId
@@ -231,6 +234,7 @@ defineEmits<{
   'set-clock-format': [format: '12' | '24']
   'set-clock-zone': [zone: 'UTC' | 'Local']
   'toggle-metric': [key: string]
+  'toggle-currency-chips': []
   'apply-logbook-layout-preset': [id: EntryCardPresetId]
   'toggle-logbook-layout-field': [key: LogbookColumnKey]
   'logbook-layout-drag-start': [key: LogbookColumnKey]
