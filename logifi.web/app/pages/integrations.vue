@@ -106,7 +106,7 @@ import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
 import MarketingSecondaryPageShell from '~/components/MarketingSecondaryPageShell.vue'
 
-const { theme, applyDocumentTheme } = useTheme()
+const { theme, isDark, applyDocumentTheme } = useTheme()
 
 /** Marketing shell stays light (matches home); restore saved theme when leaving. */
 if (import.meta.client) {
@@ -114,7 +114,7 @@ if (import.meta.client) {
   onBeforeUnmount(() => {
     applyDocumentTheme(theme.value)
   })
-  watch(theme, () => {
+  watch([theme, isDark], () => {
     applyDocumentTheme('light')
   })
 }

@@ -211,7 +211,7 @@ import TechnicalTopographyBg from '~/components/TechnicalTopographyBg.vue'
 const route = useRoute()
 const router = useRouter()
 const { isAuthenticated, session } = useAuth()
-const { theme, applyDocumentTheme } = useTheme()
+const { theme, isDark, applyDocumentTheme } = useTheme()
 const { isIos } = useCapacitorPlatform()
 
 const isFromLanding = computed(() => route.query.from === 'landing')
@@ -226,9 +226,9 @@ if (import.meta.client) {
   onBeforeUnmount(() => {
     applyDocumentTheme(theme.value)
   })
-  watch(theme, (newTheme) => {
+  watch([theme, isDark], () => {
     if (isFromLanding.value) applyDocumentTheme('light')
-    else applyDocumentTheme(newTheme)
+    else applyDocumentTheme(theme.value)
   })
 }
 

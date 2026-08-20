@@ -539,6 +539,7 @@
 import { ref, watch, computed } from 'vue'
 import { useAuditTrail, type AuditLogWithDisplay } from '~/composables/useAuditTrail'
 import { useDataIntegrity } from '~/composables/useDataIntegrity'
+import { useToast } from '~/composables/useToast'
 import { supabase } from '~/lib/supabase'
 import IntegrityStatus from '~/components/IntegrityStatus.vue'
 
@@ -575,6 +576,7 @@ const {
 
 // Add validation composable
 const { validateEntry: validateEntryIntegrity } = useDataIntegrity()
+const { showToast } = useToast()
 
 const entryMetadata = ref<{
   isImported: boolean
@@ -833,7 +835,7 @@ const confirmRestore = async () => {
       getEntryRevisions(entryId, props.localEntry)
     ])
   } else {
-    alert(`Failed to restore: ${result.error}`)
+    showToast(`Failed to restore: ${result.error}`, { type: 'error' })
   }
 }
 

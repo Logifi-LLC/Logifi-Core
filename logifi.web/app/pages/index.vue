@@ -168,7 +168,7 @@ import AuthModal from '~/components/AuthModal.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
 
-const { theme, applyDocumentTheme } = useTheme()
+const { theme, isDark, applyDocumentTheme } = useTheme()
 
 /** Landing stays visually light and drops `html.dark` so `dark:` utilities do not apply (e.g. Auth modal). Restore saved theme when leaving. */
 if (import.meta.client) {
@@ -176,7 +176,7 @@ if (import.meta.client) {
   onBeforeUnmount(() => {
     applyDocumentTheme(theme.value)
   })
-  watch(theme, () => {
+  watch([theme, isDark], () => {
     applyDocumentTheme('light')
   })
 }

@@ -80,7 +80,7 @@ const lightningRateDollars = rateDollarsForMethod('lightning')
 const stripeMinCredits = minPagesForMethod('stripe')
 const lightningMinCredits = minPagesForMethod('lightning')
 
-const { theme, applyDocumentTheme } = useTheme()
+const { theme, isDark, applyDocumentTheme } = useTheme()
 
 /** Marketing shell stays light (matches home); restore saved theme when leaving. */
 if (import.meta.client) {
@@ -88,7 +88,7 @@ if (import.meta.client) {
   onBeforeUnmount(() => {
     applyDocumentTheme(theme.value)
   })
-  watch(theme, () => {
+  watch([theme, isDark], () => {
     applyDocumentTheme('light')
   })
 }

@@ -3004,7 +3004,7 @@
               type="button"
               class="rounded-lg px-3 py-2 text-sm font-semibold border"
               :class="isDarkMode ? 'border-gray-600 hover:bg-white/10' : 'border-gray-300 hover:bg-gray-100'"
-              @click="copyGuestSignQrUrl().then(() => showToast('Link copied'))"
+              @click="copyGuestSignQrUrl().then(() => showToast('Link copied', { type: 'success' }))"
             >
               Copy link
             </button>
@@ -8528,7 +8528,7 @@ watch(guestQrCompleted, async (done) => {
       }
     }
   }
-  showToast('Entry signed by guest instructor')
+  showToast('Entry signed by guest instructor', { type: 'success' })
 })
 
 async function startGuestSignOnPhone(): Promise<void> {
@@ -8604,11 +8604,11 @@ async function openSignEntryModal(): Promise<void> {
   await fetchInstructors()
   ensureDefaultSignInstructor()
   if (!(await isEntryCloudSynced(expandedEntryId.value))) {
-    showToast('Entry must sync to the cloud before signing')
+    showToast('Entry must sync to the cloud before signing', { type: 'error' })
     return
   }
   if (!requiresInstructorSignature(inlineEditEntry.value)) {
-    showToast('Signing is only available when Dual Received time is greater than zero')
+    showToast('Signing is only available when Dual Received time is greater than zero', { type: 'info' })
     return
   }
   if (!signInstructorId.value && mainInstructorsForSigning.value[0]) {
@@ -8637,7 +8637,7 @@ async function submitSignEntry(): Promise<void> {
   try {
     const result = await signLogEntry(entryId, signInstructorId.value, signPin.value)
     if (!result.success) {
-      showToast(result.error)
+      showToast(result.error, { type: 'error' })
       return
     }
     setLocalSignaturePending(entryId, false)
@@ -8651,7 +8651,7 @@ async function submitSignEntry(): Promise<void> {
         }
       }
     }
-    showToast('Entry signed — it can no longer be edited')
+    showToast('Entry signed — it can no longer be edited', { type: 'success' })
     closeSignEntryModal()
     closeInlineEditDrawer()
   } finally {
@@ -8664,14 +8664,14 @@ async function sendEntryForSigning(): Promise<void> {
   if (!entryId) return
   const instructorId = signInstructorId.value
   if (!instructorId) {
-    showToast('Select an instructor to send for signing')
+    showToast('Select an instructor to send for signing', { type: 'error' })
     return
   }
   isMarkingSignaturePending.value = true
   try {
     const cloud = await ensureCloudPendingSignature(entryId, instructorId)
     if (!cloud.ok) {
-      showToast(cloud.error, 6000)
+      showToast(cloud.error, { type: 'error', duration: 6000 })
       return
     }
     setLocalSignaturePending(entryId, true, instructorId)
@@ -8688,7 +8688,7 @@ async function sendEntryForSigning(): Promise<void> {
         }
       }
     }
-    showToast('Sent to instructor for signature')
+    showToast('Sent to instructor for signature', { type: 'success' })
     showSignatureFinishModal.value = false
     closeInlineEditDrawer()
   } finally {
@@ -8747,15 +8747,15 @@ function beginAmendSignedEntry(): void {
   const originalId = expandedEntryId.value
   if (!original || !originalId) return
   if (!isEntrySigned(originalId)) {
-    showToast('Only signed entries can be amended')
+    showToast('Only signed entries can be amended', { type: 'error' })
     return
   }
   if (isEntrySuperseded(originalId, logEntries.value)) {
-    showToast('This entry has already been superseded')
+    showToast('This entry has already been superseded', { type: 'error' })
     return
   }
   if (getAmendmentFor(originalId, logEntries.value)) {
-    showToast('An amendment already exists — edit or delete it first')
+    showToast('An amendment already exists — edit or delete it first', { type: 'error' })
     return
   }
 
@@ -8797,7 +8797,7 @@ function beginAmendSignedEntry(): void {
     ensureDefaultSignInstructor()
   }
 
-  showToast('Amendment draft created — correct and save. History will appear in the audit trail.')
+  showToast('Amendment draft created — correct and save. History will appear in the audit trail.', { type: 'success' })
 }
 
 /** Load cloud amendment for a signed original when local state is missing it. */
@@ -8845,15 +8845,15 @@ async function beginVoidSignedEntry(): Promise<void> {
   const originalId = expandedEntryId.value
   if (!original || !originalId) return
   if (!isEntrySigned(originalId)) {
-    showToast('Only signed entries can be voided')
+    showToast('Only signed entries can be voided', { type: 'error' })
     return
   }
   if (isEntrySuperseded(originalId, logEntries.value)) {
-    showToast('This entry has already been superseded')
+    showToast('This entry has already been superseded', { type: 'error' })
     return
   }
   if (getAmendmentFor(originalId, logEntries.value)) {
-    showToast('An amendment already exists — edit or delete it first')
+    showToast('An amendment already exists — edit or delete it first', { type: 'error' })
     return
   }
 
@@ -8861,12 +8861,9 @@ async function beginVoidSignedEntry(): Promise<void> {
   const remoteExisting = await fetchRemoteAmendmentForOriginal(originalId)
   if (remoteExisting) {
     await adoptEntryIntoLocalState(remoteExisting)
-    showToast(
-      remoteExisting.isVoid
+    showToast(remoteExisting.isVoid
         ? 'This entry was already voided — restored from the cloud'
-        : 'An amendment already exists — restored from the cloud',
-      5000
-    )
+        : 'An amendment already exists — restored from the cloud', { type: 'error', duration: 5000 })
     prepareInlineEditFromEntry(remoteExisting)
     return
   }
@@ -8876,7 +8873,7 @@ async function beginVoidSignedEntry(): Promise<void> {
   )
   if (reason === null) return
   if (!reason.trim()) {
-    showToast('A void reason is required')
+    showToast('A void reason is required', { type: 'error' })
     return
   }
 
@@ -8905,12 +8902,9 @@ async function beginVoidSignedEntry(): Promise<void> {
   const recovered = await fetchRemoteAmendmentForOriginal(originalId)
   if (recovered) {
     await adoptEntryIntoLocalState(recovered, newId)
-    showToast(
-      recovered.isVoid
+    showToast(recovered.isVoid
         ? 'This entry was already voided — restored from the cloud'
-        : 'An amendment already exists — restored from the cloud',
-      5000
-    )
+        : 'An amendment already exists — restored from the cloud', { type: 'error', duration: 5000 })
     prepareInlineEditFromEntry(recovered)
     return
   }
@@ -8926,7 +8920,7 @@ async function beginVoidSignedEntry(): Promise<void> {
   expandedEntryId.value = originalId
   inlineEditEntry.value = originalSnapshot
   isInlineCommercialMode.value = priorCommercialMode
-  showToast('Could not void entry — changes were not saved', 6000)
+  showToast('Could not void entry — changes were not saved', { type: 'error', duration: 6000 })
 }
 
 function ensureInlineOOOI(): void {
@@ -8948,7 +8942,7 @@ function toggleInlineOOOIMode(): void {
 async function saveInlineEdit(): Promise<boolean> {
   if (!inlineEditEntry.value || isSavingInlineEdit.value) return false
   if (isEntrySigned(inlineEditEntry.value.id) || isEntrySigned(expandedEntryId.value)) {
-    showToast('Signed entries cannot be edited')
+    showToast('Signed entries cannot be edited', { type: 'error' })
     return false
   }
   isSavingInlineEdit.value = true
@@ -8956,11 +8950,11 @@ async function saveInlineEdit(): Promise<boolean> {
   try {
   // Basic validation: date always required; aircraft/ident required only when not logging simulator time
   if (!inlineEditEntry.value.date) {
-    alert('Date is required.')
+    showToast('Date is required.', { type: 'error' })
     return false
   }
   if (!isLoggingSimTime(inlineEditEntry.value) && !(inlineEditEntry.value.registration || '').trim()) {
-    alert('Aircraft Identification is required for flight entries.')
+    showToast('Aircraft Identification is required for flight entries.', { type: 'error' })
     return false
   }
 
@@ -9133,16 +9127,13 @@ async function saveInlineEdit(): Promise<boolean> {
                 return true
               }
             }
-            showToast(
-              isAmendUniqueViolation
+            showToast(isAmendUniqueViolation
                 ? 'An amendment for this entry already exists in the cloud'
-                : (insertError.message || 'Failed to save entry to the cloud. Check your connection and try again.'),
-              6000
-            )
+                : (insertError.message || 'Failed to save entry to the cloud. Check your connection and try again.'), { type: 'error', duration: 6000 })
             return false
           }
           if (!insertResult) {
-            showToast('Insert returned no row (possible RLS or constraint issue)', 6000)
+            showToast('Insert returned no row (possible RLS or constraint issue)', { type: 'error', duration: 6000 })
             return false
           }
 
@@ -9399,7 +9390,7 @@ async function saveInlineEdit(): Promise<boolean> {
       console.error('[SaveInlineEdit] Error details:', err?.details)
       console.error('[SaveInlineEdit] Full error JSON:', JSON.stringify(error, null, 2))
       const userMessage = err?.message ?? (typeof error === 'string' ? error : 'Error saving entry. Please try again.')
-      alert(userMessage)
+      showToast(userMessage, { type: 'error' })
       return false
     }
   } else {
@@ -9569,14 +9560,11 @@ async function finalizeSaveWithSigningIntent(
     requiresInstructorSignature(savedEntry) && !isEntrySigned(savedEntry.id)
 
   if (!needsSig) {
-    showToast(
-      savedEntry.isVoid
+    showToast(savedEntry.isVoid
         ? 'Entry voided — original remains in audit history'
         : source === 'edit'
           ? 'Entry updated'
-          : 'Entry saved',
-      3000
-    )
+          : 'Entry saved', { type: 'success', duration: 3000 })
     if (source === 'edit') closeInlineEditDrawer()
     clearFormSigningFields()
     return
@@ -9585,18 +9573,18 @@ async function finalizeSaveWithSigningIntent(
   if (intent === 'sign') {
     if (isGuestSignerSelected.value) {
       // Should have used 'guest' intent; fall through guard
-      showToast('Use Sign with guest for fill-in instructors')
+      showToast('Use Sign with guest for fill-in instructors', { type: 'error' })
       prepareInlineEditFromEntry(savedEntry)
       return
     }
-    showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', 2000)
+    showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', { type: 'success', duration: 2000 })
     if (source === 'edit') {
       prepareInlineEditFromEntry(savedEntry)
     }
     const instructorId = signInstructorId.value
     const pin = signPin.value
     if (!instructorId || pin.trim().length < 4) {
-      showToast('Instructor and PIN are required to Save & Sign')
+      showToast('Instructor and PIN are required to Save & Sign', { type: 'error' })
       prepareInlineEditFromEntry(savedEntry)
       ensureDefaultSignInstructor()
       openSignatureFinishModal()
@@ -9611,7 +9599,7 @@ async function finalizeSaveWithSigningIntent(
       }
       const result = await signLogEntry(savedEntry.id, instructorId, pin)
       if (!result.success) {
-        showToast(result.error)
+        showToast(result.error, { type: 'error' })
         prepareInlineEditFromEntry(savedEntry)
         openSignatureFinishModal()
         return
@@ -9630,7 +9618,7 @@ async function finalizeSaveWithSigningIntent(
           }
         }
       }
-      showToast('Entry saved and signed')
+      showToast('Entry saved and signed', { type: 'success' })
       clearFormSigningFields()
       closeInlineEditDrawer()
     } finally {
@@ -9647,21 +9635,18 @@ async function finalizeSaveWithSigningIntent(
       await new Promise((r) => setTimeout(r, 400))
     }
     if (!(await isEntryCloudSynced(savedEntry.id))) {
-      showToast(
-        'Could not sync the entry for phone signing. Check your connection and try again.',
-        6000
-      )
+      showToast('Could not sync the entry for phone signing. Check your connection and try again.', { type: 'error', duration: 6000 })
       return
     }
     const ok = await createGuestSignQrSession(savedEntry.id)
     if (!ok) {
-      showToast(guestQrError.value || 'Could not create phone signing session', 6000)
+      showToast(guestQrError.value || 'Could not create phone signing session', { type: 'error', duration: 6000 })
     }
     return
   }
 
   if (intent === 'guest') {
-    showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', 2000)
+    showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', { type: 'success', duration: 2000 })
     if (source === 'edit') {
       prepareInlineEditFromEntry(savedEntry)
     }
@@ -9669,7 +9654,7 @@ async function finalizeSaveWithSigningIntent(
     pendingGuestSignatureBlob.value = null
     const name = guestSignerName.value.trim()
     if (!blob || !name) {
-      showToast('Guest name and drawn signature are required')
+      showToast('Guest name and drawn signature are required', { type: 'error' })
       prepareInlineEditFromEntry(savedEntry)
       return
     }
@@ -9686,7 +9671,7 @@ async function finalizeSaveWithSigningIntent(
         blob
       )
       if (!result.success) {
-        showToast(result.error, 6000)
+        showToast(result.error, { type: 'error', duration: 6000 })
         prepareInlineEditFromEntry(savedEntry)
         return
       }
@@ -9704,7 +9689,7 @@ async function finalizeSaveWithSigningIntent(
           }
         }
       }
-      showToast('Entry signed by guest instructor')
+      showToast('Entry signed by guest instructor', { type: 'success' })
       clearFormSigningFields()
       closeInlineEditDrawer()
     } finally {
@@ -9717,14 +9702,11 @@ async function finalizeSaveWithSigningIntent(
     const instructorId = signInstructorId.value || savedEntry.pendingInstructorId
     const cloud = await ensureCloudPendingSignature(savedEntry.id, instructorId)
     if (!cloud.ok) {
-      showToast(cloud.error, 6000)
+      showToast(cloud.error, { type: 'error', duration: 6000 })
       prepareInlineEditFromEntry(savedEntry)
       return
     }
-    showToast(
-      source === 'edit' ? 'Entry updated — pending signature' : 'Entry saved — pending signature',
-      3000
-    )
+    showToast(source === 'edit' ? 'Entry updated — pending signature' : 'Entry saved — pending signature', { type: 'success', duration: 3000 })
     if (source === 'edit') {
       closeInlineEditDrawer()
     }
@@ -9733,7 +9715,7 @@ async function finalizeSaveWithSigningIntent(
   }
 
   // Dual entry but no intent (shouldn't happen with new buttons) — keep finish modal as fallback
-  showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', 3000)
+  showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', { type: 'success', duration: 3000 })
   prepareInlineEditFromEntry(savedEntry)
   ensureDefaultSignInstructor()
   if (isOnline.value) void processQueue({ silent: true })
@@ -9752,12 +9734,12 @@ function clearFormSigningFields(): void {
 async function submitEntryWithIntent(intent: 'sign' | 'later' | 'none' | 'guest'): Promise<void> {
   if (intent === 'guest') {
     if (!canSaveAndSignNewEntry.value || !isGuestSignerSelected.value) {
-      showToast('Enter guest name and draw a signature to Sign with guest')
+      showToast('Enter guest name and draw a signature to Sign with guest', { type: 'error' })
       return
     }
     const blob = await addGuestPadRef.value?.toBlob('image/png')
     if (!blob) {
-      showToast('Draw a signature before signing')
+      showToast('Draw a signature before signing', { type: 'error' })
       return
     }
     pendingGuestSignatureBlob.value = blob
@@ -9772,24 +9754,24 @@ async function submitEntryWithIntent(intent: 'sign' | 'later' | 'none' | 'guest'
     }
     if (!canSaveAndSignNewEntry.value) {
       if (activeInstructorsForSigning.value.length === 0) {
-        showToast('Link an active instructor in Settings → Instructor Links, or choose Guest / fill-in')
+        showToast('Link an active instructor in Settings → Instructor Links, or choose Guest / fill-in', { type: 'error' })
       } else {
-        showToast('Select an instructor and enter their PIN to Save & Sign')
+        showToast('Select an instructor and enter their PIN to Save & Sign', { type: 'error' })
       }
       return
     }
   }
   if (intent === 'later') {
     if (isGuestSignerSelected.value) {
-      showToast('Guest instructors cannot use Save without Signing — use Sign with guest instead')
+      showToast('Guest instructors cannot use Save without Signing — use Sign with guest instead', { type: 'error' })
       return
     }
     if (activeInstructorsForSigning.value.length === 0) {
-      showToast('Link an active instructor in Settings → Instructor Links first')
+      showToast('Link an active instructor in Settings → Instructor Links first', { type: 'error' })
       return
     }
     if (!signInstructorId.value) {
-      showToast('Select an instructor to Save without Signing')
+      showToast('Select an instructor to Save without Signing', { type: 'error' })
       return
     }
   }
@@ -9808,12 +9790,12 @@ function onAddEntryFormSubmit(): void {
 async function saveInlineEditWithIntent(intent: 'sign' | 'later' | 'none' | 'guest'): Promise<void> {
   if (intent === 'guest') {
     if (!canSaveAndSignInlineEntry.value || !isGuestSignerSelected.value) {
-      showToast('Enter guest name and draw a signature to Sign with guest')
+      showToast('Enter guest name and draw a signature to Sign with guest', { type: 'error' })
       return
     }
     const blob = await inlineGuestPadRef.value?.toBlob('image/png')
     if (!blob) {
-      showToast('Draw a signature before signing')
+      showToast('Draw a signature before signing', { type: 'error' })
       return
     }
     pendingGuestSignatureBlob.value = blob
@@ -9828,24 +9810,24 @@ async function saveInlineEditWithIntent(intent: 'sign' | 'later' | 'none' | 'gue
     }
     if (!canSaveAndSignInlineEntry.value) {
       if (activeInstructorsForSigning.value.length === 0) {
-        showToast('Link an active instructor in Settings → Instructor Links, or choose Guest / fill-in')
+        showToast('Link an active instructor in Settings → Instructor Links, or choose Guest / fill-in', { type: 'error' })
       } else {
-        showToast('Select an instructor and enter their PIN to Save & Sign')
+        showToast('Select an instructor and enter their PIN to Save & Sign', { type: 'error' })
       }
       return
     }
   }
   if (intent === 'later') {
     if (isGuestSignerSelected.value) {
-      showToast('Guest instructors cannot use Save without Signing — use Sign with guest instead')
+      showToast('Guest instructors cannot use Save without Signing — use Sign with guest instead', { type: 'error' })
       return
     }
     if (activeInstructorsForSigning.value.length === 0) {
-      showToast('Link an active instructor in Settings → Instructor Links first')
+      showToast('Link an active instructor in Settings → Instructor Links first', { type: 'error' })
       return
     }
     if (!signInstructorId.value) {
-      showToast('Select an instructor to Save without Signing')
+      showToast('Select an instructor to Save without Signing', { type: 'error' })
       return
     }
   }
@@ -11594,9 +11576,7 @@ async function proceedWithImport(includeDuplicates: boolean): Promise<void> {
 
   if (result.imported === 0 && result.tagsUpdated === 0 && result.errors.length === 0) {
     const total = importPreviewStatistics.value.totalEntries
-    alert(
-      `Nothing new to import. Check "Import duplicate entries and flag them for review" to add all ${total} rows (duplicates will be flagged).`
-    )
+    showToast(`Nothing new to import. Check "Import duplicate entries and flag them for review" to add all ${total} rows (duplicates will be flagged).`, { type: 'info' })
     cancelImport()
     return
   }
@@ -11617,7 +11597,7 @@ async function proceedWithImport(includeDuplicates: boolean): Promise<void> {
       message += `\n... and ${result.errors.length - 5} more`
     }
   }
-  alert(message)
+  showToast(message, { type: result.errors.length > 0 ? 'error' : 'success' })
 
   cancelImport()
 }
@@ -11679,7 +11659,7 @@ async function processCSVFile(file: File, provider?: ImportProviderKey): Promise
     }
 
     if (parsed.rows.length === 0) {
-      alert('Import file is empty or could not be parsed.')
+      showToast('Import file is empty or could not be parsed.', { type: 'error' })
       return
     }
 
@@ -11755,7 +11735,7 @@ async function processCSVFile(file: File, provider?: ImportProviderKey): Promise
         }
         errorMsg += '\n\nCheck console for details.'
       }
-      alert(errorMsg)
+      showToast(errorMsg, { type: 'error' })
       return
     }
 
@@ -11781,7 +11761,7 @@ async function processCSVFile(file: File, provider?: ImportProviderKey): Promise
     initImportSimTypeOverrides()
   } catch (error) {
     console.error('Error importing file:', error)
-    alert(`Error importing file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    showToast(`Error importing file: ${error instanceof Error ? error.message : 'Unknown error'}`, { type: 'error' })
   }
 }
 
@@ -11810,12 +11790,12 @@ async function processJSONFile(file: File): Promise<void> {
     } else if (data.entries && Array.isArray(data.entries)) {
       entries = data.entries
     } else {
-      alert('JSON file format not recognized. Expected an array of entries or an object with an "entries" property.')
+      showToast('JSON file format not recognized. Expected an array of entries or an object with an "entries" property.', { type: 'error' })
       return
     }
     
     if (entries.length === 0) {
-      alert('No entries found in JSON file.')
+      showToast('No entries found in JSON file.', { type: 'error' })
       return
     }
     
@@ -11829,7 +11809,7 @@ async function processJSONFile(file: File): Promise<void> {
     }
     
     if (normalizedEntries.length === 0) {
-      alert('No valid entries found in JSON file.')
+      showToast('No valid entries found in JSON file.', { type: 'error' })
       return
     }
     
@@ -11848,7 +11828,7 @@ async function processJSONFile(file: File): Promise<void> {
     initImportSimTypeOverrides()
   } catch (error) {
     console.error('Error importing JSON:', error)
-    alert(`Error importing JSON file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    showToast(`Error importing JSON file: ${error instanceof Error ? error.message : 'Unknown error'}`, { type: 'error' })
   }
 }
 
@@ -11922,7 +11902,7 @@ async function handleImportDrop(event: DragEvent): Promise<void> {
     console.log('Processing as JSON')
     await processJSONFile(file)
   } else {
-    alert(`Please drop a CSV, TSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`)
+    showToast(`Please drop a CSV, TSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`, { type: 'error' })
   }
 }
 
@@ -11934,7 +11914,7 @@ async function handleSettingsImportFile(file: File): Promise<void> {
   } else if (fileName.endsWith('.json') || file.type === 'application/json') {
     await processJSONFile(file)
   } else {
-    alert(`Please choose a CSV, TSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`)
+    showToast(`Please choose a CSV, TSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`, { type: 'error' })
   }
 }
 
@@ -11955,7 +11935,7 @@ async function handleSettingsProviderImportFile(payload: {
   ) {
     await processCSVFile(file, provider)
   } else {
-    alert(`Please choose a CSV, TSV, or TXT file for provider import. Received: ${file.type || 'unknown type'}`)
+    showToast(`Please choose a CSV, TSV, or TXT file for provider import. Received: ${file.type || 'unknown type'}`, { type: 'error' })
   }
 }
 
@@ -13725,7 +13705,7 @@ async function saveFamilySimTypeSetting(familyName: string, type: '' | SimTypeKe
 async function renameAircraftFamily(canonicalFamilyKey: string, newFamilyName: string): Promise<void> {
   const trimmedNewName = newFamilyName.trim()
   if (!canonicalFamilyKey.trim() || !trimmedNewName) {
-    showToast('Enter a new family name')
+    showToast('Enter a new family name', { type: 'error' })
     return
   }
 
@@ -13740,7 +13720,7 @@ async function renameAircraftFamily(canonicalFamilyKey: string, newFamilyName: s
   const entriesToUpdate = getLogEntriesInFamily(canonicalFamilyKey)
 
   if (entriesToUpdate.length === 0) {
-    showToast('No log entries found for this family')
+    showToast('No log entries found for this family', { type: 'error' })
     return
   }
 
@@ -13883,11 +13863,11 @@ async function renameAircraftFamily(canonicalFamilyKey: string, newFamilyName: s
   closeRenameFamilyModal()
 
   if (!isAuthenticated.value || !user.value) {
-    showToast(`Updated ${entriesToUpdate.length} ${entriesToUpdate.length === 1 ? 'entry' : 'entries'} locally`)
+    showToast(`Updated ${entriesToUpdate.length} ${entriesToUpdate.length === 1 ? 'entry' : 'entries'} locally`, { type: 'success' })
   } else if (!supabaseOk) {
-    showToast('Name updated locally — sync may be needed')
+    showToast('Name updated locally — sync may be needed', { type: 'success' })
   } else {
-    showToast(`Renamed family on ${entriesToUpdate.length} ${entriesToUpdate.length === 1 ? 'entry' : 'entries'}`)
+    showToast(`Renamed family on ${entriesToUpdate.length} ${entriesToUpdate.length === 1 ? 'entry' : 'entries'}`, { type: 'success' })
   }
 }
 
@@ -13919,7 +13899,7 @@ async function confirmRenameFamily(): Promise<void> {
   }
 
   if (!renameFamilyCanonicalKey.value) {
-    showToast('Could not determine aircraft family — close and try again')
+    showToast('Could not determine aircraft family — close and try again', { type: 'error' })
     return
   }
 
@@ -14252,7 +14232,7 @@ async function toggleEntryFlag(entry: LogEntry): Promise<void> {
         })
         // Revert the change if save failed
         entry.flagged = !newFlaggedValue
-        alert(`Failed to save flagged status: ${error.message}\n\nCheck console for details.`)
+        showToast(`Failed to save flagged status: ${error.message}\n\nCheck console for details.`, { type: 'error' })
         return
       }
       
@@ -14263,7 +14243,7 @@ async function toggleEntryFlag(entry: LogEntry): Promise<void> {
       // Revert the change if save failed
       entry.flagged = !newFlaggedValue
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      alert(`Failed to save flagged status: ${errorMessage}\n\nCheck console for details.`)
+      showToast(`Failed to save flagged status: ${errorMessage}\n\nCheck console for details.`, { type: 'error' })
       return
     }
   }
@@ -15599,7 +15579,7 @@ async function submitEntry(): Promise<void> {
       ) {
         afterAddEntrySaveSuccess(savedEntry)
       } else {
-        showToast('Entry updated', 3000)
+        showToast('Entry updated', { type: 'success', duration: 3000 })
       }
     } else {
       afterAddEntrySaveSuccess(savedEntry)
@@ -15744,7 +15724,7 @@ async function removeEntry(id: string): Promise<void> {
 async function confirmAndDeleteEditing(): Promise<void> {
   if (!editingEntryId.value) return
   if (isEntrySigned(editingEntryId.value)) {
-    showToast('Signed entries cannot be deleted')
+    showToast('Signed entries cannot be deleted', { type: 'error' })
     return
   }
   const proceed = window.confirm('Delete this entry? This action cannot be undone.')
@@ -15757,7 +15737,7 @@ async function confirmAndDeleteEditing(): Promise<void> {
 
 async function confirmAndDeleteEntry(id: string): Promise<void> {
   if (isEntrySigned(id)) {
-    showToast('Signed entries cannot be deleted')
+    showToast('Signed entries cannot be deleted', { type: 'error' })
     return
   }
   const proceed = window.confirm('Delete this entry? This action cannot be undone.')
@@ -16469,12 +16449,12 @@ async function refreshDashboardData(options?: { forceFull?: boolean }): Promise<
     await checkOnlineStatus()
 
     if (!isAuthenticated.value || !user.value) {
-      showToast('Sign in to sync')
+      showToast('Sign in to sync', { type: 'error' })
       return
     }
 
     if (!isOnline.value) {
-      showToast('Offline — showing local data')
+      showToast('Offline — showing local data', { type: 'error' })
       return
     }
 
@@ -16506,17 +16486,17 @@ async function refreshDashboardData(options?: { forceFull?: boolean }): Promise<
       )
     } else if (added > 0) {
       await new Promise((resolve) => setTimeout(resolve, 300))
-      showToast(`Synced — ${added} new ${added === 1 ? 'entry' : 'entries'}`)
+      showToast(`Synced — ${added} new ${added === 1 ? 'entry' : 'entries'}`, { type: 'success' })
     } else if (queueCleared) {
       await new Promise((resolve) => setTimeout(resolve, 300))
-      showToast('Synced')
+      showToast('Synced', { type: 'success' })
     } else if (options?.forceFull) {
       await new Promise((resolve) => setTimeout(resolve, 300))
-      showToast('Full sync complete')
+      showToast('Full sync complete', { type: 'success' })
     }
   } catch (err) {
     console.error('[refreshDashboardData]', err)
-    showToast('Sync failed')
+    showToast('Sync failed', { type: 'error' })
   } finally {
     isDashboardRefreshing.value = false
   }
@@ -16782,18 +16762,18 @@ async function testSupabaseConnection() {
         hint: error.hint,
         code: error.code
       })
-      alert(`Connection failed: ${error.message}\n\nCheck console for details.`)
+      showToast(`Connection failed: ${error.message}\n\nCheck console for details.`, { type: 'error' })
       return { success: false, error }
     }
     
     console.log('✅ Supabase connection successful!')
     console.log('Table exists, row count:', count)
-    alert(`✅ Supabase connection successful!\n\nTable accessible. Row count: ${count ?? 0}`)
+    showToast(`✅ Supabase connection successful!\n\nTable accessible. Row count: ${count ?? 0}`, { type: 'success' })
     return { success: true, data, count }
   } catch (err) {
     console.error('❌ Supabase test error:', err)
     const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-    alert(`Test error: ${errorMessage}\n\nCheck console for details.`)
+    showToast(`Test error: ${errorMessage}\n\nCheck console for details.`, { type: 'error' })
     return { success: false, error: err }
   }
 }
@@ -16811,10 +16791,10 @@ if (typeof window !== 'undefined') {
     const { resetMigration } = await import('../utils/migrateLocalStorage')
     const result = await resetMigration(user.value.id)
     if (result.success) {
-      alert('Migration reset complete! Refreshing page...')
+      showToast('Migration reset complete! Refreshing page...', { type: 'success' })
       window.location.reload()
     } else {
-      alert(`Error: ${result.error}`)
+      showToast(`Error: ${result.error}`, { type: 'error' })
     }
   }
   
@@ -16827,11 +16807,11 @@ if (typeof window !== 'undefined') {
     const { remigrateCrewProfiles } = await import('../utils/migrateLocalStorage')
     const result = await remigrateCrewProfiles(user.value.id)
     if (result.success) {
-      alert(`Re-migrated ${result.migrated} crew profiles! Refreshing page...`)
+      showToast(`Re-migrated ${result.migrated} crew profiles! Refreshing page...`, { type: 'success' })
       await loadCrewProfiles() // Reload from Supabase
       window.location.reload()
     } else {
-      alert(`Error: ${result.error}`)
+      showToast(`Error: ${result.error}`, { type: 'error' })
     }
   }
   
@@ -16844,11 +16824,11 @@ if (typeof window !== 'undefined') {
     const { migrateCrewFromLogEntries } = await import('../utils/migrateLocalStorage')
     const result = await migrateCrewFromLogEntries(user.value.id, logEntries.value)
     if (result.success) {
-      alert(`Migrated ${result.migrated} crew profiles from log entries! Refreshing page...`)
+      showToast(`Migrated ${result.migrated} crew profiles from log entries! Refreshing page...`, { type: 'success' })
       await loadCrewProfiles() // Reload from Supabase
       window.location.reload()
     } else {
-      alert(`Error: ${result.error}`)
+      showToast(`Error: ${result.error}`, { type: 'error' })
     }
   }
   
@@ -16862,9 +16842,9 @@ if (typeof window !== 'undefined') {
     const result = await findDuplicateCrewProfiles(user.value.id)
     if (result.duplicates.length > 0) {
       console.log('Duplicate crew profiles found:', result.duplicates)
-      alert(`Found ${result.duplicates.length} duplicate(s):\n${result.duplicates.map(d => d.names.join(' / ')).join('\n')}`)
+      showToast(`Found ${result.duplicates.length} duplicate(s):\n${result.duplicates.map(d => d.names.join(' / ')).join('\n')}`, { type: 'info' })
     } else {
-      alert('No duplicate crew profiles found!')
+      showToast('No duplicate crew profiles found!', { type: 'info' })
     }
     return result
   }
@@ -16876,7 +16856,7 @@ if (typeof window !== 'undefined') {
       return
     }
     if (!canonicalName || !duplicateName) {
-      alert('Usage: mergeCrewProfiles("Canonical Name", "Duplicate Name")')
+      showToast('Usage: mergeCrewProfiles("Canonical Name", "Duplicate Name")', { type: 'info' })
       return
     }
     
@@ -16926,12 +16906,12 @@ if (typeof window !== 'undefined') {
     
     const result = await mergeDuplicateCrewProfiles(user.value.id, canonicalName, duplicateName, updateLogEntries)
     if (result.success) {
-      alert(`Merged "${duplicateName}" into "${canonicalName}"! Refreshing page...`)
+      showToast(`Merged "${duplicateName}" into "${canonicalName}"! Refreshing page...`, { type: 'success' })
       await loadCrewProfiles() // Reload from Supabase
       await loadEntries({ mode: 'full' }) // Reload entries
       window.location.reload()
     } else {
-      alert(`Error: ${result.error}`)
+      showToast(`Error: ${result.error}`, { type: 'error' })
     }
     return result
   }

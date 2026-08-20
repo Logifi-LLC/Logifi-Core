@@ -151,23 +151,22 @@ export default defineNuxtConfig({
           content:
             'Free, FAA-compliant digital pilot logbooks. AI-powered paper scanning with Digifi, airline schedule import, and open-source transparency.',
         },
-        { property: 'og:image', content: '/images/app-logo-mark.png' },
-        { name: 'twitter:card', content: 'summary' },
+        { property: 'og:image', content: '/images/og-image.png' },
+        { property: 'og:image:width', content: '1200' },
+        { property: 'og:image:height', content: '630' },
+        { name: 'twitter:card', content: 'summary_large_image' },
         { name: 'twitter:title', content: 'Logifi — Digital Pilot Logbooks' },
         {
           name: 'twitter:description',
           content:
             'Free, FAA-compliant digital pilot logbooks. AI-powered paper scanning with Digifi, airline schedule import, and open-source transparency.',
         },
-        { name: 'twitter:image', content: '/images/app-logo-mark.png' },
+        { name: 'twitter:image', content: '/images/og-image.png' },
       ],
       link: [
-        { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon.png' },
-        { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/favicon.png' },
-        { rel: 'apple-touch-icon', sizes: '180x180', href: '/images/app-logo-mark.png' },
-        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: 'anonymous' },
-        { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap' }
+        { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32.png' },
+        { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/favicon-16.png' },
+        { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
       ]
     }
   }

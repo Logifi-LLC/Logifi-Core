@@ -387,9 +387,9 @@ if (import.meta.client) {
   onBeforeUnmount(() => {
     applyDocumentTheme(theme.value)
   })
-  watch(theme, (t) => {
+  watch([theme, isDark], () => {
     if (isFromLanding.value) applyDocumentTheme('light')
-    else applyDocumentTheme(t)
+    else applyDocumentTheme(theme.value)
   })
 }
 

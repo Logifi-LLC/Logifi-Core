@@ -163,6 +163,7 @@ import SettingsUpdatesTab from './tabs/SettingsUpdatesTab.vue'
 import SettingsDataTab from './tabs/SettingsDataTab.vue'
 import SettingsComplianceTab from './tabs/SettingsComplianceTab.vue'
 import type { SettingsStackFrame } from './settingsNav'
+import type { Theme } from '~/composables/useTheme'
 import type { LogbookColumnConfig, LogbookColumnKey } from '~/utils/logbookTypes'
 import type { ImportProviderKey } from '../../../shared/import'
 import type { EntryCardPreset, EntryCardPresetId } from '~/utils/entryCardPresets'
@@ -188,7 +189,7 @@ const props = defineProps<{
   emailError?: string
   passwordSuccess?: string
   passwordError?: string
-  theme: 'dark' | 'light'
+  theme: Theme
   clockFormat: '12' | '24'
   clockZone: 'UTC' | 'Local'
   availableMetrics: { key: string; label: string }[]
@@ -226,7 +227,7 @@ defineEmits<{
   'open-currency': []
   'update-email': []
   'update-password': []
-  'set-theme': [theme: 'dark' | 'light']
+  'set-theme': [theme: Theme]
   'set-clock-format': [format: '12' | '24']
   'set-clock-zone': [zone: 'UTC' | 'Local']
   'toggle-metric': [key: string]

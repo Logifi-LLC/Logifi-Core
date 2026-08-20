@@ -7,12 +7,13 @@
             <SegmentedControl
               :model-value="theme"
               :options="[
-                { value: 'dark', label: 'Dark' },
+                { value: 'system', label: 'System' },
                 { value: 'light', label: 'Light' },
+                { value: 'dark', label: 'Dark' },
               ]"
               :is-dark-mode="isDarkMode"
               aria-label="Theme"
-              @update:model-value="$emit('set-theme', $event as 'dark' | 'light')"
+              @update:model-value="$emit('set-theme', $event as 'system' | 'light' | 'dark')"
             />
           </SettingsRow>
         </div>
@@ -93,13 +94,14 @@ import SettingsRow from '../SettingsRow.vue'
 import SegmentedControl from '../SegmentedControl.vue'
 import SettingsListGroup from '../SettingsListGroup.vue'
 import SettingsLogbookLayoutSection from '../SettingsLogbookLayoutSection.vue'
+import type { Theme } from '~/composables/useTheme'
 import type { LogbookColumnConfig, LogbookColumnKey } from '~/utils/logbookTypes'
 import type { EntryCardPreset, EntryCardPresetId } from '~/utils/entryCardPresets'
 
 defineProps<{
   isDarkMode: boolean
   isIos: boolean
-  theme: 'dark' | 'light'
+  theme: Theme
   clockFormat: '12' | '24'
   clockZone: 'UTC' | 'Local'
   availableMetrics: { key: string; label: string }[]
@@ -111,7 +113,7 @@ defineProps<{
 }>()
 
 defineEmits<{
-  'set-theme': [theme: 'dark' | 'light']
+  'set-theme': [theme: Theme]
   'set-clock-format': [format: '12' | '24']
   'set-clock-zone': [zone: 'UTC' | 'Local']
   'toggle-metric': [key: string]
