@@ -4,6 +4,7 @@
     v-if="isOpen"
     class="app-modal-overlay flex items-center justify-center bg-black/50"
     @click.self="close"
+    @keydown.escape.stop="close"
   >
     <div
       :class="[
@@ -162,6 +163,13 @@
                   </span>
                 </div>
               </div>
+
+              <p
+                v-if="passengerHint"
+                :class="['text-sm font-quicksand pt-1', isDarkMode ? 'text-gray-300' : 'text-gray-700']"
+              >
+                {{ passengerHint }}
+              </p>
             </div>
           </div>
 
@@ -272,6 +280,13 @@
                   </span>
                 </div>
               </div>
+
+              <p
+                v-if="nightHint"
+                :class="['text-sm font-quicksand pt-1', isDarkMode ? 'text-gray-300' : 'text-gray-700']"
+              >
+                {{ nightHint }}
+              </p>
             </div>
           </div>
 
@@ -371,6 +386,13 @@
                   </span>
                 </div>
               </div>
+
+              <p
+                v-if="instrumentHint"
+                :class="['text-sm font-quicksand pt-1', isDarkMode ? 'text-gray-300' : 'text-gray-700']"
+              >
+                {{ instrumentHint }}
+              </p>
             </div>
           </div>
 
@@ -424,6 +446,7 @@
 import { computed } from 'vue'
 import type { CurrencyStatusType } from '~/utils/logbookTypes'
 import type { CurrencyStatus, AnnualCurrencyStatus } from '~/utils/logbookTypes'
+import { formatCurrencyDeficitHint } from '~/utils/currencyCalculator'
 
 interface Props {
   isOpen: boolean
@@ -449,6 +472,20 @@ const emit = defineEmits<{
 const close = () => {
   emit('close')
 }
+
+const passengerHint = computed(() =>
+  props.passengerCurrency
+    ? formatCurrencyDeficitHint('passenger', props.passengerCurrency)
+    : null
+)
+const nightHint = computed(() =>
+  props.nightCurrency ? formatCurrencyDeficitHint('night', props.nightCurrency) : null
+)
+const instrumentHint = computed(() =>
+  props.instrumentCurrency
+    ? formatCurrencyDeficitHint('instrument', props.instrumentCurrency)
+    : null
+)
 
 const getStatusIcon = (status: CurrencyStatusType | undefined): string => {
   if (!status) return 'ri:question-line'

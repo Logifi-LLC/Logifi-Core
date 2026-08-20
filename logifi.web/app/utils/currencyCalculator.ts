@@ -339,3 +339,138 @@ export function calculateAnnualRequirements(
     qualifyingEntries
   }
 }
+
+export type CurrencyHintKind = 'passenger' | 'night' | 'instrument'
+
+function formatHintDate(date: DateTime, reference: DateTime): string {
+  if (date.year === reference.year) return date.toFormat('LLL d')
+  return date.toFormat('LLL d, yyyy')
+}
+
+function oldestQualifyingDate(status: CurrencyStatus): DateTime | null {
+  let oldest: DateTime | null = null
+  for (const entry of status.qualifyingEntries) {
+    const date = DateTime.fromISO(entry.date)
+    if (!date.isValid) continue
+    if (!oldest || date < oldest) oldest = date
+  }
+  return oldest
+}
+
+function agingOutDate(
+  kind: CurrencyHintKind,
+  status: CurrencyStatus,
+  reference: DateTime
+): DateTime | null {
+  if (status.status === 'expiring_soon') {
+    const expiration = DateTime.fromJSDate(status.expirationDate)
+    return expiration.isValid ? expiration : null
+  }
+
+  const oldest = oldestQualifyingDate(status)
+  if (!oldest) return null
+  const agedOut = kind === 'instrument' ? oldest.plus({ months: 6 }) : oldest.plus({ days: 90 })
+  if (agedOut <= reference) return null
+  return agedOut
+}
+
+function countPhrase(count: number, singular: string, pluralWord: string, useMore: boolean): string {
+  const noun = count === 1 ? singular : pluralWord
+  return useMore ? `${count} more ${noun}` : `${count} ${noun}`
+}
+
+function joinClauses(parts: string[]): string {
+  if (parts.length === 0) return ''
+  if (parts.length === 1) return parts[0]
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`
+  return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`
+}
+
+function passengerNightNeedParts(
+  kind: 'passenger' | 'night',
+  takeoffs: number,
+  landings: number
+): string[] {
+  const needTakeoffs = Math.max(0, 3 - takeoffs)
+  const needLandings = Math.max(0, 3 - landings)
+  const landingNoun = kind === 'night' ? 'night landing' : 'landing'
+  const landingPlural = kind === 'night' ? 'night landings' : 'landings'
+  const takeoffNoun = kind === 'night' ? 'night takeoff' : 'takeoff'
+  const takeoffPlural = kind === 'night' ? 'night takeoffs' : 'takeoffs'
+  const parts: string[] = []
+
+  if (needLandings > 0 && needTakeoffs > 0 && needTakeoffs <= needLandings) {
+    parts.push(countPhrase(needLandings, landingNoun, landingPlural, landings > 0))
+    return parts
+  }
+
+  if (needTakeoffs > 0) {
+    parts.push(countPhrase(needTakeoffs, takeoffNoun, takeoffPlural, takeoffs > 0))
+  }
+  if (needLandings > 0) {
+    parts.push(countPhrase(needLandings, landingNoun, landingPlural, landings > 0))
+  }
+  return parts
+}
+
+function instrumentNeedParts(status: CurrencyStatus): string[] {
+  const approaches = status.approaches ?? 0
+  const holding = status.holdingProcedures ?? 0
+  const needApproaches = Math.max(0, 6 - approaches)
+  const parts: string[] = []
+  if (needApproaches > 0) {
+    parts.push(countPhrase(needApproaches, 'approach', 'approaches', approaches > 0))
+  }
+  if (holding <= 0) {
+    parts.push('a holding procedure')
+  }
+  return parts
+}
+
+/**
+ * One-line advice for expired / expiring-soon currency cards.
+ * Returns null when the requirement is fully current.
+ */
+export function formatCurrencyDeficitHint(
+  kind: CurrencyHintKind,
+  status: CurrencyStatus,
+  referenceDate?: Date
+): string | null {
+  if (status.status === 'current') return null
+
+  const reference = referenceDate
+    ? DateTime.fromJSDate(referenceDate)
+    : DateTime.now()
+
+  let parts: string[]
+  if (kind === 'instrument') {
+    parts = instrumentNeedParts(status)
+  } else {
+    parts = passengerNightNeedParts(kind, status.takeoffs ?? 0, status.landings ?? 0)
+  }
+
+  if (status.status === 'expiring_soon') {
+    if (kind === 'passenger') {
+      parts = [
+        countPhrase(3, 'takeoff', 'takeoffs', true),
+        countPhrase(3, 'landing', 'landings', true),
+      ]
+    } else if (kind === 'night') {
+      parts = [countPhrase(3, 'night landing', 'night landings', true)]
+    } else {
+      parts = [countPhrase(6, 'approach', 'approaches', true)]
+    }
+    const byDate = agingOutDate(kind, status, reference)
+    const clause = joinClauses(parts)
+    if (!clause) return null
+    if (byDate) return `Do ${clause} by ${formatHintDate(byDate, reference)} to stay current`
+    return `Do ${clause} to stay current`
+  }
+
+  if (parts.length === 0) return null
+
+  const byDate = agingOutDate(kind, status, reference)
+  const clause = joinClauses(parts)
+  if (byDate) return `Need ${clause} by ${formatHintDate(byDate, reference)}`
+  return `Need ${clause}`
+}

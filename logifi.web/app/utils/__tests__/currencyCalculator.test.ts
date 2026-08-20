@@ -3,7 +3,8 @@ import {
   calculatePassengerCurrency,
   calculateNightCurrency,
   calculateInstrumentCurrency,
-  calculateAnnualRequirements
+  calculateAnnualRequirements,
+  formatCurrencyDeficitHint
 } from '../currencyCalculator'
 import type { LogEntry } from '../logbookTypes'
 
@@ -332,6 +333,104 @@ describe('currencyCalculator', () => {
       const result = calculateAnnualRequirements(entries, today)
       
       expect(result.qualifyingEntries.length).toBe(1)
+    })
+  })
+
+  describe('formatCurrencyDeficitHint', () => {
+    it('returns null when passenger currency is fully current', () => {
+      const today = new Date('2024-03-15')
+      const entries = [createTestEntry({
+        date: '2024-03-01',
+        performance: {
+          dayTakeoffs: 3,
+          dayLandings: 3,
+          nightTakeoffs: null,
+          nightLandings: null,
+          approachCount: null,
+          holdingProcedures: null
+        }
+      })]
+      const status = calculatePassengerCurrency(entries, today)
+      expect(formatCurrencyDeficitHint('passenger', status, today)).toBeNull()
+    })
+
+    it('says how many night landings are still needed before the remaining one ages out', () => {
+      const today = new Date('2024-03-20')
+      const entries = [createTestEntry({
+        date: '2024-01-03',
+        flightConditions: ['nightVfr'],
+        flightTime: {
+          total: 1,
+          pic: 1,
+          sic: null,
+          dual: null,
+          solo: null,
+          night: 0.5,
+          actualInstrument: null,
+          simulatedInstrument: null,
+          crossCountry: null
+        },
+        performance: {
+          dayTakeoffs: 0,
+          dayLandings: 0,
+          nightTakeoffs: 0,
+          nightLandings: 1,
+          approachCount: null,
+          holdingProcedures: null
+        }
+      })]
+      const status = calculateNightCurrency(entries, today)
+      expect(status.status).toBe('expired')
+      expect(formatCurrencyDeficitHint('night', status, today)).toBe(
+        'Need 2 more night landings by Apr 2'
+      )
+    })
+
+    it('omits the date when the window is empty', () => {
+      const today = new Date('2024-03-20')
+      const status = calculateNightCurrency([], today)
+      expect(formatCurrencyDeficitHint('night', status, today)).toBe('Need 3 night landings')
+    })
+
+    it('tells an expiring-soon pilot to repeat landings before the expiration date', () => {
+      const today = new Date('2024-03-15')
+      const entryDate = new Date(today)
+      entryDate.setDate(entryDate.getDate() - 65)
+      const entries = [createTestEntry({
+        date: entryDate.toISOString().split('T')[0],
+        flightConditions: ['nightVfr'],
+        flightTime: {
+          total: 1,
+          pic: 1,
+          sic: null,
+          dual: null,
+          solo: null,
+          night: 1,
+          actualInstrument: null,
+          simulatedInstrument: null,
+          crossCountry: null
+        },
+        performance: {
+          dayTakeoffs: 0,
+          dayLandings: 0,
+          nightTakeoffs: 0,
+          nightLandings: 3,
+          approachCount: null,
+          holdingProcedures: null
+        }
+      })]
+      const status = calculateNightCurrency(entries, today)
+      expect(status.status).toBe('expiring_soon')
+      const hint = formatCurrencyDeficitHint('night', status, today)
+      expect(hint).toMatch(/^Do 3 more night landings by .+ to stay current$/)
+    })
+
+    it('includes holding when instrument currency is short', () => {
+      const today = new Date('2024-03-15')
+      const status = calculateInstrumentCurrency([], today)
+      expect(formatCurrencyDeficitHint('instrument', status, today)).toBe(
+        'Need 6 approaches and a holding procedure'
+      )
     })
   })
 })

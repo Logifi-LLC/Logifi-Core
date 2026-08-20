@@ -1219,11 +1219,13 @@
             </p>
       </div>
               <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end w-full lg:w-auto">
-                <div class="relative w-full sm:w-60">
+                <div class="relative w-full sm:w-72">
               <input 
+                    id="logbook-search"
+                    ref="logbookSearchInput"
                     v-model="searchTerm"
                     type="search"
-                    placeholder="Search entries"
+                    placeholder="N12345, KORD, 2024-06, night, crew"
                     :class="[
                       'w-full rounded-lg border px-5 py-2 focus:outline-none focus:ring-2 font-quicksand transition-colors duration-300',
                       isDarkMode 
@@ -1237,6 +1239,27 @@
           </div>
               </div>
         </div>
+            <div
+              v-if="searchChips.length"
+              class="flex flex-wrap gap-2 mt-3"
+            >
+              <button
+                v-for="chip in searchChips"
+                :key="chip.id"
+                type="button"
+                :class="[
+                  'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-quicksand transition-all',
+                  isDarkMode
+                    ? 'border-blue-500 bg-blue-900/40 text-blue-300 hover:bg-blue-900/60'
+                    : 'border-blue-500 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                ]"
+                :aria-label="`Remove ${chip.label} filter`"
+                @click="removeSearchChip(chip.index)"
+              >
+                <span>{{ chip.label }}</span>
+                <Icon name="ri:close-line" size="14" />
+              </button>
+            </div>
 
             <div class="flex w-full items-center justify-between gap-4">
             <div class="flex w-full items-center justify-between gap-4">
@@ -2732,6 +2755,20 @@
                   {{ showAuditTrailSidebar ? 'Hide History' : 'View History' }}
                 </button>
                 <button
+                  v-if="canRepeatExpandedEntry"
+                  type="button"
+                  @click.stop="beginRepeatExpandedEntry"
+                  :class="[
+                    'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold font-quicksand transition-colors',
+                    isDarkMode
+                      ? 'border border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600'
+                      : 'border border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200'
+                  ]"
+                >
+                  <Icon name="ri:repeat-line" size="14" />
+                  Repeat this flight
+                </button>
+                <button
                   v-if="canAmendExpandedEntry"
                   type="button"
                   @click.stop="beginAmendSignedEntry"
@@ -3110,6 +3147,20 @@
               <h2 class="text-lg font-semibold font-quicksand truncate" :class="[isDarkMode ? 'text-gray-100' : 'text-gray-900']">
                 {{ activeLogbook === 'simulator' ? (editingEntryId ? 'Edit Simulator Entry' : 'New Simulator Entry') : (editingEntryId ? 'Edit Log Entry' : 'New Log Entry') }}
               </h2>
+              <button
+                v-if="!editingEntryId && lastRepeatableEntry"
+                type="button"
+                @click="beginRepeatLastFlight"
+                :class="[
+                  'flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-quicksand font-medium transition-colors',
+                  isDarkMode
+                    ? 'border border-gray-600 hover:bg-gray-700 text-gray-200'
+                    : 'border border-gray-300 hover:bg-gray-200 text-gray-800'
+                ]"
+              >
+                <Icon name="ri:repeat-line" size="14" />
+                Repeat last
+              </button>
               <span
                 v-if="activeLogbook === 'simulator'"
                 :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded flex-shrink-0', isDarkMode ? 'bg-blue-900/40 text-blue-300 border border-blue-700/50' : 'bg-blue-100 text-blue-700 border border-blue-200']"
@@ -6756,6 +6807,14 @@ import { useDataIntegrity } from '../composables/useDataIntegrity'
 import { useValidation } from '../composables/useValidation'
 import { useOffline } from '../composables/useOffline'
 import { useToast } from '../composables/useToast'
+import { useDashboardKeyboard } from '../composables/useDashboardKeyboard'
+import {
+  parseAviationSearchQuery,
+  entryMatchesAviationQuery,
+  removeQueryToken,
+} from '../utils/aviationSearchQuery'
+import { buildRepeatedEntry } from '../utils/repeatFlight'
+import { formatCurrencyDeficitHint } from '../utils/currencyCalculator'
 import { useFlightSigning } from '../composables/useFlightSigning'
 import { useRoster } from '../composables/useRoster'
 import { requiresInstructorSignature } from '../utils/flightSigning'
@@ -7490,7 +7549,6 @@ onUnmounted(() => {
     document.removeEventListener('visibilitychange', handleAppResume)
     if (isIos.value) {
       setIosOverlayScrollLock(false)
-      window.removeEventListener('keydown', handleIosOverlayEscape)
       document.documentElement.style.overflow = ''
       document.documentElement.style.overflowX = ''
       document.body.style.overflow = ''
@@ -8274,6 +8332,13 @@ const setXcTimeManuallySet = (value: boolean) => {
 }
 const searchTerm = ref('')
 const debouncedSearchTerm = ref('')
+const logbookSearchInput = ref<HTMLInputElement | null>(null)
+const searchChips = computed(() => parseAviationSearchQuery(searchTerm.value).chips)
+
+function removeSearchChip(index: number): void {
+  searchTerm.value = removeQueryToken(searchTerm.value, index)
+}
+
 watch(searchTerm, (value) => {
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
   searchDebounceTimer = setTimeout(() => {
@@ -8465,6 +8530,12 @@ const canAmendExpandedEntry = computed(() => {
 })
 
 const canVoidExpandedEntry = computed(() => canAmendExpandedEntry.value)
+
+const canRepeatExpandedEntry = computed(() => {
+  const entry = inlineEditEntry.value
+  if (!entry) return false
+  return entry.isVoid !== true
+})
 
 const isExpandedEntryPending = computed(() => {
   if (isExpandedEntrySigned.value) return false
@@ -12919,28 +12990,67 @@ function ensureDefaultSignInstructor(): void {
   })
 }
 
-function toggleEntryForm(): void {
-  const willBeOpen = !isEntryFormOpen.value
-  isEntryFormOpen.value = willBeOpen
-
-  // If opening the Add Entry form, close any open inline edit and clear post-save state
-  if (willBeOpen) {
-    closeAuditTrailSidebar()
-    expandedEntryId.value = null
-    inlineEditEntry.value = null
-    isInlineCommercialMode.value = false
-    successMessage.value = null
-    editingEntryId.value = null
-    Object.assign(newEntry, createBlankEntry())
-    showSimSection.value = activeLogbook.value === 'simulator'
-    ensureDefaultSignInstructor()
-  } else {
-    closeAuditTrailSidebar()
-    // If closing, reset form if needed
-    if (!editingEntryId.value) {
-      resetForm()
-    }
+function openAddEntryForm(prefill?: EditableLogEntry): void {
+  closeAuditTrailSidebar()
+  expandedEntryId.value = null
+  inlineEditEntry.value = null
+  isInlineCommercialMode.value = false
+  resetForm()
+  if (prefill) {
+    Object.assign(newEntry, prefill)
   }
+  showSimSection.value = (prefill?.logbookType ?? activeLogbook.value) === 'simulator'
+  isCommercialMode.value = false
+  ensureDefaultSignInstructor()
+  isEntryFormOpen.value = true
+}
+
+function closeAddEntryForm(): void {
+  if (!isEntryFormOpen.value) return
+  closeAuditTrailSidebar()
+  isEntryFormOpen.value = false
+  if (!editingEntryId.value) {
+    resetForm()
+  }
+}
+
+function toggleEntryForm(): void {
+  if (isEntryFormOpen.value) {
+    closeAddEntryForm()
+  } else {
+    openAddEntryForm()
+  }
+}
+
+const lastRepeatableEntry = computed(() => {
+  const superseded = supersededIdSet.value
+  const candidates = logEntries.value.filter((entry) => {
+    if (entry.isVoid) return false
+    if (superseded.has(entry.id)) return false
+    if (getEntryLogbookType(entry) !== activeLogbook.value) return false
+    return true
+  })
+  return sortEntriesByDateAndOOOI(candidates)[0] ?? null
+})
+
+function beginRepeatExpandedEntry(): void {
+  const original = inlineEditEntry.value
+  if (!original || original.isVoid) return
+  const today = DateTime.now().toISODate()
+  if (!today) return
+  const draft = buildRepeatedEntry(original, today)
+  cancelInlineEdit()
+  openAddEntryForm(draft)
+  showToast('Repeated flight — date set to today. Add times and save.')
+}
+
+function beginRepeatLastFlight(): void {
+  const last = lastRepeatableEntry.value
+  if (!last) return
+  const today = DateTime.now().toISODate()
+  if (!today) return
+  openAddEntryForm(buildRepeatedEntry(last, today))
+  showToast('Repeated last flight — date set to today. Add times and save.')
 }
 
 function toggleCatalogSection(key: CatalogKey): void {
@@ -13383,19 +13493,6 @@ function closeCatalogDrawer(): void {
   isCatalogDrawerOpen.value = false
 }
 
-function handleIosOverlayEscape(e: KeyboardEvent) {
-  if (e.key !== 'Escape') return
-  if (showCrewProfileModal.value) {
-    closeCrewProfileModal()
-  } else if (isCatalogDrawerOpen.value) {
-    closeCatalogDrawer()
-  } else if (isEntryFormOpen.value) {
-    toggleEntryForm()
-  } else if (expandedEntryId.value !== null) {
-    cancelInlineEdit()
-  }
-}
-
 const isIosOverlayOpen = computed(
   () =>
     isCatalogDrawerOpen.value ||
@@ -13415,11 +13512,6 @@ function setIosOverlayScrollLock(open: boolean): void {
 watch(isIosOverlayOpen, (open) => {
   if (!isBrowser || !isIos.value) return
   setIosOverlayScrollLock(open)
-  if (open) {
-    window.addEventListener('keydown', handleIosOverlayEscape)
-  } else {
-    window.removeEventListener('keydown', handleIosOverlayEscape)
-  }
 })
 
 useCatalogDrawerGestures({
@@ -16967,6 +17059,26 @@ if (typeof window !== 'undefined') {
   }
 }
 
+useDashboardKeyboard({
+  searchInput: logbookSearchInput,
+  searchTerm,
+  isEntryFormOpen,
+  expandedEntryId,
+  showCurrencyDashboard,
+  showCrewProfileModal,
+  isCatalogDrawerOpen,
+  showSettingsModal,
+  showAuthModal,
+  openAddEntry: () => openAddEntryForm(),
+  closeAddEntry: closeAddEntryForm,
+  cancelInlineEdit,
+  closeCrewProfileModal,
+  closeCatalogDrawer,
+  closeCurrencyDashboard: () => {
+    showCurrencyDashboard.value = false
+  },
+})
+
 onMounted(async () => {
   loadClockPrefs()
   normalizeAndAutofillCategories()
@@ -16990,24 +17102,12 @@ onMounted(async () => {
   }
   document.addEventListener('click', handleClickOutside)
   
-  // Handle Escape key to close edit panel or add entry panel
-  const handleEscapeKey = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') {
-      if (expandedEntryId.value !== null) {
-        cancelInlineEdit()
-      } else if (isEntryFormOpen.value) {
-        toggleEntryForm()
-      }
-    }
-  }
-  document.addEventListener('keydown', handleEscapeKey)
   clockTimer = window.setInterval(() => {
     now.value = new Date()
   }, 1000)
   
   return () => {
     document.removeEventListener('click', handleClickOutside)
-    document.removeEventListener('keydown', handleEscapeKey)
     if (clockTimer !== null) {
       clearInterval(clockTimer)
       clockTimer = null
@@ -17093,7 +17193,7 @@ function getEntryLogbookType(entry: LogEntry): 'flight' | 'simulator' {
 }
 
 interface CatalogFilterContext {
-  term: string
+  parsedQuery: ReturnType<typeof parseAviationSearchQuery>
   activeAircraft: Set<string>
   activeAirports: Set<string>
   activePilots: Set<string>
@@ -17108,7 +17208,7 @@ interface CatalogFilterContext {
 
 function buildCatalogFilterContext(): CatalogFilterContext {
   return {
-    term: debouncedSearchTerm.value.trim().toLowerCase(),
+    parsedQuery: parseAviationSearchQuery(debouncedSearchTerm.value),
     activeAircraft: new Set(getActiveFilterKeys(selectedFilters.aircraft).map((k) => k.toUpperCase())),
     activeAirports: new Set(getActiveFilterKeys(selectedFilters.airports).map((k) => k.toUpperCase())),
     activePilots: new Set(getActiveFilterKeys(selectedFilters.pilots)),
@@ -17130,22 +17230,7 @@ function entryPassesCatalogAndSearchFilters(
 ): boolean {
   if (getEntryLogbookType(entry) !== ctx.activeLogbookType) return false
 
-  const matchesTerm =
-    ctx.term.length === 0 ||
-    [
-      entry.aircraftMakeModel,
-      entry.registration,
-      entry.departure,
-      entry.destination,
-      entry.route,
-      entry.remarks,
-      entry.trainingElements,
-    ]
-      .join(' ')
-      .toLowerCase()
-      .includes(ctx.term)
-
-  if (!matchesTerm) return false
+  if (!entryMatchesAviationQuery(entry, ctx.parsedQuery, ctx.classifiedAirports)) return false
 
   if (ctx.activeAircraft.size > 0) {
     const reg = (entry.registration || '').toUpperCase()
@@ -18002,17 +18087,23 @@ const settingsCurrencySummary = computed(() => [
   {
     label: '90-day passenger',
     current: passengerCurrency.value?.isCurrent ?? false,
-    detail: `${passengerCurrency.value?.takeoffs || 0}/3 takeoffs`,
+    detail:
+      (passengerCurrency.value && formatCurrencyDeficitHint('passenger', passengerCurrency.value)) ||
+      `${passengerCurrency.value?.takeoffs || 0}/3 takeoffs`,
   },
   {
     label: '90-day night',
     current: nightCurrency.value?.isCurrent ?? false,
-    detail: `${nightCurrency.value?.landings || 0}/3 landings`,
+    detail:
+      (nightCurrency.value && formatCurrencyDeficitHint('night', nightCurrency.value)) ||
+      `${nightCurrency.value?.landings || 0}/3 landings`,
   },
   {
     label: '6-month instrument',
     current: instrumentCurrency.value?.isCurrent ?? false,
-    detail: `${instrumentCurrency.value?.approaches || 0}/6 approaches`,
+    detail:
+      (instrumentCurrency.value && formatCurrencyDeficitHint('instrument', instrumentCurrency.value)) ||
+      `${instrumentCurrency.value?.approaches || 0}/6 approaches`,
   },
 ])
 

@@ -1,4 +1,5 @@
 // Barrel: export all utils for logifi-core package consumers
+export * from './aviationSearchQuery'
 export * from './currencyCalculator'
 export * from './duplicateDetection'
 export * from './form8710Calculator'
@@ -9,5 +10,6 @@ export * from '../../shared/logbookDataBridge'
 export * from './logbookDownload'
 export * from './migrateLocalStorage'
 export * from './nightTimeCalculator'
+export * from './repeatFlight'
 export * from './solarCalculator'
 export * from './validation'
