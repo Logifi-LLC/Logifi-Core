@@ -1088,7 +1088,7 @@
                 </div>
     </div>
               <CurrencyStatusChips
-                v-if="showCurrencyChips && hasAnyEntriesForActiveLogbook"
+                v-if="shouldShowCurrencyChips(showCurrencyChips) && hasAnyEntriesForActiveLogbook"
                 :passenger-currency="passengerCurrency"
                 :night-currency="nightCurrency"
                 :instrument-currency="instrumentCurrency"
@@ -4318,7 +4318,7 @@
       :clock-zone="clockZone"
       :available-metrics="availableTotalsMetrics"
       :selected-metrics="selectedTotalsMetrics"
-      :show-currency-chips="showCurrencyChips"
+      :show-currency-chips="showCurrencyChips === true"
       :is-online="isOnline"
       :is-syncing="isSyncing"
       :sync-error="syncError"
@@ -6717,6 +6717,8 @@ import { aircraftEngineDisplay } from '../../shared/aircraftLookupLocal'
 import { useAirportLookup } from '../composables/useAirportLookup'
 import type { AirportInfo } from '../composables/useAirportLookup'
 import { getPilotInitialsFromName } from '../utils/pilotProfile'
+import { getDisplayedPilotInitials, shouldShowCurrencyChips } from '../utils/dashboardHydration'
+import { markAppReady } from '../utils/appReady'
 import {
   formatEntryAirportCode,
   getTotalTimeColorClass,
@@ -7224,6 +7226,8 @@ interface LoadEntriesOptions {
   mode?: InboundSyncMode
   /** Skip inbound sync when a recent sync completed (resume/reconnect). */
   skipIfFresh?: boolean
+  /** Apply IndexedDB (and local prefs already loaded) without waiting on inbound sync. */
+  localOnly?: boolean
 }
 
 let logEntriesSideEffectTimer: ReturnType<typeof setTimeout> | null = null
@@ -7344,16 +7348,23 @@ async function onUserSessionReady(userId: string): Promise<void> {
     }
   }
 
-  await loadEntries({ mode: 'auto' })
-
+  loadClockPrefs()
   loadPilotProfilePrefs()
   loadSelectedTotalsMetrics()
   loadShowCurrencyChips()
   loadColumnConfig()
   loadActiveLogbook()
+
+  try {
+    await loadEntries({ localOnly: true })
+  } finally {
+    void markAppReady()
+  }
+
   maybeAutoOpenEntryFormForEmptyLogbook()
   startBackgroundSync()
 
+  void loadEntries({ mode: 'auto' })
   void loadDeferredUserData()
 }
 
@@ -7434,8 +7445,9 @@ watch(dashboardFcvConnected, (c) => {
 watch(authLoading, (loading) => {
   if (!loading && !isAuthenticated.value) {
     showAuthModal.value = true
+    void markAppReady()
   }
-})
+}, { immediate: true })
 
 // Initialize IndexedDB and scroll handlers on mount
 onMounted(async () => {
@@ -7997,14 +8009,14 @@ const defaultSelectedMetrics: TotalsMetricKey[] = [
 // Selected metrics for Totals Overview (persisted in localStorage)
 const selectedTotalsMetrics = ref<TotalsMetricKey[]>(defaultSelectedMetrics)
 
-/** Preference: show currency chips under Totals Overview (default on). */
-const showCurrencyChips = ref(true)
+/** Preference: show currency chips under Totals Overview (default on). Null until local pref is read. */
+const showCurrencyChips = ref<boolean | null>(null)
 
 function loadShowCurrencyChips(): void {
   if (!isBrowser) return
   const saved = readUserScopedLocal(ACCOUNT_SCOPED_STORAGE_KEYS.SHOW_CURRENCY_CHIPS, true)
   if (saved === '0' || saved === 'false') showCurrencyChips.value = false
-  else if (saved === '1' || saved === 'true') showCurrencyChips.value = true
+  else showCurrencyChips.value = true
 }
 
 function saveShowCurrencyChips(): void {
@@ -8013,7 +8025,7 @@ function saveShowCurrencyChips(): void {
 }
 
 function toggleShowCurrencyChips(): void {
-  showCurrencyChips.value = !showCurrencyChips.value
+  showCurrencyChips.value = showCurrencyChips.value !== true
   saveShowCurrencyChips()
 }
 
@@ -10498,7 +10510,9 @@ function getExportFilenameSegment(): string {
   return ''
 }
 
-const pilotInitials = computed(() => getPilotInitialsFromName(pilotProfile.name))
+const pilotInitials = computed(() =>
+  getDisplayedPilotInitials(pilotProfile.name, pilotProfileLoaded.value)
+)
 // Catalog filters
 const selectedFilters = reactive({
   aircraft: {} as Record<string, boolean>, // key: tail (e.g., N123AB)
@@ -16413,6 +16427,10 @@ async function loadEntriesInternal(options: LoadEntriesOptions = {}): Promise<nu
       }
     } catch (error) {
       console.error('[LoadEntries] Error loading from IndexedDB:', error)
+    }
+
+    if (options.localOnly) {
+      return inboundRemovedCount
     }
 
     if (isAuthenticated.value && user.value) {

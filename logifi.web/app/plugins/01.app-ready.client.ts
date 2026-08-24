@@ -1,27 +1,9 @@
-import { Capacitor } from '@capacitor/core'
 import { lockNativeViewportZoom } from '~/composables/useCapacitorPlatform'
+import { hideNativeSplashNow, isDashboardPath, markAppReady, removeHtmlSplashOnce } from '~/utils/appReady'
 
-const FALLBACK_MS = 4000
+const FALLBACK_MS = 6000
 
-function removeHtmlSplash(): void {
-  document.getElementById('app-splash')?.remove()
-}
-
-async function hideNativeSplash(): Promise<void> {
-  if (!Capacitor.isNativePlatform()) return
-
-  try {
-    const { SplashScreen } = await import('@capacitor/splash-screen')
-    await SplashScreen.hide()
-  } catch (error) {
-    console.warn('[app-ready] SplashScreen.hide failed:', error)
-  }
-}
-
-export async function markAppReady(): Promise<void> {
-  removeHtmlSplash()
-  await hideNativeSplash()
-}
+export { markAppReady }
 
 export default defineNuxtPlugin((nuxtApp) => {
   lockNativeViewportZoom()
@@ -29,25 +11,19 @@ export default defineNuxtPlugin((nuxtApp) => {
   const { initAuth } = useAuth()
   void initAuth()
 
-  let htmlSplashRemoved = false
-
-  const removeHtmlSplashOnce = () => {
-    if (htmlSplashRemoved) return
-    htmlSplashRemoved = true
-    removeHtmlSplash()
-  }
-
   // Native splash must not wait for auth — dismiss as soon as JS runs.
-  void hideNativeSplash()
+  void hideNativeSplashNow()
 
   nuxtApp.hook('app:mounted', () => {
+    const path = window.location.pathname
+    // Dashboard holds the HTML splash until local prefs/IndexedDB hydrate.
+    if (isDashboardPath(path)) return
     removeHtmlSplashOnce()
   })
 
   const scheduleFallback = () => {
     window.setTimeout(() => {
-      removeHtmlSplashOnce()
-      void hideNativeSplash()
+      void markAppReady()
     }, FALLBACK_MS)
   }
 

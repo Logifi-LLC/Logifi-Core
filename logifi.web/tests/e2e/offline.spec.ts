@@ -6,9 +6,10 @@ test.describe('Offline Functionality', () => {
     await page.waitForLoadState('domcontentloaded')
   })
 
-  test('removes HTML splash after the app mounts', async ({ page }) => {
+  test('removes HTML splash after local dashboard hydrate (or fallback timeout)', async ({ page }) => {
     await page.goto('/dashboard')
     await page.waitForLoadState('domcontentloaded')
+    // /dashboard may keep #app-splash until IndexedDB/prefs hydrate; still must dismiss within the fallback window.
     await expect(page.locator('#app-splash')).toHaveCount(0, { timeout: 10000 })
   })
 
