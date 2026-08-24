@@ -20,7 +20,7 @@ function mountCell(modelValue = '', isEditing = true) {
 describe('LogbookBuilderCell overwrite mode', () => {
   it('does not replace the cell on the second key when overwrite is false', async () => {
     const wrapper = mountCell('S')
-    const input = wrapper.find('input')
+    const input = wrapper.find('textarea')
     const vm = wrapper.vm as { beginEdit: (o: { overwrite: boolean }) => void }
 
     vm.beginEdit({ overwrite: false })
@@ -35,7 +35,7 @@ describe('LogbookBuilderCell overwrite mode', () => {
 
   it('places the caret at the end when overwrite is false', async () => {
     const wrapper = mountCell('Hanryul Park AT 145 FLG')
-    const input = wrapper.find('input').element as HTMLInputElement
+    const input = wrapper.find('textarea').element as HTMLInputElement
     const vm = wrapper.vm as { beginEdit: (o: { overwrite: boolean }) => void }
 
     vm.beginEdit({ overwrite: false })
@@ -47,7 +47,7 @@ describe('LogbookBuilderCell overwrite mode', () => {
 
   it('replaces the cell with a single character when overwrite is true', async () => {
     const wrapper = mountCell('S')
-    const input = wrapper.find('input')
+    const input = wrapper.find('textarea')
     const vm = wrapper.vm as { beginEdit: (o: { overwrite: boolean }) => void }
 
     vm.beginEdit({ overwrite: true })

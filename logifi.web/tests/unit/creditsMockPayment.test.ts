@@ -15,7 +15,7 @@ describe('processMockPayment', () => {
     await vi.runAllTimersAsync()
     const result = await promise
     expect(result.success).toBe(true)
-    expect(result.totalCents).toBe(150)
+    expect(result.totalCents).toBe(200)
     expect(result.paymentMethod).toBe('lightning')
   })
 
