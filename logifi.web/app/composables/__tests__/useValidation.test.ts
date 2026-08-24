@@ -88,10 +88,8 @@ describe('useValidation', () => {
     const { validateEntry, validationErrors, validationWarnings, hasErrors, hasWarnings } = useValidation()
     
     // Create entry with invalid data (future date - should be an error)
-    const futureDate = new Date()
-    futureDate.setDate(futureDate.getDate() + 1)
     const entry = createTestEntry({
-      date: futureDate.toISOString().split('T')[0]
+      date: '2099-01-01'
     })
     
     await validateEntry(entry)

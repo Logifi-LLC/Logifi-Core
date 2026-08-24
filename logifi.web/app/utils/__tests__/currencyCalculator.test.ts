@@ -10,6 +10,13 @@ import {
 import type { CurrencyStatus, LogEntry } from '../logbookTypes'
 
 describe('currencyCalculator', () => {
+  const localYmd = (d: Date) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+
   const createTestEntry = (overrides: Partial<LogEntry>): LogEntry => ({
     id: 'test-id',
     date: '2024-01-01',
@@ -61,14 +68,14 @@ describe('currencyCalculator', () => {
 
     it('should return current status when requirement is met', () => {
       const entries: LogEntry[] = []
-      const today = new Date('2024-03-15')
+      const today = new Date(2024, 2, 15)
       
       // Create 3 entries with takeoffs and landings within 90 days
       for (let i = 0; i < 3; i++) {
         const date = new Date(today)
         date.setDate(date.getDate() - (i * 10)) // 0, 10, 20 days ago
         entries.push(createTestEntry({
-          date: date.toISOString().split('T')[0],
+          date: localYmd(date),
           performance: {
             dayTakeoffs: 1,
             dayLandings: 1,
@@ -90,14 +97,14 @@ describe('currencyCalculator', () => {
 
     it('should return expired status when entries are older than 90 days', () => {
       const entries: LogEntry[] = []
-      const today = new Date('2024-03-15')
+      const today = new Date(2024, 2, 15)
       
       // Create entries 100 days ago
       const oldDate = new Date(today)
       oldDate.setDate(oldDate.getDate() - 100)
       
       entries.push(createTestEntry({
-        date: oldDate.toISOString().split('T')[0],
+        date: localYmd(oldDate),
         performance: {
           dayTakeoffs: 10,
           dayLandings: 10,
@@ -116,12 +123,12 @@ describe('currencyCalculator', () => {
 
     it('should calculate expiration date correctly', () => {
       const entries: LogEntry[] = []
-      const today = new Date('2024-03-15')
+      const today = new Date(2024, 2, 15)
       const entryDate = new Date(today)
       entryDate.setDate(entryDate.getDate() - 30) // 30 days ago
       
       entries.push(createTestEntry({
-        date: entryDate.toISOString().split('T')[0],
+        date: localYmd(entryDate),
         performance: {
           dayTakeoffs: 3,
           dayLandings: 3,
@@ -139,17 +146,17 @@ describe('currencyCalculator', () => {
       const expectedExpiration = new Date(entryDate)
       expectedExpiration.setDate(expectedExpiration.getDate() + 90)
       
-      expect(result.expirationDate.getTime()).toBeCloseTo(expectedExpiration.getTime(), -4) // Within a day
+      expect(result.expirationDate.toDateString()).toBe(expectedExpiration.toDateString())
     })
 
     it('should return expiring_soon status when less than 30 days remaining', () => {
       const entries: LogEntry[] = []
-      const today = new Date('2024-03-15')
+      const today = new Date(2024, 2, 15)
       const entryDate = new Date(today)
       entryDate.setDate(entryDate.getDate() - 65) // 65 days ago (25 days remaining)
       
       entries.push(createTestEntry({
-        date: entryDate.toISOString().split('T')[0],
+        date: localYmd(entryDate),
         performance: {
           dayTakeoffs: 3,
           dayLandings: 3,
@@ -177,14 +184,14 @@ describe('currencyCalculator', () => {
 
     it('should return current status when night requirement is met', () => {
       const entries: LogEntry[] = []
-      const today = new Date('2024-03-15')
+      const today = new Date(2024, 2, 15)
       
       // Create 3 entries with night takeoffs and landings
       for (let i = 0; i < 3; i++) {
         const date = new Date(today)
         date.setDate(date.getDate() - (i * 10))
         entries.push(createTestEntry({
-          date: date.toISOString().split('T')[0],
+          date: localYmd(date),
           flightConditions: ['nightVfr'],
           performance: {
             dayTakeoffs: 0,
@@ -207,12 +214,12 @@ describe('currencyCalculator', () => {
 
     it('should identify night entries by flight conditions', () => {
       const entries: LogEntry[] = []
-      const today = new Date('2024-03-15')
+      const today = new Date(2024, 2, 15)
       const entryDate = new Date(today)
       entryDate.setDate(entryDate.getDate() - 10)
       
       entries.push(createTestEntry({
-        date: entryDate.toISOString().split('T')[0],
+        date: localYmd(entryDate),
         flightConditions: ['nightVfr'],
         performance: {
           dayTakeoffs: 0,
@@ -241,12 +248,12 @@ describe('currencyCalculator', () => {
 
     it('should return current status when instrument requirement is met', () => {
       const entries: LogEntry[] = []
-      const today = new Date('2024-03-15')
+      const today = new Date(2024, 2, 15)
       const entryDate = new Date(today)
       entryDate.setMonth(entryDate.getMonth() - 2) // 2 months ago
       
       entries.push(createTestEntry({
-        date: entryDate.toISOString().split('T')[0],
+        date: localYmd(entryDate),
         flightConditions: ['IFR'],
         flightTime: {
           total: 2.0,
@@ -279,12 +286,12 @@ describe('currencyCalculator', () => {
 
     it('should be current with 6+ approaches and holding even without intercept/track in remarks', () => {
       const entries: LogEntry[] = []
-      const today = new Date('2024-03-15')
+      const today = new Date(2024, 2, 15)
       const entryDate = new Date(today)
       entryDate.setMonth(entryDate.getMonth() - 2)
       
       entries.push(createTestEntry({
-        date: entryDate.toISOString().split('T')[0],
+        date: localYmd(entryDate),
         flightConditions: ['IFR'],
         performance: {
           dayTakeoffs: 0,
@@ -315,20 +322,20 @@ describe('currencyCalculator', () => {
 
     it('should filter entries within the last year', () => {
       const entries: LogEntry[] = []
-      const today = new Date('2024-03-15')
+      const today = new Date(2024, 2, 15)
       
       // Entry within last year
       const recentDate = new Date(today)
       recentDate.setMonth(recentDate.getMonth() - 6)
       entries.push(createTestEntry({
-        date: recentDate.toISOString().split('T')[0]
+        date: localYmd(recentDate)
       }))
       
       // Entry older than a year
       const oldDate = new Date(today)
       oldDate.setFullYear(oldDate.getFullYear() - 2)
       entries.push(createTestEntry({
-        date: oldDate.toISOString().split('T')[0]
+        date: localYmd(oldDate)
       }))
       
       const result = calculateAnnualRequirements(entries, today)

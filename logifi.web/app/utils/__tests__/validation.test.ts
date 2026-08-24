@@ -66,10 +66,8 @@ describe('validation', () => {
     })
 
     it('should error for future dates', () => {
-      const futureDate = new Date()
-      futureDate.setDate(futureDate.getDate() + 1)
       const entry = createTestEntry({
-        date: futureDate.toISOString().split('T')[0]
+        date: '2099-01-01'
       })
       
       const results = validateDate(entry)
@@ -484,7 +482,7 @@ describe('validation', () => {
         destination: 'KLGA',
         flightTime: {
           total: 2.0,
-          pic: null,
+          pic: 2.0,
           sic: null,
           dual: null,
           solo: null,
