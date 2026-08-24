@@ -54,7 +54,7 @@ describe('useCurrency', () => {
   it('should calculate currency for entries', () => {
     const { calculateAllCurrency, passengerCurrency, isLoading } = useCurrency()
     
-    const today = new Date('2024-03-15')
+    const today = new Date(2024, 2, 15)
     const entries: LogEntry[] = []
     
     // Create entries with takeoffs and landings
@@ -62,7 +62,7 @@ describe('useCurrency', () => {
       const date = new Date(today)
       date.setDate(date.getDate() - (i * 10))
       entries.push(createTestEntry({
-        date: date.toISOString().split('T')[0],
+        date: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`,
         performance: {
           dayTakeoffs: 1,
           dayLandings: 1,

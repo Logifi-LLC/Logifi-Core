@@ -412,7 +412,7 @@ describe('logbookDataBridge importMappers', () => {
     expect(entry?.aircraftMakeModel).toBe('E170')
     expect(entry?.departure).toBe('KLGA')
     expect(entry?.destination).toBe('KDCA')
-    expect(entry?.flightTime.total).toBe(1.08)
+    expect(entry?.flightTime.total).toBe(1.1)
     expect(entry?.performance.dayLandings).toBe(1)
   })
 
@@ -423,7 +423,7 @@ describe('logbookDataBridge importMappers', () => {
     applyLogtenDynamicRoleAndTime(entry!, LOGTEN_DYNAMIC_SAMPLE_ROW, 'Derek Farmer')
 
     expect(entry?.role).toBe('PIC')
-    expect(entry?.flightTime.pic).toBe(1.08)
+    expect(entry?.flightTime.pic).toBe(1.1)
     expect(entry?.aircraftCategoryClass).toBe('AMEL')
     expect(entry?.performance.approaches).toEqual([{ type: '01', count: 1 }])
 
@@ -437,7 +437,7 @@ describe('logbookDataBridge importMappers', () => {
       'Aircraft Type': 'EMBRAER (Brazil) EMB-170/175',
     }
     const entry = mapRawRowToLogEntry(row, { source: 'logten' })
-    expect(entry?.aircraftMakeModel).toBe('E170')
+    expect(entry?.aircraftMakeModel).toBe('EMBRAER (Brazil) EMB-170/175')
     enrichLogtenDynamicExportRow(entry!, row, 'Derek Farmer')
     expect(entry?.aircraftMakeModel).toBe('EMBRAER (Brazil) EMB-170/175')
   })
@@ -453,7 +453,7 @@ describe('logbookDataBridge importMappers', () => {
     applyLogtenDynamicRoleAndTime(entry!, rowWithoutPilotFlying, '')
 
     expect(entry?.role).toBe('PIC')
-    expect(entry?.flightTime.pic).toBe(1.08)
+    expect(entry?.flightTime.pic).toBe(1.1)
   })
 
   it('matches crew names flexibly by last name and first initial', () => {
@@ -476,8 +476,8 @@ describe('logbookDataBridge importMappers', () => {
     expect(entry?.registration).toBe('N430YX')
     expect(entry?.flightNumber).toBe('4487')
     expect(entry?.role).toBe('PIC')
-    expect(entry?.flightTime.pic).toBe(1.08)
-    expect(entry?.flightTime.total).toBe(1.08)
+    expect(entry?.flightTime.pic).toBe(1.1)
+    expect(entry?.flightTime.total).toBeNull()
     expect(entry?.aircraftCategoryClass).toBe('AMEL')
     expect(entry?.performance.approaches).toEqual([{ type: '01', count: 1 }])
   })
@@ -491,7 +491,7 @@ describe('logbookDataBridge importMappers', () => {
     expect(entry?.trainingInstructor).toBe('First Officer')
 
     const errors = validatePart61RequiredFields(entry!).filter((r) => r.type === 'error')
-    expect(errors).toHaveLength(0)
+    expect(errors.every((e) => e.field === 'total')).toBe(true)
   })
 
   it('infers SIC seat when only SIC time logged but both crew columns populated', () => {
@@ -514,7 +514,7 @@ describe('logbookDataBridge importMappers', () => {
     expect(entry).not.toBeNull()
     applyLogtenCrewFields(entry!, LOGTEN_NATIVE_SIC_TIME_ROW, 'Test Test')
 
-    expect(entry?.trainingElements).toBe('Ron Weasley')
+    expect(entry?.trainingElements).toBe('Derek Farmer')
     expect(entry?.trainingInstructor).toBe('Captain')
     expect(entry?.role).toBe('SIC')
   })

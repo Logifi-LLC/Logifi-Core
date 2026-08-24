@@ -5,11 +5,13 @@ import type { Database } from '~/types/database'
 
 type AuditLog = Database['public']['Tables']['audit_logs']['Row']
 
-// Mock supabase
-const mockSupabaseFrom = vi.fn()
-const mockSupabaseSelect = vi.fn().mockReturnThis()
-const mockSupabaseIn = vi.fn().mockReturnThis()
-const mockSupabaseOrder = vi.fn().mockReturnThis()
+const { mockSupabaseFrom, mockSupabaseSelect, mockSupabaseIn, mockSupabaseOrder } = vi.hoisted(() => {
+  const mockSupabaseFrom = vi.fn()
+  const mockSupabaseSelect = vi.fn().mockReturnThis()
+  const mockSupabaseIn = vi.fn().mockReturnThis()
+  const mockSupabaseOrder = vi.fn().mockReturnThis()
+  return { mockSupabaseFrom, mockSupabaseSelect, mockSupabaseIn, mockSupabaseOrder }
+})
 
 vi.mock('~/lib/supabase', () => ({
   supabase: {
@@ -166,7 +168,7 @@ describe('useExport', () => {
   })
 
   it('should batch prepare entries for export', async () => {
-    const { batchPrepareEntriesForExport } = useExport()
+    const { prepareEntriesForExport } = useExport()
     
     const entries: LogEntry[] = [
       createTestEntry({ id: 'entry-1' }),
@@ -178,7 +180,7 @@ describe('useExport', () => {
       error: null
     })
     
-    const result = await batchPrepareEntriesForExport(entries, false)
+    const result = await prepareEntriesForExport(entries, false)
     
     expect(Array.isArray(result)).toBe(true)
     expect(result.length).toBe(2)

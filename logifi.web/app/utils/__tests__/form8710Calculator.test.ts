@@ -7,7 +7,7 @@ describe('form8710Calculator', () => {
     id: 'test-id',
     date: '2024-01-01',
     role: 'PIC',
-    aircraftCategoryClass: 'Airplane SEL',
+    aircraftCategoryClass: 'ASEL',
     categoryClassTime: null,
     aircraftMakeModel: 'C172',
     registration: 'N12345',
@@ -52,7 +52,7 @@ describe('form8710Calculator', () => {
     it('should calculate totals for airplane SEL entries', () => {
       const entries: LogEntry[] = [
         createTestEntry({
-          aircraftCategoryClass: 'Airplane SEL',
+          aircraftCategoryClass: 'ASEL',
           flightTime: {
             total: 2.0,
             pic: 2.0,
@@ -105,7 +105,7 @@ describe('form8710Calculator', () => {
     it('should accumulate multiple entries correctly', () => {
       const entries: LogEntry[] = [
         createTestEntry({
-          aircraftCategoryClass: 'Airplane SEL',
+          aircraftCategoryClass: 'ASEL',
           flightTime: {
             total: 2.0,
             pic: 2.0,
@@ -119,7 +119,7 @@ describe('form8710Calculator', () => {
           }
         }),
         createTestEntry({
-          aircraftCategoryClass: 'Airplane SEL',
+          aircraftCategoryClass: 'ASEL',
           flightTime: {
             total: 1.5,
             pic: 1.5,
@@ -144,7 +144,7 @@ describe('form8710Calculator', () => {
     it('should handle cross-country time breakdowns', () => {
       const entries: LogEntry[] = [
         createTestEntry({
-          aircraftCategoryClass: 'Airplane SEL',
+          aircraftCategoryClass: 'ASEL',
           role: 'PIC',
           flightConditions: ['crossCountry'],
           flightTime: {
@@ -170,7 +170,7 @@ describe('form8710Calculator', () => {
     it('should handle night time breakdowns', () => {
       const entries: LogEntry[] = [
         createTestEntry({
-          aircraftCategoryClass: 'Airplane SEL',
+          aircraftCategoryClass: 'ASEL',
           role: 'PIC',
           flightConditions: ['nightVfr'],
           flightTime: {
@@ -204,21 +204,27 @@ describe('form8710Calculator', () => {
   })
 
   describe('calculateSectionII', () => {
+    const daysAgo = (days: number) => {
+      const d = new Date()
+      d.setHours(12, 0, 0, 0)
+      d.setDate(d.getDate() - days)
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${y}-${m}-${day}`
+    }
+
     it('should return empty totals when no entries provided', () => {
       const result = calculateSectionII([])
       
-      expect(result.totalTime).toBe(0)
-      expect(result.picTime).toBe(0)
+      expect(result.last6Months.totalTime).toBe(0)
+      expect(result.last6Months.picTime).toBe(0)
     })
 
     it('should calculate recent experience totals', () => {
-      const today = new Date('2024-03-15')
-      const recentDate = new Date(today)
-      recentDate.setDate(recentDate.getDate() - 30) // 30 days ago
-      
       const entries: LogEntry[] = [
         createTestEntry({
-          date: recentDate.toISOString().split('T')[0],
+          date: daysAgo(30),
           flightTime: {
             total: 5.0,
             pic: 5.0,
@@ -235,21 +241,14 @@ describe('form8710Calculator', () => {
       
       const result = calculateSectionII(entries)
       
-      expect(result.totalTime).toBe(5.0)
-      expect(result.picTime).toBe(5.0)
+      expect(result.last6Months.totalTime).toBe(5.0)
+      expect(result.last6Months.picTime).toBe(5.0)
     })
 
-    it('should only include entries within 90 days', () => {
-      const today = new Date('2024-03-15')
-      const recentDate = new Date(today)
-      recentDate.setDate(recentDate.getDate() - 30) // 30 days ago - should be included
-      
-      const oldDate = new Date(today)
-      oldDate.setDate(oldDate.getDate() - 100) // 100 days ago - should be excluded
-      
+    it('should only include entries within the last 6 months', () => {
       const entries: LogEntry[] = [
         createTestEntry({
-          date: recentDate.toISOString().split('T')[0],
+          date: daysAgo(30),
           flightTime: {
             total: 5.0,
             pic: 5.0,
@@ -263,7 +262,7 @@ describe('form8710Calculator', () => {
           }
         }),
         createTestEntry({
-          date: oldDate.toISOString().split('T')[0],
+          date: daysAgo(200),
           flightTime: {
             total: 10.0,
             pic: 10.0,
@@ -280,8 +279,9 @@ describe('form8710Calculator', () => {
       
       const result = calculateSectionII(entries)
       
-      expect(result.totalTime).toBe(5.0) // Only the recent entry
-      expect(result.picTime).toBe(5.0)
+      expect(result.last6Months.totalTime).toBe(5.0)
+      expect(result.last6Months.picTime).toBe(5.0)
+      expect(result.allTime.totalTime).toBe(15.0)
     })
   })
 })
