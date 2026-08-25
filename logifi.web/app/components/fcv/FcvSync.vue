@@ -2,6 +2,8 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useAuth } from '~/composables/useAuth'
 import { apiFetch } from '~/utils/apiFetch'
+import { AUTOFI_BETA_LINE } from '~/utils/autofiBeta'
+import AutofiBetaPill from '~/components/fcv/AutofiBetaPill.vue'
 import {
   buildFcvImportRequestPayload,
   countUnresolvedDuplicateActions,
@@ -1229,6 +1231,7 @@ const previewModalOverlayClass = computed(() =>
         >
           Airline schedule sync
         </h4>
+        <AutofiBetaPill :is-dark-mode="isDarkMode" />
       </div>
     </div>
 
@@ -1246,7 +1249,7 @@ const previewModalOverlayClass = computed(() =>
     </template>
     <template v-else-if="showConnectCta">
       <p :class="['text-sm mb-4', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
-        Connect your FLICA account to import flights into your logbook. Use your FLICA User ID
+        {{ AUTOFI_BETA_LINE }} Connect your FLICA account to import flights. Use your FLICA User ID
         (e.g. RPA624619) or employee number.
       </p>
       <form

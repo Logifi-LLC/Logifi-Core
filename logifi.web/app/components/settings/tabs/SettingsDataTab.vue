@@ -154,7 +154,7 @@
       <SettingsListRow
         v-if="fcvConnected"
         label="Import airline schedule (Autofi)"
-        subtitle="Pull new flights from FLICA into logbook"
+        subtitle="Public beta · Republic (RJET)"
         icon="ri:download-cloud-2-line"
         :is-dark-mode="isDarkMode"
         @click="$emit('import-fcv')"

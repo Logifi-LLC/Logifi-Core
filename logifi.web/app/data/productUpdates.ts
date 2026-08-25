@@ -19,9 +19,10 @@ export const PRODUCT_UPDATES: ProductUpdate[] = [
     title: 'Autofi',
     tagline: 'Airline schedule → logbook',
     summary:
-      'Connect your airline FLICA portal and import scheduled legs into your logbook. Preview before import; duplicates are skipped.',
+      'Public beta with Republic (RJET). Connect FLICA and import scheduled legs into your logbook. Preview before import; duplicates are skipped.',
     bullets: [
-      'Connect FLICA in Settings → Integrations.',
+      'Republic (RJET) FLICA only for now.',
+      'Connect FLICA in Settings.',
       'Pick a date range, preview legs, then import.',
       'Included free with the core logbook.',
     ],

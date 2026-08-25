@@ -5,7 +5,7 @@
     <main class="pt-32 pb-16 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto">
       <h1 class="text-4xl font-bold text-gray-950 mb-4 drop-shadow-sm dark:text-gray-900">Pricing</h1>
       <p class="text-gray-800 mb-8 text-lg font-medium dark:text-gray-700">
-        Logifi is free. Airline schedule import via FLICA is included—see
+        Logifi is free. Autofi (FLICA) is in public beta with Republic (RJET) and included—see
         <NuxtLink to="/integrations" class="text-blue-600 hover:underline dark:text-blue-600">Integrations</NuxtLink>
         for details. Digifi scanning uses pay-per-spread credits (below).
       </p>

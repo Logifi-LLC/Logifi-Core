@@ -80,11 +80,14 @@
                     <Icon :name="featuredFeature.icon" size="24" />
                   </div>
                   <div class="mb-3">
-                    <h3 class="text-2xl sm:text-3xl font-bold tracking-tight dark:text-gray-900">
-                      <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-600 dark:to-indigo-600">
-                        {{ featuredFeature.title }}
-                      </span>
-                    </h3>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h3 class="text-2xl sm:text-3xl font-bold tracking-tight dark:text-gray-900">
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-600 dark:to-indigo-600">
+                          {{ featuredFeature.title }}
+                        </span>
+                      </h3>
+                      <AutofiBetaPill tone="marketing" />
+                    </div>
                     <p class="mt-1.5 text-sm font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-600">
                       {{ featuredFeature.tagline }}
                     </p>
@@ -160,8 +163,10 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import AuthModal from '~/components/AuthModal.vue'
+import AutofiBetaPill from '~/components/fcv/AutofiBetaPill.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
+import { AUTOFI_BETA_LINE } from '~/utils/autofiBeta'
 
 const { theme, isDark, applyDocumentTheme } = useTheme()
 
@@ -207,8 +212,7 @@ const handleAuthSuccess = () => {
 const featuredFeature = {
   title: 'Autofi',
   tagline: 'Airline schedule → logbook',
-  description:
-    'Connect FLICA in Settings, preview scheduled legs, and import into your logbook. Duplicates are skipped. Free with the core logbook.',
+  description: `${AUTOFI_BETA_LINE} Connect FLICA in Settings, preview scheduled legs, and import. Duplicates are skipped.`,
   icon: 'ri:flight-takeoff-line',
 } as const
 

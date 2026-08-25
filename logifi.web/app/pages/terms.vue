@@ -135,7 +135,8 @@
           <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">12. Third-party logbook import (airline schedule)</h2>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
             Logifi may offer an optional connection to your airline schedule portal (FLICA) so you can
-            preview and import flights into your logbook. Imported schedule data is for
+            preview and import flights into your logbook. This connection is currently in public beta
+            for Republic (RJET). Imported schedule data is for
             <strong :class="isFromLanding ? 'text-gray-950 dark:text-gray-900' : ''">logbook record-keeping only</strong>
             and is not used for flight planning, dispatch, or operational decision-making.
           </p>
