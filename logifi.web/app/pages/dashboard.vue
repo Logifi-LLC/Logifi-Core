@@ -1186,11 +1186,14 @@
             </h2>
       </div>
               <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end w-full lg:w-auto">
-                <div class="relative w-full sm:w-60">
+              <div class="flex flex-col gap-2 w-full sm:w-60">
+                <div class="relative w-full">
               <input 
+                    ref="searchInputRef"
                     v-model="searchTerm"
                     type="search"
                     placeholder="Search entries"
+                    aria-keyshortcuts="/"
                     :class="[
                       'w-full rounded-lg border px-5 py-2 focus:outline-none focus:ring-2 font-quicksand transition-colors duration-300',
                       isDarkMode 
@@ -1202,6 +1205,29 @@
             <Icon name="ri:search-line" size="18" />
           </span>        
           </div>
+                <div v-if="searchChips.length" class="flex flex-wrap gap-1.5">
+                  <span
+                    v-for="chip in searchChips"
+                    :key="chip.id"
+                    :class="[
+                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-quicksand',
+                      isDarkMode
+                        ? 'bg-gray-700 text-gray-200 border border-white/10'
+                        : 'bg-gray-200 text-gray-700 border border-gray-300'
+                    ]"
+                  >
+                    {{ chip.label }}
+                    <button
+                      type="button"
+                      class="leading-none opacity-70 hover:opacity-100"
+                      :aria-label="`Remove ${chip.label}`"
+                      @click="searchTerm = stripSearchToken(searchTerm, chip.raw)"
+                    >
+                      ×
+                    </button>
+                  </span>
+                </div>
+              </div>
               </div>
         </div>
 
@@ -1378,11 +1404,13 @@
 
             <LogEntryList
               v-else-if="isIos"
+              ref="logEntryListRef"
               :entries="displayedEntries"
               :is-dark-mode="isDarkMode"
               :visible-detail-fields="visibleDetailFields"
               :show-remarks-footer="showRemarksFooter"
               :is-entry-signed="isEntrySigned"
+              :scroll-parent="rootScrollContainerRef"
               @select="beginInlineEditing"
             />
 
@@ -3117,6 +3145,17 @@
 
               <!-- Simulator layout -->
               <template v-if="activeLogbook === 'simulator'">
+                <div v-if="duplicableLastEntry" class="flex items-center justify-end mb-2">
+                  <button
+                    type="button"
+                    @click="duplicateLastFlight"
+                    :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors',
+                      isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200'
+                    ]"
+                  >
+                    Duplicate last
+                  </button>
+                </div>
                 <div class="grid gap-6">
                   <!-- Session block: Date, Type, Time, Role -->
                   <div :class="['rounded-lg border p-4', isDarkMode ? 'border-white/10 bg-gray-900/50 shadow-md shadow-black/40' : 'border-gray-200 bg-white']">
@@ -3472,6 +3511,16 @@
                   ]"
                 >
                   {{ isCommercialMode ? 'OOOI Active' : '+ OOOI' }}
+                </button>
+                <button
+                  v-if="duplicableLastEntry"
+                  type="button"
+                  @click="duplicateLastFlight"
+                  :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors',
+                    isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200'
+                  ]"
+                >
+                  Duplicate last
                 </button>
               </div>
 
@@ -6680,6 +6729,7 @@
         isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white focus:ring-blue-400' : 'bg-blue-500 hover:bg-blue-600 text-white focus:ring-blue-300'
       ]"
       aria-label="Add entry"
+      aria-keyshortcuts="N"
     >
       <Icon name="ri:add-line" size="24" />
     </button>
@@ -6821,6 +6871,7 @@ import { useCapacitorPlatform, isCapacitorNative } from '../composables/useCapac
 import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGestures'
 import { usePullToRefresh } from '../composables/usePullToRefresh'
 import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
+import { useDashboardShortcuts } from '../composables/useDashboardShortcuts'
 import AuthModal from '../components/AuthModal.vue'
 import AuditTrail from '../components/AuditTrail.vue'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
@@ -6836,6 +6887,15 @@ import { useProductUpdates } from '../composables/useProductUpdates'
 import type { SettingsStackFrame, SettingsTabId } from '../components/settings/settingsNav'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '../utils/migrateLocalStorage'
 import { findDuplicateEntries, checkDuplicatesWithLocalFallback } from '../utils/duplicateDetection'
+import {
+  buildDuplicatedDraft,
+  findDuplicableLastEntry,
+} from '../utils/duplicateLastFlight'
+import {
+  entryMatchesAviationSearch,
+  parseAviationSearch,
+  stripSearchToken,
+} from '../utils/aviationSearch'
 import {
   ACCOUNT_SCOPED_STORAGE_KEYS,
   DEVICE_GLOBAL_STORAGE_KEYS,
@@ -8239,6 +8299,7 @@ function getCellTextColor(col: LogbookColumnConfig): string {
 
 const tableHeaderRef = ref<HTMLElement | null>(null)
 const tableContainerRef = ref<HTMLElement | null>(null)
+const logEntryListRef = ref<{ scrollToIndex: (index: number) => void } | null>(null)
 const tableRef = ref<HTMLTableElement | null>(null)
 
 function openLogbookLayoutPreferences(): void {
@@ -8301,6 +8362,7 @@ const setXcTimeManuallySet = (value: boolean) => {
   xcTimeManuallySet.value = value
 }
 const searchTerm = ref('')
+const searchInputRef = ref<HTMLInputElement | null>(null)
 const debouncedSearchTerm = ref('')
 watch(searchTerm, (value) => {
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
@@ -8309,6 +8371,22 @@ watch(searchTerm, (value) => {
     searchDebounceTimer = null
   }, SEARCH_DEBOUNCE_MS)
 })
+
+const knownSearchTails = computed(() => {
+  const tails = new Set<string>()
+  for (const logEntry of logEntries.value) {
+    if (inferLogbookType(logEntry) !== activeLogbook.value) continue
+    const raw = (logEntry.registration || '').trim().toUpperCase()
+    if (raw) tails.add(raw)
+    const normalized = raw.replace(/[^A-Z0-9]/g, '')
+    if (normalized) tails.add(normalized)
+  }
+  return tails
+})
+
+const searchChips = computed(
+  () => parseAviationSearch(searchTerm.value, { knownTails: knownSearchTails.value }).chips
+)
 const validationError = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 const duplicateWarning = ref<{ matches: LogEntry[] } | null>(null)
@@ -12294,6 +12372,39 @@ const crewModalLastTagEntryCount = ref<number | null>(null)
 
 // Aircraft family rename modal
 const showRenameFamilyModal = ref(false)
+
+const isDashboardShortcutBlocked = computed(
+  () =>
+    showSettingsModal.value ||
+    showAuthModal.value ||
+    showSignEntryModal.value ||
+    showSignatureFinishModal.value ||
+    showForm8710Modal.value ||
+    showForm8710View.value ||
+    showCurrencyDashboard.value ||
+    showDashboardImportModal.value ||
+    showExportDialog.value ||
+    showDuplicateOverrideDialog.value ||
+    showAircraftModal.value ||
+    showAirportModal.value ||
+    showCrewProfileModal.value ||
+    showRenameFamilyModal.value ||
+    showAuditTrail.value ||
+    showAuditTrailSidebar.value ||
+    expandedEntryId.value !== null ||
+    (isIos.value && isCatalogDrawerOpen.value)
+)
+
+useDashboardShortcuts({
+  isBlocked: isDashboardShortcutBlocked,
+  onNewEntry: () => {
+    if (!isEntryFormOpen.value) toggleEntryForm()
+  },
+  onFocusSearch: () => {
+    searchInputRef.value?.focus()
+  },
+})
+
 const renameFamilyOldName = ref<string>('')
 const renameFamilyCanonicalKey = ref<string>('')
 const renameFamilyNewName = ref<string>('')
@@ -12961,28 +13072,40 @@ function ensureDefaultSignInstructor(): void {
   })
 }
 
-function toggleEntryForm(): void {
-  const willBeOpen = !isEntryFormOpen.value
-  isEntryFormOpen.value = willBeOpen
+function openNewEntryForm(draft?: EditableLogEntry): void {
+  closeAuditTrailSidebar()
+  expandedEntryId.value = null
+  inlineEditEntry.value = null
+  isInlineCommercialMode.value = false
+  successMessage.value = null
+  editingEntryId.value = null
+  isCommercialMode.value = false
+  Object.assign(newEntry, createBlankEntry(), draft ?? {})
+  showSimSection.value = (draft?.logbookType ?? activeLogbook.value) === 'simulator'
+  isEntryFormOpen.value = true
+  ensureDefaultSignInstructor()
+}
 
-  // If opening the Add Entry form, close any open inline edit and clear post-save state
-  if (willBeOpen) {
+function toggleEntryForm(): void {
+  if (isEntryFormOpen.value) {
+    isEntryFormOpen.value = false
     closeAuditTrailSidebar()
-    expandedEntryId.value = null
-    inlineEditEntry.value = null
-    isInlineCommercialMode.value = false
-    successMessage.value = null
-    editingEntryId.value = null
-    Object.assign(newEntry, createBlankEntry())
-    showSimSection.value = activeLogbook.value === 'simulator'
-    ensureDefaultSignInstructor()
-  } else {
-    closeAuditTrailSidebar()
-    // If closing, reset form if needed
     if (!editingEntryId.value) {
       resetForm()
     }
+    return
   }
+  openNewEntryForm()
+}
+
+const duplicableLastEntry = computed(() =>
+  findDuplicableLastEntry(logEntries.value, activeLogbook.value, supersededIdSet.value)
+)
+
+function duplicateLastFlight(): void {
+  const source = duplicableLastEntry.value
+  if (!source) return
+  openNewEntryForm(buildDuplicatedDraft(source))
 }
 
 function toggleCatalogSection(key: CatalogKey): void {
@@ -17132,7 +17255,7 @@ function getEntryLogbookType(entry: LogEntry): 'flight' | 'simulator' {
 }
 
 interface CatalogFilterContext {
-  term: string
+  parsedSearch: ReturnType<typeof parseAviationSearch>
   activeAircraft: Set<string>
   activeAirports: Set<string>
   activePilots: Set<string>
@@ -17147,7 +17270,9 @@ interface CatalogFilterContext {
 
 function buildCatalogFilterContext(): CatalogFilterContext {
   return {
-    term: debouncedSearchTerm.value.trim().toLowerCase(),
+    parsedSearch: parseAviationSearch(debouncedSearchTerm.value, {
+      knownTails: knownSearchTails.value,
+    }),
     activeAircraft: new Set(getActiveFilterKeys(selectedFilters.aircraft).map((k) => k.toUpperCase())),
     activeAirports: new Set(getActiveFilterKeys(selectedFilters.airports).map((k) => k.toUpperCase())),
     activePilots: new Set(getActiveFilterKeys(selectedFilters.pilots)),
@@ -17169,22 +17294,9 @@ function entryPassesCatalogAndSearchFilters(
 ): boolean {
   if (getEntryLogbookType(entry) !== ctx.activeLogbookType) return false
 
-  const matchesTerm =
-    ctx.term.length === 0 ||
-    [
-      entry.aircraftMakeModel,
-      entry.registration,
-      entry.departure,
-      entry.destination,
-      entry.route,
-      entry.remarks,
-      entry.trainingElements,
-    ]
-      .join(' ')
-      .toLowerCase()
-      .includes(ctx.term)
-
-  if (!matchesTerm) return false
+  if (!entryMatchesAviationSearch(entry, ctx.parsedSearch, ctx.classifiedAirports)) {
+    return false
+  }
 
   if (ctx.activeAircraft.size > 0) {
     const reg = (entry.registration || '').toUpperCase()
@@ -17291,6 +17403,7 @@ watch(
   [debouncedSearchTerm, activeLogbook, totalsTimeMode, totalsCustomStart, totalsCustomEnd, selectedFilters],
   () => {
     visibleEntryCount.value = ENTRIES_PAGE_SIZE
+    logEntryListRef.value?.scrollToIndex(0)
   },
   { deep: true }
 )

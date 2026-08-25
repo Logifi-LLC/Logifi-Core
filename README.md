@@ -78,7 +78,7 @@ Current work lives in [TODO.txt](TODO.txt). Product direction lives in [BUSINESS
 
 ## License
 
-[License information]
+Licensed under the [Apache License, Version 2.0](LICENSE).
 
 ## Contributing
 

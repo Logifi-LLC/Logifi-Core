@@ -16,6 +16,10 @@ import {
   parseFaaRegistryHtml,
   type AircraftDatabaseMeta,
 } from '../utils/aircraftRegistryLookup'
+import {
+  aircraftLookupCacheControl,
+  shouldSetLookupCacheHeader,
+} from '../utils/lookupCacheHeaders'
 
 let aircraftDatabase: Record<string, Partial<AircraftInfo>> | null = null
 let aircraftMeta: AircraftDatabaseMeta | null = null
@@ -129,7 +133,7 @@ export default defineEventHandler(async (event) => {
   const refreshOwner = isRefreshOwnerFlag(query.refreshOwner)
 
   try {
-    return await lookupAircraftRegistration(
+    const result = await lookupAircraftRegistration(
       registration || '',
       { refreshOwner },
       {
@@ -138,6 +142,10 @@ export default defineEventHandler(async (event) => {
         queryLiveRegistry: queryFAARegistry,
       }
     )
+    if (shouldSetLookupCacheHeader(result)) {
+      setHeader(event, 'Cache-Control', aircraftLookupCacheControl(refreshOwner))
+    }
+    return result
   } catch (error) {
     console.error('Aircraft lookup error:', error)
     return {
