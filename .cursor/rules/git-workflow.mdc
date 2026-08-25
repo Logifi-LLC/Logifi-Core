@@ -1,0 +1,21 @@
+---
+description: Feature branches and PRs into dev — do not commit on dev or main
+alwaysApply: true
+---
+
+# Git workflow
+
+Work on a `feature/…` or `fix/…` branch off latest `dev`. Open PRs into **`dev`**, never `main`, unless Derek asks for a release.
+
+When a coherent chunk of work is finished (the requested feature, fix, or task), do not wait to be asked: commit on that branch, push it, and open a PR into `dev` (`gh pr create --base dev`). If a PR for the branch already exists, push the new commits to it.
+
+Do not commit or push to `dev` or `main`. Do not close a PR and dump uncommitted files onto `dev`. Direct-to-`dev` only if Derek explicitly asks.
+
+```
+# BAD — commit on the working copy of the app
+git checkout dev && git commit
+
+# GOOD — side branch, then PR into dev
+git checkout dev && git pull && git checkout -b feature/offline-cache
+# …work, commit, push, PR targeting dev…
+```

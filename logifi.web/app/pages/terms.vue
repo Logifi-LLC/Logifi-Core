@@ -132,13 +132,14 @@
         </section>
 
         <section class="mb-10">
-          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">12. Third-party logbook import (Flight Crew View)</h2>
+          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">12. Third-party logbook import (airline schedule)</h2>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
-            Logifi may offer an optional connection to Flight Crew View to import your flight history
-            into your logbook. The following notices are required by the Flight Crew View Logbook API
-            Access Policy and are reproduced verbatim:
+            Logifi may offer an optional connection to your airline schedule portal (FLICA) so you can
+            preview and import flights into your logbook. This connection is currently in public beta
+            for Republic (RJET). Imported schedule data is for
+            <strong :class="isFromLanding ? 'text-gray-950 dark:text-gray-900' : ''">logbook record-keeping only</strong>
+            and is not used for flight planning, dispatch, or operational decision-making.
           </p>
-          <FcvApiDisclaimers class="not-prose mb-4" tone="marketing" />
           <p :class="['leading-relaxed', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
             Additional detail:
             <NuxtLink to="/data-sources" class="text-blue-600 hover:underline dark:text-blue-400">Data sources &amp; third-party APIs</NuxtLink>.
@@ -180,7 +181,6 @@
 <script setup lang="ts">
 import { ref, computed, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from '#imports'
-import FcvApiDisclaimers from '~/components/fcv/FcvApiDisclaimers.vue'
 import AuthModal from '~/components/AuthModal.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
@@ -188,7 +188,7 @@ import TechnicalTopographyBg from '~/components/TechnicalTopographyBg.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { theme, applyDocumentTheme } = useTheme()
+const { theme, isDark, applyDocumentTheme } = useTheme()
 
 const isFromLanding = computed(() => route.query.from === 'landing')
 
@@ -202,9 +202,9 @@ if (import.meta.client) {
   onBeforeUnmount(() => {
     applyDocumentTheme(theme.value)
   })
-  watch(theme, (newTheme) => {
+  watch([theme, isDark], () => {
     if (isFromLanding.value) applyDocumentTheme('light')
-    else applyDocumentTheme(newTheme)
+    else applyDocumentTheme(theme.value)
   })
 }
 

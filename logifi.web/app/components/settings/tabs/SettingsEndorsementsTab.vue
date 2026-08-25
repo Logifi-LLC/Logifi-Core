@@ -589,10 +589,10 @@ async function onSubmitCompose() {
       paperSignedAt: paperSignedAt.value,
     })
     if (!result.success) {
-      showToast(result.error)
+      showToast(result.error, { type: 'error' })
       return
     }
-    showToast('Paper endorsement recorded')
+    showToast('Paper endorsement recorded', { type: 'success' })
     selectedCode.value = ''
     paperCfiName.value = ''
     paperSignedAt.value = ''
@@ -612,10 +612,10 @@ async function onSubmitCompose() {
       ? await issueEndorsement(input)
       : await requestEndorsement(input)
   if (!result.success) {
-    showToast(result.error)
+    showToast(result.error, { type: 'error' })
     return
   }
-  showToast(composeMode.value === 'issue' ? 'Draft endorsement created' : 'Endorsement requested')
+  showToast(composeMode.value === 'issue' ? 'Draft endorsement created' : 'Endorsement requested', { type: 'success' })
   selectedCode.value = ''
   counterpartyId.value = ''
   if (composeMode.value === 'issue' && result.data) {
@@ -633,10 +633,10 @@ async function onConfirmSign() {
   if (!signingRow.value) return
   const result = await signEndorsement(signingRow.value.id, signPin.value)
   if (!result.success) {
-    showToast(result.error)
+    showToast(result.error, { type: 'error' })
     return
   }
-  showToast('Endorsement signed')
+  showToast('Endorsement signed', { type: 'success' })
   signingRow.value = null
   signPin.value = ''
   await fetchMyEndorsements()
@@ -645,9 +645,9 @@ async function onConfirmSign() {
 async function onCancel(id: string) {
   const result = await cancelEndorsement(id)
   if (!result.success) {
-    showToast(result.error)
+    showToast(result.error, { type: 'error' })
     return
   }
-  showToast('Endorsement cancelled')
+  showToast('Endorsement cancelled', { type: 'info' })
 }
 </script>

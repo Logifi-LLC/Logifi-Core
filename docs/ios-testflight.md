@@ -89,7 +89,7 @@ The iOS app uses `nuxt generate` (static). Server routes under `logifi.web/serve
 
 1. Connect the repo; set **Root Directory** to `logifi.web`
 2. Use `nuxt build` (default via `vercel.json`) — **not** static export only
-3. Set all env vars from `logifi.web/env.example` for Production (and Preview if needed)
+3. Set all env vars from `logifi.web/env.example` for **Production and Preview**. Preview is the `dev` branch (and `*.vercel.app`). Production-only vars are invisible to Preview; after adding or editing a var, redeploy that environment.
 4. Verify: `curl -I https://www.logifi.io` and authenticated `GET /api/fcv/status`
 
 ### Required env vars (minimum)
@@ -100,6 +100,8 @@ The iOS app uses `nuxt generate` (static). Server routes under `logifi.web/serve
 | `NUXT_PUBLIC_SUPABASE_ANON_KEY` | Client auth |
 | `SUPABASE_SERVICE_ROLE_KEY` | Digifi uploads, FC View token storage, credits |
 | `FCV_*` | FC View OAuth + API |
+| `FLICA_CREDENTIALS_KEY` | Encrypt stored FLICA passwords (`openssl rand -base64 32`). Same value as local if already connected. Missing on Preview → `POST /api/airline-sync/fetch-flica` 503. |
+| `AERODATABOX_API_KEY` | FLICA schedule enrichment (tail, actual times). Fetch still works without it. |
 | `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` | Digifi scanning |
 | Stripe / Lightning keys | Credits checkout (optional if mock disabled) |
 
@@ -114,7 +116,10 @@ In `logifi.web/.env` before building:
 ```bash
 NUXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NUXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-NUXT_PUBLIC_API_BASE=https://www.logifi.io
+# TestFlight from the `dev` branch:
+NUXT_PUBLIC_API_BASE=https://dev.logifi.io
+# App Store / production only:
+# NUXT_PUBLIC_API_BASE=https://www.logifi.io
 ```
 
 ### 3.2 Supabase redirect URLs
@@ -215,7 +220,7 @@ Tester instructions: [ios-testflight-tester-guide.md](../logifi.web/docs/ios-tes
 | Google OAuth does not return to app | Confirm Supabase + Google redirect URLs; custom scheme `io.logifi.app` in Info.plist |
 | Email confirmation link opens browser only | Add `https://localhost/auth/callback` to Supabase redirects |
 | Upload rejected (duplicate build) | Bump `CURRENT_PROJECT_VERSION` in Xcode |
-| Digifi / FC View 503 | Server env vars missing on Vercel; redeploy |
+| Digifi / FC View / FLICA fetch 503 | Server env vars missing on that Vercel environment (Preview vs Production); enable the var for Preview when testing `dev`, then redeploy |
 
 ---
 

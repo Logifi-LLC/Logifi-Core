@@ -62,7 +62,7 @@ export default defineNuxtConfig({
     public: {
       supabaseUrl: process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL,
       supabaseAnonKey: process.env.NUXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY,
-      /** Production API base for Capacitor static builds (Digifi, FC View, lookups). */
+      /** API origin for Capacitor static builds. TestFlight-from-dev: https://dev.logifi.io. App Store: https://www.logifi.io. */
       apiBase: process.env.NUXT_PUBLIC_API_BASE || '',
       /** `off` | `beta` | `coming_soon` — see useFcvUiLabel (integrations page + Settings connect UI only). */
       fcvUiLabel: process.env.NUXT_PUBLIC_FCV_UI_LABEL || 'off',
@@ -87,6 +87,12 @@ export default defineNuxtConfig({
     fcvTokenUrl: process.env.FCV_TOKEN_URL || '',
     fcvAuthorizeUrl: process.env.FCV_AUTHORIZE_URL || '',
     fcvApiBaseUrl: process.env.FCV_API_BASE_URL || '',
+    // AeroDataBox via RapidAPI (server-only; Flica schedule enrichment)
+    aeroDataBoxApiKey: process.env.AERODATABOX_API_KEY || '',
+    aeroDataBoxApiHost:
+      process.env.AERODATABOX_API_HOST || 'aerodatabox.p.rapidapi.com',
+    /** AES-256 key for sealing FLICA passwords (base64 or hex). */
+    flicaCredentialsKey: process.env.FLICA_CREDENTIALS_KEY || '',
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
     // Digifi paper logbook scan (server-only)
     geminiApiKey: process.env.GEMINI_API_KEY || '',
@@ -136,32 +142,31 @@ export default defineNuxtConfig({
         {
           name: 'description',
           content:
-            'Free, FAA-compliant digital pilot logbooks. AI-powered paper scanning with Digifi, FC View import, and open-source transparency.',
+            'Free, FAA-compliant digital pilot logbooks. AI-powered paper scanning with Digifi, airline schedule import, and open-source transparency.',
         },
         { property: 'og:type', content: 'website' },
         { property: 'og:title', content: 'Logifi — Digital Pilot Logbooks' },
         {
           property: 'og:description',
           content:
-            'Free, FAA-compliant digital pilot logbooks. AI-powered paper scanning with Digifi, FC View import, and open-source transparency.',
+            'Free, FAA-compliant digital pilot logbooks. AI-powered paper scanning with Digifi, airline schedule import, and open-source transparency.',
         },
-        { property: 'og:image', content: '/images/app-logo-mark.png' },
-        { name: 'twitter:card', content: 'summary' },
+        { property: 'og:image', content: '/images/og-image.png' },
+        { property: 'og:image:width', content: '1200' },
+        { property: 'og:image:height', content: '630' },
+        { name: 'twitter:card', content: 'summary_large_image' },
         { name: 'twitter:title', content: 'Logifi — Digital Pilot Logbooks' },
         {
           name: 'twitter:description',
           content:
-            'Free, FAA-compliant digital pilot logbooks. AI-powered paper scanning with Digifi, FC View import, and open-source transparency.',
+            'Free, FAA-compliant digital pilot logbooks. AI-powered paper scanning with Digifi, airline schedule import, and open-source transparency.',
         },
-        { name: 'twitter:image', content: '/images/app-logo-mark.png' },
+        { name: 'twitter:image', content: '/images/og-image.png' },
       ],
       link: [
-        { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon.png' },
-        { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/favicon.png' },
-        { rel: 'apple-touch-icon', sizes: '180x180', href: '/images/app-logo-mark.png' },
-        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: 'anonymous' },
-        { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap' }
+        { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32.png' },
+        { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/favicon-16.png' },
+        { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
       ]
     }
   }

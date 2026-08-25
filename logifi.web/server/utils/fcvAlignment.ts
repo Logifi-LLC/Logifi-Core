@@ -1,4 +1,5 @@
 import type { FcvMappedEntry } from './fcvMap'
+import { buildTailCatalogFamilyMap } from '../../shared/aircraftTailIndex'
 import {
   buildCatalogPersonAlignmentSeeds,
   normalizeCrewNameForMatching,
@@ -79,6 +80,8 @@ const FCV_TYPE_TO_CANONICAL: Record<string, string> = {
   E175: 'ERJ-175',
   ERJ175: 'ERJ-175',
   EMB175: 'ERJ-175',
+  /** Republic FLICA Base/Equip code for E175. */
+  EM7: 'ERJ-175',
   E170: 'ERJ-170',
   ERJ170: 'ERJ-170',
   EMB170: 'ERJ-170',
@@ -220,13 +223,30 @@ export function buildAlignmentIndex(
     seedCatalogPersonDisplay(crewByNormalizedKey, crewCanonicalNames, n.toLowerCase(), n)
   }
 
+  const familyMap = buildTailCatalogFamilyMap(rows)
+
   for (const row of rows) {
     const tailKey = normalizeRegistrationKey(row.registration ?? '')
-    if (tailKey && !tails.has(tailKey)) {
-      tails.set(tailKey, {
-        aircraft_make_model: row.aircraft_make_model,
-        aircraft_category_class: row.aircraft_category_class,
-      })
+    if (tailKey) {
+      const family = familyMap.get(tailKey)
+      const existing = tails.get(tailKey)
+      const rowMakeModel = (row.aircraft_make_model ?? '').trim()
+      const rowCategory = (row.aircraft_category_class ?? '').trim()
+      if (!existing) {
+        tails.set(tailKey, {
+          aircraft_make_model: family ?? row.aircraft_make_model,
+          aircraft_category_class: row.aircraft_category_class,
+        })
+      } else {
+        if (family) existing.aircraft_make_model = family
+        if (rowCategory) {
+          if (family && rowMakeModel === family) {
+            existing.aircraft_category_class = row.aircraft_category_class
+          } else if (!(existing.aircraft_category_class ?? '').trim()) {
+            existing.aircraft_category_class = row.aircraft_category_class
+          }
+        }
+      }
     }
     addCanonicalCrewName(crewByNormalizedKey, crewCanonicalNames, row.training_elements)
   }

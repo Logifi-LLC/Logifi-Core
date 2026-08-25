@@ -316,7 +316,7 @@ export async function scanLogbookImageWithGemini(
   const targetColumns = buildTargetColumns(meta)
   const sendRowBands = chunkImages.length > 0 && !env.disableRowBandsToGemini
   const hasRemarksFocus = targetColumnsIncludeRemarks(targetColumns)
-  const thinkingLevel = resolveDigifiThinkingLevel(env.geminiThinkingLevel)
+  const thinkingLevel = resolveDigifiThinkingLevel(env.geminiThinkingLevel, env.model)
   const generation: DigifiGeminiGenerationOptions = {
     maxOutputTokens: computeDigifiMaxOutputTokens(
       meta.rowCount,

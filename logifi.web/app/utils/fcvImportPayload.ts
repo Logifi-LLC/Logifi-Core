@@ -24,6 +24,46 @@ function fcvIdFromFlight(flight: unknown): string {
   return typeof id === 'string' ? id.trim() : String(id ?? '').trim()
 }
 
+export interface AlreadyInLogbookDupHint {
+  alreadyImportedFcvFlightIds?: string[]
+  alreadyImportedIndices?: number[]
+  heuristicDuplicateIndices?: number[]
+  duplicateIndices?: number[]
+}
+
+/**
+ * Drop preview rows that already exist in the logbook (exact id and/or heuristic match).
+ */
+export function omitAlreadyInLogbookPreviewFlights<T extends { fcv_flight_id?: unknown }>(
+  flights: T[],
+  dup: AlreadyInLogbookDupHint
+): { flights: T[]; omitted: number } {
+  const dropIdx = new Set<number>()
+  const hasAlready = Array.isArray(dup.alreadyImportedIndices)
+  const hasHeuristic = Array.isArray(dup.heuristicDuplicateIndices)
+  if (hasAlready) {
+    for (const i of dup.alreadyImportedIndices!) dropIdx.add(i)
+  }
+  if (hasHeuristic) {
+    for (const i of dup.heuristicDuplicateIndices!) dropIdx.add(i)
+  }
+  if (!hasAlready && !hasHeuristic) {
+    for (const i of dup.duplicateIndices ?? []) dropIdx.add(i)
+  }
+  const dropIds = new Set(
+    (dup.alreadyImportedFcvFlightIds ?? [])
+      .map((id) => String(id).trim())
+      .filter((id) => id.length > 0)
+  )
+  const filtered = flights.filter((f, index) => {
+    if (dropIdx.has(index)) return false
+    const id = String(f.fcv_flight_id ?? '').trim()
+    if (id && dropIds.has(id)) return false
+    return true
+  })
+  return { flights: filtered, omitted: flights.length - filtered.length }
+}
+
 /** Default selection: clean flights only; heuristic dupes and already-imported rows unchecked. */
 export function defaultSelectedFcvFlightIds(
   previewFlights: Array<{ fcv_flight_id?: unknown }>,

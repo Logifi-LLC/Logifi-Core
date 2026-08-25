@@ -300,7 +300,7 @@ async function proceedToPayment() {
                   Credit Card (Stripe)
                 </p>
                 <p :class="['text-xs mt-1 font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
-                  $0.40 per page
+                  $0.50 per page
                 </p>
               </button>
               <button
@@ -320,13 +320,13 @@ async function proceedToPayment() {
                 <span
                   class="absolute top-2 right-2 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500 text-white"
                 >
-                  25% Savings!
+                  20% Savings!
                 </span>
                 <p :class="['font-bold font-quicksand text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
                   Bitcoin Lightning ⚡
                 </p>
                 <p :class="['text-xs mt-1 font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
-                  $0.30 per page
+                  $0.40 per page
                 </p>
               </button>
             </div>

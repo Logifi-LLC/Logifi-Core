@@ -1,0 +1,20 @@
+FOCUS: Known bugs
+
+────────────────────────────────────────
+OPEN
+────────────────────────────────────────
+
+────────────────────────────────────────
+FIXED
+────────────────────────────────────────
+
+1. HIGH — TestFlight Google sign-in never returns to the app (first report)
+   - Bug: Google sign-in finished in Safari and never returned to Logifi. Session landed on www.logifi.io or https://localhost, not in the app.
+   - Cause: signInWithGoogle() used web OAuth with redirectTo = https://localhost/auth/callback. Safari cannot map that origin back to the Capacitor WebView. The custom scheme io.logifi.app:// was already registered (and in the Supabase allow-list); Google login never used it.
+   - Fix (on `dev`, not on main yet — needs a new TestFlight build to verify):
+     - useAuth.ts — native Google: skipBrowserRedirect: true, Browser.open(), redirectTo: io.logifi.app://auth/callback
+     - authRedirectOrigin.ts — native callback/reset URLs use the custom scheme, not https://localhost
+     - 02.capacitor-auth-deeplink.client.ts — close the in-app browser on /auth/callback and consume the session from the deeplink
+     - Password reset / signup confirmation emails on native use the same scheme
+     - Apple Sign-In left alone
+   - Workaround until the next TestFlight build: Continue with Apple, or email + password.

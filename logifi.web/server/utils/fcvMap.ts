@@ -1,6 +1,12 @@
 import { DateTime } from 'luxon'
 import { getAirportIanaTimezone } from '../../shared/airportTimezone'
 import {
+  parseAirlineOwnSeat,
+  pickOppositeCrew,
+  type AirlineOwnSeat,
+  type ListedCrewMember,
+} from '../../shared/airlineOwnRole'
+import {
   mapAircraftCategoryClass,
   normalizeCrewNameForMatching,
   normalizeFcvAircraftType,
@@ -288,7 +294,7 @@ function buildFlightTimeForFcv(
   blockHours: number | null,
   dep: string,
   arr: string,
-  role: 'PIC' | 'SIC'
+  role: AirlineOwnSeat | null
 ): Record<string, unknown> {
   if (blockHours == null) return {}
   const xc =
@@ -297,39 +303,14 @@ function buildFlightTimeForFcv(
     total: blockHours,
   }
   if (role === 'SIC') ft.sic = blockHours
-  else ft.pic = blockHours
+  else if (role === 'PIC') ft.pic = blockHours
   if (xc != null) {
     ft.crossCountry = xc
   }
   return ft
 }
 
-function normalizeFcvRole(raw: unknown): 'PIC' | 'SIC' {
-  if (typeof raw !== 'string') return 'PIC'
-  const v = raw.trim().toLowerCase()
-  if (!v) return 'PIC'
-  if (
-    v === 'fo' ||
-    v === 'sic' ||
-    v.includes('first officer') ||
-    v.includes('first_officer') ||
-    v.includes('second in command')
-  ) {
-    return 'SIC'
-  }
-  if (
-    v === 'ca' ||
-    v === 'capt' ||
-    v === 'pic' ||
-    v.includes('captain') ||
-    v.includes('pilot in command')
-  ) {
-    return 'PIC'
-  }
-  return 'PIC'
-}
-
-function getOwnFcvRole(flight: FcvFlight): 'PIC' | 'SIC' {
+function getOwnFcvRole(flight: FcvFlight): AirlineOwnSeat | null {
   const roleCandidates: unknown[] = [
     flight.role,
     flight.pilot_role,
@@ -338,10 +319,11 @@ function getOwnFcvRole(flight: FcvFlight): 'PIC' | 'SIC' {
     flight.duty_role,
   ]
   for (const c of roleCandidates) {
-    const normalized = normalizeFcvRole(c)
-    if (typeof c === 'string' && c.trim()) return normalized
+    if (typeof c !== 'string' || !c.trim()) continue
+    const normalized = parseAirlineOwnSeat(c)
+    if (normalized) return normalized
   }
-  return 'PIC'
+  return null
 }
 
 type FcvCrewMember = {
@@ -383,7 +365,7 @@ function crewMemberName(member: FcvCrewMember): string {
   return full
 }
 
-function crewMemberRole(member: FcvCrewMember): 'PIC' | 'SIC' | null {
+function crewMemberRole(member: FcvCrewMember): AirlineOwnSeat | null {
   const candidates = [
     member.role,
     member.pilot_role,
@@ -392,9 +374,39 @@ function crewMemberRole(member: FcvCrewMember): 'PIC' | 'SIC' | null {
     member.position,
   ]
   for (const c of candidates) {
-    if (typeof c === 'string' && c.trim()) return normalizeFcvRole(c)
+    if (typeof c !== 'string' || !c.trim()) continue
+    const parsed = parseAirlineOwnSeat(c)
+    if (parsed) return parsed
   }
   return null
+}
+
+function crewMemberPositionRaw(member: FcvCrewMember): string {
+  const candidates = [
+    member.role,
+    member.pilot_role,
+    member.crew_role,
+    member.crew_position,
+    member.position,
+  ]
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim()) return c.trim()
+  }
+  return ''
+}
+
+function listFcvCrew(flight: FcvFlight): ListedCrewMember[] {
+  const members = [
+    ...toCrewMembers(flight.crew),
+    ...toCrewMembers(flight.crew_members),
+    ...toCrewMembers(flight.crew_list),
+  ]
+  return members
+    .map((m) => ({
+      name: crewMemberName(m),
+      position: crewMemberPositionRaw(m),
+    }))
+    .filter((m) => m.name.length > 0)
 }
 
 function isSelfCrewMember(member: FcvCrewMember): boolean {
@@ -404,11 +416,8 @@ function isSelfCrewMember(member: FcvCrewMember): boolean {
 
 function extractOtherCrew(
   flight: FcvFlight,
-  ownRole: 'PIC' | 'SIC'
-): { name: string; label: 'Captain' | 'First Officer'; rawName: string } | null {
-  const label: 'Captain' | 'First Officer' =
-    ownRole === 'PIC' ? 'First Officer' : 'Captain'
-  const oppositeRole: 'PIC' | 'SIC' = ownRole === 'PIC' ? 'SIC' : 'PIC'
+  ownRole: AirlineOwnSeat | null
+): { name: string; label: 'Captain' | 'First Officer' | null; rawName: string } | null {
   const members = [
     ...toCrewMembers(flight.crew),
     ...toCrewMembers(flight.crew_members),
@@ -420,13 +429,21 @@ function extractOtherCrew(
     .filter((m) => !isSelfCrewMember(m))
     .map((m) => ({
       name: crewMemberName(m),
+      position: crewMemberPositionRaw(m),
       role: crewMemberRole(m),
     }))
     .filter((m) => m.name.length > 0)
 
   if (!candidates.length) return null
-  const matched = candidates.find((c) => c.role === oppositeRole) ?? candidates[0]
-  return { name: matched.name, label, rawName: matched.name }
+  if (!ownRole) {
+    return { name: candidates[0].name, label: null, rawName: candidates[0].name }
+  }
+  const picked = pickOppositeCrew(
+    candidates.map((c) => ({ position: c.position, name: c.name })),
+    ownRole
+  )
+  if (!picked) return { name: candidates[0].name, label: null, rawName: candidates[0].name }
+  return { name: picked.name, label: picked.label, rawName: picked.name }
 }
 
 function primaryDepartureLocal(f: FcvFlight): string | undefined {
@@ -475,6 +492,8 @@ export function mapFcvFlightToEntry(flight: FcvFlight): FcvMappedEntry {
   const oooi = buildOooiFromFlight(flight)
   const tags = buildTags(flight)
   const ownRole = getOwnFcvRole(flight)
+  const unmatched = ownRole == null
+  const crewListed = listFcvCrew(flight)
   const otherCrew = extractOtherCrew(flight, ownRole)
   const flight_time = buildFlightTimeForFcv(blockHours, dep, arr, ownRole)
   const xcRaw = flight_time.crossCountry
@@ -485,7 +504,7 @@ export function mapFcvFlightToEntry(flight: FcvFlight): FcvMappedEntry {
   return {
     fcv_flight_id: fcvId,
     date: date || '',
-    role: ownRole,
+    role: ownRole ?? '',
     aircraft_category_class: mapAircraftCategoryClass(sourceCategory),
     category_class_time: blockHours,
     aircraft_make_model: aircraftType || 'Unknown',
@@ -510,6 +529,10 @@ export function mapFcvFlightToEntry(flight: FcvFlight): FcvMappedEntry {
       fcv_id: fcvId,
       is_deadhead: flight.is_deadhead,
       trip_number: flight.trip_number,
+      ...(unmatched
+        ? { own_role_unmatched: true, own_role_unmatched_reason: 'unknown_role' as const }
+        : {}),
+      crew_listed: crewListed,
       normalized: {
         registration_key: normalizeRegistrationKey(registration),
         aircraft_type: aircraftType || null,

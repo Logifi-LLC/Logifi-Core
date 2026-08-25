@@ -60,4 +60,5 @@ export const DIGIFI_COMMON_MISTAKE_PROMPT_RULES = [
   'Never transcribe the bottom totals, brought forward, or carried forward summary row as a flight line.',
   'Remarks: one rowIndex per flight line — use horizontal ruled lines as boundaries; never merge remarks from adjacent rows.',
   'Consecutive rows with identical total/PIC times (e.g. three 1.3 lines) are still separate flights — never skip a rowIndex or join their remarks with " | ".',
+  'Year rollover: when dates cross from December to January mid-page, the January rows belong to the next calendar year — transcribe the year as printed, or if only month/day is printed, infer the rollover.',
 ].join(' ')

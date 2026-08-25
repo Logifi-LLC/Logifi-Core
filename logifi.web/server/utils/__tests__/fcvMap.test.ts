@@ -31,6 +31,7 @@ describe('mapFcvFlightToEntry', () => {
   it('maps OOOI from actual with scheduled fallback for out/in', () => {
     const e = mapFcvFlightToEntry({
       fcv_flight_id: '1',
+      role: 'PIC',
       actual_out_local: '2026-04-01 08:00:00',
       actual_off_local: '2026-04-01 08:12:00',
       actual_on_local: '2026-04-01 10:30:00',
@@ -125,6 +126,22 @@ describe('mapFcvFlightToEntry', () => {
     expect(e.training_instructor).toBe('First Officer')
   })
 
+  it('does not guess PIC when FC View omits role', () => {
+    const e = mapFcvFlightToEntry({
+      fcv_flight_id: 'no-role',
+      scheduled_out_local: '2026-04-01 07:00:00',
+      dep_airport_icao: 'KSEA',
+      arr_airport_icao: 'KPDX',
+      block: '0100',
+    })
+    expect(e.role).toBe('')
+    expect(e.flight_time).toMatchObject({ total: 1, crossCountry: 1 })
+    expect((e.flight_time as Record<string, unknown>).pic).toBeUndefined()
+    expect((e.flight_time as Record<string, unknown>).sic).toBeUndefined()
+    expect(e.import_metadata?.own_role_unmatched).toBe(true)
+    expect(e.import_metadata?.own_role_unmatched_reason).toBe('unknown_role')
+  })
+
   it('falls back to scheduled out/in when actual missing', () => {
     const e = mapFcvFlightToEntry({
       fcv_flight_id: '2',
@@ -166,6 +183,7 @@ describe('mapFcvFlightToEntry', () => {
   it('sets IFR only when no XC leg (same airport)', () => {
     const e = mapFcvFlightToEntry({
       fcv_flight_id: '5',
+      role: 'PIC',
       scheduled_out_local: '2026-06-01 12:00:00',
       dep_airport_icao: 'KORD',
       arr_airport_icao: 'KORD',

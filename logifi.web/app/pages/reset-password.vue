@@ -150,7 +150,7 @@ const handleSubmit = async () => {
   try {
     const result = await completePasswordReset(newPassword.value)
     if (result.success) {
-      showToast('Password updated successfully. You are now logged in.')
+      showToast('Password updated successfully. You are now logged in.', { type: 'success' })
       await navigateTo('/dashboard')
     } else {
       formError.value = result.error ?? 'Could not update password.'

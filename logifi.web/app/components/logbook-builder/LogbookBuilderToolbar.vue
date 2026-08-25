@@ -6,6 +6,7 @@ import { supabase } from '~/lib/supabase'
 import type { BuilderTemplateColumn } from '~/utils/logbookBuilderTypes'
 import { ROLE_OPTIONS } from '~/utils/logbookBuilderTypes'
 import { useTheme } from '~/composables/useTheme'
+import { useToast } from '~/composables/useToast'
 import { persistLastTemplateId } from '~/composables/useLogbookBuilderLastTemplate'
 
 import { ACCOUNT_SCOPED_STORAGE_KEYS, getScopedItem, setScopedItem } from '~/utils/userScopedStorage'
@@ -19,6 +20,7 @@ const { user, isAuthenticated } = useAuth()
 const { rowCount, setRowCount, addColumn, layout, columns, removeColumn, loadTemplate, deleteTemplate, visibleColumns, setTwoPageSplitIndex, twoPageSplitIndex, effectiveSplitIndex, tagsColumnWidth, defaultImportRole, defaultYear } = grid
 
 const { isDark } = useTheme()
+const { showToast } = useToast()
 
 const layoutOptions = [
   { value: 'single' as const, label: 'Single page' },
@@ -69,7 +71,7 @@ const deletingTemplateId = ref<string | null>(null)
 
 async function handleSaveTemplate() {
   if (!isAuthenticated.value || !user.value) {
-    alert('Please sign in to save a template.')
+    showToast('Please sign in to save a template.', { type: 'info' })
     return
   }
   showSaveModal.value = true
@@ -107,7 +109,7 @@ async function confirmSaveTemplate() {
 
 async function handleLoadTemplate() {
   if (!isAuthenticated.value || !user.value) {
-    alert('Please sign in to load a template.')
+    showToast('Please sign in to load a template.', { type: 'info' })
     return
   }
   loadError.value = null

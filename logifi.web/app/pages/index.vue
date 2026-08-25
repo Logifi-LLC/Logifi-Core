@@ -14,16 +14,16 @@
 
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <div class="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-semibold mb-8 shadow-[0_0_22px_-6px_rgba(59,130,246,0.38),0_0_36px_-12px_rgba(37,99,235,0.18)] animate-fade-in dark:bg-blue-50 dark:border-blue-100 dark:text-blue-700">
-            Free · FAA-compliant · Open source
+            Free logbook · Open source
           </div>
           
           <h1 class="text-5xl lg:text-7xl font-bold tracking-tight text-gray-900 mb-8 animate-slide-up dark:text-gray-900">
-            The Future of <br />
-            <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-600 dark:to-indigo-600">Pilot Logbooks</span>
+            A digital <br />
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-600 dark:to-indigo-600">flight logbook</span>
           </h1>
           
           <p class="max-w-2xl mx-auto text-xl text-gray-700 mb-12 animate-slide-up delay-100 dark:text-gray-700">
-            Logifi is constantly innovating with new technology to keep your records secure, organized, and FAA-compliant—including AI-powered paper-to-digital scanning with Digifi.
+            Import your logbook, scan paper with Digifi, pull schedule with Autofi, and export when you need to.
           </p>
           
           <div class="flex flex-col sm:flex-row items-center justify-center gap-4 animate-slide-up delay-200">
@@ -64,8 +64,7 @@
         <section id="features" class="relative z-10 scroll-mt-28 pt-24 pb-14 lg:pb-16">
         <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="text-center mb-16">
-            <h2 class="text-3xl font-bold text-gray-950 sm:text-4xl drop-shadow-sm dark:text-gray-900">Everything you need</h2>
-            <p class="mt-4 text-lg font-medium text-gray-800 dark:text-gray-700">Built by pilots, for pilots.</p>
+            <h2 class="text-3xl font-bold text-gray-950 sm:text-4xl drop-shadow-sm dark:text-gray-900">Features</h2>
           </div>
 
           <div class="relative overflow-hidden rounded-[28px] border border-white/15 bg-white/10 backdrop-blur-md shadow-[0_0_42px_-12px_rgba(59,130,246,0.24),0_0_56px_-18px_rgba(37,99,235,0.14)] p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8">
@@ -73,55 +72,47 @@
             <div class="mb-14 relative z-10">
               <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center dark:text-gray-900">Features</h3>
               <div class="grid grid-cols-1 md:grid-cols-6 gap-5 md:gap-6 md:auto-rows-min">
+                <!-- Featured: Autofi (left) + Digifi compact (right) -->
                 <div
-                  v-for="(feature, i) in features"
-                  :key="i"
-                  :class="[
-                    'bg-white/10 backdrop-blur-md p-8 rounded-3xl border border-white/15 flex flex-col md:h-full shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)]',
-                    i === 0 ? 'md:col-span-6 ring-1 ring-blue-400/35 shadow-[0_0_48px_-8px_rgba(59,130,246,0.38)]' : '',
-                    i >= 1 ? 'md:col-span-2' : '',
-                  ]"
+                  class="md:col-span-3 bg-white/10 backdrop-blur-md p-8 rounded-3xl border border-white/15 flex flex-col md:h-full ring-1 ring-blue-400/35 shadow-[0_0_48px_-8px_rgba(59,130,246,0.38)]"
                 >
                   <div class="w-12 h-12 bg-blue-50/70 rounded-xl flex items-center justify-center text-blue-600 mb-6 dark:bg-blue-50/70 dark:text-blue-600">
-                    <Icon :name="feature.icon" size="24" />
+                    <Icon :name="featuredFeature.icon" size="24" />
                   </div>
-                  <div v-if="'featured' in feature && feature.featured" class="mb-3">
-                    <h3 class="text-2xl sm:text-3xl font-bold tracking-tight dark:text-gray-900">
-                      <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-600 dark:to-indigo-600">
-                        {{ feature.title }}
-                      </span>
-                    </h3>
-                    <p
-                      v-if="'tagline' in feature && feature.tagline"
-                      class="mt-1.5 text-sm font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-600"
-                    >
-                      {{ feature.tagline }}
+                  <div class="mb-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h3 class="text-2xl sm:text-3xl font-bold tracking-tight dark:text-gray-900">
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-600 dark:to-indigo-600">
+                          {{ featuredFeature.title }}
+                        </span>
+                      </h3>
+                      <AutofiBetaPill tone="marketing" />
+                    </div>
+                    <p class="mt-1.5 text-sm font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-600">
+                      {{ featuredFeature.tagline }}
                     </p>
                   </div>
-                  <h3 v-else class="text-xl font-bold mb-3 dark:text-gray-900">{{ feature.title }}</h3>
-                  <p class="text-gray-700 leading-relaxed dark:text-gray-700 md:grow">{{ feature.description }}</p>
+                  <p class="text-gray-700 leading-relaxed dark:text-gray-700 md:grow">{{ featuredFeature.description }}</p>
                 </div>
-              </div>
-            </div>
 
-            <!-- On the roadmap -->
-            <details class="relative z-10 group">
-              <summary class="cursor-pointer list-none text-center mb-6 select-none">
-                <span class="inline-flex items-center gap-2 text-lg font-semibold text-gray-800 hover:text-blue-600 transition-colors dark:text-gray-800">
-                  On the roadmap
-                  <Icon name="ri:arrow-down-s-line" size="20" class="transition-transform group-open:rotate-180" />
-                </span>
-              </summary>
-              <div class="grid grid-cols-1 md:grid-cols-6 gap-5 md:gap-6 md:auto-rows-min pt-2">
                 <div
-                  v-for="(feature, i) in featuresToCome"
+                  class="md:col-span-3 bg-white/10 backdrop-blur-md p-6 sm:p-8 rounded-3xl border border-white/15 flex flex-col md:h-full shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)]"
+                >
+                  <div class="w-12 h-12 bg-blue-50/70 rounded-xl flex items-center justify-center text-blue-600 mb-4 dark:bg-blue-50/70 dark:text-blue-600">
+                    <Icon :name="secondaryFeature.icon" size="24" />
+                  </div>
+                  <h3 class="text-xl font-bold mb-2 dark:text-gray-900">{{ secondaryFeature.title }}</h3>
+                  <p class="text-xs font-semibold uppercase tracking-wider text-gray-600 mb-3 dark:text-gray-600">
+                    {{ secondaryFeature.tagline }}
+                  </p>
+                  <p class="text-gray-700 leading-relaxed dark:text-gray-700 md:grow">{{ secondaryFeature.description }}</p>
+                </div>
+
+                <!-- Standard feature cards -->
+                <div
+                  v-for="(feature, i) in standardFeatures"
                   :key="i"
-                  :class="[
-                    'bg-white/10 backdrop-blur-md p-8 rounded-3xl border border-white/15 flex flex-col md:h-full shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)]',
-                    i === 0 ? 'md:col-span-6' : '',
-                    i === 1 ? 'md:col-span-3' : '',
-                    i === 2 ? 'md:col-span-3' : '',
-                  ]"
+                  class="md:col-span-3 bg-white/10 backdrop-blur-md p-8 rounded-3xl border border-white/15 flex flex-col md:h-full shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)]"
                 >
                   <div class="w-12 h-12 bg-blue-50/70 rounded-xl flex items-center justify-center text-blue-600 mb-6 dark:bg-blue-50/70 dark:text-blue-600">
                     <Icon :name="feature.icon" size="24" />
@@ -130,7 +121,25 @@
                   <p class="text-gray-700 leading-relaxed dark:text-gray-700 md:grow">{{ feature.description }}</p>
                 </div>
               </div>
-            </details>
+            </div>
+
+            <!-- On the roadmap -->
+            <div class="relative z-10">
+              <h3 class="text-2xl font-bold text-gray-900 mb-8 text-center dark:text-gray-900">On the roadmap</h3>
+              <div class="grid grid-cols-1 md:grid-cols-6 gap-5 md:gap-6 md:auto-rows-min">
+                <div
+                  v-for="(feature, i) in featuresToCome"
+                  :key="i"
+                  class="md:col-span-3 bg-white/10 backdrop-blur-md p-8 rounded-3xl border border-white/15 flex flex-col md:h-full shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)]"
+                >
+                  <div class="w-12 h-12 bg-blue-50/70 rounded-xl flex items-center justify-center text-blue-600 mb-6 dark:bg-blue-50/70 dark:text-blue-600">
+                    <Icon :name="feature.icon" size="24" />
+                  </div>
+                  <h3 class="text-xl font-bold mb-3 dark:text-gray-900">{{ feature.title }}</h3>
+                  <p class="text-gray-700 leading-relaxed dark:text-gray-700 md:grow">{{ feature.description }}</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         </section>
@@ -154,10 +163,12 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import AuthModal from '~/components/AuthModal.vue'
+import AutofiBetaPill from '~/components/fcv/AutofiBetaPill.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
+import { AUTOFI_BETA_LINE } from '~/utils/autofiBeta'
 
-const { theme, applyDocumentTheme } = useTheme()
+const { theme, isDark, applyDocumentTheme } = useTheme()
 
 /** Landing stays visually light and drops `html.dark` so `dark:` utilities do not apply (e.g. Auth modal). Restore saved theme when leaving. */
 if (import.meta.client) {
@@ -165,7 +176,7 @@ if (import.meta.client) {
   onBeforeUnmount(() => {
     applyDocumentTheme(theme.value)
   })
-  watch(theme, () => {
+  watch([theme, isDark], () => {
     applyDocumentTheme('light')
   })
 }
@@ -198,47 +209,57 @@ const handleAuthSuccess = () => {
   window.location.href = '/dashboard'
 }
 
-const features = [
-  {
-    title: 'Digifi',
-    tagline: 'Paper logbook scanning',
-    description: 'Scan paper logbook spreads with your phone or camera. AI transcribes handwriting into your digital logbook—you review and edit before import.',
-    icon: 'ri:scan-line',
-    featured: true,
-  },
+const featuredFeature = {
+  title: 'Autofi',
+  tagline: 'Airline schedule → logbook',
+  description: `${AUTOFI_BETA_LINE} Connect FLICA in Settings, preview scheduled legs, and import. Duplicates are skipped.`,
+  icon: 'ri:flight-takeoff-line',
+} as const
+
+const secondaryFeature = {
+  title: 'Digifi',
+  tagline: 'Paper logbook scanning',
+  description:
+    'Photograph logbook spreads; AI transcribes for you to review before import. First 10 spreads on the house.',
+  icon: 'ri:scan-line',
+} as const
+
+const standardFeatures = [
   {
     title: 'Open Source Logbook',
-    description: 'Built with transparency and community collaboration. View our code, contribute, and help shape the future of digital flight logging.',
-    icon: 'ri:open-source-line'
+    description: 'View the code on GitHub. Report issues or open a pull request.',
+    icon: 'ri:open-source-line',
   },
   {
-    title: 'FAA Compliant',
-    description: 'Rest easy knowing your records meet AC 120-78B requirements for data integrity and revision history.',
-    icon: 'ri:shield-check-line'
+    title: 'AC 120-78B design',
+    description:
+      'Signed rows are amended or voided, not edited. Audit trail, signatures, and export follow AC 120-78B.',
+    icon: 'ri:shield-check-line',
   },
   {
-    title: 'Import/Export Instantly',
-    description: 'Generate formatted PDFs or CSVs for interviews, checkrides, or backups. Import from existing logbooks seamlessly.',
-    icon: 'ri:file-download-line'
-  }
+    title: 'Import & export',
+    description:
+      'Import CSV yourself, or request a reviewed transfer. Export CSV, JSON, or Form 8710 when you need to.',
+    icon: 'ri:file-download-line',
+  },
+  {
+    title: 'iOS app',
+    description: 'Log flights, check currency, and scan pages from your phone.',
+    icon: 'ri:smartphone-line',
+  },
 ] as const
 
 const featuresToCome = [
   {
-    title: 'Mobile App',
-    description: 'A native iOS app for your logbook on the go—log flights, check currency, and capture Digifi scans from your phone.',
-    icon: 'ri:smartphone-line'
-  },
-  {
     title: 'Student/Instructor Portals',
     description: 'Dedicated portals for flight training with progress tracking and collaborative logbook management.',
-    icon: 'ri:user-star-line'
+    icon: 'ri:user-star-line',
   },
   {
-    title: 'Community Driven Improvements',
-    description: 'Your feedback shapes our roadmap. Join our community to suggest features and ideas on what we build next.',
-    icon: 'ri:community-line'
-  }
+    title: 'Community feedback',
+    description: 'Suggest features on GitHub or Discord.',
+    icon: 'ri:community-line',
+  },
 ] as const
 
 </script>

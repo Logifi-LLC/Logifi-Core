@@ -5,19 +5,68 @@ export interface AircraftInfo {
   year?: string
   owner?: string
   engineType?: string
+  engineModel?: string
   category?: string
   city?: string
   state?: string
   serialNumber?: string
   airworthinessDate?: string
   source?: string
+  asOf?: string
+  ownerCheckedAt?: string
+}
+
+export interface AircraftDatabaseMeta {
+  generatedAt?: string
+  recordCount?: number
+}
+
+export function isNumericEngineCode(value?: string | null): boolean {
+  return /^\d+$/.test(String(value || '').trim())
+}
+
+/** Old snapshot cached engine manufacturer/model codes like "41597". */
+export function isLegacyAircraftCacheEntry(
+  info: Pick<AircraftInfo, 'engineType' | 'engineModel'> | null | undefined
+): boolean {
+  if (!info) return true
+  return isNumericEngineCode(info.engineType)
+}
+
+export function aircraftEngineDisplay(
+  info: Pick<AircraftInfo, 'engineType' | 'engineModel'> | null | undefined
+): { type?: string; model?: string } {
+  if (!info) return {}
+  const type = isNumericEngineCode(info.engineType) ? undefined : info.engineType?.trim() || undefined
+  const model = info.engineModel?.trim() || undefined
+  return { type, model }
 }
 
 const DB_URL = '/data/aircraft-database.json'
+const META_URL = '/data/aircraft-database-meta.json'
 
 let database: Record<string, Omit<AircraftInfo, 'registration' | 'source'>> | null = null
+let meta: AircraftDatabaseMeta | null = null
 let loadPromise: Promise<Record<string, Omit<AircraftInfo, 'registration' | 'source'>>> | null = null
 let loadFailed = false
+
+function asOfFromMeta(value: AircraftDatabaseMeta | null): string | undefined {
+  const generatedAt = value?.generatedAt?.trim()
+  if (!generatedAt) return undefined
+  return generatedAt.slice(0, 10)
+}
+
+async function loadMeta(): Promise<AircraftDatabaseMeta | null> {
+  if (meta) return meta
+  try {
+    const res = await fetch(META_URL)
+    if (!res.ok) return null
+    meta = (await res.json()) as AircraftDatabaseMeta
+    return meta
+  } catch {
+    return null
+  }
+}
 
 async function loadDatabase(): Promise<Record<string, Omit<AircraftInfo, 'registration' | 'source'>>> {
   if (database) {
@@ -89,7 +138,7 @@ export async function lookupAircraftLocal(registration: string): Promise<Aircraf
   }
 
   try {
-    const db = await loadDatabase()
+    const [db, dbMeta] = await Promise.all([loadDatabase(), loadMeta()])
     const dbKey = resolveDbRegistrationKey(normalizedReg, db)
     const localResult = dbKey ? db[dbKey] : undefined
 
@@ -98,6 +147,7 @@ export async function lookupAircraftLocal(registration: string): Promise<Aircraf
         ...localResult,
         registration: normalizedReg,
         source: 'Local Database (FAA)',
+        asOf: asOfFromMeta(dbMeta) || localResult.asOf,
       }
     }
   } catch (err) {

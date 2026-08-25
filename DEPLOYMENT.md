@@ -376,5 +376,3 @@ After deployment:
 3. Gather feedback
 4. Fix issues and redeploy
 5. When ready, deploy to production
-
-For private repository setup, see [CLOSED_SOURCE_SETUP.md](CLOSED_SOURCE_SETUP.md).

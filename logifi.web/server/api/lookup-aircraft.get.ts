@@ -1,134 +1,96 @@
 /**
  * Aircraft Registration Lookup API (Hybrid Approach)
- * 
- * 1. Checks local static database first (instant, offline) - ~200K+ aircraft
- * 2. Falls back to live FAA API for very recent registrations (last 30 days)
- * 
- * Benefits:
- * - 99.9% of lookups are instant and offline
- * - Always up-to-date for brand new registrations
- * - Update static DB monthly with: npm run update-aircraft-db
+ *
+ * 1. Checks local static database first (instant, offline)
+ * 2. Optionally overlays live FAA owner when refreshOwner=1 (modal only)
+ * 3. Falls back to live FAA inquiry for N-numbers missing from the snapshot
+ *
+ * Update static DB monthly with: npm run update-aircraft-db
  */
 
-// Static database will be lazy-loaded from filesystem
-import { readFileSync } from 'fs'
+import { readFileSync, statSync } from 'fs'
 import { join } from 'path'
-import { resolveDbRegistrationKey } from '../../shared/aircraftLookupLocal'
+import type { AircraftInfo } from '../../shared/aircraftLookupLocal'
+import {
+  lookupAircraftRegistration,
+  parseFaaRegistryHtml,
+  type AircraftDatabaseMeta,
+} from '../utils/aircraftRegistryLookup'
+import {
+  aircraftLookupCacheControl,
+  shouldSetLookupCacheHeader,
+} from '../utils/lookupCacheHeaders'
 
-let aircraftDatabase: Record<string, any> | null = null
-let databaseLoadAttempted = false
+let aircraftDatabase: Record<string, Partial<AircraftInfo>> | null = null
+let aircraftMeta: AircraftDatabaseMeta | null = null
+let databaseMtimeMs = 0
+let metaMtimeMs = 0
+
+function dataPath(fileName: string) {
+  return join(process.cwd(), 'server/data', fileName)
+}
 
 function loadDatabase() {
-  if (databaseLoadAttempted) {
-    return aircraftDatabase
-  }
-  
-  databaseLoadAttempted = true
-  
+  const dbPath = dataPath('aircraft-database.json')
   try {
+    const mtimeMs = statSync(dbPath).mtimeMs
+    if (aircraftDatabase && mtimeMs === databaseMtimeMs) {
+      return aircraftDatabase
+    }
     console.log('Loading aircraft database from filesystem...')
-    // Read from filesystem instead of importing (to avoid memory issues during build)
-    const dbPath = join(process.cwd(), 'server/data/aircraft-database.json')
-    const dbContent = readFileSync(dbPath, 'utf-8')
-    aircraftDatabase = JSON.parse(dbContent)
+    aircraftDatabase = JSON.parse(readFileSync(dbPath, 'utf-8'))
+    databaseMtimeMs = mtimeMs
     const count = aircraftDatabase ? Object.keys(aircraftDatabase).length : 0
-    console.log(`✅ Loaded ${count.toLocaleString()} aircraft from local database`)
-  } catch (error) {
-    console.warn('⚠️  Aircraft database not found. Run: node scripts/download-faa-aircraft.js')
-    console.warn('    Will use FAA API only (slower, requires internet)')
+    console.log(`Loaded ${count.toLocaleString()} aircraft from local database`)
+  } catch {
+    console.warn('Aircraft database not found. Run: node scripts/download-faa-aircraft.js')
+    console.warn('    Will use FAA inquiry only (slower, requires internet)')
     aircraftDatabase = {}
+    databaseMtimeMs = 0
   }
-  
+
   return aircraftDatabase
 }
 
-export default defineEventHandler(async (event) => {
-  const query = getQuery(event)
-  const registration = query.registration as string
-
-  if (!registration || registration.trim().length === 0) {
-    return { success: false, error: 'Registration number is required' }
-  }
-
-  const normalizedReg = registration.trim().toUpperCase().replace(/[-\s]/g, '')
-
-  // Validate N-number format (US registrations start with N)
-  if (!normalizedReg.startsWith('N') || normalizedReg.length < 3) {
-    return { success: false, error: 'Invalid registration format. US registrations must start with N.' }
-  }
-
+function loadMeta(): AircraftDatabaseMeta | null {
+  const metaPath = dataPath('aircraft-database-meta.json')
   try {
-    // 1. Try local database first (instant lookup, offline)
-    const db = loadDatabase()
-    const dbKey = db ? resolveDbRegistrationKey(normalizedReg, db) : null
-    const localResult = dbKey ? db?.[dbKey] : undefined
-
-    if (localResult) {
-      console.log(`✅ Found ${normalizedReg} in local database`)
-      return {
-        success: true,
-        data: {
-          ...localResult,
-          registration: normalizedReg,
-          source: 'Local Database (FAA)'
-        }
-      }
+    const mtimeMs = statSync(metaPath).mtimeMs
+    if (aircraftMeta && mtimeMs === metaMtimeMs) {
+      return aircraftMeta
     }
-
-    console.log(`⚠️  ${normalizedReg} not in local database, querying live FAA API...`)
-
-    // 2. Fall back to live FAA API (for very recent registrations)
-    const faaResult = await queryFAARegistry(normalizedReg)
-    
-    if (faaResult) {
-      console.log(`✅ Found ${normalizedReg} via live FAA API`)
-      return {
-        success: true,
-        data: {
-          ...faaResult,
-          source: 'FAA API (Recent Registration)'
-        }
-      }
-    }
-
-    return { 
-      success: false, 
-      error: 'Aircraft not found in database or FAA registry' 
-    }
-  } catch (error) {
-    console.error('Aircraft lookup error:', error)
-    return {
-      success: false,
-      error: 'Failed to lookup aircraft information'
-    }
+    aircraftMeta = JSON.parse(readFileSync(metaPath, 'utf-8')) as AircraftDatabaseMeta
+    metaMtimeMs = mtimeMs
+  } catch {
+    aircraftMeta = null
+    metaMtimeMs = 0
   }
-})
 
-/**
- * Query live FAA Registry (fallback for recent registrations)
- * This is slower but ensures we can find brand new aircraft
- */
-async function queryFAARegistry(registration: string) {
+  return aircraftMeta
+}
+
+async function queryFAARegistry(registration: string): Promise<Partial<AircraftInfo> | null> {
   try {
     const faaUrl = 'https://registry.faa.gov/aircraftinquiry/Search/NNumberResult'
-    
-    console.log(`Querying FAA Registry API for: ${registration}`)
-    
+
+    console.log(`Querying FAA Registry for: ${registration}`)
+
     const response = await $fetch(faaUrl, {
       method: 'POST',
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Origin': 'https://registry.faa.gov',
-        'Referer': 'https://registry.faa.gov/aircraftinquiry/',
+        Origin: 'https://registry.faa.gov',
+        Referer: 'https://registry.faa.gov/aircraftinquiry/',
       },
       body: new URLSearchParams({
-        'NNumbertxt': registration
+        NNumbertxt: registration,
       }).toString(),
-      timeout: 15000
+      timeout: 15000,
     }).catch((error) => {
-      console.warn('FAA API request failed:', error?.message)
+      console.warn('FAA inquiry request failed:', error?.message)
       return null
     })
 
@@ -136,74 +98,59 @@ async function queryFAARegistry(registration: string) {
       return null
     }
 
-    // Check if aircraft not found
-    if (response.includes('No records found') || 
-        response.includes('not found') || 
-        response.includes('No matching records') ||
-        response.includes('Invalid N-Number') ||
-        response.includes('No aircraft found')) {
+    if (
+      response.includes('No records found') ||
+      response.includes('not found') ||
+      response.includes('No matching records') ||
+      response.includes('Invalid N-Number') ||
+      response.includes('No aircraft found')
+    ) {
       console.log('Aircraft not found in FAA Registry')
       return null
     }
 
-    return parseFAAResponse(response, registration)
+    return parseFaaRegistryHtml(response, registration)
   } catch (error) {
-    console.warn('FAA API query error:', error)
+    console.warn('FAA inquiry error:', error)
     return null
   }
 }
 
-/**
- * Parse FAA Registry HTML response
- * Extracts aircraft information from the HTML table structure
- */
-function parseFAAResponse(html: string, registration: string) {
+function isRefreshOwnerFlag(value: unknown): boolean {
+  if (Array.isArray(value)) return value.some(isRefreshOwnerFlag)
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    return normalized === '1' || normalized === 'true' || normalized === 'yes'
+  }
+  return false
+}
+
+export default defineEventHandler(async (event) => {
+  const query = getQuery(event)
+  const registration = query.registration as string
+  const refreshOwner = isRefreshOwnerFlag(query.refreshOwner)
+
   try {
-    const extractValue = (label: string): string | null => {
-      const patterns = [
-        new RegExp(`<td[^>]*>\\s*${label}\\s*</td>\\s*<td[^>]*>([^<]+)</td>`, 'i'),
-        new RegExp(`<th[^>]*>\\s*${label}\\s*</th>\\s*<td[^>]*>([^<]+)</td>`, 'i'),
-      ]
-      
-      for (const pattern of patterns) {
-        const match = html.match(pattern)
-        if (match && match[1]) {
-          const value = match[1].trim()
-          if (value && value.length > 0 && !value.match(/^[\s\-]+$/)) {
-            return value
-          }
-        }
+    const result = await lookupAircraftRegistration(
+      registration || '',
+      { refreshOwner },
+      {
+        loadDatabase,
+        loadMeta,
+        queryLiveRegistry: queryFAARegistry,
       }
-      return null
+    )
+    if (shouldSetLookupCacheHeader(result)) {
+      setHeader(event, 'Cache-Control', aircraftLookupCacheControl(refreshOwner))
     }
-    
-    const make = extractValue('Manufacturer Name') || extractValue('Mfr Name') || extractValue('Manufacturer')
-    const model = extractValue('Model') || extractValue('Model Name')
-    const year = extractValue('Year') || extractValue('Mfr Year') || extractValue('Year Mfr')
-    const engineType = extractValue('Engine Model') || extractValue('Engine') || extractValue('Engine Type')
-    const category = extractValue('Aircraft Category') || extractValue('Type Aircraft') || extractValue('Category')
-    const owner = extractValue('Owner Name') || extractValue('Registered Owner') || extractValue('Owner')
-    const city = extractValue('City')
-    const state = extractValue('State')
-
-    // Only return data if we found at least manufacturer or model
-    if (make || model || year) {
-      return {
-        registration,
-        make: make || undefined,
-        model: model || undefined,
-        year: year || undefined,
-        engineType: engineType || undefined,
-        category: category || undefined,
-        owner: owner || undefined,
-        city: city || undefined,
-        state: state || undefined,
-      }
-    }
-
-    return null
+    return result
   } catch (error) {
-    console.error('Error parsing FAA response:', error)
-    return null
+    console.error('Aircraft lookup error:', error)
+    return {
+      success: false,
+      error: 'Failed to lookup aircraft information',
+    }
   }
-}
+})

@@ -63,7 +63,6 @@
 
     <SettingsListGroup title="Import" :is-dark-mode="isDarkMode">
       <div
-        class="px-4 py-3"
         @dragover.prevent="$emit('import-dragover')"
         @dragenter.prevent="$emit('import-dragenter')"
         @dragleave="$emit('import-dragleave')"
@@ -77,16 +76,33 @@
           :show-chevron="true"
           @click="openImportModal()"
         />
-        <p :class="[helper, 'mt-2 px-1 text-xs']">
+      </div>
+      <div class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
+        <p :class="[helper, 'text-xs']">
           Choose your logbook software for guided export. Files are parsed on-device. Duplicates (same date and registration) are skipped.
         </p>
       </div>
+      <SettingsListRow
+        label="Logbook transfer"
+        :subtitle="transferRowSubtitle"
+        icon="ri:mail-send-line"
+        :is-dark-mode="isDarkMode"
+        :show-chevron="!hasPendingTransfer"
+        @click="openTransferSheet()"
+      />
       <LogbookImportModal
         :is-open="showImportModal"
         :is-dark-mode="isDarkMode"
         :pending-file="pendingImportFile"
         @close="closeImportModal"
         @import-provider-file="onProviderFile"
+        @request-transfer="openTransferSheet()"
+      />
+      <LogbookTransferRequestSheet
+        :is-open="showTransferSheet"
+        :is-dark-mode="isDarkMode"
+        @close="closeTransferSheet"
+        @success="onTransferSuccess"
       />
       <div class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
         <button
@@ -137,8 +153,8 @@
     <SettingsListGroup title="Integrations" :is-dark-mode="isDarkMode">
       <SettingsListRow
         v-if="fcvConnected"
-        label="Import from FC View"
-        subtitle="Pull new flights into logbook"
+        label="Import airline schedule (Autofi)"
+        subtitle="Public beta · Republic (RJET)"
         icon="ri:download-cloud-2-line"
         :is-dark-mode="isDarkMode"
         @click="$emit('import-fcv')"
@@ -152,7 +168,7 @@
         @click="$emit('close')"
       />
       <div class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
-        <FcvSync mode="connect" :is-dark-mode="isDarkMode" show-rollout-label />
+        <FcvSync mode="connect" :is-dark-mode="isDarkMode" @connection-changed="$emit('flica-connection-changed', $event)" />
       </div>
     </SettingsListGroup>
 
@@ -176,13 +192,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import SettingsListGroup from '../SettingsListGroup.vue'
 import SettingsListRow from '../SettingsListRow.vue'
 import { useSettingsClasses } from '../useSettingsClasses'
 import FcvSync from '~/components/fcv/FcvSync.vue'
 import LogbookImportModal from '~/components/import/LogbookImportModal.vue'
+import LogbookTransferRequestSheet from '~/components/import/LogbookTransferRequestSheet.vue'
 import type { ImportProviderKey } from '../../../../shared/import'
+import { useLogbookTransferRequest } from '~/composables/useLogbookTransferRequest'
 
 const props = defineProps<{
   isDarkMode: boolean
@@ -210,14 +228,28 @@ const emit = defineEmits<{
   'export-logbook': []
   'generate-8710': []
   'import-fcv': []
+  'flica-connection-changed': [{ connected: boolean }]
   close: []
 }>()
 
 const showImportGuide = ref(false)
 const showImportModal = ref(false)
+const showTransferSheet = ref(false)
 const pendingImportFile = ref<File | null>(null)
 
 const { helper } = useSettingsClasses(computed(() => props.isDarkMode))
+const { hasPendingRequest: hasPendingTransfer, refreshStatus: refreshTransferStatus } =
+  useLogbookTransferRequest()
+
+const transferRowSubtitle = computed(() =>
+  hasPendingTransfer.value
+    ? "Requested — we'll email you to schedule"
+    : 'LogTen, ForeFlight, or CSV — request a reviewed transfer',
+)
+
+onMounted(() => {
+  void refreshTransferStatus()
+})
 
 const syncBadgeClass = computed(() => {
   if (props.syncStatusText === 'Checking…') {
@@ -240,6 +272,18 @@ function openImportModal(file?: File | null) {
 function closeImportModal() {
   showImportModal.value = false
   pendingImportFile.value = null
+}
+
+function openTransferSheet() {
+  showTransferSheet.value = true
+}
+
+function closeTransferSheet() {
+  showTransferSheet.value = false
+}
+
+function onTransferSuccess() {
+  void refreshTransferStatus()
 }
 
 function onProviderFile(payload: { file: File; provider: ImportProviderKey }) {

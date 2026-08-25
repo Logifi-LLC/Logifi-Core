@@ -7,12 +7,12 @@
             <SegmentedControl
               :model-value="theme"
               :options="[
-                { value: 'dark', label: 'Dark' },
                 { value: 'light', label: 'Light' },
+                { value: 'dark', label: 'Dark' },
               ]"
               :is-dark-mode="isDarkMode"
               aria-label="Theme"
-              @update:model-value="$emit('set-theme', $event as 'dark' | 'light')"
+              @update:model-value="$emit('set-theme', $event as Theme)"
             />
           </SettingsRow>
         </div>
@@ -49,6 +49,25 @@
 
     <SettingsListGroup title="Totals overview" :is-dark-mode="isDarkMode">
       <div class="divide-y" :class="isDarkMode ? 'divide-gray-700' : 'divide-gray-100'">
+        <label
+          class="flex cursor-pointer items-center justify-between gap-3 px-4 py-3"
+        >
+          <span class="min-w-0">
+            <span class="block text-sm font-quicksand" :class="isDarkMode ? 'text-gray-200' : 'text-gray-700'">
+              Currency chips
+            </span>
+            <span class="mt-0.5 block text-xs font-quicksand" :class="isDarkMode ? 'text-gray-400' : 'text-gray-500'">
+              90-day / night / IFR under totals
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            :checked="showCurrencyChips"
+            class="h-5 w-5 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            :class="isDarkMode ? 'border-gray-600 bg-gray-800' : 'bg-white'"
+            @change="$emit('toggle-currency-chips')"
+          />
+        </label>
         <label
           v-for="metric in availableMetrics"
           :key="metric.key"
@@ -93,17 +112,19 @@ import SettingsRow from '../SettingsRow.vue'
 import SegmentedControl from '../SegmentedControl.vue'
 import SettingsListGroup from '../SettingsListGroup.vue'
 import SettingsLogbookLayoutSection from '../SettingsLogbookLayoutSection.vue'
+import type { Theme } from '~/composables/useTheme'
 import type { LogbookColumnConfig, LogbookColumnKey } from '~/utils/logbookTypes'
 import type { EntryCardPreset, EntryCardPresetId } from '~/utils/entryCardPresets'
 
 defineProps<{
   isDarkMode: boolean
   isIos: boolean
-  theme: 'dark' | 'light'
+  theme: Theme
   clockFormat: '12' | '24'
   clockZone: 'UTC' | 'Local'
   availableMetrics: { key: string; label: string }[]
   selectedMetrics: string[]
+  showCurrencyChips: boolean
   logbookLayoutPresets: readonly EntryCardPreset[]
   activeLogbookLayoutPresetId: EntryCardPresetId
   logbookLayoutPickerFields: LogbookColumnConfig[]
@@ -111,10 +132,11 @@ defineProps<{
 }>()
 
 defineEmits<{
-  'set-theme': [theme: 'dark' | 'light']
+  'set-theme': [theme: Theme]
   'set-clock-format': [format: '12' | '24']
   'set-clock-zone': [zone: 'UTC' | 'Local']
   'toggle-metric': [key: string]
+  'toggle-currency-chips': []
   'apply-logbook-layout-preset': [id: EntryCardPresetId]
   'toggle-logbook-layout-field': [key: LogbookColumnKey]
   'logbook-layout-drag-start': [key: LogbookColumnKey]

@@ -1,0 +1,19 @@
+---
+description: Product decisions — who Logifi is for, what ships first, pricing, and copy tone
+alwaysApply: true
+---
+
+# Product context
+
+Read `BUSINESS_CONTEXT.md` before product, UX, pricing, or copy decisions. Current work is in `TODO.txt`. Target PRs at `dev`, not `main`.
+
+## Non-negotiables
+
+- **Never lose or silently rewrite flights.** Signed rows are immutable: amend or void. Data integrity beats a prettier screen.
+- **Core logbook stays free.** Digifi is credits (first 10 pages free). Auto-logging may become a subscription later; **grandfather existing users** at whatever they signed up at.
+- **Offline is a requirement.** Do not ship a stuck “offline” banner or saves that no-op without a queue. `isOnline` means Supabase is reachable, not `navigator.onLine`.
+- **No AI slop.** Short labels. No verbose descriptions on new pages. Match dashboard / settings / iOS shells, not a generic SaaS template.
+- **Day one:** import, Digifi, Flica auto-logging, export.
+- **Not the focus:** ForeFlight-as-logbook / charter filing workflows.
+
+Do not claim FAA certification or Digifi accuracy above “about 70%, tested on one logbook.”

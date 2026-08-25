@@ -93,6 +93,7 @@
       :clock-zone="clockZone"
       :available-metrics="availableMetrics"
       :selected-metrics="selectedMetrics"
+      :show-currency-chips="showCurrencyChips"
       :logbook-layout-presets="logbookLayoutPresets"
       :active-logbook-layout-preset-id="activeLogbookLayoutPresetId"
       :logbook-layout-picker-fields="logbookLayoutPickerFields"
@@ -101,6 +102,7 @@
       @set-clock-format="$emit('set-clock-format', $event)"
       @set-clock-zone="$emit('set-clock-zone', $event)"
       @toggle-metric="$emit('toggle-metric', $event)"
+      @toggle-currency-chips="$emit('toggle-currency-chips')"
       @apply-logbook-layout-preset="$emit('apply-logbook-layout-preset', $event)"
       @toggle-logbook-layout-field="$emit('toggle-logbook-layout-field', $event)"
       @logbook-layout-drag-start="$emit('logbook-layout-drag-start', $event)"
@@ -139,6 +141,7 @@
       @export-logbook="$emit('export-logbook')"
       @generate-8710="$emit('generate-8710')"
       @import-fcv="$emit('import-fcv')"
+      @flica-connection-changed="$emit('flica-connection-changed', $event)"
       @close="$emit('close')"
     />
 
@@ -162,6 +165,7 @@ import SettingsUpdatesTab from './tabs/SettingsUpdatesTab.vue'
 import SettingsDataTab from './tabs/SettingsDataTab.vue'
 import SettingsComplianceTab from './tabs/SettingsComplianceTab.vue'
 import type { SettingsStackFrame } from './settingsNav'
+import type { Theme } from '~/composables/useTheme'
 import type { LogbookColumnConfig, LogbookColumnKey } from '~/utils/logbookTypes'
 import type { ImportProviderKey } from '../../../shared/import'
 import type { EntryCardPreset, EntryCardPresetId } from '~/utils/entryCardPresets'
@@ -187,11 +191,12 @@ const props = defineProps<{
   emailError?: string
   passwordSuccess?: string
   passwordError?: string
-  theme: 'dark' | 'light'
+  theme: Theme
   clockFormat: '12' | '24'
   clockZone: 'UTC' | 'Local'
   availableMetrics: { key: string; label: string }[]
   selectedMetrics: string[]
+  showCurrencyChips: boolean
   isIos: boolean
   logbookLayoutPresets: readonly EntryCardPreset[]
   activeLogbookLayoutPresetId: EntryCardPresetId
@@ -225,10 +230,11 @@ defineEmits<{
   'open-currency': []
   'update-email': []
   'update-password': []
-  'set-theme': [theme: 'dark' | 'light']
+  'set-theme': [theme: Theme]
   'set-clock-format': [format: '12' | '24']
   'set-clock-zone': [zone: 'UTC' | 'Local']
   'toggle-metric': [key: string]
+  'toggle-currency-chips': []
   'apply-logbook-layout-preset': [id: EntryCardPresetId]
   'toggle-logbook-layout-field': [key: LogbookColumnKey]
   'logbook-layout-drag-start': [key: LogbookColumnKey]
@@ -248,6 +254,7 @@ defineEmits<{
   'export-logbook': []
   'generate-8710': []
   'import-fcv': []
+  'flica-connection-changed': [{ connected: boolean }]
 }>()
 
 const currentFrame = computed(() => props.stack[props.stack.length - 1] ?? 'root')

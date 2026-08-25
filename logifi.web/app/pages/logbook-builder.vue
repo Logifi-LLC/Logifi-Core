@@ -106,10 +106,10 @@ onMounted(() => {
   const creditsResult = route.query.credits
   if (creditsResult === 'success') {
     void fetchBalance()
-    showToast('Credits added successfully')
+    showToast('Credits added successfully', { type: 'success' })
     void router.replace({ query: { ...route.query, credits: undefined } })
   } else if (creditsResult === 'cancelled') {
-    showToast('Checkout cancelled')
+    showToast('Checkout cancelled', { type: 'info' })
     void router.replace({ query: { ...route.query, credits: undefined } })
   }
 })
@@ -174,7 +174,7 @@ watchEffect(async (onCleanup) => {
   }
 })
 
-const { theme, isDark } = useTheme()
+const { isDark } = useTheme()
 const showDigifiPanel = ref(false)
 const showInstructions = ref(false)
 const showDigifiChecklist = ref(false)
@@ -184,16 +184,16 @@ const showDigifiCommonMistakes = ref(false)
 <template>
   <div
     class="min-h-screen font-quicksand transition-colors duration-300 p-4 sm:p-6 lg:p-8"
-    :class="theme === 'dark' ? 'bg-gray-950' : 'bg-gray-50'"
+    :class="isDark ? 'bg-gray-950' : 'bg-gray-50'"
   >
     <div class="mx-auto max-w-7xl space-y-4">
       <div
         class="flex items-center justify-between pb-4 border-b"
-        :class="theme === 'dark' ? 'border-white/10' : 'border-gray-400/50'"
+        :class="isDark ? 'border-white/10' : 'border-gray-400/50'"
       >
         <h1
           class="text-2xl font-bold font-quicksand"
-          :class="theme === 'dark' ? 'text-white' : 'text-gray-900'"
+          :class="isDark ? 'text-white' : 'text-gray-900'"
         >
           Add Pages
         </h1>
@@ -201,7 +201,7 @@ const showDigifiCommonMistakes = ref(false)
           to="/dashboard"
           :class="[
             'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-quicksand font-bold transition-colors border',
-            theme === 'dark'
+            isDark
               ? 'bg-white/5 hover:bg-white/10 border-white/10 text-white shadow-sm shadow-black/20'
               : 'bg-gray-200 hover:bg-gray-300 text-gray-900 border-gray-300'
           ]"
@@ -212,14 +212,14 @@ const showDigifiCommonMistakes = ref(false)
 
       <section
         class="rounded-2xl border px-4 py-3 sm:px-5 sm:py-4"
-        :class="theme === 'dark' ? 'border-white/10 bg-gray-900' : 'border-gray-200 bg-white'"
+        :class="isDark ? 'border-white/10 bg-gray-900' : 'border-gray-200 bg-white'"
       >
         <div class="flex flex-wrap items-center gap-2 sm:gap-3">
           <button
             type="button"
             :class="[
               'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold font-quicksand transition-colors',
-              theme === 'dark'
+              isDark
                 ? 'border-white/15 text-gray-200 hover:bg-white/10'
                 : 'border-gray-300 text-gray-800 hover:bg-gray-100',
             ]"
@@ -232,7 +232,7 @@ const showDigifiCommonMistakes = ref(false)
             type="button"
             :class="[
               'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold font-quicksand transition-colors',
-              theme === 'dark'
+              isDark
                 ? 'border-blue-400/30 text-blue-300 hover:bg-blue-500/10'
                 : 'border-blue-300 text-blue-700 hover:bg-blue-50',
             ]"
@@ -245,7 +245,7 @@ const showDigifiCommonMistakes = ref(false)
             type="button"
             :class="[
               'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold font-quicksand transition-colors',
-              theme === 'dark'
+              isDark
                 ? 'border-orange-400/30 text-orange-300 hover:bg-orange-500/10'
                 : 'border-orange-300 text-orange-800 hover:bg-orange-50',
             ]"
@@ -267,14 +267,14 @@ const showDigifiCommonMistakes = ref(false)
           <div v-if="showInstructions" class="mt-3 overflow-hidden">
             <div
               class="rounded-xl border p-4"
-              :class="theme === 'dark' ? 'border-white/10 bg-white/[0.03]' : 'border-gray-200 bg-gray-50'"
+              :class="isDark ? 'border-white/10 bg-white/[0.03]' : 'border-gray-200 bg-gray-50'"
             >
-              <h2 class="text-sm font-semibold mb-2" :class="theme === 'dark' ? 'text-white' : 'text-gray-900'">
+              <h2 class="text-sm font-semibold mb-2" :class="isDark ? 'text-white' : 'text-gray-900'">
                 Add Pages Instructions
               </h2>
               <ul
                 class="space-y-1.5 text-sm list-disc list-inside"
-                :class="theme === 'dark' ? 'text-gray-300' : 'text-gray-700'"
+                :class="isDark ? 'text-gray-300' : 'text-gray-700'"
               >
                 <li>Use the toolbar to set rows, layout, and columns before editing or scanning.</li>
                 <li>Type directly in the grid to transcribe pages manually when not using Digifi.</li>
@@ -295,14 +295,14 @@ const showDigifiCommonMistakes = ref(false)
           <div v-if="showDigifiChecklist" class="mt-3 overflow-hidden">
             <div
               class="rounded-xl border p-4"
-              :class="theme === 'dark' ? 'border-blue-500/30 bg-blue-500/10' : 'border-blue-200 bg-blue-50'"
+              :class="isDark ? 'border-blue-500/30 bg-blue-500/10' : 'border-blue-200 bg-blue-50'"
             >
-              <h2 class="text-sm font-semibold mb-2" :class="theme === 'dark' ? 'text-blue-100' : 'text-blue-900'">
+              <h2 class="text-sm font-semibold mb-2" :class="isDark ? 'text-blue-100' : 'text-blue-900'">
                 Pre-Scan Digifi Checklist
               </h2>
               <ul
                 class="space-y-1.5 text-sm list-disc list-inside"
-                :class="theme === 'dark' ? 'text-blue-100/90' : 'text-blue-900/90'"
+                :class="isDark ? 'text-blue-100/90' : 'text-blue-900/90'"
               >
                 <li>Confirm row count and layout (single-page or two-page) are correct.</li>
                 <li>Verify columns/template match the paper page format.</li>
@@ -323,7 +323,7 @@ const showDigifiCommonMistakes = ref(false)
           leave-to-class="opacity-0 max-h-0"
         >
           <div v-if="showDigifiCommonMistakes" class="mt-3 overflow-hidden">
-            <DigifiCommonMistakesPanel :is-dark="theme === 'dark'" />
+            <DigifiCommonMistakesPanel :is-dark="isDark" />
           </div>
         </Transition>
       </section>
@@ -332,18 +332,18 @@ const showDigifiCommonMistakes = ref(false)
       <section
         ref="digifiSectionRef"
         class="rounded-3xl p-4 sm:p-6 font-quicksand border shadow-[0_20px_50px_rgba(0,0,0,0.08)]"
-        :class="theme === 'dark' ? 'border-white/10 bg-gray-900' : 'border-gray-200 bg-white'"
+        :class="isDark ? 'border-white/10 bg-gray-900' : 'border-gray-200 bg-white'"
       >
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2
               class="text-base sm:text-lg font-semibold flex items-center gap-2"
-              :class="theme === 'dark' ? 'text-white' : 'text-gray-900'"
+              :class="isDark ? 'text-white' : 'text-gray-900'"
             >
               <Icon name="ri:scan-line" size="20" class="text-blue-500" />
               Digifi scanner (optional)
             </h2>
-            <p class="text-sm mt-1" :class="theme === 'dark' ? 'text-gray-400' : 'text-gray-600'">
+            <p class="text-sm mt-1" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
               Use Digifi only when you want AI to pre-fill rows from paper page photos.
             </p>
           </div>
@@ -351,7 +351,7 @@ const showDigifiCommonMistakes = ref(false)
             type="button"
             :class="[
               'inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold font-quicksand transition-colors',
-              theme === 'dark'
+              isDark
                 ? 'border-blue-400/40 text-blue-300 hover:bg-blue-500/10'
                 : 'border-blue-300 text-blue-700 hover:bg-blue-50',
             ]"
@@ -380,19 +380,19 @@ const showDigifiCommonMistakes = ref(false)
       <LogbookBuilderValidateBar />
       <section
         class="rounded-3xl p-4 sm:p-6 font-quicksand border shadow-[0_20px_50px_rgba(0,0,0,0.15)]"
-        :class="theme === 'dark'
+        :class="isDark
           ? 'border-white/10 bg-gray-900'
           : 'border-gray-200 bg-white'"
       >
         <h2
           class="text-base font-semibold mb-3"
-          :class="theme === 'dark' ? 'text-white' : 'text-gray-900'"
+          :class="isDark ? 'text-white' : 'text-gray-900'"
         >
           How to use
         </h2>
         <ul
           class="space-y-2 text-sm list-disc list-inside"
-          :class="theme === 'dark' ? 'text-gray-300' : 'text-gray-700'"
+          :class="isDark ? 'text-gray-300' : 'text-gray-700'"
         >
           <li>Use this grid to <strong>transcribe entries from a paper logbook</strong>. Fill in the cells, then validate and import into your digital logbook.</li>
           <li><strong>Toolbar:</strong> Set the number of rows; choose single-page or two-page layout (and “Columns on left” for two-page); add or remove columns; sign in to save or load templates.</li>

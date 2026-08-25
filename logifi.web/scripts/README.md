@@ -39,9 +39,10 @@ node scripts/download-faa-aircraft.js
 This will:
 1. Download the latest FAA aircraft registry (~50MB ZIP file)
 2. Extract the data
-3. Process it into a JSON database
-4. Save to `server/data/aircraft-database.json`
-5. Clean up temporary files
+3. Join MASTER.txt with ACFTREF.txt (make/model) and ENGINE.txt (engine model)
+4. Map TYPE ENGINE to a pilot-facing class (Piston, Turbofan, …)
+5. Save `server/data/aircraft-database.json` and `server/data/aircraft-database-meta.json`
+6. Clean up temporary files
 
 ## Monthly Updates
 
@@ -60,7 +61,7 @@ Or use the convenience script:
 After updating, commit the changes:
 
 ```bash
-git add server/data/aircraft-database.json
+git add server/data/aircraft-database.json server/data/aircraft-database-meta.json
 git commit -m "Update aircraft database - $(date +%Y-%m)"
 git push
 ```
@@ -71,8 +72,9 @@ git push
 
 The aircraft lookup system uses a hybrid approach:
 
-1. **Local Database (Primary)**: 200,000+ aircraft available instantly, offline
-2. **FAA API (Fallback)**: For brand new registrations (last 30 days)
+1. **Local Database (Primary)**: 200,000+ aircraft available instantly, offline. Airframe fields (make, model, year, engine class, engine model, category) come from the monthly FAA dump.
+2. **FAA inquiry (Owner overlay)**: When the Aircraft Information modal opens on web, owner/city/state can be refreshed from the live registry.
+3. **FAA inquiry (Fallback)**: For brand new registrations not yet in the snapshot.
 
 ### Benefits
 

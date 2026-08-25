@@ -14,6 +14,20 @@ export type ProductUpdate = {
 
 export const PRODUCT_UPDATES: ProductUpdate[] = [
   {
+    id: '2026-08-autofi',
+    date: '2026-08-17',
+    title: 'Autofi',
+    tagline: 'Airline schedule → logbook',
+    summary:
+      'Public beta with Republic (RJET). Connect FLICA and import scheduled legs into your logbook. Preview before import; duplicates are skipped.',
+    bullets: [
+      'Republic (RJET) FLICA only for now.',
+      'Connect FLICA in Settings.',
+      'Pick a date range, preview legs, then import.',
+      'Included free with the core logbook.',
+    ],
+  },
+  {
     id: '2026-06-welcome-credits',
     date: '2026-06-25',
     title: 'Welcome Digifi spreads',

@@ -19,6 +19,7 @@ function existingRow(
     is_imported?: boolean
     import_source?: string | null
     fcv_flight_id?: string | null
+    flight_number?: string | null
   }
 ) {
   return logEntryRowToExistingForDedup({
@@ -153,6 +154,146 @@ describe('partitionFcvPreviewDuplicates', () => {
     expect(part.heuristicDuplicateIndices).toEqual([0])
     expect(part.heuristicMatches[0]?.existingEntryId).toBe('manual-1')
     expect(part.heuristicMatches[0]?.isImported).toBe(false)
+  })
+
+  it('matches empty-tail FLICA row to logbook entry with N-number on same date/route', () => {
+    const flights = [
+      flight({
+        fcv_flight_id: 'FLICA_20260812_4442_LGA',
+        date: '2026-08-12',
+        registration: '',
+        departure: 'LGA',
+        destination: 'RIC',
+        flight_number: '4442',
+        oooi: { out: '1059' },
+      }),
+    ]
+    const existingShapes = [
+      existingRow({
+        id: 'log-1',
+        date: '2026-08-12',
+        registration: 'N12345',
+        departure: 'KLGA',
+        destination: 'KRIC',
+        flight_number: '4442',
+        oooi: { out: '1059' },
+      }),
+    ]
+    const part = partitionFcvPreviewDuplicates(flights, existingShapes, new Set())
+    expect(part.alreadyImportedIndices).toEqual([])
+    expect(part.heuristicDuplicateIndices).toEqual([0])
+    expect(part.heuristicMatches[0]?.existingEntryId).toBe('log-1')
+  })
+
+  it('keeps opposite same-day turn distinct (LGA-RIC vs RIC-LGA)', () => {
+    const flights = [
+      flight({
+        fcv_flight_id: 'FLICA_20260812_4442_RIC',
+        date: '2026-08-12',
+        registration: '',
+        departure: 'RIC',
+        destination: 'LGA',
+        flight_number: '4442',
+        oooi: { out: '1310' },
+      }),
+    ]
+    const existingShapes = [
+      existingRow({
+        id: 'log-1',
+        date: '2026-08-12',
+        registration: 'N12345',
+        departure: 'KLGA',
+        destination: 'KRIC',
+        flight_number: '4442',
+        oooi: { out: '1059' },
+      }),
+    ]
+    const part = partitionFcvPreviewDuplicates(flights, existingShapes, new Set())
+    expect(part.heuristicDuplicateIndices).toEqual([])
+  })
+
+  it('matches enriched FLICA row to logbook even when tail and actual OOOI differ', () => {
+    const flights = [
+      flight({
+        fcv_flight_id: 'FLICA_20260812_4442_LGA',
+        date: '2026-08-12',
+        registration: 'N421YX',
+        departure: 'LGA',
+        destination: 'RIC',
+        flight_number: '4442',
+        oooi: { out: '1103' },
+      }),
+    ]
+    const existingShapes = [
+      existingRow({
+        id: 'log-1',
+        date: '2026-08-12',
+        registration: '',
+        departure: 'KLGA',
+        destination: 'KRIC',
+        flight_number: '4442',
+        oooi: { out: '1059' },
+      }),
+    ]
+    const part = partitionFcvPreviewDuplicates(flights, existingShapes, new Set())
+    expect(part.alreadyImportedIndices).toEqual([])
+    expect(part.heuristicDuplicateIndices).toEqual([0])
+    expect(part.heuristicMatches[0]?.existingEntryId).toBe('log-1')
+  })
+
+  it('matches enriched FLICA row when logbook has a different N-number', () => {
+    const flights = [
+      flight({
+        fcv_flight_id: 'FLICA_20260812_4442_LGA',
+        date: '2026-08-12',
+        registration: 'N421YX',
+        departure: 'LGA',
+        destination: 'RIC',
+        flight_number: 'YX4442',
+        oooi: { out: '1103' },
+      }),
+    ]
+    const existingShapes = [
+      existingRow({
+        id: 'log-fcv',
+        date: '2026-08-12',
+        registration: 'N999AA',
+        departure: 'KLGA',
+        destination: 'KRIC',
+        flight_number: '4442',
+        oooi: { out: '1059' },
+      }),
+    ]
+    const part = partitionFcvPreviewDuplicates(flights, existingShapes, new Set())
+    expect(part.heuristicDuplicateIndices).toEqual([0])
+    expect(part.heuristicMatches[0]?.existingEntryId).toBe('log-fcv')
+  })
+
+  it('keeps same-day same-route legs distinct when flight numbers differ', () => {
+    const flights = [
+      flight({
+        fcv_flight_id: 'FLICA_20260812_5770_LGA',
+        date: '2026-08-12',
+        registration: 'N421YX',
+        departure: 'LGA',
+        destination: 'RIC',
+        flight_number: '5770',
+        oooi: { out: '1103' },
+      }),
+    ]
+    const existingShapes = [
+      existingRow({
+        id: 'log-1',
+        date: '2026-08-12',
+        registration: 'N421YX',
+        departure: 'KLGA',
+        destination: 'KRIC',
+        flight_number: '4442',
+        oooi: { out: '1059' },
+      }),
+    ]
+    const part = partitionFcvPreviewDuplicates(flights, existingShapes, new Set())
+    expect(part.heuristicDuplicateIndices).toEqual([])
   })
 })
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyCatalogFamilyToFcvPreview,
   buildAircraftTailIndex,
   buildTailCatalogFamilyMap,
   consolidateAircraftMakeModelByTail,
@@ -211,5 +212,35 @@ describe('effectiveCatalogFamilyKey', () => {
         tailFamilyMap
       )
     ).toBe(UNKNOWN_AIRCRAFT_FAMILY)
+  })
+})
+
+describe('applyCatalogFamilyToFcvPreview', () => {
+  it('rewrites known tails to the catalog family', () => {
+    const flights = applyCatalogFamilyToFcvPreview(
+      [
+        {
+          registration: 'N-421YX',
+          aircraft_make_model: 'EMBRAER 175',
+        },
+      ],
+      { N421YX: 'ERJ170/175' }
+    )
+
+    expect(flights[0]?.aircraft_make_model).toBe('ERJ170/175')
+  })
+
+  it('leaves unknown tails as the vendor type', () => {
+    const flights = applyCatalogFamilyToFcvPreview(
+      [
+        {
+          registration: 'N999ZZ',
+          aircraft_make_model: 'EMBRAER 175',
+        },
+      ],
+      { N421YX: 'ERJ170/175' }
+    )
+
+    expect(flights[0]?.aircraft_make_model).toBe('EMBRAER 175')
   })
 })

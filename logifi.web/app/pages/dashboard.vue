@@ -5,7 +5,7 @@
     isIos
       ? 'h-dvh overflow-y-auto overscroll-y-contain transition-colors duration-300 font-quicksand'
       : 'min-h-screen overflow-y-auto transition-colors duration-300 font-quicksand',
-    theme === 'dark' ? 'bg-gray-950' : 'bg-gray-50'
+    isDarkMode ? 'bg-gray-950' : 'bg-gray-50'
   ]"
 >
   <!-- Auth Modal -->
@@ -314,7 +314,7 @@
       ]"
     >
       <section
-        v-show="showFcvFetchPanel && dashboardFcvConnected && !isIos"
+        v-show="showFcvFetchPanel && !isIos"
         ref="fcvFetchSectionRef"
         :class="[
           'mr-auto mb-8 w-full rounded-2xl border p-4 sm:p-6 space-y-4',
@@ -323,11 +323,14 @@
       >
         <div class="flex items-start justify-between gap-4">
           <div>
-            <h3 :class="['text-base sm:text-lg font-semibold font-quicksand', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
-              FC View Fetch
-            </h3>
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 :class="['text-base sm:text-lg font-semibold font-quicksand', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
+                Airline schedule
+              </h3>
+              <AutofiBetaPill :is-dark-mode="isDarkMode" />
+            </div>
             <p :class="['text-sm mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
-              Fetch and import FC View flights from your dashboard.
+              Fetch and import flights from Republic (RJET) FLICA.
             </p>
           </div>
           <button
@@ -343,7 +346,6 @@
         </div>
 
         <div :class="['space-y-4 rounded-2xl border p-4 sm:p-6', isDarkMode ? 'bg-gray-900/60 border-gray-700' : 'bg-white border-gray-200 shadow-sm']">
-          <FcvApiDisclaimers :is-dark-mode="isDarkMode" tone="dashboard" />
           <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
             <NuxtLink
               to="/data-sources?from=dashboard"
@@ -353,12 +355,16 @@
             </NuxtLink>
           </p>
           <FcvSync
+            :key="`flica-fetch-${showFcvFetchPanel ? 'open' : 'closed'}`"
             mode="fetch"
             :is-dark-mode="isDarkMode"
+            :external-connected="dashboardFcvConnected"
             :before-duplicate-check="prepareLogbookForFcvImport"
             :pending-sync-count="queueLength"
             :catalog-person-names="catalogPersonNames"
+            :tail-catalog-family-by-tail="tailCatalogFamilyByTail"
             @imported="handleFcvImported"
+            @connection-changed="handleFlicaConnectionChanged"
           />
           <p
             v-if="fcvImportMessage"
@@ -369,11 +375,11 @@
         </div>
       </section>
 
-      <!-- iOS: fullscreen FC View import sheet -->
+      <!-- iOS: fullscreen airline schedule import sheet -->
       <Teleport to="body">
         <Transition name="fade">
           <div
-            v-if="isIos && showFcvFetchPanel && dashboardFcvConnected"
+            v-if="isIos && showFcvFetchPanel"
             class="fixed inset-0 z-[65] flex flex-col font-quicksand"
             :class="isDarkMode ? 'bg-gray-900 text-gray-100' : 'bg-gray-50 text-gray-900'"
           >
@@ -382,7 +388,10 @@
               :class="isDarkMode ? 'border-gray-800 bg-gray-900/95' : 'border-gray-200 bg-gray-50/95'"
             >
               <div class="flex items-center justify-between gap-3">
-                <h2 class="text-base font-semibold font-quicksand">Import from FC View</h2>
+                <div class="flex items-center gap-2 min-w-0">
+                  <h2 class="text-base font-semibold font-quicksand">Airline schedule</h2>
+                  <AutofiBetaPill :is-dark-mode="isDarkMode" />
+                </div>
                 <button
                   type="button"
                   class="rounded-lg px-2 py-1.5 text-sm font-semibold font-quicksand transition-colors"
@@ -395,21 +404,24 @@
               <p
                 :class="['text-xs mt-1 font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-600']"
               >
-                Pull new flights into your logbook. Review before importing.
+                Pull new flights from Republic (RJET) FLICA. Review before importing.
               </p>
             </header>
             <div
               class="flex-1 overflow-y-auto overscroll-contain px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] space-y-4"
             >
-              <FcvApiDisclaimers :is-dark-mode="isDarkMode" tone="dashboard" />
               <FcvSync
+                key="flica-ios-sheet"
                 mode="fetch"
                 compact
                 :is-dark-mode="isDarkMode"
+                :external-connected="dashboardFcvConnected"
                 :before-duplicate-check="prepareLogbookForFcvImport"
                 :pending-sync-count="queueLength"
                 :catalog-person-names="catalogPersonNames"
+                :tail-catalog-family-by-tail="tailCatalogFamilyByTail"
                 @imported="handleFcvImported"
+                @connection-changed="handleFlicaConnectionChanged"
               />
             </div>
           </div>
@@ -432,7 +444,7 @@
             ref="catalogDrawerRef"
             :class="[
             'flex-shrink-0 rounded-2xl border text-left font-quicksand transition-all duration-300 flex flex-col',
-            theme === 'dark'
+            isDarkMode
               ? 'bg-gray-900 border-white/10 text-gray-200 shadow-md shadow-black/40'
               : 'bg-gray-100 border-gray-200 text-gray-800 shadow-sm',
             isIos
@@ -499,7 +511,7 @@
               v-if="isIos && iosCatalogBuilding"
               :class="[
                 'rounded-xl border px-4 py-8 text-center text-sm font-quicksand',
-                theme === 'dark'
+                isDarkMode
                   ? 'bg-white/5 border-white/10 text-gray-400'
                   : 'bg-white border-gray-200 text-gray-500'
               ]"
@@ -512,7 +524,7 @@
               :key="section.key"
               :class="[
                 'rounded-xl border px-4 py-4 transition-colors duration-300',
-                theme === 'dark'
+                isDarkMode
                   ? 'bg-white/5 border-white/10 shadow-sm shadow-black/20'
                   : 'bg-white border-gray-200 shadow-sm'
               ]"
@@ -906,11 +918,11 @@
                           ? 'border-blue-500/40 bg-blue-600/15 text-blue-300 hover:bg-blue-600/30'
                           : 'border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100',
                       ]"
-                      aria-label="Import from FC View"
+                      aria-label="Open Autofi"
                       @click="openFcvFetchSection"
                     >
                       <Icon name="ri:download-cloud-2-line" size="16" class="shrink-0" />
-                      FC View
+                      Autofi
                     </button>
                   </div>
                   <div class="flex flex-wrap items-center gap-2">
@@ -1081,7 +1093,15 @@
                   </div>
                 </div>
     </div>
-              <Transition
+              <CurrencyStatusChips
+                v-if="shouldShowCurrencyChips(showCurrencyChips) && hasAnyEntriesForActiveLogbook"
+                :passenger-currency="passengerCurrency"
+                :night-currency="nightCurrency"
+                :instrument-currency="instrumentCurrency"
+                :is-dark-mode="isDarkMode"
+                @open="showCurrencyDashboard = true"
+              />
+<Transition
                 enter-active-class="transition ease-out duration-300"
                 enter-from-class="opacity-0 -translate-y-2"
                 enter-to-class="opacity-100 translate-y-0"
@@ -1142,52 +1162,8 @@
                   </button>
                 </div>
               </Transition>
-              <Transition
-                enter-active-class="transition ease-out duration-300"
-                enter-from-class="opacity-0 -translate-y-2"
-                enter-to-class="opacity-100 translate-y-0"
-                leave-active-class="transition ease-in duration-200"
-                leave-from-class="opacity-100 translate-y-0"
-                leave-to-class="opacity-0 -translate-y-2"
-              >
-                <div
-                  v-if="showRegulatorySnapshot"
-                  :class="[
-                    'relative p-6 rounded-2xl border text-left transition-colors duration-300',
-                    isDarkMode
-                      ? 'bg-gray-900 border-white/10 shadow-md shadow-black/40'
-                      : 'bg-white border-gray-200 shadow-sm'
-                  ]"
-                >
-                  <button
-                    type="button"
-                    class="absolute right-4 top-4 rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/10 dark:hover:text-gray-200 transition-colors"
-                    aria-label="Dismiss"
-                    @click="dismissSnapshot"
-                  >
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                  <h2 :class="['text-lg font-quicksand font-semibold mb-4 pr-10', isDarkMode ? 'text-white' : 'text-gray-900']">
-                    Regulatory Snapshot
-                  </h2>
-                  <ul :class="['space-y-2 text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-600']">
-                    <li>
-                      • Track dates, aircraft identification, departure/destination, and total time to satisfy
-                      61.51(b) recordkeeping.
-                    </li>
-                    <li>
-                      • Capture conditions (night, instrument, simulated) and training specifics required for recent experience.
-                    </li>
-                    <li>
-                      • AC&nbsp;120-78B reminders: maintain data integrity, protect revision history, and record signer identity (electronic signatures supported).
-                    </li>
-                  </ul>
-                </div>
-              </Transition>
               <div
-                v-if="!showLatestBanner && !showRegulatorySnapshot"
+                v-if="!showLatestBanner"
                 class="flex items-center justify-center"
               >
                 <button
@@ -1214,16 +1190,16 @@
                 <h2 :class="['text-2xl font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
                   Logbook
             </h2>
-            <p :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
-                  Entries are stored locally in this browser to align with AC&nbsp;120-78B data integrity expectations. Export and secured archival features will follow the signing workflow.
-            </p>
       </div>
               <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end w-full lg:w-auto">
-                <div class="relative w-full sm:w-60">
+              <div class="flex flex-col gap-2 w-full sm:w-60">
+                <div class="relative w-full">
               <input 
+                    ref="searchInputRef"
                     v-model="searchTerm"
                     type="search"
                     placeholder="Search entries"
+                    aria-keyshortcuts="/"
                     :class="[
                       'w-full rounded-lg border px-5 py-2 focus:outline-none focus:ring-2 font-quicksand transition-colors duration-300',
                       isDarkMode 
@@ -1235,6 +1211,29 @@
             <Icon name="ri:search-line" size="18" />
           </span>        
           </div>
+                <div v-if="searchChips.length" class="flex flex-wrap gap-1.5">
+                  <span
+                    v-for="chip in searchChips"
+                    :key="chip.id"
+                    :class="[
+                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-quicksand',
+                      isDarkMode
+                        ? 'bg-gray-700 text-gray-200 border border-white/10'
+                        : 'bg-gray-200 text-gray-700 border border-gray-300'
+                    ]"
+                  >
+                    {{ chip.label }}
+                    <button
+                      type="button"
+                      class="leading-none opacity-70 hover:opacity-100"
+                      :aria-label="`Remove ${chip.label}`"
+                      @click="searchTerm = stripSearchToken(searchTerm, chip.raw)"
+                    >
+                      ×
+                    </button>
+                  </span>
+                </div>
+              </div>
               </div>
         </div>
 
@@ -1384,18 +1383,25 @@
 
             <div
               v-if="filteredEntries.length === 0"
-                      :class="[
-                'mt-6 rounded-2xl border border-dashed p-10 text-center font-quicksand transition-colors duration-300',
-                      isDarkMode 
-                  ? 'bg-gray-900 border-white/10 text-gray-400 shadow-md shadow-black/40' 
-                  : 'bg-gray-100 border-gray-300 text-gray-500'
-                    ]"
+              :class="[
+                'mt-6 rounded-2xl border border-dashed font-quicksand transition-colors duration-300',
+                !hasAnyEntriesForActiveLogbook ? 'p-6' : 'p-10 text-center',
+                isDarkMode
+                  ? 'bg-gray-900 border-white/10 text-gray-400 shadow-md shadow-black/40'
+                  : 'bg-gray-100 border-gray-300 text-gray-500',
+              ]"
             >
               <template v-if="entriesHiddenOnlyByDateRange">
                 No entries in {{ dateRangeFilterSummary }}. Adjust the date range in Totals Overview above, or choose <strong>All time</strong> to see every entry.
               </template>
               <template v-else-if="!hasAnyEntriesForActiveLogbook">
-                No entries recorded yet. Add your first flight above to begin building your digital logbook.
+                <LogbookEmptyState
+                  :is-dark-mode="isDarkMode"
+                  :is-simulator="activeLogbook === 'simulator'"
+                  @add-entry="toggleEntryForm()"
+                  @import-csv="showDashboardImportModal = true"
+                  @scan-digifi="openDigifiFromEmptyState"
+                />
               </template>
               <template v-else>
                 No entries match your current filters. Clear sidebar filters or search to see more entries.
@@ -1404,11 +1410,13 @@
 
             <LogEntryList
               v-else-if="isIos"
+              ref="logEntryListRef"
               :entries="displayedEntries"
               :is-dark-mode="isDarkMode"
               :visible-detail-fields="visibleDetailFields"
               :show-remarks-footer="showRemarksFooter"
               :is-entry-signed="isEntrySigned"
+              :scroll-parent="rootScrollContainerRef"
               @select="beginInlineEditing"
             />
 
@@ -1536,7 +1544,7 @@
                         </template>
                         <template v-else-if="col.key === 'fromTo'">
                           <div :class="['font-semibold text-sm truncate', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-                            {{ entry.departure }} → {{ entry.destination }}
+                            {{ formatEntryAirportCode(entry, entry.departure) }} → {{ formatEntryAirportCode(entry, entry.destination) }}
                           </div>
                           <div v-if="entry.route" :class="['text-xs truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                             {{ entry.route }}
@@ -1610,17 +1618,7 @@
                           <div class="truncate">{{ entry.trainingElements || '—' }}</div>
                         </template>
                         <template v-else-if="col.key === 'total'">
-                          <span
-                            :class="[
-                              entry.importSource === 'fc_view'
-                                ? (isDarkMode ? 'text-amber-400' : 'text-amber-600')
-                                : entry.importSource === 'logbook_builder'
-                                  ? (isDarkMode ? 'text-green-400' : 'text-green-600')
-                                  : entry.isImported && entry.importSource !== 'localStorage'
-                                    ? (isDarkMode ? 'text-red-400' : 'text-red-600')
-                                    : (isDarkMode ? 'text-blue-400' : 'text-blue-600')
-                            ]"
-                          >
+                          <span :class="getTotalTimeColorClass(entry, isDarkMode)">
                             {{ formatNumber(entry.flightTime.total) }}
                           </span>
                         </template>
@@ -3055,7 +3053,7 @@
               type="button"
               class="rounded-lg px-3 py-2 text-sm font-semibold border"
               :class="isDarkMode ? 'border-gray-600 hover:bg-white/10' : 'border-gray-300 hover:bg-gray-100'"
-              @click="copyGuestSignQrUrl().then(() => showToast('Link copied'))"
+              @click="copyGuestSignQrUrl().then(() => showToast('Link copied', { type: 'success' }))"
             >
               Copy link
             </button>
@@ -3153,6 +3151,17 @@
 
               <!-- Simulator layout -->
               <template v-if="activeLogbook === 'simulator'">
+                <div v-if="duplicableLastEntry" class="flex items-center justify-end mb-2">
+                  <button
+                    type="button"
+                    @click="duplicateLastFlight"
+                    :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors',
+                      isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200'
+                    ]"
+                  >
+                    Duplicate last
+                  </button>
+                </div>
                 <div class="grid gap-6">
                   <!-- Session block: Date, Type, Time, Role -->
                   <div :class="['rounded-lg border p-4', isDarkMode ? 'border-white/10 bg-gray-900/50 shadow-md shadow-black/40' : 'border-gray-200 bg-white']">
@@ -3508,6 +3517,16 @@
                   ]"
                 >
                   {{ isCommercialMode ? 'OOOI Active' : '+ OOOI' }}
+                </button>
+                <button
+                  v-if="duplicableLastEntry"
+                  type="button"
+                  @click="duplicateLastFlight"
+                  :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors',
+                    isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200'
+                  ]"
+                >
+                  Duplicate last
                 </button>
               </div>
 
@@ -4354,6 +4373,7 @@
       :clock-zone="clockZone"
       :available-metrics="availableTotalsMetrics"
       :selected-metrics="selectedTotalsMetrics"
+      :show-currency-chips="showCurrencyChips === true"
       :is-online="isOnline"
       :is-syncing="isSyncing"
       :sync-error="syncError"
@@ -4375,6 +4395,7 @@
       @set-clock-format="setClockFormat"
       @set-clock-zone="setClockZone"
       @toggle-metric="toggleTotalsMetric"
+      @toggle-currency-chips="toggleShowCurrencyChips"
       :logbook-layout-presets="logbookLayoutPresets"
       :active-logbook-layout-preset-id="activePresetId"
       :logbook-layout-picker-fields="pickerFields"
@@ -4399,6 +4420,15 @@
       @export-logbook="openExportDialog"
       @generate-8710="showForm8710Modal = true"
       @import-fcv="handleOpenFcvImportFromSettings"
+      @flica-connection-changed="handleFlicaConnectionChanged"
+    />
+
+    <LogbookImportModal
+      :is-open="showDashboardImportModal"
+      :is-dark-mode="isDarkMode"
+      @close="showDashboardImportModal = false"
+      @import-provider-file="onDashboardImportProviderFile"
+      @request-transfer="onDashboardImportRequestTransfer"
     />
 
     <input
@@ -5079,7 +5109,7 @@
         </div>
       </div>
 
-            <div v-if="currentAircraftInfo.year || currentAircraftInfo.engineType || currentAircraftInfo.category" class="grid grid-cols-2 gap-4">
+            <div v-if="currentAircraftInfo.year || aircraftEngineTypeLabel(currentAircraftInfo) || currentAircraftInfo.category" class="grid grid-cols-2 gap-4">
               <div v-if="currentAircraftInfo.year">
                 <div :class="['text-sm font-semibold font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                   Year
@@ -5088,12 +5118,18 @@
                   {{ currentAircraftInfo.year }}
                 </div>
               </div>
-              <div v-if="currentAircraftInfo.engineType">
+              <div v-if="aircraftEngineTypeLabel(currentAircraftInfo)">
                 <div :class="['text-sm font-semibold font-quicksand mb-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                   Engine Type
                 </div>
                 <div :class="['text-base font-quicksand', isDarkMode ? 'text-gray-200' : 'text-gray-700']">
-                  {{ currentAircraftInfo.engineType }}
+                  {{ aircraftEngineTypeLabel(currentAircraftInfo) }}
+                </div>
+                <div
+                  v-if="aircraftEngineClassLabel(currentAircraftInfo)"
+                  :class="['text-sm font-quicksand mt-0.5', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+                >
+                  {{ aircraftEngineClassLabel(currentAircraftInfo) }}
                 </div>
               </div>
               <div v-if="currentAircraftInfo.category || derivedAircraftCategoryDisplay(currentAircraftInfo)">
@@ -5112,8 +5148,14 @@
               </div>
               <div :class="['text-base font-quicksand', isDarkMode ? 'text-gray-200' : 'text-gray-700']">
                 {{ currentAircraftInfo.owner }}
-        </div>
-      </div>
+              </div>
+              <div
+                v-if="currentAircraftInfo.city || currentAircraftInfo.state"
+                :class="['text-sm font-quicksand mt-0.5', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+              >
+                {{ [currentAircraftInfo.city, currentAircraftInfo.state].filter(Boolean).join(', ') }}
+              </div>
+            </div>
 
             <!-- Tags for this aircraft (applied to all entries with this registration, autofill on new entries) -->
             <div v-if="isAuthenticated && currentAircraftInfo?.registration" class="pt-4 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
@@ -5154,9 +5196,28 @@
               </div>
             </div>
 
-            <div v-if="currentAircraftInfo.source" class="pt-4 border-t" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
-              <div :class="['text-xs font-quicksand italic', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
+            <div
+              v-if="currentAircraftInfo.source || currentAircraftInfo.asOf || currentAircraftInfo.ownerCheckedAt"
+              class="pt-4 border-t space-y-0.5"
+              :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']"
+            >
+              <div
+                v-if="currentAircraftInfo.source"
+                :class="['text-xs font-quicksand italic', isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+              >
                 Source: {{ currentAircraftInfo.source }}
+              </div>
+              <div
+                v-if="currentAircraftInfo.asOf"
+                :class="['text-xs font-quicksand italic', isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+              >
+                FAA registry as of {{ currentAircraftInfo.asOf }}
+              </div>
+              <div
+                v-if="currentAircraftInfo.ownerCheckedAt"
+                :class="['text-xs font-quicksand italic', isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+              >
+                {{ aircraftOwnerCheckedLabel(currentAircraftInfo.ownerCheckedAt) }}
               </div>
             </div>
       </div>
@@ -6674,6 +6735,7 @@
         isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white focus:ring-blue-400' : 'bg-blue-500 hover:bg-blue-600 text-white focus:ring-blue-300'
       ]"
       aria-label="Add entry"
+      aria-keyshortcuts="N"
     >
       <Icon name="ri:add-line" size="24" />
     </button>
@@ -6707,9 +6769,16 @@ import type {
 } from '../utils/logbookTypes'
 import { useAircraftLookup } from '../composables/useAircraftLookup'
 import type { AircraftInfo } from '../composables/useAircraftLookup'
+import { aircraftEngineDisplay } from '../../shared/aircraftLookupLocal'
 import { useAirportLookup } from '../composables/useAirportLookup'
 import type { AirportInfo } from '../composables/useAirportLookup'
 import { getPilotInitialsFromName } from '../utils/pilotProfile'
+import { getDisplayedPilotInitials, shouldShowCurrencyChips } from '../utils/dashboardHydration'
+import { markAppReady } from '../utils/appReady'
+import {
+  formatEntryAirportCode,
+  getTotalTimeColorClass,
+} from '../utils/entryFieldDisplay'
 import {
   validateCrossCountry,
   computeCrossCountryDistanceNm,
@@ -6808,21 +6877,34 @@ import { useCapacitorPlatform, isCapacitorNative } from '../composables/useCapac
 import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGestures'
 import { usePullToRefresh } from '../composables/usePullToRefresh'
 import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
+import { useDashboardShortcuts } from '../composables/useDashboardShortcuts'
 import AuthModal from '../components/AuthModal.vue'
 import AuditTrail from '../components/AuditTrail.vue'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
 import ComplianceChecklist from '../components/ComplianceChecklist.vue'
 import CurrencyDashboard from '../components/CurrencyDashboard.vue'
 import DashboardSettingsModal from '../components/settings/DashboardSettingsModal.vue'
+import CurrencyStatusChips from '../components/logbook/CurrencyStatusChips.vue'
+import LogbookEmptyState from '../components/logbook/LogbookEmptyState.vue'
 import LogEntryList from '../components/logbook/LogEntryList.vue'
+import LogbookImportModal from '../components/import/LogbookImportModal.vue'
 import ProductUpdateHeadline from '../components/ProductUpdateHeadline.vue'
 import { useProductUpdates } from '../composables/useProductUpdates'
 import type { SettingsStackFrame, SettingsTabId } from '../components/settings/settingsNav'
-import FcvApiDisclaimers from '../components/fcv/FcvApiDisclaimers.vue'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '../utils/migrateLocalStorage'
 import { findDuplicateEntries, checkDuplicatesWithLocalFallback } from '../utils/duplicateDetection'
 import {
+  buildDuplicatedDraft,
+  findDuplicableLastEntry,
+} from '../utils/duplicateLastFlight'
+import {
+  entryMatchesAviationSearch,
+  parseAviationSearch,
+  stripSearchToken,
+} from '../utils/aviationSearch'
+import {
   ACCOUNT_SCOPED_STORAGE_KEYS,
+  DEVICE_GLOBAL_STORAGE_KEYS,
   getScopedItem,
   migrateAllGlobalKeysToScoped,
   setScopedItem,
@@ -7158,10 +7240,6 @@ const {
   dismissLatest,
   restoreLatestBanner,
 } = useProductUpdates()
-const showRegulatorySnapshot = ref(true)
-function dismissSnapshot() {
-  showRegulatorySnapshot.value = false
-}
 function openSettings(tab?: SettingsTabId) {
   if (isIos.value && isCatalogDrawerOpen.value) {
     closeCatalogDrawer()
@@ -7214,6 +7292,8 @@ interface LoadEntriesOptions {
   mode?: InboundSyncMode
   /** Skip inbound sync when a recent sync completed (resume/reconnect). */
   skipIfFresh?: boolean
+  /** Apply IndexedDB (and local prefs already loaded) without waiting on inbound sync. */
+  localOnly?: boolean
 }
 
 let logEntriesSideEffectTimer: ReturnType<typeof setTimeout> | null = null
@@ -7227,6 +7307,7 @@ const supersededIdSet = computed(() => buildSupersededIdSet(logEntries.value))
 const aircraftTailIndex = computed(() => buildAircraftTailIndex(logEntries.value))
 
 const tailCatalogFamilyMap = computed(() => buildTailCatalogFamilyMap(logEntries.value))
+const tailCatalogFamilyByTail = computed(() => Object.fromEntries(tailCatalogFamilyMap.value))
 const iosTailCatalogFamilyMap = shallowRef<Map<string, string>>(new Map())
 
 function refreshIosTailCatalogFamilyMap(): void {
@@ -7243,12 +7324,10 @@ function effectiveFamilyKeyForEntry(entry: {
 
 // Logout function
 const router = useRouter()
-const route = useRoute()
 
-/** Header “FC View Fetch” only when FC View OAuth is connected (see `/api/fcv/status`). */
+/** Header fetch CTA when FLICA is connected (see `/api/flica/status`). */
 const dashboardFcvConnected = ref(false)
 const showFcvFetchPanel = ref(false)
-const fcvImportPromptHandled = ref(false)
 
 async function refreshDashboardFcvStatus(): Promise<void> {
   if (!isAuthenticated.value) {
@@ -7261,8 +7340,9 @@ async function refreshDashboardFcvStatus(): Promise<void> {
     return
   }
   try {
-    const data = await apiFetch<{ connected: boolean }>('/api/fcv/status', {
+    const data = await apiFetch<{ connected: boolean }>('/api/flica/status', {
       headers: { Authorization: `Bearer ${token}` },
+      query: { airlineCode: 'RJET' },
     })
     dashboardFcvConnected.value = Boolean(data?.connected)
   } catch {
@@ -7334,15 +7414,23 @@ async function onUserSessionReady(userId: string): Promise<void> {
     }
   }
 
-  await loadEntries({ mode: 'auto' })
-
+  loadClockPrefs()
   loadPilotProfilePrefs()
   loadSelectedTotalsMetrics()
+  loadShowCurrencyChips()
   loadColumnConfig()
   loadActiveLogbook()
+
+  try {
+    await loadEntries({ localOnly: true })
+  } finally {
+    void markAppReady()
+  }
+
   maybeAutoOpenEntryFormForEmptyLogbook()
   startBackgroundSync()
 
+  void loadEntries({ mode: 'auto' })
   void loadDeferredUserData()
 }
 
@@ -7413,25 +7501,9 @@ watch(isMigrating, (migrating, wasMigrating) => {
   }
 })
 
-watch(
-  [() => route.query.fcv, isAuthenticated, () => session.value?.access_token],
-  async ([val, authed, token]) => {
-    if (val !== 'connected' || !authed || !token || fcvImportPromptHandled.value) return
-    await refreshDashboardFcvStatus()
-    if (!dashboardFcvConnected.value) return
-    fcvImportPromptHandled.value = true
-    if (isIos.value) {
-      closeSettings()
-      await openFcvFetchSection()
-    }
-  },
-  { immediate: true }
-)
-
 watch(dashboardFcvConnected, (c) => {
   if (!c) {
     showFcvFetchPanel.value = false
-    fcvImportPromptHandled.value = false
   }
 })
 
@@ -7439,8 +7511,9 @@ watch(dashboardFcvConnected, (c) => {
 watch(authLoading, (loading) => {
   if (!loading && !isAuthenticated.value) {
     showAuthModal.value = true
+    void markAppReady()
   }
-})
+}, { immediate: true })
 
 // Initialize IndexedDB and scroll handlers on mount
 onMounted(async () => {
@@ -8002,6 +8075,27 @@ const defaultSelectedMetrics: TotalsMetricKey[] = [
 // Selected metrics for Totals Overview (persisted in localStorage)
 const selectedTotalsMetrics = ref<TotalsMetricKey[]>(defaultSelectedMetrics)
 
+/** Preference: show currency chips under Totals Overview (default on). Null until local pref is read. */
+const showCurrencyChips = ref<boolean | null>(null)
+
+function loadShowCurrencyChips(): void {
+  if (!isBrowser) return
+  const saved = readUserScopedLocal(ACCOUNT_SCOPED_STORAGE_KEYS.SHOW_CURRENCY_CHIPS, true)
+  if (saved === '0' || saved === 'false') showCurrencyChips.value = false
+  else showCurrencyChips.value = true
+}
+
+function saveShowCurrencyChips(): void {
+  if (!isBrowser) return
+  writeUserScopedLocal(ACCOUNT_SCOPED_STORAGE_KEYS.SHOW_CURRENCY_CHIPS, showCurrencyChips.value ? '1' : '0')
+}
+
+function toggleShowCurrencyChips(): void {
+  showCurrencyChips.value = showCurrencyChips.value !== true
+  saveShowCurrencyChips()
+}
+
+
 // Load selected metrics from localStorage
 function loadSelectedTotalsMetrics(): void {
   if (!isBrowser) return
@@ -8211,6 +8305,7 @@ function getCellTextColor(col: LogbookColumnConfig): string {
 
 const tableHeaderRef = ref<HTMLElement | null>(null)
 const tableContainerRef = ref<HTMLElement | null>(null)
+const logEntryListRef = ref<{ scrollToIndex: (index: number) => void } | null>(null)
 const tableRef = ref<HTMLTableElement | null>(null)
 
 function openLogbookLayoutPreferences(): void {
@@ -8273,6 +8368,7 @@ const setXcTimeManuallySet = (value: boolean) => {
   xcTimeManuallySet.value = value
 }
 const searchTerm = ref('')
+const searchInputRef = ref<HTMLInputElement | null>(null)
 const debouncedSearchTerm = ref('')
 watch(searchTerm, (value) => {
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
@@ -8281,6 +8377,22 @@ watch(searchTerm, (value) => {
     searchDebounceTimer = null
   }, SEARCH_DEBOUNCE_MS)
 })
+
+const knownSearchTails = computed(() => {
+  const tails = new Set<string>()
+  for (const logEntry of logEntries.value) {
+    if (inferLogbookType(logEntry) !== activeLogbook.value) continue
+    const raw = (logEntry.registration || '').trim().toUpperCase()
+    if (raw) tails.add(raw)
+    const normalized = raw.replace(/[^A-Z0-9]/g, '')
+    if (normalized) tails.add(normalized)
+  }
+  return tails
+})
+
+const searchChips = computed(
+  () => parseAviationSearch(searchTerm.value, { knownTails: knownSearchTails.value }).chips
+)
 const validationError = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 const duplicateWarning = ref<{ matches: LogEntry[] } | null>(null)
@@ -8321,6 +8433,7 @@ const scrollToTop = (): void => {
 
 const openFcvFetchSection = async (): Promise<void> => {
   showFcvFetchPanel.value = true
+  await refreshDashboardFcvStatus()
   if (isIos.value) return
   await nextTick()
   fcvFetchSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -8333,6 +8446,15 @@ function closeFcvFetchUi(): void {
 function handleOpenFcvImportFromSettings(): void {
   closeSettings()
   void openFcvFetchSection()
+}
+
+function handleFlicaConnectionChanged(payload: { connected: boolean }): void {
+  dashboardFcvConnected.value = !!payload?.connected
+  if (payload?.connected) {
+    showFcvFetchPanel.value = true
+  } else {
+    showFcvFetchPanel.value = false
+  }
 }
 const isInlineCommercialMode = ref(false)
 const editingEntryId = ref<string | null>(null)
@@ -8552,7 +8674,7 @@ watch(guestQrCompleted, async (done) => {
       }
     }
   }
-  showToast('Entry signed by guest instructor')
+  showToast('Entry signed by guest instructor', { type: 'success' })
 })
 
 async function startGuestSignOnPhone(): Promise<void> {
@@ -8628,11 +8750,11 @@ async function openSignEntryModal(): Promise<void> {
   await fetchInstructors()
   ensureDefaultSignInstructor()
   if (!(await isEntryCloudSynced(expandedEntryId.value))) {
-    showToast('Entry must sync to the cloud before signing')
+    showToast('Entry must sync to the cloud before signing', { type: 'error' })
     return
   }
   if (!requiresInstructorSignature(inlineEditEntry.value)) {
-    showToast('Signing is only available when Dual Received time is greater than zero')
+    showToast('Signing is only available when Dual Received time is greater than zero', { type: 'info' })
     return
   }
   if (!signInstructorId.value && mainInstructorsForSigning.value[0]) {
@@ -8661,7 +8783,7 @@ async function submitSignEntry(): Promise<void> {
   try {
     const result = await signLogEntry(entryId, signInstructorId.value, signPin.value)
     if (!result.success) {
-      showToast(result.error)
+      showToast(result.error, { type: 'error' })
       return
     }
     setLocalSignaturePending(entryId, false)
@@ -8675,7 +8797,7 @@ async function submitSignEntry(): Promise<void> {
         }
       }
     }
-    showToast('Entry signed — it can no longer be edited')
+    showToast('Entry signed — it can no longer be edited', { type: 'success' })
     closeSignEntryModal()
     closeInlineEditDrawer()
   } finally {
@@ -8688,14 +8810,14 @@ async function sendEntryForSigning(): Promise<void> {
   if (!entryId) return
   const instructorId = signInstructorId.value
   if (!instructorId) {
-    showToast('Select an instructor to send for signing')
+    showToast('Select an instructor to send for signing', { type: 'error' })
     return
   }
   isMarkingSignaturePending.value = true
   try {
     const cloud = await ensureCloudPendingSignature(entryId, instructorId)
     if (!cloud.ok) {
-      showToast(cloud.error, 6000)
+      showToast(cloud.error, { type: 'error', duration: 6000 })
       return
     }
     setLocalSignaturePending(entryId, true, instructorId)
@@ -8712,7 +8834,7 @@ async function sendEntryForSigning(): Promise<void> {
         }
       }
     }
-    showToast('Sent to instructor for signature')
+    showToast('Sent to instructor for signature', { type: 'success' })
     showSignatureFinishModal.value = false
     closeInlineEditDrawer()
   } finally {
@@ -8771,15 +8893,15 @@ function beginAmendSignedEntry(): void {
   const originalId = expandedEntryId.value
   if (!original || !originalId) return
   if (!isEntrySigned(originalId)) {
-    showToast('Only signed entries can be amended')
+    showToast('Only signed entries can be amended', { type: 'error' })
     return
   }
   if (isEntrySuperseded(originalId, logEntries.value)) {
-    showToast('This entry has already been superseded')
+    showToast('This entry has already been superseded', { type: 'error' })
     return
   }
   if (getAmendmentFor(originalId, logEntries.value)) {
-    showToast('An amendment already exists — edit or delete it first')
+    showToast('An amendment already exists — edit or delete it first', { type: 'error' })
     return
   }
 
@@ -8821,7 +8943,7 @@ function beginAmendSignedEntry(): void {
     ensureDefaultSignInstructor()
   }
 
-  showToast('Amendment draft created — correct and save. History will appear in the audit trail.')
+  showToast('Amendment draft created — correct and save. History will appear in the audit trail.', { type: 'success' })
 }
 
 /** Load cloud amendment for a signed original when local state is missing it. */
@@ -8869,15 +8991,15 @@ async function beginVoidSignedEntry(): Promise<void> {
   const originalId = expandedEntryId.value
   if (!original || !originalId) return
   if (!isEntrySigned(originalId)) {
-    showToast('Only signed entries can be voided')
+    showToast('Only signed entries can be voided', { type: 'error' })
     return
   }
   if (isEntrySuperseded(originalId, logEntries.value)) {
-    showToast('This entry has already been superseded')
+    showToast('This entry has already been superseded', { type: 'error' })
     return
   }
   if (getAmendmentFor(originalId, logEntries.value)) {
-    showToast('An amendment already exists — edit or delete it first')
+    showToast('An amendment already exists — edit or delete it first', { type: 'error' })
     return
   }
 
@@ -8885,12 +9007,9 @@ async function beginVoidSignedEntry(): Promise<void> {
   const remoteExisting = await fetchRemoteAmendmentForOriginal(originalId)
   if (remoteExisting) {
     await adoptEntryIntoLocalState(remoteExisting)
-    showToast(
-      remoteExisting.isVoid
+    showToast(remoteExisting.isVoid
         ? 'This entry was already voided — restored from the cloud'
-        : 'An amendment already exists — restored from the cloud',
-      5000
-    )
+        : 'An amendment already exists — restored from the cloud', { type: 'error', duration: 5000 })
     prepareInlineEditFromEntry(remoteExisting)
     return
   }
@@ -8900,7 +9019,7 @@ async function beginVoidSignedEntry(): Promise<void> {
   )
   if (reason === null) return
   if (!reason.trim()) {
-    showToast('A void reason is required')
+    showToast('A void reason is required', { type: 'error' })
     return
   }
 
@@ -8929,12 +9048,9 @@ async function beginVoidSignedEntry(): Promise<void> {
   const recovered = await fetchRemoteAmendmentForOriginal(originalId)
   if (recovered) {
     await adoptEntryIntoLocalState(recovered, newId)
-    showToast(
-      recovered.isVoid
+    showToast(recovered.isVoid
         ? 'This entry was already voided — restored from the cloud'
-        : 'An amendment already exists — restored from the cloud',
-      5000
-    )
+        : 'An amendment already exists — restored from the cloud', { type: 'error', duration: 5000 })
     prepareInlineEditFromEntry(recovered)
     return
   }
@@ -8950,7 +9066,7 @@ async function beginVoidSignedEntry(): Promise<void> {
   expandedEntryId.value = originalId
   inlineEditEntry.value = originalSnapshot
   isInlineCommercialMode.value = priorCommercialMode
-  showToast('Could not void entry — changes were not saved', 6000)
+  showToast('Could not void entry — changes were not saved', { type: 'error', duration: 6000 })
 }
 
 function ensureInlineOOOI(): void {
@@ -8972,7 +9088,7 @@ function toggleInlineOOOIMode(): void {
 async function saveInlineEdit(): Promise<boolean> {
   if (!inlineEditEntry.value || isSavingInlineEdit.value) return false
   if (isEntrySigned(inlineEditEntry.value.id) || isEntrySigned(expandedEntryId.value)) {
-    showToast('Signed entries cannot be edited')
+    showToast('Signed entries cannot be edited', { type: 'error' })
     return false
   }
   isSavingInlineEdit.value = true
@@ -8980,11 +9096,11 @@ async function saveInlineEdit(): Promise<boolean> {
   try {
   // Basic validation: date always required; aircraft/ident required only when not logging simulator time
   if (!inlineEditEntry.value.date) {
-    alert('Date is required.')
+    showToast('Date is required.', { type: 'error' })
     return false
   }
   if (!isLoggingSimTime(inlineEditEntry.value) && !(inlineEditEntry.value.registration || '').trim()) {
-    alert('Aircraft Identification is required for flight entries.')
+    showToast('Aircraft Identification is required for flight entries.', { type: 'error' })
     return false
   }
 
@@ -9157,16 +9273,13 @@ async function saveInlineEdit(): Promise<boolean> {
                 return true
               }
             }
-            showToast(
-              isAmendUniqueViolation
+            showToast(isAmendUniqueViolation
                 ? 'An amendment for this entry already exists in the cloud'
-                : (insertError.message || 'Failed to save entry to the cloud. Check your connection and try again.'),
-              6000
-            )
+                : (insertError.message || 'Failed to save entry to the cloud. Check your connection and try again.'), { type: 'error', duration: 6000 })
             return false
           }
           if (!insertResult) {
-            showToast('Insert returned no row (possible RLS or constraint issue)', 6000)
+            showToast('Insert returned no row (possible RLS or constraint issue)', { type: 'error', duration: 6000 })
             return false
           }
 
@@ -9423,7 +9536,7 @@ async function saveInlineEdit(): Promise<boolean> {
       console.error('[SaveInlineEdit] Error details:', err?.details)
       console.error('[SaveInlineEdit] Full error JSON:', JSON.stringify(error, null, 2))
       const userMessage = err?.message ?? (typeof error === 'string' ? error : 'Error saving entry. Please try again.')
-      alert(userMessage)
+      showToast(userMessage, { type: 'error' })
       return false
     }
   } else {
@@ -9593,14 +9706,11 @@ async function finalizeSaveWithSigningIntent(
     requiresInstructorSignature(savedEntry) && !isEntrySigned(savedEntry.id)
 
   if (!needsSig) {
-    showToast(
-      savedEntry.isVoid
+    showToast(savedEntry.isVoid
         ? 'Entry voided — original remains in audit history'
         : source === 'edit'
           ? 'Entry updated'
-          : 'Entry saved',
-      3000
-    )
+          : 'Entry saved', { type: 'success', duration: 3000 })
     if (source === 'edit') closeInlineEditDrawer()
     clearFormSigningFields()
     return
@@ -9609,18 +9719,18 @@ async function finalizeSaveWithSigningIntent(
   if (intent === 'sign') {
     if (isGuestSignerSelected.value) {
       // Should have used 'guest' intent; fall through guard
-      showToast('Use Sign with guest for fill-in instructors')
+      showToast('Use Sign with guest for fill-in instructors', { type: 'error' })
       prepareInlineEditFromEntry(savedEntry)
       return
     }
-    showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', 2000)
+    showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', { type: 'success', duration: 2000 })
     if (source === 'edit') {
       prepareInlineEditFromEntry(savedEntry)
     }
     const instructorId = signInstructorId.value
     const pin = signPin.value
     if (!instructorId || pin.trim().length < 4) {
-      showToast('Instructor and PIN are required to Save & Sign')
+      showToast('Instructor and PIN are required to Save & Sign', { type: 'error' })
       prepareInlineEditFromEntry(savedEntry)
       ensureDefaultSignInstructor()
       openSignatureFinishModal()
@@ -9635,7 +9745,7 @@ async function finalizeSaveWithSigningIntent(
       }
       const result = await signLogEntry(savedEntry.id, instructorId, pin)
       if (!result.success) {
-        showToast(result.error)
+        showToast(result.error, { type: 'error' })
         prepareInlineEditFromEntry(savedEntry)
         openSignatureFinishModal()
         return
@@ -9654,7 +9764,7 @@ async function finalizeSaveWithSigningIntent(
           }
         }
       }
-      showToast('Entry saved and signed')
+      showToast('Entry saved and signed', { type: 'success' })
       clearFormSigningFields()
       closeInlineEditDrawer()
     } finally {
@@ -9671,21 +9781,18 @@ async function finalizeSaveWithSigningIntent(
       await new Promise((r) => setTimeout(r, 400))
     }
     if (!(await isEntryCloudSynced(savedEntry.id))) {
-      showToast(
-        'Could not sync the entry for phone signing. Check your connection and try again.',
-        6000
-      )
+      showToast('Could not sync the entry for phone signing. Check your connection and try again.', { type: 'error', duration: 6000 })
       return
     }
     const ok = await createGuestSignQrSession(savedEntry.id)
     if (!ok) {
-      showToast(guestQrError.value || 'Could not create phone signing session', 6000)
+      showToast(guestQrError.value || 'Could not create phone signing session', { type: 'error', duration: 6000 })
     }
     return
   }
 
   if (intent === 'guest') {
-    showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', 2000)
+    showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', { type: 'success', duration: 2000 })
     if (source === 'edit') {
       prepareInlineEditFromEntry(savedEntry)
     }
@@ -9693,7 +9800,7 @@ async function finalizeSaveWithSigningIntent(
     pendingGuestSignatureBlob.value = null
     const name = guestSignerName.value.trim()
     if (!blob || !name) {
-      showToast('Guest name and drawn signature are required')
+      showToast('Guest name and drawn signature are required', { type: 'error' })
       prepareInlineEditFromEntry(savedEntry)
       return
     }
@@ -9710,7 +9817,7 @@ async function finalizeSaveWithSigningIntent(
         blob
       )
       if (!result.success) {
-        showToast(result.error, 6000)
+        showToast(result.error, { type: 'error', duration: 6000 })
         prepareInlineEditFromEntry(savedEntry)
         return
       }
@@ -9728,7 +9835,7 @@ async function finalizeSaveWithSigningIntent(
           }
         }
       }
-      showToast('Entry signed by guest instructor')
+      showToast('Entry signed by guest instructor', { type: 'success' })
       clearFormSigningFields()
       closeInlineEditDrawer()
     } finally {
@@ -9741,14 +9848,11 @@ async function finalizeSaveWithSigningIntent(
     const instructorId = signInstructorId.value || savedEntry.pendingInstructorId
     const cloud = await ensureCloudPendingSignature(savedEntry.id, instructorId)
     if (!cloud.ok) {
-      showToast(cloud.error, 6000)
+      showToast(cloud.error, { type: 'error', duration: 6000 })
       prepareInlineEditFromEntry(savedEntry)
       return
     }
-    showToast(
-      source === 'edit' ? 'Entry updated — pending signature' : 'Entry saved — pending signature',
-      3000
-    )
+    showToast(source === 'edit' ? 'Entry updated — pending signature' : 'Entry saved — pending signature', { type: 'success', duration: 3000 })
     if (source === 'edit') {
       closeInlineEditDrawer()
     }
@@ -9757,7 +9861,7 @@ async function finalizeSaveWithSigningIntent(
   }
 
   // Dual entry but no intent (shouldn't happen with new buttons) — keep finish modal as fallback
-  showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', 3000)
+  showToast(source === 'edit' ? 'Entry updated' : 'Entry saved', { type: 'success', duration: 3000 })
   prepareInlineEditFromEntry(savedEntry)
   ensureDefaultSignInstructor()
   if (isOnline.value) void processQueue({ silent: true })
@@ -9776,12 +9880,12 @@ function clearFormSigningFields(): void {
 async function submitEntryWithIntent(intent: 'sign' | 'later' | 'none' | 'guest'): Promise<void> {
   if (intent === 'guest') {
     if (!canSaveAndSignNewEntry.value || !isGuestSignerSelected.value) {
-      showToast('Enter guest name and draw a signature to Sign with guest')
+      showToast('Enter guest name and draw a signature to Sign with guest', { type: 'error' })
       return
     }
     const blob = await addGuestPadRef.value?.toBlob('image/png')
     if (!blob) {
-      showToast('Draw a signature before signing')
+      showToast('Draw a signature before signing', { type: 'error' })
       return
     }
     pendingGuestSignatureBlob.value = blob
@@ -9796,24 +9900,24 @@ async function submitEntryWithIntent(intent: 'sign' | 'later' | 'none' | 'guest'
     }
     if (!canSaveAndSignNewEntry.value) {
       if (activeInstructorsForSigning.value.length === 0) {
-        showToast('Link an active instructor in Settings → Instructor Links, or choose Guest / fill-in')
+        showToast('Link an active instructor in Settings → Instructor Links, or choose Guest / fill-in', { type: 'error' })
       } else {
-        showToast('Select an instructor and enter their PIN to Save & Sign')
+        showToast('Select an instructor and enter their PIN to Save & Sign', { type: 'error' })
       }
       return
     }
   }
   if (intent === 'later') {
     if (isGuestSignerSelected.value) {
-      showToast('Guest instructors cannot use Save without Signing — use Sign with guest instead')
+      showToast('Guest instructors cannot use Save without Signing — use Sign with guest instead', { type: 'error' })
       return
     }
     if (activeInstructorsForSigning.value.length === 0) {
-      showToast('Link an active instructor in Settings → Instructor Links first')
+      showToast('Link an active instructor in Settings → Instructor Links first', { type: 'error' })
       return
     }
     if (!signInstructorId.value) {
-      showToast('Select an instructor to Save without Signing')
+      showToast('Select an instructor to Save without Signing', { type: 'error' })
       return
     }
   }
@@ -9832,12 +9936,12 @@ function onAddEntryFormSubmit(): void {
 async function saveInlineEditWithIntent(intent: 'sign' | 'later' | 'none' | 'guest'): Promise<void> {
   if (intent === 'guest') {
     if (!canSaveAndSignInlineEntry.value || !isGuestSignerSelected.value) {
-      showToast('Enter guest name and draw a signature to Sign with guest')
+      showToast('Enter guest name and draw a signature to Sign with guest', { type: 'error' })
       return
     }
     const blob = await inlineGuestPadRef.value?.toBlob('image/png')
     if (!blob) {
-      showToast('Draw a signature before signing')
+      showToast('Draw a signature before signing', { type: 'error' })
       return
     }
     pendingGuestSignatureBlob.value = blob
@@ -9852,24 +9956,24 @@ async function saveInlineEditWithIntent(intent: 'sign' | 'later' | 'none' | 'gue
     }
     if (!canSaveAndSignInlineEntry.value) {
       if (activeInstructorsForSigning.value.length === 0) {
-        showToast('Link an active instructor in Settings → Instructor Links, or choose Guest / fill-in')
+        showToast('Link an active instructor in Settings → Instructor Links, or choose Guest / fill-in', { type: 'error' })
       } else {
-        showToast('Select an instructor and enter their PIN to Save & Sign')
+        showToast('Select an instructor and enter their PIN to Save & Sign', { type: 'error' })
       }
       return
     }
   }
   if (intent === 'later') {
     if (isGuestSignerSelected.value) {
-      showToast('Guest instructors cannot use Save without Signing — use Sign with guest instead')
+      showToast('Guest instructors cannot use Save without Signing — use Sign with guest instead', { type: 'error' })
       return
     }
     if (activeInstructorsForSigning.value.length === 0) {
-      showToast('Link an active instructor in Settings → Instructor Links first')
+      showToast('Link an active instructor in Settings → Instructor Links first', { type: 'error' })
       return
     }
     if (!signInstructorId.value) {
-      showToast('Select an instructor to Save without Signing')
+      showToast('Select an instructor to Save without Signing', { type: 'error' })
       return
     }
   }
@@ -10038,6 +10142,26 @@ const csvFileInput = ref<HTMLInputElement | null>(null)
 // Form 8710 state
 const showForm8710Modal = ref(false)
 const showCurrencyDashboard = ref(false)
+const showDashboardImportModal = ref(false)
+
+function openDigifiFromEmptyState(): void {
+  showDashboardImportModal.value = false
+  if (isIos.value) {
+    void router.push('/digifi-eye')
+  } else {
+    void router.push({ path: '/logbook-builder', query: { digifi: 'open' } })
+  }
+}
+
+function onDashboardImportProviderFile(payload: { file: File; provider: ImportProviderKey }): void {
+  showDashboardImportModal.value = false
+  void handleSettingsProviderImportFile(payload)
+}
+
+function onDashboardImportRequestTransfer(): void {
+  showDashboardImportModal.value = false
+  openSettings('data')
+}
 const showForm8710View = ref(false)
 const form8710PreviewData = ref<Form8710Data | null>(null)
 const form8710Warnings = computed<string[]>(() => {
@@ -10470,7 +10594,9 @@ function getExportFilenameSegment(): string {
   return ''
 }
 
-const pilotInitials = computed(() => getPilotInitialsFromName(pilotProfile.name))
+const pilotInitials = computed(() =>
+  getDisplayedPilotInitials(pilotProfile.name, pilotProfileLoaded.value)
+)
 // Catalog filters
 const selectedFilters = reactive({
   aircraft: {} as Record<string, boolean>, // key: tail (e.g., N123AB)
@@ -11618,9 +11744,7 @@ async function proceedWithImport(includeDuplicates: boolean): Promise<void> {
 
   if (result.imported === 0 && result.tagsUpdated === 0 && result.errors.length === 0) {
     const total = importPreviewStatistics.value.totalEntries
-    alert(
-      `Nothing new to import. Check "Import duplicate entries and flag them for review" to add all ${total} rows (duplicates will be flagged).`
-    )
+    showToast(`Nothing new to import. Check "Import duplicate entries and flag them for review" to add all ${total} rows (duplicates will be flagged).`, { type: 'info' })
     cancelImport()
     return
   }
@@ -11641,7 +11765,7 @@ async function proceedWithImport(includeDuplicates: boolean): Promise<void> {
       message += `\n... and ${result.errors.length - 5} more`
     }
   }
-  alert(message)
+  showToast(message, { type: result.errors.length > 0 ? 'error' : 'success' })
 
   cancelImport()
 }
@@ -11703,7 +11827,7 @@ async function processCSVFile(file: File, provider?: ImportProviderKey): Promise
     }
 
     if (parsed.rows.length === 0) {
-      alert('Import file is empty or could not be parsed.')
+      showToast('Import file is empty or could not be parsed.', { type: 'error' })
       return
     }
 
@@ -11779,7 +11903,7 @@ async function processCSVFile(file: File, provider?: ImportProviderKey): Promise
         }
         errorMsg += '\n\nCheck console for details.'
       }
-      alert(errorMsg)
+      showToast(errorMsg, { type: 'error' })
       return
     }
 
@@ -11805,7 +11929,7 @@ async function processCSVFile(file: File, provider?: ImportProviderKey): Promise
     initImportSimTypeOverrides()
   } catch (error) {
     console.error('Error importing file:', error)
-    alert(`Error importing file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    showToast(`Error importing file: ${error instanceof Error ? error.message : 'Unknown error'}`, { type: 'error' })
   }
 }
 
@@ -11834,12 +11958,12 @@ async function processJSONFile(file: File): Promise<void> {
     } else if (data.entries && Array.isArray(data.entries)) {
       entries = data.entries
     } else {
-      alert('JSON file format not recognized. Expected an array of entries or an object with an "entries" property.')
+      showToast('JSON file format not recognized. Expected an array of entries or an object with an "entries" property.', { type: 'error' })
       return
     }
     
     if (entries.length === 0) {
-      alert('No entries found in JSON file.')
+      showToast('No entries found in JSON file.', { type: 'error' })
       return
     }
     
@@ -11853,7 +11977,7 @@ async function processJSONFile(file: File): Promise<void> {
     }
     
     if (normalizedEntries.length === 0) {
-      alert('No valid entries found in JSON file.')
+      showToast('No valid entries found in JSON file.', { type: 'error' })
       return
     }
     
@@ -11872,7 +11996,7 @@ async function processJSONFile(file: File): Promise<void> {
     initImportSimTypeOverrides()
   } catch (error) {
     console.error('Error importing JSON:', error)
-    alert(`Error importing JSON file: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    showToast(`Error importing JSON file: ${error instanceof Error ? error.message : 'Unknown error'}`, { type: 'error' })
   }
 }
 
@@ -11946,7 +12070,7 @@ async function handleImportDrop(event: DragEvent): Promise<void> {
     console.log('Processing as JSON')
     await processJSONFile(file)
   } else {
-    alert(`Please drop a CSV, TSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`)
+    showToast(`Please drop a CSV, TSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`, { type: 'error' })
   }
 }
 
@@ -11958,7 +12082,7 @@ async function handleSettingsImportFile(file: File): Promise<void> {
   } else if (fileName.endsWith('.json') || file.type === 'application/json') {
     await processJSONFile(file)
   } else {
-    alert(`Please choose a CSV, TSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`)
+    showToast(`Please choose a CSV, TSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`, { type: 'error' })
   }
 }
 
@@ -11979,7 +12103,7 @@ async function handleSettingsProviderImportFile(payload: {
   ) {
     await processCSVFile(file, provider)
   } else {
-    alert(`Please choose a CSV, TSV, or TXT file for provider import. Received: ${file.type || 'unknown type'}`)
+    showToast(`Please choose a CSV, TSV, or TXT file for provider import. Received: ${file.type || 'unknown type'}`, { type: 'error' })
   }
 }
 
@@ -12124,7 +12248,7 @@ function savePilotProfileToSupabase(): void {
 }
 
 // Aircraft lookup
-const { lookupAircraft } = useAircraftLookup()
+const { lookupAircraft, lookupAircraftDetails } = useAircraftLookup()
 const showAircraftModal = ref(false)
 const currentAircraftInfo = ref<AircraftInfo | null>(null)
 const aircraftModalNewTagInput = ref('')
@@ -12254,6 +12378,39 @@ const crewModalLastTagEntryCount = ref<number | null>(null)
 
 // Aircraft family rename modal
 const showRenameFamilyModal = ref(false)
+
+const isDashboardShortcutBlocked = computed(
+  () =>
+    showSettingsModal.value ||
+    showAuthModal.value ||
+    showSignEntryModal.value ||
+    showSignatureFinishModal.value ||
+    showForm8710Modal.value ||
+    showForm8710View.value ||
+    showCurrencyDashboard.value ||
+    showDashboardImportModal.value ||
+    showExportDialog.value ||
+    showDuplicateOverrideDialog.value ||
+    showAircraftModal.value ||
+    showAirportModal.value ||
+    showCrewProfileModal.value ||
+    showRenameFamilyModal.value ||
+    showAuditTrail.value ||
+    showAuditTrailSidebar.value ||
+    expandedEntryId.value !== null ||
+    (isIos.value && isCatalogDrawerOpen.value)
+)
+
+useDashboardShortcuts({
+  isBlocked: isDashboardShortcutBlocked,
+  onNewEntry: () => {
+    if (!isEntryFormOpen.value) toggleEntryForm()
+  },
+  onFocusSearch: () => {
+    searchInputRef.value?.focus()
+  },
+})
+
 const renameFamilyOldName = ref<string>('')
 const renameFamilyCanonicalKey = ref<string>('')
 const renameFamilyNewName = ref<string>('')
@@ -12528,6 +12685,22 @@ function derivedAircraftCategoryDisplay(info: { category?: string; make?: string
   return derived || ''
 }
 
+function aircraftOwnerCheckedLabel(ownerCheckedAt: string): string {
+  const checked = ownerCheckedAt.slice(0, 10)
+  const today = new Date().toISOString().slice(0, 10)
+  return checked === today ? 'Owner checked today' : `Owner checked ${checked}`
+}
+
+function aircraftEngineTypeLabel(info: AircraftInfo | null): string {
+  const display = aircraftEngineDisplay(info)
+  return display.model || display.type || ''
+}
+
+function aircraftEngineClassLabel(info: AircraftInfo | null): string {
+  const display = aircraftEngineDisplay(info)
+  return display.model && display.type ? display.type : ''
+}
+
 // Category/Class normalization and autofill helpers
 function normalizeCategoryClassLabel(value: string): string {
   if (!value) return ''
@@ -12626,12 +12799,7 @@ function deriveCategoryFromTextShort(text: string): string {
 
 function deriveCategoryFromInfoShort(info: any, fallbackMakeModel: string): string {
   const category = (info?.category || '').toLowerCase()
-  const engineType = (info?.engineType || '').toLowerCase()
-  
-  // Log for debugging
-  console.log('Deriving category from:', { category, engineType, make: info?.make, model: info?.model })
-  
-  // Check category field first
+
   if (category.includes('single') && (category.includes('land') || category.includes('fixed'))) return 'ASEL'
   if (category.includes('single') && (category.includes('sea') || category.includes('amphib'))) return 'ASES'
   if (category.includes('multi') && (category.includes('land') || category.includes('fixed'))) return 'AMEL'
@@ -12646,21 +12814,12 @@ function deriveCategoryFromInfoShort(info: any, fallbackMakeModel: string): stri
     if (category.includes('sea') || category.includes('amphib')) return 'WSC-S'
     return 'WSC-L'
   }
-  
-  // Check engine type for multi-engine indicators
-  if (engineType.includes('multi') || engineType.includes('twin') || /\d+\s*engines?/.test(engineType)) {
-    const isSea = category.includes('sea') || category.includes('amphib') || engineType.includes('sea')
-    return isSea ? 'AMES' : 'AMEL'
-  }
-  
-  // Fall back to text analysis of make/model
-  const derived = deriveCategoryFromTextShort(`${info?.make || ''} ${info?.model || ''} ${fallbackMakeModel || ''}`)
-  console.log('Derived from text:', derived)
-  return derived
+
+  return deriveCategoryFromTextShort(`${info?.make || ''} ${info?.model || ''} ${fallbackMakeModel || ''}`)
 }
 
 function normalizeAndAutofillCategories(): void {
-  const cacheRaw = isBrowser ? window.localStorage.getItem('logifi://aircraft-cache') : null
+  const cacheRaw = isBrowser ? window.localStorage.getItem(DEVICE_GLOBAL_STORAGE_KEYS.AIRCRAFT_CACHE) : null
   let cache: Record<string, any> = {}
   if (cacheRaw) {
     try { cache = JSON.parse(cacheRaw) as Record<string, any> } catch { cache = {} }
@@ -12919,28 +13078,40 @@ function ensureDefaultSignInstructor(): void {
   })
 }
 
-function toggleEntryForm(): void {
-  const willBeOpen = !isEntryFormOpen.value
-  isEntryFormOpen.value = willBeOpen
+function openNewEntryForm(draft?: EditableLogEntry): void {
+  closeAuditTrailSidebar()
+  expandedEntryId.value = null
+  inlineEditEntry.value = null
+  isInlineCommercialMode.value = false
+  successMessage.value = null
+  editingEntryId.value = null
+  isCommercialMode.value = false
+  Object.assign(newEntry, createBlankEntry(), draft ?? {})
+  showSimSection.value = (draft?.logbookType ?? activeLogbook.value) === 'simulator'
+  isEntryFormOpen.value = true
+  ensureDefaultSignInstructor()
+}
 
-  // If opening the Add Entry form, close any open inline edit and clear post-save state
-  if (willBeOpen) {
+function toggleEntryForm(): void {
+  if (isEntryFormOpen.value) {
+    isEntryFormOpen.value = false
     closeAuditTrailSidebar()
-    expandedEntryId.value = null
-    inlineEditEntry.value = null
-    isInlineCommercialMode.value = false
-    successMessage.value = null
-    editingEntryId.value = null
-    Object.assign(newEntry, createBlankEntry())
-    showSimSection.value = activeLogbook.value === 'simulator'
-    ensureDefaultSignInstructor()
-  } else {
-    closeAuditTrailSidebar()
-    // If closing, reset form if needed
     if (!editingEntryId.value) {
       resetForm()
     }
+    return
   }
+  openNewEntryForm()
+}
+
+const duplicableLastEntry = computed(() =>
+  findDuplicableLastEntry(logEntries.value, activeLogbook.value, supersededIdSet.value)
+)
+
+function duplicateLastFlight(): void {
+  const source = duplicableLastEntry.value
+  if (!source) return
+  openNewEntryForm(buildDuplicatedDraft(source))
 }
 
 function toggleCatalogSection(key: CatalogKey): void {
@@ -13578,7 +13749,7 @@ async function showAircraftInfo(registration: string): Promise<void> {
   console.log('Looking up aircraft:', registration, '-> cleaned:', cleanRegistration)
 
   try {
-    const info = await lookupAircraft(cleanRegistration)
+    const info = await lookupAircraftDetails(cleanRegistration)
     console.log('Aircraft lookup result:', info)
     if (info) {
       currentAircraftInfo.value = info
@@ -13747,7 +13918,7 @@ async function saveFamilySimTypeSetting(familyName: string, type: '' | SimTypeKe
 async function renameAircraftFamily(canonicalFamilyKey: string, newFamilyName: string): Promise<void> {
   const trimmedNewName = newFamilyName.trim()
   if (!canonicalFamilyKey.trim() || !trimmedNewName) {
-    showToast('Enter a new family name')
+    showToast('Enter a new family name', { type: 'error' })
     return
   }
 
@@ -13762,7 +13933,7 @@ async function renameAircraftFamily(canonicalFamilyKey: string, newFamilyName: s
   const entriesToUpdate = getLogEntriesInFamily(canonicalFamilyKey)
 
   if (entriesToUpdate.length === 0) {
-    showToast('No log entries found for this family')
+    showToast('No log entries found for this family', { type: 'error' })
     return
   }
 
@@ -13905,11 +14076,11 @@ async function renameAircraftFamily(canonicalFamilyKey: string, newFamilyName: s
   closeRenameFamilyModal()
 
   if (!isAuthenticated.value || !user.value) {
-    showToast(`Updated ${entriesToUpdate.length} ${entriesToUpdate.length === 1 ? 'entry' : 'entries'} locally`)
+    showToast(`Updated ${entriesToUpdate.length} ${entriesToUpdate.length === 1 ? 'entry' : 'entries'} locally`, { type: 'success' })
   } else if (!supabaseOk) {
-    showToast('Name updated locally — sync may be needed')
+    showToast('Name updated locally — sync may be needed', { type: 'success' })
   } else {
-    showToast(`Renamed family on ${entriesToUpdate.length} ${entriesToUpdate.length === 1 ? 'entry' : 'entries'}`)
+    showToast(`Renamed family on ${entriesToUpdate.length} ${entriesToUpdate.length === 1 ? 'entry' : 'entries'}`, { type: 'success' })
   }
 }
 
@@ -13941,7 +14112,7 @@ async function confirmRenameFamily(): Promise<void> {
   }
 
   if (!renameFamilyCanonicalKey.value) {
-    showToast('Could not determine aircraft family — close and try again')
+    showToast('Could not determine aircraft family — close and try again', { type: 'error' })
     return
   }
 
@@ -14159,20 +14330,12 @@ function deriveCategoryFromText(text: string): string {
 
 function deriveCategoryFromInfo(info: any, fallbackMakeModel: string): string {
   const category = (info?.category || '').toLowerCase()
-  const engineType = (info?.engineType || '').toLowerCase()
-  
-  // Check category field first
+
   if (category.includes('single') && (category.includes('land') || category.includes('fixed'))) return 'Airplane SEL'
   if (category.includes('single') && (category.includes('sea') || category.includes('amphib'))) return 'Airplane SES'
   if (category.includes('multi') && (category.includes('land') || category.includes('fixed'))) return 'Airplane MEL'
   if (category.includes('multi') && (category.includes('sea') || category.includes('amphib'))) return 'Airplane MES'
-  
-  // Check engine type for multi-engine indicators
-  if (engineType.includes('multi') || engineType.includes('twin') || /\d+\s*engines?/.test(engineType)) {
-    const isSea = category.includes('sea') || category.includes('amphib') || engineType.includes('sea')
-    return isSea ? 'Airplane MES' : 'Airplane MEL'
-  }
-  
+
   return deriveCategoryFromText(`${info?.make || ''} ${info?.model || ''} ${fallbackMakeModel || ''}`)
 }
 
@@ -14183,7 +14346,7 @@ async function tryPopulateAircraftCategory(registration: string): Promise<void> 
     // 1) Try local aircraft cache created during exports
     let derived = ''
     if (isBrowser) {
-      const cacheRaw = window.localStorage.getItem('logifi://aircraft-cache')
+      const cacheRaw = window.localStorage.getItem(DEVICE_GLOBAL_STORAGE_KEYS.AIRCRAFT_CACHE)
       if (cacheRaw) {
         try {
           const cache = JSON.parse(cacheRaw) as Record<string, any>
@@ -14222,7 +14385,7 @@ async function tryPopulateAircraftCategoryForInline(registration: string): Promi
     if (!reg) return
     let derived = ''
     if (isBrowser) {
-      const cacheRaw = window.localStorage.getItem('logifi://aircraft-cache')
+      const cacheRaw = window.localStorage.getItem(DEVICE_GLOBAL_STORAGE_KEYS.AIRCRAFT_CACHE)
       if (cacheRaw) {
         try {
           const cache = JSON.parse(cacheRaw) as Record<string, any>
@@ -14282,7 +14445,7 @@ async function toggleEntryFlag(entry: LogEntry): Promise<void> {
         })
         // Revert the change if save failed
         entry.flagged = !newFlaggedValue
-        alert(`Failed to save flagged status: ${error.message}\n\nCheck console for details.`)
+        showToast(`Failed to save flagged status: ${error.message}\n\nCheck console for details.`, { type: 'error' })
         return
       }
       
@@ -14293,7 +14456,7 @@ async function toggleEntryFlag(entry: LogEntry): Promise<void> {
       // Revert the change if save failed
       entry.flagged = !newFlaggedValue
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      alert(`Failed to save flagged status: ${errorMessage}\n\nCheck console for details.`)
+      showToast(`Failed to save flagged status: ${errorMessage}\n\nCheck console for details.`, { type: 'error' })
       return
     }
   }
@@ -15629,7 +15792,7 @@ async function submitEntry(): Promise<void> {
       ) {
         afterAddEntrySaveSuccess(savedEntry)
       } else {
-        showToast('Entry updated', 3000)
+        showToast('Entry updated', { type: 'success', duration: 3000 })
       }
     } else {
       afterAddEntrySaveSuccess(savedEntry)
@@ -15774,7 +15937,7 @@ async function removeEntry(id: string): Promise<void> {
 async function confirmAndDeleteEditing(): Promise<void> {
   if (!editingEntryId.value) return
   if (isEntrySigned(editingEntryId.value)) {
-    showToast('Signed entries cannot be deleted')
+    showToast('Signed entries cannot be deleted', { type: 'error' })
     return
   }
   const proceed = window.confirm('Delete this entry? This action cannot be undone.')
@@ -15787,7 +15950,7 @@ async function confirmAndDeleteEditing(): Promise<void> {
 
 async function confirmAndDeleteEntry(id: string): Promise<void> {
   if (isEntrySigned(id)) {
-    showToast('Signed entries cannot be deleted')
+    showToast('Signed entries cannot be deleted', { type: 'error' })
     return
   }
   const proceed = window.confirm('Delete this entry? This action cannot be undone.')
@@ -16395,6 +16558,10 @@ async function loadEntriesInternal(options: LoadEntriesOptions = {}): Promise<nu
       console.error('[LoadEntries] Error loading from IndexedDB:', error)
     }
 
+    if (options.localOnly) {
+      return inboundRemovedCount
+    }
+
     if (isAuthenticated.value && user.value) {
       await checkOnlineStatus()
       const browserOnline = typeof navigator !== 'undefined' ? navigator.onLine : true
@@ -16499,12 +16666,12 @@ async function refreshDashboardData(options?: { forceFull?: boolean }): Promise<
     await checkOnlineStatus()
 
     if (!isAuthenticated.value || !user.value) {
-      showToast('Sign in to sync')
+      showToast('Sign in to sync', { type: 'error' })
       return
     }
 
     if (!isOnline.value) {
-      showToast('Offline — showing local data')
+      showToast('Offline — showing local data', { type: 'error' })
       return
     }
 
@@ -16532,21 +16699,22 @@ async function refreshDashboardData(options?: { forceFull?: boolean }): Promise<
     if (removed > 0) {
       await new Promise((resolve) => setTimeout(resolve, 300))
       showToast(
-        `Removed ${removed} ${removed === 1 ? 'entry' : 'entries'} deleted elsewhere`
+        `Removed ${removed} ${removed === 1 ? 'entry' : 'entries'} deleted elsewhere`,
+        { type: 'info' }
       )
     } else if (added > 0) {
       await new Promise((resolve) => setTimeout(resolve, 300))
-      showToast(`Synced — ${added} new ${added === 1 ? 'entry' : 'entries'}`)
+      showToast(`Synced — ${added} new ${added === 1 ? 'entry' : 'entries'}`, { type: 'success' })
     } else if (queueCleared) {
       await new Promise((resolve) => setTimeout(resolve, 300))
-      showToast('Synced')
+      showToast('Synced', { type: 'success' })
     } else if (options?.forceFull) {
       await new Promise((resolve) => setTimeout(resolve, 300))
-      showToast('Full sync complete')
+      showToast('Full sync complete', { type: 'success' })
     }
   } catch (err) {
     console.error('[refreshDashboardData]', err)
-    showToast('Sync failed')
+    showToast('Sync failed', { type: 'error' })
   } finally {
     isDashboardRefreshing.value = false
   }
@@ -16663,11 +16831,11 @@ async function handleFcvImported(payload: {
   }
   const summary =
     parts.length > 0
-      ? `FC View import complete: ${parts.join(', ')}.`
-      : 'FC View import complete.'
+      ? `Schedule import complete: ${parts.join(', ')}.`
+      : 'Schedule import complete.'
   fcvImportMessage.value = summary
   if (isIos.value) {
-    showToast(summary, 5000)
+    showToast(summary, { type: 'success', duration: 5000 })
   }
 }
 
@@ -16812,18 +16980,18 @@ async function testSupabaseConnection() {
         hint: error.hint,
         code: error.code
       })
-      alert(`Connection failed: ${error.message}\n\nCheck console for details.`)
+      showToast(`Connection failed: ${error.message}\n\nCheck console for details.`, { type: 'error' })
       return { success: false, error }
     }
     
     console.log('✅ Supabase connection successful!')
     console.log('Table exists, row count:', count)
-    alert(`✅ Supabase connection successful!\n\nTable accessible. Row count: ${count ?? 0}`)
+    showToast(`Supabase connection successful!\n\nTable accessible. Row count: ${count ?? 0}`, { type: 'success' })
     return { success: true, data, count }
   } catch (err) {
     console.error('❌ Supabase test error:', err)
     const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-    alert(`Test error: ${errorMessage}\n\nCheck console for details.`)
+    showToast(`Test error: ${errorMessage}\n\nCheck console for details.`, { type: 'error' })
     return { success: false, error: err }
   }
 }
@@ -16841,10 +17009,10 @@ if (typeof window !== 'undefined') {
     const { resetMigration } = await import('../utils/migrateLocalStorage')
     const result = await resetMigration(user.value.id)
     if (result.success) {
-      alert('Migration reset complete! Refreshing page...')
+      showToast('Migration reset complete! Refreshing page...', { type: 'success' })
       window.location.reload()
     } else {
-      alert(`Error: ${result.error}`)
+      showToast(`Error: ${result.error}`, { type: 'error' })
     }
   }
   
@@ -16857,11 +17025,11 @@ if (typeof window !== 'undefined') {
     const { remigrateCrewProfiles } = await import('../utils/migrateLocalStorage')
     const result = await remigrateCrewProfiles(user.value.id)
     if (result.success) {
-      alert(`Re-migrated ${result.migrated} crew profiles! Refreshing page...`)
+      showToast(`Re-migrated ${result.migrated} crew profiles! Refreshing page...`, { type: 'success' })
       await loadCrewProfiles() // Reload from Supabase
       window.location.reload()
     } else {
-      alert(`Error: ${result.error}`)
+      showToast(`Error: ${result.error}`, { type: 'error' })
     }
   }
   
@@ -16874,11 +17042,11 @@ if (typeof window !== 'undefined') {
     const { migrateCrewFromLogEntries } = await import('../utils/migrateLocalStorage')
     const result = await migrateCrewFromLogEntries(user.value.id, logEntries.value)
     if (result.success) {
-      alert(`Migrated ${result.migrated} crew profiles from log entries! Refreshing page...`)
+      showToast(`Migrated ${result.migrated} crew profiles from log entries! Refreshing page...`, { type: 'success' })
       await loadCrewProfiles() // Reload from Supabase
       window.location.reload()
     } else {
-      alert(`Error: ${result.error}`)
+      showToast(`Error: ${result.error}`, { type: 'error' })
     }
   }
   
@@ -16892,9 +17060,9 @@ if (typeof window !== 'undefined') {
     const result = await findDuplicateCrewProfiles(user.value.id)
     if (result.duplicates.length > 0) {
       console.log('Duplicate crew profiles found:', result.duplicates)
-      alert(`Found ${result.duplicates.length} duplicate(s):\n${result.duplicates.map(d => d.names.join(' / ')).join('\n')}`)
+      showToast(`Found ${result.duplicates.length} duplicate(s):\n${result.duplicates.map(d => d.names.join(' / ')).join('\n')}`, { type: 'info' })
     } else {
-      alert('No duplicate crew profiles found!')
+      showToast('No duplicate crew profiles found!', { type: 'info' })
     }
     return result
   }
@@ -16906,7 +17074,7 @@ if (typeof window !== 'undefined') {
       return
     }
     if (!canonicalName || !duplicateName) {
-      alert('Usage: mergeCrewProfiles("Canonical Name", "Duplicate Name")')
+      showToast('Usage: mergeCrewProfiles("Canonical Name", "Duplicate Name")', { type: 'info' })
       return
     }
     
@@ -16956,12 +17124,12 @@ if (typeof window !== 'undefined') {
     
     const result = await mergeDuplicateCrewProfiles(user.value.id, canonicalName, duplicateName, updateLogEntries)
     if (result.success) {
-      alert(`Merged "${duplicateName}" into "${canonicalName}"! Refreshing page...`)
+      showToast(`Merged "${duplicateName}" into "${canonicalName}"! Refreshing page...`, { type: 'success' })
       await loadCrewProfiles() // Reload from Supabase
       await loadEntries({ mode: 'full' }) // Reload entries
       window.location.reload()
     } else {
-      alert(`Error: ${result.error}`)
+      showToast(`Error: ${result.error}`, { type: 'error' })
     }
     return result
   }
@@ -17093,7 +17261,7 @@ function getEntryLogbookType(entry: LogEntry): 'flight' | 'simulator' {
 }
 
 interface CatalogFilterContext {
-  term: string
+  parsedSearch: ReturnType<typeof parseAviationSearch>
   activeAircraft: Set<string>
   activeAirports: Set<string>
   activePilots: Set<string>
@@ -17108,7 +17276,9 @@ interface CatalogFilterContext {
 
 function buildCatalogFilterContext(): CatalogFilterContext {
   return {
-    term: debouncedSearchTerm.value.trim().toLowerCase(),
+    parsedSearch: parseAviationSearch(debouncedSearchTerm.value, {
+      knownTails: knownSearchTails.value,
+    }),
     activeAircraft: new Set(getActiveFilterKeys(selectedFilters.aircraft).map((k) => k.toUpperCase())),
     activeAirports: new Set(getActiveFilterKeys(selectedFilters.airports).map((k) => k.toUpperCase())),
     activePilots: new Set(getActiveFilterKeys(selectedFilters.pilots)),
@@ -17130,22 +17300,9 @@ function entryPassesCatalogAndSearchFilters(
 ): boolean {
   if (getEntryLogbookType(entry) !== ctx.activeLogbookType) return false
 
-  const matchesTerm =
-    ctx.term.length === 0 ||
-    [
-      entry.aircraftMakeModel,
-      entry.registration,
-      entry.departure,
-      entry.destination,
-      entry.route,
-      entry.remarks,
-      entry.trainingElements,
-    ]
-      .join(' ')
-      .toLowerCase()
-      .includes(ctx.term)
-
-  if (!matchesTerm) return false
+  if (!entryMatchesAviationSearch(entry, ctx.parsedSearch, ctx.classifiedAirports)) {
+    return false
+  }
 
   if (ctx.activeAircraft.size > 0) {
     const reg = (entry.registration || '').toUpperCase()
@@ -17252,6 +17409,7 @@ watch(
   [debouncedSearchTerm, activeLogbook, totalsTimeMode, totalsCustomStart, totalsCustomEnd, selectedFilters],
   () => {
     visibleEntryCount.value = ENTRIES_PAGE_SIZE
+    logEntryListRef.value?.scrollToIndex(0)
   },
   { deep: true }
 )
@@ -17880,7 +18038,7 @@ function computePilotProfileStats(): PilotProfileStats {
     const routeLabel = buildRouteLabel(entry)
     routeCounts[routeLabel] = (routeCounts[routeLabel] || 0) + 1
 
-    const family = normalizeAircraftFamily(entry.aircraftMakeModel.trim())
+    const family = effectiveFamilyKeyForEntry(entry)
     if (family) {
       familyCounts[family] = (familyCounts[family] || 0) + 1
     }
@@ -18106,16 +18264,13 @@ function normalizeDateForInput(date: string): string {
   return ''
 }
 
-// Computed property for most used aircraft family
+// Computed property for most used aircraft (catalog family label, same as Aircraft catalog)
 const mostUsedAircraft = computed(() => {
   const familyCounts: Record<string, number> = {}
   entriesForTotals.value.forEach((entry) => {
-    const makeModel = entry.aircraftMakeModel.trim()
-    if (makeModel) {
-      const family = normalizeAircraftFamily(makeModel)
-      if (family) {
-        familyCounts[family] = (familyCounts[family] || 0) + 1
-      }
+    const family = effectiveFamilyKeyForEntry(entry)
+    if (family) {
+      familyCounts[family] = (familyCounts[family] || 0) + 1
     }
   })
   if (Object.keys(familyCounts).length === 0) return null

@@ -16,14 +16,13 @@
       <div class="pt-10 pb-6 flex flex-col items-center border-b" :class="[isDarkMode ? 'border-gray-800 bg-gray-900/50' : 'border-gray-50 bg-gray-50/50']">
         <LogifiAppLogo class="mb-4" />
         <h3 :class="['text-2xl font-bold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
-          {{ activeTab === 'signin' ? 'Welcome Back' : 'Create Account' }}
+          {{ activeTab === 'signin' ? 'Sign in' : 'Sign up' }}
         </h3>
-        <p :class="['text-sm font-quicksand mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-          {{
-            activeTab === 'signin'
-              ? 'Log in to access your flight logs'
-              : `Create your free digital logbook — includes ${welcomeCredits} free Digifi spreads`
-          }}
+        <p
+          v-if="activeTab === 'signup'"
+          :class="['text-sm font-quicksand mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+        >
+          Includes {{ welcomeCredits }} free Digifi spreads
         </p>
         
         <button

@@ -524,7 +524,7 @@ async function onReview(entryId: string) {
   try {
     const result = await fetchPendingSignatureEntry(entryId)
     if (!result.success) {
-      showToast(result.error)
+      showToast(result.error, { type: 'error' })
       reviewingEntryId.value = null
       return
     }
@@ -540,17 +540,17 @@ async function onSignFromReview(pin: string) {
   const entryId = reviewingEntryId.value ?? reviewEntry.value?.id
   const instructorId = user.value?.id
   if (!entryId || !instructorId) {
-    showToast('You must be signed in to sign')
+    showToast('You must be signed in to sign', { type: 'error' })
     return
   }
   isSigning.value = true
   try {
     const result = await signLogEntry(entryId, instructorId, pin)
     if (!result.success) {
-      showToast(result.error)
+      showToast(result.error, { type: 'error' })
       return
     }
-    showToast('Flight signed')
+    showToast('Flight signed', { type: 'success' })
     closeReview()
     await fetchPendingSignaturesForInstructor()
   } finally {
@@ -569,42 +569,42 @@ async function loadLists() {
   const results = await Promise.all(tasks)
   const failed = results.find((r) => !r.success)
   if (failed && !failed.success) {
-    showToast(failed.error ?? 'Failed to load instructor links')
+    showToast(failed.error ?? 'Failed to load instructor links', { type: 'error' })
   }
 }
 
 async function onRequestLink() {
   const result = await requestInstructorLink(instructorEmail.value)
   if (!result.success) {
-    showToast(result.error)
+    showToast(result.error, { type: 'error' })
     return
   }
   instructorEmail.value = ''
-  showToast('Link request sent')
+  showToast('Link request sent', { type: 'success' })
 }
 
 async function onSetMain(relationshipId: string) {
   const result = await setMainInstructor(relationshipId)
   if (!result.success) {
-    showToast(result.error)
+    showToast(result.error, { type: 'error' })
     return
   }
-  showToast('Main instructor updated')
+  showToast('Main instructor updated', { type: 'success' })
 }
 
 async function onAccept(relationshipId: string) {
   const result = await acceptStudentLink(relationshipId)
   if (!result.success) {
-    showToast(result.error)
+    showToast(result.error, { type: 'error' })
     return
   }
-  showToast('Student link accepted')
+  showToast('Student link accepted', { type: 'success' })
 }
 
 async function onRevoke(relationshipId: string, action: 'cancel' | 'decline' | 'remove') {
   const result = await revokeRelationship(relationshipId)
   if (!result.success) {
-    showToast(result.error)
+    showToast(result.error, { type: 'error' })
     return
   }
   const messages = {
@@ -612,7 +612,7 @@ async function onRevoke(relationshipId: string, action: 'cancel' | 'decline' | '
     decline: 'Request declined',
     remove: 'Link removed'
   }
-  showToast(messages[action])
+  showToast(messages[action], { type: 'info' })
 }
 
 onMounted(() => {

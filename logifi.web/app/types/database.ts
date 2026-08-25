@@ -121,6 +121,35 @@ export type Database = {
           is_void?: boolean
         }
       }
+      logbook_transfer_requests: {
+        Row: {
+          id: string
+          user_id: string
+          email: string
+          source_app: string | null
+          note: string | null
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          email: string
+          source_app?: string | null
+          note?: string | null
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          email?: string
+          source_app?: string | null
+          note?: string | null
+          status?: string
+          created_at?: string
+        }
+      }
       fcv_integrations: {
         Row: {
           id: string
@@ -146,6 +175,50 @@ export type Database = {
           access_token?: string
           refresh_token?: string
           expires_at?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      flica_integrations: {
+        Row: {
+          id: string
+          user_id: string
+          airline_code: string
+          portal_host: string
+          username: string
+          password_ciphertext: string
+          password_nonce: string
+          key_version: number
+          last_ok_at: string | null
+          last_error: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          airline_code?: string
+          portal_host?: string
+          username: string
+          password_ciphertext: string
+          password_nonce: string
+          key_version?: number
+          last_ok_at?: string | null
+          last_error?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          airline_code?: string
+          portal_host?: string
+          username?: string
+          password_ciphertext?: string
+          password_nonce?: string
+          key_version?: number
+          last_ok_at?: string | null
+          last_error?: string | null
           created_at?: string
           updated_at?: string
         }

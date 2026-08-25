@@ -79,7 +79,7 @@
       <template v-else>
         <div class="min-w-0">
           <div :class="['text-base font-semibold truncate font-quicksand', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
-            {{ entry.departure }} → {{ entry.destination }}
+            {{ formatEntryAirportCode(entry, entry.departure) }} → {{ formatEntryAirportCode(entry, entry.destination) }}
           </div>
           <div v-if="entry.route" :class="['text-xs truncate mt-0.5', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
             {{ entry.route }}
@@ -148,6 +148,7 @@
 import type { LogbookColumnConfig, LogEntry } from '~/utils/logbookTypes'
 import {
   formatDisplayDate,
+  formatEntryAirportCode,
   formatLogbookNumber,
   getDisplayConditions,
   getEntryFieldDisplay,

@@ -387,19 +387,19 @@ const profileSubTabs = [
 
 async function onSaveSigningPin() {
   if (signingPin.value !== signingPinConfirm.value) {
-    showToast('PIN confirmation does not match')
+    showToast('PIN confirmation does not match', { type: 'error' })
     return
   }
   isSavingPin.value = true
   try {
     const result = await setSigningPin(signingPin.value)
     if (!result.success) {
-      showToast(result.error)
+      showToast(result.error, { type: 'error' })
       return
     }
     signingPin.value = ''
     signingPinConfirm.value = ''
-    showToast('Signing PIN saved')
+    showToast('Signing PIN saved', { type: 'success' })
   } finally {
     isSavingPin.value = false
   }

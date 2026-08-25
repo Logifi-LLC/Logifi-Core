@@ -4,6 +4,38 @@
 /* Logifi theme is `html.dark` / `html.light` from `useTheme()`, not OS media alone. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+@font-face {
+  font-family: 'Quicksand';
+  src: url('../fonts/quicksand/quicksand-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Quicksand';
+  src: url('../fonts/quicksand/quicksand-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Quicksand';
+  src: url('../fonts/quicksand/quicksand-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Quicksand';
+  src: url('../fonts/quicksand/quicksand-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 .font-quicksand {
   font-family: 'Quicksand', sans-serif;
 }

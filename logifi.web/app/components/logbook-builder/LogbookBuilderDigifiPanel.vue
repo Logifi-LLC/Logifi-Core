@@ -31,7 +31,7 @@ const {
 
 const { isAuthenticated } = useAuth()
 const { fetchBalance } = useDigifiCredits()
-const { theme } = useTheme()
+const { isDark } = useTheme()
 const showAddCreditsModal = ref(false)
 
 const leftInputRef = ref<HTMLInputElement | null>(null)
@@ -77,8 +77,6 @@ const companionCaptureOrigin = computed(() => {
     return null
   }
 })
-
-const isDark = computed(() => theme.value === 'dark')
 
 const unlabeledPhotos = computed(() => photos.value.filter((photo) => !photo.pageSide))
 

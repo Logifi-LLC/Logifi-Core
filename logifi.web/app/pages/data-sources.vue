@@ -81,27 +81,27 @@
           Data sources &amp; third-party APIs
         </h1>
         <p :class="['mb-8', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-600 dark:text-gray-400']">
-          How Logifi uses external services, including the Flight Crew View Logbook API.
+          How Logifi uses external services for schedule import and Digifi scanning.
         </p>
 
-        <FcvApiDisclaimers class="not-prose mb-10" tone="marketing" />
-
         <section class="mb-10">
-          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">Flight Crew View</h2>
+          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">Airline schedule (FLICA)</h2>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
-            If you choose to connect Flight Crew View, you complete OAuth on FC View’s side. Our
-            <strong :class="isFromLanding ? 'text-gray-950 dark:text-gray-900' : ''">server</strong> exchanges the authorization code for access and refresh tokens and
-            stores them in our database associated with your Logifi user account. The browser does not
-            receive FC View tokens. We use those tokens only to request your flight history for
-            logbook import, in line with FC View’s partner policy (logbook workflows only).
+            Autofi is in public beta with Republic (RJET). Other airlines are not supported yet.
           </p>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
-            We do not collect or store your FC View password or passkey. We do not send FC View
-            tokens or authorization codes to AI or LLM providers.
+            If you choose to connect FLICA, you provide your airline portal credentials in Logifi.
+            Our
+            <strong :class="isFromLanding ? 'text-gray-950 dark:text-gray-900' : ''">server</strong> stores an encrypted copy associated with your Logifi user account and uses it only to
+            fetch your schedule for logbook import. Credentials are not exposed to the browser after connect.
+          </p>
+          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
+            Schedule enrichment may use third-party flight data APIs. We do not send your FLICA password
+            to AI or LLM providers.
           </p>
           <p :class="['leading-relaxed mb-4', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
-            To remove imported flights, use Logifi’s logbook tools. To revoke the FC View connection
-            and delete stored tokens, you can disconnect your account below.
+            To remove imported flights, use Logifi’s logbook tools. To revoke the FLICA connection
+            and delete stored credentials, you can disconnect your account below.
           </p>
 
           <div
@@ -110,12 +110,12 @@
           >
             <h3 :class="['text-base font-semibold mb-1', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">Manage Connection</h3>
             <p :class="['text-sm mb-4', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-600 dark:text-gray-400']">
-              Disconnecting will immediately delete your FC View access and refresh tokens from our servers. You will need to reconnect to import future flights.
+              Disconnecting will immediately delete your stored FLICA credentials from our servers. You will need to reconnect to import future flights.
             </p>
             <div :class="['flex gap-3', isIos ? 'flex-col items-stretch' : 'items-center']">
               <button
                 type="button"
-                @click="disconnectFcv"
+                @click="disconnectSchedule"
                 :disabled="isDisconnecting"
                 :class="[
                   'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed dark:border-red-800/70 dark:text-red-400 dark:hover:bg-red-950/40',
@@ -123,7 +123,7 @@
                 ]"
               >
                 <Icon name="ri:link-unlink" size="16" />
-                {{ isDisconnecting ? 'Disconnecting...' : 'Disconnect FC View' }}
+                {{ isDisconnecting ? 'Disconnecting...' : 'Disconnect FLICA' }}
               </button>
               <span
                 v-if="disconnectMessage"
@@ -140,7 +140,7 @@
             v-else
             :class="['not-prose border rounded-xl p-4 text-sm transition-colors', isFromLanding ? 'bg-white/20 border-white/20 text-gray-800 dark:bg-white/20 dark:text-gray-800' : 'bg-gray-50 border-gray-200 text-gray-600 dark:border-gray-700 dark:bg-gray-900/60 dark:text-gray-400']"
           >
-            Sign in to manage your Flight Crew View connection.
+            Sign in to manage your FLICA connection.
           </div>
         </section>
 
@@ -155,7 +155,7 @@
           </p>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
             Scan images are stored in our private storage bucket for up to <strong :class="isFromLanding ? 'text-gray-950 dark:text-gray-900' : ''">24 hours</strong>
-            (for support), then deleted. We do not send FC View tokens, authorization codes, or passkeys to Gemini or any other AI provider.
+            (for support), then deleted. We do not send airline portal credentials to Gemini or any other AI provider.
           </p>
         </section>
 
@@ -206,7 +206,6 @@ import { ref, computed, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from '#imports'
 import { useAuth } from '~/composables/useAuth'
 import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
-import FcvApiDisclaimers from '~/components/fcv/FcvApiDisclaimers.vue'
 import AuthModal from '~/components/AuthModal.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
@@ -215,7 +214,7 @@ import TechnicalTopographyBg from '~/components/TechnicalTopographyBg.vue'
 const route = useRoute()
 const router = useRouter()
 const { isAuthenticated, session } = useAuth()
-const { theme, applyDocumentTheme } = useTheme()
+const { theme, isDark, applyDocumentTheme } = useTheme()
 const { isIos } = useCapacitorPlatform()
 
 const isFromLanding = computed(() => route.query.from === 'landing')
@@ -230,9 +229,9 @@ if (import.meta.client) {
   onBeforeUnmount(() => {
     applyDocumentTheme(theme.value)
   })
-  watch(theme, (newTheme) => {
+  watch([theme, isDark], () => {
     if (isFromLanding.value) applyDocumentTheme('light')
-    else applyDocumentTheme(newTheme)
+    else applyDocumentTheme(theme.value)
   })
 }
 
@@ -252,7 +251,7 @@ const isDisconnecting = ref(false)
 const disconnectMessage = ref('')
 const disconnectError = ref(false)
 
-const disconnectFcv = async () => {
+const disconnectSchedule = async () => {
   if (!isAuthenticated.value) return
   
   isDisconnecting.value = true
@@ -260,7 +259,7 @@ const disconnectFcv = async () => {
   disconnectError.value = false
   
   try {
-    await $fetch('/api/fcv/disconnect', {
+    await $fetch('/api/flica/disconnect', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${session.value?.access_token}`
@@ -297,7 +296,7 @@ useHead({
   meta: [
     {
       name: 'description',
-      content: 'Third-party data sources used by Logifi, including Flight Crew View.',
+      content: 'Third-party data sources used by Logifi, including FLICA schedule import and Digifi.',
     },
   ],
 })

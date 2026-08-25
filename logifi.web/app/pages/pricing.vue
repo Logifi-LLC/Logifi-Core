@@ -5,8 +5,7 @@
     <main class="pt-32 pb-16 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto">
       <h1 class="text-4xl font-bold text-gray-950 mb-4 drop-shadow-sm dark:text-gray-900">Pricing</h1>
       <p class="text-gray-800 mb-8 text-lg font-medium dark:text-gray-700">
-        Logifi is free. FC View integration requires a separate Flight Crew View
-        subscription—see
+        Logifi is free. Autofi (FLICA) is in public beta with Republic (RJET) and included—see
         <NuxtLink to="/integrations" class="text-blue-600 hover:underline dark:text-blue-600">Integrations</NuxtLink>
         for details. Digifi scanning uses pay-per-spread credits (below).
       </p>
@@ -46,8 +45,6 @@
           refunds before you pay—same idea as in our
           <NuxtLink to="/terms?from=landing" class="text-blue-600 font-bold hover:underline dark:text-blue-600">Terms</NuxtLink>.
         </p>
-
-        <FcvApiDisclaimers class="mt-4" tone="marketing" />
       </div>
     </main>
 
@@ -66,7 +63,6 @@
 
 <script setup lang="ts">
 import { ref, onBeforeUnmount, watch } from 'vue'
-import FcvApiDisclaimers from '~/components/fcv/FcvApiDisclaimers.vue'
 import AuthModal from '~/components/AuthModal.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
@@ -84,7 +80,7 @@ const lightningRateDollars = rateDollarsForMethod('lightning')
 const stripeMinCredits = minPagesForMethod('stripe')
 const lightningMinCredits = minPagesForMethod('lightning')
 
-const { theme, applyDocumentTheme } = useTheme()
+const { theme, isDark, applyDocumentTheme } = useTheme()
 
 /** Marketing shell stays light (matches home); restore saved theme when leaving. */
 if (import.meta.client) {
@@ -92,7 +88,7 @@ if (import.meta.client) {
   onBeforeUnmount(() => {
     applyDocumentTheme(theme.value)
   })
-  watch(theme, () => {
+  watch([theme, isDark], () => {
     applyDocumentTheme('light')
   })
 }
@@ -115,7 +111,7 @@ useHead({
     {
       name: 'description',
       content:
-        'Logifi is free. Every account includes 10 free Digifi spreads. Additional scanning uses pay-per-spread credits ($0.30–$0.40). FC View sold separately.',
+        'Logifi is free. Every account includes 10 free Digifi spreads. Additional scanning uses pay-per-spread credits ($0.40–$0.50).',
     },
   ],
 })

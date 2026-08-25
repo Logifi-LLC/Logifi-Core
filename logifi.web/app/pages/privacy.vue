@@ -89,16 +89,14 @@
         </section>
 
         <section class="mb-10">
-          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">6. Optional Flight Crew View connection</h2>
+          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">6. Optional airline schedule connection</h2>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
-            If you connect Flight Crew View, OAuth completes on FC View’s systems. Our servers exchange
-            the authorization code for access and refresh tokens and store them in our database for
-            your Logifi account. Tokens are used only to retrieve your flight history for logbook
-            import. We do not send FC View tokens or authorization codes to third-party AI providers.
+            If you connect FLICA, our servers store encrypted portal credentials associated with your
+            Logifi account and use them only to retrieve your schedule for logbook import.
+            We do not send those credentials to third-party AI providers.
           </p>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
-            We do not collect your FC View password or passkey. To request removal of stored FC View
-            tokens, you can disconnect your account directly within the Logifi app (see Data sources).
+            To remove stored credentials, disconnect FLICA in Settings or on the Data sources page.
           </p>
           <p :class="['leading-relaxed', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
             See also
@@ -112,7 +110,7 @@
             If you use Digifi on Add Pages, you upload photos of your paper logbook. Our servers send those images to
             <strong :class="isFromLanding ? 'text-gray-950 dark:text-gray-900' : ''">Google Gemini</strong> to transcribe entries into the builder grid.
             You review and edit before importing. Scan images are retained for up to 24 hours in private storage, then deleted.
-            FC View tokens and credentials are not sent to AI providers.
+            Airline portal credentials are not sent to AI providers.
           </p>
         </section>
 
@@ -203,7 +201,7 @@ import TechnicalTopographyBg from '~/components/TechnicalTopographyBg.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { theme, applyDocumentTheme } = useTheme()
+const { theme, isDark, applyDocumentTheme } = useTheme()
 
 const isFromLanding = computed(() => route.query.from === 'landing')
 
@@ -217,9 +215,9 @@ if (import.meta.client) {
   onBeforeUnmount(() => {
     applyDocumentTheme(theme.value)
   })
-  watch(theme, (newTheme) => {
+  watch([theme, isDark], () => {
     if (isFromLanding.value) applyDocumentTheme('light')
-    else applyDocumentTheme(newTheme)
+    else applyDocumentTheme(theme.value)
   })
 }
 
