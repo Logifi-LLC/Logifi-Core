@@ -3133,6 +3133,17 @@
 
               <!-- Simulator layout -->
               <template v-if="activeLogbook === 'simulator'">
+                <div v-if="duplicableLastEntry" class="flex items-center justify-end mb-2">
+                  <button
+                    type="button"
+                    @click="duplicateLastFlight"
+                    :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors',
+                      isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200'
+                    ]"
+                  >
+                    Duplicate last
+                  </button>
+                </div>
                 <div class="grid gap-6">
                   <!-- Session block: Date, Type, Time, Role -->
                   <div :class="['rounded-lg border p-4', isDarkMode ? 'border-white/10 bg-gray-900/50 shadow-md shadow-black/40' : 'border-gray-200 bg-white']">
@@ -3488,6 +3499,16 @@
                   ]"
                 >
                   {{ isCommercialMode ? 'OOOI Active' : '+ OOOI' }}
+                </button>
+                <button
+                  v-if="duplicableLastEntry"
+                  type="button"
+                  @click="duplicateLastFlight"
+                  :class="['text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors',
+                    isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200'
+                  ]"
+                >
+                  Duplicate last
                 </button>
               </div>
 
@@ -6856,6 +6877,10 @@ import { useProductUpdates } from '../composables/useProductUpdates'
 import type { SettingsStackFrame, SettingsTabId } from '../components/settings/settingsNav'
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '../utils/migrateLocalStorage'
 import { findDuplicateEntries, checkDuplicatesWithLocalFallback } from '../utils/duplicateDetection'
+import {
+  buildDuplicatedDraft,
+  findDuplicableLastEntry,
+} from '../utils/duplicateLastFlight'
 import {
   ACCOUNT_SCOPED_STORAGE_KEYS,
   DEVICE_GLOBAL_STORAGE_KEYS,
@@ -13016,28 +13041,40 @@ function ensureDefaultSignInstructor(): void {
   })
 }
 
-function toggleEntryForm(): void {
-  const willBeOpen = !isEntryFormOpen.value
-  isEntryFormOpen.value = willBeOpen
+function openNewEntryForm(draft?: EditableLogEntry): void {
+  closeAuditTrailSidebar()
+  expandedEntryId.value = null
+  inlineEditEntry.value = null
+  isInlineCommercialMode.value = false
+  successMessage.value = null
+  editingEntryId.value = null
+  isCommercialMode.value = false
+  Object.assign(newEntry, createBlankEntry(), draft ?? {})
+  showSimSection.value = (draft?.logbookType ?? activeLogbook.value) === 'simulator'
+  isEntryFormOpen.value = true
+  ensureDefaultSignInstructor()
+}
 
-  // If opening the Add Entry form, close any open inline edit and clear post-save state
-  if (willBeOpen) {
+function toggleEntryForm(): void {
+  if (isEntryFormOpen.value) {
+    isEntryFormOpen.value = false
     closeAuditTrailSidebar()
-    expandedEntryId.value = null
-    inlineEditEntry.value = null
-    isInlineCommercialMode.value = false
-    successMessage.value = null
-    editingEntryId.value = null
-    Object.assign(newEntry, createBlankEntry())
-    showSimSection.value = activeLogbook.value === 'simulator'
-    ensureDefaultSignInstructor()
-  } else {
-    closeAuditTrailSidebar()
-    // If closing, reset form if needed
     if (!editingEntryId.value) {
       resetForm()
     }
+    return
   }
+  openNewEntryForm()
+}
+
+const duplicableLastEntry = computed(() =>
+  findDuplicableLastEntry(logEntries.value, activeLogbook.value, supersededIdSet.value)
+)
+
+function duplicateLastFlight(): void {
+  const source = duplicableLastEntry.value
+  if (!source) return
+  openNewEntryForm(buildDuplicatedDraft(source))
 }
 
 function toggleCatalogSection(key: CatalogKey): void {
