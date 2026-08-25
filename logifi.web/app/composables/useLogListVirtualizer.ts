@@ -6,9 +6,16 @@ type CountSource = Ref<number> | ComputedRef<number>
 type FlagSource = Ref<boolean> | ComputedRef<boolean>
 type ElementSource = Ref<HTMLElement | null> | ComputedRef<HTMLElement | null>
 
+function viewportRect(): { width: number; height: number } {
+  if (typeof window === 'undefined') {
+    return { width: 0, height: 800 }
+  }
+  return { width: window.innerWidth, height: window.innerHeight }
+}
+
 export function useLogListVirtualizer(options: {
   count: CountSource
-  isIos: FlagSource
+  useElementScroll: FlagSource
   scrollParent: ElementSource
   estimateSize: number
   scrollMarginElement?: ElementSource
@@ -19,6 +26,7 @@ export function useLogListVirtualizer(options: {
       getScrollElement: () => options.scrollParent.value,
       estimateSize: () => options.estimateSize,
       overscan: LOG_LIST_OVERSCAN,
+      initialRect: viewportRect(),
     }))
   )
 
@@ -34,18 +42,21 @@ export function useLogListVirtualizer(options: {
         estimateSize: () => options.estimateSize,
         overscan: LOG_LIST_OVERSCAN,
         scrollMargin,
+        initialRect: viewportRect(),
       }
     })
   )
 
   const active = computed(() =>
-    options.isIos.value ? elementVirtualizer.value : windowVirtualizer.value
+    options.useElementScroll.value ? elementVirtualizer.value : windowVirtualizer.value
   )
 
   const virtualItems = computed(() => active.value.getVirtualItems())
   const totalSize = computed(() => active.value.getTotalSize())
   const scrollMargin = computed(() =>
-    options.isIos.value ? 0 : (windowVirtualizer.value.options.scrollMargin ?? 0)
+    options.useElementScroll.value
+      ? 0
+      : (windowVirtualizer.value.options.scrollMargin ?? 0)
   )
   const padding = computed(() =>
     getVirtualPadding(virtualItems.value, totalSize.value, scrollMargin.value)

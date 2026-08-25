@@ -53,7 +53,7 @@ const scrollParentRef = toRef(() => props.scrollParent ?? null)
 
 const { virtualItems, totalSize, scrollToIndex } = useLogListVirtualizer({
   count: entryCount,
-  isIos: isIosList,
+  useElementScroll: isIosList,
   scrollParent: scrollParentRef,
   estimateSize: LOG_LIST_CARD_ESTIMATE_PX,
 })

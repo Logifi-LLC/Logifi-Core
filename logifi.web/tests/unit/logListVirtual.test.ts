@@ -32,10 +32,10 @@ describe('logListVirtual', () => {
     ).toEqual({ paddingTop: 112, paddingBottom: 336 })
   })
 
-  it('subtracts window scrollMargin from the top spacer', () => {
+  it('converts window-absolute ranges into list-local padding', () => {
     expect(
       getVirtualPadding([{ start: 400, end: 456 }], 560, 280)
-    ).toEqual({ paddingTop: 120, paddingBottom: 104 })
+    ).toEqual({ paddingTop: 120, paddingBottom: 384 })
   })
 
   it('does not return negative padding', () => {

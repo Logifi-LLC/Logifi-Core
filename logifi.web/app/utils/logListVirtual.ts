@@ -13,8 +13,9 @@ export interface VirtualListPadding {
 }
 
 /**
- * Top/bottom spacer heights for a virtual window.
- * `scrollMargin` is subtracted from the first item start (window virtualizer).
+ * Top/bottom spacer heights for a virtual window, in list-local pixels.
+ * Window virtualizers include `scrollMargin` in item start/end; subtract it
+ * so table padding rows do not leave a hole under the header.
  */
 export function getVirtualPadding(
   virtualItems: readonly VirtualRangeItem[],
@@ -26,8 +27,10 @@ export function getVirtualPadding(
   }
   const first = virtualItems[0]
   const last = virtualItems[virtualItems.length - 1]
+  const firstStart = first.start - scrollMargin
+  const lastEnd = last.end - scrollMargin
   return {
-    paddingTop: Math.max(0, first.start - scrollMargin),
-    paddingBottom: Math.max(0, totalSize - last.end),
+    paddingTop: Math.max(0, firstStart),
+    paddingBottom: Math.max(0, totalSize - lastEnd),
   }
 }

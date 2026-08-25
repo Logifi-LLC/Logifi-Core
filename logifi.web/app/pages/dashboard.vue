@@ -17375,17 +17375,16 @@ const displayedEntries = computed(() =>
   filteredEntries.value.slice(0, visibleEntryCount.value)
 )
 
-const logTableAlwaysWindow = computed(() => false)
+const logTableUsesElementScroll = computed(() => true)
 const {
   virtualItems: logTableVirtualItems,
   padding: logTablePadding,
   scrollToIndex: scrollLogTableToIndex,
 } = useLogListVirtualizer({
   count: computed(() => displayedEntries.value.length),
-  isIos: logTableAlwaysWindow,
+  useElementScroll: logTableUsesElementScroll,
   scrollParent: rootScrollContainerRef,
   estimateSize: LOG_LIST_TABLE_ROW_ESTIMATE_PX,
-  scrollMarginElement: tableContainerRef,
 })
 
 const visibleTableEntries = computed(() =>
