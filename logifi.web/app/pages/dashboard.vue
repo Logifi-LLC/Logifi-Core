@@ -1380,11 +1380,13 @@
 
             <LogEntryList
               v-else-if="isIos"
+              ref="logEntryListRef"
               :entries="displayedEntries"
               :is-dark-mode="isDarkMode"
               :visible-detail-fields="visibleDetailFields"
               :show-remarks-footer="showRemarksFooter"
               :is-entry-signed="isEntrySigned"
+              :scroll-parent="rootScrollContainerRef"
               @select="beginInlineEditing"
             />
 
@@ -1447,7 +1449,13 @@
                       : 'divide-gray-200 bg-gray-100 text-gray-600'
                   ]"
                 >
-                  <template v-for="entry in displayedEntries" :key="entry.id">
+                  <tr v-if="logTablePadding.paddingTop > 0" aria-hidden="true">
+                    <td
+                      :colspan="visibleColumns.length"
+                      :style="{ height: `${logTablePadding.paddingTop}px`, padding: '0', border: 'none' }"
+                    />
+                  </tr>
+                  <template v-for="entry in visibleTableEntries" :key="entry.id">
                     <tr
                       :class="[
                         'transition-all duration-200 border-l-4 cursor-pointer',
@@ -1593,6 +1601,12 @@
                       </td>
                     </tr>
                   </template>
+                  <tr v-if="logTablePadding.paddingBottom > 0" aria-hidden="true">
+                    <td
+                      :colspan="visibleColumns.length"
+                      :style="{ height: `${logTablePadding.paddingBottom}px`, padding: '0', border: 'none' }"
+                    />
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -6825,6 +6839,8 @@ import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGesture
 import { usePullToRefresh } from '../composables/usePullToRefresh'
 import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
 import { useDashboardShortcuts } from '../composables/useDashboardShortcuts'
+import { useLogListVirtualizer } from '../composables/useLogListVirtualizer'
+import { LOG_LIST_TABLE_ROW_ESTIMATE_PX } from '../utils/logListVirtual'
 import AuthModal from '../components/AuthModal.vue'
 import AuditTrail from '../components/AuditTrail.vue'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
@@ -8243,6 +8259,7 @@ function getCellTextColor(col: LogbookColumnConfig): string {
 
 const tableHeaderRef = ref<HTMLElement | null>(null)
 const tableContainerRef = ref<HTMLElement | null>(null)
+const logEntryListRef = ref<{ scrollToIndex: (index: number) => void } | null>(null)
 const tableRef = ref<HTMLTableElement | null>(null)
 
 function openLogbookLayoutPreferences(): void {
@@ -17287,6 +17304,25 @@ const displayedEntries = computed(() =>
   filteredEntries.value.slice(0, visibleEntryCount.value)
 )
 
+const logTableAlwaysWindow = computed(() => false)
+const {
+  virtualItems: logTableVirtualItems,
+  padding: logTablePadding,
+  scrollToIndex: scrollLogTableToIndex,
+} = useLogListVirtualizer({
+  count: computed(() => displayedEntries.value.length),
+  isIos: logTableAlwaysWindow,
+  scrollParent: rootScrollContainerRef,
+  estimateSize: LOG_LIST_TABLE_ROW_ESTIMATE_PX,
+  scrollMarginElement: tableContainerRef,
+})
+
+const visibleTableEntries = computed(() =>
+  logTableVirtualItems.value
+    .map((item) => displayedEntries.value[item.index])
+    .filter((entry): entry is LogEntry => entry != null)
+)
+
 const entriesLoadMoreSentinelRef = ref<HTMLElement | null>(null)
 let entriesLoadMoreObserver: IntersectionObserver | undefined
 
@@ -17329,6 +17365,11 @@ watch(
   [debouncedSearchTerm, activeLogbook, totalsTimeMode, totalsCustomStart, totalsCustomEnd, selectedFilters],
   () => {
     visibleEntryCount.value = ENTRIES_PAGE_SIZE
+    if (isIos.value) {
+      logEntryListRef.value?.scrollToIndex(0)
+    } else {
+      scrollLogTableToIndex(0)
+    }
   },
   { deep: true }
 )

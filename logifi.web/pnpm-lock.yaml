@@ -68,6 +68,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.1.18
         version: 4.1.18(vite@8.2.1(@types/node@25.0.6)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.49.2)(yaml@2.9.0))
+      '@tanstack/vue-virtual':
+        specifier: ^3.13.36
+        version: 3.13.36(vue@3.5.26(typescript@5.9.3))
       csv-parse:
         specifier: ^6.1.0
         version: 6.1.0
@@ -1424,6 +1427,14 @@ packages:
     resolution: {integrity: sha512-jVA+/UpKL1vRLg6Hkao5jldawNmRo7mQYrZtNHMIVpLfLhDml5nMRUo/8MwoX2vNXvnaXNNMedrMfMugAVX1nA==}
     peerDependencies:
       vite: ^8.2.1
+
+  '@tanstack/virtual-core@3.17.8':
+    resolution: {integrity: sha512-BfEvehNpOT75r5Ksc5xW6NZuXujTfb7nlSEyVu4XHG3gdxNg1KqXruWbDewXOUaUYIo4oRbSfkjIajz4MAT8tA==}
+
+  '@tanstack/vue-virtual@3.13.36':
+    resolution: {integrity: sha512-gKpExv4RbB9luVG+SucTXoqPZv/gzu/Yvz6BNO+8kpNxJ2x+I/ulryzl5W9BRciahZGp5Tls3Dp5XP1ztVGbMw==}
+    peerDependencies:
+      vue: ^2.7.0 || ^3.0.0
 
   '@testing-library/dom@9.3.4':
     resolution: {integrity: sha512-FlS4ZWlp97iiNWig0Muq8p+3rVDjRiYE+YKGbAqXOu9nwJFFOdL00kFpz42M+4huzYi86vAK1sOOfyOG45muIQ==}
@@ -6093,6 +6104,13 @@ snapshots:
       '@tailwindcss/oxide': 4.1.18
       tailwindcss: 4.1.18
       vite: 8.2.1(@types/node@25.0.6)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.49.2)(yaml@2.9.0)
+
+  '@tanstack/virtual-core@3.17.8': {}
+
+  '@tanstack/vue-virtual@3.13.36(vue@3.5.26(typescript@5.9.3))':
+    dependencies:
+      '@tanstack/virtual-core': 3.17.8
+      vue: 3.5.26(typescript@5.9.3)
 
   '@testing-library/dom@9.3.4':
     dependencies:
