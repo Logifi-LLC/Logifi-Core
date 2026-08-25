@@ -1188,9 +1188,11 @@
               <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end w-full lg:w-auto">
                 <div class="relative w-full sm:w-60">
               <input 
+                    ref="searchInputRef"
                     v-model="searchTerm"
                     type="search"
                     placeholder="Search entries"
+                    aria-keyshortcuts="/"
                     :class="[
                       'w-full rounded-lg border px-5 py-2 focus:outline-none focus:ring-2 font-quicksand transition-colors duration-300',
                       isDarkMode 
@@ -6680,6 +6682,7 @@
         isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white focus:ring-blue-400' : 'bg-blue-500 hover:bg-blue-600 text-white focus:ring-blue-300'
       ]"
       aria-label="Add entry"
+      aria-keyshortcuts="N"
     >
       <Icon name="ri:add-line" size="24" />
     </button>
@@ -6821,6 +6824,7 @@ import { useCapacitorPlatform, isCapacitorNative } from '../composables/useCapac
 import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGestures'
 import { usePullToRefresh } from '../composables/usePullToRefresh'
 import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
+import { useDashboardShortcuts } from '../composables/useDashboardShortcuts'
 import AuthModal from '../components/AuthModal.vue'
 import AuditTrail from '../components/AuditTrail.vue'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
@@ -8301,6 +8305,7 @@ const setXcTimeManuallySet = (value: boolean) => {
   xcTimeManuallySet.value = value
 }
 const searchTerm = ref('')
+const searchInputRef = ref<HTMLInputElement | null>(null)
 const debouncedSearchTerm = ref('')
 watch(searchTerm, (value) => {
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
@@ -12294,6 +12299,39 @@ const crewModalLastTagEntryCount = ref<number | null>(null)
 
 // Aircraft family rename modal
 const showRenameFamilyModal = ref(false)
+
+const isDashboardShortcutBlocked = computed(
+  () =>
+    showSettingsModal.value ||
+    showAuthModal.value ||
+    showSignEntryModal.value ||
+    showSignatureFinishModal.value ||
+    showForm8710Modal.value ||
+    showForm8710View.value ||
+    showCurrencyDashboard.value ||
+    showDashboardImportModal.value ||
+    showExportDialog.value ||
+    showDuplicateOverrideDialog.value ||
+    showAircraftModal.value ||
+    showAirportModal.value ||
+    showCrewProfileModal.value ||
+    showRenameFamilyModal.value ||
+    showAuditTrail.value ||
+    showAuditTrailSidebar.value ||
+    expandedEntryId.value !== null ||
+    (isIos.value && isCatalogDrawerOpen.value)
+)
+
+useDashboardShortcuts({
+  isBlocked: isDashboardShortcutBlocked,
+  onNewEntry: () => {
+    if (!isEntryFormOpen.value) toggleEntryForm()
+  },
+  onFocusSearch: () => {
+    searchInputRef.value?.focus()
+  },
+})
+
 const renameFamilyOldName = ref<string>('')
 const renameFamilyCanonicalKey = ref<string>('')
 const renameFamilyNewName = ref<string>('')
