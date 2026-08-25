@@ -1,5 +1,27 @@
+import { DateTime } from 'luxon'
+import { getAirportIanaTimezone } from '../../shared/airportTimezone'
 import type { AirlineLeg, AirlineLegCrewMember } from './airlineLeg'
 import { hhmmToLocalDatetime } from './airlineLeg'
+
+/** Republic pairings are Eastern-based; used when airport TZ is unknown and for naive `nowIso`. */
+export const FLICA_DEFAULT_NOW_ZONE = 'America/New_York'
+
+const FCV_LOCAL_DATETIME_RE =
+  /^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$/
+
+const LAST_UPDATED_FULL_RE =
+  /Last Updated\s+([A-Za-z]{3})\s+(\d{1,2}),\s+(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s+([A-Z]{2,4})/i
+
+const TZ_ABBR_TO_IANA: Record<string, string> = {
+  EST: 'America/New_York',
+  EDT: 'America/New_York',
+  CST: 'America/Chicago',
+  CDT: 'America/Chicago',
+  MST: 'America/Denver',
+  MDT: 'America/Denver',
+  PST: 'America/Los_Angeles',
+  PDT: 'America/Los_Angeles',
+}
 
 const MONTH_MAP: Record<string, number> = {
   JAN: 1,
@@ -113,8 +135,182 @@ function parseBlockMinutes(hhmm: string | null): number | null {
   if (!hhmm || !/^\d{4}$/.test(hhmm)) return null
   const h = parseInt(hhmm.slice(0, 2), 10)
   const m = parseInt(hhmm.slice(2, 4), 10)
-  if (Number.isNaN(h) || Number.isNaN(m)) return null
+  if (Number.isNaN(h) || Number.isNaN(m) || m > 59) return null
   return h * 60 + m
+}
+
+function isValidClockHhmm(hhmm: string): boolean {
+  if (!/^\d{4}$/.test(hhmm)) return false
+  const h = parseInt(hhmm.slice(0, 2), 10)
+  const m = parseInt(hhmm.slice(2, 4), 10)
+  return h <= 23 && m <= 59
+}
+
+function clockMinutes(hhmm: string): number {
+  return parseInt(hhmm.slice(0, 2), 10) * 60 + parseInt(hhmm.slice(2, 4), 10)
+}
+
+/**
+ * True when out/in look like clock times and block is a duration that matches
+ * elapsed time, allowing 0–3h timezone slack (US continental).
+ */
+export function isPlausibleFlicaGateTriple(out: string, inn: string, block: string): boolean {
+  if (!isValidClockHhmm(out) || !isValidClockHhmm(inn)) return false
+  const blk = parseBlockMinutes(block)
+  if (blk == null || blk < 15 || blk > 12 * 60) return false
+  let diff = clockMinutes(inn) - clockMinutes(out)
+  if (diff <= 0) diff += 24 * 60
+  const slack = Math.abs(diff - blk)
+  if (slack <= 20) return true
+  const nearestHour = Math.round(slack / 60) * 60
+  if (nearestHour < 60 || nearestHour > 3 * 60) return false
+  return Math.abs(slack - nearestHour) <= 15
+}
+
+function findPlausibleGateTriples(
+  nums: string[]
+): Array<{ index: number; out: string; inn: string; block: string }> {
+  const found: Array<{ index: number; out: string; inn: string; block: string }> = []
+  for (let i = 0; i + 2 < nums.length; i++) {
+    const out = nums[i]!
+    const inn = nums[i + 1]!
+    const block = nums[i + 2]!
+    if (isPlausibleFlicaGateTriple(out, inn, block)) {
+      found.push({ index: i, out, inn, block })
+    }
+  }
+  return found
+}
+
+/**
+ * Pick DEPL/ARRL/BLKT from a FLICA remainder. When published actuals are
+ * appended after the bid triple, prefer a later non-overlapping Out/In/block.
+ */
+export function pickFlicaGateHhmm(
+  nums: string[],
+  gluedDep: string | null
+): { depHhmm: string | null; arrHhmm: string | null; blockHhmm: string | null } {
+  const triples = findPlausibleGateTriples(nums)
+  const first = triples[0] ?? null
+  const later =
+    first != null ? triples.filter((t) => t.index >= first.index + 3).at(-1) ?? null : null
+  const chosen = later ?? first
+
+  if (chosen && (!gluedDep || chosen.index > 0 || later)) {
+    return { depHhmm: chosen.out, arrHhmm: chosen.inn, blockHhmm: chosen.block }
+  }
+  if (gluedDep) {
+    return {
+      depHhmm: gluedDep,
+      arrHhmm: nums[0] ?? null,
+      blockHhmm: nums[1] ?? null,
+    }
+  }
+  return {
+    depHhmm: nums[0] ?? null,
+    arrHhmm: nums[1] ?? null,
+    blockHhmm: nums[2] ?? null,
+  }
+}
+
+function parseLocalDatetimeInZone(dt: string, zone: string): DateTime | null {
+  const m = dt.trim().match(FCV_LOCAL_DATETIME_RE)
+  if (!m) return null
+  const dtObj = DateTime.fromObject(
+    {
+      year: parseInt(m[1], 10),
+      month: parseInt(m[2], 10),
+      day: parseInt(m[3], 10),
+      hour: parseInt(m[4], 10),
+      minute: parseInt(m[5], 10),
+      second: m[6] ? parseInt(m[6], 10) : 0,
+    },
+    { zone }
+  )
+  return dtObj.isValid ? dtObj : null
+}
+
+function resolveNowMs(
+  opts: { nowMs?: number; nowIso?: string; nowZone?: string },
+  fallbackMs: number
+): number {
+  if (typeof opts.nowMs === 'number' && Number.isFinite(opts.nowMs)) return opts.nowMs
+  const raw = opts.nowIso?.trim()
+  if (!raw) return fallbackMs
+  if (/[zZ]$/.test(raw) || /[+-]\d{2}:?\d{2}$/.test(raw)) {
+    const ms = Date.parse(raw)
+    return Number.isFinite(ms) ? ms : fallbackMs
+  }
+  const zone = opts.nowZone ?? FLICA_DEFAULT_NOW_ZONE
+  const dt = parseLocalDatetimeInZone(raw.replace(' ', 'T'), zone)
+  return dt ? dt.toUTC().toMillis() : fallbackMs
+}
+
+/** Instant of FLICA Out in the departure airport's local zone. */
+export function flicaScheduledOutMs(leg: Pick<AirlineLeg, 'scheduled_out_local' | 'dep_airport'>): number | null {
+  const raw = leg.scheduled_out_local
+  if (!raw) return null
+  const tz = getAirportIanaTimezone(leg.dep_airport) ?? FLICA_DEFAULT_NOW_ZONE
+  const dt = parseLocalDatetimeInZone(raw, tz)
+  return dt ? dt.toUTC().toMillis() : null
+}
+
+/**
+ * True when the leg has already operated: AeroDataBox Off/On, or FLICA Out is
+ * not after `nowMs` in the departure airport timezone.
+ */
+export function hasFlicaLegDeparted(
+  leg: Pick<
+    AirlineLeg,
+    'scheduled_out_local' | 'dep_airport' | 'actual_off_local' | 'actual_on_local'
+  >,
+  nowMs: number
+): boolean {
+  const off = typeof leg.actual_off_local === 'string' && leg.actual_off_local.trim().length > 0
+  const on = typeof leg.actual_on_local === 'string' && leg.actual_on_local.trim().length > 0
+  if (off || on) return true
+  const outMs = flicaScheduledOutMs(leg)
+  if (outMs == null) return false
+  return outMs <= nowMs
+}
+
+export function parseFlicaLastUpdatedMs(htmlOrText: string): number | null {
+  const m = htmlOrText.match(LAST_UPDATED_FULL_RE)
+  if (!m) return null
+  const month = MONTH_MAP[m[1].toUpperCase()]
+  if (!month) return null
+  const zone = TZ_ABBR_TO_IANA[m[7].toUpperCase()] ?? FLICA_DEFAULT_NOW_ZONE
+  const dt = DateTime.fromObject(
+    {
+      year: parseInt(m[3], 10),
+      month,
+      day: parseInt(m[2], 10),
+      hour: parseInt(m[4], 10),
+      minute: parseInt(m[5], 10),
+      second: parseInt(m[6], 10),
+    },
+    { zone }
+  )
+  return dt.isValid ? dt.toUTC().toMillis() : null
+}
+
+/** Overlay pairing-page DEPL/ARRL/block onto matching month-refrigerator legs. */
+export function overlayFlicaPairingLegs(base: AirlineLeg[], overlays: AirlineLeg[]): AirlineLeg[] {
+  if (!overlays.length) return base
+  const byId = new Map<string, AirlineLeg>()
+  for (const leg of overlays) {
+    if (leg.external_flight_id) byId.set(leg.external_flight_id, leg)
+  }
+  return base.map((leg) => {
+    const o = byId.get(leg.external_flight_id)
+    if (!o) return leg
+    return {
+      ...leg,
+      scheduled_out_local: o.scheduled_out_local ?? leg.scheduled_out_local,
+      scheduled_in_local: o.scheduled_in_local ?? leg.scheduled_in_local,
+      block_minutes: o.block_minutes ?? leg.block_minutes,
+    }
+  })
 }
 
 function buildExternalFlightId(dateYmd: string, flightNumber: string, dep: string): string {
@@ -531,9 +727,10 @@ export function parseFlicaSchedule(
     if (hit.dep.length !== 3 || hit.arr.length !== 3) continue
 
     const nums = hit.remainder.match(/\b\d{4}\b/g) ?? []
-    const depHhmm = hit.gluedDep ?? nums[0] ?? null
-    const arrHhmm = hit.gluedDep ? (nums[0] ?? null) : (nums[1] ?? null)
-    const blockHhmm = hit.gluedDep ? (nums[1] ?? null) : (nums[2] ?? null)
+    const gate = pickFlicaGateHhmm(nums, hit.gluedDep)
+    const depHhmm = gate.depHhmm
+    const arrHhmm = gate.arrHhmm
+    const blockHhmm = gate.blockHhmm
     const blockMinutes = parseBlockMinutes(blockHhmm)
     const scheduledOut = hhmmToLocalDatetime(dateYmd, depHhmm)
     const scheduledIn = hhmmToLocalDatetime(dateYmd, arrHhmm)
@@ -588,15 +785,27 @@ export function filterAirlineLegsWithStats(
     includeScheduled?: boolean
     todayYmd?: string
     /**
-     * Local datetime string for "now" in `YYYY-MM-DDTHH:MM` format (NOT UTC).
-     * Must be in the same timezone as `scheduled_out_local` so the comparison is
-     * apples-to-apples. Used to exclude today's not-yet-departed legs.
+     * Epoch ms for "now". Preferred over `nowIso` so Vercel UTC wall-clock is not
+     * compared to airport-local FLICA times.
+     */
+    nowMs?: number
+    /**
+     * Naive `YYYY-MM-DDTHH:MM` local datetime, interpreted in `nowZone`
+     * (default America/New_York). Absolute ISO with Z/offset is also accepted.
      */
     nowIso?: string
+    nowZone?: string
+    /** Exclude legs whose calendar date is after this YYYY-MM-DD (counts as scheduled). */
+    excludeAfterYmd?: string
   } = {}
 ): AirlineLegFilterStats {
-  const now = opts.nowIso ?? new Date().toISOString()
-  const today = opts.todayYmd ?? now.slice(0, 10)
+  const nowMs = resolveNowMs(opts, Date.now())
+  const today =
+    opts.todayYmd ??
+    DateTime.fromMillis(nowMs, { zone: opts.nowZone ?? FLICA_DEFAULT_NOW_ZONE }).toFormat(
+      'yyyy-MM-dd'
+    )
+  const excludeAfter = opts.excludeAfterYmd ?? (!opts.includeScheduled ? today : undefined)
   const filtered: AirlineLeg[] = []
   let excludedDeadheads = 0
   let excludedOutsideRange = 0
@@ -616,11 +825,12 @@ export function filterAirlineLegsWithStats(
       excludedDeadheads++
       continue
     }
-    if (!opts.includeScheduled && date && !leg.actual_off_local && !leg.actual_out_local) {
-      const scheduledOut = (leg.scheduled_out_local ?? '').replace(' ', 'T')
-      const isFuture =
-        date > today || (date === today && scheduledOut > now.slice(0, 16))
-      if (isFuture) {
+    if (!opts.includeScheduled) {
+      if (excludeAfter && date && date > excludeAfter) {
+        excludedScheduled++
+        continue
+      }
+      if (!hasFlicaLegDeparted(leg, nowMs)) {
         excludedScheduled++
         continue
       }

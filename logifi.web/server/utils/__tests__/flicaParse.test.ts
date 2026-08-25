@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { DateTime } from 'luxon'
 import {
   flicaHtmlToText,
   filterAirlineLegs,
   filterAirlineLegsWithStats,
+  overlayFlicaPairingLegs,
+  parseFlicaLastUpdatedMs,
   parseFlicaSchedule,
+  pickFlicaGateHhmm,
 } from '../flicaParse'
 
 const FLICA_FIXTURE = `
@@ -586,5 +590,196 @@ CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
     })
     expect(stats.filtered).toHaveLength(0)
     expect(stats.excludedScheduled).toBe(2)
+  })
+
+  it('excludes a 15:00 Eastern leg when UTC now is 17:30 (still in the future locally)', () => {
+    const text = `
+August Schedule
+DEREK FARMER
+(624619)
+Last Updated Aug 25, 2026 09:00:00 EDT
+L9Z25 : 25AUG
+Base/Equip: LGA/EM7 CA01
+TU 25  9999 LGA-DCA 1500 1630 0130
+Crew:
+CA 624619 FARMER, DEREK
+`
+    const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
+    const nowMs = Date.parse('2026-08-25T17:30:00.000Z')
+    const stats = filterAirlineLegsWithStats(legs, {
+      dateFrom: '2026-08-25',
+      dateTo: '2026-08-25',
+      includeDeadheads: false,
+      includeScheduled: false,
+      nowMs,
+    })
+    expect(stats.filtered).toHaveLength(0)
+    expect(stats.excludedScheduled).toBe(1)
+  })
+
+  it('uses departure-airport timezone so STL 06:00 Central is departed at 09:30 Eastern', () => {
+    const pairing = parseFlicaSchedule(THREE_DAY_PAIRING_TSV, { defaultYear: 2026 })
+    const nowMs = DateTime.fromObject(
+      { year: 2026, month: 8, day: 19, hour: 9, minute: 30 },
+      { zone: 'America/New_York' }
+    ).toUTC().toMillis()
+    const stats = filterAirlineLegsWithStats(pairing, {
+      dateFrom: '2026-08-19',
+      dateTo: '2026-08-19',
+      includeDeadheads: false,
+      includeScheduled: false,
+      nowMs,
+    })
+    expect(stats.filtered.map((l) => l.flight_number)).toEqual(['4669'])
+    expect(stats.excludedScheduled).toBe(1)
+  })
+
+  it('excludes a same-day leg with missing Out unless includeScheduled is true', () => {
+    const pairing = parseFlicaSchedule(THREE_DAY_PAIRING_TSV, { defaultYear: 2026 })
+    const broken = pairing
+      .filter((l) => l.scheduled_out_local?.startsWith('2026-08-19'))
+      .map((l) =>
+        l.flight_number === '4349' ? { ...l, scheduled_out_local: null } : l
+      )
+    const nowMs = DateTime.fromObject(
+      { year: 2026, month: 8, day: 19, hour: 14, minute: 0 },
+      { zone: 'America/New_York' }
+    ).toUTC().toMillis()
+    const excluded = filterAirlineLegsWithStats(broken, {
+      dateFrom: '2026-08-19',
+      dateTo: '2026-08-19',
+      includeDeadheads: false,
+      includeScheduled: false,
+      nowMs,
+    })
+    expect(excluded.filtered.map((l) => l.flight_number)).toEqual(['4669'])
+    expect(excluded.excludedScheduled).toBe(1)
+
+    const included = filterAirlineLegs(broken, {
+      dateFrom: '2026-08-19',
+      dateTo: '2026-08-19',
+      includeDeadheads: false,
+      includeScheduled: true,
+      nowMs,
+    })
+    expect(included.map((l) => l.flight_number)).toEqual(['4669', '4349'])
+  })
+
+  it('includes a slightly-future bid Out when AeroDataBox Off/On shows the flight already operated', () => {
+    const pairing = parseFlicaSchedule(THREE_DAY_PAIRING_TSV, { defaultYear: 2026 })
+    const nowMs = DateTime.fromObject(
+      { year: 2026, month: 8, day: 19, hour: 11, minute: 40 },
+      { zone: 'America/New_York' }
+    ).toUTC().toMillis()
+    const withOff = pairing
+      .filter((l) => l.scheduled_out_local?.startsWith('2026-08-19'))
+      .map((l) =>
+        l.flight_number === '4349'
+          ? { ...l, actual_off_local: '2026-08-19 11:35:00' }
+          : l
+      )
+    const stats = filterAirlineLegsWithStats(withOff, {
+      dateFrom: '2026-08-19',
+      dateTo: '2026-08-19',
+      includeDeadheads: false,
+      includeScheduled: false,
+      nowMs,
+    })
+    expect(stats.filtered.map((l) => l.flight_number)).toEqual(['4669', '4349'])
+    expect(stats.excludedScheduled).toBe(0)
+  })
+})
+
+describe('pickFlicaGateHhmm', () => {
+  it('keeps the first Out/In/block triple on a normal refrigerator row', () => {
+    expect(pickFlicaGateHhmm(['0603', '0727', '0124', '0108'], null)).toEqual({
+      depHhmm: '0603',
+      arrHhmm: '0727',
+      blockHhmm: '0124',
+    })
+  })
+
+  it('prefers a later published Out/In/block triple when bid times are still present', () => {
+    expect(
+      pickFlicaGateHhmm(['0609', '0825', '0216', '0047', '0606', '0809', '0203'], null)
+    ).toEqual({
+      depHhmm: '0606',
+      arrHhmm: '0809',
+      blockHhmm: '0203',
+    })
+  })
+
+  it('does not steal TBLK/duty numbers from a timezone-crossing row', () => {
+    expect(
+      pickFlicaGateHhmm(
+        ['0835', '0957', '0222', '0346', '0412', '0552', '0537', '1903'],
+        null
+      )
+    ).toEqual({
+      depHhmm: '0835',
+      arrHhmm: '0957',
+      blockHhmm: '0222',
+    })
+  })
+})
+
+describe('parseFlicaSchedule published actuals', () => {
+  it('maps dual-column 4809 bid+published times to published Out/In/block', () => {
+    const text = `
+August Schedule
+DEREK FARMER
+(624619)
+Last Updated Aug 20, 2026 14:00:00 EDT
+L7H18 : 18AUG
+Base/Equip: LGA/EM7 CA01FO01
+TH	20	 	*	4809	ATL-LGA	0609	0825	0216	0047	0606	0809	0203
+Crew:
+CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
+`
+    const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
+    const atlLga = legs.find((l) => l.flight_number === '4809')
+    expect(atlLga?.scheduled_out_local).toBe('2026-08-20 06:06:00')
+    expect(atlLga?.scheduled_in_local).toBe('2026-08-20 08:09:00')
+    expect(atlLga?.block_minutes).toBe(123)
+  })
+})
+
+describe('overlayFlicaPairingLegs', () => {
+  it('replaces month-refrigerator bid times with pairing-page published actuals', () => {
+    const month = parseFlicaSchedule(
+      `
+L7H18 : 18AUG
+Base/Equip: LGA/EM7 CA01
+TH 20  4809 ATL-LGA 0609 0825 0216
+`,
+      { defaultYear: 2026 }
+    )
+    const pairing = parseFlicaSchedule(
+      `
+Last Updated Aug 20, 2026 16:00:00 EDT
+L7H18 : 18AUG
+Base/Equip: LGA/EM7 CA01
+TH 20  4809 ATL-LGA 0606 0809 0203
+`,
+      { defaultYear: 2026 }
+    )
+    const merged = overlayFlicaPairingLegs(month, pairing)
+    expect(merged[0]?.scheduled_out_local).toBe('2026-08-20 06:06:00')
+    expect(merged[0]?.scheduled_in_local).toBe('2026-08-20 08:09:00')
+    expect(merged[0]?.block_minutes).toBe(123)
+  })
+})
+
+describe('parseFlicaLastUpdatedMs', () => {
+  it('parses Last Updated with an Eastern abbreviation', () => {
+    const ms = parseFlicaLastUpdatedMs('Last Updated Aug 20, 2026 14:00:00 EDT')
+    expect(ms).toBe(
+      DateTime.fromObject(
+        { year: 2026, month: 8, day: 20, hour: 14, minute: 0, second: 0 },
+        { zone: 'America/New_York' }
+      )
+        .toUTC()
+        .toMillis()
+    )
   })
 })

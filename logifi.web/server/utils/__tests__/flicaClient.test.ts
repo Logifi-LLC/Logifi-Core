@@ -1,7 +1,9 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import {
   decodeFlicaHtmlBytes,
+  extractFlicaPairingLinks,
   extractFlicaToken,
+  fetchFlicaPairingOverlays,
   fetchScheduleHtml,
   flicaBlockDate,
   findScheduleDetailLinks,
@@ -13,7 +15,7 @@ import {
   FlicaSession,
   FLICA_IMPORTABLE_SCHEDULE_MIN_BYTES,
 } from '../flicaClient'
-import { parseFlicaSchedule } from '../flicaParse'
+import { overlayFlicaPairingLegs, parseFlicaSchedule } from '../flicaParse'
 
 const SCHEDULE_FIXTURE = `
 August Schedule
@@ -419,5 +421,80 @@ describe('fetchScheduleHtml', () => {
     await expect(
       fetchScheduleHtml(session, { dateFrom: '2026-08-20', dateTo: '2026-08-20' })
     ).rejects.toMatchObject({ code: 'schedule_not_found' } satisfies Partial<FlicaClientError>)
+  })
+})
+
+const PAIRING_PUBLISHED_HTML = `
+<html><body>
+<div>Last Updated Aug 20, 2026 16:00:00 EDT</div>
+<div>L7H18 : 18AUG</div>
+<div>Base/Equip: LGA/EM7 CA01FO01</div>
+<div>TH 20 * 4809 ATL-LGA 0606 0809 0203</div>
+<div>TH 20  4584 LGA-RIC 0908 1103 0155</div>
+<div>TH 20  4584 RIC-LGA 1141 1256</div>
+<div>Crew:</div>
+<div>CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE</div>
+</body></html>
+`
+
+const GO_WITH_PAIRING_LINK_HTML = padScheduleHtml(
+  `
+<html><body>
+<div>Last Updated Aug 18, 2026 09:00:00 EDT</div>
+<div>L7H18 : 18AUG</div>
+<div>Base/Equip: LGA/EM7 CA01FO01</div>
+<a href="viewpairing.cgi?Trip=L7H18&token=abc">L7H18</a>
+<div>TH 20 * 4809 ATL-LGA 0609 0825 0216</div>
+<div>TH 20  4584 LGA-RIC 0912 1047 0135</div>
+<div>TH 20  4584 RIC-LGA 1117 1239 0122</div>
+<div>Crew:</div>
+<div>CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE</div>
+</body></html>
+`,
+  FLICA_IMPORTABLE_SCHEDULE_MIN_BYTES
+)
+
+describe('extractFlicaPairingLinks', () => {
+  it('finds Trip= pairing CGI links on the month refrigerator', () => {
+    const links = extractFlicaPairingLinks(GO_WITH_PAIRING_LINK_HTML)
+    expect(links.some((l) => l.tripId === 'L7H18' && l.href.includes('viewpairing.cgi'))).toBe(
+      true
+    )
+  })
+})
+
+describe('fetchFlicaPairingOverlays', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('overlays published pairing DEPL/ARRL onto month bid times', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url: string) => {
+        const u = String(url)
+        if (u.includes('viewpairing.cgi')) {
+          return htmlResponse(PAIRING_PUBLISHED_HTML)
+        }
+        return htmlResponse('<html></html>')
+      })
+    )
+    const session = new FlicaSession('rpa.flica.net')
+    const overlays = await fetchFlicaPairingOverlays(session, GO_WITH_PAIRING_LINK_HTML, {
+      dateFrom: '2026-08-20',
+      dateTo: '2026-08-20',
+      defaultYear: 2026,
+    })
+    const month = parseFlicaSchedule(GO_WITH_PAIRING_LINK_HTML, { defaultYear: 2026 })
+    expect(month.find((l) => l.flight_number === '4809')?.scheduled_out_local).toBe(
+      '2026-08-20 06:09:00'
+    )
+    const merged = overlayFlicaPairingLegs(month, overlays)
+    expect(merged.find((l) => l.flight_number === '4809')?.scheduled_out_local).toBe(
+      '2026-08-20 06:06:00'
+    )
+    expect(merged.find((l) => l.flight_number === '4809')?.scheduled_in_local).toBe(
+      '2026-08-20 08:09:00'
+    )
   })
 })
