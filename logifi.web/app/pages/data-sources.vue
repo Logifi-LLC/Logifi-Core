@@ -87,6 +87,9 @@
         <section class="mb-10">
           <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">Airline schedule (FLICA)</h2>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
+            Autofi is in public beta with Republic (RJET). Other airlines are not supported yet.
+          </p>
+          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
             If you choose to connect FLICA, you provide your airline portal credentials in Logifi.
             Our
             <strong :class="isFromLanding ? 'text-gray-950 dark:text-gray-900' : ''">server</strong> stores an encrypted copy associated with your Logifi user account and uses it only to

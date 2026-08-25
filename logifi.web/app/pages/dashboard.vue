@@ -323,11 +323,14 @@
       >
         <div class="flex items-start justify-between gap-4">
           <div>
-            <h3 :class="['text-base sm:text-lg font-semibold font-quicksand', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
-              Airline schedule
-            </h3>
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 :class="['text-base sm:text-lg font-semibold font-quicksand', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
+                Airline schedule
+              </h3>
+              <AutofiBetaPill :is-dark-mode="isDarkMode" />
+            </div>
             <p :class="['text-sm mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
-              Fetch and import flights from FLICA into your logbook.
+              Fetch and import flights from Republic (RJET) FLICA.
             </p>
           </div>
           <button
@@ -385,7 +388,10 @@
               :class="isDarkMode ? 'border-gray-800 bg-gray-900/95' : 'border-gray-200 bg-gray-50/95'"
             >
               <div class="flex items-center justify-between gap-3">
-                <h2 class="text-base font-semibold font-quicksand">Airline schedule</h2>
+                <div class="flex items-center gap-2 min-w-0">
+                  <h2 class="text-base font-semibold font-quicksand">Airline schedule</h2>
+                  <AutofiBetaPill :is-dark-mode="isDarkMode" />
+                </div>
                 <button
                   type="button"
                   class="rounded-lg px-2 py-1.5 text-sm font-semibold font-quicksand transition-colors"
@@ -398,7 +404,7 @@
               <p
                 :class="['text-xs mt-1 font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-600']"
               >
-                Pull new flights from FLICA into your logbook. Review before importing.
+                Pull new flights from Republic (RJET) FLICA. Review before importing.
               </p>
             </header>
             <div

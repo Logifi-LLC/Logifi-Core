@@ -18,9 +18,10 @@
       <section id="schedule" class="scroll-mt-28 mb-10">
         <div class="flex flex-wrap items-center gap-3 mb-4">
           <h2 class="text-2xl font-bold text-gray-950 m-0 drop-shadow-sm dark:text-gray-900">Airline schedule import</h2>
+          <AutofiBetaPill tone="marketing" />
         </div>
         <p class="text-gray-800 mb-6 text-lg font-medium dark:text-gray-700">
-          Connect your airline FLICA portal to preview and import scheduled flights into your logbook.
+          {{ AUTOFI_BETA_LINE }} Connect your FLICA portal to preview and import scheduled flights.
         </p>
 
         <div
@@ -31,7 +32,7 @@
             <p class="text-lg leading-relaxed">
               After you connect FLICA in Settings, Logifi fetches schedule legs for the date range you choose.
               You review a preview (including optional duplicate warnings) before import. Imports are intended
-              to be idempotent using stable flight identifiers.
+              to be idempotent using stable flight identifiers. Other airlines are not supported yet.
             </p>
             <p class="text-lg leading-relaxed">
               This is for
@@ -102,9 +103,11 @@
 <script setup lang="ts">
 import { ref, onBeforeUnmount, watch } from 'vue'
 import AuthModal from '~/components/AuthModal.vue'
+import AutofiBetaPill from '~/components/fcv/AutofiBetaPill.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
 import MarketingSecondaryPageShell from '~/components/MarketingSecondaryPageShell.vue'
+import { AUTOFI_BETA_LINE } from '~/utils/autofiBeta'
 
 const { theme, isDark, applyDocumentTheme } = useTheme()
 
@@ -137,7 +140,7 @@ useHead({
     {
       name: 'description',
       content:
-        'Logifi integrations: airline schedule import via FLICA and Google Gemini for Digifi paper scanning.',
+        'Logifi integrations: Autofi FLICA import (public beta with Republic / RJET) and Google Gemini for Digifi paper scanning.',
     },
   ],
 })
