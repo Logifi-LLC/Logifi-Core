@@ -24,6 +24,7 @@ import {
 } from '../../../shared/catalogPersonNames'
 import { applyCatalogFamilyToFcvPreview } from '../../../shared/aircraftTailIndex'
 import { OOOI_FIELD_ORDER } from '~/utils/logbookTypes'
+import { localCalendarYmd } from '../../../shared/localCalendarDate'
 
 /** Must match dashboard theme; avoid `dark:` here so OS dark mode does not fight white settings cards. */
 const props = withDefaults(
@@ -719,8 +720,8 @@ async function fetchFlights() {
           'Content-Type': 'application/json',
         },
         body: {
-          dateFrom: dateFrom.value || new Date().toISOString().slice(0, 10),
-          dateTo: dateTo.value || new Date().toISOString().slice(0, 10),
+          dateFrom: dateFrom.value || localCalendarYmd(),
+          dateTo: dateTo.value || localCalendarYmd(),
           includeDeadheads: includeDeadheads.value,
           includeScheduled: includeScheduled.value,
           airlineCode: 'RJET',
@@ -786,7 +787,7 @@ async function fetchSinceLastEntry() {
     const latest = await apiFetch<{ date: string | null }>('/api/fcv/last-entry-date', {
       headers: authHeaders(),
     })
-    const today = new Date().toISOString().slice(0, 10)
+    const today = localCalendarYmd()
     const from = typeof latest?.date === 'string' && latest.date.trim() ? latest.date : today
     dateFrom.value = from
     dateTo.value = today

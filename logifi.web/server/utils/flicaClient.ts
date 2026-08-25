@@ -6,7 +6,12 @@
  * Schedule surface (observed): /online/mainmenu.cgi → Schedules → month detail.
  */
 
-import { parseFlicaSchedule, summarizeFlicaHtml } from './flicaParse'
+import type { AirlineLeg } from './airlineLeg'
+import {
+  parseFlicaLastUpdatedMs,
+  parseFlicaSchedule,
+  summarizeFlicaHtml,
+} from './flicaParse'
 
 const FLICA_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -398,6 +403,120 @@ export function findScheduleDetailLinks(html: string): string[] {
     if (/scheduledetail\.cgi/i.test(href)) push(href)
   }
   return out
+}
+
+export interface FlicaPairingLink {
+  tripId: string
+  href: string
+}
+
+const PAIRING_TRIP_QUERY_RE = /[?&](?:trip|pairing|pairid|pair)=?(L\d[\dA-Z]*)/i
+const PAIRING_CGI_RE =
+  /(?:\/(?:online|full)\/)?[\w.-]*(?:pairing|opentrip|viewtrip|tripdetail)[\w.-]*\.cgi\?[^"'\\\s<>]*/gi
+
+function resolvePairingHref(href: string): string[] {
+  const cleaned = href.replace(/&amp;/g, '&').trim()
+  if (!cleaned) return []
+  if (cleaned.startsWith('http') || cleaned.startsWith('/')) return [cleaned]
+  if (/\.cgi/i.test(cleaned)) {
+    return [`/full/${cleaned}`, `/online/${cleaned}`]
+  }
+  return [resolveOnlineHref(cleaned)]
+}
+
+/**
+ * Pairing-detail CGI links from month refrigerator HTML (Trip=L7H18 etc.).
+ */
+export function extractFlicaPairingLinks(html: string): FlicaPairingLink[] {
+  const out: FlicaPairingLink[] = []
+  const seen = new Set<string>()
+  const consider = (raw: string) => {
+    const cleaned = raw.replace(/&amp;/g, '&').trim()
+    if (!/\.cgi/i.test(cleaned)) return
+    if (/scheduledetail\.cgi/i.test(cleaned) && !PAIRING_TRIP_QUERY_RE.test(cleaned)) return
+    const tripMatch =
+      cleaned.match(PAIRING_TRIP_QUERY_RE) ?? cleaned.match(/\/(L\d[\dA-Z]*)(?:[/?&#]|$)/i)
+    if (!tripMatch) return
+    const tripId = tripMatch[1].toUpperCase()
+    for (const href of resolvePairingHref(cleaned)) {
+      const key = `${tripId}:${href}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push({ tripId, href })
+    }
+  }
+
+  PAIRING_CGI_RE.lastIndex = 0
+  let match: RegExpExecArray | null
+  while ((match = PAIRING_CGI_RE.exec(html))) {
+    consider(match[0])
+  }
+  const genericCgi = /(?:\/(?:online|full)\/)?[\w.-]+\.cgi\?[^"'\\\s<>]+/gi
+  while ((match = genericCgi.exec(html))) {
+    if (PAIRING_TRIP_QUERY_RE.test(match[0])) consider(match[0])
+  }
+  for (const { href } of anchorEntries(html)) {
+    consider(href)
+  }
+  return out
+}
+
+/**
+ * Fetch pairing pages linked from the month schedule and return overlay legs
+ * (published DEPL/ARRL) for trips in the requested date range.
+ */
+export async function fetchFlicaPairingOverlays(
+  session: FlicaSession,
+  monthHtml: string,
+  opts: { dateFrom: string; dateTo: string; defaultYear?: number }
+): Promise<AirlineLeg[]> {
+  const links = extractFlicaPairingLinks(monthHtml)
+  if (!links.length) return []
+
+  const monthLegs = parseFlicaSchedule(monthHtml, { defaultYear: opts.defaultYear })
+  const wantedTrips = new Set(
+    monthLegs
+      .filter((leg) => {
+        const date = leg.scheduled_out_local?.slice(0, 10) ?? ''
+        if (opts.dateFrom && date && date < opts.dateFrom) return false
+        if (opts.dateTo && date && date > opts.dateTo) return false
+        return Boolean(leg.trip_number)
+      })
+      .map((leg) => leg.trip_number as string)
+  )
+
+  const monthUpdated = parseFlicaLastUpdatedMs(monthHtml)
+  const overlays: AirlineLeg[] = []
+  const fetched = new Set<string>()
+
+  for (const link of links) {
+    if (wantedTrips.size > 0 && !wantedTrips.has(link.tripId)) continue
+    if (fetched.has(link.href)) continue
+    fetched.add(link.href)
+    if (fetched.size > 24) break
+    try {
+      const page = await session.request(link.href, {
+        method: 'GET',
+        headers: {
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      })
+      if (looksLikeLoginPage(page.html, page.finalUrl)) continue
+      const pairingUpdated = parseFlicaLastUpdatedMs(page.html)
+      if (
+        monthUpdated != null &&
+        pairingUpdated != null &&
+        pairingUpdated < monthUpdated
+      ) {
+        continue
+      }
+      const legs = parseFlicaSchedule(page.html, { defaultYear: opts.defaultYear })
+      overlays.push(...legs)
+    } catch {
+      continue
+    }
+  }
+  return overlays
 }
 
 function buildScheduleDetailUrls(

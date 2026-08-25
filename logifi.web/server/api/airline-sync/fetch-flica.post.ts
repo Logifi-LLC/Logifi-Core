@@ -14,17 +14,22 @@ import {
 } from '../../utils/fcvPreviewDuplicates'
 import {
   filterAirlineLegsWithStats,
+  overlayFlicaPairingLegs,
   parseFlicaSchedule,
   summarizeFlicaHtml,
+  FLICA_DEFAULT_NOW_ZONE,
 } from '../../utils/flicaParse'
 import {
+  fetchFlicaPairingOverlays,
   fetchScheduleHtml,
   loginFlica,
   FlicaClientError,
+  type FlicaSession,
 } from '../../utils/flicaClient'
 import { resolveFlicaPortal } from '../../utils/flicaPortal'
 import { unsealSecret, SecretBoxError } from '../../utils/secretBox'
 import type { FcvMappedEntry } from '../../utils/fcvMap'
+import { DateTime } from 'luxon'
 
 interface FetchFlicaBody {
   dateFrom?: string
@@ -312,18 +317,25 @@ export default defineEventHandler(async (event) => {
   }
 
   const host = integration.portal_host || portal.host
+  const nowMs = Date.now()
+  const todayYmd = DateTime.fromMillis(nowMs, { zone: FLICA_DEFAULT_NOW_ZONE }).toFormat(
+    'yyyy-MM-dd'
+  )
   const dateFrom =
     typeof body.dateFrom === 'string' && body.dateFrom.trim()
       ? body.dateFrom.trim()
-      : new Date().toISOString().slice(0, 10)
+      : todayYmd
   const dateTo =
     typeof body.dateTo === 'string' && body.dateTo.trim()
       ? body.dateTo.trim()
       : dateFrom
+  const includeScheduled = body.includeScheduled === true
+  const includeDeadheads = body.includeDeadheads === true
 
   let scheduleHtml: string
+  let session!: FlicaSession
   try {
-    const session = await loginFlica({
+    session = await loginFlica({
       host,
       username: integration.username,
       password,
@@ -355,15 +367,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 502, statusMessage: message })
   }
 
-  const nowDate = new Date()
-  const nowIso = nowDate.toISOString()
-  // Build a local-time "now" string (YYYY-MM-DDTHH:MM) so it can be compared
-  // directly against scheduled_out_local, which is always in local (pilot) time.
-  // toISOString() is UTC and must not be used for that comparison.
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const nowLocalDatetime = `${nowDate.getFullYear()}-${pad(nowDate.getMonth() + 1)}-${pad(nowDate.getDate())}T${pad(nowDate.getHours())}:${pad(nowDate.getMinutes())}`
-  const todayYmd = nowLocalDatetime.slice(0, 10)
   const defaultYear = parseInt(dateFrom.slice(0, 4), 10)
+  const parseOpts = {
+    defaultYear: Number.isFinite(defaultYear) ? defaultYear : undefined,
+  }
   const htmlSummary = summarizeFlicaHtml(scheduleHtml)
   console.info('[flica] schedule html', {
     bytes: htmlSummary.bytes,
@@ -371,32 +378,58 @@ export default defineEventHandler(async (event) => {
     hasL7G13: htmlSummary.hasL7G13,
     has4442: htmlSummary.has4442,
   })
-  const parsed = parseFlicaSchedule(scheduleHtml, {
-    defaultYear: Number.isFinite(defaultYear) ? defaultYear : undefined,
-  })
-  const {
-    filtered,
-    excludedDeadheads,
-    excludedOutsideRange,
-    excludedScheduled,
-  } = filterAirlineLegsWithStats(parsed, {
+  let parsed = parseFlicaSchedule(scheduleHtml, parseOpts)
+  try {
+    const pairingLegs = await fetchFlicaPairingOverlays(session, scheduleHtml, {
+      dateFrom,
+      dateTo,
+      defaultYear: parseOpts.defaultYear,
+    })
+    if (pairingLegs.length > 0) {
+      parsed = overlayFlicaPairingLegs(parsed, pairingLegs)
+    }
+  } catch {
+    /* month HTML is still usable */
+  }
+
+  const pre = filterAirlineLegsWithStats(parsed, {
     dateFrom,
     dateTo,
-    includeDeadheads: body.includeDeadheads === true,
-    includeScheduled: body.includeScheduled === true,
+    includeDeadheads,
+    includeScheduled: true,
+    excludeAfterYmd: includeScheduled ? undefined : todayYmd,
+    nowMs,
     todayYmd,
-    nowIso: nowLocalDatetime,
   })
 
-  const skipEnrich = await loadEnrichSkipIndices(supabase, userId, filtered)
+  const skipEnrich = await loadEnrichSkipIndices(supabase, userId, pre.filtered)
   const {
     legs: enriched,
     enrichAttempted,
     enrichedCount,
     enrichDetail,
     authRejected,
-  } = await enrichLegsSequential(filtered, dateTo, portal.airlineCode, skipEnrich)
-  const mapped: FcvMappedEntry[] = enriched.map(mapAirlineLegToFcvMappedEntry)
+  } = await enrichLegsSequential(pre.filtered, dateTo, portal.airlineCode, skipEnrich)
+
+  const post = includeScheduled
+    ? {
+        filtered: enriched,
+        excludedDeadheads: 0,
+        excludedOutsideRange: 0,
+        excludedScheduled: 0,
+      }
+    : filterAirlineLegsWithStats(enriched, {
+        includeDeadheads: true,
+        includeScheduled: false,
+        nowMs,
+        todayYmd,
+      })
+
+  const filtered = post.filtered
+  const excludedDeadheads = pre.excludedDeadheads
+  const excludedOutsideRange = pre.excludedOutsideRange
+  const excludedScheduled = pre.excludedScheduled + post.excludedScheduled
+  const mapped: FcvMappedEntry[] = filtered.map(mapAirlineLegToFcvMappedEntry)
 
   const warningParts: string[] = []
   if (!isAeroDataBoxConfigured() && filtered.length > 0) {
