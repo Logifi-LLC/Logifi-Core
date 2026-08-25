@@ -7,6 +7,10 @@
  */
 
 import { lookupAirportServer } from '../utils/airportLookupServer'
+import {
+  airportLookupCacheControl,
+  shouldSetLookupCacheHeader,
+} from '../utils/lookupCacheHeaders'
 
 export default defineEventHandler(async (event): Promise<{ success: boolean; data?: any; error?: string }> => {
   const query = getQuery(event)
@@ -26,16 +30,24 @@ export default defineEventHandler(async (event): Promise<{ success: boolean; dat
   try {
     const result = lookupAirportServer(normalizedCode)
     if (result) {
-      return {
-        success: true,
+      const payload = {
+        success: true as const,
         data: {
           ...result,
           locationKind: 'airport' as const
         }
       }
+      if (shouldSetLookupCacheHeader(payload)) {
+        setHeader(event, 'Cache-Control', airportLookupCacheControl())
+      }
+      return payload
     }
 
-    return { success: false, error: 'Airport not found' }
+    const notFound = { success: false, error: 'Airport not found' }
+    if (shouldSetLookupCacheHeader(notFound)) {
+      setHeader(event, 'Cache-Control', airportLookupCacheControl())
+    }
+    return notFound
   } catch (error) {
     console.error('Airport lookup error:', error)
     return {

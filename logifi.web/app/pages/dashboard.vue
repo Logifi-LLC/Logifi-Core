@@ -1186,7 +1186,8 @@
             </h2>
       </div>
               <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end w-full lg:w-auto">
-                <div class="relative w-full sm:w-60">
+              <div class="flex flex-col gap-2 w-full sm:w-60">
+                <div class="relative w-full">
               <input 
                     ref="searchInputRef"
                     v-model="searchTerm"
@@ -1204,6 +1205,29 @@
             <Icon name="ri:search-line" size="18" />
           </span>        
           </div>
+                <div v-if="searchChips.length" class="flex flex-wrap gap-1.5">
+                  <span
+                    v-for="chip in searchChips"
+                    :key="chip.id"
+                    :class="[
+                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-quicksand',
+                      isDarkMode
+                        ? 'bg-gray-700 text-gray-200 border border-white/10'
+                        : 'bg-gray-200 text-gray-700 border border-gray-300'
+                    ]"
+                  >
+                    {{ chip.label }}
+                    <button
+                      type="button"
+                      class="leading-none opacity-70 hover:opacity-100"
+                      :aria-label="`Remove ${chip.label}`"
+                      @click="searchTerm = stripSearchToken(searchTerm, chip.raw)"
+                    >
+                      ×
+                    </button>
+                  </span>
+                </div>
+              </div>
               </div>
         </div>
 
@@ -6882,6 +6906,11 @@ import {
   findDuplicableLastEntry,
 } from '../utils/duplicateLastFlight'
 import {
+  entryMatchesAviationSearch,
+  parseAviationSearch,
+  stripSearchToken,
+} from '../utils/aviationSearch'
+import {
   ACCOUNT_SCOPED_STORAGE_KEYS,
   DEVICE_GLOBAL_STORAGE_KEYS,
   getScopedItem,
@@ -8356,6 +8385,22 @@ watch(searchTerm, (value) => {
     searchDebounceTimer = null
   }, SEARCH_DEBOUNCE_MS)
 })
+
+const knownSearchTails = computed(() => {
+  const tails = new Set<string>()
+  for (const logEntry of logEntries.value) {
+    if (inferLogbookType(logEntry) !== activeLogbook.value) continue
+    const raw = (logEntry.registration || '').trim().toUpperCase()
+    if (raw) tails.add(raw)
+    const normalized = raw.replace(/[^A-Z0-9]/g, '')
+    if (normalized) tails.add(normalized)
+  }
+  return tails
+})
+
+const searchChips = computed(
+  () => parseAviationSearch(searchTerm.value, { knownTails: knownSearchTails.value }).chips
+)
 const validationError = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 const duplicateWarning = ref<{ matches: LogEntry[] } | null>(null)
@@ -17224,7 +17269,7 @@ function getEntryLogbookType(entry: LogEntry): 'flight' | 'simulator' {
 }
 
 interface CatalogFilterContext {
-  term: string
+  parsedSearch: ReturnType<typeof parseAviationSearch>
   activeAircraft: Set<string>
   activeAirports: Set<string>
   activePilots: Set<string>
@@ -17239,7 +17284,9 @@ interface CatalogFilterContext {
 
 function buildCatalogFilterContext(): CatalogFilterContext {
   return {
-    term: debouncedSearchTerm.value.trim().toLowerCase(),
+    parsedSearch: parseAviationSearch(debouncedSearchTerm.value, {
+      knownTails: knownSearchTails.value,
+    }),
     activeAircraft: new Set(getActiveFilterKeys(selectedFilters.aircraft).map((k) => k.toUpperCase())),
     activeAirports: new Set(getActiveFilterKeys(selectedFilters.airports).map((k) => k.toUpperCase())),
     activePilots: new Set(getActiveFilterKeys(selectedFilters.pilots)),
@@ -17261,22 +17308,9 @@ function entryPassesCatalogAndSearchFilters(
 ): boolean {
   if (getEntryLogbookType(entry) !== ctx.activeLogbookType) return false
 
-  const matchesTerm =
-    ctx.term.length === 0 ||
-    [
-      entry.aircraftMakeModel,
-      entry.registration,
-      entry.departure,
-      entry.destination,
-      entry.route,
-      entry.remarks,
-      entry.trainingElements,
-    ]
-      .join(' ')
-      .toLowerCase()
-      .includes(ctx.term)
-
-  if (!matchesTerm) return false
+  if (!entryMatchesAviationSearch(entry, ctx.parsedSearch, ctx.classifiedAirports)) {
+    return false
+  }
 
   if (ctx.activeAircraft.size > 0) {
     const reg = (entry.registration || '').toUpperCase()
