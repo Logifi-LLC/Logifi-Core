@@ -1473,13 +1473,7 @@
                       : 'divide-gray-200 bg-gray-100 text-gray-600'
                   ]"
                 >
-                  <tr v-if="logTablePadding.paddingTop > 0" aria-hidden="true">
-                    <td
-                      :colspan="visibleColumns.length"
-                      :style="{ height: `${logTablePadding.paddingTop}px`, padding: '0', border: 'none' }"
-                    />
-                  </tr>
-                  <template v-for="entry in visibleTableEntries" :key="entry.id">
+                  <template v-for="entry in displayedEntries" :key="entry.id">
                     <tr
                       :class="[
                         'transition-all duration-200 border-l-4 cursor-pointer',
@@ -1625,12 +1619,6 @@
                       </td>
                     </tr>
                   </template>
-                  <tr v-if="logTablePadding.paddingBottom > 0" aria-hidden="true">
-                    <td
-                      :colspan="visibleColumns.length"
-                      :style="{ height: `${logTablePadding.paddingBottom}px`, padding: '0', border: 'none' }"
-                    />
-                  </tr>
                 </tbody>
               </table>
             </div>
@@ -6884,8 +6872,6 @@ import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGesture
 import { usePullToRefresh } from '../composables/usePullToRefresh'
 import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
 import { useDashboardShortcuts } from '../composables/useDashboardShortcuts'
-import { useLogListVirtualizer } from '../composables/useLogListVirtualizer'
-import { LOG_LIST_TABLE_ROW_ESTIMATE_PX } from '../utils/logListVirtual'
 import AuthModal from '../components/AuthModal.vue'
 import AuditTrail from '../components/AuditTrail.vue'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
@@ -17375,24 +17361,6 @@ const displayedEntries = computed(() =>
   filteredEntries.value.slice(0, visibleEntryCount.value)
 )
 
-const logTableUsesElementScroll = computed(() => true)
-const {
-  virtualItems: logTableVirtualItems,
-  padding: logTablePadding,
-  scrollToIndex: scrollLogTableToIndex,
-} = useLogListVirtualizer({
-  count: computed(() => displayedEntries.value.length),
-  useElementScroll: logTableUsesElementScroll,
-  scrollParent: rootScrollContainerRef,
-  estimateSize: LOG_LIST_TABLE_ROW_ESTIMATE_PX,
-})
-
-const visibleTableEntries = computed(() =>
-  logTableVirtualItems.value
-    .map((item) => displayedEntries.value[item.index])
-    .filter((entry): entry is LogEntry => entry != null)
-)
-
 const entriesLoadMoreSentinelRef = ref<HTMLElement | null>(null)
 let entriesLoadMoreObserver: IntersectionObserver | undefined
 
@@ -17435,11 +17403,7 @@ watch(
   [debouncedSearchTerm, activeLogbook, totalsTimeMode, totalsCustomStart, totalsCustomEnd, selectedFilters],
   () => {
     visibleEntryCount.value = ENTRIES_PAGE_SIZE
-    if (isIos.value) {
-      logEntryListRef.value?.scrollToIndex(0)
-    } else {
-      scrollLogTableToIndex(0)
-    }
+    logEntryListRef.value?.scrollToIndex(0)
   },
   { deep: true }
 )
