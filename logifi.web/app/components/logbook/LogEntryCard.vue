@@ -105,7 +105,7 @@
       </template>
     </div>
 
-    <!-- Detail zone -->
+    <!-- Detail zone: conditions (and leftover non-metric chips) -->
     <div v-if="detailChipFields.length" class="mt-3 flex flex-wrap gap-2 min-w-0">
       <template v-for="field in detailChipFields" :key="field.key">
         <template v-if="field.key === 'conditions'">
@@ -125,6 +125,21 @@
           {{ getEntryFieldDisplay(entry, field.key).text }}
         </span>
       </template>
+    </div>
+
+    <div
+      v-if="metricStripFields.length"
+      data-testid="metrics-strip"
+      class="mt-3 flex flex-wrap gap-x-4 gap-y-1 min-w-0"
+    >
+      <span
+        v-for="field in metricStripFields"
+        :key="field.key"
+        :class="['min-w-[4.5rem] text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']"
+      >
+        <span :class="isDarkMode ? 'text-gray-400' : 'text-gray-500'">{{ field.label }}</span>
+        <span class="font-mono"> {{ getEntryFieldDisplay(entry, field.key).text }}</span>
+      </span>
     </div>
 
     <p
@@ -166,6 +181,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { LogbookColumnConfig, LogEntry } from '~/utils/logbookTypes'
+import { isMetricZoneKey } from '~/utils/entryCardPresets'
 import {
   formatDisplayDate,
   formatEntryAirportCode,
@@ -206,7 +222,15 @@ const headerFlightNumber = computed(() => {
 })
 
 const detailChipFields = computed(() =>
-  props.visibleDetailFields.filter((field) => field.key !== 'flightNumber' && field.key !== 'pilots'),
+  props.visibleDetailFields.filter(
+    (field) => field.key !== 'flightNumber' && field.key !== 'pilots' && !isMetricZoneKey(field.key),
+  ),
+)
+
+const metricStripFields = computed(() =>
+  props.visibleDetailFields.filter(
+    (field) => isMetricZoneKey(field.key) && !getEntryFieldDisplay(props.entry, field.key).isEmpty,
+  ),
 )
 
 const pilotsLine = computed(() => {

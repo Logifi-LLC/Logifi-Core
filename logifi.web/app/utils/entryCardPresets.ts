@@ -26,6 +26,23 @@ export const ENTRY_CARD_HEADER_KEYS: readonly LogbookColumnKey[] = [
 /** Shown in footer when enabled, not as a detail chip. */
 export const ENTRY_CARD_FOOTER_KEYS: readonly LogbookColumnKey[] = ['remarks']
 
+/** Hours and counts on the iOS card metrics strip, not as chips. */
+export const ENTRY_CARD_METRIC_KEYS: readonly LogbookColumnKey[] = [
+  'pic',
+  'sic',
+  'dualR',
+  'solo',
+  'night',
+  'nvg',
+  'actual',
+  'hood',
+  'dualG',
+  'xc',
+  'dayLandings',
+  'nightLandings',
+  'approach',
+]
+
 export const ENTRY_CARD_PRESETS: readonly EntryCardPreset[] = [
   {
     id: 'student',
@@ -69,4 +86,8 @@ export function isFooterZoneKey(key: LogbookColumnKey): boolean {
 
 export function isDetailChipKey(key: LogbookColumnKey): boolean {
   return !isHeaderZoneKey(key) && !isFooterZoneKey(key)
+}
+
+export function isMetricZoneKey(key: LogbookColumnKey): boolean {
+  return (ENTRY_CARD_METRIC_KEYS as readonly string[]).includes(key)
 }
