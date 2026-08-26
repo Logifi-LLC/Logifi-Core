@@ -95,3 +95,47 @@ describe('LogEntryCard flight number', () => {
     expect(wrapper.text()).not.toContain('Flight Number:')
   })
 })
+
+describe('LogEntryCard pilots', () => {
+  it('shows names as a line of text and not as a chip when the field is enabled', () => {
+    const wrapper = mountCard({
+      entry: entry({
+        trainingElements: 'Christopher White',
+        performance: { ...createEmptyPerformance(), dayLandings: 1 },
+      }),
+      visibleDetailFields: [
+        field('pilots', 'Pilots'),
+        field('conditions', 'Conditions'),
+        field('dayLandings', 'Day Landings'),
+      ],
+    })
+
+    const pilotsLine = wrapper.get('[data-testid="pilots-line"]')
+    expect(pilotsLine.text()).toBe('Christopher White')
+    expect(pilotsLine.classes()).toContain('text-right')
+    expect(wrapper.text()).not.toContain('Pilots:')
+    expect(wrapper.text()).toContain('IFR')
+    expect(wrapper.text()).toContain('Day Landings: 1')
+  })
+
+  it('omits the pilots line when the field is turned off', () => {
+    const wrapper = mountCard({
+      entry: entry({ trainingElements: 'Christopher White' }),
+      visibleDetailFields: [field('conditions', 'Conditions')],
+    })
+
+    expect(wrapper.find('[data-testid="pilots-line"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Christopher White')
+    expect(wrapper.text()).not.toContain('Pilots:')
+  })
+
+  it('omits the pilots line when the field is enabled but the value is empty', () => {
+    const wrapper = mountCard({
+      entry: entry({ trainingElements: '   ' }),
+      visibleDetailFields: [field('pilots', 'Pilots')],
+    })
+
+    expect(wrapper.find('[data-testid="pilots-line"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Pilots:')
+  })
+})
