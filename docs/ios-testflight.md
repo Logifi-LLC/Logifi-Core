@@ -116,10 +116,9 @@ In `logifi.web/.env` before building:
 ```bash
 NUXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NUXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-# TestFlight from the `dev` branch:
-NUXT_PUBLIC_API_BASE=https://dev.logifi.io
-# App Store / production only:
-# NUXT_PUBLIC_API_BASE=https://www.logifi.io
+# TestFlight and App Store both talk to production. `dev.logifi.io` is not a live host
+# (NXDOMAIN → iOS `[POST] /api/flica/connect: <no response> Load failed`).
+NUXT_PUBLIC_API_BASE=https://www.logifi.io
 ```
 
 ### 3.2 Supabase redirect URLs
@@ -216,7 +215,8 @@ Tester instructions: [ios-testflight-tester-guide.md](../logifi.web/docs/ios-tes
 | App feels frozen with 1000+ entries on iOS | iOS uses display-windowed log cards (infinite scroll, ~100/page). Rebuild after `cap:sync` if you still see all entries at once |
 | Cannot scroll / taps ignored on iOS | Pull-to-refresh removed on iOS; entry form no longer auto-opens on empty logbook. Run `cap:sync`, clean Xcode build, reinstall |
 | Stuck on "Syncing logbook" | Check Safari console for `[LoadEntries] Merged entries`. Large logbooks sync in background — UI should stay interactive. Use Settings → Sync to force completion |
-| `/api/*` 404 on device | Set `NUXT_PUBLIC_API_BASE` and rebuild with `cap:sync`; verify Vercel deploy uses `nuxt build` |
+| `/api/*` 404 on device | Set `NUXT_PUBLIC_API_BASE=https://www.logifi.io` and rebuild with `cap:sync`; verify Vercel deploy uses `nuxt build` |
+| Autofi Connect: `[POST] "https://dev.logifi.io/api/flica/connect": Load failed` | `dev.logifi.io` has no DNS. Use `https://www.logifi.io`, `cap:sync`, new TestFlight. Runtime remaps the dead host after this rebuild. |
 | Google OAuth does not return to app | Confirm Supabase + Google redirect URLs; custom scheme `io.logifi.app` in Info.plist |
 | Email confirmation link opens browser only | Add `https://localhost/auth/callback` to Supabase redirects |
 | Upload rejected (duplicate build) | Bump `CURRENT_PROJECT_VERSION` in Xcode |
