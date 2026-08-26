@@ -36,7 +36,6 @@
     "@nwpr/airport-codes": "^3.0.3",
     "@supabase/supabase-js": "^2.90.1",
     "@tailwindcss/vite": "^4.1.18",
-    "@tanstack/vue-virtual": "^3.13.36",
     "csv-parse": "^6.1.0",
     "luxon": "^3.7.2",
     "nuxt": "^4.5.2",
