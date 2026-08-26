@@ -110,7 +110,9 @@ describe('LogEntryCard pilots', () => {
       ],
     })
 
-    expect(wrapper.get('[data-testid="pilots-line"]').text()).toBe('Christopher White')
+    const pilotsLine = wrapper.get('[data-testid="pilots-line"]')
+    expect(pilotsLine.text()).toBe('Christopher White')
+    expect(pilotsLine.classes()).toContain('text-right')
     expect(wrapper.text()).not.toContain('Pilots:')
     expect(wrapper.text()).toContain('IFR')
     expect(wrapper.text()).toContain('Day Landings: 1')

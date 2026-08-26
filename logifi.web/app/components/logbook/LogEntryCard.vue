@@ -130,7 +130,7 @@
     <p
       v-if="pilotsLine"
       data-testid="pilots-line"
-      :class="['mt-3 text-sm truncate font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+      :class="['mt-3 text-sm truncate text-right font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
     >
       {{ pilotsLine }}
     </p>
