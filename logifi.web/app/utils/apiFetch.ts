@@ -1,5 +1,6 @@
 import type { FetchOptions } from 'ofetch'
 import { isCapacitorNative } from '~/composables/useCapacitorPlatform'
+import { canonicalizeApiBase } from './apiBase'
 
 /**
  * Resolves `/api/*` paths to the remote backend (`NUXT_PUBLIC_API_BASE`) on the native
@@ -15,7 +16,7 @@ export function resolveApiUrl(path: string): string {
 
   try {
     const config = useRuntimeConfig()
-    const base = String(config.public.apiBase || '').trim().replace(/\/$/, '')
+    const base = canonicalizeApiBase(String(config.public.apiBase || ''))
     if (!base) return path
     return `${base}${path}`
   } catch {

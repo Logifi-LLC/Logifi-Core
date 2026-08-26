@@ -56,4 +56,22 @@ describe('resolveApiUrl', () => {
     const { resolveApiUrl } = await import('../apiFetch')
     expect(resolveApiUrl('/api/digifi/scan')).toBe('https://www.logifi.io/api/digifi/scan')
   })
+
+  it('rewrites the unrouted TestFlight host to the live API', async () => {
+    platform.native = true
+    mockUseRuntimeConfig.mockReturnValue({
+      public: { apiBase: 'https://dev.logifi.io' },
+    })
+    const { resolveApiUrl } = await import('../apiFetch')
+    expect(resolveApiUrl('/api/flica/connect')).toBe('https://www.logifi.io/api/flica/connect')
+  })
+
+  it('rewrites the unrouted host when it has a trailing slash', async () => {
+    platform.native = true
+    mockUseRuntimeConfig.mockReturnValue({
+      public: { apiBase: 'https://dev.logifi.io/' },
+    })
+    const { resolveApiUrl } = await import('../apiFetch')
+    expect(resolveApiUrl('/api/flica/status')).toBe('https://www.logifi.io/api/flica/status')
+  })
 })
