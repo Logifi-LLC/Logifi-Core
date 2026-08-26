@@ -194,6 +194,8 @@ export function getEntryFieldDisplay(entry: LogEntry, key: LogbookColumnKey): En
       return { text: formatLogbookNumber(entry.flightTime.solo), isEmpty: formatLogbookNumber(entry.flightTime.solo) === '—' }
     case 'night':
       return { text: formatLogbookNumber(entry.flightTime.night), isEmpty: formatLogbookNumber(entry.flightTime.night) === '—' }
+    case 'nvg':
+      return { text: formatLogbookNumber(entry.flightTime.nvg), isEmpty: formatLogbookNumber(entry.flightTime.nvg) === '—' }
     case 'actual':
       return { text: formatLogbookNumber(entry.flightTime.actualInstrument), isEmpty: formatLogbookNumber(entry.flightTime.actualInstrument) === '—' }
     case 'hood':
