@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useAuth } from '~/composables/useAuth'
 import { apiFetch } from '~/utils/apiFetch'
+import { messageFromFlicaApiError } from '~/utils/flicaApiError'
 import { AUTOFI_BETA_LINE } from '~/utils/autofiBeta'
 import AutofiBetaPill from '~/components/fcv/AutofiBetaPill.vue'
 import {
@@ -303,25 +304,6 @@ function authHeaders(): Record<string, string> {
   return { Authorization: `Bearer ${token}` }
 }
 
-function messageFromApiError(e: unknown, fallback: string): string {
-  if (e && typeof e === 'object') {
-    const rec = e as { data?: unknown; statusCode?: number; statusMessage?: string; message?: string }
-    const data = rec.data
-    if (data && typeof data === 'object') {
-      const d = data as { statusMessage?: unknown; message?: unknown }
-      if (typeof d.statusMessage === 'string' && d.statusMessage.trim()) return d.statusMessage.trim()
-      if (typeof d.message === 'string' && d.message.trim()) return d.message.trim()
-    }
-    if (typeof rec.statusMessage === 'string' && rec.statusMessage.trim()) return rec.statusMessage.trim()
-    if (rec.statusCode === 404) {
-      return 'FLICA API not found on this server. Rebuild iOS against the `dev` API (NUXT_PUBLIC_API_BASE=https://dev.logifi.io), not production.'
-    }
-    if (typeof rec.message === 'string' && rec.message.trim()) return rec.message.trim()
-  }
-  if (e instanceof Error && e.message.trim()) return e.message.trim()
-  return fallback
-}
-
 async function checkStatus() {
   if (!isAuthenticated.value) return
   loadingStatus.value = true
@@ -340,7 +322,7 @@ async function checkStatus() {
   } catch (e) {
     connected.value = false
     flicaUsername.value = null
-    error.value = messageFromApiError(e, 'Failed to check FLICA status')
+    error.value = messageFromFlicaApiError(e, 'Failed to check FLICA status')
   } finally {
     loadingStatus.value = false
   }
@@ -388,7 +370,7 @@ async function connectFlica() {
     emit('connection-changed', { connected: connected.value })
   } catch (e) {
     connected.value = false
-    error.value = messageFromApiError(e, 'Failed to connect FLICA')
+    error.value = messageFromFlicaApiError(e, 'Failed to connect FLICA')
   } finally {
     connectingFlica.value = false
   }
