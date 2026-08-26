@@ -135,10 +135,10 @@
       <span
         v-for="field in metricStripFields"
         :key="field.key"
-        :class="['min-w-[4.5rem] text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']"
+        :class="['inline-flex items-baseline gap-2 min-w-[4.5rem] text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']"
       >
         <span :class="isDarkMode ? 'text-gray-400' : 'text-gray-500'">{{ field.label }}</span>
-        <span class="font-mono"> {{ getEntryFieldDisplay(entry, field.key).text }}</span>
+        <span class="font-mono tabular-nums">{{ getEntryFieldDisplay(entry, field.key).text }}</span>
       </span>
     </div>
 

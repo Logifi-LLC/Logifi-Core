@@ -159,6 +159,7 @@ describe('LogEntryCard metrics strip', () => {
     expect(strip.text()).toContain('PIC')
     expect(strip.text()).toContain('2.1')
     expect(strip.text()).toContain('XC')
+    expect(strip.find('span.inline-flex').classes()).toContain('gap-2')
     expect(wrapper.text()).not.toContain('PIC:')
     expect(wrapper.text()).not.toContain('XC:')
     expect(wrapper.text()).toContain('IFR')
