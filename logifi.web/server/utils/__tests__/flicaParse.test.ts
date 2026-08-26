@@ -721,6 +721,26 @@ describe('pickFlicaGateHhmm', () => {
       blockHhmm: '0222',
     })
   })
+
+  it('prefers a later published Out/In pair when the actuals omit BLKT', () => {
+    expect(
+      pickFlicaGateHhmm(['0609', '0825', '0216', '0047', '0606', '0809'], null)
+    ).toEqual({
+      depHhmm: '0606',
+      arrHhmm: '0809',
+      blockHhmm: '0203',
+    })
+  })
+
+  it('prefers stacked sked/act cell pairs (Out_sked Out_act In_sked In_act)', () => {
+    expect(
+      pickFlicaGateHhmm(['0609', '0606', '0825', '0809', '0216', '0203'], null)
+    ).toEqual({
+      depHhmm: '0606',
+      arrHhmm: '0809',
+      blockHhmm: '0203',
+    })
+  })
 })
 
 describe('parseFlicaSchedule published actuals', () => {
@@ -737,6 +757,89 @@ Crew:
 CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
 `
     const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
+    const atlLga = legs.find((l) => l.flight_number === '4809')
+    expect(atlLga?.scheduled_out_local).toBe('2026-08-20 06:06:00')
+    expect(atlLga?.scheduled_in_local).toBe('2026-08-20 08:09:00')
+    expect(atlLga?.block_minutes).toBe(123)
+  })
+
+  it('maps dual-column published Out/In when the actuals omit BLKT', () => {
+    const text = `
+August Schedule
+DEREK FARMER
+(624619)
+Last Updated Aug 20, 2026 14:00:00 EDT
+L7H18 : 18AUG
+Base/Equip: LGA/EM7 CA01FO01
+TH	20	 	*	4809	ATL-LGA	0609	0825	0216	0047	0606	0809
+Crew:
+CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
+`
+    const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
+    const atlLga = legs.find((l) => l.flight_number === '4809')
+    expect(atlLga?.scheduled_out_local).toBe('2026-08-20 06:06:00')
+    expect(atlLga?.scheduled_in_local).toBe('2026-08-20 08:09:00')
+    expect(atlLga?.block_minutes).toBe(123)
+  })
+
+  it('folds a continuation row of published actuals into the bid leg', () => {
+    const html = `
+<html><body>
+<div>Last Updated Aug 20, 2026 16:00:00 EDT</div>
+<div>L7H18 : 18AUG</div>
+<div>Base/Equip: LGA/EM7 CA01FO01</div>
+<table>
+<tr><td>TH</td><td>20</td><td></td><td>*</td><td>4809</td><td>ATL-LGA</td><td>0609</td><td>0825</td><td>0216</td><td>0047</td><td>B48</td></tr>
+<tr><td></td><td></td><td></td><td></td><td></td><td></td><td>0606</td><td>0809</td><td>0203</td></tr>
+<tr><td>TH</td><td>20</td><td></td><td></td><td>4584</td><td>LGA-RIC</td><td>0912</td><td>1047</td><td>0135</td></tr>
+<tr><td></td><td></td><td></td><td></td><td></td><td></td><td>0908</td><td>1103</td></tr>
+</table>
+<div>Crew:</div>
+<div>CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE</div>
+</body></html>
+`
+    const legs = parseFlicaSchedule(html, { defaultYear: 2026 })
+    const atlLga = legs.find((l) => l.flight_number === '4809')
+    expect(atlLga?.scheduled_out_local).toBe('2026-08-20 06:06:00')
+    expect(atlLga?.scheduled_in_local).toBe('2026-08-20 08:09:00')
+    expect(atlLga?.block_minutes).toBe(123)
+
+    const lgaRic = legs.find((l) => l.flight_number === '4584' && l.dep_airport === 'LGA')
+    expect(lgaRic?.scheduled_out_local).toBe('2026-08-20 09:08:00')
+    expect(lgaRic?.scheduled_in_local).toBe('2026-08-20 11:03:00')
+  })
+
+  it('parses classic FLICA CGI with published actuals on the next unclosed row', () => {
+    const html = `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html><body>
+<table border=0 cellpadding=0 cellspacing=0>
+<tr><td colspan=12><font size=2><b>L7H18 : 18AUG</b></font>
+<tr><td colspan=12><font size=2>Base/Equip: LGA/EM7 CA01FO01</font>
+<tr>
+<td><font size=2>TH</font>
+<td><font size=2>20</font>
+<td><font size=2>&nbsp;</font>
+<td><font size=2>*</font>
+<td><font size=2>4809</font>
+<td><font size=2>ATL-LGA</font>
+<td><font size=2>0609</font>
+<td><font size=2>0825</font>
+<td><font size=2>0216</font>
+<tr>
+<td><font size=2>&nbsp;</font>
+<td><font size=2>&nbsp;</font>
+<td><font size=2>&nbsp;</font>
+<td><font size=2>&nbsp;</font>
+<td><font size=2>&nbsp;</font>
+<td><font size=2>&nbsp;</font>
+<td><font size=2>0606</font>
+<td><font size=2>0809</font>
+<td><font size=2>0203</font>
+<tr><td colspan=12>Crew:
+<tr><td colspan=12>CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
+</table>
+</body></html>`
+    const legs = parseFlicaSchedule(html, { defaultYear: 2026 })
     const atlLga = legs.find((l) => l.flight_number === '4809')
     expect(atlLga?.scheduled_out_local).toBe('2026-08-20 06:06:00')
     expect(atlLga?.scheduled_in_local).toBe('2026-08-20 08:09:00')

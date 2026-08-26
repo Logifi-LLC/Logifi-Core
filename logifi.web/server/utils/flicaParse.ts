@@ -150,6 +150,32 @@ function clockMinutes(hhmm: string): number {
   return parseInt(hhmm.slice(0, 2), 10) * 60 + parseInt(hhmm.slice(2, 4), 10)
 }
 
+/** Shortest clock difference in minutes (wraps at 12h so 23:59 vs 00:01 is 2). */
+function clockDiffMin(a: string, b: string): number {
+  let d = Math.abs(clockMinutes(a) - clockMinutes(b))
+  if (d > 12 * 60) d = 24 * 60 - d
+  return d
+}
+
+function elapsedClockMinutes(out: string, inn: string): number | null {
+  if (!isValidClockHhmm(out) || !isValidClockHhmm(inn)) return null
+  let diff = clockMinutes(inn) - clockMinutes(out)
+  if (diff <= 0) diff += 24 * 60
+  return diff
+}
+
+function minutesToHhmm(mins: number): string | null {
+  if (!Number.isFinite(mins) || mins < 0 || mins > 12 * 60) return null
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return String(h).padStart(2, '0') + String(m).padStart(2, '0')
+}
+
+/** Published actuals stay within a few hours of bid Out (IROPS delays). */
+const PUBLISHED_OUT_SLACK_MIN = 3 * 60
+/** Two Outs stacked in one cell (sked vs act) are much closer than Out→In. */
+const INTERLEAVED_OUT_SLACK_MIN = 90
+
 /**
  * True when out/in look like clock times and block is a duration that matches
  * elapsed time, allowing 0–3h timezone slack (US continental).
@@ -158,8 +184,8 @@ export function isPlausibleFlicaGateTriple(out: string, inn: string, block: stri
   if (!isValidClockHhmm(out) || !isValidClockHhmm(inn)) return false
   const blk = parseBlockMinutes(block)
   if (blk == null || blk < 15 || blk > 12 * 60) return false
-  let diff = clockMinutes(inn) - clockMinutes(out)
-  if (diff <= 0) diff += 24 * 60
+  const diff = elapsedClockMinutes(out, inn)
+  if (diff == null) return false
   const slack = Math.abs(diff - blk)
   if (slack <= 20) return true
   const nearestHour = Math.round(slack / 60) * 60
@@ -167,10 +193,20 @@ export function isPlausibleFlicaGateTriple(out: string, inn: string, block: stri
   return Math.abs(slack - nearestHour) <= 15
 }
 
-function findPlausibleGateTriples(
-  nums: string[]
-): Array<{ index: number; out: string; inn: string; block: string }> {
-  const found: Array<{ index: number; out: string; inn: string; block: string }> = []
+function isPlausiblePublishedOutIn(bid: GateChoice, out: string, inn: string): boolean {
+  const elapsed = elapsedClockMinutes(out, inn)
+  if (elapsed == null || elapsed < 15 || elapsed > 12 * 60) return false
+  if (clockDiffMin(bid.out, out) > PUBLISHED_OUT_SLACK_MIN) return false
+  if (clockDiffMin(bid.inn, inn) > PUBLISHED_OUT_SLACK_MIN) return false
+  const bidElapsed = elapsedClockMinutes(bid.out, bid.inn)
+  if (bidElapsed != null && Math.abs(elapsed - bidElapsed) > 90) return false
+  return true
+}
+
+type GateChoice = { index: number; out: string; inn: string; block: string | null }
+
+function findPlausibleGateTriples(nums: string[]): GateChoice[] {
+  const found: GateChoice[] = []
   for (let i = 0; i + 2 < nums.length; i++) {
     const out = nums[i]!
     const inn = nums[i + 1]!
@@ -183,8 +219,65 @@ function findPlausibleGateTriples(
 }
 
 /**
+ * FLICA sometimes stacks sked/act in one cell: Out_sked Out_act In_sked In_act
+ * [Blk_sked Blk_act]. First three numbers are then not a gate triple.
+ */
+function pickInterleavedPublishedPair(nums: string[]): GateChoice | null {
+  if (nums.length < 4) return null
+  const skedOut = nums[0]!
+  const actOut = nums[1]!
+  const skedIn = nums[2]!
+  const actIn = nums[3]!
+  if (
+    !isValidClockHhmm(skedOut) ||
+    !isValidClockHhmm(actOut) ||
+    !isValidClockHhmm(skedIn) ||
+    !isValidClockHhmm(actIn)
+  ) {
+    return null
+  }
+  if (clockDiffMin(skedOut, actOut) > INTERLEAVED_OUT_SLACK_MIN) return null
+  if (clockDiffMin(skedIn, actIn) > INTERLEAVED_OUT_SLACK_MIN) return null
+  const elapsed = elapsedClockMinutes(actOut, actIn)
+  if (elapsed == null || elapsed < 15 || elapsed > 12 * 60) return null
+  const blkAct = nums[5]
+  const blkSked = nums[4]
+  const block =
+    blkAct && isPlausibleFlicaGateTriple(actOut, actIn, blkAct)
+      ? blkAct
+      : blkSked && isPlausibleFlicaGateTriple(actOut, actIn, blkSked)
+        ? blkSked
+        : minutesToHhmm(elapsed)
+  return { index: 1, out: actOut, inn: actIn, block }
+}
+
+/**
+ * After the bid triple, published actuals may be Out/In only (no BLKT).
+ * Require Out near bid Out so TBLK/duty numbers are not stolen.
+ */
+function pickLaterPublishedPair(nums: string[], bid: GateChoice): GateChoice | null {
+  let found: GateChoice | null = null
+  for (let i = bid.index + 3; i + 1 < nums.length; i++) {
+    const out = nums[i]!
+    const inn = nums[i + 1]!
+    if (!isPlausiblePublishedOutIn(bid, out, inn)) continue
+    const maybeBlk = nums[i + 2]
+    const elapsed = elapsedClockMinutes(out, inn)
+    const block =
+      maybeBlk && isPlausibleFlicaGateTriple(out, inn, maybeBlk)
+        ? maybeBlk
+        : elapsed != null
+          ? minutesToHhmm(elapsed)
+          : bid.block
+    found = { index: i, out, inn, block }
+  }
+  return found
+}
+
+/**
  * Pick DEPL/ARRL/BLKT from a FLICA remainder. When published actuals are
- * appended after the bid triple, prefer a later non-overlapping Out/In/block.
+ * appended after the bid triple (with or without a matching block), or stacked
+ * as sked/act pairs in one cell, prefer those later Out/In values.
  */
 export function pickFlicaGateHhmm(
   nums: string[],
@@ -192,11 +285,19 @@ export function pickFlicaGateHhmm(
 ): { depHhmm: string | null; arrHhmm: string | null; blockHhmm: string | null } {
   const triples = findPlausibleGateTriples(nums)
   const first = triples[0] ?? null
-  const later =
-    first != null ? triples.filter((t) => t.index >= first.index + 3).at(-1) ?? null : null
-  const chosen = later ?? first
+  const laterTriple =
+    first != null
+      ? triples
+          .filter(
+            (t) => t.index >= first.index + 3 && isPlausiblePublishedOutIn(first, t.out, t.inn)
+          )
+          .at(-1) ?? null
+      : null
+  const laterPair = first ? pickLaterPublishedPair(nums, first) : null
+  const interleaved = !first ? pickInterleavedPublishedPair(nums) : null
+  const chosen = laterTriple ?? laterPair ?? interleaved ?? first
 
-  if (chosen && (!gluedDep || chosen.index > 0 || later)) {
+  if (chosen && (!gluedDep || chosen.index > 0 || laterTriple || laterPair || interleaved)) {
     return { depHhmm: chosen.out, arrHhmm: chosen.inn, blockHhmm: chosen.block }
   }
   if (gluedDep) {
@@ -523,6 +624,31 @@ function isNoiseLine(line: string): boolean {
   return false
 }
 
+/** Trip / duty chrome that must not donate leftover HHMMs to the previous leg. */
+function shouldBreakOrphanGateAttach(line: string): boolean {
+  const t = line.replace(/\|/g, ' ').trim()
+  if (!t) return false
+  if (/^D-END\b/i.test(t)) return true
+  if (/\bT\.A\.F\.B\b/i.test(t)) return true
+  if (/^Total:/i.test(t)) return true
+  if (/^Crew:/i.test(t)) return true
+  if (/Base\/Equip:/i.test(t)) return true
+  if (/^GDO\b/i.test(t)) return true
+  if (/L\d[\dA-Z]*\s*:/i.test(t)) return true
+  return false
+}
+
+/**
+ * Published actuals often live on a continuation row with empty day/flight
+ * cells (`| | | | | |0606|0809|0203`). Fold those HHMMs into the previous leg.
+ */
+function extractOrphanGateNums(line: string): string[] {
+  if (shouldBreakOrphanGateAttach(line)) return []
+  const nums = line.match(/\b\d{4}\b/g) ?? []
+  const clocks = nums.filter((n) => isValidClockHhmm(n))
+  return clocks.length >= 2 ? clocks : []
+}
+
 function parseLegLine(line: string, index: number): ParseHit | null {
   if (isNoiseLine(line)) return null
   const { cells, hadPipes } = splitCells(line)
@@ -634,9 +760,23 @@ function collectHits(text: string): ParseHit[] {
   }
 
   let offset = 0
+  let lastLeg: Extract<ParseHit, { kind: 'leg' }> | null = null
   for (const line of text.split('\n')) {
+    if (shouldBreakOrphanGateAttach(line)) {
+      lastLeg = null
+      offset += line.length + 1
+      continue
+    }
     const hit = parseLegLine(line, offset)
-    if (hit) hits.push(hit)
+    if (hit) {
+      hits.push(hit)
+      lastLeg = hit
+    } else if (lastLeg) {
+      const extra = extractOrphanGateNums(line)
+      if (extra.length >= 2) {
+        lastLeg.remainder = `${lastLeg.remainder} ${extra.join(' ')}`.trim()
+      }
+    }
     offset += line.length + 1
   }
 
