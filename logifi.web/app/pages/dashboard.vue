@@ -1410,13 +1410,11 @@
 
             <LogEntryList
               v-else-if="isIos"
-              ref="logEntryListRef"
               :entries="displayedEntries"
               :is-dark-mode="isDarkMode"
               :visible-detail-fields="visibleDetailFields"
               :show-remarks-footer="showRemarksFooter"
               :is-entry-signed="isEntrySigned"
-              :scroll-parent="rootScrollContainerRef"
               @select="beginInlineEditing"
             />
 
@@ -8305,7 +8303,6 @@ function getCellTextColor(col: LogbookColumnConfig): string {
 
 const tableHeaderRef = ref<HTMLElement | null>(null)
 const tableContainerRef = ref<HTMLElement | null>(null)
-const logEntryListRef = ref<{ scrollToIndex: (index: number) => void } | null>(null)
 const tableRef = ref<HTMLTableElement | null>(null)
 
 function openLogbookLayoutPreferences(): void {
@@ -17409,7 +17406,9 @@ watch(
   [debouncedSearchTerm, activeLogbook, totalsTimeMode, totalsCustomStart, totalsCustomEnd, selectedFilters],
   () => {
     visibleEntryCount.value = ENTRIES_PAGE_SIZE
-    logEntryListRef.value?.scrollToIndex(0)
+    if (isIos.value) {
+      rootScrollContainerRef.value?.scrollTo({ top: 0 })
+    }
   },
   { deep: true }
 )
