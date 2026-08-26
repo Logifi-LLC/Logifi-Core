@@ -127,6 +127,14 @@
       </template>
     </div>
 
+    <p
+      v-if="pilotsLine"
+      data-testid="pilots-line"
+      :class="['mt-3 text-sm truncate font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+    >
+      {{ pilotsLine }}
+    </p>
+
     <!-- Footer zone -->
     <div
       v-if="(showRemarksFooter && entry.remarks?.trim()) || (entry.tags && entry.tags.length)"
@@ -198,8 +206,15 @@ const headerFlightNumber = computed(() => {
 })
 
 const detailChipFields = computed(() =>
-  props.visibleDetailFields.filter((field) => field.key !== 'flightNumber'),
+  props.visibleDetailFields.filter((field) => field.key !== 'flightNumber' && field.key !== 'pilots'),
 )
+
+const pilotsLine = computed(() => {
+  const enabled = props.visibleDetailFields.some((field) => field.key === 'pilots')
+  const value = props.entry.trainingElements?.trim()
+  if (!enabled || !value) return ''
+  return value
+})
 
 const totalTimeClass = computed(() => getTotalTimeColorClass(props.entry, props.isDarkMode))
 
