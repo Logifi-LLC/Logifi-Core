@@ -23,11 +23,11 @@
   >
     <!-- Header zone -->
     <div class="flex flex-col gap-1.5 min-w-0">
-      <!-- Row 1: date · role left, total + lock top-right -->
-      <div class="flex items-start justify-between gap-3 min-w-0">
+      <!-- Row 1: date · role left, flight number centered in the gap, total right -->
+      <div class="flex items-baseline min-w-0">
         <p
           :class="[
-            'min-w-0 flex-1 text-base font-semibold font-quicksand truncate',
+            'min-w-0 shrink truncate text-base font-semibold font-quicksand',
             isDarkMode ? 'text-white' : 'text-gray-900',
           ]"
         >
@@ -36,7 +36,18 @@
             · {{ roleDisplayLabel(entry.role) }}<template v-if="entry.logbookType === 'simulator'"> · Simulator</template>
           </span>
         </p>
-
+        <div class="min-w-0 flex-1 text-center px-2">
+          <span
+            v-if="headerFlightNumber"
+            data-testid="header-flight-number"
+            :class="[
+              'text-base font-semibold font-quicksand leading-none',
+              isDarkMode ? 'text-white' : 'text-gray-900',
+            ]"
+          >
+            {{ headerFlightNumber }}
+          </span>
+        </div>
         <div class="flex shrink-0 items-center gap-2">
           <Icon
             v-if="entry.isVoid"
@@ -95,8 +106,8 @@
     </div>
 
     <!-- Detail zone -->
-    <div v-if="visibleDetailFields.length" class="mt-3 flex flex-wrap gap-2 min-w-0">
-      <template v-for="field in visibleDetailFields" :key="field.key">
+    <div v-if="detailChipFields.length" class="mt-3 flex flex-wrap gap-2 min-w-0">
+      <template v-for="field in detailChipFields" :key="field.key">
         <template v-if="field.key === 'conditions'">
           <span
             v-for="condition in getDisplayConditions(entry)"
@@ -145,6 +156,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { LogbookColumnConfig, LogEntry } from '~/utils/logbookTypes'
 import {
   formatDisplayDate,
@@ -177,6 +189,17 @@ const chipClass = computed(() => [
     ? 'bg-gray-800/80 border-gray-600 text-gray-200'
     : 'bg-white border-gray-200 text-gray-700',
 ])
+
+const headerFlightNumber = computed(() => {
+  const enabled = props.visibleDetailFields.some((field) => field.key === 'flightNumber')
+  const value = props.entry.flightNumber?.trim()
+  if (!enabled || !value) return ''
+  return value
+})
+
+const detailChipFields = computed(() =>
+  props.visibleDetailFields.filter((field) => field.key !== 'flightNumber'),
+)
 
 const totalTimeClass = computed(() => getTotalTimeColorClass(props.entry, props.isDarkMode))
 
