@@ -3,7 +3,7 @@
     <p :class="listGroupHeader">Logbook layout</p>
     <p :class="['px-1 text-xs font-quicksand mb-2', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
       <template v-if="isIos">
-        Choose which details appear on each logbook entry. Date, route, aircraft, and total always show in the card header. Flight number shows in the header when enabled.
+        Choose which details appear on each logbook entry. Date, route, aircraft, and total always show in the card header. Flight number shows in the header when enabled. Times show in a row when enabled. Conditions stay as chips. Pilots show as a line above the footer when enabled.
       </template>
       <template v-else>
         Choose which columns appear in your logbook table. Date and total are always shown.

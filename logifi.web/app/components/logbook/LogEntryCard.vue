@@ -105,7 +105,7 @@
       </template>
     </div>
 
-    <!-- Detail zone -->
+    <!-- Detail zone: conditions (and leftover non-metric chips) -->
     <div v-if="detailChipFields.length" class="mt-3 flex flex-wrap gap-2 min-w-0">
       <template v-for="field in detailChipFields" :key="field.key">
         <template v-if="field.key === 'conditions'">
@@ -126,6 +126,29 @@
         </span>
       </template>
     </div>
+
+    <div
+      v-if="metricStripFields.length"
+      data-testid="metrics-strip"
+      class="mt-3 flex flex-wrap gap-x-4 gap-y-1 min-w-0"
+    >
+      <span
+        v-for="field in metricStripFields"
+        :key="field.key"
+        :class="['inline-flex items-baseline gap-2 min-w-[4.5rem] text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']"
+      >
+        <span :class="isDarkMode ? 'text-gray-400' : 'text-gray-500'">{{ field.label }}</span>
+        <span class="font-mono tabular-nums">{{ getEntryFieldDisplay(entry, field.key).text }}</span>
+      </span>
+    </div>
+
+    <p
+      v-if="pilotsLine"
+      data-testid="pilots-line"
+      :class="['mt-3 text-sm truncate text-right font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+    >
+      {{ pilotsLine }}
+    </p>
 
     <!-- Footer zone -->
     <div
@@ -158,6 +181,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { LogbookColumnConfig, LogEntry } from '~/utils/logbookTypes'
+import { isMetricZoneKey } from '~/utils/entryCardPresets'
 import {
   formatDisplayDate,
   formatEntryAirportCode,
@@ -198,8 +222,23 @@ const headerFlightNumber = computed(() => {
 })
 
 const detailChipFields = computed(() =>
-  props.visibleDetailFields.filter((field) => field.key !== 'flightNumber'),
+  props.visibleDetailFields.filter(
+    (field) => field.key !== 'flightNumber' && field.key !== 'pilots' && !isMetricZoneKey(field.key),
+  ),
 )
+
+const metricStripFields = computed(() =>
+  props.visibleDetailFields.filter(
+    (field) => isMetricZoneKey(field.key) && !getEntryFieldDisplay(props.entry, field.key).isEmpty,
+  ),
+)
+
+const pilotsLine = computed(() => {
+  const enabled = props.visibleDetailFields.some((field) => field.key === 'pilots')
+  const value = props.entry.trainingElements?.trim()
+  if (!enabled || !value) return ''
+  return value
+})
 
 const totalTimeClass = computed(() => getTotalTimeColorClass(props.entry, props.isDarkMode))
 
