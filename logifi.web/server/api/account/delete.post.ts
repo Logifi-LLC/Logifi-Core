@@ -71,7 +71,7 @@ export default defineEventHandler(async (event) => {
     console.error('[account/delete] purge RPC failed:', purgeError.message)
     throw createError({
       statusCode: 500,
-      statusMessage: 'Failed to prepare account data for deletion',
+      statusMessage: purgeError.message || 'Failed to prepare account data for deletion',
     })
   }
 
@@ -88,7 +88,7 @@ export default defineEventHandler(async (event) => {
     console.error('[account/delete] admin.deleteUser failed:', deleteError.message)
     throw createError({
       statusCode: 500,
-      statusMessage: 'Failed to delete account',
+      statusMessage: deleteError.message || 'Failed to delete account',
     })
   }
 
