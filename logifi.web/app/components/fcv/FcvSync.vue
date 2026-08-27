@@ -1293,7 +1293,7 @@ const previewModalOverlayClass = computed(() =>
       </p>
       <p
         v-if="!isCompactFetch"
-        :class="['text-xs mb-4 -mt-2', isDarkMode ? 'text-gray-400' : 'text-gray-600']"
+        :class="['text-base font-bold mb-4 -mt-2', isDarkMode ? 'text-gray-100' : 'text-gray-900']"
       >
         {{ AUTOFI_TIMES_LAG_LINE }}
       </p>
@@ -1314,7 +1314,7 @@ const previewModalOverlayClass = computed(() =>
                 : 'Import new flights'
             }}
           </button>
-          <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+          <p :class="['text-base font-bold', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
             {{ AUTOFI_TIMES_LAG_LINE }}
           </p>
           <button
@@ -1561,7 +1561,7 @@ const previewModalOverlayClass = computed(() =>
             >
               {{ fetchWarning }}
             </p>
-            <p :class="['text-xs mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+            <p :class="['text-base font-bold mt-1', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
               {{ AUTOFI_TIMES_LAG_LINE }}
             </p>
             <div v-if="previewFlights.length > 0" class="flex flex-wrap gap-2 mt-2">
