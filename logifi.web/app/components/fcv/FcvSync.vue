@@ -3,7 +3,7 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useAuth } from '~/composables/useAuth'
 import { apiFetch } from '~/utils/apiFetch'
 import { messageFromFlicaApiError } from '~/utils/flicaApiError'
-import { AUTOFI_BETA_LINE } from '~/utils/autofiBeta'
+import { AUTOFI_BETA_LINE, AUTOFI_TIMES_LAG_LINE } from '~/utils/autofiBeta'
 import AutofiBetaPill from '~/components/fcv/AutofiBetaPill.vue'
 import {
   buildFcvImportRequestPayload,
@@ -1291,6 +1291,12 @@ const previewModalOverlayClass = computed(() =>
           Connected as {{ flicaUsername }}.
         </span>
       </p>
+      <p
+        v-if="!isCompactFetch"
+        :class="['text-xs mb-4 -mt-2', isDarkMode ? 'text-gray-400' : 'text-gray-600']"
+      >
+        {{ AUTOFI_TIMES_LAG_LINE }}
+      </p>
       <div class="space-y-4">
         <template v-if="isCompactFetch">
           <button
@@ -1308,6 +1314,9 @@ const previewModalOverlayClass = computed(() =>
                 : 'Import new flights'
             }}
           </button>
+          <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+            {{ AUTOFI_TIMES_LAG_LINE }}
+          </p>
           <button
             type="button"
             :class="[
@@ -1551,6 +1560,9 @@ const previewModalOverlayClass = computed(() =>
               :class="['text-xs mt-1', isDarkMode ? 'text-amber-300' : 'text-amber-800']"
             >
               {{ fetchWarning }}
+            </p>
+            <p :class="['text-xs mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+              {{ AUTOFI_TIMES_LAG_LINE }}
             </p>
             <div v-if="previewFlights.length > 0" class="flex flex-wrap gap-2 mt-2">
               <button
