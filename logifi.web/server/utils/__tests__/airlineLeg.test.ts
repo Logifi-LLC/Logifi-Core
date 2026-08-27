@@ -79,6 +79,61 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
     expect(entry.oooi?.off).toBe('0620')
   })
 
+  it('copies Autofi source trace onto the preview entry and omits it from airline_leg_raw', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20260827_4442_LGA',
+      import_source: 'flica_aerodatabox',
+      flight_number: '4442',
+      trip_number: 'L7513',
+      role: 'PIC',
+      dep_airport: 'LGA',
+      arr_airport: 'RIC',
+      scheduled_out_local: '2026-08-27 06:03:00',
+      scheduled_in_local: '2026-08-27 07:10:00',
+      actual_out_local: null,
+      actual_in_local: null,
+      actual_off_local: '2026-08-27 06:14:00',
+      actual_on_local: '2026-08-27 07:20:00',
+      fcv_tail_number: 'N421YX',
+      fcv_aircraft_type: 'E75',
+      crew: [],
+      is_deadhead: false,
+      block_minutes: 67,
+      autofi_sources: {
+        flica: {
+          out: '06:03',
+          in: '07:10',
+          off: null,
+          on: null,
+          tail: null,
+          type: 'E75',
+          blockMinutes: 67,
+        },
+        enricher: {
+          id: 'aerodatabox',
+          label: 'AeroDataBox',
+          configured: true,
+          attempted: true,
+          hit: true,
+          skipped: false,
+          ident: 'YX4442 200',
+          tail: 'N421YX',
+          type: 'E75',
+          off: '06:14',
+          on: '07:20',
+          unusedOut: '07:27',
+          unusedIn: '08:30',
+        },
+      },
+    })
+
+    expect(entry.autofi_sources?.flica.out).toBe('06:03')
+    expect(entry.autofi_sources?.enricher.unusedOut).toBe('07:27')
+    expect(entry.autofi_sources?.enricher.off).toBe('06:14')
+    const raw = entry.import_metadata?.airline_leg_raw as Record<string, unknown> | undefined
+    expect(raw?.autofi_sources).toBeUndefined()
+  })
+
   it('maps SIC legs with SIC time and Captain as the other crew', () => {
     const entry = mapAirlineLegToFcvMappedEntry({
       external_flight_id: 'FLICA_20260804_5772_DCA',

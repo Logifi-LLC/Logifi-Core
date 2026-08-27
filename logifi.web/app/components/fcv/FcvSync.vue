@@ -28,6 +28,7 @@ import {
 import { applyCatalogFamilyToFcvPreview } from '../../../shared/aircraftTailIndex'
 import { OOOI_FIELD_ORDER } from '~/utils/logbookTypes'
 import { localCalendarYmd } from '../../../shared/localCalendarDate'
+import type { AutofiSourceTrace } from '../../../shared/autofiSources'
 
 /** Must match dashboard theme; avoid `dark:` here so OS dark mode does not fight white settings cards. */
 const props = withDefaults(
@@ -162,6 +163,8 @@ const selectedFcvFlightIds = ref<Set<string>>(new Set())
 /** When "Since last entry" hid rows that are already in the logbook. */
 const sinceLastEntryOmittedAlreadyImported = ref(0)
 const expandedEnrichmentRows = ref<Set<number>>(new Set())
+const expandedSourceRows = ref<Set<number>>(new Set())
+const flicaLastUpdatedIso = ref<string | null>(null)
 const perFlightEnrichment = ref<Record<number, FlightEnrichment>>({})
 const crewReviewCandidates = ref<CrewReviewCandidate[]>([])
 /** Crew review state keyed by exact imported `raw_name` so rows with the same string stay in sync. */
@@ -244,6 +247,39 @@ function toggleEnrichmentRow(index: number) {
 
 function isEnrichmentExpanded(index: number): boolean {
   return expandedEnrichmentRows.value.has(index)
+}
+
+function autofiSourcesOf(f: FcvMappedEntry): AutofiSourceTrace | null {
+  const raw = f.autofi_sources
+  if (!raw || typeof raw !== 'object') return null
+  return raw as AutofiSourceTrace
+}
+
+function dashClock(value: string | null | undefined): string {
+  return value && value.trim() ? value : '—'
+}
+
+function toggleSourceRow(index: number) {
+  const next = new Set(expandedSourceRows.value)
+  if (next.has(index)) next.delete(index)
+  else next.add(index)
+  expandedSourceRows.value = next
+}
+
+function isSourceExpanded(index: number): boolean {
+  return expandedSourceRows.value.has(index)
+}
+
+function formatFlicaLastUpdated(iso: string | null): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  })
 }
 
 function addApproach(index: number) {
@@ -545,6 +581,7 @@ function resolveCrewOverrideMode(editedName: string, rawName: string): CrewOverr
 function resetPreviewImportState() {
   showPreviewModal.value = false
   fetchWarning.value = null
+  flicaLastUpdatedIso.value = null
   previewFlights.value = []
   sinceLastEntryOmittedAlreadyImported.value = 0
   heuristicDuplicateIndices.value = new Set()
@@ -556,6 +593,7 @@ function resetPreviewImportState() {
   includeAlreadyImportedInImport.value = false
   perFlightEnrichment.value = {}
   expandedEnrichmentRows.value = new Set()
+  expandedSourceRows.value = new Set()
   perFlightCrewName.value = {}
   crewReviewCandidates.value = []
   crewReviewCatalogNames.value = []
@@ -697,6 +735,7 @@ async function fetchFlights() {
       excludedDeadheads?: number
       excludedOutsideRange?: number
       excludedScheduled?: number
+      flicaLastUpdated?: string
     }>('/api/airline-sync/fetch-flica', {
         method: 'POST',
         headers: {
@@ -713,6 +752,10 @@ async function fetchFlights() {
       })
     if (data?.success && Array.isArray(data.flights)) {
       fetchWarning.value = typeof data.warning === 'string' && data.warning.trim() ? data.warning.trim() : null
+      flicaLastUpdatedIso.value =
+        typeof data.flicaLastUpdated === 'string' && data.flicaLastUpdated.trim()
+          ? data.flicaLastUpdated.trim()
+          : null
       includeDuplicatesInImport.value = false
       includeAlreadyImportedInImport.value = false
       heuristicDuplicateIndices.value = new Set()
@@ -722,6 +765,7 @@ async function fetchFlights() {
       selectedFcvFlightIds.value = new Set()
       perFlightEnrichment.value = {}
       expandedEnrichmentRows.value = new Set()
+      expandedSourceRows.value = new Set()
       crewReviewCandidates.value = []
       crewResolutionMode.value = {}
       crewPickSelection.value = {}
@@ -1552,6 +1596,12 @@ const previewModalOverlayClass = computed(() =>
             >
               {{ fetchWarning }}
             </p>
+            <p
+              v-if="formatFlicaLastUpdated(flicaLastUpdatedIso)"
+              :class="['text-xs mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-600']"
+            >
+              FLICA last updated {{ formatFlicaLastUpdated(flicaLastUpdatedIso) }}
+            </p>
             <div v-if="previewFlights.length > 0" class="flex flex-wrap gap-2 mt-2">
               <button
                 type="button"
@@ -1716,6 +1766,106 @@ const previewModalOverlayClass = computed(() =>
             >
               {{ formatCrewPreviewLine(f) }}
             </span>
+            <div
+              v-if="autofiSourcesOf(f)"
+              class="w-full basis-full mt-1"
+            >
+              <button
+                type="button"
+                :class="[
+                  'text-xs underline-offset-2 hover:underline',
+                  isDarkMode ? 'text-blue-300' : 'text-blue-700',
+                ]"
+                @click="toggleSourceRow(idx)"
+              >
+                {{ isSourceExpanded(idx) ? 'Hide sources' : 'Sources' }}
+              </button>
+              <div
+                v-if="isSourceExpanded(idx) && autofiSourcesOf(f)"
+                :class="[
+                  'mt-2 rounded-lg border p-3 text-xs',
+                  isDarkMode ? 'border-gray-700 bg-gray-800/40 text-gray-200' : 'border-gray-200 bg-gray-50 text-gray-800',
+                ]"
+              >
+                <p
+                  v-if="!autofiSourcesOf(f)!.enricher.configured"
+                  :class="isDarkMode ? 'text-gray-400' : 'text-gray-600'"
+                >
+                  AeroDataBox not configured.
+                </p>
+                <p
+                  v-else-if="autofiSourcesOf(f)!.enricher.skipped"
+                  :class="isDarkMode ? 'text-gray-400' : 'text-gray-600'"
+                >
+                  AeroDataBox skipped (already in logbook).
+                </p>
+                <p
+                  v-else-if="!autofiSourcesOf(f)!.enricher.hit"
+                  :class="isDarkMode ? 'text-gray-400' : 'text-gray-600'"
+                >
+                  {{ autofiSourcesOf(f)!.enricher.label }} miss{{
+                    autofiSourcesOf(f)!.enricher.ident ? ` · ${autofiSourcesOf(f)!.enricher.ident}` : ''
+                  }}
+                </p>
+                <table class="w-full border-collapse">
+                  <thead>
+                    <tr :class="isDarkMode ? 'text-gray-400' : 'text-gray-500'">
+                      <th class="text-left font-medium py-0.5 pr-2">Field</th>
+                      <th class="text-left font-medium py-0.5 pr-2">FLICA</th>
+                      <th class="text-left font-medium py-0.5">
+                        {{ autofiSourcesOf(f)!.enricher.label }}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td class="py-0.5 pr-2">Out</td>
+                      <td class="py-0.5 pr-2">{{ dashClock(autofiSourcesOf(f)!.flica.out) }}</td>
+                      <td class="py-0.5">
+                        {{ dashClock(autofiSourcesOf(f)!.enricher.unusedOut) }}
+                        <span
+                          v-if="autofiSourcesOf(f)!.enricher.unusedOut"
+                          :class="isDarkMode ? 'text-gray-500' : 'text-gray-500'"
+                        > (not used)</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="py-0.5 pr-2">In</td>
+                      <td class="py-0.5 pr-2">{{ dashClock(autofiSourcesOf(f)!.flica.in) }}</td>
+                      <td class="py-0.5">
+                        {{ dashClock(autofiSourcesOf(f)!.enricher.unusedIn) }}
+                        <span
+                          v-if="autofiSourcesOf(f)!.enricher.unusedIn"
+                          :class="isDarkMode ? 'text-gray-500' : 'text-gray-500'"
+                        > (not used)</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td class="py-0.5 pr-2">Off</td>
+                      <td class="py-0.5 pr-2">{{ dashClock(autofiSourcesOf(f)!.flica.off) }}</td>
+                      <td class="py-0.5">{{ dashClock(autofiSourcesOf(f)!.enricher.off) }}</td>
+                    </tr>
+                    <tr>
+                      <td class="py-0.5 pr-2">On</td>
+                      <td class="py-0.5 pr-2">{{ dashClock(autofiSourcesOf(f)!.flica.on) }}</td>
+                      <td class="py-0.5">{{ dashClock(autofiSourcesOf(f)!.enricher.on) }}</td>
+                    </tr>
+                    <tr>
+                      <td class="py-0.5 pr-2">Tail</td>
+                      <td class="py-0.5 pr-2">{{ dashClock(autofiSourcesOf(f)!.flica.tail) }}</td>
+                      <td class="py-0.5">{{ dashClock(autofiSourcesOf(f)!.enricher.tail) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+                <p
+                  v-if="autofiSourcesOf(f)!.enricher.ident && autofiSourcesOf(f)!.enricher.hit"
+                  class="mt-2"
+                  :class="isDarkMode ? 'text-gray-400' : 'text-gray-600'"
+                >
+                  Lookup {{ autofiSourcesOf(f)!.enricher.ident }}
+                </p>
+              </div>
+            </div>
             <div
               v-if="isFlightSelected(f.fcv_flight_id)"
               class="w-full basis-full mt-2 space-y-1"

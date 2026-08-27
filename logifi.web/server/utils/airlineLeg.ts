@@ -18,6 +18,7 @@ import {
   normalizeRegistrationDisplay,
   normalizeRegistrationKey,
 } from './fcvAlignment'
+import type { AutofiSourceTrace } from '../../shared/autofiSources'
 
 export type AirlineImportSource = 'fc_view' | 'flica_aerodatabox'
 
@@ -47,6 +48,7 @@ export interface AirlineLeg {
   is_deadhead: boolean
   block_minutes: number | null
   aircraft_category_class?: string
+  autofi_sources?: AutofiSourceTrace | null
 }
 
 function listedCrewFromLeg(leg: AirlineLeg): ListedCrewMember[] {
@@ -300,6 +302,8 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
   const flight_conditions = buildFlightConditions(xcHours)
 
   const importSource = leg.import_source
+  const autofiSources = leg.autofi_sources ?? null
+  const { autofi_sources: _autofiSources, ...legRaw } = leg
 
   return {
     fcv_flight_id: fcvId,
@@ -324,6 +328,7 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
     is_imported: true,
     import_source: importSource,
     original_entry_date: originalEntryDate,
+    autofi_sources: autofiSources,
     import_metadata: {
       source: importSource,
       external_flight_id: fcvId,
@@ -340,7 +345,8 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
         crew_name_raw: otherCrew?.rawName ?? null,
         crew_name_normalized: normalizeCrewNameForMatching(otherCrew?.name ?? ''),
       },
-      airline_leg_raw: { ...leg },
+      airline_leg_raw: legRaw,
+      ...(autofiSources ? { autofi_sources: autofiSources } : {}),
     },
   }
 }

@@ -7,10 +7,16 @@ export interface AeroDataBoxActuals {
   actualInLocal: string | null
   actualOffLocal: string | null
   actualOnLocal: string | null
+  /** FIDS/gate Out — preview only; never applied as logbook Out. */
+  unusedOutLocal: string | null
+  /** FIDS/gate In — preview only; never applied as logbook In. */
+  unusedInLocal: string | null
 }
 
 export interface AeroDataBoxLookupResult {
   actuals: AeroDataBoxActuals | null
+  unusedOutLocal: string | null
+  unusedInLocal: string | null
   authRejected: boolean
   rateLimited: boolean
   detail: string | null
@@ -167,6 +173,30 @@ function pickRunwayLocal(movement: AeroMovement | undefined): string | null {
   )
 }
 
+/** FIDS/gate times we show in Autofi Sources but never write as Out/In. */
+function pickUnusedGateLocal(movement: AeroMovement | undefined): string | null {
+  if (!movement) return null
+  return (
+    localTimeFromUnknown(movement.actualTime) ||
+    localTimeFromUnknown(movement.actualTimeLocal) ||
+    localTimeFromUnknown(movement.revisedTime)
+  )
+}
+
+function emptyLookup(
+  extras: Partial<AeroDataBoxLookupResult> = {}
+): AeroDataBoxLookupResult {
+  return {
+    actuals: null,
+    unusedOutLocal: null,
+    unusedInLocal: null,
+    authRejected: false,
+    rateLimited: false,
+    detail: null,
+    ...extras,
+  }
+}
+
 function nonEmptyString(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const t = value.trim()
@@ -191,6 +221,8 @@ export function extractAeroDataBoxActuals(record: AeroFlightRecord): AeroDataBox
     actualInLocal: null,
     actualOffLocal: pickRunwayLocal(dep),
     actualOnLocal: pickRunwayLocal(arr),
+    unusedOutLocal: pickUnusedGateLocal(dep),
+    unusedInLocal: pickUnusedGateLocal(arr),
   }
 }
 
@@ -489,25 +521,21 @@ export async function lookupFlightActuals(
   const num = flightNumber.trim()
   const date = dateYYYYMMDD.trim()
   if (!num || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return { actuals: null, authRejected: false, rateLimited: false, detail: null }
+    return emptyLookup()
   }
 
   const { apiKey, apiHost } = getAeroDataBoxEnv()
   if (!apiKey) {
-    return { actuals: null, authRejected: false, rateLimited: false, detail: null }
+    return emptyLookup()
   }
 
   if (Date.now() < rateLimitedUntilMs) {
-    return {
-      actuals: null,
-      authRejected: false,
-      rateLimited: true,
-      detail: 'HTTP 429 cooldown',
-    }
+    return emptyLookup({ rateLimited: true, detail: 'HTTP 429 cooldown' })
   }
 
   const candidates = aeroDataBoxFlightNumberCandidates(num, airlineCode)
   const statuses: string[] = []
+  let lastOutcome: OnceOutcome | null = null
 
   for (const candidate of candidates) {
     let last: OnceOutcome | null = null
@@ -521,27 +549,23 @@ export async function lookupFlightActuals(
         apiHost
       )
       last = outcome
+      lastOutcome = outcome
       if (outcome.authRejected) {
-        return {
-          actuals: null,
+        return emptyLookup({
           authRejected: true,
-          rateLimited: false,
           detail: compactAeroLookupStatus(candidate, outcome.status, 'auth'),
-        }
+        })
       }
       if (outcome.rateLimited) {
         rateLimitedUntilMs = Date.now() + RATE_LIMIT_COOLDOWN_MS
-        return {
-          actuals: null,
-          authRejected: false,
-          rateLimited: true,
-          detail: 'HTTP 429',
-        }
+        return emptyLookup({ rateLimited: true, detail: 'HTTP 429' })
       }
       if (outcome.usable && outcome.actuals) {
         statuses.push(compactAeroLookupStatus(candidate, outcome.status, 'ok'))
         return {
           actuals: outcome.actuals,
+          unusedOutLocal: outcome.actuals.unusedOutLocal,
+          unusedInLocal: outcome.actuals.unusedInLocal,
           authRejected: false,
           rateLimited: false,
           detail: statuses.join(' '),
@@ -554,12 +578,11 @@ export async function lookupFlightActuals(
     }
   }
 
-  return {
-    actuals: null,
-    authRejected: false,
-    rateLimited: false,
+  return emptyLookup({
+    unusedOutLocal: lastOutcome?.actuals?.unusedOutLocal ?? null,
+    unusedInLocal: lastOutcome?.actuals?.unusedInLocal ?? null,
     detail: statuses.length ? statuses.join(' ') : null,
-  }
+  })
 }
 
 /**

@@ -16,6 +16,7 @@ import {
   filterAirlineLegsWithStats,
   overlayFlicaPairingLegs,
   parseFlicaSchedule,
+  parseFlicaLastUpdatedMs,
   summarizeFlicaHtml,
   FLICA_DEFAULT_NOW_ZONE,
 } from '../../utils/flicaParse'
@@ -30,6 +31,13 @@ import { resolveFlicaPortal } from '../../utils/flicaPortal'
 import { unsealSecret, SecretBoxError } from '../../utils/secretBox'
 import type { FcvMappedEntry } from '../../utils/fcvMap'
 import { DateTime } from 'luxon'
+import {
+  buildAutofiSourceTrace,
+  clockFromLocalDatetime,
+  emptyAeroEnricherSnapshot,
+  snapshotFlicaSource,
+  type AutofiEnricherSnapshot,
+} from '../../../shared/autofiSources'
 
 interface FetchFlicaBody {
   dateFrom?: string
@@ -37,6 +45,47 @@ interface FetchFlicaBody {
   includeDeadheads?: boolean
   includeScheduled?: boolean
   airlineCode?: string
+}
+
+function withAutofiSources(
+  leg: AirlineLeg,
+  enricher: AutofiEnricherSnapshot
+): AirlineLeg {
+  return {
+    ...leg,
+    autofi_sources: buildAutofiSourceTrace(snapshotFlicaSource(leg), enricher),
+  }
+}
+
+function enricherFromAeroLookup(
+  lookup: {
+    actuals: {
+      registration: string | null
+      aircraftType: string | null
+      actualOffLocal: string | null
+      actualOnLocal: string | null
+      unusedOutLocal: string | null
+      unusedInLocal: string | null
+    } | null
+    unusedOutLocal: string | null
+    unusedInLocal: string | null
+    detail: string | null
+  },
+  extras: Partial<AutofiEnricherSnapshot>
+): AutofiEnricherSnapshot {
+  const actuals = lookup.actuals
+  return emptyAeroEnricherSnapshot({
+    configured: true,
+    attempted: true,
+    ident: lookup.detail,
+    tail: actuals?.registration ?? null,
+    type: actuals?.aircraftType ?? null,
+    off: clockFromLocalDatetime(actuals?.actualOffLocal),
+    on: clockFromLocalDatetime(actuals?.actualOnLocal),
+    unusedOut: clockFromLocalDatetime(lookup.unusedOutLocal ?? actuals?.unusedOutLocal),
+    unusedIn: clockFromLocalDatetime(lookup.unusedInLocal ?? actuals?.unusedInLocal),
+    ...extras,
+  })
 }
 
 async function enrichLegWithAeroDataBox(
@@ -54,7 +103,10 @@ async function enrichLegWithAeroDataBox(
   const date = leg.scheduled_out_local?.slice(0, 10) ?? ''
   if (!date || date > dateTo) {
     return {
-      leg,
+      leg: withAutofiSources(
+        leg,
+        emptyAeroEnricherSnapshot({ configured: isAeroDataBoxConfigured() })
+      ),
       attempted: false,
       enriched: false,
       detail: null,
@@ -64,7 +116,7 @@ async function enrichLegWithAeroDataBox(
   }
   if (!isAeroDataBoxConfigured()) {
     return {
-      leg,
+      leg: withAutofiSources(leg, emptyAeroEnricherSnapshot({ configured: false })),
       attempted: false,
       enriched: false,
       detail: null,
@@ -82,7 +134,7 @@ async function enrichLegWithAeroDataBox(
   )
   if (lookup.authRejected) {
     return {
-      leg,
+      leg: withAutofiSources(leg, enricherFromAeroLookup(lookup, { hit: false })),
       attempted: true,
       enriched: false,
       detail: lookup.detail,
@@ -92,7 +144,7 @@ async function enrichLegWithAeroDataBox(
   }
   if (lookup.rateLimited) {
     return {
-      leg,
+      leg: withAutofiSources(leg, enricherFromAeroLookup(lookup, { hit: false })),
       attempted: true,
       enriched: false,
       detail: lookup.detail,
@@ -102,7 +154,7 @@ async function enrichLegWithAeroDataBox(
   }
   if (!lookup.actuals || !isUsableAeroDataBoxHit(lookup.actuals)) {
     return {
-      leg,
+      leg: withAutofiSources(leg, enricherFromAeroLookup(lookup, { hit: false })),
       attempted: true,
       enriched: false,
       detail: lookup.detail,
@@ -111,6 +163,7 @@ async function enrichLegWithAeroDataBox(
     }
   }
 
+  const flica = snapshotFlicaSource(leg)
   return {
     leg: {
       ...leg,
@@ -120,6 +173,10 @@ async function enrichLegWithAeroDataBox(
       // times (scheduled_out/in) are ground truth and are already actual for completed flights.
       actual_off_local: lookup.actuals.actualOffLocal ?? leg.actual_off_local,
       actual_on_local: lookup.actuals.actualOnLocal ?? leg.actual_on_local,
+      autofi_sources: buildAutofiSourceTrace(
+        flica,
+        enricherFromAeroLookup(lookup, { hit: true })
+      ),
     },
     attempted: true,
     enriched: true,
@@ -153,11 +210,24 @@ async function enrichLegsSequential(
     const date = leg.scheduled_out_local?.slice(0, 10) ?? ''
     const eligible = Boolean(date && date <= dateTo && isAeroDataBoxConfigured())
     if (!eligible || skipIndices.has(i)) {
-      out.push(leg)
+      out.push(
+        withAutofiSources(
+          leg,
+          emptyAeroEnricherSnapshot({
+            configured: isAeroDataBoxConfigured(),
+            skipped: skipIndices.has(i),
+          })
+        )
+      )
       continue
     }
     if (rateLimited) {
-      out.push(leg)
+      out.push(
+        withAutofiSources(
+          leg,
+          emptyAeroEnricherSnapshot({ configured: true, skipped: true, ident: 'rate limited' })
+        )
+      )
       continue
     }
 
@@ -372,6 +442,10 @@ export default defineEventHandler(async (event) => {
     defaultYear: Number.isFinite(defaultYear) ? defaultYear : undefined,
   }
   const htmlSummary = summarizeFlicaHtml(scheduleHtml)
+  const flicaLastUpdatedMs = parseFlicaLastUpdatedMs(scheduleHtml)
+  const flicaLastUpdated = flicaLastUpdatedMs
+    ? DateTime.fromMillis(flicaLastUpdatedMs).toUTC().toISO()
+    : null
   console.info('[flica] schedule html', {
     bytes: htmlSummary.bytes,
     trips: htmlSummary.tripCount,
@@ -481,6 +555,7 @@ export default defineEventHandler(async (event) => {
     enrichAttempted,
     enrichedCount,
     enrichDetail: enrichDetail ?? undefined,
+    flicaLastUpdated: flicaLastUpdated ?? undefined,
     warning: warningParts.length > 0 ? warningParts.join(' ') : undefined,
   }
 })

@@ -174,3 +174,55 @@ describe('FcvSync row selection', () => {
     expect(setupState.importCount).toBe(1)
   })
 })
+
+describe('FcvSync Autofi sources', () => {
+  it('shows a Sources panel comparing FLICA Out to unused AeroDataBox Out', async () => {
+    const wrapper = mountFcvSync()
+    const setupState = (wrapper.vm as { $: { setupState: Record<string, unknown> } }).$.setupState
+
+    primePreviewModal(setupState, [
+      buildPreviewFlight({
+        autofi_sources: {
+          flica: {
+            out: '06:03',
+            in: '07:10',
+            off: null,
+            on: null,
+            tail: null,
+            type: 'E75',
+            blockMinutes: 67,
+          },
+          enricher: {
+            id: 'aerodatabox',
+            label: 'AeroDataBox',
+            configured: true,
+            attempted: true,
+            hit: true,
+            skipped: false,
+            ident: 'YX4442 200',
+            tail: 'N421YX',
+            type: 'E75',
+            off: '06:14',
+            on: '07:20',
+            unusedOut: '07:27',
+            unusedIn: '08:30',
+          },
+        },
+      }),
+    ])
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Sources')
+    expect(wrapper.text()).not.toContain('07:27')
+
+    const toggle = setupState.toggleSourceRow as (index: number) => void
+    toggle(0)
+    await nextTick()
+
+    expect(wrapper.text()).toContain('FLICA')
+    expect(wrapper.text()).toContain('AeroDataBox')
+    expect(wrapper.text()).toContain('06:03')
+    expect(wrapper.text()).toContain('07:27')
+    expect(wrapper.text()).toContain('not used')
+  })
+})

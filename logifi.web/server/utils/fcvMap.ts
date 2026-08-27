@@ -94,6 +94,8 @@ export interface FcvMappedEntry {
   import_source: string
   original_entry_date: string | null
   import_metadata: Record<string, unknown> | null
+  /** Autofi preview: FLICA vs enricher clocks. Not a logbook column. */
+  autofi_sources?: import('../../shared/autofiSources').AutofiSourceTrace | null
 }
 
 /** FCV block is HHMM (e.g. "0135" → 1h 35m). */

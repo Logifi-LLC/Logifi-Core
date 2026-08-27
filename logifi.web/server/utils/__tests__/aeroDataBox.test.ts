@@ -81,6 +81,8 @@ describe('fetchFlightActuals', () => {
       actualInLocal: null,
       actualOffLocal: '2026-08-04 06:20:00',
       actualOnLocal: '2026-08-04 07:05:00',
+      unusedOutLocal: '2026-08-04 06:08:00',
+      unusedInLocal: '2026-08-04 07:15:00',
     })
   })
 
@@ -531,6 +533,8 @@ describe('extractAeroDataBoxActuals', () => {
     expect(actuals.actualOffLocal).toBe('2026-08-12 11:10:00')
     expect(actuals.actualOnLocal).toBe('2026-08-12 12:20:00')
     expect(actuals.actualInLocal).toBeNull()
+    expect(actuals.unusedOutLocal).toBe('2026-08-12 11:02:00')
+    expect(actuals.unusedInLocal).toBe('2026-08-12 12:26:00')
     expect(isUsableAeroDataBoxHit(actuals)).toBe(true)
   })
 
