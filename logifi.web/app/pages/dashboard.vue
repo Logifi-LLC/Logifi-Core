@@ -6906,6 +6906,7 @@ import {
   getScopedItem,
   migrateAllGlobalKeysToScoped,
   setScopedItem,
+  tryLocalStorageSetItem,
 } from '../utils/userScopedStorage'
 import {
   initIndexedDB,
@@ -7194,7 +7195,7 @@ function writeUserScopedLocal(baseKey: string, value: string): void {
     return
   }
   if (isBrowser) {
-    window.localStorage.setItem(baseKey, value)
+    tryLocalStorageSetItem(baseKey, value)
   }
 }
 
@@ -17198,7 +17199,7 @@ watch(
     }
     logEntriesSideEffectTimer = setTimeout(() => {
       if (!isAuthenticated.value) {
-        window.localStorage.setItem(LOGBOOK_STORAGE_KEY, JSON.stringify(entries))
+        tryLocalStorageSetItem(LOGBOOK_STORAGE_KEY, JSON.stringify(entries))
       }
       if (entries.length > 0 && !(isIos.value && (isCatalogDrawerOpen.value || showSettingsModal.value))) {
         calculateAllCurrency(entries)
