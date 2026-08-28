@@ -6808,10 +6808,12 @@ import { getDisplayedPilotInitials, shouldShowCurrencyChips } from '../utils/das
 import { markAppReady } from '../utils/appReady'
 import {
   formatEntryAirportCode,
-  getDisplayConditions,
   getTotalTimeColorClass,
-  sanitizeFlightConditions,
 } from '../utils/entryFieldDisplay'
+import {
+  getDisplayConditions,
+  sanitizeFlightConditions,
+} from '../utils/flightConditions'
 import {
   validateCrossCountry,
   computeCrossCountryDistanceNm,

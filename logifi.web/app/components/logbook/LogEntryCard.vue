@@ -186,13 +186,13 @@ import {
   formatDisplayDate,
   formatEntryAirportCode,
   formatLogbookNumber,
-  getDisplayConditions,
   getEntryFieldDisplay,
   getSimHeaderLabel,
   getSimHeaderTime,
   getTotalTimeColorClass,
   roleDisplayLabel,
 } from '~/utils/entryFieldDisplay'
+import { getDisplayConditions } from '~/utils/flightConditions'
 
 const props = defineProps<{
   entry: LogEntry

@@ -34,15 +34,7 @@ import {
   parseSimDeviceType,
   type SimDeviceType,
 } from '~/utils/importSimulator'
-
-/** Mirror of sanitizeFlightConditions from index.vue for builder import. */
-function sanitizeFlightConditions(conditions: string[]): string[] {
-  return (conditions || [])
-    .filter(Boolean)
-    .filter((c) => c !== 'dayVfr')
-    .map((c) => (c === 'Cross-Country' ? 'crossCountry' : c))
-    .filter((c, i, arr) => arr.indexOf(c) === i)
-}
+import { sanitizeFlightConditions } from '~/utils/flightConditions'
 
 function generateEntryId(): string {
   return crypto.randomUUID?.() ?? `entry-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
