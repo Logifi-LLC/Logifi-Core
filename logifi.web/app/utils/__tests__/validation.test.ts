@@ -285,6 +285,20 @@ describe('validation', () => {
         destination: 'KLAF'
       })).toEqual(['KLAF'])
     })
+
+    it('collapses IATA and ICAO for the same airport', () => {
+      expect(getCatalogAirportCodes({
+        departure: 'ISP',
+        destination: 'KISP'
+      })).toEqual(['KISP'])
+    })
+
+    it('maps IATA LGB to catalog ICAO KLGB', () => {
+      expect(getCatalogAirportCodes({
+        departure: 'LGB',
+        destination: 'KFRG'
+      })).toEqual(['KLGB', 'KFRG'])
+    })
   })
 
   describe('getEntryAirportCodes', () => {
@@ -303,6 +317,15 @@ describe('validation', () => {
         destination: 'KLAF',
         route: 'FWA'
       })).toEqual(['KLAF'])
+    })
+
+    it('canonicalizes classified IATA route tokens', () => {
+      const classified = new Set(['FWA'])
+      expect(getEntryAirportCodes({
+        departure: 'KLAF',
+        destination: 'KLAF',
+        route: 'FWA'
+      }, classified)).toEqual(['KLAF', 'KFWA'])
     })
   })
 

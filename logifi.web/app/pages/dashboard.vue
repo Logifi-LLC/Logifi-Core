@@ -4135,7 +4135,7 @@
                         <div class="space-y-1">
                           <div v-for="match in duplicateWarning.matches.slice(0, 3)" :key="match.id"
                                :class="['font-quicksand text-xs', isDarkMode ? 'text-yellow-200' : 'text-yellow-800']">
-                            • {{ formatDisplayDate(match.date) }} · {{ match.registration }} · {{ match.departure }} → {{ match.destination }}
+                            • {{ formatDisplayDate(match.date) }} · {{ match.registration }} · {{ formatEntryAirportCode(match, match.departure) }} → {{ formatEntryAirportCode(match, match.destination) }}
                           </div>
                           <div v-if="duplicateWarning.matches.length > 3"
                                :class="['font-quicksand text-xs', isDarkMode ? 'text-yellow-300' : 'text-yellow-700']">
@@ -5553,7 +5553,7 @@
               >
                 <div class="min-w-0 flex-1">
                   <div :class="['text-sm font-quicksand font-medium truncate', isDarkMode ? 'text-white' : 'text-gray-900']">
-                    {{ flight.departure }} → {{ flight.destination }}
+                    {{ formatEntryAirportCode(flight, flight.departure) }} → {{ formatEntryAirportCode(flight, flight.destination) }}
                   </div>
                   <div :class="['text-xs font-quicksand truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
                     {{ formatDisplayDate(flight.date) }} · {{ flight.aircraftMakeModel || flight.registration }}
@@ -5977,7 +5977,7 @@
               <div v-for="(dup, index) in importPreviewStatistics.duplicateEntries.slice(0, 10)" :key="index"
                    :class="['text-sm font-quicksand py-2 border-b last:border-b-0', isDarkMode ? 'border-yellow-700/30 text-yellow-200' : 'border-yellow-300/50 text-yellow-800']">
                 <div class="font-semibold mb-1">
-                  {{ formatDisplayDate(dup.entry.date) }} · {{ dup.entry.registration }} · {{ dup.entry.departure }} → {{ dup.entry.destination }}
+                  {{ formatDisplayDate(dup.entry.date) }} · {{ dup.entry.registration }} · {{ formatEntryAirportCode(dup.entry, dup.entry.departure) }} → {{ formatEntryAirportCode(dup.entry, dup.entry.destination) }}
                 </div>
                 <div :class="['text-xs mt-1', isDarkMode ? 'text-yellow-300' : 'text-yellow-700']">
                   Matches {{ dup.matches.length }} existing {{ dup.matches.length === 1 ? 'entry' : 'entries' }}:
@@ -6085,7 +6085,7 @@
                     </div>
                     <div class="flex items-center gap-2 mt-1">
                       <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                        {{ item.entry.departure }} → {{ item.entry.destination }}
+                        {{ formatEntryAirportCode(item.entry, item.entry.departure) }} → {{ formatEntryAirportCode(item.entry, item.entry.destination) }}
                       </div>
                       <div :class="['text-xs font-mono', isDarkMode ? 'text-blue-400' : 'text-blue-600']">
                         {{ (item.entry.flightTime.total ?? 0).toFixed(1) }}h
@@ -6245,7 +6245,7 @@
           </div>
           <div v-for="(dup, index) in importPreviewStatistics.duplicateEntries.slice(0, 3)" :key="index"
                :class="['text-xs font-quicksand py-1', isDarkMode ? 'text-yellow-200' : 'text-yellow-800']">
-            {{ formatDisplayDate(dup.entry.date) }} · {{ dup.entry.registration }} · {{ dup.entry.departure }} → {{ dup.entry.destination }}
+            {{ formatDisplayDate(dup.entry.date) }} · {{ dup.entry.registration }} · {{ formatEntryAirportCode(dup.entry, dup.entry.departure) }} → {{ formatEntryAirportCode(dup.entry, dup.entry.destination) }}
           </div>
           <div v-if="importPreviewStatistics.duplicateEntries.length > 3"
                :class="['text-xs font-quicksand py-1', isDarkMode ? 'text-yellow-300' : 'text-yellow-700']">
@@ -6334,7 +6334,7 @@
           </div>
           <div v-for="match in duplicateWarning.matches.slice(0, 5)" :key="match.id"
                :class="['text-xs font-quicksand py-1', isDarkMode ? 'text-yellow-200' : 'text-yellow-800']">
-            • {{ formatDisplayDate(match.date) }} · {{ match.registration }} · {{ match.departure }} → {{ match.destination }}
+            • {{ formatDisplayDate(match.date) }} · {{ match.registration }} · {{ formatEntryAirportCode(match, match.departure) }} → {{ formatEntryAirportCode(match, match.destination) }}
           </div>
           <div v-if="duplicateWarning.matches.length > 5"
                :class="['text-xs font-quicksand py-1', isDarkMode ? 'text-yellow-300' : 'text-yellow-700']">
@@ -6600,7 +6600,7 @@
                       <div :class="['text-sm font-quicksand min-w-0 truncate', isDarkMode ? 'text-gray-400' : 'text-gray-500']">{{ entry.aircraftMakeModel }}</div>
                     </div>
                     <div class="flex items-center gap-2 mt-1 flex-wrap">
-                      <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">{{ entry.departure }} → {{ entry.destination }}</div>
+                      <div :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">{{ formatEntryAirportCode(entry, entry.departure) }} → {{ formatEntryAirportCode(entry, entry.destination) }}</div>
                       <div :class="['text-xs font-mono', isDarkMode ? 'text-blue-400' : 'text-blue-600']">{{ (entry.flightTime.total ?? 0).toFixed(1) }}h</div>
                     </div>
                   </div>
@@ -6777,6 +6777,7 @@ import {
   formatEntryAirportCode,
   getTotalTimeColorClass,
 } from '../utils/entryFieldDisplay'
+import { toCatalogAirportCode } from '../../shared/airportCodeCanonical'
 import {
   validateCrossCountry,
   computeCrossCountryDistanceNm,
@@ -13134,8 +13135,10 @@ function getFilteredCatalogItems(key: Exclude<CatalogKey, 'aircraft'>): string[]
   const query = normalizedCatalogSearch(key)
   if (!query) return items
   if (key === 'airports') {
+    const queryCanon = toCatalogAirportCode(query.toUpperCase())
     return items.filter((code) => {
       if (code.toLowerCase().includes(query)) return true
+      if (queryCanon && code === queryCanon) return true
       const name = airportNames.value[code]
       return name ? name.toLowerCase().includes(query) : false
     })
