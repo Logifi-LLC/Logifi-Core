@@ -237,7 +237,9 @@ export function applyLogtenCrewFields(
   }
 
   const selectedPilot = pickOtherCrewName(seat, crew.candidates)
-  entry.trainingElements = toTitleCase(selectedPilot)
+  if (selectedPilot) {
+    entry.trainingElements = toTitleCase(selectedPilot)
+  }
 
   const explicitInstructor = findFieldValue(rawEntry, [
     'Training Instructor',
@@ -267,12 +269,12 @@ export function applyLogtenCrewFields(
     return
   }
 
-  entry.trainingInstructor = selectedPilot
-    ? jobLabelForOtherPilot(
-        selectedPilot,
-        seat,
-        crew.instructorCrew,
-        crew.studentCrew
-      )
-    : ''
+  if (selectedPilot) {
+    entry.trainingInstructor = jobLabelForOtherPilot(
+      selectedPilot,
+      seat,
+      crew.instructorCrew,
+      crew.studentCrew
+    )
+  }
 }

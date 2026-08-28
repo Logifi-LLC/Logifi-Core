@@ -141,6 +141,25 @@ describe('LogEntryCard pilots', () => {
   })
 })
 
+describe('LogEntryCard crew names', () => {
+  it('shows PIC and SIC names when they are set', () => {
+    const wrapper = mountCard({
+      entry: entry({
+        picName: 'D. Cameron',
+        sicName: 'D. Bird',
+      }),
+    })
+
+    const line = wrapper.get('[data-testid="crew-names-line"]')
+    expect(line.text()).toBe('PIC D. Cameron · SIC D. Bird')
+  })
+
+  it('omits the crew-names line when both names are empty', () => {
+    const wrapper = mountCard()
+    expect(wrapper.find('[data-testid="crew-names-line"]').exists()).toBe(false)
+  })
+})
+
 describe('LogEntryCard metrics strip', () => {
   it('shows enabled times in the strip and not as chips', () => {
     const wrapper = mountCard({
