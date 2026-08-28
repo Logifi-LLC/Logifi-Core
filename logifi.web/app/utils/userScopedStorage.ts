@@ -36,6 +36,31 @@ export function scopedKey(baseKey: string, userId: string): string {
   return `${baseKey}/${userId}`
 }
 
+function isQuotaExceededError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+  const e = err as { name?: string; code?: number }
+  return (
+    e.name === 'QuotaExceededError' ||
+    e.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+    e.code === 22
+  )
+}
+
+/** localStorage.setItem that never throws on quota — returns false if the write failed. */
+export function tryLocalStorageSetItem(key: string, value: string): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    window.localStorage.setItem(key, value)
+    return true
+  } catch (err) {
+    if (isQuotaExceededError(err)) {
+      console.warn('[userScopedStorage] localStorage quota exceeded for', key)
+      return false
+    }
+    throw err
+  }
+}
+
 export function getScopedItem(baseKey: string, userId: string): string | null {
   if (typeof window === 'undefined' || !userId) return null
   return window.localStorage.getItem(scopedKey(baseKey, userId))
@@ -43,7 +68,7 @@ export function getScopedItem(baseKey: string, userId: string): string | null {
 
 export function setScopedItem(baseKey: string, userId: string, value: string): void {
   if (typeof window === 'undefined' || !userId) return
-  window.localStorage.setItem(scopedKey(baseKey, userId), value)
+  tryLocalStorageSetItem(scopedKey(baseKey, userId), value)
 }
 
 export function removeScopedItem(baseKey: string, userId: string): void {
@@ -68,16 +93,26 @@ export function migrateGlobalToScoped(
   const global = window.localStorage.getItem(baseKey)
   if (global == null) return false
 
-  window.localStorage.setItem(scoped, global)
+  if (!tryLocalStorageSetItem(scoped, global)) return false
   if (removeGlobal) {
     window.localStorage.removeItem(baseKey)
   }
   return true
 }
 
+/**
+ * Full logbook JSON must not be duplicated into per-user localStorage on login.
+ * Signed-in offline uses IndexedDB; Supabase migration still reads the legacy
+ * unscoped key via readScopedOrLegacy. Copying it is what blows the ~5MB quota.
+ */
+const SKIP_SCOPED_MIGRATION_KEYS = new Set<string>([
+  ACCOUNT_SCOPED_STORAGE_KEYS.LOGBOOK,
+])
+
 /** Migrate all account-scoped legacy global keys for a user on first login after upgrade. */
 export function migrateAllGlobalKeysToScoped(userId: string, removeGlobal = false): void {
   for (const baseKey of Object.values(ACCOUNT_SCOPED_STORAGE_KEYS)) {
+    if (SKIP_SCOPED_MIGRATION_KEYS.has(baseKey)) continue
     migrateGlobalToScoped(baseKey, userId, removeGlobal)
   }
 }
