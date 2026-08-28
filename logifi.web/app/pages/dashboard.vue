@@ -1613,7 +1613,7 @@
                           {{ getTotalApproachCount(entry.performance) || '—' }}
                         </template>
                         <template v-else-if="col.key === 'pilots'">
-                          <div class="truncate">{{ entry.trainingElements || '—' }}</div>
+                          <div class="truncate">{{ getEntryFieldDisplay(entry, 'pilots').text }}</div>
                         </template>
                         <template v-else-if="col.key === 'total'">
                           <span :class="getTotalTimeColorClass(entry, isDarkMode)">
@@ -2015,6 +2015,16 @@
                     </select>
                   </div>
                 </div>
+                <div :class="['mt-3 grid gap-4', isIos ? 'entry-grid-ios-2' : 'md:grid-cols-2']">
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">PIC / Captain</label>
+                    <input v-model="inlineEditEntry.picName" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" autocomplete="off" />
+                  </div>
+                  <div>
+                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">SIC / First Officer</label>
+                    <input v-model="inlineEditEntry.sicName" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" autocomplete="off" />
+                  </div>
+                </div>
                 <div
                   class="mt-4 pt-3 border-t grid gap-4 grid-cols-1 sm:grid-cols-2"
                   :class="[
@@ -2364,6 +2374,16 @@
                     {{ aircraft.registration }}
                   </button>
                 </div>
+              </div>
+            </div>
+            <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'md:grid-cols-2']">
+              <div>
+                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">PIC / Captain</label>
+                <input v-model="inlineEditEntry.picName" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" autocomplete="off" />
+              </div>
+              <div>
+                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">SIC / First Officer</label>
+                <input v-model="inlineEditEntry.sicName" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" autocomplete="off" />
               </div>
             </div>
             <div :class="['grid gap-4 mb-2 items-end', isIos ? 'entry-grid-ios-1' : 'md:grid-cols-4']">
@@ -3222,6 +3242,16 @@
                         </select>
                       </div>
                     </div>
+                    <div :class="['mt-3 grid gap-4', isIos ? 'entry-grid-ios-2' : 'md:grid-cols-2']">
+                      <div>
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">PIC / Captain</label>
+                        <input v-model="newEntry.picName" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" autocomplete="off" />
+                      </div>
+                      <div>
+                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">SIC / First Officer</label>
+                        <input v-model="newEntry.sicName" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" autocomplete="off" />
+                      </div>
+                    </div>
                     <div
                       class="mt-4 pt-3 border-t grid gap-4 grid-cols-1 sm:grid-cols-2"
                       :class="[
@@ -3610,6 +3640,16 @@
                       {{ aircraft.registration }}
                     </button>
                   </div>
+                </div>
+              </div>
+              <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'md:grid-cols-2']">
+                <div>
+                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">PIC / Captain</label>
+                  <input v-model="newEntry.picName" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" autocomplete="off" />
+                </div>
+                <div>
+                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">SIC / First Officer</label>
+                  <input v-model="newEntry.sicName" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" autocomplete="off" />
                 </div>
               </div>
               <div :class="['grid gap-4 mb-2 items-end', isIos ? 'entry-grid-ios-1' : 'md:grid-cols-4']">
@@ -6808,6 +6848,7 @@ import { getDisplayedPilotInitials, shouldShowCurrencyChips } from '../utils/das
 import { markAppReady } from '../utils/appReady'
 import {
   formatEntryAirportCode,
+  getEntryFieldDisplay,
   getTotalTimeColorClass,
 } from '../utils/entryFieldDisplay'
 import { toCatalogAirportCode } from '../../shared/airportCodeCanonical'
@@ -8580,6 +8621,8 @@ function buildDbPayloadFromLogEntry(
     training_elements: entry.trainingElements || null,
     training_instructor: entry.trainingInstructor || null,
     instructor_certificate: entry.instructorCertificate || null,
+    pic_name: (entry.picName || '').trim() || null,
+    sic_name: (entry.sicName || '').trim() || null,
     flight_conditions: entry.flightConditions,
     remarks: entry.remarks || null,
     tags: Array.isArray(entry.tags) ? entry.tags : [],
@@ -9243,6 +9286,8 @@ async function saveInlineEdit(): Promise<boolean> {
         training_elements: updatedEntry.trainingElements || null,
         training_instructor: updatedEntry.trainingInstructor || null,
         instructor_certificate: updatedEntry.instructorCertificate || null,
+        pic_name: (updatedEntry.picName || '').trim() || null,
+        sic_name: (updatedEntry.sicName || '').trim() || null,
         flight_conditions: updatedEntry.flightConditions,
         remarks: updatedEntry.remarks || null,
         tags: Array.isArray(updatedEntry.tags) ? updatedEntry.tags : [],
@@ -9439,6 +9484,8 @@ async function saveInlineEdit(): Promise<boolean> {
         trainingElements: dbEntryResult.training_elements || '',
         trainingInstructor: dbEntryResult.training_instructor || '',
         instructorCertificate: dbEntryResult.instructor_certificate || '',
+        picName: dbEntryResult.pic_name || null,
+        sicName: dbEntryResult.sic_name || null,
         flightConditions: sanitizeFlightConditions(dbEntryResult.flight_conditions || []),
         remarks: dbEntryResult.remarks || '',
         logbookType: dbEntryResult.logbook_type === 'simulator' ? 'simulator' : 'flight',
@@ -9496,7 +9543,7 @@ async function saveInlineEdit(): Promise<boolean> {
           'date', 'role', 'aircraft_category_class', 'category_class_time',
           'aircraft_make_model', 'registration', 'flight_number', 'departure',
           'destination', 'route', 'training_elements', 'training_instructor',
-          'instructor_certificate', 'flight_conditions', 'remarks',
+          'instructor_certificate', 'pic_name', 'sic_name', 'flight_conditions', 'remarks',
           'flight_time', 'performance', 'oooi', 'flagged'
         ]
         
@@ -10891,6 +10938,8 @@ async function exportToJSON(entries?: LogEntry[]): Promise<void> {
           trainingElements: entry.trainingElements,
           trainingInstructor: entry.trainingInstructor,
           instructorCertificate: entry.instructorCertificate,
+          picName: entry.picName ?? null,
+          sicName: entry.sicName ?? null,
           flightConditions: entry.flightConditions,
           remarks: entry.remarks,
           flightTime: entry.flightTime,
@@ -11722,6 +11771,8 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
       training_elements: entry.trainingElements || null,
       training_instructor: entry.trainingInstructor || null,
       instructor_certificate: entry.instructorCertificate || null,
+      pic_name: (entry.picName || '').trim() || null,
+      sic_name: (entry.sicName || '').trim() || null,
       flight_conditions: entry.flightConditions || [],
       remarks: entry.remarks || null,
       tags: Array.isArray(entry.tags) ? entry.tags.filter(Boolean) : [],
@@ -13197,6 +13248,8 @@ function createBlankEntry(): EditableLogEntry {
     trainingElements: '',
     trainingInstructor: '',
     instructorCertificate: '',
+    picName: null,
+    sicName: null,
     flightConditions: [],
     remarks: '',
     tags: [],
@@ -14448,6 +14501,8 @@ async function beginEditing(entry: LogEntry): Promise<void> {
   newEntry.trainingElements = entry.trainingElements
   newEntry.trainingInstructor = entry.trainingInstructor
   newEntry.instructorCertificate = entry.instructorCertificate
+  newEntry.picName = entry.picName ?? null
+  newEntry.sicName = entry.sicName ?? null
   newEntry.flightConditions = sanitizeFlightConditions(entry.flightConditions || [])
   newEntry.remarks = entry.remarks
   Object.assign(newEntry.flightTime, entry.flightTime)
@@ -15724,6 +15779,8 @@ async function submitEntry(): Promise<void> {
     trainingElements: newEntry.trainingElements.trim(),
     trainingInstructor: newEntry.trainingInstructor.trim(),
     instructorCertificate: newEntry.instructorCertificate.trim(),
+    picName: (newEntry.picName || '').trim() || null,
+    sicName: (newEntry.sicName || '').trim() || null,
     flightConditions: sanitizeFlightConditions([...newEntry.flightConditions]),
     remarks: newEntry.remarks.trim(),
     tags: Array.isArray(newEntry.tags) ? [...newEntry.tags].filter(Boolean) : [],
@@ -15929,6 +15986,8 @@ async function submitEntry(): Promise<void> {
       training_elements: baseEntry.trainingElements || null,
       training_instructor: baseEntry.trainingInstructor || null,
       instructor_certificate: baseEntry.instructorCertificate || null,
+      pic_name: (baseEntry.picName || '').trim() || null,
+      sic_name: (baseEntry.sicName || '').trim() || null,
       flight_conditions: baseEntry.flightConditions,
       remarks: baseEntry.remarks || null,
       tags: baseEntry.tags && baseEntry.tags.length > 0 ? baseEntry.tags : [],
@@ -16226,6 +16285,8 @@ function mapSupabaseRowToLogEntry(dbEntry: any): LogEntry {
     trainingElements: dbEntry.training_elements || '',
     trainingInstructor: dbEntry.training_instructor || '',
     instructorCertificate: dbEntry.instructor_certificate || '',
+    picName: dbEntry.pic_name || null,
+    sicName: dbEntry.sic_name || null,
     flightConditions: sanitizeFlightConditions(dbEntry.flight_conditions || []),
     remarks: dbEntry.remarks || '',
     tags: Array.isArray(dbEntry.tags) ? [...dbEntry.tags] : [],
@@ -16656,6 +16717,8 @@ function mapIdbEntryToLogEntry(
     trainingElements: entry.trainingElements,
     trainingInstructor: entry.trainingInstructor,
     instructorCertificate: entry.instructorCertificate,
+    picName: entry.picName ?? null,
+    sicName: entry.sicName ?? null,
     flightConditions: entry.flightConditions,
     remarks: entry.remarks,
     tags: entry.tags,
@@ -16971,6 +17034,8 @@ async function migrateSimulatorInstrumentOnLoad(): Promise<void> {
         training_elements: entry.trainingElements || null,
         training_instructor: entry.trainingInstructor || null,
         instructor_certificate: entry.instructorCertificate || null,
+        pic_name: (entry.picName || '').trim() || null,
+        sic_name: (entry.sicName || '').trim() || null,
         flight_conditions: entry.flightConditions,
         remarks: entry.remarks || null,
         tags: Array.isArray(entry.tags) ? entry.tags : [],

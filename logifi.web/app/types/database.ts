@@ -22,6 +22,8 @@ export type Database = {
           training_elements: string | null
           training_instructor: string | null
           instructor_certificate: string | null
+          pic_name: string | null
+          sic_name: string | null
           flight_conditions: string[]
           tags: string[]
           remarks: string | null
@@ -60,6 +62,8 @@ export type Database = {
           training_elements?: string | null
           training_instructor?: string | null
           instructor_certificate?: string | null
+          pic_name?: string | null
+          sic_name?: string | null
           flight_conditions?: string[]
           tags?: string[]
           remarks?: string | null
@@ -98,6 +102,8 @@ export type Database = {
           training_elements?: string | null
           training_instructor?: string | null
           instructor_certificate?: string | null
+          pic_name?: string | null
+          sic_name?: string | null
           flight_conditions?: string[]
           tags?: string[]
           remarks?: string | null

@@ -26,6 +26,8 @@ function entry(overrides: Partial<LogEntry>): LogEntry {
     trainingElements: 'Jane Doe',
     trainingInstructor: 'CFI Smith',
     instructorCertificate: '1234567',
+    picName: 'Pat PIC',
+    sicName: 'Sam SIC',
     flightConditions: ['nightVfr'],
     remarks: 'keep out',
     tags: ['IPC'],
@@ -118,6 +120,8 @@ describe('buildDuplicatedDraft', () => {
     expect(draft.trainingElements).toBe('Jane Doe')
     expect(draft.trainingInstructor).toBe('CFI Smith')
     expect(draft.instructorCertificate).toBe('1234567')
+    expect(draft.picName).toBe('Pat PIC')
+    expect(draft.sicName).toBe('Sam SIC')
     expect(draft.logbookType).toBe('flight')
     expect(draft.flightTime).toEqual(createEmptyFlightTime())
     expect(draft.performance.dayLandings).toBeNull()

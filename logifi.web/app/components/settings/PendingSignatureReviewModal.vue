@@ -293,6 +293,18 @@
               />
             </div>
 
+            <!-- Crew names -->
+            <div class="grid gap-4 md:grid-cols-2">
+              <div>
+                <label :class="labelClass">PIC / Captain</label>
+                <input :value="view.picName" type="text" readonly :class="inputClass" />
+              </div>
+              <div>
+                <label :class="labelClass">SIC / First Officer</label>
+                <input :value="view.sicName" type="text" readonly :class="inputClass" />
+              </div>
+            </div>
+
             <!-- Pilot -->
             <div>
               <label :class="['block text-[10px] uppercase font-bold mb-2', mutedClass]">Pilot</label>
@@ -394,6 +406,8 @@ type ReviewView = {
   trainingElements: string
   trainingInstructor: string
   instructorCertificate: string
+  picName: string
+  sicName: string
   flightConditions: string[]
   remarks: string
   tags: string[]
@@ -571,6 +585,8 @@ const view = computed<ReviewView | null>(() => {
     trainingElements: e.training_elements || '',
     trainingInstructor: e.training_instructor || '',
     instructorCertificate: e.instructor_certificate || '',
+    picName: e.pic_name || '',
+    sicName: e.sic_name || '',
     flightConditions: Array.isArray(e.flight_conditions) ? e.flight_conditions : [],
     remarks: e.remarks || '',
     tags: Array.isArray(e.tags) ? e.tags : [],

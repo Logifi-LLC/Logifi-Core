@@ -515,6 +515,8 @@ const convertLogEntryToDb = (entry: LogEntry, userId: string) => {
     training_elements: entry.trainingElements || null,
     training_instructor: entry.trainingInstructor || null,
     instructor_certificate: entry.instructorCertificate || null,
+    pic_name: (entry.picName || '').trim() || null,
+    sic_name: (entry.sicName || '').trim() || null,
     flight_conditions: entry.flightConditions || [],
     remarks: entry.remarks || null,
     flight_time: entry.flightTime,

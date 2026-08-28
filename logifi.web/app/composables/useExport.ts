@@ -114,6 +114,8 @@ export const useExport = () => {
       trainingElements: entry.trainingElements,
       trainingInstructor: entry.trainingInstructor,
       instructorCertificate: entry.instructorCertificate,
+      picName: entry.picName ?? null,
+      sicName: entry.sicName ?? null,
       flightConditions: entry.flightConditions,
       remarks: entry.remarks,
       flightTime: entry.flightTime,

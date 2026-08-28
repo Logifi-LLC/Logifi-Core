@@ -28,6 +28,8 @@ The main table storing flight log entries.
 - `training_elements` (TEXT): Training elements completed
 - `training_instructor` (TEXT): Instructor name
 - `instructor_certificate` (TEXT): Instructor certificate number
+- `pic_name` (TEXT): PIC / Captain name (optional; not PIC time)
+- `sic_name` (TEXT): SIC / First Officer name (optional; not SIC time)
 - `flight_conditions` (TEXT[]): Array of flight conditions (VFR, IFR, night, etc.)
 - `remarks` (TEXT): Additional remarks
 - `flight_time` (JSONB): Flight time breakdown (total, PIC, SIC, dual, solo, night, instrument, cross-country, etc.)
