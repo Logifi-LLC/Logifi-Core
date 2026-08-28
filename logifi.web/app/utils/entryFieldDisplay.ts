@@ -9,15 +9,14 @@ function isAirlineScheduleImport(source: string | undefined): boolean {
   return source === 'fc_view' || source === 'flica_aerodatabox'
 }
 
-/** Display airport codes in catalog ICAO form for airline-imported entries (LGA → KLGA). */
+/** Display airport codes in catalog ICAO form when known (LGA → KLGA). Stored values are unchanged. */
 export function formatEntryAirportCode(
-  entry: Pick<LogEntry, 'importSource'>,
+  _entry: Pick<LogEntry, 'importSource'>,
   code: string | null | undefined
 ): string {
   const raw = (code ?? '').trim()
   if (!raw) return raw
-  if (isAirlineScheduleImport(entry.importSource)) return toCatalogAirportCode(raw)
-  return raw
+  return toCatalogAirportCode(raw)
 }
 
 const CONDITION_OPTIONS = [
