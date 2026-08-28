@@ -143,14 +143,6 @@
     </div>
 
     <p
-      v-if="crewNamesLine"
-      data-testid="crew-names-line"
-      :class="['mt-3 text-sm truncate font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
-    >
-      {{ crewNamesLine }}
-    </p>
-
-    <p
       v-if="pilotsLine"
       data-testid="pilots-line"
       :class="['mt-3 text-sm truncate text-right font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
@@ -191,7 +183,6 @@ import { computed } from 'vue'
 import type { LogbookColumnConfig, LogEntry } from '~/utils/logbookTypes'
 import { isMetricZoneKey } from '~/utils/entryCardPresets'
 import {
-  formatCrewNamesLine,
   formatDisplayDate,
   formatEntryAirportCode,
   formatLogbookNumber,
@@ -241,8 +232,6 @@ const metricStripFields = computed(() =>
     (field) => isMetricZoneKey(field.key) && !getEntryFieldDisplay(props.entry, field.key).isEmpty,
   ),
 )
-
-const crewNamesLine = computed(() => formatCrewNamesLine(props.entry))
 
 const pilotsLine = computed(() => {
   const enabled = props.visibleDetailFields.some((field) => field.key === 'pilots')
