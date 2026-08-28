@@ -302,6 +302,17 @@ export function parseOtherCrewFromRemarks(
   return null
 }
 
+function otherCrewJobAndName(
+  role: string,
+  picName: string | null,
+  sicName: string | null
+): { name: string; job: 'Captain' | 'First Officer' } | null {
+  const roleNorm = role.trim().toUpperCase()
+  if (roleNorm === 'PIC' && sicName) return { name: sicName, job: 'First Officer' }
+  if (roleNorm === 'SIC' && picName) return { name: picName, job: 'Captain' }
+  return null
+}
+
 export function resolveCrewNamesFromRawRow(
   rawEntry: Record<string, unknown>,
   role: string,
@@ -658,6 +669,12 @@ export function mapRawRowToLogEntry(
   const crewNames = resolveCrewNamesFromRawRow(rawEntry, entry.role, entry.remarks)
   entry.picName = crewNames.picName
   entry.sicName = crewNames.sicName
+
+  const otherCrew = otherCrewJobAndName(entry.role, crewNames.picName, crewNames.sicName)
+  if (otherCrew) {
+    if (!entry.trainingElements.trim()) entry.trainingElements = otherCrew.name
+    if (!entry.trainingInstructor.trim()) entry.trainingInstructor = otherCrew.job
+  }
 
   return entry
 }

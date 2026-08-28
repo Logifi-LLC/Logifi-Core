@@ -832,9 +832,29 @@ describe('PIC Name / SIC Name import and native export', () => {
     expect(entry?.role).toBe('PIC')
     expect(entry?.picName).toBeNull()
     expect(entry?.sicName).toBe('Ary Madison')
+    expect(entry?.trainingElements).toBe('Ary Madison')
+    expect(entry?.trainingInstructor).toBe('First Officer')
     expect(entry?.flightTime.pic).toBe(1.5)
     expect(entry?.flightTime.sic).toBeNull()
     expect(entry?.flightTime.total).toBe(1.5)
+  })
+
+  it('fills Job and Pilot name from E-175 remarks (Derek Farmer 624619)', () => {
+    const row = {
+      ...crewBaseRow,
+      Role: 'PIC',
+      PIC: '1.5',
+      Remarks: 'Derek Farmer 624619',
+    }
+    const entry = mapRawRowToLogEntry(row)
+    expect(entry?.sicName).toBe('Derek Farmer')
+    expect(entry?.trainingElements).toBe('Derek Farmer')
+    expect(entry?.trainingInstructor).toBe('First Officer')
+
+    applyLogtenCrewFields(entry!, row, 'Someone Else')
+    expect(entry?.trainingElements).toBe('Derek Farmer')
+    expect(entry?.trainingInstructor).toBe('First Officer')
+    expect(entry?.flightTime.pic).toBe(1.5)
   })
 
   it('treats E-175 remarks as PIC name when Role is SIC', () => {
@@ -847,6 +867,8 @@ describe('PIC Name / SIC Name import and native export', () => {
     expect(entry?.role).toBe('SIC')
     expect(entry?.picName).toBe('Jane Doe')
     expect(entry?.sicName).toBeNull()
+    expect(entry?.trainingElements).toBe('Jane Doe')
+    expect(entry?.trainingInstructor).toBe('Captain')
     expect(entry?.flightTime.sic).toBe(1.5)
     expect(entry?.flightTime.pic).toBeNull()
   })
