@@ -5773,12 +5773,35 @@
     </div>
     </Teleport>
 
+    <!-- Import busy overlay (parse + commit) -->
+    <Teleport to="body">
+      <div
+        v-if="importBusy"
+        class="fixed inset-0 z-[110] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm"
+        role="status"
+        aria-live="polite"
+        aria-busy="true"
+      >
+        <div
+          :class="[
+            'flex items-center gap-3 rounded-2xl px-5 py-4 shadow-xl border',
+            isDarkMode
+              ? 'bg-gray-900 border-white/10 text-white'
+              : 'bg-white border-gray-200 text-gray-900'
+          ]"
+        >
+          <Icon name="ri:loader-4-line" size="24" class="animate-spin flex-shrink-0" />
+          <span class="text-sm font-quicksand font-medium">{{ importBusyLabel }}</span>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Import Preview Modal -->
     <Teleport to="body">
     <div
       v-if="showImportPreview && importPreviewStatistics && importPreviewMetadata"
       class="app-modal-overlay flex items-center justify-center p-4"
-      @click.self="cancelImport"
+      @click.self="!importBusy && cancelImport()"
     >
       <div
         :class="[
@@ -5801,8 +5824,10 @@
           </div>
           <button
             @click="cancelImport"
+            :disabled="importBusy"
             :class="[
               'p-1 rounded-lg transition-colors',
+              importBusy ? 'opacity-40 cursor-not-allowed' : '',
               isDarkMode 
                 ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
                 : 'text-gray-500 hover:text-gray-700 hover:bg-gray-300'
@@ -6127,8 +6152,10 @@
         <div class="flex items-center justify-end gap-3 p-6 border-t flex-shrink-0" :class="[isDarkMode ? 'border-gray-700' : 'border-gray-300']">
           <button
             @click="cancelImport"
+            :disabled="importBusy"
             :class="[
               'px-4 py-2 rounded-lg font-quicksand transition-colors',
+              importBusy ? 'opacity-50 cursor-not-allowed' : '',
               isDarkMode 
                 ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white shadow-sm shadow-black/20' 
                 : 'bg-gray-300 hover:bg-gray-400 text-gray-900'
@@ -6139,8 +6166,12 @@
           <button
             v-if="importPreviewStatistics.duplicates > 0"
             @click="handleSkipDuplicatesImport"
+            :disabled="importBusy || importPreviewToImportCount === 0"
             :class="[
               'px-4 py-2 rounded-lg font-quicksand transition-colors',
+              importBusy || importPreviewToImportCount === 0
+                ? 'opacity-50 cursor-not-allowed'
+                : '',
               importPreviewToImportCount > 0
                 ? 'bg-green-600 hover:bg-green-700 text-white'
                 : (isDarkMode ? 'bg-white/5 hover:bg-white/10 border border-white/10 text-white' : 'bg-gray-300 hover:bg-gray-400 text-gray-900')
@@ -6150,13 +6181,13 @@
           </button>
           <button
             v-if="importPreviewStatistics.duplicates > 0"
-            :disabled="!importDuplicatesFlagged"
+            :disabled="importBusy || !importDuplicatesFlagged"
             @click="handleImportAllWithDuplicates"
             :class="[
               'px-4 py-2 rounded-lg font-quicksand transition-colors',
-              importDuplicatesFlagged
-                ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
-                : 'bg-gray-400 text-gray-200 cursor-not-allowed'
+              importBusy || !importDuplicatesFlagged
+                ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                : 'bg-yellow-600 hover:bg-yellow-700 text-white'
             ]"
           >
             Import All ({{ importPreviewStatistics.totalEntries }})
@@ -6164,8 +6195,10 @@
           <button
             v-else
             @click="handleSkipDuplicatesImport"
+            :disabled="importBusy"
             :class="[
               'px-4 py-2 rounded-lg font-quicksand transition-colors',
+              importBusy ? 'opacity-50 cursor-not-allowed' : '',
               'bg-green-600 hover:bg-green-700 text-white'
             ]"
           >
@@ -6778,6 +6811,10 @@ import {
   getTotalTimeColorClass,
 } from '../utils/entryFieldDisplay'
 import { toCatalogAirportCode } from '../../shared/airportCodeCanonical'
+import {
+  getDisplayConditions,
+  sanitizeFlightConditions,
+} from '../utils/flightConditions'
 import {
   validateCrossCountry,
   computeCrossCountryDistanceNm,
@@ -10396,6 +10433,34 @@ const importPreviewAllEntries = ref<LogEntry[]>([])
 const importPreviewEntries = ref<LogEntry[]>([])
 const importPreviewStatistics = ref<ImportStatistics | null>(null)
 const importPreviewMetadata = ref<ImportMetadata | null>(null)
+/** Validation errors from preview, keyed by entry id — used on commit without re-validating. */
+const importPreviewValidationErrors = ref<Map<string, string>>(new Map())
+/** True while parsing a file or committing an import (blocks UI; shows overlay). */
+const importBusy = ref(false)
+const importBusyLabel = ref('Importing…')
+
+const IMPORT_UI_YIELD_EVERY = 50
+const IMPORT_INSERT_BATCH = 100
+
+async function yieldToImportUi(): Promise<void> {
+  await new Promise<void>((resolve) => {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => resolve())
+    } else {
+      setTimeout(resolve, 0)
+    }
+  })
+}
+
+function setImportBusy(label: string): void {
+  importBusy.value = true
+  importBusyLabel.value = label
+}
+
+function clearImportBusy(): void {
+  importBusy.value = false
+  importBusyLabel.value = 'Importing…'
+}
 
 const importPreviewTimeCards = computed(() => {
   const stats = importPreviewStatistics.value
@@ -11247,20 +11312,35 @@ async function normalizeImportedEntry(
     // If we have OOOI times, calculate block time from out to in (gate out to gate in)
     // For Logten imports, this will override the null initial value
     // Fall back to off/on if out/in don't exist
+    // Zulu times need no airport timezone lookup (duration is UTC-to-UTC).
     if (out && inTime) {
-      // Get timezones for departure and destination airports
-      const startTimezone = entry.departure ? await getAirportTimezone(entry.departure) : null
-      const endTimezone = entry.destination ? await getAirportTimezone(entry.destination) : null
-      
+      const startTimezone = isZulu
+        ? null
+        : entry.departure
+          ? await getAirportTimezone(entry.departure)
+          : null
+      const endTimezone = isZulu
+        ? null
+        : entry.destination
+          ? await getAirportTimezone(entry.destination)
+          : null
+
       const calculatedTime = await calculateDuration(out, inTime, entry.date, startTimezone, endTimezone, isZulu)
       if (calculatedTime !== null && calculatedTime > 0) {
         entry.flightTime.total = calculatedTime
       }
     } else if (off && on) {
-      // Fallback: calculate from off to on if out/in not available
-      const startTimezone = entry.departure ? await getAirportTimezone(entry.departure) : null
-      const endTimezone = entry.destination ? await getAirportTimezone(entry.destination) : null
-      
+      const startTimezone = isZulu
+        ? null
+        : entry.departure
+          ? await getAirportTimezone(entry.departure)
+          : null
+      const endTimezone = isZulu
+        ? null
+        : entry.destination
+          ? await getAirportTimezone(entry.destination)
+          : null
+
       const calculatedTime = await calculateDuration(off, on, entry.date, startTimezone, endTimezone, isZulu)
       if (calculatedTime !== null && calculatedTime > 0) {
         entry.flightTime.total = calculatedTime
@@ -11362,9 +11442,10 @@ async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statist
   const errorMessages: string[] = []
   /** Entries accepted in this import batch so far — mirrors importEntries growing logEntries. */
   const batchAccepted: LogEntry[] = []
+  const previewErrors = new Map<string, string>()
   
-  for (const entry of entries) {
-    // Provide defaults for missing required fields
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]!
     if (!entry.departure.trim()) {
       entry.departure = 'UNKNOWN'
     }
@@ -11375,15 +11456,18 @@ async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statist
       entry.aircraftMakeModel = 'Unknown'
     }
     
-    // Validate entry using composable validation
     const validationError = await validateEntryForImport(entry)
     if (validationError) {
+      previewErrors.set(entry.id, validationError)
       errors.push({ entry, message: validationError })
       errorMessages.push(`Entry ${entry.date} ${entry.registration}: ${validationError}`)
+      if ((i + 1) % IMPORT_UI_YIELD_EVERY === 0) {
+        setImportBusy(`Checking ${i + 1} / ${entries.length}`)
+        await yieldToImportUi()
+      }
       continue
     }
 
-    // File-level stats: all validated rows (including duplicates) so preview totals stay visible on re-import
     dates.push(entry.date)
     totalFlightTime += entry.flightTime.total ?? 0
     picTime += entry.flightTime.pic ?? 0
@@ -11406,21 +11490,28 @@ async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statist
     const aircraftKey = `${entry.aircraftMakeModel} (${entry.registration})`
     aircraftBreakdown[aircraftKey] = (aircraftBreakdown[aircraftKey] || 0) + 1
     
-    // Check duplicates against logbook AND earlier rows in this file (same order as importEntries)
     const logbookMatches = findDuplicateEntries(entry, logEntries.value)
     const batchMatches = findDuplicateEntries(entry, batchAccepted)
     const matches = [...logbookMatches, ...batchMatches]
     if (matches.length > 0) {
       duplicates.push(entry)
       duplicateEntries.push({ entry, matches })
+      if ((i + 1) % IMPORT_UI_YIELD_EVERY === 0) {
+        setImportBusy(`Checking ${i + 1} / ${entries.length}`)
+        await yieldToImportUi()
+      }
       continue
     }
     
-    // Entry is valid and not a duplicate
     validEntries.push(entry)
     batchAccepted.push(entry)
+
+    if ((i + 1) % IMPORT_UI_YIELD_EVERY === 0) {
+      setImportBusy(`Checking ${i + 1} / ${entries.length}`)
+      await yieldToImportUi()
+    }
   }
-  
+
   // Calculate date range
   dates.sort()
   const earliestDate: string | null = dates.length > 0 ? (dates[0] ?? null) : null
@@ -11458,6 +11549,7 @@ async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statist
     duplicateEntries
   }
   
+  importPreviewValidationErrors.value = previewErrors
   return { statistics, validEntries, duplicates, errors }
 }
 
@@ -11545,35 +11637,28 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
     }
   }
   
-  // Process each entry
-  for (const entry of entries) {
-    // Provide defaults for missing required fields (for imports from other systems)
-    if (!entry.departure.trim()) {
-      entry.departure = 'UNKNOWN'
-    }
-    if (!entry.destination.trim()) {
-      entry.destination = 'UNKNOWN'
-    }
-    if (!entry.aircraftMakeModel.trim()) {
-      entry.aircraftMakeModel = 'Unknown'
-    }
-    
-    // Validate entry using composable validation (with lenient defaults applied)
-    const validationError = await validateEntryForImport(entry)
-    if (validationError) {
+  // Classify rows (no second full validation — preview already classified errors)
+  const toInsert: LogEntry[] = []
+  const importedAt = new Date().toISOString()
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]!
+    if (!entry.departure.trim()) entry.departure = 'UNKNOWN'
+    if (!entry.destination.trim()) entry.destination = 'UNKNOWN'
+    if (!entry.aircraftMakeModel.trim()) entry.aircraftMakeModel = 'Unknown'
+
+    const previewError = importPreviewValidationErrors.value.get(entry.id)
+    if (previewError) {
       if (importWithErrorsFlag) {
-        // Import with flag and error in remarks
         entry.flagged = true
-        const errorNote = `\n\n[Import Error: ${validationError}]`
+        const errorNote = `\n\n[Import Error: ${previewError}]`
         entry.remarks = (entry.remarks || '') + errorNote
       } else {
-        // Skip entry (current behavior)
-        result.errors.push(`Entry ${entry.date} ${entry.registration}: ${validationError}`)
+        result.errors.push(`Entry ${entry.date} ${entry.registration}: ${previewError}`)
         continue
       }
     }
-    
-    // Check for duplicates
+
     const matches = findDuplicateEntries(entry, logEntries.value)
     if (matches.length > 0 && !importDuplicates) {
       const incomingTags = Array.isArray(entry.tags) ? entry.tags : []
@@ -11599,117 +11684,197 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
       const dupNote = `[Import Duplicate: matches ${match.date} ${match.registration}]`
       entry.remarks = (entry.remarks || '') + (entry.remarks ? '\n\n' : '') + dupNote
     }
-    
-    // Save to Supabase if authenticated
-    if (isAuthenticated.value && user.value) {
+
+    entry.isImported = true
+    entry.importSource = importSource
+    entry.importBatchId = importBatchId || undefined
+    entry.originalEntryDate = entry.date
+    entry.importMetadata = {
+      fileName,
+      fileType: importPreviewMetadata.value?.fileType,
+      importedAt,
+    }
+    if (!entry.id) entry.id = generateEntryId()
+    toInsert.push(entry)
+
+    if ((i + 1) % IMPORT_UI_YIELD_EVERY === 0) {
+      setImportBusy(`Preparing ${i + 1} / ${entries.length}`)
+      await yieldToImportUi()
+    }
+  }
+
+  const storedEntries: LogEntry[] = []
+
+  function buildImportDbRow(entry: LogEntry, userId: string): Record<string, unknown> {
+    return {
+      id: entry.id,
+      user_id: userId,
+      date: entry.date,
+      role: entry.role,
+      aircraft_category_class: entry.aircraftCategoryClass,
+      category_class_time: entry.categoryClassTime,
+      aircraft_make_model: entry.aircraftMakeModel,
+      registration: entry.registration,
+      flight_number: entry.flightNumber || null,
+      departure: entry.departure,
+      destination: entry.destination,
+      route: entry.route || null,
+      training_elements: entry.trainingElements || null,
+      training_instructor: entry.trainingInstructor || null,
+      instructor_certificate: entry.instructorCertificate || null,
+      flight_conditions: entry.flightConditions || [],
+      remarks: entry.remarks || null,
+      tags: Array.isArray(entry.tags) ? entry.tags.filter(Boolean) : [],
+      logbook_type: entry.logbookType ?? 'flight',
+      flight_time: entry.flightTime,
+      performance: entry.performance,
+      oooi: entry.oooi || null,
+      flagged: entry.flagged || false,
+      is_imported: true,
+      import_source: importSource,
+      import_batch_id: importBatchId,
+      original_entry_date: entry.date ? new Date(entry.date).toISOString() : null,
+      import_metadata: entry.importMetadata ?? {
+        fileName,
+        fileType: importPreviewMetadata.value?.fileType,
+        importedAt,
+      },
+    }
+  }
+
+  function mapInsertedRowToLogEntry(entry: LogEntry, data: Record<string, any>): LogEntry {
+    return {
+      ...entry,
+      id: data.id ?? entry.id,
+      isImported: true,
+      importSource,
+      importBatchId: importBatchId || undefined,
+      originalEntryDate: entry.date,
+      importMetadata: entry.importMetadata,
+      version: data.version ?? entry.version,
+      dataHash: data.data_hash ?? entry.dataHash,
+      createdAt: data.created_at ?? entry.createdAt,
+      updatedAt: data.updated_at ?? entry.updatedAt,
+    }
+  }
+
+  async function insertImportRowsOneByOne(
+    chunk: LogEntry[],
+    userId: string
+  ): Promise<LogEntry[]> {
+    const saved: LogEntry[] = []
+    for (const entry of chunk) {
       try {
-        const dbEntry: any = {
-          user_id: user.value.id,
-          date: entry.date,
-          role: entry.role,
-          aircraft_category_class: entry.aircraftCategoryClass,
-          category_class_time: entry.categoryClassTime,
-          aircraft_make_model: entry.aircraftMakeModel,
-          registration: entry.registration,
-          flight_number: entry.flightNumber || null,
-          departure: entry.departure,
-          destination: entry.destination,
-          route: entry.route || null,
-          training_elements: entry.trainingElements || null,
-          training_instructor: entry.trainingInstructor || null,
-          instructor_certificate: entry.instructorCertificate || null,
-          flight_conditions: entry.flightConditions || [],
-          remarks: entry.remarks || null,
-          tags: Array.isArray(entry.tags) ? entry.tags.filter(Boolean) : [],
-          logbook_type: entry.logbookType ?? 'flight',
-          flight_time: entry.flightTime,
-          performance: entry.performance,
-          oooi: entry.oooi || null,
-          flagged: entry.flagged || false,
-          // Import tracking fields
-          is_imported: true,
-          import_source: importSource,
-          import_batch_id: importBatchId,
-          original_entry_date: entry.date ? new Date(entry.date).toISOString() : null,
-          import_metadata: {
-            fileName,
-            fileType: importPreviewMetadata.value?.fileType,
-            importedAt: new Date().toISOString()
-          }
-        }
-        
-        const { data, error } = await (supabase
-          .from('log_entries') as any)
-          .insert(dbEntry)
+        const { data, error } = await (supabase.from('log_entries') as any)
+          .insert(buildImportDbRow(entry, userId))
           .select()
           .single()
-        
-        if (error) {
-          throw error
-        }
-        
-        // Add to local state with import tracking
-        const entryToStore: LogEntry = {
-          ...entry,
-          id: (data as any).id,
-          isImported: true,
-          importSource,
-          importBatchId: importBatchId || undefined,
-          originalEntryDate: entry.date,
-          importMetadata: {
-            fileName,
-            fileType: importPreviewMetadata.value?.fileType,
-            importedAt: new Date().toISOString()
-          },
-          version: (data as any).version ?? entry.version,
-          dataHash: (data as any).data_hash ?? entry.dataHash,
-          createdAt: (data as any).created_at ?? entry.createdAt,
-          updatedAt: (data as any).updated_at ?? entry.updatedAt,
-        }
-        try {
-          await saveSyncedEntryToIndexedDB(entryToStore, user.value!.id)
-        } catch (idbErr) {
-          console.warn('[importEntries] IndexedDB save failed:', idbErr)
-        }
-        logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
-        result.imported++
+        if (error) throw error
+        saved.push(mapInsertedRowToLogEntry(entry, data as any))
         for (const tag of entry.tags || []) {
           const trimmed = tag.trim()
           if (trimmed) importedTagPresets.add(trimmed)
         }
       } catch (error) {
         console.error('Error saving imported entry:', error)
-        result.errors.push(`Entry ${entry.date} ${entry.registration}: ${error instanceof Error ? error.message : 'Failed to save'}`)
-      }
-    } else {
-      // Fallback to localStorage (not authenticated)
-      const entryToStore: LogEntry = {
-        ...entry,
-        id: entry.id || generateEntryId(),
-        isImported: true,
-        importSource,
-        importBatchId: importBatchId || undefined,
-        originalEntryDate: entry.date,
-        importMetadata: {
-          fileName,
-          fileType: importPreviewMetadata.value?.fileType,
-          importedAt: new Date().toISOString()
-        }
-      }
-      logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, entryToStore])
-      result.imported++
-      for (const tag of entry.tags || []) {
-        const trimmed = tag.trim()
-        if (trimmed) importedTagPresets.add(trimmed)
+        result.errors.push(
+          `Entry ${entry.date} ${entry.registration}: ${error instanceof Error ? error.message : 'Failed to save'}`
+        )
       }
     }
+    return saved
+  }
+
+  isBulkLoadInProgress.value = true
+  try {
+    if (isAuthenticated.value && user.value) {
+      const userId = user.value.id
+      for (let i = 0; i < toInsert.length; i += IMPORT_INSERT_BATCH) {
+        const chunk = toInsert.slice(i, i + IMPORT_INSERT_BATCH)
+        setImportBusy(`Importing ${Math.min(i + chunk.length, toInsert.length)} / ${toInsert.length}`)
+        await yieldToImportUi()
+
+        const dbRows = chunk.map((entry) => buildImportDbRow(entry, userId))
+        try {
+          const { data, error } = await (supabase.from('log_entries') as any)
+            .insert(dbRows)
+            .select()
+
+          if (error) throw error
+
+          const rows = (data || []) as any[]
+          const byId = new Map(rows.map((row) => [row.id as string, row]))
+          let matchedAll = true
+          const chunkSaved: LogEntry[] = []
+          for (const entry of chunk) {
+            const row = byId.get(entry.id)
+            if (!row) {
+              matchedAll = false
+              break
+            }
+            chunkSaved.push(mapInsertedRowToLogEntry(entry, row))
+            for (const tag of entry.tags || []) {
+              const trimmed = tag.trim()
+              if (trimmed) importedTagPresets.add(trimmed)
+            }
+          }
+          if (!matchedAll || chunkSaved.length !== chunk.length) {
+            console.warn('[importEntries] Batch insert id match failed; retrying one-by-one')
+            storedEntries.push(...(await insertImportRowsOneByOne(chunk, userId)))
+          } else {
+            storedEntries.push(...chunkSaved)
+          }
+        } catch (chunkError) {
+          console.warn('[importEntries] Batch insert failed; retrying one-by-one:', chunkError)
+          storedEntries.push(...(await insertImportRowsOneByOne(chunk, userId)))
+        }
+      }
+
+      result.imported = storedEntries.length
+
+      if (storedEntries.length > 0) {
+        try {
+          const remoteIds = new Set(storedEntries.map((e) => e.id))
+          await persistSyncedEntriesToIndexedDB(storedEntries, remoteIds, userId)
+        } catch (idbErr) {
+          console.warn('[importEntries] IndexedDB batch save failed:', idbErr)
+        }
+        logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, ...storedEntries])
+      }
+    } else {
+      for (let i = 0; i < toInsert.length; i++) {
+        const entry = toInsert[i]!
+        storedEntries.push({
+          ...entry,
+          id: entry.id || generateEntryId(),
+          isImported: true,
+          importSource,
+          importBatchId: importBatchId || undefined,
+          originalEntryDate: entry.date,
+          importMetadata: entry.importMetadata,
+        })
+        for (const tag of entry.tags || []) {
+          const trimmed = tag.trim()
+          if (trimmed) importedTagPresets.add(trimmed)
+        }
+        if ((i + 1) % IMPORT_UI_YIELD_EVERY === 0) {
+          setImportBusy(`Importing ${i + 1} / ${toInsert.length}`)
+          await yieldToImportUi()
+        }
+      }
+      result.imported = storedEntries.length
+      if (storedEntries.length > 0) {
+        logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, ...storedEntries])
+      }
+    }
+  } finally {
+    finalizeBulkLoadSideEffects()
   }
 
   for (const tag of importedTagPresets) {
     await addTagPreset(tag)
   }
   
-  // Update import batch statistics if batch was created
   if (importBatchId && isAuthenticated.value && user.value) {
     try {
       await (supabase
@@ -11732,41 +11897,55 @@ async function proceedWithImport(includeDuplicates: boolean): Promise<void> {
   if (!importPreviewStatistics.value?.totalEntries || !importPreviewAllEntries.value.length) {
     return
   }
+  if (importBusy.value) return
 
   applyImportSimTypeOverrides()
+  setImportBusy(`Importing 0 / ${importPreviewAllEntries.value.length}`)
 
-  const result = await importEntries(
-    importPreviewAllEntries.value,
-    includeDuplicates,
-    importWithErrors.value
-  )
+  try {
+    const result = await importEntries(
+      importPreviewAllEntries.value,
+      includeDuplicates,
+      importWithErrors.value
+    )
 
-  if (result.imported === 0 && result.tagsUpdated === 0 && result.errors.length === 0) {
-    const total = importPreviewStatistics.value.totalEntries
-    showToast(`Nothing new to import. Check "Import duplicate entries and flag them for review" to add all ${total} rows (duplicates will be flagged).`, { type: 'info' })
-    cancelImport()
-    return
-  }
+    clearImportBusy()
 
-  let message = `Import complete!\n\nImported: ${result.imported} ${result.imported === 1 ? 'entry' : 'entries'}`
-  if (result.flaggedDuplicates > 0) {
-    message += ` (${result.flaggedDuplicates} flagged as duplicates)`
-  }
-  if (result.tagsUpdated > 0) {
-    message += `\nUpdated tags on ${result.tagsUpdated} existing ${result.tagsUpdated === 1 ? 'entry' : 'entries'}`
-  }
-  if (result.skipped > 0) {
-    message += `\nSkipped (duplicates): ${result.skipped} ${result.skipped === 1 ? 'entry' : 'entries'}`
-  }
-  if (result.errors.length > 0) {
-    message += `\n\nErrors (${result.errors.length}):\n${result.errors.slice(0, 5).join('\n')}`
-    if (result.errors.length > 5) {
-      message += `\n... and ${result.errors.length - 5} more`
+    if (result.imported === 0 && result.tagsUpdated === 0 && result.errors.length === 0) {
+      const total = importPreviewStatistics.value.totalEntries
+      showToast(`Nothing new to import. Check "Import duplicate entries and flag them for review" to add all ${total} rows (duplicates will be flagged).`, { type: 'info' })
+      cancelImport()
+      return
     }
-  }
-  showToast(message, { type: result.errors.length > 0 ? 'error' : 'success' })
 
-  cancelImport()
+    let message = `Import complete!\n\nImported: ${result.imported} ${result.imported === 1 ? 'entry' : 'entries'}`
+    if (result.flaggedDuplicates > 0) {
+      message += ` (${result.flaggedDuplicates} flagged as duplicates)`
+    }
+    if (result.tagsUpdated > 0) {
+      message += `\nUpdated tags on ${result.tagsUpdated} existing ${result.tagsUpdated === 1 ? 'entry' : 'entries'}`
+    }
+    if (result.skipped > 0) {
+      message += `\nSkipped (duplicates): ${result.skipped} ${result.skipped === 1 ? 'entry' : 'entries'}`
+    }
+    if (result.errors.length > 0) {
+      message += `\n\nErrors (${result.errors.length}):\n${result.errors.slice(0, 5).join('\n')}`
+      if (result.errors.length > 5) {
+        message += `\n... and ${result.errors.length - 5} more`
+      }
+    }
+    showToast(message, { type: result.errors.length > 0 ? 'error' : 'success' })
+
+    cancelImport()
+  } catch (error) {
+    console.error('Import commit failed:', error)
+    showToast(
+      `Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      { type: 'error' }
+    )
+  } finally {
+    clearImportBusy()
+  }
 }
 
 async function handleSkipDuplicatesImport(): Promise<void> {
@@ -11780,11 +11959,13 @@ async function handleImportAllWithDuplicates(): Promise<void> {
 }
 
 function cancelImport(): void {
+  if (importBusy.value) return
   showImportPreview.value = false
   importPreviewAllEntries.value = []
   importPreviewEntries.value = []
   importPreviewStatistics.value = null
   importPreviewMetadata.value = null
+  importPreviewValidationErrors.value = new Map()
   expandedPreviewEntries.value = new Set()
   importDuplicatesFlagged.value = false
   importWithErrors.value = false
@@ -11814,6 +11995,7 @@ async function handleCSVImport(event: Event): Promise<void> {
 }
 
 async function processCSVFile(file: File, provider?: ImportProviderKey): Promise<void> {
+  setImportBusy('Reading file…')
   try {
     const text = await file.text()
     const sourceOverride = provider ? providerKeyToBridgeSource(provider) : undefined
@@ -11834,6 +12016,7 @@ async function processCSVFile(file: File, provider?: ImportProviderKey): Promise
     const acceptedRawRows: Record<string, string>[] = []
     const rejectedRows: { row: any; reason: string }[] = []
 
+    setImportBusy(`Reading 0 / ${parsed.rows.length}`)
     for (let i = 0; i < parsed.rows.length; i++) {
       const row = parsed.rows[i]
       if (!row) continue
@@ -11880,6 +12063,11 @@ async function processCSVFile(file: File, provider?: ImportProviderKey): Promise
           console.log('Available columns:', Object.keys(row))
         }
       }
+
+      if ((i + 1) % IMPORT_UI_YIELD_EVERY === 0) {
+        setImportBusy(`Reading ${i + 1} / ${parsed.rows.length}`)
+        await yieldToImportUi()
+      }
     }
 
     // WHY: ForeFlight flight rows often omit type/class; join Aircraft Table by AircraftID.
@@ -11906,6 +12094,7 @@ async function processCSVFile(file: File, provider?: ImportProviderKey): Promise
       return
     }
 
+    setImportBusy(`Checking 0 / ${entries.length}`)
     const { statistics, validEntries, errors } = await calculateImportStatistics(entries)
     importPreviewAllEntries.value = entries
     importPreviewEntries.value = [...validEntries, ...errors.map((e) => e.entry)]
@@ -11929,6 +12118,8 @@ async function processCSVFile(file: File, provider?: ImportProviderKey): Promise
   } catch (error) {
     console.error('Error importing file:', error)
     showToast(`Error importing file: ${error instanceof Error ? error.message : 'Unknown error'}`, { type: 'error' })
+  } finally {
+    clearImportBusy()
   }
 }
 
@@ -11946,6 +12137,7 @@ async function handleJSONImport(event: Event): Promise<void> {
 }
 
 async function processJSONFile(file: File): Promise<void> {
+  setImportBusy('Reading file…')
   try {
     const text = await file.text()
     const data = JSON.parse(text)
@@ -11968,10 +12160,15 @@ async function processJSONFile(file: File): Promise<void> {
     
     // Normalize entries
     const normalizedEntries: LogEntry[] = []
-    for (const entry of entries) {
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i]
       const normalized = await normalizeImportedEntry(entry)
       if (normalized) {
         normalizedEntries.push(normalized)
+      }
+      if ((i + 1) % IMPORT_UI_YIELD_EVERY === 0) {
+        setImportBusy(`Reading ${i + 1} / ${entries.length}`)
+        await yieldToImportUi()
       }
     }
     
@@ -11981,6 +12178,7 @@ async function processJSONFile(file: File): Promise<void> {
     }
     
     // Calculate statistics and show preview
+    setImportBusy(`Checking 0 / ${normalizedEntries.length}`)
     const { statistics, validEntries, errors } = await calculateImportStatistics(normalizedEntries)
     importPreviewAllEntries.value = normalizedEntries
     importPreviewEntries.value = [...validEntries, ...errors.map(e => e.entry)]
@@ -11996,6 +12194,8 @@ async function processJSONFile(file: File): Promise<void> {
   } catch (error) {
     console.error('Error importing JSON:', error)
     showToast(`Error importing JSON file: ${error instanceof Error ? error.message : 'Unknown error'}`, { type: 'error' })
+  } finally {
+    clearImportBusy()
   }
 }
 
@@ -12842,23 +13042,6 @@ function normalizeAndAutofillCategories(): void {
   logEntries.value = updated
 }
 
-
-function sanitizeFlightConditions(conditions: string[]): string[] {
-  return (conditions || [])
-    .filter(Boolean)
-    .filter((condition) => condition !== 'dayVfr')
-    .map((condition) => {
-      // Normalize 'Cross-Country' label to 'crossCountry' value
-      if (condition === 'Cross-Country') {
-        return 'crossCountry'
-      }
-      return condition
-    })
-    .filter((condition, index, array) => {
-      // Remove duplicates (in case both 'Cross-Country' and 'crossCountry' existed)
-      return array.indexOf(condition) === index
-    })
-}
 
 function fillFieldWithTotalTime(fieldKey: FlightTimeKey, totalTime: number | null, isInline: boolean): void {
   // Only fill if total time has a value and field is not 'total'
@@ -14468,7 +14651,7 @@ async function toggleEntryFlag(entry: LogEntry): Promise<void> {
 // Helper function for import validation - returns first error message if any
 // Uses the composable validation but returns a simple string for import compatibility
 async function validateEntryForImport(entry: LogEntry): Promise<string | null> {
-  const results = await validateFlightTimeEntry(entry)
+  const results = await validateFlightTimeEntry(entry, undefined, { localAirportsOnly: true })
   const firstError = results.find(r => r.type === 'error')
   return firstError ? firstError.message : null
 }
@@ -18361,50 +18544,6 @@ function formatSimTotalValue(key: TotalsMetricKey): string {
   if (key === 'dualReceived') return safeNumber(sim.dual).toFixed(1)
   if (key === 'mostUsedAircraft') return '—'
   return '0.0'
-}
-
-function conditionLabel(value: string): string {
-  if (value === 'dayVfr') {
-    return ''
-  }
-  const option = activeConditionOptions.value.find((option) => option.value === value)
-  return option ? option.label : value
-}
-
-function sortConditionsInFixedOrder(conditions: string[]): string[] {
-  // Create a map of value to index for fixed ordering
-  const conditionOrderMap = new Map<string, number>(
-    activeConditionOptions.value.map((opt, index) => [opt.value, index])
-  )
-  
-  // Sort by the original values first, then map to labels
-  const sorted = [...conditions]
-    .filter((cond): cond is string => typeof cond === 'string' && cond !== '' && cond !== 'dayVfr') // Filter out empty/invalid conditions
-    .sort((a, b) => {
-      const orderA = conditionOrderMap.get(a) ?? Infinity
-      const orderB = conditionOrderMap.get(b) ?? Infinity
-      return orderA - orderB
-    })
-  
-  return sorted
-    .map((cond) => {
-      if (cond === 'dayVfr') return ''
-      const option = activeConditionOptions.value.find((opt) => opt.value === cond)
-      return option ? option.label : cond
-    })
-    .filter((label): label is string => Boolean(label))
-}
-
-function getDisplayConditions(entry: LogEntry): string[] {
-  const merged = autoCheckFlightConditions(
-    sanitizeFlightConditions(entry.flightConditions || []),
-    normalizeNumber(entry.flightTime?.night),
-    normalizeNumber(entry.flightTime?.actualInstrument),
-    normalizeNumber(entry.flightTime?.simulatedInstrument),
-    normalizeNumber(entry.flightTime?.crossCountry),
-    normalizeNumber(entry.flightTime?.nvg)
-  )
-  return sortConditionsInFixedOrder(merged)
 }
 </script>
 

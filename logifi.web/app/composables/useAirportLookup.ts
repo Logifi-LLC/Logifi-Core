@@ -6,22 +6,34 @@ export type { AirportInfo }
 const AIRPORT_CACHE_KEY = 'logifi://airport-cache'
 const CACHE_EXPIRY_DAYS = 30
 
+/** In-memory cache so import does not JSON.parse localStorage per code. */
+const memoryCache = new Map<string, AirportInfo>()
+
+function normalizeAirportCode(code: string): string {
+  return code.trim().toUpperCase().replace(/\s+/g, '')
+}
+
 /**
- * Lookup airport information by ICAO/IATA/FAA code
+ * Lookup airport information by ICAO/IATA/FAA code.
+ * Prefers the bundled static DB; only hits the API for codes missing locally (US supplement).
  */
 export const useAirportLookup = () => {
   const getCachedAirport = (code: string): AirportInfo | null => {
+    const normalizedCode = normalizeAirportCode(code)
+    const mem = memoryCache.get(normalizedCode)
+    if (mem) return mem
+
     if (typeof window === 'undefined') return null
 
     try {
       const cache = JSON.parse(window.localStorage.getItem(AIRPORT_CACHE_KEY) || '{}')
-      const normalizedCode = code.trim().toUpperCase().replace(/\s+/g, '')
       const cached = cache[normalizedCode]
 
       if (cached && cached.lastUpdated) {
-        const cacheAge = (Date.now() - new Date(cached.lastUpdated).getTime()) / (1000 * 60 * 60 * 24)
+        const cacheAge =
+          (Date.now() - new Date(cached.lastUpdated).getTime()) / (1000 * 60 * 60 * 24)
         if (cacheAge < CACHE_EXPIRY_DAYS && cached.source) {
-          console.log('Using cached airport data:', cached.source)
+          memoryCache.set(normalizedCode, cached)
           return cached
         }
       }
@@ -33,11 +45,13 @@ export const useAirportLookup = () => {
   }
 
   const setCachedAirport = (code: string, info: AirportInfo) => {
+    const normalizedCode = normalizeAirportCode(code)
+    memoryCache.set(normalizedCode, info)
+
     if (typeof window === 'undefined') return
 
     try {
       const cache = JSON.parse(window.localStorage.getItem(AIRPORT_CACHE_KEY) || '{}')
-      const normalizedCode = code.trim().toUpperCase().replace(/\s+/g, '')
       cache[normalizedCode] = {
         ...info,
         lastUpdated: new Date().toISOString(),
@@ -53,7 +67,7 @@ export const useAirportLookup = () => {
       return null
     }
 
-    const normalizedCode = code.trim().toUpperCase().replace(/\s+/g, '')
+    const normalizedCode = normalizeAirportCode(code)
 
     if (normalizedCode.length < 3 || normalizedCode.length > 4) {
       return null
@@ -64,21 +78,20 @@ export const useAirportLookup = () => {
       return cached
     }
 
+    const local = lookupAirportLocal(normalizedCode)
+    if (local) {
+      setCachedAirport(normalizedCode, local)
+      return local
+    }
+
     if (isCapacitorNative()) {
-      const info = lookupAirportLocal(normalizedCode)
-      if (info) {
-        setCachedAirport(normalizedCode, info)
-      }
-      return info
+      return null
     }
 
     try {
-      console.log('Calling airport lookup API for:', normalizedCode)
       const response = await $fetch<{ success: boolean; data?: AirportInfo; error?: string }>(
         `/api/lookup-airport?code=${encodeURIComponent(normalizedCode)}`
       )
-
-      console.log('Airport API response:', response)
 
       if (response.success && response.data) {
         setCachedAirport(normalizedCode, response.data)
@@ -98,4 +111,9 @@ export const useAirportLookup = () => {
   return {
     lookupAirport,
   }
+}
+
+/** Test helper: clear in-memory airport cache between tests. */
+export function __resetAirportLookupMemoryCacheForTests(): void {
+  memoryCache.clear()
 }
