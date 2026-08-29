@@ -26,18 +26,27 @@ export const useValidation = () => {
   const { lookupAirport } = useAirportLookup()
   const { lookupLocationCoords } = useLocationLookup()
 
-  const resolveAirportCoordinates = async (
+  const resolveAirportCoordinatesLocal = (
     code: string
+  ): { latitude?: number; longitude?: number } | null => {
+    const normalizedCode = code.trim().toUpperCase().replace(/\s+/g, '')
+    if (!normalizedCode) return null
+    const info = lookupAirportLocal(normalizedCode)
+    if (info?.latitude !== undefined && info?.longitude !== undefined) {
+      return { latitude: info.latitude, longitude: info.longitude }
+    }
+    return null
+  }
+
+  const resolveAirportCoordinates = async (
+    code: string,
+    options?: { localOnly?: boolean }
   ): Promise<{ latitude?: number; longitude?: number } | null> => {
     const normalizedCode = code.trim().toUpperCase().replace(/\s+/g, '')
     if (!normalizedCode) return null
 
-    if (isCapacitorNative()) {
-      const info = lookupAirportLocal(normalizedCode)
-      if (info?.latitude !== undefined && info?.longitude !== undefined) {
-        return { latitude: info.latitude, longitude: info.longitude }
-      }
-      return null
+    if (options?.localOnly || isCapacitorNative()) {
+      return resolveAirportCoordinatesLocal(normalizedCode)
     }
 
     const info = await lookupAirport(normalizedCode)
@@ -47,7 +56,6 @@ export const useValidation = () => {
     return null
   }
 
-  // Separate errors and warnings
   const validationErrors = computed(() => 
     validationResults.value.filter(r => r.type === 'error')
   )
@@ -60,31 +68,25 @@ export const useValidation = () => {
   const hasWarnings = computed(() => validationWarnings.value.length > 0)
   const hasIssues = computed(() => hasErrors.value || hasWarnings.value)
 
-  /**
-   * Validate a log entry and update validation state
-   * @param entry - The log entry to validate
-   * @param allEntries - Optional array of all entries for chronological order validation
-   */
-  const validateEntry = async (entry: LogEntry, allEntries?: LogEntry[]): Promise<ValidationResult[]> => {
+  const validateEntry = async (
+    entry: LogEntry,
+    allEntries?: LogEntry[],
+    options?: { localAirportsOnly?: boolean }
+  ): Promise<ValidationResult[]> => {
     try {
       isLoading.value = true
       error.value = null
 
-      // For simulator logbook entries, skip all validation rules.
-      // The simulator logbook has its own structure and the user does not
-      // want Part 61 / date / cross‑country rules applied there.
       if (entry.logbookType === 'simulator') {
         validationResults.value = []
         return []
       }
 
-      // Run date validation (with allEntries for chronological checks)
+      const localAirportsOnly = options?.localAirportsOnly === true
+
       const dateResults = validateDate(entry, allEntries)
-      
-      // Run flight time validation
       const flightTimeResults = validateFlightTime(entry)
       
-      // Run cross-country validation with distance calculation if airports are available
       let crossCountryResults: ValidationResult[] = []
       const departure = (entry.departure || '').trim()
       const destination = (entry.destination || '').trim()
@@ -95,9 +97,13 @@ export const useValidation = () => {
           const uniqueRouteCodes = [...new Set(routeCodes)]
 
           const [depInfo, destInfo, ...routeInfos] = await Promise.all([
-            resolveAirportCoordinates(departure),
-            resolveAirportCoordinates(destination),
-            ...uniqueRouteCodes.map((code) => lookupLocationCoords(code))
+            resolveAirportCoordinates(departure, { localOnly: localAirportsOnly }),
+            resolveAirportCoordinates(destination, { localOnly: localAirportsOnly }),
+            ...uniqueRouteCodes.map((code) =>
+              localAirportsOnly
+                ? Promise.resolve(resolveAirportCoordinatesLocal(code))
+                : lookupLocationCoords(code)
+            )
           ])
 
           const airportCoords: CrossCountryAirportCoords = {}
@@ -140,39 +146,27 @@ export const useValidation = () => {
           }
         } catch (err) {
           console.warn('Failed to lookup airport coordinates for cross-country validation:', err)
-          // Fall back to basic validation without distance
           crossCountryResults = validateCrossCountry(entry)
         }
       } else {
-        // Basic validation without distance
         crossCountryResults = validateCrossCountry(entry)
       }
       
-      // Run Part 61 required field validation
       const part61RequiredResults = validatePart61RequiredFields(entry)
-      
-      // Run format validation
       const formatResults: ValidationResult[] = []
       
-      // Date format validation
       if (entry.date) {
         formatResults.push(...validateDateFormat(entry.date))
       }
-      
-      // Airport code format validation
       if (entry.departure) {
         formatResults.push(...validateAirportCode(entry.departure, 'departure'))
       }
       if (entry.destination) {
         formatResults.push(...validateAirportCode(entry.destination, 'destination'))
       }
-      
-      // Aircraft registration format validation
       if (entry.registration) {
         formatResults.push(...validateAircraftRegistration(entry.registration))
       }
-      
-      // Numeric precision validation for flight times
       if (entry.flightTime) {
         const timeFields = ['total', 'pic', 'sic', 'dual', 'solo', 'night', 'nvg', 'actualInstrument', 'simulatedInstrument', 'crossCountry', 'dualGiven'] as const
         timeFields.forEach(field => {
@@ -183,8 +177,6 @@ export const useValidation = () => {
         })
       }
       
-      // Combine all validation results
-      // Part 61 required fields come first (most critical), then format validation, then logical consistency checks
       const results = [
         ...part61RequiredResults,
         ...formatResults,
@@ -194,7 +186,6 @@ export const useValidation = () => {
       ]
       
       validationResults.value = results
-
       return results
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to validate entry'
@@ -207,31 +198,19 @@ export const useValidation = () => {
     }
   }
 
-  /**
-   * Clear validation state
-   */
   const clearValidation = () => {
     validationResults.value = []
     error.value = null
   }
 
-  /**
-   * Get validation results for a specific field
-   */
   const getFieldResults = (field: string): ValidationResult[] => {
     return validationResults.value.filter(r => r.field === field)
   }
 
-  /**
-   * Check if a specific field has errors
-   */
   const hasFieldErrors = (field: string): boolean => {
     return validationErrors.value.some(r => r.field === field)
   }
 
-  /**
-   * Check if a specific field has warnings
-   */
   const hasFieldWarnings = (field: string): boolean => {
     return validationWarnings.value.some(r => r.field === field)
   }
@@ -252,4 +231,3 @@ export const useValidation = () => {
     hasFieldWarnings
   }
 }
-

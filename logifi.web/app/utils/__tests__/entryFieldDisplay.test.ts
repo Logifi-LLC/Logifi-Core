@@ -65,9 +65,9 @@ describe('formatEntryAirportCode', () => {
     expect(formatEntryAirportCode(flica, 'LGA')).toBe('KLGA')
   })
 
-  it('leaves manual IATA codes unchanged', () => {
+  it('maps manual IATA codes to catalog ICAO', () => {
     expect(formatEntryAirportCode(entry({ importSource: undefined, isImported: false }), 'LGA')).toBe(
-      'LGA'
+      'KLGA'
     )
   })
 })
@@ -76,5 +76,13 @@ describe('getEntryFieldDisplay fromTo', () => {
   it('shows catalog ICAO for FLICA entries stored as IATA', () => {
     const display = getEntryFieldDisplay(entry(), 'fromTo')
     expect(display.text).toBe('KRIC → KLGA')
+  })
+
+  it('shows catalog ICAO for manual entries stored as IATA', () => {
+    const display = getEntryFieldDisplay(
+      entry({ importSource: undefined, isImported: false, departure: 'ISP', destination: 'LGB' }),
+      'fromTo'
+    )
+    expect(display.text).toBe('KISP → KLGB')
   })
 })

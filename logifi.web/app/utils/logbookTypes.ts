@@ -92,6 +92,10 @@ export interface LogEntry {
   trainingElements: string
   trainingInstructor: string
   instructorCertificate: string
+  /** PIC / Captain name. Not PIC time. */
+  picName?: string | null
+  /** SIC / First Officer name. Not SIC time. */
+  sicName?: string | null
   flightConditions: string[]
   remarks: string
   /** Optional tags (e.g. Checkride, Flight Review, IPC, Part 135) */

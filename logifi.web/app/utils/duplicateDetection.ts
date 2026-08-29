@@ -119,6 +119,8 @@ export async function checkDuplicatesInDatabase(
           trainingElements: dbEntry.training_elements || '',
           trainingInstructor: dbEntry.training_instructor || '',
           instructorCertificate: dbEntry.instructor_certificate || '',
+          picName: dbEntry.pic_name || null,
+          sicName: dbEntry.sic_name || null,
           flightConditions: dbEntry.flight_conditions || [],
           remarks: dbEntry.remarks || '',
           tags: Array.isArray(dbEntry.tags) ? dbEntry.tags : [],

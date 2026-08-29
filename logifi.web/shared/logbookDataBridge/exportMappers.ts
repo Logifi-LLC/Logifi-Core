@@ -153,6 +153,8 @@ export const GENERIC_HEADERS = [
 export const LOGIFI_NATIVE_HEADERS = [
   'Date',
   'Role',
+  'PIC Name',
+  'SIC Name',
   'Aircraft Category/Class',
   'Aircraft Make/Model',
   'Registration',
@@ -378,6 +380,8 @@ export function mapEntryToLogifiNativeRow(entry: LogEntry): string[] {
   return [
     formatLogifiNativeDate(entry.date),
     entry.role || '',
+    entry.picName?.trim() || '',
+    entry.sicName?.trim() || '',
     entry.aircraftCategoryClass || '',
     entry.aircraftMakeModel || '',
     entry.registration || '',

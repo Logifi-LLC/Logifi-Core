@@ -227,6 +227,119 @@ function parseRouteFields(rawEntry: Record<string, unknown>): {
   }
 }
 
+const PIC_NAME_FIELDS = [
+  'PIC Name',
+  'pic_name',
+  'picName',
+  'Captain',
+  'Captain Name',
+  'Name of PIC',
+  'flight_selectedCrewPIC',
+  'PIC/P1 Crew',
+]
+
+const SIC_NAME_FIELDS = [
+  'SIC Name',
+  'sic_name',
+  'sicName',
+  'First Officer',
+  'First Officer Name',
+  'FO',
+  'Name of SIC',
+  'flight_selectedCrewSIC',
+  'SIC/P2 Crew',
+]
+
+function looksLikeHoursToken(value: string): boolean {
+  return /^\d+(\.\d+)?$/.test(value.trim())
+}
+
+function normalizeCrewName(value: string): string | null {
+  const trimmed = value.replace(/\s+/g, ' ').trim()
+  if (!trimmed || looksLikeHoursToken(trimmed)) return null
+  if (/^(PIC|SIC|IRP|ACM)$/i.test(trimmed)) return null
+  return trimmed
+}
+
+/**
+ * 777-style remarks: `PIC <name> SIC <name>` with optional (TOLA) and IRP/ACM after.
+ * IRP/ACM names are not PIC/SIC. Does not invent hours.
+ */
+export function parsePicSicPairFromRemarks(
+  remarks: string
+): { picName: string; sicName: string } | null {
+  const match = remarks.match(/\bPIC\s+(.+?)\s+SIC\s+(.+)/i)
+  if (!match?.[1] || !match[2]) return null
+
+  const picName = normalizeCrewName(match[1])
+  const sicRaw = match[2].split(/\s+(?:IRP|ACM)\b/i)[0] ?? match[2]
+  const sicName = normalizeCrewName(sicRaw.replace(/\s*\([^)]*\)/g, ' '))
+  if (!picName || !sicName) return null
+  return { picName, sicName }
+}
+
+/**
+ * E-175 style: remarks is only `First Last` plus an optional employee number.
+ * That name is the other crew: Role PIC → sicName, Role SIC → picName.
+ */
+export function parseOtherCrewFromRemarks(
+  remarks: string,
+  role: string
+): { picName?: string; sicName?: string } | null {
+  const trimmed = remarks.trim()
+  if (!trimmed) return null
+  if (/\b(PIC|SIC|IRP|ACM)\b/i.test(trimmed)) return null
+
+  const match = trimmed.match(
+    /^([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*)+)(?:\s+\d{3,})?$/
+  )
+  const name = match?.[1] ? normalizeCrewName(match[1]) : null
+  if (!name) return null
+
+  const roleNorm = role.trim().toUpperCase()
+  if (roleNorm === 'PIC') return { sicName: name }
+  if (roleNorm === 'SIC') return { picName: name }
+  return null
+}
+
+function otherCrewJobAndName(
+  role: string,
+  picName: string | null,
+  sicName: string | null
+): { name: string; job: 'Captain' | 'First Officer' } | null {
+  const roleNorm = role.trim().toUpperCase()
+  if (roleNorm === 'PIC' && sicName) return { name: sicName, job: 'First Officer' }
+  if (roleNorm === 'SIC' && picName) return { name: picName, job: 'Captain' }
+  return null
+}
+
+export function resolveCrewNamesFromRawRow(
+  rawEntry: Record<string, unknown>,
+  role: string,
+  remarks: string
+): { picName: string | null; sicName: string | null } {
+  let picName = normalizeCrewName(findFieldValue(rawEntry, PIC_NAME_FIELDS))
+  let sicName = normalizeCrewName(findFieldValue(rawEntry, SIC_NAME_FIELDS))
+
+  if (!picName || !sicName) {
+    const pair = parsePicSicPairFromRemarks(remarks)
+    if (pair) {
+      if (!picName) picName = pair.picName
+      if (!sicName) sicName = pair.sicName
+    }
+  }
+
+  if (!picName || !sicName) {
+    const other = parseOtherCrewFromRemarks(remarks, role)
+    if (other) {
+      if (!picName && other.picName) picName = other.picName
+      if (!sicName && other.sicName) sicName = other.sicName
+    }
+  }
+
+  return { picName, sicName }
+}
+
 function defaultGenerateId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID()
@@ -424,6 +537,8 @@ export function mapRawRowToLogEntry(
         'PilotComments',
         'Pilot Comments',
       ]) || '',
+    picName: null,
+    sicName: null,
     tags: (() => {
       const t = findFieldValue(rawEntry, ['Tags', 'tags'])
       if (t) return t.split(/[,;]/).map((s) => s.trim()).filter(Boolean)
@@ -549,6 +664,16 @@ export function mapRawRowToLogEntry(
     },
     isImported: true,
     importSource: options?.source ?? 'csv',
+  }
+
+  const crewNames = resolveCrewNamesFromRawRow(rawEntry, entry.role, entry.remarks)
+  entry.picName = crewNames.picName
+  entry.sicName = crewNames.sicName
+
+  const otherCrew = otherCrewJobAndName(entry.role, crewNames.picName, crewNames.sicName)
+  if (otherCrew) {
+    if (!entry.trainingElements.trim()) entry.trainingElements = otherCrew.name
+    if (!entry.trainingInstructor.trim()) entry.trainingInstructor = otherCrew.job
   }
 
   return entry

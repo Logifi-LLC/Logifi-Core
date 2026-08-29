@@ -4,107 +4,20 @@ import {
   type LogbookColumnKey,
   type LogEntry,
 } from './logbookTypes'
+import { getDisplayConditions } from './flightConditions'
 
 function isAirlineScheduleImport(source: string | undefined): boolean {
   return source === 'fc_view' || source === 'flica_aerodatabox'
 }
 
-/** Display airport codes in catalog ICAO form for airline-imported entries (LGA → KLGA). */
+/** Display airport codes in catalog ICAO form when known (LGA → KLGA). Stored values are unchanged. */
 export function formatEntryAirportCode(
-  entry: Pick<LogEntry, 'importSource'>,
+  _entry: Pick<LogEntry, 'importSource'>,
   code: string | null | undefined
 ): string {
   const raw = (code ?? '').trim()
   if (!raw) return raw
-  if (isAirlineScheduleImport(entry.importSource)) return toCatalogAirportCode(raw)
-  return raw
-}
-
-const CONDITION_OPTIONS = [
-  { value: 'nightVfr', label: 'Night' },
-  { value: 'ifr', label: 'IFR' },
-  { value: 'simInstrument', label: 'Simulated Instrument' },
-  { value: 'actualInstrument', label: 'Actual Instrument' },
-  { value: 'crossCountry', label: 'Cross-Country' },
-] as const
-
-function normalizeNumber(value: number | null | string | undefined): number | null {
-  if (value === null || value === undefined || value === '') return null
-  const num = typeof value === 'number' ? value : Number(value)
-  return Number.isFinite(num) ? num : null
-}
-
-function sanitizeFlightConditions(conditions: string[]): string[] {
-  return (conditions || [])
-    .filter(Boolean)
-    .filter((condition) => condition !== 'dayVfr')
-    .map((condition) => (condition === 'Cross-Country' ? 'crossCountry' : condition))
-    .filter((condition, index, array) => array.indexOf(condition) === index)
-}
-
-function autoCheckFlightConditions(
-  conditions: string[],
-  nightTime: number | null,
-  actualInstrumentTime: number | null,
-  simulatedInstrumentTime: number | null,
-  xcTime: number | null,
-): string[] {
-  const conditionSet = new Set(conditions)
-
-  if (nightTime && nightTime > 0) {
-    conditionSet.add('nightVfr')
-  }
-
-  if (actualInstrumentTime && actualInstrumentTime > 0) {
-    conditionSet.add('ifr')
-    conditionSet.add('actualInstrument')
-  } else {
-    conditionSet.delete('actualInstrument')
-  }
-
-  if (simulatedInstrumentTime && simulatedInstrumentTime > 0) {
-    conditionSet.add('simInstrument')
-  } else {
-    conditionSet.delete('simInstrument')
-  }
-
-  if (xcTime && xcTime > 0) {
-    conditionSet.add('crossCountry')
-  } else {
-    conditionSet.delete('crossCountry')
-  }
-
-  return Array.from(conditionSet)
-}
-
-function sortConditionsInFixedOrder(conditions: string[]): string[] {
-  const conditionOrderMap = new Map<string, number>(
-    CONDITION_OPTIONS.map((opt, index) => [opt.value, index]),
-  )
-
-  return [...conditions]
-    .filter((cond): cond is string => typeof cond === 'string' && cond !== '' && cond !== 'dayVfr')
-    .sort((a, b) => {
-      const orderA = conditionOrderMap.get(a) ?? Infinity
-      const orderB = conditionOrderMap.get(b) ?? Infinity
-      return orderA - orderB
-    })
-    .map((cond) => {
-      const option = CONDITION_OPTIONS.find((opt) => opt.value === cond)
-      return option ? option.label : cond
-    })
-    .filter((label): label is string => Boolean(label))
-}
-
-export function getDisplayConditions(entry: LogEntry): string[] {
-  const merged = autoCheckFlightConditions(
-    sanitizeFlightConditions(entry.flightConditions || []),
-    normalizeNumber(entry.flightTime?.night),
-    normalizeNumber(entry.flightTime?.actualInstrument),
-    normalizeNumber(entry.flightTime?.simulatedInstrument),
-    normalizeNumber(entry.flightTime?.crossCountry),
-  )
-  return sortConditionsInFixedOrder(merged)
+  return toCatalogAirportCode(raw)
 }
 
 export function roleDisplayLabel(role: string): string {

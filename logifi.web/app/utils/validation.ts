@@ -1,6 +1,7 @@
 import type { LogEntry, FlightTimeBreakdown } from './logbookTypes'
 import { sortEntriesByDateAndOOOI } from '../../shared/oooiSort'
 import { FOREFLIGHT_MISSING_TAIL } from '../../shared/logbookDataBridge/importMappers'
+import { toCatalogAirportCode } from '../../shared/airportCodeCanonical'
 
 export interface ValidationResult {
   type: 'error' | 'warning'
@@ -82,7 +83,7 @@ export function parseRouteAirportCodes(route: string): string[] {
     .map((part) => part.toUpperCase())
 }
 
-/** Departure and destination only — always counted as airports visited. */
+/** Departure and destination only — always counted as airports visited (catalog ICAO when known). */
 export function getCatalogAirportCodes(entry: {
   departure?: string
   destination?: string
@@ -90,8 +91,8 @@ export function getCatalogAirportCodes(entry: {
   const codes = new Set<string>()
   const departure = (entry.departure || '').trim().toUpperCase()
   const destination = (entry.destination || '').trim().toUpperCase()
-  if (departure && departure !== 'UNKNOWN') codes.add(departure)
-  if (destination && destination !== 'UNKNOWN') codes.add(destination)
+  if (departure && departure !== 'UNKNOWN') codes.add(toCatalogAirportCode(departure))
+  if (destination && destination !== 'UNKNOWN') codes.add(toCatalogAirportCode(destination))
   return Array.from(codes)
 }
 
@@ -107,7 +108,7 @@ export function getEntryAirportCodes(
   const codes = new Set<string>(getCatalogAirportCodes(entry))
   if (classifiedRouteAirportSet) {
     parseRouteAirportCodes(entry.route || '').forEach((code) => {
-      if (classifiedRouteAirportSet.has(code)) codes.add(code)
+      if (classifiedRouteAirportSet.has(code)) codes.add(toCatalogAirportCode(code))
     })
   }
   return Array.from(codes)
@@ -119,7 +120,7 @@ export function entryUsesAirport(
   airportCode: string,
   classifiedRouteAirportSet?: ReadonlySet<string>
 ): boolean {
-  const normalized = airportCode.trim().toUpperCase()
+  const normalized = toCatalogAirportCode(airportCode.trim().toUpperCase())
   if (!normalized) return false
   return getEntryAirportCodes(entry, classifiedRouteAirportSet).includes(normalized)
 }

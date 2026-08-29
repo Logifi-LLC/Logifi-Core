@@ -8,16 +8,19 @@ import {
 } from '../logbookDataBridge/formatters'
 import {
   FOREFLIGHT_FLIGHT_HEADERS,
+  LOGIFI_NATIVE_HEADERS,
   LOGTEN_HEADERS,
   MYFLIGHTBOOK_HEADERS,
   mapEntryToForeFlightFlightRow,
   mapEntryToLogTenRow,
+  mapEntryToLogifiNativeRow,
   mapEntryToMyFlightbookRow,
 } from '../logbookDataBridge/exportMappers'
 import { mapRawRowToLogEntry } from '../logbookDataBridge/importMappers'
 import {
   buildHeaderRowObject,
   exportToForeFlight,
+  exportToLogifiNative,
   exportToMyFlightbook,
 } from '../logbookDataBridge/exportService'
 import { ingestBridgeFile } from '../logbookDataBridge/importService'
@@ -476,6 +479,8 @@ describe('logbookDataBridge importMappers', () => {
     expect(entry?.registration).toBe('N430YX')
     expect(entry?.flightNumber).toBe('4487')
     expect(entry?.role).toBe('PIC')
+    expect(entry?.picName).toBe('Derek Farmer')
+    expect(entry?.sicName).toBe('WILLIAM RIDDLE')
     expect(entry?.flightTime.pic).toBe(1.1)
     expect(entry?.flightTime.total).toBeNull()
     expect(entry?.aircraftCategoryClass).toBe('AMEL')
@@ -755,5 +760,158 @@ describe('catalogAircraftFamilyKey', () => {
     expect(catalogAircraftFamilyKey('', 'N855RW')).toBe(UNKNOWN_AIRCRAFT_FAMILY)
     expect(catalogAircraftFamilyKey('Unknown', 'N855RW')).toBe(UNKNOWN_AIRCRAFT_FAMILY)
     expect(catalogAircraftFamilyKey('ERJ-170', 'N432YX')).toBe('ERJ-170')
+  })
+})
+
+describe('PIC Name / SIC Name import and native export', () => {
+  const crewBaseRow = {
+    Date: '2024-06-13',
+    Registration: 'N12345',
+    From: 'KORD',
+    To: 'KMDW',
+    'Aircraft Make/Model': 'B777',
+    'Category/Class': 'AMEL',
+    'Total Time': '1.5',
+  }
+
+  it('maps PIC Name / SIC Name columns onto picName/sicName', () => {
+    const entry = mapRawRowToLogEntry({
+      ...crewBaseRow,
+      PIC: '1.5',
+      'PIC Name': 'D. Cameron',
+      'SIC Name': 'D. Bird',
+    })
+    expect(entry?.picName).toBe('D. Cameron')
+    expect(entry?.sicName).toBe('D. Bird')
+    expect(entry?.flightTime.pic).toBe(1.5)
+    expect(entry?.flightTime.sic).toBeNull()
+  })
+
+  it('maps Captain / First Officer columns', () => {
+    const entry = mapRawRowToLogEntry({
+      ...crewBaseRow,
+      Captain: 'Jane CA',
+      'First Officer': 'John FO',
+    })
+    expect(entry?.picName).toBe('Jane CA')
+    expect(entry?.sicName).toBe('John FO')
+  })
+
+  it('parses 777-style PIC/SIC remarks and ignores IRP/ACM names', () => {
+    const entry = mapRawRowToLogEntry({
+      ...crewBaseRow,
+      Remarks: 'PIC D. Cameron SIC D. Bird (TOLA) IRP 1 X.DeCoteau',
+    })
+    expect(entry?.picName).toBe('D. Cameron')
+    expect(entry?.sicName).toBe('D. Bird')
+    expect(entry?.picName).not.toContain('DeCoteau')
+    expect(entry?.sicName).not.toContain('DeCoteau')
+    expect(entry?.flightTime.pic).toBeNull()
+    expect(entry?.flightTime.sic).toBeNull()
+    expect(entry?.role).toBe('')
+  })
+
+  it('does not overwrite explicit columns with remarks', () => {
+    const entry = mapRawRowToLogEntry({
+      ...crewBaseRow,
+      'PIC Name': 'Explicit PIC',
+      'SIC Name': 'Explicit SIC',
+      Remarks: 'PIC A. Other SIC B. Other IRP 1 X.DeCoteau',
+    })
+    expect(entry?.picName).toBe('Explicit PIC')
+    expect(entry?.sicName).toBe('Explicit SIC')
+  })
+
+  it('treats E-175 remarks name + employee number as the other crew', () => {
+    const entry = mapRawRowToLogEntry({
+      ...crewBaseRow,
+      Role: 'PIC',
+      PIC: '1.5',
+      Remarks: 'Ary Madison 53346',
+    })
+    expect(entry?.role).toBe('PIC')
+    expect(entry?.picName).toBeNull()
+    expect(entry?.sicName).toBe('Ary Madison')
+    expect(entry?.trainingElements).toBe('Ary Madison')
+    expect(entry?.trainingInstructor).toBe('First Officer')
+    expect(entry?.flightTime.pic).toBe(1.5)
+    expect(entry?.flightTime.sic).toBeNull()
+    expect(entry?.flightTime.total).toBe(1.5)
+  })
+
+  it('fills Job and Pilot name from E-175 remarks (Derek Farmer 624619)', () => {
+    const row = {
+      ...crewBaseRow,
+      Role: 'PIC',
+      PIC: '1.5',
+      Remarks: 'Derek Farmer 624619',
+    }
+    const entry = mapRawRowToLogEntry(row)
+    expect(entry?.sicName).toBe('Derek Farmer')
+    expect(entry?.trainingElements).toBe('Derek Farmer')
+    expect(entry?.trainingInstructor).toBe('First Officer')
+
+    applyLogtenCrewFields(entry!, row, 'Someone Else')
+    expect(entry?.trainingElements).toBe('Derek Farmer')
+    expect(entry?.trainingInstructor).toBe('First Officer')
+    expect(entry?.flightTime.pic).toBe(1.5)
+  })
+
+  it('treats E-175 remarks as PIC name when Role is SIC', () => {
+    const entry = mapRawRowToLogEntry({
+      ...crewBaseRow,
+      Role: 'SIC',
+      SIC: '1.5',
+      Remarks: 'Jane Doe 12345',
+    })
+    expect(entry?.role).toBe('SIC')
+    expect(entry?.picName).toBe('Jane Doe')
+    expect(entry?.sicName).toBeNull()
+    expect(entry?.trainingElements).toBe('Jane Doe')
+    expect(entry?.trainingInstructor).toBe('Captain')
+    expect(entry?.flightTime.sic).toBe(1.5)
+    expect(entry?.flightTime.pic).toBeNull()
+  })
+
+  it('does not invent PIC/SIC hours from names; Part 61 still fails without hours', () => {
+    const named = mapRawRowToLogEntry({
+      ...crewBaseRow,
+      Remarks: 'PIC D. Cameron SIC D. Bird (TOLA) IRP 1 X.DeCoteau',
+    })
+    const unnamed = mapRawRowToLogEntry({
+      ...crewBaseRow,
+      Remarks: 'Observer / IRP',
+    })
+    expect(named?.flightTime.pic).toBe(unnamed?.flightTime.pic)
+    expect(named?.flightTime.sic).toBe(unnamed?.flightTime.sic)
+    expect(named?.role).toBe(unnamed?.role)
+
+    const namedErrors = validatePart61RequiredFields(named!).filter((r) => r.type === 'error')
+    const unnamedErrors = validatePart61RequiredFields(unnamed!).filter((r) => r.type === 'error')
+    expect(namedErrors.map((e) => e.field).sort()).toEqual(unnamedErrors.map((e) => e.field).sort())
+    expect(namedErrors.some((e) => e.field === 'pic')).toBe(true)
+  })
+
+  it('writes PIC Name / SIC Name on native export and round-trips', () => {
+    const original = createTestEntry({
+      picName: 'D. Cameron',
+      sicName: 'D. Bird',
+    })
+    const row = mapEntryToLogifiNativeRow(original)
+    expect(row).toHaveLength(LOGIFI_NATIVE_HEADERS.length)
+    const obj = buildHeaderRowObject(LOGIFI_NATIVE_HEADERS, row)
+    expect(obj['PIC Name']).toBe('D. Cameron')
+    expect(obj['SIC Name']).toBe('D. Bird')
+
+    const exported = exportToLogifiNative([original], { baseDate: '2024-06-13' })
+    expect(exported.content).toContain('PIC Name')
+    expect(exported.content).toContain('SIC Name')
+    expect(exported.content).toContain('D. Cameron')
+    expect(exported.content).toContain('D. Bird')
+
+    const reimported = mapRawRowToLogEntry(obj)
+    expect(reimported?.picName).toBe('D. Cameron')
+    expect(reimported?.sicName).toBe('D. Bird')
+    expect(reimported?.flightTime.pic).toBe(1.5)
   })
 })

@@ -46,6 +46,8 @@ export function buildDuplicatedDraft(source: LogEntry): EditableLogEntry {
     trainingElements: source.trainingElements,
     trainingInstructor: source.trainingInstructor,
     instructorCertificate: source.instructorCertificate,
+    picName: source.picName ?? null,
+    sicName: source.sicName ?? null,
     flightConditions: [],
     remarks: '',
     tags: [],
