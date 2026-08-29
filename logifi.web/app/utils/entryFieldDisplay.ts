@@ -72,17 +72,6 @@ export interface EntryFieldDisplay {
   conditions?: string[]
 }
 
-export function formatCrewNamesLine(
-  entry: Pick<LogEntry, 'picName' | 'sicName'>
-): string {
-  const pic = entry.picName?.trim()
-  const sic = entry.sicName?.trim()
-  const parts: string[] = []
-  if (pic) parts.push(`PIC ${pic}`)
-  if (sic) parts.push(`SIC ${sic}`)
-  return parts.join(' · ')
-}
-
 export function getEntryFieldDisplay(entry: LogEntry, key: LogbookColumnKey): EntryFieldDisplay {
   switch (key) {
     case 'date':
@@ -134,12 +123,8 @@ export function getEntryFieldDisplay(entry: LogEntry, key: LogbookColumnKey): En
       return { text: entry.performance.nightLandings != null ? String(entry.performance.nightLandings) : '—', isEmpty: entry.performance.nightLandings == null }
     case 'approach':
       return { text: String(getTotalApproachCount(entry.performance) || '—'), isEmpty: !getTotalApproachCount(entry.performance) }
-    case 'pilots': {
-      const crew = formatCrewNamesLine(entry)
-      const other = entry.trainingElements?.trim() || ''
-      const text = [crew, other].filter(Boolean).join(' · ')
-      return { text: text || '—', isEmpty: !text }
-    }
+    case 'pilots':
+      return { text: entry.trainingElements || '—', isEmpty: !entry.trainingElements?.trim() }
     case 'total':
       return { text: formatLogbookNumber(entry.flightTime.total), isEmpty: formatLogbookNumber(entry.flightTime.total) === '—' }
     default:

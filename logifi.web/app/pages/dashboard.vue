@@ -1613,7 +1613,7 @@
                           {{ getTotalApproachCount(entry.performance) || '—' }}
                         </template>
                         <template v-else-if="col.key === 'pilots'">
-                          <div class="truncate">{{ getEntryFieldDisplay(entry, 'pilots').text }}</div>
+                          <div class="truncate">{{ entry.trainingElements || '—' }}</div>
                         </template>
                         <template v-else-if="col.key === 'total'">
                           <span :class="getTotalTimeColorClass(entry, isDarkMode)">
@@ -6848,7 +6848,6 @@ import { getDisplayedPilotInitials, shouldShowCurrencyChips } from '../utils/das
 import { markAppReady } from '../utils/appReady'
 import {
   formatEntryAirportCode,
-  getEntryFieldDisplay,
   getTotalTimeColorClass,
 } from '../utils/entryFieldDisplay'
 import { toCatalogAirportCode } from '../../shared/airportCodeCanonical'
