@@ -27,7 +27,7 @@ import {
 } from '../../../shared/catalogPersonNames'
 import { applyCatalogFamilyToFcvPreview } from '../../../shared/aircraftTailIndex'
 import { OOOI_FIELD_ORDER } from '~/utils/logbookTypes'
-import { localCalendarYmd } from '../../../shared/localCalendarDate'
+import { localCalendarYmd, normalizeCalendarYmd } from '../../../shared/localCalendarDate'
 
 /** Must match dashboard theme; avoid `dark:` here so OS dark mode does not fight white settings cards. */
 const props = withDefaults(
@@ -704,8 +704,8 @@ async function fetchFlights() {
           'Content-Type': 'application/json',
         },
         body: {
-          dateFrom: dateFrom.value || localCalendarYmd(),
-          dateTo: dateTo.value || localCalendarYmd(),
+          dateFrom: normalizeCalendarYmd(dateFrom.value) || localCalendarYmd(),
+          dateTo: normalizeCalendarYmd(dateTo.value) || localCalendarYmd(),
           includeDeadheads: includeDeadheads.value,
           includeScheduled: includeScheduled.value,
           airlineCode: 'RJET',
@@ -772,7 +772,8 @@ async function fetchSinceLastEntry() {
       headers: authHeaders(),
     })
     const today = localCalendarYmd()
-    const from = typeof latest?.date === 'string' && latest.date.trim() ? latest.date : today
+    const from =
+      normalizeCalendarYmd(typeof latest?.date === 'string' ? latest.date : '') || today
     dateFrom.value = from
     dateTo.value = today
     await fetchFlights()

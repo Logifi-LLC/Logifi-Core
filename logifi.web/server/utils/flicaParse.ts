@@ -1,7 +1,7 @@
 import { DateTime } from 'luxon'
 import { getAirportIanaTimezone } from '../../shared/airportTimezone'
-import type { AirlineLeg, AirlineLegCrewMember } from './airlineLeg'
-import { hhmmToLocalDatetime } from './airlineLeg'
+import { normalizeCalendarYmd } from '../../shared/localCalendarDate'
+import { hhmmToLocalDatetime, type AirlineLeg, type AirlineLegCrewMember } from './airlineLeg'
 
 /** Republic pairings are Eastern-based; used when airport TZ is unknown and for naive `nowIso`. */
 export const FLICA_DEFAULT_NOW_ZONE = 'America/New_York'
@@ -946,18 +946,20 @@ export function filterAirlineLegsWithStats(
       'yyyy-MM-dd'
     )
   const excludeAfter = opts.excludeAfterYmd ?? (!opts.includeScheduled ? today : undefined)
+  const dateFrom = normalizeCalendarYmd(opts.dateFrom) ?? undefined
+  const dateTo = normalizeCalendarYmd(opts.dateTo) ?? undefined
   const filtered: AirlineLeg[] = []
   let excludedDeadheads = 0
   let excludedOutsideRange = 0
   let excludedScheduled = 0
 
   for (const leg of legs) {
-    const date = leg.scheduled_out_local?.slice(0, 10) ?? ''
-    if (opts.dateFrom && date && date < opts.dateFrom) {
+    const date = normalizeCalendarYmd(leg.scheduled_out_local) ?? ''
+    if (dateFrom && date && date < dateFrom) {
       excludedOutsideRange++
       continue
     }
-    if (opts.dateTo && date && date > opts.dateTo) {
+    if (dateTo && date && date > dateTo) {
       excludedOutsideRange++
       continue
     }

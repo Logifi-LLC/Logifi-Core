@@ -688,6 +688,62 @@ CA 624619 FARMER, DEREK
     expect(stats.filtered.map((l) => l.flight_number)).toEqual(['4669', '4349'])
     expect(stats.excludedScheduled).toBe(0)
   })
+
+  it('keeps legs in a range that crosses months (Aug 29–Sep 2 Autofi)', () => {
+    const text = `
+August Schedule
+DEREK FARMER
+(624619)
+Last Updated Aug 12, 2026 09:51:14 EDT
+L7513 : 04AUG
+Base/Equip: LGA/EM7 CA01
+TU 04  5770 LGA-DCA 0605 0712 0107
+Crew:
+CA 624619 FARMER, DEREK
+September Schedule
+DEREK FARMER
+(624619)
+Last Updated Sep 2, 2026 09:00:00 EDT
+L8A01 : 01SEP
+Base/Equip: LGA/EM7 CA01
+TU 01  5001 LGA-ORD 0800 1000 0200
+WE 02  5002 ORD-LGA 1100 1400 0300
+Crew:
+CA 624619 FARMER, DEREK
+`
+    const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
+    const stats = filterAirlineLegsWithStats(legs, {
+      dateFrom: '2026-08-29',
+      dateTo: '2026-09-02',
+      includeDeadheads: true,
+      includeScheduled: true,
+    })
+    expect(stats.filtered.map((l) => l.flight_number)).toEqual(['5001', '5002'])
+    expect(stats.excludedOutsideRange).toBe(1)
+  })
+
+  it('does not treat ISO datetime bounds as excluding every YYYY-MM-DD leg', () => {
+    const text = `
+August Schedule
+DEREK FARMER
+(624619)
+Last Updated Aug 29, 2026 09:00:00 EDT
+L7Z29 : 29AUG
+Base/Equip: LGA/EM7 CA01
+SA 29  4901 LGA-DCA 0600 0720 0120
+Crew:
+CA 624619 FARMER, DEREK
+`
+    const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
+    const stats = filterAirlineLegsWithStats(legs, {
+      dateFrom: '2026-08-29T00:00:00.000Z',
+      dateTo: '2026-09-02T00:00:00.000Z',
+      includeDeadheads: true,
+      includeScheduled: true,
+    })
+    expect(stats.filtered.map((l) => l.flight_number)).toEqual(['4901'])
+    expect(stats.excludedOutsideRange).toBe(0)
+  })
 })
 
 describe('pickFlicaGateHhmm', () => {
