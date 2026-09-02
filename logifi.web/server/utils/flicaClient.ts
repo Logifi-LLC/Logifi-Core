@@ -6,6 +6,7 @@
  * Schedule surface (observed): /online/mainmenu.cgi → Schedules → month detail.
  */
 
+import { normalizeCalendarYmd } from '../../shared/localCalendarDate'
 import type { AirlineLeg } from './airlineLeg'
 import {
   parseFlicaLastUpdatedMs,
@@ -315,8 +316,10 @@ const MONTH_NAMES = [
 ]
 
 function monthsInRange(dateFrom: string, dateTo: string): Array<{ year: number; month: number }> {
-  const from = dateFrom.slice(0, 7)
-  const to = dateTo.slice(0, 7)
+  const fromYmd = normalizeCalendarYmd(dateFrom) ?? dateFrom
+  const toYmd = normalizeCalendarYmd(dateTo) ?? dateTo
+  const from = fromYmd.slice(0, 7)
+  const to = toYmd.slice(0, 7)
   const [fy, fm] = from.split('-').map((n) => parseInt(n, 10))
   const [ty, tm] = to.split('-').map((n) => parseInt(n, 10))
   if (!fy || !fm || !ty || !tm) return []
@@ -474,12 +477,14 @@ export async function fetchFlicaPairingOverlays(
   if (!links.length) return []
 
   const monthLegs = parseFlicaSchedule(monthHtml, { defaultYear: opts.defaultYear })
+  const dateFrom = normalizeCalendarYmd(opts.dateFrom) ?? opts.dateFrom
+  const dateTo = normalizeCalendarYmd(opts.dateTo) ?? opts.dateTo
   const wantedTrips = new Set(
     monthLegs
       .filter((leg) => {
-        const date = leg.scheduled_out_local?.slice(0, 10) ?? ''
-        if (opts.dateFrom && date && date < opts.dateFrom) return false
-        if (opts.dateTo && date && date > opts.dateTo) return false
+        const date = normalizeCalendarYmd(leg.scheduled_out_local) ?? ''
+        if (dateFrom && date && date < dateFrom) return false
+        if (dateTo && date && date > dateTo) return false
         return Boolean(leg.trip_number)
       })
       .map((leg) => leg.trip_number as string)
@@ -791,8 +796,9 @@ export async function fetchScheduleHtml(
   session: FlicaSession,
   opts: { dateFrom: string; dateTo: string }
 ): Promise<string> {
-  const dateFrom = opts.dateFrom || new Date().toISOString().slice(0, 10)
-  const dateTo = opts.dateTo || dateFrom
+  const dateFrom =
+    normalizeCalendarYmd(opts.dateFrom) || opts.dateFrom || new Date().toISOString().slice(0, 10)
+  const dateTo = normalizeCalendarYmd(opts.dateTo) || opts.dateTo || dateFrom
   const targets = monthsInRange(dateFrom, dateTo)
   if (targets.length === 0) {
     throw new FlicaClientError('schedule_not_found', 'Invalid date range for FLICA schedule fetch.')
@@ -862,8 +868,13 @@ export async function fetchScheduleHtml(
    * 1) GET /full/scheduledetail.cgi?BlockDate=MMYY&token=T0  (Referer: leftmenu) ~2KB
    * 2) GET /full/scheduledetail.cgi?GO=1&token=T1&BlockDate=MMYY&JUNK=… (Referer: step 1) ~65KB
    * Token T1 is taken from step 1 HTML — it differs from T0.
+   *
+   * Collect every month in the range. Returning the first importable page dropped
+   * September (etc.) when Autofi asked for Aug 29–Sep 2, so a full August
+   * refrigerator (39 legs) was parsed and then all filtered as outside the range.
    */
-  for (const t of targets) {
+  const collected: string[] = []
+  monthLoop: for (const t of targets) {
     const block = flicaBlockDate(t.year, t.month)
 
     const warmCandidates: string[] = []
@@ -944,7 +955,10 @@ export async function fetchScheduleHtml(
           go.response.status === 404 ||
           /404\s*-\s*file or directory not found/i.test(go.html)
         if (go404) continue
-        if (isImportableScheduleHtml(go.html)) return go.html
+        if (isImportableScheduleHtml(go.html)) {
+          collected.push(go.html)
+          continue monthLoop
+        }
 
         // Retry once if GO=1 returned a stub/refresh that includes a newer token.
         const retryToken = extractFlicaToken(go.html) || goToken
@@ -954,11 +968,18 @@ export async function fetchScheduleHtml(
           go.response.status === 404 ||
           /404\s*-\s*file or directory not found/i.test(go.html)
         if (retry404) continue
-        if (isImportableScheduleHtml(go.html)) return go.html
+        if (isImportableScheduleHtml(go.html)) {
+          collected.push(go.html)
+          continue monthLoop
+        }
       } catch {
         /* try the next warm candidate — never fall back to scheduled stub */
       }
     }
+  }
+
+  if (collected.length > 0) {
+    return collected.join('\n')
   }
 
   const monthLinkCount = detailFromMenu.filter((href) => {
@@ -1012,8 +1033,9 @@ export async function probeFlicaMenu(
   session: FlicaSession,
   opts: { dateFrom?: string; dateTo?: string } = {}
 ): Promise<FlicaMenuProbeResult> {
-  const dateFrom = opts.dateFrom || new Date().toISOString().slice(0, 10)
-  const dateTo = opts.dateTo || dateFrom
+  const dateFrom =
+    normalizeCalendarYmd(opts.dateFrom) || opts.dateFrom || new Date().toISOString().slice(0, 10)
+  const dateTo = normalizeCalendarYmd(opts.dateTo) || opts.dateTo || dateFrom
   const targets = monthsInRange(dateFrom, dateTo)
 
   const menu = await session.request(

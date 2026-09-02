@@ -1,5 +1,6 @@
 import { defineEventHandler, createError } from 'h3'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
+import { normalizeCalendarYmd } from '../../../shared/localCalendarDate'
 
 /**
  * Returns user's most recent logbook entry date (YYYY-MM-DD), if any.
@@ -29,10 +30,11 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const date =
+  const raw =
     Array.isArray(data) && data.length > 0 && typeof data[0]?.date === 'string'
       ? data[0].date
       : null
+  const date = normalizeCalendarYmd(raw)
 
   return { date }
 })

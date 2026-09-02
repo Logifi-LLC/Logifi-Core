@@ -1,4 +1,5 @@
 import { defineEventHandler, readBody, createError } from 'h3'
+import { DateTime } from 'luxon'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import {
   isAeroDataBoxConfigured,
@@ -29,7 +30,7 @@ import {
 import { resolveFlicaPortal } from '../../utils/flicaPortal'
 import { unsealSecret, SecretBoxError } from '../../utils/secretBox'
 import type { FcvMappedEntry } from '../../utils/fcvMap'
-import { DateTime } from 'luxon'
+import { normalizeCalendarYmd } from '../../../shared/localCalendarDate'
 
 interface FetchFlicaBody {
   dateFrom?: string
@@ -322,13 +323,9 @@ export default defineEventHandler(async (event) => {
     'yyyy-MM-dd'
   )
   const dateFrom =
-    typeof body.dateFrom === 'string' && body.dateFrom.trim()
-      ? body.dateFrom.trim()
-      : todayYmd
+    normalizeCalendarYmd(typeof body.dateFrom === 'string' ? body.dateFrom : '') ?? todayYmd
   const dateTo =
-    typeof body.dateTo === 'string' && body.dateTo.trim()
-      ? body.dateTo.trim()
-      : dateFrom
+    normalizeCalendarYmd(typeof body.dateTo === 'string' ? body.dateTo : '') ?? dateFrom
   const includeScheduled = body.includeScheduled === true
   const includeDeadheads = body.includeDeadheads === true
 

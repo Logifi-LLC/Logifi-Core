@@ -422,6 +422,57 @@ describe('fetchScheduleHtml', () => {
       fetchScheduleHtml(session, { dateFrom: '2026-08-20', dateTo: '2026-08-20' })
     ).rejects.toMatchObject({ code: 'schedule_not_found' } satisfies Partial<FlicaClientError>)
   })
+
+  it('fetches every month in a cross-month Autofi range, not only the first', async () => {
+    const goSep = padScheduleHtml(
+      `
+<html><body>
+<div>L8A01 : 01SEP</div>
+<div>Last Updated Sep 2, 2026 09:00:00 EDT</div>
+<div>Base/Equip: LGA/EM7 CA01</div>
+<div>TU 01  5001 LGA-ORD 0800 1000 0200</div>
+<div>Crew:</div>
+<div>CA 624619 FARMER, DEREK</div>
+</body></html>
+`,
+      FLICA_IMPORTABLE_SCHEDULE_MIN_BYTES
+    )
+    const requestedBlocks: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url: string) => {
+        const u = String(url)
+        if (u.includes('mainmenu.cgi')) {
+          return htmlResponse('<html><body>Crewmember Menu Schedules</body></html>')
+        }
+        if (u.includes('leftmenu.cgi')) {
+          return htmlResponse(LEFT_MENU_HTML)
+        }
+        if (u.includes('scheduledetail.cgi') && /[?&]GO=1(?:&|$)/i.test(u)) {
+          const block = u.match(/BlockDate=(\d{4})/i)?.[1]
+          if (block) requestedBlocks.push(block)
+          if (block === '0926') return htmlResponse(goSep)
+          return htmlResponse(GO_ACTUALS_HTML)
+        }
+        if (u.includes('scheduledetail.cgi')) {
+          return htmlResponse(WARM_SCHEDULE_HTML)
+        }
+        return htmlResponse('<html></html>')
+      })
+    )
+    const session = new FlicaSession('rpa.flica.net')
+    const html = await fetchScheduleHtml(session, {
+      dateFrom: '2026-08-29',
+      dateTo: '2026-09-02',
+    })
+    expect(requestedBlocks).toContain('0826')
+    expect(requestedBlocks).toContain('0926')
+    expect(html).toContain('4809')
+    expect(html).toContain('5001')
+    const legs = parseFlicaSchedule(html, { defaultYear: 2026 })
+    expect(legs.some((l) => l.flight_number === '4809')).toBe(true)
+    expect(legs.some((l) => l.flight_number === '5001')).toBe(true)
+  })
 })
 
 const PAIRING_PUBLISHED_HTML = `
