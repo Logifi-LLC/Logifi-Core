@@ -33,4 +33,8 @@ describe('getAirportIanaTimezone', () => {
     expect(getAirportIanaTimezone('ZZZZ')).toBeNull()
     expect(getAirportIanaTimezone('')).toBeNull()
   })
+
+  it('does not resolve KAWA via Awassa IATA AWA', () => {
+    expect(getAirportIanaTimezone('KAWA')).toBeNull()
+  })
 })

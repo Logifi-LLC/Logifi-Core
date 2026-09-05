@@ -65,6 +65,9 @@ export function lookupAirportServer(code: string): AirportLookupResult | null {
     }
   }
 
+  // Exact ICAO / IATA from nwpr first, then US supplement.
+  // No last-3 IATA fallback (KAWA≠AWA, KTIP≠TIP) — that shadowed real US
+  // ICAOs like KTIP (Rantoul) with foreign airports (Tripoli).
   let airport: Airport | undefined
 
   if (normalizedCode.length === 4) {
@@ -72,9 +75,6 @@ export function lookupAirportServer(code: string): AirportLookupResult | null {
   }
   if (!airport && normalizedCode.length === 3) {
     airport = airports.find((a) => a.iata === normalizedCode)
-  }
-  if (!airport && normalizedCode.length === 4) {
-    airport = airports.find((a) => a.iata === normalizedCode.substring(1))
   }
 
   if (airport?.latitude != null && airport?.longitude != null) {
