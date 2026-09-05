@@ -8,6 +8,7 @@ import {
   parseRouteAirportCodes,
   getEntryAirportCodes,
   getCatalogAirportCodes,
+  entryUsesAirport,
   computeCrossCountryDistanceNm,
   qualifiesForCrossCountryDistance,
   MIN_CROSS_COUNTRY_DISTANCE_NM
@@ -326,6 +327,50 @@ describe('validation', () => {
         destination: 'KLAF',
         route: 'FWA'
       }, classified)).toEqual(['KLAF', 'KFWA'])
+    })
+
+    it('keeps route KAWA as KAWA, not HALA', () => {
+      const classified = new Set(['KAWA'])
+      expect(getEntryAirportCodes({
+        departure: 'KSMD',
+        destination: 'KSMD',
+        route: 'KAWA'
+      }, classified)).toEqual(['KSMD', 'KAWA'])
+    })
+  })
+
+  describe('entryUsesAirport', () => {
+    it('does not match HALA against KSMD + route KAWA', () => {
+      const classified = new Set(['KAWA'])
+      expect(
+        entryUsesAirport(
+          { departure: 'KSMD', destination: 'KSMD', route: 'KAWA' },
+          'HALA',
+          classified
+        )
+      ).toBe(false)
+    })
+
+    it('does not match HLLT against KLAF + route KTIP', () => {
+      const classified = new Set(['KTIP', 'KHUF'])
+      expect(
+        entryUsesAirport(
+          { departure: 'KLAF', destination: 'KLAF', route: 'KHUF KTIP' },
+          'HLLT',
+          classified
+        )
+      ).toBe(false)
+    })
+
+    it('matches KTIP when selected and present on the entry route', () => {
+      const classified = new Set(['KTIP', 'KHUF'])
+      expect(
+        entryUsesAirport(
+          { departure: 'KLAF', destination: 'KLAF', route: 'KHUF KTIP' },
+          'KTIP',
+          classified
+        )
+      ).toBe(true)
     })
   })
 
