@@ -28,12 +28,9 @@ export function canonicalizeAirportCodeForMatch(code: string): string {
   const fromIata = iataToIcao.get(raw)
   if (fromIata) return fromIata
 
-  // US-style FAA/ICAO: K + 3-letter IATA (aligns with lookup-airport.get.ts)
-  if (raw.length === 4 && raw.startsWith('K')) {
-    const last3 = raw.slice(1)
-    const mapped = iataToIcao.get(last3)
-    if (mapped) return mapped
-  }
+  // Do not strip a leading K and re-resolve as IATA. Unknown Kxxx (e.g. KAWA,
+  // KTIP) must stay as entered — otherwise foreign IATA collisions rewrite them
+  // (AWA→HALA Awassa, TIP→HLLT Tripoli).
 
   return raw
 }

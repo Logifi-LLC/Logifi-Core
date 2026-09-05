@@ -62,10 +62,8 @@ export function lookupAirportLocal(code: string): AirportInfo | null {
     airport = airports.find((a) => a.iata === normalizedCode)
   }
 
-  if (!airport && normalizedCode.length === 4) {
-    const iataCode = normalizedCode.substring(1)
-    airport = airports.find((a) => a.iata === iataCode)
-  }
+  // Do not fall back to IATA = last 3 of a 4-letter miss (KAWA→AWA Awassa).
+  // Exact ICAO / IATA only; US supplement covers GA codes missing from nwpr.
 
   const override = COORDINATE_OVERRIDES[normalizedCode]
   if (override) {

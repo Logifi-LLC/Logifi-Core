@@ -17,4 +17,11 @@ describe('airportSupplement', () => {
     const entry = lookupSupplementAirport('KFRR')
     expect(entry?.name).toContain('Front Royal')
   })
+
+  it('finds KTIP as Rantoul (not Tripoli)', () => {
+    const entry = lookupSupplementAirport('KTIP')
+    expect(entry?.icao).toBe('KTIP')
+    expect(entry?.name).toContain('Rantoul')
+    expect(entry?.country).toBe('US')
+  })
 })

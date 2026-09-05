@@ -13,6 +13,20 @@ describe('canonicalizeAirportCodeForMatch', () => {
   it('returns uppercase unknown codes unchanged', () => {
     expect(canonicalizeAirportCodeForMatch('ZZ1')).toBe('ZZ1')
   })
+
+  it('does not rewrite unknown Kxxx to foreign IATA ICAOs', () => {
+    // KAWA is not a US ICAO; AWA is Awassa (HALA). Must not collapse.
+    expect(canonicalizeAirportCodeForMatch('KAWA')).toBe('KAWA')
+    expect(canonicalizeAirportCodeForMatch('KAWA')).not.toBe('HALA')
+    // KTIP is Rantoul (US); TIP is Tripoli (HLLT). Must not collapse.
+    expect(canonicalizeAirportCodeForMatch('KTIP')).toBe('KTIP')
+    expect(canonicalizeAirportCodeForMatch('KTIP')).not.toBe('HLLT')
+  })
+
+  it('still maps real 3-letter IATA AWA/TIP to their ICAOs', () => {
+    expect(canonicalizeAirportCodeForMatch('AWA')).toBe('HALA')
+    expect(canonicalizeAirportCodeForMatch('TIP')).toBe('HLLT')
+  })
 })
 
 describe('toCatalogAirportCode', () => {

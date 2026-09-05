@@ -96,10 +96,7 @@ function findAirportRow(normalizedCode: string): AirportRow | undefined {
     const byIata = airports.find((a) => a.iata === normalizedCode)
     if (byIata) return byIata
   }
-  if (normalizedCode.length === 4) {
-    const iataCode = normalizedCode.substring(1)
-    return airports.find((a) => a.iata === iataCode)
-  }
+  // Exact ICAO / IATA only — do not treat last 3 of a 4-letter miss as IATA.
   return undefined
 }
 
