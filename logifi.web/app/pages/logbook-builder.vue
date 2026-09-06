@@ -25,9 +25,11 @@ import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { useDigifiLearning } from '~/composables/useDigifiLearning'
 import { supabase } from '~/lib/supabase'
 import DigifiLearningOptInModal from '~/components/digifi/DigifiLearningOptInModal.vue'
-import DigifiModeHeader from '~/components/DigifiModeHeader.vue'
-import SettingsRootView from '~/components/settings/SettingsRootView.vue'
-import SettingsStackShell from '~/components/settings/SettingsStackShell.vue'
+import DigifiSettingsModal from '~/components/settings/DigifiSettingsModal.vue'
+import { getDisplayedPilotInitials } from '~/utils/dashboardHydration'
+import type { Database } from '~/types/database'
+
+type UserProfile = Database['public']['Tables']['user_profiles']['Row']
 
 definePageMeta({ layout: 'default' })
 
@@ -205,14 +207,136 @@ const showInstructions = ref(false)
 const showDigifiChecklist = ref(false)
 const showDigifiCommonMistakes = ref(false)
 const showDigifiLearningOptIn = ref(false)
-const showAccountSettings = ref(false)
+const showDigifiSettings = ref(false)
+const digifiSettingsStack = ref<Array<'root' | 'account' | 'digifi' | 'account-email' | 'account-password'>>(['root'])
 const { optInStatus, loadOptInStatus, setOptIn } = useDigifiLearning()
 
 const isDigifiMode = computed(() => route.query.digifi === 'open')
 
+// Profile for initials
+const pilotProfile = ref<UserProfile | null>(null)
+const pilotProfileLoaded = ref(false)
+
+const pilotInitials = computed(() =>
+  getDisplayedPilotInitials(pilotProfile.value?.name || '', pilotProfileLoaded.value)
+)
+
+// Account settings state
+const accountEmail = ref('')
+const currentPassword = ref('')
+const newPassword = ref('')
+const confirmNewPassword = ref('')
+const isUpdatingEmail = ref(false)
+const isUpdatingPassword = ref(false)
+const emailSuccessMessage = ref('')
+const emailErrorMessage = ref('')
+const passwordSuccessMessage = ref('')
+const passwordErrorMessage = ref('')
+
+function openDigifiSettings(tab?: 'account' | 'digifi') {
+  digifiSettingsStack.value = tab ? ['root', tab] : ['root']
+  showDigifiSettings.value = true
+}
+
+function pushDigifiSettingsFrame(frame: 'root' | 'account' | 'digifi' | 'account-email' | 'account-password') {
+  digifiSettingsStack.value = [...digifiSettingsStack.value, frame]
+}
+
+function popDigifiSettingsFrame() {
+  if (digifiSettingsStack.value.length > 1) {
+    digifiSettingsStack.value = digifiSettingsStack.value.slice(0, -1)
+  }
+}
+
+function closeDigifiSettings() {
+  showDigifiSettings.value = false
+  digifiSettingsStack.value = ['root']
+}
+
+async function updateAccountEmail() {
+  if (!user.value) return
+  isUpdatingEmail.value = true
+  emailSuccessMessage.value = ''
+  emailErrorMessage.value = ''
+
+  try {
+    const { error } = await supabase.auth.updateUser({ email: accountEmail.value })
+    if (error) throw error
+
+    emailSuccessMessage.value = 'Check your new email for a confirmation link'
+    accountEmail.value = ''
+    currentPassword.value = ''
+  } catch (err: any) {
+    emailErrorMessage.value = err.message || 'Failed to update email'
+  } finally {
+    isUpdatingEmail.value = false
+  }
+}
+
+async function updateAccountPassword() {
+  if (!user.value) return
+  isUpdatingPassword.value = true
+  passwordSuccessMessage.value = ''
+  passwordErrorMessage.value = ''
+
+  if (newPassword.value !== confirmNewPassword.value) {
+    passwordErrorMessage.value = 'Passwords do not match'
+    isUpdatingPassword.value = false
+    return
+  }
+
+  try {
+    const { error } = await supabase.auth.updateUser({ password: newPassword.value })
+    if (error) throw error
+
+    passwordSuccessMessage.value = 'Password updated successfully'
+    currentPassword.value = ''
+    newPassword.value = ''
+    confirmNewPassword.value = ''
+  } catch (err: any) {
+    passwordErrorMessage.value = err.message || 'Failed to update password'
+  } finally {
+    isUpdatingPassword.value = false
+  }
+}
+
+function handleAccountDeleted() {
+  closeDigifiSettings()
+  showToast('Account deleted', { type: 'success' })
+  void router.push('/')
+}
+
 watchEffect(() => {
   if (isAuthenticated.value && user.value && optInStatus.value === null) {
     loadOptInStatus()
+  }
+})
+
+watchEffect(async (onCleanup) => {
+  if (!isAuthenticated.value || !user.value) {
+    pilotProfile.value = null
+    pilotProfileLoaded.value = false
+    return
+  }
+
+  let cancelled = false
+  onCleanup(() => {
+    cancelled = true
+  })
+
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', user.value.id)
+      .single()
+
+    if (error || cancelled) return
+
+    pilotProfile.value = data as UserProfile
+    pilotProfileLoaded.value = true
+  } catch (err) {
+    console.error('Failed to load pilot profile:', err)
   }
 })
 </script>
@@ -223,14 +347,48 @@ watchEffect(() => {
     :class="isDark ? 'bg-gray-950' : 'bg-gray-50'"
   >
     <div class="mx-auto max-w-7xl space-y-4">
-      <DigifiModeHeader
+      <!-- Digifi mode header with Feedback + avatar -->
+      <div
         v-if="isDigifiMode"
-        :is-dark="isDark"
-        @show-directions="showInstructions = !showInstructions"
-        @show-common-errors="showDigifiCommonMistakes = !showDigifiCommonMistakes"
-        @show-account="showAccountSettings = true"
-      />
+        class="flex items-center justify-between pb-4 border-b"
+        :class="isDark ? 'border-white/10' : 'border-gray-400/50'"
+      >
+        <h1
+          class="text-2xl font-bold font-quicksand"
+          :class="isDark ? 'text-white' : 'text-gray-900'"
+        >
+          Digifi
+        </h1>
+        <nav class="flex items-center gap-2">
+          <NuxtLink
+            to="/feedback?from=digifi"
+            class="hidden sm:inline-block text-xs sm:text-sm font-medium font-quicksand transition-colors mr-2"
+            :class="[
+              isDark
+                ? 'text-gray-300 hover:text-orange-400'
+                : 'text-gray-600 hover:text-orange-600'
+            ]"
+            aria-label="Send feedback about Digifi"
+          >
+            Feedback
+          </NuxtLink>
+          <button
+            type="button"
+            @click="openDigifiSettings()"
+            :class="[
+              'h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all duration-200 shadow-sm border',
+              isDark 
+                ? 'bg-orange-600/20 text-orange-400 border-orange-500/30 hover:bg-orange-600/40' 
+                : 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100'
+            ]"
+            aria-label="Digifi Settings"
+          >
+            {{ pilotInitials || 'DF' }}
+          </button>
+        </nav>
+      </div>
       
+      <!-- Normal Logifi mode header -->
       <div
         v-else
         class="flex items-center justify-between pb-4 border-b"
@@ -450,14 +608,38 @@ watchEffect(() => {
       </section>
     </div>
     
-    <SettingsStackShell
-      :open="showAccountSettings"
+    <!-- Digifi Settings Modal -->
+    <DigifiSettingsModal
+      :open="showDigifiSettings"
+      :stack="digifiSettingsStack"
       :is-dark-mode="isDark"
-      :is-root="true"
-      title="Settings"
-      @close="showAccountSettings = false"
-    >
-      <SettingsRootView :is-dark-mode="isDark" @close="showAccountSettings = false" />
-    </SettingsStackShell>
+      :user-email="user?.email"
+      v-model:account-email="accountEmail"
+      v-model:current-password="currentPassword"
+      v-model:new-password="newPassword"
+      v-model:confirm-new-password="confirmNewPassword"
+      :is-updating-email="isUpdatingEmail"
+      :is-updating-password="isUpdatingPassword"
+      :email-success="emailSuccessMessage"
+      :email-error="emailErrorMessage"
+      :password-success="passwordSuccessMessage"
+      :password-error="passwordErrorMessage"
+      @close="closeDigifiSettings"
+      @pop="popDigifiSettingsFrame"
+      @push="pushDigifiSettingsFrame"
+      @update-email="updateAccountEmail"
+      @update-password="updateAccountPassword"
+      @account-deleted="handleAccountDeleted"
+      @show-directions="showInstructions = !showInstructions"
+      @show-common-errors="showDigifiCommonMistakes = !showDigifiCommonMistakes"
+    />
+
+    <!-- Digifi Learning Opt-In Modal -->
+    <DigifiLearningOptInModal
+      v-if="showDigifiLearningOptIn"
+      :is-dark="isDark"
+      @accept="handleLearningOptInAccept"
+      @decline="handleLearningOptInDecline"
+    />
   </div>
 </template>
