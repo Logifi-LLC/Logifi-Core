@@ -13,8 +13,11 @@
         ></div>
 
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-          <div class="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-semibold mb-8 shadow-[0_0_22px_-6px_rgba(59,130,246,0.38),0_0_36px_-12px_rgba(37,99,235,0.18)] animate-fade-in dark:bg-blue-50 dark:border-blue-100 dark:text-blue-700">
-            Free logbook · Open source
+          <div class="flex flex-col items-center gap-4 mb-8">
+            <ProductSwitcher active-product="logifi" />
+            <div class="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-semibold shadow-[0_0_22px_-6px_rgba(59,130,246,0.38),0_0_36px_-12px_rgba(37,99,235,0.18)] animate-fade-in dark:bg-blue-50 dark:border-blue-100 dark:text-blue-700">
+              Free logbook · Open source
+            </div>
           </div>
           
           <h1 class="text-5xl lg:text-7xl font-bold tracking-tight text-gray-900 mb-8 animate-slide-up dark:text-gray-900">
@@ -166,6 +169,7 @@ import AuthModal from '~/components/AuthModal.vue'
 import AutofiBetaPill from '~/components/fcv/AutofiBetaPill.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
+import ProductSwitcher from '~/components/ProductSwitcher.vue'
 import { AUTOFI_BETA_LINE } from '~/utils/autofiBeta'
 
 const { theme, isDark, applyDocumentTheme } = useTheme()
