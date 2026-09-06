@@ -32,7 +32,7 @@
               @click="handleStartScanning"
               class="btn-cta-primary w-full sm:w-auto px-8 py-4 bg-orange-600 text-white text-lg font-bold rounded-xl hover:bg-orange-700 transition-all ring-1 ring-orange-400/60 shadow-[0_0_18px_-3px_rgba(249,115,22,0.48),0_0_36px_-12px_rgba(251,146,60,0.22)] hover:shadow-[0_0_28px_-2px_rgba(249,115,22,0.55),0_0_48px_-10px_rgba(251,146,60,0.28)] active:scale-[0.98] dark:bg-orange-600 dark:text-white dark:hover:bg-orange-700"
             >
-              <span class="relative z-10">Start Scanning</span>
+              <span class="relative z-10">{{ isAuthenticated ? 'Continue Scanning' : 'Start Scanning' }}</span>
             </button>
             <NuxtLink 
               to="/"
