@@ -23,7 +23,6 @@ import { useAuth } from '~/composables/useAuth'
 import { useToast } from '~/composables/useToast'
 import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { useDigifiLearning } from '~/composables/useDigifiLearning'
-import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { supabase } from '~/lib/supabase'
 import DigifiLearningOptInModal from '~/components/digifi/DigifiLearningOptInModal.vue'
 import DigifiSettingsModal from '~/components/settings/DigifiSettingsModal.vue'
@@ -211,7 +210,7 @@ const showDigifiLearningOptIn = ref(false)
 const showDigifiSettings = ref(false)
 const digifiSettingsStack = ref<Array<'root' | 'account' | 'digifi' | 'account-email' | 'account-password'>>(['root'])
 const { optInStatus, loadOptInStatus, setOptIn } = useDigifiLearning()
-const { displayCredits, loading: creditsLoading, fetchBalance } = useDigifiCredits()
+const { displayCredits, loading: creditsLoading } = useDigifiCredits()
 
 const isDigifiMode = computed(() => route.query.digifi === 'open')
 
