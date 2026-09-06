@@ -306,6 +306,16 @@ function handleAccountDeleted() {
   void router.push('/')
 }
 
+function handleShowDirections() {
+  closeDigifiSettings()
+  showInstructions.value = true
+}
+
+function handleShowCommonErrors() {
+  closeDigifiSettings()
+  showDigifiCommonMistakes.value = true
+}
+
 watchEffect(() => {
   if (isAuthenticated.value && user.value && optInStatus.value === null) {
     loadOptInStatus()
@@ -413,6 +423,81 @@ watchEffect(async (onCleanup) => {
         </NuxtLink>
       </div>
 
+      <!-- Digifi mode help panels (Directions and Common Errors) -->
+      <section v-if="isDigifiMode">
+        <Transition
+          enter-active-class="transition-all duration-200 ease-out"
+          enter-from-class="opacity-0 max-h-0"
+          enter-to-class="opacity-100 max-h-[1200px]"
+          leave-active-class="transition-all duration-150 ease-in"
+          leave-from-class="opacity-100 max-h-[1200px]"
+          leave-to-class="opacity-0 max-h-0"
+        >
+          <div v-if="showInstructions" class="mb-4 overflow-hidden">
+            <div
+              class="rounded-xl border p-4"
+              :class="isDark ? 'border-white/10 bg-white/[0.03]' : 'border-gray-200 bg-gray-50'"
+            >
+              <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-semibold" :class="isDark ? 'text-white' : 'text-gray-900'">
+                  Digifi Directions
+                </h2>
+                <button
+                  type="button"
+                  @click="showInstructions = false"
+                  class="text-xs font-medium transition-colors"
+                  :class="isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'"
+                >
+                  Close
+                </button>
+              </div>
+              <ul
+                class="space-y-1.5 text-sm list-disc list-inside"
+                :class="isDark ? 'text-gray-300' : 'text-gray-700'"
+              >
+                <li>Use the toolbar to set rows, layout, and columns before scanning.</li>
+                <li>Upload a paper logbook page photo using the Digifi scanner below.</li>
+                <li>Review AI-filled cells carefully; correct any mistakes before importing.</li>
+                <li>Use Validate to review totals and issues, then Import to add entries to your logbook.</li>
+                <li>You can also Send to LogTen Pro to open the entries directly in LogTen.</li>
+              </ul>
+            </div>
+          </div>
+        </Transition>
+
+        <Transition
+          enter-active-class="transition-all duration-200 ease-out"
+          enter-from-class="opacity-0 max-h-0"
+          enter-to-class="opacity-100 max-h-[1200px]"
+          leave-active-class="transition-all duration-150 ease-in"
+          leave-from-class="opacity-100 max-h-[1200px]"
+          leave-to-class="opacity-0 max-h-0"
+        >
+          <div v-if="showDigifiCommonMistakes" class="mb-4 overflow-hidden">
+            <div
+              class="rounded-xl border p-4"
+              :class="isDark ? 'border-orange-500/30 bg-orange-500/10' : 'border-orange-200 bg-orange-50'"
+            >
+              <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-semibold" :class="isDark ? 'text-orange-100' : 'text-orange-900'">
+                  Common Digifi Errors
+                </h2>
+                <button
+                  type="button"
+                  @click="showDigifiCommonMistakes = false"
+                  class="text-xs font-medium transition-colors"
+                  :class="isDark ? 'text-orange-300/70 hover:text-orange-200' : 'text-orange-700/70 hover:text-orange-900'"
+                >
+                  Close
+                </button>
+              </div>
+              <DigifiCommonMistakesPanel :is-dark="isDark" />
+            </div>
+          </div>
+        </Transition>
+      </section>
+
+      <!-- Non-Digifi mode: show expandable buttons for instructions, checklist, and common mistakes -->
       <section
         v-if="!isDigifiMode"
         class="rounded-2xl border px-4 py-3 sm:px-5 sm:py-4"
@@ -630,8 +715,8 @@ watchEffect(async (onCleanup) => {
       @update-email="updateAccountEmail"
       @update-password="updateAccountPassword"
       @account-deleted="handleAccountDeleted"
-      @show-directions="showInstructions = !showInstructions"
-      @show-common-errors="showDigifiCommonMistakes = !showDigifiCommonMistakes"
+      @show-directions="handleShowDirections"
+      @show-common-errors="handleShowCommonErrors"
     />
 
     <!-- Digifi Learning Opt-In Modal -->
