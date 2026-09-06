@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, inject } from 'vue'
 import { useLogbookBuilderDigifi } from '~/composables/useLogbookBuilderDigifi'
 import { useDigifiCompanionCapture } from '~/composables/useDigifiCompanionCapture'
 import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { useAuth } from '~/composables/useAuth'
 import { useTheme } from '~/composables/useTheme'
 import type { DigifiCapturePhoto, DigifiPageSide } from '~/utils/digifiTypes'
+
+const showDigifiLearningOptInModal = inject<(() => void) | null>('showDigifiLearningOptInModal', null)
 
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
@@ -285,6 +287,11 @@ async function processFile(
   successMessage.value = null
   scanningSide.value = pageSide
   updateQueueStatus()
+  
+  if (!options?.fromQueue && showDigifiLearningOptInModal) {
+    showDigifiLearningOptInModal()
+  }
+  
   try {
     await scanPage(file, pageSide)
   } finally {
