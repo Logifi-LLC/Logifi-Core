@@ -415,14 +415,10 @@ watchEffect(async (onCleanup) => {
             <template v-if="pilotInitials">
               {{ pilotInitials }}
             </template>
-            <img
+            <Icon
               v-else
-              src="/images/app-logo-mark.png"
-              alt="Digifi"
-              :class="[
-                'w-6 h-6 sm:w-7 sm:h-7 transition-all',
-                isDark ? 'brightness-[0.9] contrast-[1.1] hue-rotate-[15deg] saturate-[1.2]' : 'brightness-[0.85] contrast-[1.15] hue-rotate-[20deg] saturate-[1.3]'
-              ]"
+              name="ri:scan-line"
+              :size="20"
             />
           </button>
         </nav>
