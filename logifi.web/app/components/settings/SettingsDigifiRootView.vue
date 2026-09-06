@@ -42,9 +42,9 @@
 
     <SettingsListGroup :is-dark-mode="isDarkMode">
       <SettingsListRow
-        label="Back to Logifi"
-        subtitle="Return to main dashboard"
-        icon="ri:home-line"
+        label="Open Logifi"
+        subtitle="Use the Logifi digital logbook"
+        icon="ri:book-open-line"
         :is-dark-mode="isDarkMode"
         tag="NuxtLink"
         to="/dashboard"
