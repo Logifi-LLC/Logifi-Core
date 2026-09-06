@@ -300,14 +300,10 @@
             <template v-if="pilotInitials">
               {{ pilotInitials }}
             </template>
-            <img
+            <Icon
               v-else
-              src="/images/app-logo-mark.png"
-              alt="Logifi"
-              :class="[
-                'w-6 h-6 sm:w-7 sm:h-7',
-                isDarkMode ? 'brightness-[1.1]' : 'brightness-[0.6]'
-              ]"
+              name="ri:book-open-line"
+              :size="20"
             />
           </button>
         </nav>
