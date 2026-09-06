@@ -97,10 +97,16 @@ export function isKnownDigifiLocationCode(code: string): boolean {
   return kind === 'airport' || kind === 'navaid'
 }
 
+interface VocabularyRow {
+  value: string
+  last_seen_at: string
+}
+
 export function buildDigifiAirportIndex(options: {
   historyRows: AirportHistoryRow[]
   catalogRows: CatalogAirportRow[]
   feedbackRows: DigifiCorrectionFeedbackRow[]
+  vocabularyRows?: VocabularyRow[]
 }): DigifiAirportIndex {
   const airportMap = new Map<string, AirportCandidateRecord>()
   const feedbackByRawContext = new Map<string, DigifiCorrectionFeedbackRow[]>()
@@ -143,6 +149,22 @@ export function buildDigifiAirportIndex(options: {
       historyCount: 0,
       catalogCount: 1,
       lastSeenAt: null,
+    })
+  }
+
+  for (const row of (options.vocabularyRows ?? [])) {
+    const key = normalizeDigifiAirportKey(row.value ?? '')
+    if (!key) continue
+    const existing = airportMap.get(key)
+    if (existing) {
+      continue
+    }
+    airportMap.set(key, {
+      value: key,
+      key,
+      historyCount: 0,
+      catalogCount: 0,
+      lastSeenAt: row.last_seen_at ?? null,
     })
   }
 
