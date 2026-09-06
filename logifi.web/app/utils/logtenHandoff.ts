@@ -87,7 +87,14 @@ export function buildLogTenUrl(entries: LogEntry[]): string {
   return `logten://v2/addEntities?package=${encoded}`
 }
 
-export function triggerLogTenHandoff(entries: LogEntry[]): { success: boolean; url?: string; error?: string } {
+export interface LogTenHandoffResult {
+  success: boolean
+  url?: string
+  tooLarge?: boolean
+  error?: string
+}
+
+export function triggerLogTenHandoff(entries: LogEntry[]): LogTenHandoffResult {
   if (entries.length === 0) {
     return { success: false, error: 'No entries to send' }
   }
@@ -98,7 +105,7 @@ export function triggerLogTenHandoff(entries: LogEntry[]): { success: boolean; u
     if (url.length > 100000) {
       return {
         success: false,
-        error: 'Payload too large. Try exporting fewer entries.',
+        tooLarge: true,
         url,
       }
     }
@@ -113,5 +120,19 @@ export function triggerLogTenHandoff(entries: LogEntry[]): { success: boolean; u
       success: false,
       error: error instanceof Error ? error.message : 'Failed to build LogTen URL',
     }
+  }
+}
+
+export async function copyToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator === 'undefined' || !navigator.clipboard) {
+    return false
+  }
+  
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch (error) {
+    console.error('Failed to copy to clipboard:', error)
+    return false
   }
 }

@@ -239,10 +239,50 @@ async function loadCorrectionFeedbackRows(
   return (data ?? []) as DigifiCorrectionFeedbackRow[]
 }
 
+interface VocabularyRow {
+  value: string
+  last_seen_at: string
+}
+
+async function loadAircraftVocabularyRows(
+  supabase: any,
+  userId: string
+): Promise<VocabularyRow[]> {
+  const { data, error } = await (supabase
+    .from('digifi_user_vocabulary') as any)
+    .select('value, last_seen_at')
+    .eq('user_id', userId)
+    .eq('vocab_type', 'aircraft')
+
+  if (error) {
+    throw error
+  }
+
+  return (data ?? []) as VocabularyRow[]
+}
+
+async function loadAirportVocabularyRows(
+  supabase: any,
+  userId: string
+): Promise<VocabularyRow[]> {
+  const { data, error } = await (supabase
+    .from('digifi_user_vocabulary') as any)
+    .select('value, last_seen_at')
+    .eq('user_id', userId)
+    .eq('vocab_type', 'airport')
+
+  if (error) {
+    throw error
+  }
+
+  return (data ?? []) as VocabularyRow[]
+}
+
 export function buildDigifiRegistrationIndex(options: {
   historyRows: LogEntryPersonalizationRow[]
   catalogRows: CatalogAircraftRow[]
   feedbackRows: DigifiCorrectionFeedbackRow[]
+  vocabularyRows?: VocabularyRow[]
 }): DigifiRegistrationIndex {
   const registrationMap = new Map<string, RegistrationCandidateRecord>()
   const feedbackByRawContext = new Map<string, DigifiCorrectionFeedbackRow[]>()
@@ -299,6 +339,24 @@ export function buildDigifiRegistrationIndex(options: {
       historyCount: 0,
       catalogCount: 1,
       lastSeenAt: null,
+    })
+  }
+
+  for (const row of (options.vocabularyRows ?? [])) {
+    const key = normalizeDigifiRegistrationKey(row.value ?? '')
+    if (!key) continue
+    const existing = registrationMap.get(key)
+    if (existing) {
+      continue
+    }
+    registrationMap.set(key, {
+      value: key,
+      key,
+      aircraftMakeModel: null,
+      aircraftCategoryClass: null,
+      historyCount: 0,
+      catalogCount: 0,
+      lastSeenAt: row.last_seen_at ?? null,
     })
   }
 
@@ -622,7 +680,7 @@ export async function personalizeDigifiScanRows(options: {
     }
   }
 
-  const [historyRows, catalogRows, feedbackRows, airportCatalogRows, airportFeedbackRows] =
+  const [historyRows, catalogRows, feedbackRows, vocabularyRows, airportCatalogRows, airportFeedbackRows, airportVocabularyRows] =
     await Promise.all([
       loadRegistrationHistory(options.supabase, options.userId),
       identificationColumn
@@ -631,11 +689,17 @@ export async function personalizeDigifiScanRows(options: {
       identificationColumn
         ? loadCorrectionFeedbackRows(options.supabase, options.userId)
         : Promise.resolve([]),
+      identificationColumn
+        ? loadAircraftVocabularyRows(options.supabase, options.userId)
+        : Promise.resolve([]),
       hasAirportColumns
         ? loadCatalogAirportRows(options.supabase, options.userId)
         : Promise.resolve([]),
       hasAirportColumns
         ? loadAirportCorrectionFeedbackRows(options.supabase, options.userId)
+        : Promise.resolve([]),
+      hasAirportColumns
+        ? loadAirportVocabularyRows(options.supabase, options.userId)
         : Promise.resolve([]),
     ])
 
@@ -647,6 +711,7 @@ export async function personalizeDigifiScanRows(options: {
       historyRows,
       catalogRows,
       feedbackRows,
+      vocabularyRows,
     })
     const tailIndex = buildAircraftTailIndex(historyRows)
 
@@ -690,6 +755,7 @@ export async function personalizeDigifiScanRows(options: {
       historyRows,
       catalogRows: airportCatalogRows,
       feedbackRows: airportFeedbackRows,
+      vocabularyRows: airportVocabularyRows,
     })
     const airportResult = personalizeDigifiAirportCells({
       rows: rowsWithMeta,

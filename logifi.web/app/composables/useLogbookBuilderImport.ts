@@ -849,6 +849,13 @@ export async function runValidateAndImport(
     } catch (error) {
       console.warn('[digifi] failed to persist correction feedback', error)
     }
+    
+    try {
+      const { persistDigifiVocabulary } = await import('~/composables/useDigifiVocabulary')
+      await persistDigifiVocabulary(grid, user.value.id)
+    } catch (error) {
+      console.warn('[digifi] failed to persist vocabulary', error)
+    }
   }
 
   if (result.imported > 0) {
