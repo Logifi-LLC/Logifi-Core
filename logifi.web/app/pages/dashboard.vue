@@ -290,14 +290,25 @@
             type="button"
             @click="openSettings()"
             :class="[
-              'h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all duration-200 shadow-sm border',
+              'h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all duration-200 shadow-sm border overflow-hidden',
               isDarkMode 
                 ? 'bg-blue-600/20 text-blue-400 border-blue-500/30 hover:bg-blue-600/40' 
                 : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
             ]"
             aria-label="Profile & Settings"
           >
-            {{ pilotInitials }}
+            <template v-if="pilotInitials">
+              {{ pilotInitials }}
+            </template>
+            <img
+              v-else
+              src="/images/app-logo-mark.png"
+              alt="Logifi"
+              :class="[
+                'w-6 h-6 sm:w-7 sm:h-7',
+                isDarkMode ? 'brightness-[1.1]' : 'brightness-[0.6]'
+              ]"
+            />
           </button>
         </nav>
           </div>

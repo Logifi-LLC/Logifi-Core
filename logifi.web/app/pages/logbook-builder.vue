@@ -386,14 +386,25 @@ watchEffect(async (onCleanup) => {
             type="button"
             @click="openDigifiSettings()"
             :class="[
-              'h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all duration-200 shadow-sm border',
+              'h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all duration-200 shadow-sm border overflow-hidden',
               isDark 
                 ? 'bg-orange-600/20 text-orange-400 border-orange-500/30 hover:bg-orange-600/40' 
                 : 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100'
             ]"
             aria-label="Digifi Settings"
           >
-            {{ pilotInitials || 'DF' }}
+            <template v-if="pilotInitials">
+              {{ pilotInitials }}
+            </template>
+            <img
+              v-else
+              src="/images/app-logo-mark.png"
+              alt="Digifi"
+              :class="[
+                'w-6 h-6 sm:w-7 sm:h-7 transition-all',
+                isDark ? 'brightness-[0.9] contrast-[1.1] hue-rotate-[15deg] saturate-[1.2]' : 'brightness-[0.85] contrast-[1.15] hue-rotate-[20deg] saturate-[1.3]'
+              ]"
+            />
           </button>
         </nav>
       </div>
