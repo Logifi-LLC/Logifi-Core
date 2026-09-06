@@ -25,6 +25,9 @@ import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { useDigifiLearning } from '~/composables/useDigifiLearning'
 import { supabase } from '~/lib/supabase'
 import DigifiLearningOptInModal from '~/components/digifi/DigifiLearningOptInModal.vue'
+import DigifiModeHeader from '~/components/DigifiModeHeader.vue'
+import SettingsRootView from '~/components/settings/SettingsRootView.vue'
+import SettingsStackShell from '~/components/settings/SettingsStackShell.vue'
 
 definePageMeta({ layout: 'default' })
 
@@ -202,7 +205,10 @@ const showInstructions = ref(false)
 const showDigifiChecklist = ref(false)
 const showDigifiCommonMistakes = ref(false)
 const showDigifiLearningOptIn = ref(false)
+const showAccountSettings = ref(false)
 const { optInStatus, loadOptInStatus, setOptIn } = useDigifiLearning()
+
+const isDigifiMode = computed(() => route.query.digifi === 'open')
 
 watchEffect(() => {
   if (isAuthenticated.value && user.value && optInStatus.value === null) {
@@ -217,7 +223,16 @@ watchEffect(() => {
     :class="isDark ? 'bg-gray-950' : 'bg-gray-50'"
   >
     <div class="mx-auto max-w-7xl space-y-4">
+      <DigifiModeHeader
+        v-if="isDigifiMode"
+        :is-dark="isDark"
+        @show-directions="showInstructions = !showInstructions"
+        @show-common-errors="showDigifiCommonMistakes = !showDigifiCommonMistakes"
+        @show-account="showAccountSettings = true"
+      />
+      
       <div
+        v-else
         class="flex items-center justify-between pb-4 border-b"
         :class="isDark ? 'border-white/10' : 'border-gray-400/50'"
       >
@@ -241,6 +256,7 @@ watchEffect(() => {
       </div>
 
       <section
+        v-if="!isDigifiMode"
         class="rounded-2xl border px-4 py-3 sm:px-5 sm:py-4"
         :class="isDark ? 'border-white/10 bg-gray-900' : 'border-gray-200 bg-white'"
       >
@@ -409,6 +425,7 @@ watchEffect(() => {
       <LogbookBuilderGrid ref="gridRef" />
       <LogbookBuilderValidateBar />
       <section
+        v-if="!isDigifiMode"
         class="rounded-3xl p-4 sm:p-6 font-quicksand border shadow-[0_20px_50px_rgba(0,0,0,0.15)]"
         :class="isDark
           ? 'border-white/10 bg-gray-900'
@@ -432,5 +449,15 @@ watchEffect(() => {
         </ul>
       </section>
     </div>
+    
+    <SettingsStackShell
+      :open="showAccountSettings"
+      :is-dark-mode="isDark"
+      :is-root="true"
+      title="Settings"
+      @close="showAccountSettings = false"
+    >
+      <SettingsRootView :is-dark-mode="isDark" @close="showAccountSettings = false" />
+    </SettingsStackShell>
   </div>
 </template>
