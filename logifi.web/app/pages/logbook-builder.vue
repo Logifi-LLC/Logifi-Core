@@ -22,7 +22,9 @@ import { useTheme } from '~/composables/useTheme'
 import { useAuth } from '~/composables/useAuth'
 import { useToast } from '~/composables/useToast'
 import { useDigifiCredits } from '~/composables/useDigifiCredits'
+import { useDigifiLearning } from '~/composables/useDigifiLearning'
 import { supabase } from '~/lib/supabase'
+import DigifiLearningOptInModal from '~/components/digifi/DigifiLearningOptInModal.vue'
 
 definePageMeta({ layout: 'default' })
 
@@ -138,6 +140,26 @@ onUnmounted(() => {
 const builderPilots = ref<string[]>([])
 provide('builderPilots', builderPilots)
 
+provide('showDigifiLearningOptInModal', () => {
+  if (optInStatus.value === false) {
+    showDigifiLearningOptIn.value = true
+  }
+})
+
+const handleLearningOptInAccept = async () => {
+  try {
+    await setOptIn(true)
+    showDigifiLearningOptIn.value = false
+    showToast('Digifi learning enabled', { type: 'success' })
+  } catch (error) {
+    showToast('Failed to enable learning', { type: 'error' })
+  }
+}
+
+const handleLearningOptInDecline = () => {
+  showDigifiLearningOptIn.value = false
+}
+
 watchEffect(async (onCleanup) => {
   const currentUser = user.value
 
@@ -179,6 +201,14 @@ const showDigifiPanel = ref(false)
 const showInstructions = ref(false)
 const showDigifiChecklist = ref(false)
 const showDigifiCommonMistakes = ref(false)
+const showDigifiLearningOptIn = ref(false)
+const { optInStatus, loadOptInStatus, setOptIn } = useDigifiLearning()
+
+watchEffect(() => {
+  if (isAuthenticated.value && user.value && optInStatus.value === null) {
+    loadOptInStatus()
+  }
+})
 </script>
 
 <template>

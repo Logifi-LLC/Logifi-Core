@@ -4,18 +4,25 @@ import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import type { ValidateOnlyResult, ColumnTotalRow } from '~/composables/useLogbookBuilderImport'
 import { useTheme } from '~/composables/useTheme'
 import { useToast } from '~/composables/useToast'
+import { useAuth } from '~/composables/useAuth'
+import { supabase } from '~/lib/supabase'
+import { gridToEntries } from '~/composables/useLogbookBuilderImport'
+import { triggerLogTenHandoff } from '~/utils/logtenHandoff'
+import { unref } from 'vue'
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
 if (!grid) throw new Error('LogbookBuilderValidateBar must be used inside a page that provides logbookBuilderGrid')
 
 const { isDark } = useTheme()
 const { showToast } = useToast()
+const { isAuthenticated, user } = useAuth()
 
 const validating = ref(false)
 const errorMessage = ref<string | null>(null)
 const showConfirm = ref(false)
 const confirmResult = ref<{ validRowCount: number; columnTotals: ColumnTotalRow[] } | null>(null)
 const importing = ref(false)
+const sendingToLogTen = ref(false)
 
 async function handleValidate() {
   validating.value = true
@@ -70,6 +77,54 @@ async function handleImport() {
 function formatTotal(row: ColumnTotalRow): string {
   return row.isInteger ? String(row.total) : row.total.toFixed(1)
 }
+
+async function handleSendToLogTen() {
+  if (!confirmResult.value) return
+  sendingToLogTen.value = true
+  errorMessage.value = null
+
+  try {
+    const entries = gridToEntries({
+      columns: grid!.columns.value,
+      rows: grid!.rows.value,
+      defaultRole: grid!.defaultImportRole?.value ?? 'PIC',
+      defaultYear: unref((grid as any).defaultYear) ?? null,
+      tailIndex: undefined,
+    })
+
+    if (entries.length === 0) {
+      throw new Error('No entries to send')
+    }
+
+    if (isAuthenticated.value && user.value) {
+      const { data: profile } = await (supabase as any)
+        .from('user_profiles')
+        .select('digifi_learning_opt_in')
+        .eq('id', user.value.id)
+        .single()
+
+      if (profile?.digifi_learning_opt_in) {
+        const { persistDigifiCorrectionFeedback } = await import('~/composables/useLogbookBuilderImport')
+        try {
+          await persistDigifiCorrectionFeedback(grid!, user.value.id)
+        } catch (error) {
+          console.warn('[digifi] failed to persist corrections before LogTen handoff', error)
+        }
+      }
+    }
+
+    const result = triggerLogTenHandoff(entries)
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to send to LogTen')
+    }
+
+    showToast('Opened LogTen Pro with your entries', { type: 'success' })
+  } catch (e: any) {
+    errorMessage.value = e?.message ?? 'Failed to send to LogTen'
+  } finally {
+    sendingToLogTen.value = false
+  }
+}
 </script>
 
 <template>
@@ -121,6 +176,14 @@ function formatTotal(row: ColumnTotalRow): string {
             @click="handleImport"
           >
             {{ importing ? 'Importing…' : 'Import' }}
+          </button>
+          <button
+            type="button"
+            class="rounded border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20"
+            :disabled="sendingToLogTen"
+            @click="handleSendToLogTen"
+          >
+            {{ sendingToLogTen ? 'Sending…' : 'Send to LogTen Pro' }}
           </button>
         </div>
         <p v-if="errorMessage" class="text-sm text-red-600 dark:text-red-400">
