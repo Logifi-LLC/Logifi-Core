@@ -300,10 +300,9 @@
             <template v-if="pilotInitials">
               {{ pilotInitials }}
             </template>
-            <Icon
+            <LogifiMarkIcon
               v-else
-              name="ri:book-open-line"
-              :size="20"
+              :size="24"
             />
           </button>
         </nav>
@@ -6962,6 +6961,7 @@ import { usePullToRefresh } from '../composables/usePullToRefresh'
 import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
 import { useDashboardShortcuts } from '../composables/useDashboardShortcuts'
 import AuthModal from '../components/AuthModal.vue'
+import LogifiMarkIcon from '../components/LogifiMarkIcon.vue'
 import AuditTrail from '../components/AuditTrail.vue'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
 import ComplianceChecklist from '../components/ComplianceChecklist.vue'
