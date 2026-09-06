@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, ref } from 'vue'
+import { inject, ref, computed } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import type { ValidateOnlyResult, ColumnTotalRow } from '~/composables/useLogbookBuilderImport'
 import { useTheme } from '~/composables/useTheme'
@@ -12,6 +12,9 @@ import { unref } from 'vue'
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
 if (!grid) throw new Error('LogbookBuilderValidateBar must be used inside a page that provides logbookBuilderGrid')
+
+const route = useRoute()
+const isDigifiMode = computed(() => route.query.digifi === 'open')
 
 const { isDark } = useTheme()
 const { showToast } = useToast()
@@ -209,7 +212,50 @@ function downloadLogTenPackage() {
             </li>
           </ul>
         </div>
-        <div class="flex flex-wrap items-center gap-3">
+        <!-- Digifi mode: equal sink choices -->
+        <div v-if="isDigifiMode" class="space-y-3">
+          <p class="text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
+            Where do you want to send these entries?
+          </p>
+          <div class="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              class="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10 dark:shadow-sm dark:shadow-black/20"
+              @click="handleBack"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              class="rounded border px-4 py-2 text-sm font-medium disabled:opacity-50 shadow-sm"
+              :class="[
+                isDark
+                  ? 'border-blue-500/40 bg-blue-600/20 text-blue-300 hover:bg-blue-600/30'
+                  : 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
+              ]"
+              :disabled="importing"
+              @click="handleImport"
+            >
+              {{ importing ? 'Importing…' : 'Import to Logifi' }}
+            </button>
+            <button
+              type="button"
+              class="rounded border px-4 py-2 text-sm font-medium disabled:opacity-50 shadow-sm"
+              :class="[
+                isDark
+                  ? 'border-orange-500/40 bg-orange-600/20 text-orange-300 hover:bg-orange-600/30'
+                  : 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100'
+              ]"
+              :disabled="sendingToLogTen"
+              @click="handleSendToLogTen"
+            >
+              {{ sendingToLogTen ? 'Sending…' : 'Send to LogTen Pro' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Non-Digifi mode: original layout -->
+        <div v-else class="flex flex-wrap items-center gap-3">
           <button
             type="button"
             class="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10 dark:shadow-sm dark:shadow-black/20"
