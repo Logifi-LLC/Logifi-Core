@@ -74,8 +74,11 @@
         <div class="absolute inset-0 z-0 bg-gradient-to-b from-[#0a0e1a] via-[#0f1423] to-[#0a0e1a]"></div>
 
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-          <div class="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-950/40 border border-blue-800/30 text-blue-400 text-xs font-semibold mb-8 backdrop-blur-sm">
-            Free · Open source
+          <div class="flex flex-col items-center gap-4 mb-8">
+            <ProductSwitcher active-product="logifi" />
+            <div class="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-950/40 border border-blue-800/30 text-blue-400 text-xs font-semibold backdrop-blur-sm">
+              Free · Open source
+            </div>
           </div>
           
           <h1 class="text-5xl lg:text-7xl font-bold tracking-tight text-gray-100 mb-6 leading-[1.1]">
@@ -193,6 +196,8 @@ import AuthModal from '~/components/AuthModal.vue'
 import AutofiBetaPill from '~/components/fcv/AutofiBetaPill.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
+import ProductSwitcher from '~/components/ProductSwitcher.vue'
+import { AUTOFI_BETA_LINE } from '~/utils/autofiBeta'
 
 const { theme, isDark, applyDocumentTheme } = useTheme()
 
