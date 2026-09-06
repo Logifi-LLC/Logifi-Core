@@ -23,6 +23,7 @@ import { useAuth } from '~/composables/useAuth'
 import { useToast } from '~/composables/useToast'
 import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { useDigifiLearning } from '~/composables/useDigifiLearning'
+import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { supabase } from '~/lib/supabase'
 import DigifiLearningOptInModal from '~/components/digifi/DigifiLearningOptInModal.vue'
 import DigifiSettingsModal from '~/components/settings/DigifiSettingsModal.vue'
@@ -210,8 +211,15 @@ const showDigifiLearningOptIn = ref(false)
 const showDigifiSettings = ref(false)
 const digifiSettingsStack = ref<Array<'root' | 'account' | 'digifi' | 'account-email' | 'account-password'>>(['root'])
 const { optInStatus, loadOptInStatus, setOptIn } = useDigifiLearning()
+const { displayCredits, loading: creditsLoading, fetchBalance } = useDigifiCredits()
 
 const isDigifiMode = computed(() => route.query.digifi === 'open')
+
+watchEffect(() => {
+  if (isDigifiMode.value && isAuthenticated.value) {
+    fetchBalance()
+  }
+})
 
 // Profile for initials
 const pilotProfile = ref<UserProfile | null>(null)
@@ -369,10 +377,10 @@ watchEffect(async (onCleanup) => {
         >
           Digifi
         </h1>
-        <nav class="flex items-center gap-2">
+        <nav class="flex items-center gap-3">
           <NuxtLink
             to="/feedback?from=digifi"
-            class="hidden sm:inline-block text-xs sm:text-sm font-medium font-quicksand transition-colors mr-2"
+            class="hidden sm:inline-block text-xs sm:text-sm font-medium font-quicksand transition-colors"
             :class="[
               isDark
                 ? 'text-gray-300 hover:text-orange-400'
@@ -382,6 +390,18 @@ watchEffect(async (onCleanup) => {
           >
             Feedback
           </NuxtLink>
+          <div
+            class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium font-quicksand border"
+            :class="[
+              isDark
+                ? 'bg-orange-600/10 border-orange-500/30 text-orange-300'
+                : 'bg-orange-50 border-orange-200 text-orange-700'
+            ]"
+            aria-label="Digifi credits available"
+          >
+            <Icon name="ri:coins-line" size="14" />
+            <span>{{ creditsLoading ? '…' : displayCredits }}</span>
+          </div>
           <button
             type="button"
             @click="openDigifiSettings()"
@@ -675,6 +695,46 @@ watchEffect(async (onCleanup) => {
           </div>
         </Transition>
       </section>
+
+      <!-- Digifi empty state -->
+      <div
+        v-if="isDigifiMode && grid.rows.value.length === 0"
+        class="rounded-2xl border p-8 sm:p-12 text-center"
+        :class="isDark ? 'border-orange-500/30 bg-orange-500/5' : 'border-orange-200 bg-orange-50'"
+      >
+        <div class="max-w-md mx-auto space-y-4">
+          <Icon
+            name="ri:scan-line"
+            size="48"
+            :class="isDark ? 'text-orange-400' : 'text-orange-600'"
+          />
+          <h2
+            class="text-xl font-bold font-quicksand"
+            :class="isDark ? 'text-white' : 'text-gray-900'"
+          >
+            Ready to scan your logbook
+          </h2>
+          <p
+            class="text-sm"
+            :class="isDark ? 'text-gray-300' : 'text-gray-700'"
+          >
+            Open the Digifi scanner below to photograph a logbook spread. AI will transcribe the entries for you to review.
+          </p>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 rounded-xl border px-6 py-3 text-sm font-semibold font-quicksand transition-colors shadow-sm"
+            :class="[
+              isDark
+                ? 'border-orange-400/40 bg-orange-600/20 text-orange-300 hover:bg-orange-600/30'
+                : 'border-orange-300 bg-orange-100 text-orange-800 hover:bg-orange-200'
+            ]"
+            @click="showDigifiPanel = true; nextTick(() => digifiSectionRef?.scrollIntoView({ behavior: 'smooth', block: 'start' }))"
+          >
+            <Icon name="ri:scan-line" size="18" />
+            Scan a spread
+          </button>
+        </div>
+      </div>
 
       <LogbookBuilderGrid ref="gridRef" />
       <LogbookBuilderValidateBar />
