@@ -36,7 +36,7 @@
         :badge="item.id === 'updates' && updatesBadge ? updatesBadge : undefined"
         :is-dark-mode="isDarkMode"
         :tag="item.id === 'digifi' ? 'NuxtLink' : undefined"
-        :to="item.id === 'digifi' ? '/digifi' : undefined"
+        :to="item.id === 'digifi' ? '/logbook-builder?digifi=open' : undefined"
         @click="item.id === 'digifi' ? $emit('close') : $emit('navigate', item.id)"
       />
     </SettingsListGroup>
