@@ -270,28 +270,28 @@ const scrollToAutofi = () => {
 
 @keyframes figure8-1 {
   0%, 100% { 
-    transform: translate(0, 0) rotate(0deg); 
+    transform: translate(0, 0) rotate(15deg);
   }
   12.5% { 
-    transform: translate(20vw, -15vh) rotate(45deg); 
+    transform: translate(20vw, -15vh) rotate(35deg);
   }
   25% { 
-    transform: translate(40vw, -8vh) rotate(90deg); 
+    transform: translate(40vw, -8vh) rotate(25deg);
   }
   37.5% { 
-    transform: translate(60vw, 15vh) rotate(135deg); 
+    transform: translate(60vw, 15vh) rotate(-20deg);
   }
   50% { 
-    transform: translate(80vw, 8vh) rotate(180deg); 
+    transform: translate(80vw, 8vh) rotate(15deg);
   }
   62.5% { 
-    transform: translate(100vw, -12vh) rotate(225deg); 
+    transform: translate(100vw, -12vh) rotate(40deg);
   }
   75% { 
-    transform: translate(115vw, -5vh) rotate(270deg); 
+    transform: translate(115vw, -5vh) rotate(25deg);
   }
   87.5% { 
-    transform: translate(120vw, 12vh) rotate(315deg); 
+    transform: translate(120vw, 12vh) rotate(-15deg);
   }
 }
 
@@ -304,25 +304,25 @@ const scrollToAutofi = () => {
 
 @keyframes loopdeloop-2 {
   0%, 100% { 
-    transform: translate(0, 0) rotate(180deg); 
+    transform: translate(0, 0) rotate(180deg) scaleX(-1);
   }
   15% { 
-    transform: translate(-25vw, -12vh) rotate(225deg); 
+    transform: translate(-25vw, -12vh) rotate(145deg) scaleX(-1);
   }
   30% { 
-    transform: translate(-50vw, -8vh) rotate(270deg); 
+    transform: translate(-50vw, -8vh) rotate(175deg) scaleX(-1);
   }
   45% { 
-    transform: translate(-70vw, 10vh) rotate(315deg); 
+    transform: translate(-70vw, 10vh) rotate(205deg) scaleX(-1);
   }
   60% { 
-    transform: translate(-90vw, 20vh) rotate(360deg); 
+    transform: translate(-90vw, 20vh) rotate(195deg) scaleX(-1);
   }
   75% { 
-    transform: translate(-105vw, 12vh) rotate(405deg); 
+    transform: translate(-105vw, 12vh) rotate(170deg) scaleX(-1);
   }
   90% { 
-    transform: translate(-115vw, -5vh) rotate(450deg); 
+    transform: translate(-115vw, -5vh) rotate(145deg) scaleX(-1);
   }
 }
 
@@ -335,19 +335,19 @@ const scrollToAutofi = () => {
 
 @keyframes arc-3 {
   0% { 
-    transform: translate(0, 0) rotate(0deg); 
+    transform: translate(0, 0) rotate(10deg);
   }
   25% { 
-    transform: translate(30vw, -20vh) rotate(60deg); 
+    transform: translate(30vw, -20vh) rotate(-25deg);
   }
   50% { 
-    transform: translate(60vw, -15vh) rotate(120deg); 
+    transform: translate(60vw, -15vh) rotate(5deg);
   }
   75% { 
-    transform: translate(90vw, 8vh) rotate(180deg); 
+    transform: translate(90vw, 8vh) rotate(20deg);
   }
   100% { 
-    transform: translate(115vw, 20vh) rotate(240deg); 
+    transform: translate(115vw, 20vh) rotate(25deg);
   }
 }
 
@@ -360,19 +360,19 @@ const scrollToAutofi = () => {
 
 @keyframes swoop-4 {
   0%, 100% { 
-    transform: translate(0, 0) rotate(180deg); 
+    transform: translate(0, 0) rotate(180deg) scaleX(-1);
   }
   20% { 
-    transform: translate(-30vw, 18vh) rotate(210deg); 
+    transform: translate(-30vw, 18vh) rotate(205deg) scaleX(-1);
   }
   40% { 
-    transform: translate(-60vw, 12vh) rotate(240deg); 
+    transform: translate(-60vw, 12vh) rotate(185deg) scaleX(-1);
   }
   60% { 
-    transform: translate(-85vw, -8vh) rotate(270deg); 
+    transform: translate(-85vw, -8vh) rotate(155deg) scaleX(-1);
   }
   80% { 
-    transform: translate(-105vw, -15vh) rotate(300deg); 
+    transform: translate(-105vw, -15vh) rotate(150deg) scaleX(-1);
   }
 }
 
@@ -385,22 +385,22 @@ const scrollToAutofi = () => {
 
 @keyframes wideloop-5 {
   0%, 100% { 
-    transform: translate(0, 0) rotate(0deg); 
+    transform: translate(0, 0) rotate(5deg);
   }
   16.67% { 
-    transform: translate(25vw, -18vh) rotate(50deg); 
+    transform: translate(25vw, -18vh) rotate(-30deg);
   }
   33.33% { 
-    transform: translate(55vw, -25vh) rotate(100deg); 
+    transform: translate(55vw, -25vh) rotate(-10deg);
   }
   50% { 
-    transform: translate(85vw, -18vh) rotate(150deg); 
+    transform: translate(85vw, -18vh) rotate(20deg);
   }
   66.67% { 
-    transform: translate(105vw, 5vh) rotate(200deg); 
+    transform: translate(105vw, 5vh) rotate(30deg);
   }
   83.33% { 
-    transform: translate(115vw, 18vh) rotate(250deg); 
+    transform: translate(115vw, 18vh) rotate(25deg);
   }
 }
 
@@ -413,16 +413,16 @@ const scrollToAutofi = () => {
 
 @keyframes corner-6 {
   0%, 100% { 
-    transform: translate(0, 0) rotate(90deg); 
+    transform: translate(0, 0) rotate(180deg) scaleX(-1);
   }
   25% { 
-    transform: translate(-15vw, 10vh) rotate(135deg); 
+    transform: translate(-15vw, 10vh) rotate(205deg) scaleX(-1);
   }
   50% { 
-    transform: translate(-30vw, 15vh) rotate(180deg); 
+    transform: translate(-30vw, 15vh) rotate(200deg) scaleX(-1);
   }
   75% { 
-    transform: translate(-45vw, 10vh) rotate(225deg); 
+    transform: translate(-45vw, 10vh) rotate(175deg) scaleX(-1);
   }
 }
 
@@ -435,16 +435,16 @@ const scrollToAutofi = () => {
 
 @keyframes midpage-7 {
   0%, 100% { 
-    transform: translate(0, 0) rotate(15deg); 
+    transform: translate(0, 0) rotate(5deg);
   }
   25% { 
-    transform: translate(30vw, -8vh) rotate(60deg); 
+    transform: translate(30vw, -8vh) rotate(-8deg);
   }
   50% { 
-    transform: translate(65vw, -5vh) rotate(105deg); 
+    transform: translate(65vw, -5vh) rotate(3deg);
   }
   75% { 
-    transform: translate(95vw, 3vh) rotate(150deg); 
+    transform: translate(95vw, 3vh) rotate(8deg);
   }
 }
 
@@ -457,19 +457,19 @@ const scrollToAutofi = () => {
 
 @keyframes lower-8 {
   0%, 100% { 
-    transform: translate(0, 0) rotate(200deg); 
+    transform: translate(0, 0) rotate(180deg) scaleX(-1);
   }
   20% { 
-    transform: translate(-20vw, 8vh) rotate(240deg); 
+    transform: translate(-20vw, 8vh) rotate(205deg) scaleX(-1);
   }
   40% { 
-    transform: translate(-45vw, 12vh) rotate(280deg); 
+    transform: translate(-45vw, 12vh) rotate(200deg) scaleX(-1);
   }
   60% { 
-    transform: translate(-70vw, 8vh) rotate(320deg); 
+    transform: translate(-70vw, 8vh) rotate(185deg) scaleX(-1);
   }
   80% { 
-    transform: translate(-95vw, -5vh) rotate(360deg); 
+    transform: translate(-95vw, -5vh) rotate(160deg) scaleX(-1);
   }
 }
 
