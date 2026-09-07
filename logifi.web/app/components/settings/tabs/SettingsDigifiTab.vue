@@ -14,18 +14,8 @@
       </div>
     </SettingsListGroup>
 
-    <SettingsListGroup title="Scanner" :is-dark-mode="isDarkMode">
+    <SettingsListGroup v-if="isIos" title="Scanner" :is-dark-mode="isDarkMode">
       <SettingsListRow
-        label="Open Digifi"
-        subtitle="Use Digifi to scan logbook pages"
-        icon="ri:scan-line"
-        to="/digifi"
-        :is-dark-mode="isDarkMode"
-        tag="NuxtLink"
-        @click="$emit('close')"
-      />
-      <SettingsListRow
-        v-if="isIos"
         label="Digifi Eye"
         subtitle="Camera for desktop Add Pages"
         icon="ri:camera-line"

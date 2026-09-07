@@ -30,12 +30,14 @@
       <SettingsListRow
         v-for="item in itemsForGroup(group)"
         :key="item.id"
-        :label="item.label"
+        :label="item.id === 'digifi' ? 'Open Digifi' : item.label"
         :subtitle="rowSubtitle(item)"
         :icon="item.id === 'profile' && profilePreview ? undefined : item.icon"
         :badge="item.id === 'updates' && updatesBadge ? updatesBadge : undefined"
         :is-dark-mode="isDarkMode"
-        @click="$emit('navigate', item.id)"
+        :tag="item.id === 'digifi' ? 'NuxtLink' : undefined"
+        :to="item.id === 'digifi' ? '/digifi' : undefined"
+        @click="item.id === 'digifi' ? $emit('close') : $emit('navigate', item.id)"
       />
     </SettingsListGroup>
 
