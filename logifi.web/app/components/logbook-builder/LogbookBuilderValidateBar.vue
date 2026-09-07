@@ -13,6 +13,8 @@ import { unref } from 'vue'
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
 if (!grid) throw new Error('LogbookBuilderValidateBar must be used inside a page that provides logbookBuilderGrid')
 
+const preferredSink = inject<Ref<'logten' | 'logifi' | null>>('digifiPreferredSink', ref(null))
+
 const route = useRoute()
 const isDigifiMode = computed(() => route.query.digifi === 'open')
 
@@ -212,10 +214,10 @@ function downloadLogTenPackage() {
             </li>
           </ul>
         </div>
-        <!-- Digifi mode: equal sink choices -->
+        <!-- Digifi mode: sink choices (emphasize preferred) -->
         <div v-if="isDigifiMode" class="space-y-3">
           <p class="text-sm font-medium" :class="isDark ? 'text-gray-300' : 'text-gray-700'">
-            Where do you want to send these entries?
+            {{ preferredSink === 'logten' ? 'Send to LogTen Pro' : preferredSink === 'logifi' ? 'Import to Logifi' : 'Where do you want to send these entries?' }}
           </p>
           <div class="flex flex-wrap items-center gap-3">
             <button
@@ -225,31 +227,76 @@ function downloadLogTenPackage() {
             >
               Back
             </button>
+
+            <!-- LogTen button (primary if preferred) -->
             <button
+              v-if="preferredSink === 'logten' || !preferredSink"
               type="button"
-              class="rounded border px-4 py-2 text-sm font-medium disabled:opacity-50 shadow-sm"
+              class="rounded px-4 py-2 text-sm font-medium disabled:opacity-50 shadow-sm font-semibold"
               :class="[
-                isDark
-                  ? 'border-blue-500/40 bg-blue-600/20 text-blue-300 hover:bg-blue-600/30'
-                  : 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                preferredSink === 'logten'
+                  ? isDark
+                    ? 'bg-orange-600 text-white hover:bg-orange-700 border border-orange-600'
+                    : 'bg-orange-600 text-white hover:bg-orange-700 border border-orange-600'
+                  : isDark
+                    ? 'border border-orange-500/40 bg-orange-600/20 text-orange-300 hover:bg-orange-600/30'
+                    : 'border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100'
+              ]"
+              :disabled="sendingToLogTen"
+              @click="handleSendToLogTen"
+            >
+              {{ sendingToLogTen ? 'Sending…' : 'Send to LogTen Pro' }}
+            </button>
+
+            <!-- Logifi button (primary if preferred) -->
+            <button
+              v-if="preferredSink === 'logifi' || !preferredSink"
+              type="button"
+              class="rounded px-4 py-2 text-sm font-medium disabled:opacity-50 shadow-sm font-semibold"
+              :class="[
+                preferredSink === 'logifi'
+                  ? isDark
+                    ? 'bg-blue-600 text-white hover:bg-blue-700 border border-blue-600'
+                    : 'bg-blue-600 text-white hover:bg-blue-700 border border-blue-600'
+                  : isDark
+                    ? 'border border-blue-500/40 bg-blue-600/20 text-blue-300 hover:bg-blue-600/30'
+                    : 'border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
               ]"
               :disabled="importing"
               @click="handleImport"
             >
               {{ importing ? 'Importing…' : 'Import to Logifi' }}
             </button>
+
+            <!-- Alternative option (smaller, if preference is set) -->
             <button
+              v-if="preferredSink === 'logten'"
               type="button"
-              class="rounded border px-4 py-2 text-sm font-medium disabled:opacity-50 shadow-sm"
+              class="rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
               :class="[
                 isDark
-                  ? 'border-orange-500/40 bg-orange-600/20 text-orange-300 hover:bg-orange-600/30'
+                  ? 'border-blue-500/30 bg-blue-600/10 text-blue-300 hover:bg-blue-600/20'
+                  : 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
+              ]"
+              :disabled="importing"
+              @click="handleImport"
+            >
+              Or import to Logifi
+            </button>
+
+            <button
+              v-if="preferredSink === 'logifi'"
+              type="button"
+              class="rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+              :class="[
+                isDark
+                  ? 'border-orange-500/30 bg-orange-600/10 text-orange-300 hover:bg-orange-600/20'
                   : 'border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100'
               ]"
               :disabled="sendingToLogTen"
               @click="handleSendToLogTen"
             >
-              {{ sendingToLogTen ? 'Sending…' : 'Send to LogTen Pro' }}
+              Or send to LogTen Pro
             </button>
           </div>
         </div>

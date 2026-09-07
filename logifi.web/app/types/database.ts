@@ -620,6 +620,7 @@ export type Database = {
           signing_pin_hash: string | null
           digifi_learning_opt_in: boolean
           digifi_learning_opted_in_at: string | null
+          digifi_preferred_sink: 'logten' | 'logifi' | null
           created_at: string
           updated_at: string
         }
@@ -640,6 +641,7 @@ export type Database = {
           signing_pin_hash?: string | null
           digifi_learning_opt_in?: boolean
           digifi_learning_opted_in_at?: string | null
+          digifi_preferred_sink?: 'logten' | 'logifi' | null
           created_at?: string
           updated_at?: string
         }
@@ -659,6 +661,7 @@ export type Database = {
           cfi_expiration?: string | null
           digifi_learning_opt_in?: boolean
           digifi_learning_opted_in_at?: string | null
+          digifi_preferred_sink?: 'logten' | 'logifi' | null
           signing_pin_hash?: string | null
           created_at?: string
           updated_at?: string

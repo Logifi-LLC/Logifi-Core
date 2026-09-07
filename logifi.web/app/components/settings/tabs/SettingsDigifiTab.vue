@@ -26,6 +26,65 @@
       />
     </SettingsListGroup>
 
+    <SettingsListGroup title="Destination" :is-dark-mode="isDarkMode">
+      <div class="px-4 py-3 space-y-3">
+        <div>
+          <p class="text-sm font-semibold mb-1" :class="isDarkMode ? 'text-white' : 'text-gray-900'">
+            Send flights to
+          </p>
+          <p class="text-xs mb-3" :class="isDarkMode ? 'text-gray-400' : 'text-gray-600'">
+            Choose where Digifi should send your scanned flights
+          </p>
+          <div class="space-y-2">
+            <button
+              type="button"
+              :disabled="sinkLoading"
+              class="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl border text-left transition-colors"
+              :class="[
+                preferredSink === 'logten'
+                  ? isDarkMode
+                    ? 'bg-orange-600/20 border-orange-500/40 text-white'
+                    : 'bg-orange-50 border-orange-300 text-gray-900'
+                  : isDarkMode
+                    ? 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-750'
+                    : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100',
+                sinkLoading ? 'opacity-50 cursor-not-allowed' : ''
+              ]"
+              @click="changeSink('logten')"
+            >
+              <div class="flex items-center gap-2">
+                <Icon name="ri:macbook-line" size="18" />
+                <span class="text-sm font-medium">LogTen Pro (Mac)</span>
+              </div>
+              <Icon v-if="preferredSink === 'logten'" name="ri:check-line" size="18" :class="isDarkMode ? 'text-orange-400' : 'text-orange-600'" />
+            </button>
+            <button
+              type="button"
+              :disabled="sinkLoading"
+              class="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl border text-left transition-colors"
+              :class="[
+                preferredSink === 'logifi'
+                  ? isDarkMode
+                    ? 'bg-blue-600/20 border-blue-500/40 text-white'
+                    : 'bg-blue-50 border-blue-300 text-gray-900'
+                  : isDarkMode
+                    ? 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-750'
+                    : 'bg-gray-50 border-gray-200 text-gray-700 hover:bg-gray-100',
+                sinkLoading ? 'opacity-50 cursor-not-allowed' : ''
+              ]"
+              @click="changeSink('logifi')"
+            >
+              <div class="flex items-center gap-2">
+                <Icon name="ri:book-open-line" size="18" />
+                <span class="text-sm font-medium">Logifi logbook</span>
+              </div>
+              <Icon v-if="preferredSink === 'logifi'" name="ri:check-line" size="18" :class="isDarkMode ? 'text-blue-400' : 'text-blue-600'" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </SettingsListGroup>
+
     <SettingsListGroup title="Credits" :is-dark-mode="isDarkMode">
       <div class="px-4 py-3">
         <DigifiCreditsIndicator compact @open-checkout="showAddCreditsModal = true" />
@@ -98,6 +157,7 @@ import SettingsListGroup from '../SettingsListGroup.vue'
 import SettingsListRow from '../SettingsListRow.vue'
 import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
 import { useDigifiLearning } from '~/composables/useDigifiLearning'
+import { useDigifiDestination } from '~/composables/useDigifiDestination'
 import { useToast } from '~/composables/useToast'
 import DigifiCreditsIndicator from '~/components/digifi/DigifiCreditsIndicator.vue'
 import DigifiCreditHistory from '~/components/digifi/DigifiCreditHistory.vue'
@@ -116,9 +176,11 @@ const showAddCreditsModal = ref(false)
 const { isIos } = useCapacitorPlatform()
 const { showToast } = useToast()
 const { isOptedIn: isLearningOptedIn, isLoading: learningLoading, loadOptInStatus, setOptIn, eraseDigifiLearningData } = useDigifiLearning()
+const { preferredSink, sinkLabel, isLoading: sinkLoading, loadPreferredSink, setPreferredSink } = useDigifiDestination()
 
 onMounted(() => {
   loadOptInStatus()
+  loadPreferredSink()
 })
 
 const toggleLearning = async () => {
@@ -142,6 +204,17 @@ const confirmEraseLearningData = async () => {
     showToast('Digifi learning data erased', { type: 'success' })
   } catch (error) {
     showToast('Failed to erase learning data', { type: 'error' })
+  }
+}
+
+const changeSink = async (sink: 'logten' | 'logifi') => {
+  if (preferredSink.value === sink) return
+  try {
+    await setPreferredSink(sink)
+    const label = sink === 'logten' ? 'LogTen Pro' : 'Logifi logbook'
+    showToast(`Destination changed to ${label}`, { type: 'success' })
+  } catch (error) {
+    showToast('Failed to change destination', { type: 'error' })
   }
 }
 </script>
