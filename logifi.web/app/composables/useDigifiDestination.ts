@@ -4,11 +4,25 @@ import { useAuth } from '~/composables/useAuth'
 
 type DigifiSink = 'logten' | 'logifi' | null
 
-const preferredSink = ref<DigifiSink>(null)
-const isLoading = ref(false)
+let _preferredSink: ReturnType<typeof ref<DigifiSink>> | null = null
+let _isLoading: ReturnType<typeof ref<boolean>> | null = null
+
+function getState() {
+  if (!_preferredSink) {
+    _preferredSink = ref<DigifiSink>(null)
+  }
+  if (!_isLoading) {
+    _isLoading = ref(false)
+  }
+  return {
+    preferredSink: _preferredSink,
+    isLoading: _isLoading
+  }
+}
 
 export function useDigifiDestination() {
   const { user } = useAuth()
+  const { preferredSink, isLoading } = getState()
 
   const sinkLabel = computed(() => {
     if (preferredSink.value === 'logten') return 'LogTen Pro'
@@ -57,9 +71,9 @@ export function useDigifiDestination() {
   }
 
   return {
-    preferredSink: computed(() => preferredSink.value),
+    preferredSink,
     sinkLabel,
-    isLoading: computed(() => isLoading.value),
+    isLoading,
     loadPreferredSink,
     setPreferredSink,
   }
