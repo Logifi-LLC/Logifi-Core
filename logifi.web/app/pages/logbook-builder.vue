@@ -23,8 +23,10 @@ import { useAuth } from '~/composables/useAuth'
 import { useToast } from '~/composables/useToast'
 import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { useDigifiLearning } from '~/composables/useDigifiLearning'
+import { useDigifiDestination } from '~/composables/useDigifiDestination'
 import { supabase } from '~/lib/supabase'
 import DigifiLearningOptInModal from '~/components/digifi/DigifiLearningOptInModal.vue'
+import DigifiDestinationModal from '~/components/digifi/DigifiDestinationModal.vue'
 import DigifiSettingsModal from '~/components/settings/DigifiSettingsModal.vue'
 import { getDisplayedPilotInitials } from '~/utils/dashboardHydration'
 import type { Database } from '~/types/database'
@@ -151,6 +153,8 @@ provide('showDigifiLearningOptInModal', () => {
   }
 })
 
+provide('digifiPreferredSink', preferredSink)
+
 const handleLearningOptInAccept = async () => {
   try {
     await setOptIn(true)
@@ -207,18 +211,44 @@ const showInstructions = ref(false)
 const showDigifiChecklist = ref(false)
 const showDigifiCommonMistakes = ref(false)
 const showDigifiLearningOptIn = ref(false)
+const showDigifiDestinationModal = ref(false)
 const showDigifiSettings = ref(false)
 const digifiSettingsStack = ref<Array<'root' | 'account' | 'digifi' | 'account-email' | 'account-password'>>(['root'])
 const { optInStatus, loadOptInStatus, setOptIn } = useDigifiLearning()
 const { displayCredits, loading: creditsLoading } = useDigifiCredits()
+const { preferredSink, loadPreferredSink, setPreferredSink } = useDigifiDestination()
 
 const isDigifiMode = computed(() => route.query.digifi === 'open')
 
 watchEffect(() => {
   if (isDigifiMode.value && isAuthenticated.value) {
     fetchBalance()
+    loadPreferredSink()
   }
 })
+
+// Show destination chooser on first Digifi entry if no preference set
+watchEffect(() => {
+  if (isDigifiMode.value && isAuthenticated.value && preferredSink.value === null && !showDigifiDestinationModal.value) {
+    // Small delay to let other modals settle
+    setTimeout(() => {
+      if (preferredSink.value === null) {
+        showDigifiDestinationModal.value = true
+      }
+    }, 500)
+  }
+})
+
+async function handleDestinationSelect(sink: 'logten' | 'logifi') {
+  try {
+    await setPreferredSink(sink)
+    showDigifiDestinationModal.value = false
+    const label = sink === 'logten' ? 'LogTen Pro' : 'Logifi logbook'
+    showToast(`Destination set to ${label}`, { type: 'success' })
+  } catch (error) {
+    showToast('Failed to save destination preference', { type: 'error' })
+  }
+}
 
 // Profile for initials
 const pilotProfile = ref<UserProfile | null>(null)
@@ -593,7 +623,9 @@ watchEffect(async (onCleanup) => {
               >
                 <li>Use the toolbar to set rows, layout, and columns before editing or scanning.</li>
                 <li>Type directly in the grid to transcribe pages manually when not using Digifi.</li>
-                <li>Use Validate to review totals and issues, then Import to add entries to your logbook.</li>
+                <li v-if="isDigifiMode && preferredSink === 'logten'">Use Validate to review totals and issues, then Send to LogTen Pro to open the flights on your Mac.</li>
+                <li v-else-if="isDigifiMode && preferredSink === 'logifi'">Use Validate to review totals and issues, then Import to add entries to your Logifi logbook.</li>
+                <li v-else>Use Validate to review totals and issues, then Import to add entries to your logbook.</li>
               </ul>
             </div>
           </div>
@@ -613,7 +645,7 @@ watchEffect(async (onCleanup) => {
               :class="isDark ? 'border-blue-500/30 bg-blue-500/10' : 'border-blue-200 bg-blue-50'"
             >
               <h2 class="text-sm font-semibold mb-2" :class="isDark ? 'text-blue-100' : 'text-blue-900'">
-                Pre-Scan Digifi Checklist
+                {{ preferredSink === 'logten' ? 'Pre-Scan Checklist (for LogTen Pro)' : preferredSink === 'logifi' ? 'Pre-Scan Checklist (for Logifi)' : 'Pre-Scan Digifi Checklist' }}
               </h2>
               <ul
                 class="space-y-1.5 text-sm list-disc list-inside"
@@ -623,7 +655,8 @@ watchEffect(async (onCleanup) => {
                 <li>Verify columns/template match the paper page format.</li>
                 <li>Ensure the page photo is flat, bright, and fully in frame.</li>
                 <li>In two-page mode, scan the left page first before scanning the right page.</li>
-                <li>After scan, review all AI-filled cells before importing.</li>
+                <li v-if="preferredSink === 'logten'">After scan, review all AI-filled cells before sending to LogTen Pro.</li>
+                <li v-else>After scan, review all AI-filled cells before importing.</li>
               </ul>
             </div>
           </div>
@@ -707,13 +740,21 @@ watchEffect(async (onCleanup) => {
             class="text-xl font-bold font-quicksand"
             :class="isDark ? 'text-white' : 'text-gray-900'"
           >
-            Ready to scan your logbook
+            {{ preferredSink === 'logten' ? 'Ready to scan for LogTen Pro' : preferredSink === 'logifi' ? 'Ready to scan for Logifi' : 'Ready to scan your logbook' }}
           </h2>
           <p
             class="text-sm"
             :class="isDark ? 'text-gray-300' : 'text-gray-700'"
           >
-            Open the Digifi scanner below to photograph a logbook spread. AI will transcribe the entries for you to review.
+            <template v-if="preferredSink === 'logten'">
+              Scan a logbook spread below. After you review, send the flights directly to LogTen Pro on your Mac.
+            </template>
+            <template v-else-if="preferredSink === 'logifi'">
+              Scan a logbook spread below. After you review, import the flights into your Logifi digital logbook.
+            </template>
+            <template v-else>
+              Open the Digifi scanner below to photograph a logbook spread. AI will transcribe the entries for you to review.
+            </template>
           </p>
           <button
             type="button"
@@ -783,6 +824,14 @@ watchEffect(async (onCleanup) => {
       @account-deleted="handleAccountDeleted"
       @show-directions="handleShowDirections"
       @show-common-errors="handleShowCommonErrors"
+    />
+
+    <!-- Digifi Destination Chooser Modal -->
+    <DigifiDestinationModal
+      :open="showDigifiDestinationModal"
+      :is-dark="isDark"
+      @close="showDigifiDestinationModal = false"
+      @select="handleDestinationSelect"
     />
 
     <!-- Digifi Learning Opt-In Modal -->
