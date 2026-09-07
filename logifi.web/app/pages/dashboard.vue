@@ -290,14 +290,21 @@
             type="button"
             @click="openSettings()"
             :class="[
-              'h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all duration-200 shadow-sm border',
+              'h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all duration-200 shadow-sm border overflow-hidden',
               isDarkMode 
                 ? 'bg-blue-600/20 text-blue-400 border-blue-500/30 hover:bg-blue-600/40' 
                 : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
             ]"
             aria-label="Profile & Settings"
           >
-            {{ pilotInitials }}
+            <template v-if="pilotInitials">
+              {{ pilotInitials }}
+            </template>
+            <Icon
+              v-else
+              name="ri:send-plane-line"
+              :size="20"
+            />
           </button>
         </nav>
           </div>

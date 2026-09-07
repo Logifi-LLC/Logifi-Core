@@ -26,12 +26,90 @@
       />
     </SettingsListGroup>
 
+    <SettingsListGroup title="Destination" :is-dark-mode="isDarkMode">
+      <div class="px-4 py-3">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex-1">
+            <p class="text-sm font-semibold mb-1" :class="isDarkMode ? 'text-white' : 'text-gray-900'">
+              Send flights to {{ preferredSink === 'logten' ? 'LogTen Pro' : preferredSink === 'logifi' ? 'Logifi logbook' : 'Not set' }}
+            </p>
+            <p class="text-xs" :class="isDarkMode ? 'text-gray-400' : 'text-gray-600'">
+              Change in Account Settings
+            </p>
+          </div>
+          <Icon
+            v-if="preferredSink === 'logten'"
+            name="ri:macbook-line"
+            size="20"
+            :class="isDarkMode ? 'text-orange-400' : 'text-orange-600'"
+          />
+          <Icon
+            v-if="preferredSink === 'logifi'"
+            name="ri:book-open-line"
+            size="20"
+            :class="isDarkMode ? 'text-blue-400' : 'text-blue-600'"
+          />
+        </div>
+      </div>
+    </SettingsListGroup>
+
     <SettingsListGroup title="Credits" :is-dark-mode="isDarkMode">
       <div class="px-4 py-3">
         <DigifiCreditsIndicator compact @open-checkout="showAddCreditsModal = true" />
       </div>
       <div class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
         <DigifiCreditHistory :is-dark-mode="isDarkMode" />
+      </div>
+    </SettingsListGroup>
+
+    <SettingsListGroup title="Learning" :is-dark-mode="isDarkMode">
+      <div class="px-4 py-3 space-y-3">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex-1">
+            <p class="text-sm font-semibold mb-1" :class="isDarkMode ? 'text-white' : 'text-gray-900'">
+              Save corrections & vocabulary
+            </p>
+            <p class="text-xs" :class="isDarkMode ? 'text-gray-400' : 'text-gray-600'">
+              Improve future scans by learning from your corrections and vocabulary
+            </p>
+          </div>
+          <button
+            type="button"
+            :disabled="learningLoading"
+            :class="[
+              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2',
+              isLearningOptedIn
+                ? 'bg-blue-600'
+                : isDarkMode
+                ? 'bg-gray-700'
+                : 'bg-gray-200',
+              learningLoading ? 'opacity-50 cursor-not-allowed' : ''
+            ]"
+            @click="toggleLearning"
+          >
+            <span
+              :class="[
+                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                isLearningOptedIn ? 'translate-x-5' : 'translate-x-0'
+              ]"
+            />
+          </button>
+        </div>
+        <button
+          v-if="isLearningOptedIn"
+          type="button"
+          :disabled="learningLoading"
+          :class="[
+            'w-full px-4 py-2 rounded-xl text-sm font-semibold transition-colors border',
+            isDarkMode
+              ? 'bg-red-500/10 hover:bg-red-500/20 border-red-500/30 text-red-400'
+              : 'bg-red-50 hover:bg-red-100 border-red-200 text-red-700',
+            learningLoading ? 'opacity-50 cursor-not-allowed' : ''
+          ]"
+          @click="confirmEraseLearningData"
+        >
+          Erase Digifi learning data
+        </button>
       </div>
     </SettingsListGroup>
 
@@ -42,10 +120,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import SettingsListGroup from '../SettingsListGroup.vue'
 import SettingsListRow from '../SettingsListRow.vue'
 import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
+import { useDigifiLearning } from '~/composables/useDigifiLearning'
+import { useDigifiDestination } from '~/composables/useDigifiDestination'
+import { useToast } from '~/composables/useToast'
 import DigifiCreditsIndicator from '~/components/digifi/DigifiCreditsIndicator.vue'
 import DigifiCreditHistory from '~/components/digifi/DigifiCreditHistory.vue'
 import DigifiAddCreditsModal from '~/components/digifi/DigifiAddCreditsModal.vue'
@@ -61,4 +142,36 @@ defineEmits<{
 
 const showAddCreditsModal = ref(false)
 const { isIos } = useCapacitorPlatform()
+const { showToast } = useToast()
+const { isOptedIn: isLearningOptedIn, isLoading: learningLoading, loadOptInStatus, setOptIn, eraseDigifiLearningData } = useDigifiLearning()
+const { preferredSink, loadPreferredSink } = useDigifiDestination()
+
+onMounted(() => {
+  loadOptInStatus()
+  loadPreferredSink()
+})
+
+const toggleLearning = async () => {
+  try {
+    await setOptIn(!isLearningOptedIn.value)
+    showToast(
+      isLearningOptedIn.value ? 'Digifi learning enabled' : 'Digifi learning disabled',
+      { type: 'success' }
+    )
+  } catch (error) {
+    showToast('Failed to update learning setting', { type: 'error' })
+  }
+}
+
+const confirmEraseLearningData = async () => {
+  if (!confirm('Erase all saved Digifi corrections and vocabulary? This cannot be undone.')) {
+    return
+  }
+  try {
+    await eraseDigifiLearningData()
+    showToast('Digifi learning data erased', { type: 'success' })
+  } catch (error) {
+    showToast('Failed to erase learning data', { type: 'error' })
+  }
+}
 </script>

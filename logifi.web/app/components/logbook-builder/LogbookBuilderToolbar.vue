@@ -184,7 +184,7 @@ function onRowCountInput(e: Event) {
 
 <template>
   <div
-    class="flex flex-wrap items-center gap-4 rounded-lg border p-3"
+    class="flex flex-nowrap items-center gap-3 rounded-lg border p-3 overflow-x-auto"
     :class="isDark ? 'border-white/10 bg-gray-900 shadow-md shadow-black/40' : 'border-gray-200 bg-white'"
   >
     <div class="flex items-center gap-2">
@@ -272,7 +272,7 @@ function onRowCountInput(e: Event) {
     <button
       type="button"
       :class="[
-        'rounded px-3 py-1.5 text-sm font-medium transition-colors border',
+        'rounded px-3 py-1.5 text-sm font-medium transition-colors border whitespace-nowrap flex-shrink-0',
         isDark
           ? 'bg-blue-600 hover:bg-blue-500 text-white border-blue-600'
           : 'bg-gray-200 hover:bg-gray-300 text-black border-gray-300 shadow-sm'
@@ -285,7 +285,7 @@ function onRowCountInput(e: Event) {
       v-if="columns.length > 1"
       type="button"
       :class="[
-        'rounded border px-3 py-1.5 text-sm transition-colors',
+        'rounded border px-3 py-1.5 text-sm transition-colors whitespace-nowrap flex-shrink-0',
         isDark 
           ? 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 shadow-sm shadow-black/20' 
           : 'border-gray-300 bg-gray-200 text-black hover:bg-gray-300 shadow-sm'
@@ -294,11 +294,11 @@ function onRowCountInput(e: Event) {
     >
       Remove column
     </button>
-    <div class="ml-auto flex gap-2">
+    <div class="ml-auto flex gap-2 flex-shrink-0">
       <button
         type="button"
         :class="[
-          'rounded border px-3 py-1.5 text-sm transition-colors',
+          'rounded border px-3 py-1.5 text-sm transition-colors whitespace-nowrap',
           isDark 
             ? 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 shadow-sm shadow-black/20' 
             : 'border-gray-300 bg-gray-200 text-black hover:bg-gray-300 shadow-sm'
@@ -310,7 +310,7 @@ function onRowCountInput(e: Event) {
       <button
         type="button"
         :class="[
-          'rounded border px-3 py-1.5 text-sm transition-colors',
+          'rounded border px-3 py-1.5 text-sm transition-colors whitespace-nowrap',
           isDark 
             ? 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 shadow-sm shadow-black/20' 
             : 'border-gray-300 bg-gray-200 text-black hover:bg-gray-300 shadow-sm'

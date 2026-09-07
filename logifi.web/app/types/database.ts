@@ -573,6 +573,35 @@ export type Database = {
           last_corrected_at?: string
         }
       }
+      digifi_user_vocabulary: {
+        Row: {
+          id: string
+          user_id: string
+          vocab_type: 'aircraft' | 'airport'
+          value: string
+          context: Record<string, any>
+          last_seen_at: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          vocab_type: 'aircraft' | 'airport'
+          value: string
+          context?: Record<string, any>
+          last_seen_at?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          vocab_type?: 'aircraft' | 'airport'
+          value?: string
+          context?: Record<string, any>
+          last_seen_at?: string
+          created_at?: string
+        }
+      }
       user_profiles: {
         Row: {
           id: string
@@ -589,6 +618,9 @@ export type Database = {
           cfi_number: string | null
           cfi_expiration: string | null
           signing_pin_hash: string | null
+          digifi_learning_opt_in: boolean
+          digifi_learning_opted_in_at: string | null
+          digifi_preferred_sink: 'logten' | 'logifi' | null
           created_at: string
           updated_at: string
         }
@@ -607,6 +639,9 @@ export type Database = {
           cfi_number?: string | null
           cfi_expiration?: string | null
           signing_pin_hash?: string | null
+          digifi_learning_opt_in?: boolean
+          digifi_learning_opted_in_at?: string | null
+          digifi_preferred_sink?: 'logten' | 'logifi' | null
           created_at?: string
           updated_at?: string
         }
@@ -624,6 +659,9 @@ export type Database = {
           role?: 'STUDENT' | 'INSTRUCTOR' | 'DUAL'
           cfi_number?: string | null
           cfi_expiration?: string | null
+          digifi_learning_opt_in?: boolean
+          digifi_learning_opted_in_at?: string | null
+          digifi_preferred_sink?: 'logten' | 'logifi' | null
           signing_pin_hash?: string | null
           created_at?: string
           updated_at?: string
