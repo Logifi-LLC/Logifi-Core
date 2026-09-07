@@ -614,10 +614,20 @@ function collectDigifiCorrectionFeedback(
   return [...feedbackItems.values()]
 }
 
-async function persistDigifiCorrectionFeedback(
+export async function persistDigifiCorrectionFeedback(
   grid: ReturnType<typeof useLogbookBuilderGrid>,
   userId: string
 ): Promise<void> {
+  const { data: profile } = await (supabase as any)
+    .from('user_profiles')
+    .select('digifi_learning_opt_in')
+    .eq('id', userId)
+    .single()
+  
+  if (!profile?.digifi_learning_opt_in) {
+    return
+  }
+
   const feedbackItems = collectDigifiCorrectionFeedback(grid)
   if (feedbackItems.length === 0) return
 
@@ -838,6 +848,13 @@ export async function runValidateAndImport(
       await persistDigifiCorrectionFeedback(grid, user.value.id)
     } catch (error) {
       console.warn('[digifi] failed to persist correction feedback', error)
+    }
+    
+    try {
+      const { persistDigifiVocabulary } = await import('~/composables/useDigifiVocabulary')
+      await persistDigifiVocabulary(grid, user.value.id)
+    } catch (error) {
+      console.warn('[digifi] failed to persist vocabulary', error)
     }
   }
 

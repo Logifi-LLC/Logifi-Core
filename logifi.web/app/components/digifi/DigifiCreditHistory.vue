@@ -58,27 +58,29 @@ function formatWhen(iso: string): string {
     >
       No credit activity yet.
     </p>
-    <ul v-else class="space-y-2">
-      <li
-        v-for="tx in transactions"
-        :key="tx.id"
-        class="flex items-start justify-between gap-3 text-sm"
-      >
-        <div class="min-w-0">
-          <p :class="dark ? 'text-gray-100' : 'text-gray-800'">
-            {{ formatTransactionLabel(tx) }}
-          </p>
-          <p class="text-xs" :class="dark ? 'text-gray-500' : 'text-gray-500'">
-            {{ formatWhen(tx.created_at) }}
-          </p>
-        </div>
-        <span
-          class="shrink-0 font-medium font-quicksand"
-          :class="tx.amount > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-300'"
+    <div v-else class="max-h-[280px] overflow-y-auto pr-1">
+      <ul class="space-y-2">
+        <li
+          v-for="tx in transactions"
+          :key="tx.id"
+          class="flex items-start justify-between gap-3 text-sm"
         >
-          {{ formatTransactionAmount(tx) }}
-        </span>
-      </li>
-    </ul>
+          <div class="min-w-0">
+            <p :class="dark ? 'text-gray-100' : 'text-gray-800'">
+              {{ formatTransactionLabel(tx) }}
+            </p>
+            <p class="text-xs" :class="dark ? 'text-gray-500' : 'text-gray-500'">
+              {{ formatWhen(tx.created_at) }}
+            </p>
+          </div>
+          <span
+            class="shrink-0 font-medium font-quicksand"
+            :class="tx.amount > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-700 dark:text-amber-300'"
+          >
+            {{ formatTransactionAmount(tx) }}
+          </span>
+        </li>
+      </ul>
+    </div>
   </div>
 </template>
