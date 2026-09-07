@@ -4,7 +4,7 @@
       <div class="px-4 py-3">
         <DigifiCreditsIndicator compact @open-checkout="showAddCreditsModal = true" />
       </div>
-      <div class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
+      <div class="border-t px-4 py-3 max-h-[400px] overflow-y-auto" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
         <DigifiCreditHistory :is-dark-mode="isDarkMode" />
       </div>
     </SettingsListGroup>

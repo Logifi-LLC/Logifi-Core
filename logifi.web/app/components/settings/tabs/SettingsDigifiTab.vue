@@ -16,11 +16,21 @@
 
     <SettingsListGroup title="Scanner" :is-dark-mode="isDarkMode">
       <SettingsListRow
-        :label="isIos ? 'Digifi Eye' : 'Open Digifi scanner'"
-        :subtitle="isIos ? 'Camera for desktop Add Pages' : 'Add Pages — upload page photos'"
+        label="Open Digifi"
+        subtitle="Use Digifi to scan logbook pages"
         icon="ri:scan-line"
-        :badge="isIos ? 'Beta' : undefined"
-        :to="isIos ? '/digifi-eye' : '/logbook-builder?digifi=open'"
+        to="/digifi"
+        :is-dark-mode="isDarkMode"
+        tag="NuxtLink"
+        @click="$emit('close')"
+      />
+      <SettingsListRow
+        v-if="isIos"
+        label="Digifi Eye"
+        subtitle="Camera for desktop Add Pages"
+        icon="ri:camera-line"
+        badge="Beta"
+        to="/digifi-eye"
         :is-dark-mode="isDarkMode"
         @click="$emit('close')"
       />
@@ -57,7 +67,7 @@
       <div class="px-4 py-3">
         <DigifiCreditsIndicator compact @open-checkout="showAddCreditsModal = true" />
       </div>
-      <div class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
+      <div class="border-t px-4 py-3 max-h-[400px] overflow-y-auto" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
         <DigifiCreditHistory :is-dark-mode="isDarkMode" />
       </div>
     </SettingsListGroup>
@@ -113,8 +123,6 @@
       </div>
     </SettingsListGroup>
 
-    <DigifiCommonMistakesPanel :is-dark="isDarkMode" />
-
     <DigifiAddCreditsModal :is-open="showAddCreditsModal" @close="showAddCreditsModal = false" />
   </div>
 </template>
@@ -130,7 +138,6 @@ import { useToast } from '~/composables/useToast'
 import DigifiCreditsIndicator from '~/components/digifi/DigifiCreditsIndicator.vue'
 import DigifiCreditHistory from '~/components/digifi/DigifiCreditHistory.vue'
 import DigifiAddCreditsModal from '~/components/digifi/DigifiAddCreditsModal.vue'
-import DigifiCommonMistakesPanel from '~/components/digifi/DigifiCommonMistakesPanel.vue'
 
 defineProps<{
   isDarkMode: boolean
