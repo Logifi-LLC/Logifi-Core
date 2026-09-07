@@ -3,54 +3,68 @@
   <div class="min-h-screen bg-[#0a0e1a] font-quicksand text-gray-100 overflow-x-hidden dark:bg-[#0a0e1a] dark:text-gray-100">
     <MarketingHeader active-page="home" :logo-href="null" @open-auth="openAuth" />
 
+    <!-- Paper airplanes animation layer - full page -->
+    <div class="paper-planes-container fixed inset-0 z-[1] pointer-events-none" aria-hidden="true">
+      <!-- Plane 1: Large figure-8 -->
+      <div class="paper-plane plane-1">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.5" class="text-cyan-400" style="filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.4));"/>
+        </svg>
+      </div>
+      
+      <!-- Plane 2: Medium, loop-de-loop -->
+      <div class="paper-plane plane-2">
+        <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.45" class="text-blue-400" style="filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.4));"/>
+        </svg>
+      </div>
+      
+      <!-- Plane 3: Medium, fast arc -->
+      <div class="paper-plane plane-3">
+        <svg width="52" height="52" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.4" class="text-blue-300" style="filter: drop-shadow(0 0 6px rgba(147, 197, 253, 0.3));"/>
+        </svg>
+      </div>
+      
+      <!-- Plane 4: Large, gentle swoop -->
+      <div class="paper-plane plane-4">
+        <svg width="72" height="72" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.55" class="text-cyan-300" style="filter: drop-shadow(0 0 10px rgba(103, 232, 249, 0.5));"/>
+        </svg>
+      </div>
+      
+      <!-- Plane 5: Large, wide loop -->
+      <div class="paper-plane plane-5">
+        <svg width="60" height="60" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.48" class="text-blue-400" style="filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.4));"/>
+        </svg>
+      </div>
+      
+      <!-- Plane 6: Small accent in upper corner -->
+      <div class="paper-plane plane-6">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.42" class="text-cyan-500" style="filter: drop-shadow(0 0 6px rgba(6, 182, 212, 0.4));"/>
+        </svg>
+      </div>
+      
+      <!-- Plane 7: Mid-page cruiser -->
+      <div class="paper-plane plane-7">
+        <svg width="58" height="58" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.46" class="text-blue-400" style="filter: drop-shadow(0 0 7px rgba(59, 130, 246, 0.4));"/>
+        </svg>
+      </div>
+      
+      <!-- Plane 8: Lower section accent -->
+      <div class="paper-plane plane-8">
+        <svg width="50" height="50" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.38" class="text-cyan-400" style="filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.3));"/>
+        </svg>
+      </div>
+    </div>
+
     <!-- Hero Section -->
     <main>
       <section class="relative pt-32 pb-20 lg:pt-48 lg:pb-28 overflow-hidden">
-        <!-- Paper airplanes animation layer -->
-        <div class="paper-planes-container absolute inset-0 z-[1] pointer-events-none" aria-hidden="true">
-          <!-- Plane 1: Large figure-8 -->
-          <div class="paper-plane plane-1">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.5" class="text-cyan-400" style="filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.4));"/>
-            </svg>
-          </div>
-          
-          <!-- Plane 2: Medium, loop-de-loop -->
-          <div class="paper-plane plane-2">
-            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.45" class="text-blue-400" style="filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.4));"/>
-            </svg>
-          </div>
-          
-          <!-- Plane 3: Medium, fast arc -->
-          <div class="paper-plane plane-3">
-            <svg width="52" height="52" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.4" class="text-blue-300" style="filter: drop-shadow(0 0 6px rgba(147, 197, 253, 0.3));"/>
-            </svg>
-          </div>
-          
-          <!-- Plane 4: Large, gentle swoop -->
-          <div class="paper-plane plane-4">
-            <svg width="72" height="72" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.55" class="text-cyan-300" style="filter: drop-shadow(0 0 10px rgba(103, 232, 249, 0.5));"/>
-            </svg>
-          </div>
-          
-          <!-- Plane 5: Large, wide loop -->
-          <div class="paper-plane plane-5">
-            <svg width="60" height="60" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.48" class="text-blue-400" style="filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.4));"/>
-            </svg>
-          </div>
-          
-          <!-- Plane 6: Small accent in upper corner -->
-          <div class="paper-plane plane-6">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.42" class="text-cyan-500" style="filter: drop-shadow(0 0 6px rgba(6, 182, 212, 0.4));"/>
-            </svg>
-          </div>
-        </div>
-        
         <!-- Subtle grid background pattern -->
         <div class="absolute inset-0 z-0 opacity-[0.03]" style="background-image: linear-gradient(rgba(59, 130, 246, 0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(59, 130, 246, 0.4) 1px, transparent 1px); background-size: 40px 40px;"></div>
         
@@ -400,6 +414,53 @@ const scrollToAutofi = () => {
   }
 }
 
+/* Plane 7: Mid-page cruiser, gentle across, 48s */
+.plane-7 {
+  animation: midpage-7 48s ease-in-out infinite;
+  top: 50%;
+  left: -10%;
+}
+
+@keyframes midpage-7 {
+  0%, 100% { 
+    transform: translate(0, 0) rotate(15deg); 
+  }
+  25% { 
+    transform: translate(30vw, -8vh) rotate(60deg); 
+  }
+  50% { 
+    transform: translate(65vw, -5vh) rotate(105deg); 
+  }
+  75% { 
+    transform: translate(95vw, 3vh) rotate(150deg); 
+  }
+}
+
+/* Plane 8: Lower section, slow arc, 52s */
+.plane-8 {
+  animation: lower-8 52s ease-in-out infinite;
+  top: 75%;
+  right: -8%;
+}
+
+@keyframes lower-8 {
+  0%, 100% { 
+    transform: translate(0, 0) rotate(200deg); 
+  }
+  20% { 
+    transform: translate(-20vw, 8vh) rotate(240deg); 
+  }
+  40% { 
+    transform: translate(-45vw, 12vh) rotate(280deg); 
+  }
+  60% { 
+    transform: translate(-70vw, 8vh) rotate(320deg); 
+  }
+  80% { 
+    transform: translate(-95vw, -5vh) rotate(360deg); 
+  }
+}
+
 /* Respect prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   .paper-plane {
@@ -413,5 +474,7 @@ const scrollToAutofi = () => {
   .plane-4 { top: 12%; right: 30%; transform: rotate(225deg); }
   .plane-5 { top: 50%; left: 45%; transform: rotate(135deg); }
   .plane-6 { top: 8%; right: 8%; transform: rotate(90deg); }
+  .plane-7 { top: 55%; left: 35%; transform: rotate(60deg); }
+  .plane-8 { top: 75%; right: 25%; transform: rotate(200deg); }
 }
 </style>
