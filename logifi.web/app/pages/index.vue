@@ -22,7 +22,7 @@
           </h1>
           
           <p class="max-w-2xl mx-auto text-xl text-gray-400 mb-12 leading-relaxed">
-            Built for 121 CA and FO flying — pairings, legs, and hours that match the job. Not a student kitchen sink.
+            Logifi is built for 121 CA/FO flying — pairings, legs, and hours that match the job. Not a student kitchen sink.
           </p>
           
           <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -102,9 +102,9 @@
         <div class="absolute inset-0 z-0 bg-gradient-to-b from-[#0a0e1a] via-transparent to-[#0a0e1a]"></div>
         
         <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
-          <h2 class="text-3xl sm:text-4xl font-bold text-gray-100 mb-6">The book</h2>
+          <h2 class="text-3xl sm:text-4xl font-bold text-gray-100 mb-6">What the book is</h2>
           <p class="text-xl text-gray-300 leading-relaxed">
-            One professional logbook for airline flying. Totals, history, and export when you need it. Built by a Republic captain who got tired of the alternatives.
+            One professional logbook for airline flying. Totals, history, export when you need it. Built by a Republic captain who got tired of the alternatives.
           </p>
         </div>
       </section>
