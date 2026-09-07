@@ -263,214 +263,114 @@ const scrollToAutofi = () => {
 
 /* Plane 1: Large figure-8 loop across hero, 60s */
 .plane-1 {
-  animation: figure8-1 60s ease-in-out infinite;
   top: 10%;
   left: -8%;
+  offset-path: path('M 0 0 Q 200 -150 400 -80 Q 600 150 800 80 Q 1000 -120 1200 120');
+  offset-rotate: auto;
+  animation: path-1 60s ease-in-out infinite;
 }
 
-@keyframes figure8-1 {
-  0%, 100% { 
-    transform: translate(0, 0) rotate(15deg);
-  }
-  12.5% { 
-    transform: translate(20vw, -15vh) rotate(35deg);
-  }
-  25% { 
-    transform: translate(40vw, -8vh) rotate(25deg);
-  }
-  37.5% { 
-    transform: translate(60vw, 15vh) rotate(-20deg);
-  }
-  50% { 
-    transform: translate(80vw, 8vh) rotate(15deg);
-  }
-  62.5% { 
-    transform: translate(100vw, -12vh) rotate(40deg);
-  }
-  75% { 
-    transform: translate(115vw, -5vh) rotate(25deg);
-  }
-  87.5% { 
-    transform: translate(120vw, 12vh) rotate(-15deg);
-  }
+@keyframes path-1 {
+  0% { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
 }
 
 /* Plane 2: Loop-de-loop from right side, 45s */
 .plane-2 {
-  animation: loopdeloop-2 45s ease-in-out infinite;
   top: 35%;
   left: 105%;
+  offset-path: path('M 0 0 Q -250 -120 -500 -80 Q -700 100 -900 200 Q -1050 120 -1150 -50');
+  offset-rotate: auto;
+  animation: path-2 45s ease-in-out infinite;
 }
 
-@keyframes loopdeloop-2 {
-  0%, 100% { 
-    transform: translate(0, 0) rotate(180deg) scaleX(-1);
-  }
-  15% { 
-    transform: translate(-25vw, -12vh) rotate(145deg) scaleX(-1);
-  }
-  30% { 
-    transform: translate(-50vw, -8vh) rotate(175deg) scaleX(-1);
-  }
-  45% { 
-    transform: translate(-70vw, 10vh) rotate(205deg) scaleX(-1);
-  }
-  60% { 
-    transform: translate(-90vw, 20vh) rotate(195deg) scaleX(-1);
-  }
-  75% { 
-    transform: translate(-105vw, 12vh) rotate(170deg) scaleX(-1);
-  }
-  90% { 
-    transform: translate(-115vw, -5vh) rotate(145deg) scaleX(-1);
-  }
+@keyframes path-2 {
+  0% { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
 }
 
 /* Plane 3: Fast arc across center, 35s */
 .plane-3 {
-  animation: arc-3 35s linear infinite;
   top: 55%;
   left: -8%;
+  offset-path: path('M 0 0 Q 300 -200 600 -150 Q 900 80 1150 200');
+  offset-rotate: auto;
+  animation: path-3 35s linear infinite;
 }
 
-@keyframes arc-3 {
-  0% { 
-    transform: translate(0, 0) rotate(10deg);
-  }
-  25% { 
-    transform: translate(30vw, -20vh) rotate(-25deg);
-  }
-  50% { 
-    transform: translate(60vw, -15vh) rotate(5deg);
-  }
-  75% { 
-    transform: translate(90vw, 8vh) rotate(20deg);
-  }
-  100% { 
-    transform: translate(115vw, 20vh) rotate(25deg);
-  }
+@keyframes path-3 {
+  0% { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
 }
 
 /* Plane 4: Large gentle swoop in upper area (very visible), 50s */
 .plane-4 {
-  animation: swoop-4 50s ease-in-out infinite;
   top: 8%;
   left: 105%;
+  offset-path: path('M 0 0 Q -300 180 -600 120 Q -850 -80 -1050 -150');
+  offset-rotate: auto;
+  animation: path-4 50s ease-in-out infinite;
 }
 
-@keyframes swoop-4 {
-  0%, 100% { 
-    transform: translate(0, 0) rotate(180deg) scaleX(-1);
-  }
-  20% { 
-    transform: translate(-30vw, 18vh) rotate(205deg) scaleX(-1);
-  }
-  40% { 
-    transform: translate(-60vw, 12vh) rotate(185deg) scaleX(-1);
-  }
-  60% { 
-    transform: translate(-85vw, -8vh) rotate(155deg) scaleX(-1);
-  }
-  80% { 
-    transform: translate(-105vw, -15vh) rotate(150deg) scaleX(-1);
-  }
+@keyframes path-4 {
+  0% { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
 }
 
 /* Plane 5: Wide loop through middle, 55s */
 .plane-5 {
-  animation: wideloop-5 55s ease-in-out infinite;
   top: 45%;
   left: -12%;
+  offset-path: path('M 0 0 Q 250 -180 550 -250 Q 850 -180 1050 50 Q 1100 120 1150 180');
+  offset-rotate: auto;
+  animation: path-5 55s ease-in-out infinite;
 }
 
-@keyframes wideloop-5 {
-  0%, 100% { 
-    transform: translate(0, 0) rotate(5deg);
-  }
-  16.67% { 
-    transform: translate(25vw, -18vh) rotate(-30deg);
-  }
-  33.33% { 
-    transform: translate(55vw, -25vh) rotate(-10deg);
-  }
-  50% { 
-    transform: translate(85vw, -18vh) rotate(20deg);
-  }
-  66.67% { 
-    transform: translate(105vw, 5vh) rotate(30deg);
-  }
-  83.33% { 
-    transform: translate(115vw, 18vh) rotate(25deg);
-  }
+@keyframes path-5 {
+  0% { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
 }
 
 /* Plane 6: Upper corner accent, quick loop, 40s */
 .plane-6 {
-  animation: corner-6 40s ease-in-out infinite;
   top: 5%;
   right: 5%;
+  offset-path: path('M 0 0 Q -150 100 -300 150 Q -400 120 -450 100');
+  offset-rotate: auto;
+  animation: path-6 40s ease-in-out infinite;
 }
 
-@keyframes corner-6 {
-  0%, 100% { 
-    transform: translate(0, 0) rotate(180deg) scaleX(-1);
-  }
-  25% { 
-    transform: translate(-15vw, 10vh) rotate(205deg) scaleX(-1);
-  }
-  50% { 
-    transform: translate(-30vw, 15vh) rotate(200deg) scaleX(-1);
-  }
-  75% { 
-    transform: translate(-45vw, 10vh) rotate(175deg) scaleX(-1);
-  }
+@keyframes path-6 {
+  0% { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
 }
 
 /* Plane 7: Mid-page cruiser, gentle across, 48s */
 .plane-7 {
-  animation: midpage-7 48s ease-in-out infinite;
   top: 50%;
   left: -10%;
+  offset-path: path('M 0 0 Q 300 -80 650 -50 Q 800 0 950 30');
+  offset-rotate: auto;
+  animation: path-7 48s ease-in-out infinite;
 }
 
-@keyframes midpage-7 {
-  0%, 100% { 
-    transform: translate(0, 0) rotate(5deg);
-  }
-  25% { 
-    transform: translate(30vw, -8vh) rotate(-8deg);
-  }
-  50% { 
-    transform: translate(65vw, -5vh) rotate(3deg);
-  }
-  75% { 
-    transform: translate(95vw, 3vh) rotate(8deg);
-  }
+@keyframes path-7 {
+  0% { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
 }
 
 /* Plane 8: Lower section, slow arc, 52s */
 .plane-8 {
-  animation: lower-8 52s ease-in-out infinite;
   top: 75%;
   right: -8%;
+  offset-path: path('M 0 0 Q -200 80 -450 120 Q -700 80 -950 -50');
+  offset-rotate: auto;
+  animation: path-8 52s ease-in-out infinite;
 }
 
-@keyframes lower-8 {
-  0%, 100% { 
-    transform: translate(0, 0) rotate(180deg) scaleX(-1);
-  }
-  20% { 
-    transform: translate(-20vw, 8vh) rotate(205deg) scaleX(-1);
-  }
-  40% { 
-    transform: translate(-45vw, 12vh) rotate(200deg) scaleX(-1);
-  }
-  60% { 
-    transform: translate(-70vw, 8vh) rotate(185deg) scaleX(-1);
-  }
-  80% { 
-    transform: translate(-95vw, -5vh) rotate(160deg) scaleX(-1);
-  }
+@keyframes path-8 {
+  0% { offset-distance: 0%; }
+  100% { offset-distance: 100%; }
 }
 
 /* Respect prefers-reduced-motion */
