@@ -7,7 +7,7 @@ describe('getPilotInitialsFromName', () => {
     expect(getPilotInitialsFromName('Charles Elwood Yeager')).toBe('CY')
   })
 
-  it('returns PP when name is empty', () => {
-    expect(getPilotInitialsFromName('')).toBe('PP')
+  it('returns empty string when name is empty (for paper airplane avatar fallback)', () => {
+    expect(getPilotInitialsFromName('')).toBe('')
   })
 })
