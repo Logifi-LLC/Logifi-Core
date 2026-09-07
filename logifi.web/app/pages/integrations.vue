@@ -28,20 +28,15 @@
           class="relative overflow-hidden rounded-xl border border-gray-800/50 bg-gray-900/40 backdrop-blur-sm shadow-lg p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8"
         >
           <div class="prose prose-invert max-w-none text-gray-300 space-y-4">
-            <h3 class="text-xl font-bold text-gray-100 font-quicksand mt-0">What this integration does</h3>
             <p class="text-lg leading-relaxed">
               After you connect FLICA in Settings, Logifi fetches schedule legs for the date range you choose.
-              You review a preview (including optional duplicate warnings) before import. Imports are intended
-              to be idempotent using stable flight identifiers. Other airlines are not supported yet.
+              You review a preview (including optional duplicate warnings) before import.
             </p>
             <p class="text-lg leading-relaxed">
-              This is for
-              <strong class="text-gray-100">logbook record-keeping only</strong>. Logifi does not use schedule data for flight
-              planning, dispatch, weather or NOTAM briefing, or any operational decision-making.
+              This is for <strong class="text-gray-100">logbook record-keeping only</strong>. Logifi does not use schedule data for flight planning, dispatch, weather or NOTAM briefing, or any operational decision-making.
             </p>
             <p class="text-lg leading-relaxed">
-              More detail on data handling:
-              <NuxtLink to="/data-sources?from=landing" class="text-blue-400 font-bold hover:text-blue-300 transition-colors">Data sources &amp; third-party APIs</NuxtLink>.
+              More detail: <NuxtLink to="/data-sources?from=landing" class="text-blue-400 font-bold hover:text-blue-300 transition-colors">Data sources &amp; third-party APIs</NuxtLink>.
             </p>
           </div>
         </div>
@@ -59,28 +54,22 @@
           class="relative overflow-hidden rounded-xl border border-gray-800/50 bg-gray-900/40 backdrop-blur-sm shadow-lg p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8"
         >
           <div class="prose prose-invert max-w-none text-gray-300 space-y-4">
-            <h3 class="text-xl font-bold text-gray-100 font-quicksand mt-0">What this integration does</h3>
             <p class="text-lg leading-relaxed">
-              When you use Digifi, Logifi sends your logbook scan images and extracted text to
-              <strong class="text-gray-100">Google Gemini</strong> for transcription into your logbook grid.
-              You review and edit before importing into your digital logbook.
+              Logifi sends your logbook scan images to <strong class="text-gray-100">Google Gemini</strong> for transcription.
+              You review and edit before importing.
             </p>
             <p class="text-lg leading-relaxed">
-              Scan images are stored in our private storage bucket for up to
-              <strong class="text-gray-100">24 hours</strong> (for support), then deleted.
+              Scan images are stored in our private storage bucket for up to <strong class="text-gray-100">24 hours</strong> (for support), then deleted.
               We do not send airline portal credentials or schedule tokens to Gemini or any other AI provider.
             </p>
             <p class="text-lg leading-relaxed">
-              Digifi scanning uses a pay-per-spread credit model. Every account includes
-              <strong class="text-gray-100">10 free Digifi spreads</strong> to get started—see
+              Digifi uses a pay-per-spread credit model. Every account includes <strong class="text-gray-100">10 free Digifi spreads</strong> to get started—see
               <NuxtLink to="/pricing" class="text-blue-400 font-bold hover:text-blue-300 transition-colors">Pricing</NuxtLink>
-              for additional rates. Purchase more credits in Settings → Account after signing in.
+              for additional rates.
             </p>
             <p class="text-lg leading-relaxed">
-              More detail on data handling:
-              <NuxtLink to="/data-sources?from=landing" class="text-blue-400 font-bold hover:text-blue-300 transition-colors">Data sources &amp; third-party APIs</NuxtLink>
-              and our
-              <NuxtLink to="/privacy?from=landing#digifi" class="text-blue-400 font-bold hover:text-blue-300 transition-colors">Privacy Policy (Digifi)</NuxtLink>.
+              More detail: <NuxtLink to="/data-sources?from=landing" class="text-blue-400 font-bold hover:text-blue-300 transition-colors">Data sources &amp; third-party APIs</NuxtLink>
+              and our <NuxtLink to="/privacy?from=landing#digifi" class="text-blue-400 font-bold hover:text-blue-300 transition-colors">Privacy Policy</NuxtLink>.
             </p>
           </div>
         </div>
