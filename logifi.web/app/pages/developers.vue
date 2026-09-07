@@ -3,13 +3,15 @@
     :class="[
       'min-h-screen transition-colors duration-300 font-quicksand',
       isFromLanding
-        ? 'relative overflow-x-hidden bg-[#e4e8e7] text-gray-900'
+        ? 'relative overflow-x-hidden bg-[#0a0e1a] text-gray-100'
         : theme === 'dark'
           ? 'bg-gray-900'
           : 'bg-gray-50'
     ]"
   >
-    <TechnicalTopographyBg v-if="isFromLanding" />
+    <!-- Subtle grid background for marketing mode -->
+    <div v-if="isFromLanding" class="fixed inset-0 z-0 opacity-[0.02]" style="background-image: linear-gradient(rgba(59, 130, 246, 0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(59, 130, 246, 0.4) 1px, transparent 1px); background-size: 40px 40px;"></div>
+    
     <div :class="isFromLanding ? 'relative z-10' : 'contents'">
     <MarketingHeader v-if="isFromLanding" active-page="developers" @open-auth="openAuth" />
 
@@ -116,14 +118,14 @@
             : 'pt-24 pb-16'
       ]"
     >
-      <div :class="['max-w-4xl mx-auto', isFromLanding ? 'relative overflow-hidden rounded-[28px] border border-white/15 bg-white/10 backdrop-blur-md shadow-[0_0_42px_-12px_rgba(59,130,246,0.24),0_0_56px_-18px_rgba(37,99,235,0.14)] p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8' : '']">
+      <div :class="['max-w-4xl mx-auto', isFromLanding ? 'relative overflow-hidden rounded-xl border border-gray-800/50 bg-gray-900/40 backdrop-blur-sm shadow-lg p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8' : '']">
         <!-- Hero Section -->
         <div :class="['text-center', isAppShell && isIos ? 'mb-8' : 'mb-12']">
           <div
             :class="[
               'inline-flex items-center justify-center rounded-2xl shadow-lg',
               isAppShell && isIos ? 'w-14 h-14 mb-4' : 'w-16 h-16 mb-6',
-              isFromLanding ? 'bg-blue-600 shadow-[0_0_24px_-2px_rgba(37,99,235,0.55)]' : 'bg-blue-600 shadow-blue-900/20'
+              isFromLanding ? 'bg-blue-600' : 'bg-blue-600 shadow-blue-900/20'
             ]"
           >
             <Icon name="ri:open-source-line" :size="isAppShell && isIos ? 28 : 32" class="text-white" />
@@ -132,7 +134,7 @@
             v-if="!(isAppShell && isIos)"
             :class="[
               'font-bold font-quicksand mb-4',
-              isFromLanding ? 'text-4xl text-gray-950 dark:text-gray-900 drop-shadow-sm' : ['text-4xl', effectiveDark ? 'text-white' : 'text-gray-900']
+              isFromLanding ? 'text-4xl text-gray-100' : ['text-4xl', effectiveDark ? 'text-white' : 'text-gray-900']
             ]"
           >
             Open Source
@@ -140,7 +142,7 @@
           <p
             :class="[
               'max-w-2xl mx-auto',
-              isFromLanding ? 'text-lg text-gray-800 dark:text-gray-700 font-medium' : ['text-lg', effectiveDark ? 'text-gray-400' : 'text-gray-600']
+              isFromLanding ? 'text-lg text-gray-400 font-medium' : ['text-lg', effectiveDark ? 'text-gray-400' : 'text-gray-600']
             ]"
           >
             Logifi-Core is open source. View the repo, report issues, or contribute.
@@ -156,23 +158,23 @@
             rel="noopener noreferrer"
             :class="[
               'flex items-start gap-4 p-6 rounded-3xl border transition-all duration-200 hover:scale-[1.02]',
-              isFromLanding ? 'bg-white/10 backdrop-blur-md border-white/15 hover:border-white/25 shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)] dark:bg-white/10 dark:border-white/15 dark:hover:border-white/25' : (effectiveDark 
+              isFromLanding ? 'bg-gray-900/40 backdrop-blur-sm border-gray-800/50 hover:border-gray-700/50 shadow-lg' : (effectiveDark 
                 ? 'bg-gray-800 border-gray-700 hover:border-gray-600 text-gray-200 shadow-[0_20px_50px_rgba(0,0,0,0.15)]' 
                 : 'bg-gray-100 border-gray-300 hover:border-gray-400 text-gray-800 shadow-[0_20px_50px_rgba(0,0,0,0.15)]')
             ]"
           >
-            <div :class="['flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center', isFromLanding ? 'bg-white/50 dark:bg-white/50' : (effectiveDark ? 'bg-gray-700' : 'bg-gray-200')]">
-              <Icon name="ri:github-fill" size="24" :class="isFromLanding ? 'text-gray-900' : (effectiveDark ? 'text-white' : 'text-gray-900')" />
+            <div :class="['flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center', isFromLanding ? 'bg-gray-800/60' : (effectiveDark ? 'bg-gray-700' : 'bg-gray-200')]">
+              <Icon name="ri:github-fill" size="24" :class="isFromLanding ? 'text-gray-100' : (effectiveDark ? 'text-white' : 'text-gray-900')" />
             </div>
             <div>
-              <h3 :class="['font-semibold font-quicksand mb-1', isFromLanding ? 'text-gray-950 dark:text-gray-900' : (effectiveDark ? 'text-white' : 'text-gray-900')]">
+              <h3 :class="['font-semibold font-quicksand mb-1', isFromLanding ? 'text-gray-100' : (effectiveDark ? 'text-white' : 'text-gray-900')]">
                 GitHub Repository
               </h3>
-              <p :class="['text-sm', isFromLanding ? 'text-gray-800 dark:text-gray-800' : (effectiveDark ? 'text-gray-400' : 'text-gray-600')]">
+              <p :class="['text-sm', isFromLanding ? 'text-gray-300' : (effectiveDark ? 'text-gray-400' : 'text-gray-600')]">
                 View source code, report issues, and submit pull requests.
               </p>
             </div>
-            <Icon name="ri:external-link-line" size="18" :class="['flex-shrink-0 mt-1', isFromLanding ? 'text-gray-600 dark:text-gray-600' : (effectiveDark ? 'text-gray-500' : 'text-gray-400')]" />
+            <Icon name="ri:external-link-line" size="18" :class="['flex-shrink-0 mt-1', isFromLanding ? 'text-gray-400' : (effectiveDark ? 'text-gray-500' : 'text-gray-400')]" />
           </a>
 
           <!-- Contributing -->
@@ -182,23 +184,23 @@
             rel="noopener noreferrer"
             :class="[
               'flex items-start gap-4 p-6 rounded-3xl border transition-all duration-200 hover:scale-[1.02]',
-              isFromLanding ? 'bg-white/10 backdrop-blur-md border-white/15 hover:border-white/25 shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)] dark:bg-white/10 dark:border-white/15 dark:hover:border-white/25' : (effectiveDark 
+              isFromLanding ? 'bg-gray-900/40 backdrop-blur-sm border-gray-800/50 hover:border-gray-700/50 shadow-lg' : (effectiveDark 
                 ? 'bg-gray-800 border-gray-700 hover:border-gray-600 text-gray-200 shadow-[0_20px_50px_rgba(0,0,0,0.15)]' 
                 : 'bg-gray-100 border-gray-300 hover:border-gray-400 text-gray-800 shadow-[0_20px_50px_rgba(0,0,0,0.15)]')
             ]"
           >
-            <div :class="['flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center', isFromLanding ? 'bg-green-100/50 dark:bg-green-100/50' : (effectiveDark ? 'bg-green-900/50' : 'bg-green-100')]">
-              <Icon name="ri:git-pull-request-line" size="24" :class="isFromLanding ? 'text-green-700 dark:text-green-700' : (effectiveDark ? 'text-green-400' : 'text-green-600')" />
+            <div :class="['flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center', isFromLanding ? 'bg-green-900/40' : (effectiveDark ? 'bg-green-900/50' : 'bg-green-100')]">
+              <Icon name="ri:git-pull-request-line" size="24" :class="isFromLanding ? 'text-green-400' : (effectiveDark ? 'text-green-400' : 'text-green-600')" />
             </div>
             <div>
-              <h3 :class="['font-semibold font-quicksand mb-1', isFromLanding ? 'text-gray-950 dark:text-gray-900' : (effectiveDark ? 'text-white' : 'text-gray-900')]">
+              <h3 :class="['font-semibold font-quicksand mb-1', isFromLanding ? 'text-gray-100' : (effectiveDark ? 'text-white' : 'text-gray-900')]">
                 Contributing Guide
               </h3>
-              <p :class="['text-sm', isFromLanding ? 'text-gray-800 dark:text-gray-800' : (effectiveDark ? 'text-gray-400' : 'text-gray-600')]">
+              <p :class="['text-sm', isFromLanding ? 'text-gray-300' : (effectiveDark ? 'text-gray-400' : 'text-gray-600')]">
                 Learn how to contribute to the project and what we accept.
               </p>
             </div>
-            <Icon name="ri:external-link-line" size="18" :class="['flex-shrink-0 mt-1', isFromLanding ? 'text-gray-600 dark:text-gray-600' : (effectiveDark ? 'text-gray-500' : 'text-gray-400')]" />
+            <Icon name="ri:external-link-line" size="18" :class="['flex-shrink-0 mt-1', isFromLanding ? 'text-gray-400' : (effectiveDark ? 'text-gray-500' : 'text-gray-400')]" />
           </a>
 
           <!-- License -->
@@ -208,23 +210,23 @@
             rel="noopener noreferrer"
             :class="[
               'flex items-start gap-4 p-6 rounded-3xl border transition-all duration-200 hover:scale-[1.02]',
-              isFromLanding ? 'bg-white/10 backdrop-blur-md border-white/15 hover:border-white/25 shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)] dark:bg-white/10 dark:border-white/15 dark:hover:border-white/25' : (effectiveDark 
+              isFromLanding ? 'bg-gray-900/40 backdrop-blur-sm border-gray-800/50 hover:border-gray-700/50 shadow-lg' : (effectiveDark 
                 ? 'bg-gray-800 border-gray-700 hover:border-gray-600 text-gray-200 shadow-[0_20px_50px_rgba(0,0,0,0.15)]' 
                 : 'bg-gray-100 border-gray-300 hover:border-gray-400 text-gray-800 shadow-[0_20px_50px_rgba(0,0,0,0.15)]')
             ]"
           >
-            <div :class="['flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center', isFromLanding ? 'bg-purple-100/50 dark:bg-purple-100/50' : (effectiveDark ? 'bg-purple-900/50' : 'bg-purple-100')]">
-              <Icon name="ri:scales-3-line" size="24" :class="isFromLanding ? 'text-purple-700 dark:text-purple-700' : (effectiveDark ? 'text-purple-400' : 'text-purple-600')" />
+            <div :class="['flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center', isFromLanding ? 'bg-purple-900/40' : (effectiveDark ? 'bg-purple-900/50' : 'bg-purple-100')]">
+              <Icon name="ri:scales-3-line" size="24" :class="isFromLanding ? 'text-purple-400' : (effectiveDark ? 'text-purple-400' : 'text-purple-600')" />
             </div>
             <div>
-              <h3 :class="['font-semibold font-quicksand mb-1', isFromLanding ? 'text-gray-950 dark:text-gray-900' : (effectiveDark ? 'text-white' : 'text-gray-900')]">
+              <h3 :class="['font-semibold font-quicksand mb-1', isFromLanding ? 'text-gray-100' : (effectiveDark ? 'text-white' : 'text-gray-900')]">
                 License
               </h3>
-              <p :class="['text-sm', isFromLanding ? 'text-gray-800 dark:text-gray-800' : (effectiveDark ? 'text-gray-400' : 'text-gray-600')]">
+              <p :class="['text-sm', isFromLanding ? 'text-gray-300' : (effectiveDark ? 'text-gray-400' : 'text-gray-600')]">
                 Apache 2.0 License - free to use, modify, and distribute.
               </p>
             </div>
-            <Icon name="ri:external-link-line" size="18" :class="['flex-shrink-0 mt-1', isFromLanding ? 'text-gray-600 dark:text-gray-600' : (effectiveDark ? 'text-gray-500' : 'text-gray-400')]" />
+            <Icon name="ri:external-link-line" size="18" :class="['flex-shrink-0 mt-1', isFromLanding ? 'text-gray-400' : (effectiveDark ? 'text-gray-500' : 'text-gray-400')]" />
           </a>
 
           <!-- Code of Conduct -->
@@ -234,23 +236,23 @@
             rel="noopener noreferrer"
             :class="[
               'flex items-start gap-4 p-6 rounded-3xl border transition-all duration-200 hover:scale-[1.02]',
-              isFromLanding ? 'bg-white/10 backdrop-blur-md border-white/15 hover:border-white/25 shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)] dark:bg-white/10 dark:border-white/15 dark:hover:border-white/25' : (effectiveDark 
+              isFromLanding ? 'bg-gray-900/40 backdrop-blur-sm border-gray-800/50 hover:border-gray-700/50 shadow-lg' : (effectiveDark 
                 ? 'bg-gray-800 border-gray-700 hover:border-gray-600 text-gray-200 shadow-[0_20px_50px_rgba(0,0,0,0.15)]' 
                 : 'bg-gray-100 border-gray-300 hover:border-gray-400 text-gray-800 shadow-[0_20px_50px_rgba(0,0,0,0.15)]')
             ]"
           >
-            <div :class="['flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center', isFromLanding ? 'bg-orange-100/50 dark:bg-orange-100/50' : (effectiveDark ? 'bg-orange-900/50' : 'bg-orange-100')]">
-              <Icon name="ri:heart-line" size="24" :class="isFromLanding ? 'text-orange-700 dark:text-orange-700' : (effectiveDark ? 'text-orange-400' : 'text-orange-600')" />
+            <div :class="['flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center', isFromLanding ? 'bg-orange-900/40' : (effectiveDark ? 'bg-orange-900/50' : 'bg-orange-100')]">
+              <Icon name="ri:heart-line" size="24" :class="isFromLanding ? 'text-orange-400' : (effectiveDark ? 'text-orange-400' : 'text-orange-600')" />
             </div>
             <div>
-              <h3 :class="['font-semibold font-quicksand mb-1', isFromLanding ? 'text-gray-950 dark:text-gray-900' : (effectiveDark ? 'text-white' : 'text-gray-900')]">
+              <h3 :class="['font-semibold font-quicksand mb-1', isFromLanding ? 'text-gray-100' : (effectiveDark ? 'text-white' : 'text-gray-900')]">
                 Code of Conduct
               </h3>
-              <p :class="['text-sm', isFromLanding ? 'text-gray-800 dark:text-gray-800' : (effectiveDark ? 'text-gray-400' : 'text-gray-600')]">
+              <p :class="['text-sm', isFromLanding ? 'text-gray-300' : (effectiveDark ? 'text-gray-400' : 'text-gray-600')]">
                 Our community guidelines for a welcoming environment.
               </p>
             </div>
-            <Icon name="ri:external-link-line" size="18" :class="['flex-shrink-0 mt-1', isFromLanding ? 'text-gray-600 dark:text-gray-600' : (effectiveDark ? 'text-gray-500' : 'text-gray-400')]" />
+            <Icon name="ri:external-link-line" size="18" :class="['flex-shrink-0 mt-1', isFromLanding ? 'text-gray-400' : (effectiveDark ? 'text-gray-500' : 'text-gray-400')]" />
           </a>
 
           <!-- ICLA -->
@@ -260,30 +262,30 @@
             rel="noopener noreferrer"
             :class="[
               'flex items-start gap-4 p-6 rounded-3xl border transition-all duration-200 hover:scale-[1.02]',
-              isFromLanding ? 'bg-white/10 backdrop-blur-md border-white/15 hover:border-white/25 shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)] dark:bg-white/10 dark:border-white/15 dark:hover:border-white/25' : (effectiveDark 
+              isFromLanding ? 'bg-gray-900/40 backdrop-blur-sm border-gray-800/50 hover:border-gray-700/50 shadow-lg' : (effectiveDark 
                 ? 'bg-gray-800 border-gray-700 hover:border-gray-600 text-gray-200 shadow-[0_20px_50px_rgba(0,0,0,0.15)]' 
                 : 'bg-gray-100 border-gray-300 hover:border-gray-400 text-gray-800 shadow-[0_20px_50px_rgba(0,0,0,0.15)]')
             ]"
           >
-            <div :class="['flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center', isFromLanding ? 'bg-blue-100/50 dark:bg-blue-100/50' : (effectiveDark ? 'bg-blue-900/50' : 'bg-blue-100')]">
-              <Icon name="ri:file-pdf-2-line" size="24" :class="isFromLanding ? 'text-blue-700 dark:text-blue-700' : (effectiveDark ? 'text-blue-400' : 'text-blue-600')" />
+            <div :class="['flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center', isFromLanding ? 'bg-blue-900/40' : (effectiveDark ? 'bg-blue-900/50' : 'bg-blue-100')]">
+              <Icon name="ri:file-pdf-2-line" size="24" :class="isFromLanding ? 'text-blue-400' : (effectiveDark ? 'text-blue-400' : 'text-blue-600')" />
             </div>
             <div>
-              <h3 :class="['font-semibold font-quicksand mb-1', isFromLanding ? 'text-gray-950 dark:text-gray-900' : (effectiveDark ? 'text-white' : 'text-gray-900')]">
+              <h3 :class="['font-semibold font-quicksand mb-1', isFromLanding ? 'text-gray-100' : (effectiveDark ? 'text-white' : 'text-gray-900')]">
                 Contributor License Agreement
               </h3>
-              <p :class="['text-sm', isFromLanding ? 'text-gray-800 dark:text-gray-800' : (effectiveDark ? 'text-gray-400' : 'text-gray-600')]">
+              <p :class="['text-sm', isFromLanding ? 'text-gray-300' : (effectiveDark ? 'text-gray-400' : 'text-gray-600')]">
                 Review and sign the CLA to contribute.
               </p>
             </div>
-            <Icon name="ri:external-link-line" size="18" :class="['flex-shrink-0 mt-1', isFromLanding ? 'text-gray-600 dark:text-gray-600' : (effectiveDark ? 'text-gray-500' : 'text-gray-400')]" />
+            <Icon name="ri:external-link-line" size="18" :class="['flex-shrink-0 mt-1', isFromLanding ? 'text-gray-400' : (effectiveDark ? 'text-gray-500' : 'text-gray-400')]" />
           </a>
 
         </div>
 
         <!-- Tech Stack -->
-        <div :class="['rounded-2xl border p-8', isFromLanding ? 'bg-white/10 backdrop-blur-md border-white/15 shadow-[0_0_32px_-10px_rgba(59,130,246,0.28)] dark:bg-white/10 dark:border-white/15' : (effectiveDark ? 'bg-gray-800 border-gray-700 text-gray-200 shadow-sm' : 'bg-gray-100 border-gray-300 text-gray-800 shadow-sm')]">
-          <h2 :class="['text-xl font-semibold font-quicksand mb-6', isFromLanding ? 'text-gray-950 dark:text-gray-900' : (effectiveDark ? 'text-white' : 'text-gray-900')]">
+        <div :class="['rounded-2xl border p-8', isFromLanding ? 'bg-gray-900/40 backdrop-blur-sm border-gray-800/50 shadow-lg' : (effectiveDark ? 'bg-gray-800 border-gray-700 text-gray-200 shadow-sm' : 'bg-gray-100 border-gray-300 text-gray-800 shadow-sm')]">
+          <h2 :class="['text-xl font-semibold font-quicksand mb-6', isFromLanding ? 'text-gray-100' : (effectiveDark ? 'text-white' : 'text-gray-900')]">
             Built With
           </h2>
           <div class="flex flex-wrap gap-3">
@@ -292,7 +294,7 @@
               :key="tech"
               :class="[
                 'px-4 py-2 rounded-lg text-sm font-quicksand font-medium',
-                isFromLanding ? 'bg-white/60 text-gray-900 border border-white/30 dark:bg-white/60 dark:text-gray-900' : (effectiveDark ? 'bg-gray-700 text-gray-300' : 'bg-white text-gray-700 border border-gray-200')
+                isFromLanding ? 'bg-gray-800/60 text-gray-200 border border-gray-700/50' : (effectiveDark ? 'bg-gray-700 text-gray-300' : 'bg-white text-gray-700 border border-gray-200')
               ]"
             >
               {{ tech }}
@@ -330,7 +332,6 @@ import { useRoute, useRouter } from '#imports'
 import AuthModal from '~/components/AuthModal.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
-import TechnicalTopographyBg from '~/components/TechnicalTopographyBg.vue'
 import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
 
 const route = useRoute()

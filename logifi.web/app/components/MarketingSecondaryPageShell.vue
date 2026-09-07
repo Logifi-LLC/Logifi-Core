@@ -1,8 +1,10 @@
 <template>
   <div
-    class="relative min-h-screen overflow-x-hidden bg-[#e4e8e7] font-quicksand text-gray-900 selection:bg-blue-200/70 dark:bg-[#e4e8e7] dark:text-gray-900"
+    class="relative min-h-screen overflow-x-hidden bg-[#0a0e1a] font-quicksand text-gray-100 selection:bg-blue-900/50 dark:bg-[#0a0e1a] dark:text-gray-100"
   >
-    <TechnicalTopographyBg />
+    <!-- Subtle grid background pattern -->
+    <div class="fixed inset-0 z-0 opacity-[0.02]" style="background-image: linear-gradient(rgba(59, 130, 246, 0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(59, 130, 246, 0.4) 1px, transparent 1px); background-size: 40px 40px;"></div>
+    
     <div class="relative z-10">
       <slot />
     </div>
@@ -10,5 +12,5 @@
 </template>
 
 <script setup lang="ts">
-import TechnicalTopographyBg from '~/components/TechnicalTopographyBg.vue'
+// Dark cockpit aesthetic for all marketing secondary pages
 </script>
