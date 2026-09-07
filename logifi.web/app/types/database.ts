@@ -621,6 +621,8 @@ export type Database = {
           digifi_learning_opt_in: boolean
           digifi_learning_opted_in_at: string | null
           digifi_preferred_sink: 'logten' | 'logifi' | null
+          digifi_pilot_notes: string | null
+          digifi_pilot_notes_priors: Record<string, unknown> | null
           created_at: string
           updated_at: string
         }
@@ -642,6 +644,8 @@ export type Database = {
           digifi_learning_opt_in?: boolean
           digifi_learning_opted_in_at?: string | null
           digifi_preferred_sink?: 'logten' | 'logifi' | null
+          digifi_pilot_notes?: string | null
+          digifi_pilot_notes_priors?: Record<string, unknown> | null
           created_at?: string
           updated_at?: string
         }
@@ -662,6 +666,8 @@ export type Database = {
           digifi_learning_opt_in?: boolean
           digifi_learning_opted_in_at?: string | null
           digifi_preferred_sink?: 'logten' | 'logifi' | null
+          digifi_pilot_notes?: string | null
+          digifi_pilot_notes_priors?: Record<string, unknown> | null
           signing_pin_hash?: string | null
           created_at?: string
           updated_at?: string
