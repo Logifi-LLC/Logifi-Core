@@ -3,13 +3,15 @@
     :class="[
       'min-h-screen transition-colors duration-300 font-quicksand',
       isFromLanding
-        ? 'relative overflow-x-hidden bg-[#e4e8e7] text-gray-900'
+        ? 'relative overflow-x-hidden bg-[#0a0e1a] text-gray-100'
         : theme === 'dark'
           ? 'bg-gray-950'
           : 'bg-gray-50'
     ]"
   >
-    <TechnicalTopographyBg v-if="isFromLanding" />
+    <!-- Subtle grid background for marketing mode -->
+    <div v-if="isFromLanding" class="fixed inset-0 z-0 opacity-[0.02]" style="background-image: linear-gradient(rgba(59, 130, 246, 0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(59, 130, 246, 0.4) 1px, transparent 1px); background-size: 40px 40px;"></div>
+    
     <div :class="isFromLanding ? 'relative z-10' : 'contents'">
     <MarketingHeader v-if="isFromLanding" active-page="feedback" @open-auth="openAuth" />
 
@@ -77,7 +79,7 @@
         :class="[
           'max-w-2xl mx-auto rounded-3xl p-8 sm:p-12 border transition-all duration-500',
           isFromLanding 
-            ? 'relative overflow-hidden border-white/15 bg-white/10 backdrop-blur-md shadow-[0_0_42px_-12px_rgba(59,130,246,0.24),0_0_56px_-18px_rgba(37,99,235,0.14)]' 
+            ? 'relative overflow-hidden border-gray-800/50 bg-gray-900/40 backdrop-blur-sm shadow-lg' 
             : (effectiveDark ? 'bg-gray-900 border-gray-800 shadow-[0_20px_50px_rgba(0,0,0,0.15)]' : 'bg-white border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.15)]')
         ]"
       >
@@ -85,7 +87,7 @@
           <div
             :class="[
               'inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-6 shadow-lg',
-              isFromLanding ? 'bg-blue-600 shadow-[0_0_24px_-2px_rgba(37,99,235,0.55)]' : (effectiveDark ? 'bg-blue-900/50' : 'bg-blue-600 shadow-blue-900/20')
+              isFromLanding ? 'bg-blue-600' : (effectiveDark ? 'bg-blue-900/50' : 'bg-blue-600 shadow-blue-900/20')
             ]"
           >
             <Icon name="ri:feedback-line" size="32" class="text-white" />
@@ -93,7 +95,7 @@
           <h1
             :class="[
               'font-bold font-quicksand mb-4',
-              isFromLanding ? 'text-4xl text-gray-950 dark:text-gray-900 drop-shadow-sm' : ['text-4xl', effectiveDark ? 'text-white' : 'text-gray-900']
+              isFromLanding ? 'text-4xl text-gray-100' : ['text-4xl', effectiveDark ? 'text-white' : 'text-gray-900']
             ]"
           >
             Feedback
@@ -101,7 +103,7 @@
           <p
             :class="[
               'max-w-xl mx-auto',
-              isFromLanding ? 'text-lg text-gray-800 dark:text-gray-700 font-medium' : ['text-lg', effectiveDark ? 'text-gray-400' : 'text-gray-600']
+              isFromLanding ? 'text-lg text-gray-400 font-medium' : ['text-lg', effectiveDark ? 'text-gray-400' : 'text-gray-600']
             ]"
           >
             Report a bug, suggest a feature, or share general feedback. We read everything.
@@ -261,7 +263,6 @@ import { useRoute, useRouter } from '#imports'
 import AuthModal from '~/components/AuthModal.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
-import TechnicalTopographyBg from '~/components/TechnicalTopographyBg.vue'
 
 const route = useRoute()
 const router = useRouter()
