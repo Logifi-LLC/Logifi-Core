@@ -155,8 +155,8 @@
       </section>
 
       <MarketingFooter />
-    </div>
     </main>
+    </div>
 
     <ClientOnly>
       <AuthModal 
