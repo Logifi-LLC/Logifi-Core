@@ -26,7 +26,6 @@ import { useDigifiLearning } from '~/composables/useDigifiLearning'
 import { supabase } from '~/lib/supabase'
 import DigifiLearningOptInModal from '~/components/digifi/DigifiLearningOptInModal.vue'
 import DigifiSettingsModal from '~/components/settings/DigifiSettingsModal.vue'
-import LogifiMarkIcon from '~/components/LogifiMarkIcon.vue'
 import { getDisplayedPilotInitials } from '~/utils/dashboardHydration'
 import type { Database } from '~/types/database'
 
@@ -416,9 +415,10 @@ watchEffect(async (onCleanup) => {
             <template v-if="pilotInitials">
               {{ pilotInitials }}
             </template>
-            <LogifiMarkIcon
+            <Icon
               v-else
-              :size="24"
+              name="ri:send-plane-line"
+              :size="20"
             />
           </button>
         </nav>
