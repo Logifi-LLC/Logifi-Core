@@ -147,6 +147,11 @@ onUnmounted(() => {
 const builderPilots = ref<string[]>([])
 provide('builderPilots', builderPilots)
 
+// Initialize Digifi composables BEFORE providing them
+const { optInStatus, loadOptInStatus, setOptIn } = useDigifiLearning()
+const { displayCredits, loading: creditsLoading } = useDigifiCredits()
+const { preferredSink, loadPreferredSink, setPreferredSink } = useDigifiDestination()
+
 provide('showDigifiLearningOptInModal', () => {
   if (optInStatus.value === false) {
     showDigifiLearningOptIn.value = true
@@ -214,9 +219,6 @@ const showDigifiLearningOptIn = ref(false)
 const showDigifiDestinationModal = ref(false)
 const showDigifiSettings = ref(false)
 const digifiSettingsStack = ref<Array<'root' | 'account' | 'digifi' | 'account-email' | 'account-password'>>(['root'])
-const { optInStatus, loadOptInStatus, setOptIn } = useDigifiLearning()
-const { displayCredits, loading: creditsLoading } = useDigifiCredits()
-const { preferredSink, loadPreferredSink, setPreferredSink } = useDigifiDestination()
 
 const isDigifiMode = computed(() => route.query.digifi === 'open')
 
