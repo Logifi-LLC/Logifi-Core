@@ -22,7 +22,7 @@
           </h1>
           
           <p class="max-w-2xl mx-auto text-xl text-gray-400 mb-12 leading-relaxed">
-            Logifi is built for 121 CA/FO flying — pairings, legs, and hours that match the job. Not a student kitchen sink.
+            Built for 121 CA and FO flying — pairings, legs, and hours that match the job. Not a student kitchen sink.
           </p>
           
           <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
