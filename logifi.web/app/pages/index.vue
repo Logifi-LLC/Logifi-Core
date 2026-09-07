@@ -6,6 +6,44 @@
     <!-- Hero Section -->
     <main>
       <section class="relative pt-32 pb-20 lg:pt-48 lg:pb-28 overflow-hidden">
+        <!-- Paper airplanes animation layer -->
+        <div class="paper-planes-container absolute inset-0 z-0 pointer-events-none" aria-hidden="true">
+          <!-- Plane 1: Large, slow figure-8 -->
+          <div class="paper-plane plane-1">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.15" class="text-blue-400"/>
+            </svg>
+          </div>
+          
+          <!-- Plane 2: Medium, loop-de-loop -->
+          <div class="paper-plane plane-2">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.12" class="text-cyan-400"/>
+            </svg>
+          </div>
+          
+          <!-- Plane 3: Small, fast arc -->
+          <div class="paper-plane plane-3">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.1" class="text-blue-300"/>
+            </svg>
+          </div>
+          
+          <!-- Plane 4: Medium, gentle swoop -->
+          <div class="paper-plane plane-4">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.13" class="text-indigo-400"/>
+            </svg>
+          </div>
+          
+          <!-- Plane 5: Large, wide loop -->
+          <div class="paper-plane plane-5">
+            <svg width="38" height="38" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" opacity="0.11" class="text-cyan-300"/>
+            </svg>
+          </div>
+        </div>
+        
         <!-- Subtle grid background pattern -->
         <div class="absolute inset-0 z-0 opacity-[0.03]" style="background-image: linear-gradient(rgba(59, 130, 246, 0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(59, 130, 246, 0.4) 1px, transparent 1px); background-size: 40px 40px;"></div>
         
@@ -178,3 +216,173 @@ const scrollToAutofi = () => {
   }
 }
 </script>
+
+<style scoped>
+/* Paper airplane animations - respect prefers-reduced-motion */
+.paper-planes-container {
+  overflow: hidden;
+}
+
+.paper-plane {
+  position: absolute;
+  will-change: transform;
+}
+
+/* Plane 1: Large figure-8 loop, 60s */
+.plane-1 {
+  animation: figure8-1 60s ease-in-out infinite;
+  top: 15%;
+  left: -5%;
+}
+
+@keyframes figure8-1 {
+  0%, 100% { 
+    transform: translate(0, 0) rotate(0deg); 
+  }
+  12.5% { 
+    transform: translate(15vw, -8vh) rotate(45deg); 
+  }
+  25% { 
+    transform: translate(30vw, 0) rotate(90deg); 
+  }
+  37.5% { 
+    transform: translate(45vw, 10vh) rotate(135deg); 
+  }
+  50% { 
+    transform: translate(60vw, 0) rotate(180deg); 
+  }
+  62.5% { 
+    transform: translate(75vw, -10vh) rotate(225deg); 
+  }
+  75% { 
+    transform: translate(90vw, 0) rotate(270deg); 
+  }
+  87.5% { 
+    transform: translate(105vw, 8vh) rotate(315deg); 
+  }
+}
+
+/* Plane 2: Loop-de-loop, 45s */
+.plane-2 {
+  animation: loopdeloop-2 45s ease-in-out infinite;
+  top: 40%;
+  left: 100%;
+}
+
+@keyframes loopdeloop-2 {
+  0%, 100% { 
+    transform: translate(0, 0) rotate(180deg); 
+  }
+  15% { 
+    transform: translate(-20vw, -5vh) rotate(225deg); 
+  }
+  30% { 
+    transform: translate(-40vw, 0) rotate(270deg); 
+  }
+  45% { 
+    transform: translate(-60vw, 8vh) rotate(315deg); 
+  }
+  60% { 
+    transform: translate(-80vw, 15vh) rotate(360deg); 
+  }
+  75% { 
+    transform: translate(-95vw, 8vh) rotate(405deg); 
+  }
+  90% { 
+    transform: translate(-105vw, 0) rotate(450deg); 
+  }
+}
+
+/* Plane 3: Fast arc, 35s */
+.plane-3 {
+  animation: arc-3 35s linear infinite;
+  top: 60%;
+  left: -5%;
+}
+
+@keyframes arc-3 {
+  0% { 
+    transform: translate(0, 0) rotate(0deg); 
+  }
+  25% { 
+    transform: translate(25vw, -15vh) rotate(60deg); 
+  }
+  50% { 
+    transform: translate(55vw, -10vh) rotate(120deg); 
+  }
+  75% { 
+    transform: translate(85vw, 5vh) rotate(180deg); 
+  }
+  100% { 
+    transform: translate(110vw, 15vh) rotate(240deg); 
+  }
+}
+
+/* Plane 4: Gentle swoop, 50s */
+.plane-4 {
+  animation: swoop-4 50s ease-in-out infinite;
+  top: 25%;
+  left: 100%;
+}
+
+@keyframes swoop-4 {
+  0%, 100% { 
+    transform: translate(0, 0) rotate(180deg); 
+  }
+  20% { 
+    transform: translate(-25vw, 10vh) rotate(210deg); 
+  }
+  40% { 
+    transform: translate(-50vw, 5vh) rotate(240deg); 
+  }
+  60% { 
+    transform: translate(-75vw, -5vh) rotate(270deg); 
+  }
+  80% { 
+    transform: translate(-95vw, -10vh) rotate(300deg); 
+  }
+}
+
+/* Plane 5: Wide loop, 55s */
+.plane-5 {
+  animation: wideloop-5 55s ease-in-out infinite;
+  top: 50%;
+  left: -10%;
+}
+
+@keyframes wideloop-5 {
+  0%, 100% { 
+    transform: translate(0, 0) rotate(0deg); 
+  }
+  16.67% { 
+    transform: translate(20vw, -12vh) rotate(50deg); 
+  }
+  33.33% { 
+    transform: translate(45vw, -18vh) rotate(100deg); 
+  }
+  50% { 
+    transform: translate(70vw, -12vh) rotate(150deg); 
+  }
+  66.67% { 
+    transform: translate(90vw, 0) rotate(200deg); 
+  }
+  83.33% { 
+    transform: translate(105vw, 10vh) rotate(250deg); 
+  }
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .paper-plane {
+    animation: none;
+    opacity: 0.05;
+    position: absolute;
+  }
+  
+  .plane-1 { top: 20%; left: 10%; }
+  .plane-2 { top: 45%; right: 15%; }
+  .plane-3 { top: 65%; left: 20%; }
+  .plane-4 { top: 30%; right: 25%; }
+  .plane-5 { top: 55%; left: 40%; }
+}
+</style>
