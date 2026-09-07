@@ -1,17 +1,17 @@
 <template>
   <header
-    class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b border-white/10 bg-white/5 backdrop-blur-md"
+    class="fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b border-gray-800/50 bg-[#0a0e1a]/80 backdrop-blur-md"
   >
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
       <div class="flex items-center shrink-0">
         <NuxtLink v-if="logoHref" :to="logoHref" class="flex items-center">
-          <img src="/images/logifi-logo.png" alt="Logifi" class="h-32 w-auto brightness-0" />
+          <img src="/images/logifi-logo.png" alt="Logifi" class="h-32 w-auto brightness-0 invert" />
         </NuxtLink>
         <img
           v-else
           src="/images/logifi-logo.png"
           alt="Logifi"
-          class="h-32 w-auto brightness-0"
+          class="h-32 w-auto brightness-0 invert"
         />
       </div>
 
@@ -34,13 +34,13 @@
         <NuxtLink to="/pricing" :class="navLinkClass('pricing')">Pricing</NuxtLink>
         <NuxtLink to="/developers?from=landing" :class="navLinkClass('developers')">Developers</NuxtLink>
         <NuxtLink to="/feedback?from=landing" :class="navLinkClass('feedback')">Feedback</NuxtLink>
-        <div class="h-4 w-px bg-gray-200 dark:bg-gray-200" />
+        <div class="h-4 w-px bg-gray-700" />
         <button type="button" :class="navLinkClass()" @click="emit('open-auth', 'signin')">
           Sign In
         </button>
         <button
           type="button"
-          class="btn-cta-primary px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-all ring-1 ring-blue-400/60 shadow-[0_0_16px_-3px_rgba(37,99,235,0.48),0_0_32px_-12px_rgba(59,130,246,0.22)] hover:shadow-[0_0_24px_-2px_rgba(37,99,235,0.55),0_0_40px_-10px_rgba(59,130,246,0.28)] active:scale-[0.98] dark:bg-blue-600 dark:text-white dark:hover:bg-blue-700"
+          class="btn-cta-primary px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-all border border-blue-500/50 shadow-lg shadow-blue-900/50 hover:shadow-xl hover:shadow-blue-900/60 active:scale-[0.98]"
           @click="emit('open-auth', 'signup')"
         >
           <span class="relative z-10">Get Started</span>
@@ -49,7 +49,7 @@
 
       <button
         type="button"
-        class="md:hidden p-2 text-gray-600 dark:text-gray-600"
+        class="md:hidden p-2 text-gray-300"
         :aria-label="mobileOpen ? 'Close menu' : 'Open menu'"
         :aria-expanded="mobileOpen"
         @click="toggleMobile"
@@ -69,18 +69,18 @@
         >
           <button
             type="button"
-            class="absolute inset-0 bg-gray-900/40 backdrop-blur-sm"
+            class="absolute inset-0 bg-gray-900/80 backdrop-blur-sm"
             aria-label="Close menu"
             @click="closeMobile"
           />
           <nav
-            class="absolute top-0 right-0 h-full w-[min(100%,20rem)] bg-[#e4e8e7] border-l border-white/20 shadow-xl flex flex-col font-quicksand"
+            class="absolute top-0 right-0 h-full w-[min(100%,20rem)] bg-[#0a0e1a] border-l border-gray-800/50 shadow-xl flex flex-col font-quicksand"
           >
-            <div class="flex items-center justify-between px-4 h-16 border-b border-white/20">
-              <img src="/images/logifi-logo.png" alt="Logifi" class="h-8 w-auto brightness-0" />
+            <div class="flex items-center justify-between px-4 h-16 border-b border-gray-800/50">
+              <img src="/images/logifi-logo.png" alt="Logifi" class="h-8 w-auto brightness-0 invert" />
               <button
                 type="button"
-                class="p-2 text-gray-600"
+                class="p-2 text-gray-300"
                 aria-label="Close menu"
                 @click="closeMobile"
               >
@@ -133,17 +133,17 @@
                 Feedback
               </NuxtLink>
             </div>
-            <div class="px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] space-y-3 border-t border-white/20 pt-4">
+            <div class="px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] space-y-3 border-t border-gray-800/50 pt-4">
               <button
                 type="button"
-                class="w-full py-3 text-sm font-medium text-gray-700 rounded-xl border border-[#d1d8d6] bg-white hover:bg-blue-50/50 transition-colors"
+                class="w-full py-3 text-sm font-medium text-gray-200 rounded-lg border border-gray-700/50 bg-gray-800/50 hover:bg-gray-800/70 transition-colors"
                 @click="openAuthAndClose('signin')"
               >
                 Sign In
               </button>
               <button
                 type="button"
-                class="btn-cta-primary w-full py-3 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-all ring-1 ring-blue-400/60 active:scale-[0.98]"
+                class="btn-cta-primary w-full py-3 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-all border border-blue-500/50 active:scale-[0.98]"
                 @click="openAuthAndClose('signup')"
               >
                 <span class="relative z-10">Get Started</span>
@@ -187,9 +187,9 @@ const emit = defineEmits<{
 const mobileOpen = ref(false)
 
 const navBase =
-  'text-sm font-medium transition-colors dark:text-gray-600 dark:hover:text-blue-600'
-const navActive = 'text-blue-600 dark:text-blue-600'
-const navInactive = 'text-gray-600 hover:text-blue-600'
+  'text-sm font-medium transition-colors'
+const navActive = 'text-blue-400'
+const navInactive = 'text-gray-300 hover:text-blue-400'
 
 function navLinkClass(page?: string) {
   const isActive = page && props.activePage === page
@@ -197,9 +197,9 @@ function navLinkClass(page?: string) {
 }
 
 const mobileBase =
-  'block rounded-xl px-4 py-3 text-base font-medium transition-colors'
-const mobileActive = 'bg-white/60 text-blue-600'
-const mobileInactive = 'text-gray-800 hover:bg-white/40'
+  'block rounded-lg px-4 py-3 text-base font-medium transition-colors'
+const mobileActive = 'bg-gray-800/60 text-blue-400'
+const mobileInactive = 'text-gray-300 hover:bg-gray-800/40'
 
 function mobileLinkClass(page?: string) {
   const isActive = page && props.activePage === page
