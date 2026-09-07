@@ -106,15 +106,15 @@
               isFromLanding ? 'text-lg text-gray-400 font-medium' : ['text-lg', effectiveDark ? 'text-gray-400' : 'text-gray-600']
             ]"
           >
-            Report a bug, suggest a feature, or share general feedback. We read everything.
+            Report bugs, suggest features, or share feedback.
           </p>
         </div>
 
         <div
           v-if="submitStatus === 'success'"
           :class="[
-            'mb-6 p-4 rounded-xl border',
-            isFromLanding ? 'bg-green-100/50 border-green-200 text-green-800 dark:bg-green-100/50 dark:border-green-200 dark:text-green-800' : (effectiveDark ? 'bg-green-900/20 border-green-700 text-green-200' : 'bg-green-50 border-green-200 text-green-800')
+            'mb-5 p-4 rounded-xl border',
+            isFromLanding ? 'bg-green-900/30 border-green-700/50 text-green-200' : (effectiveDark ? 'bg-green-900/20 border-green-700 text-green-200' : 'bg-green-50 border-green-200 text-green-800')
           ]"
         >
           <p class="font-quicksand font-medium">Thanks! Your feedback has been sent.</p>
@@ -122,20 +122,20 @@
         <div
           v-else-if="submitStatus === 'not-configured'"
           :class="[
-            'mb-6 p-4 rounded-xl border',
-            isFromLanding ? 'bg-amber-100/50 border-amber-200 text-amber-800 dark:bg-amber-100/50 dark:border-amber-200 dark:text-amber-800' : (effectiveDark ? 'bg-amber-900/20 border-amber-700 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-800')
+            'mb-5 p-4 rounded-xl border',
+            isFromLanding ? 'bg-amber-900/30 border-amber-700/50 text-amber-200' : (effectiveDark ? 'bg-amber-900/20 border-amber-700 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-800')
           ]"
         >
           <p class="font-quicksand font-medium">Feedback is not set up on this instance.</p>
-          <p :class="['text-sm mt-2', isFromLanding ? 'text-amber-800 dark:text-amber-800' : (effectiveDark ? 'text-amber-300/90' : 'text-amber-700')]">
+          <p :class="['text-sm mt-2', isFromLanding ? 'text-amber-300/90' : (effectiveDark ? 'text-amber-300/90' : 'text-amber-700')]">
             You can open an issue on <a href="https://github.com/Logifi-LLC/Logifi-Core" target="_blank" rel="noopener noreferrer" class="underline">GitHub</a> or join our <a href="https://discord.gg/hBaDkNt2ev" target="_blank" rel="noopener noreferrer" class="underline">Discord</a> to share your thoughts.
           </p>
         </div>
         <div
           v-else-if="submitStatus === 'error'"
           :class="[
-            'mb-6 p-4 rounded-xl border',
-            isFromLanding ? 'bg-red-100/50 border-red-200 text-red-800 dark:bg-red-100/50 dark:border-red-200 dark:text-red-800' : (effectiveDark ? 'bg-red-900/20 border-red-700 text-red-200' : 'bg-red-50 border-red-200 text-red-800')
+            'mb-5 p-4 rounded-xl border',
+            isFromLanding ? 'bg-red-900/30 border-red-700/50 text-red-200' : (effectiveDark ? 'bg-red-900/20 border-red-700 text-red-200' : 'bg-red-50 border-red-200 text-red-800')
           ]"
         >
           <p class="font-quicksand font-medium">{{ submitError }}</p>
@@ -143,29 +143,29 @@
 
         <form
           v-if="submitStatus !== 'success'"
-          class="space-y-6"
+          class="space-y-5"
           @submit.prevent="onSubmit"
         >
           <div>
-            <label :class="['block text-sm font-quicksand font-medium mb-2', isFromLanding ? 'text-gray-950 dark:text-gray-900' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">Type</label>
+            <label :class="['block text-sm font-quicksand font-medium mb-2', isFromLanding ? 'text-gray-200' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">Type</label>
             <div class="flex flex-wrap gap-4">
-              <label :class="['inline-flex items-center gap-2 cursor-pointer', isFromLanding ? 'text-gray-950 dark:text-gray-900 font-medium' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">
-                <input v-model="form.type" type="radio" value="bug" :class="['rounded border-gray-400', isFromLanding ? 'bg-white/40 dark:bg-white/40' : '']" />
+              <label :class="['inline-flex items-center gap-2 cursor-pointer', isFromLanding ? 'text-gray-200 font-medium' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">
+                <input v-model="form.type" type="radio" value="bug" :class="['rounded border-gray-600', isFromLanding ? 'bg-gray-800/60 text-blue-500' : '']" />
                 <span>Bug</span>
               </label>
-              <label :class="['inline-flex items-center gap-2 cursor-pointer', isFromLanding ? 'text-gray-950 dark:text-gray-900 font-medium' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">
-                <input v-model="form.type" type="radio" value="feature" :class="['rounded border-gray-400', isFromLanding ? 'bg-white/40 dark:bg-white/40' : '']" />
+              <label :class="['inline-flex items-center gap-2 cursor-pointer', isFromLanding ? 'text-gray-200 font-medium' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">
+                <input v-model="form.type" type="radio" value="feature" :class="['rounded border-gray-600', isFromLanding ? 'bg-gray-800/60 text-blue-500' : '']" />
                 <span>Feature request</span>
               </label>
-              <label :class="['inline-flex items-center gap-2 cursor-pointer', isFromLanding ? 'text-gray-950 dark:text-gray-900 font-medium' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">
-                <input v-model="form.type" type="radio" value="other" :class="['rounded border-gray-400', isFromLanding ? 'bg-white/40 dark:bg-white/40' : '']" />
+              <label :class="['inline-flex items-center gap-2 cursor-pointer', isFromLanding ? 'text-gray-200 font-medium' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">
+                <input v-model="form.type" type="radio" value="other" :class="['rounded border-gray-600', isFromLanding ? 'bg-gray-800/60 text-blue-500' : '']" />
                 <span>Other</span>
               </label>
             </div>
           </div>
 
           <div>
-            <label :class="['block text-sm font-quicksand font-medium mb-2', isFromLanding ? 'text-gray-950 dark:text-gray-900' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">Subject</label>
+            <label :class="['block text-sm font-quicksand font-medium mb-2', isFromLanding ? 'text-gray-200' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">Subject</label>
             <input
               v-model="form.subject"
               type="text"
@@ -173,18 +173,18 @@
               maxlength="200"
               placeholder="Short summary"
               :class="[
-                'w-full px-4 py-3 rounded-xl border font-quicksand placeholder-gray-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all',
+                'w-full px-4 py-3 rounded-xl border font-quicksand focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all',
                 isFromLanding
-                  ? 'bg-white/40 border-white/20 text-gray-900 dark:bg-white/40 dark:border-white/20 dark:text-gray-900'
+                  ? 'bg-gray-800/60 border-gray-700/50 text-gray-100 placeholder:text-gray-500'
                   : (effectiveDark
-                    ? 'bg-gray-800 border-gray-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-900')
+                    ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400'
+                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400')
               ]"
             />
           </div>
 
           <div>
-            <label :class="['block text-sm font-quicksand font-medium mb-2', isFromLanding ? 'text-gray-950 dark:text-gray-900' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">Message</label>
+            <label :class="['block text-sm font-quicksand font-medium mb-2', isFromLanding ? 'text-gray-200' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">Message</label>
             <textarea
               v-model="form.message"
               required
@@ -192,30 +192,30 @@
               maxlength="2000"
               placeholder="Describe your bug report or feature idea..."
               :class="[
-                'w-full px-4 py-3 rounded-xl border font-quicksand placeholder-gray-400 resize-y focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all',
+                'w-full px-4 py-3 rounded-xl border font-quicksand resize-y focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all',
                 isFromLanding
-                  ? 'bg-white/40 border-white/20 text-gray-900 dark:bg-white/40 dark:border-white/20 dark:text-gray-900'
+                  ? 'bg-gray-800/60 border-gray-700/50 text-gray-100 placeholder:text-gray-500'
                   : (effectiveDark
-                    ? 'bg-gray-800 border-gray-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-900')
+                    ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400'
+                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400')
               ]"
             />
           </div>
 
           <div>
-            <label :class="['block text-sm font-quicksand font-medium mb-2', isFromLanding ? 'text-gray-950 dark:text-gray-900' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">Email (optional)</label>
+            <label :class="['block text-sm font-quicksand font-medium mb-2', isFromLanding ? 'text-gray-200' : (effectiveDark ? 'text-gray-300' : 'text-gray-700')]">Email (optional)</label>
             <input
               v-model="form.email"
               type="email"
               maxlength="320"
               placeholder="For follow-up"
               :class="[
-                'w-full px-4 py-3 rounded-xl border font-quicksand placeholder-gray-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all',
+                'w-full px-4 py-3 rounded-xl border font-quicksand focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all',
                 isFromLanding
-                  ? 'bg-white/40 border-white/20 text-gray-900 dark:bg-white/40 dark:border-white/20 dark:text-gray-900'
+                  ? 'bg-gray-800/60 border-gray-700/50 text-gray-100 placeholder:text-gray-500'
                   : (effectiveDark
-                    ? 'bg-gray-800 border-gray-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-900')
+                    ? 'bg-gray-800 border-gray-600 text-white placeholder-gray-400'
+                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400')
               ]"
             />
           </div>
