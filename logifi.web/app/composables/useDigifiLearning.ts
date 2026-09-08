@@ -23,10 +23,12 @@ export function useDigifiLearning() {
         .single()
 
       if (error) throw error
-      optInStatus.value = data?.digifi_learning_opt_in ?? false
+      // Treat null/undefined as opted IN (default TRUE, opt-out model)
+      optInStatus.value = data?.digifi_learning_opt_in ?? true
     } catch (error) {
       console.error('[digifi-learning] Failed to load opt-in status:', error)
-      optInStatus.value = false
+      // Default to opted in on error
+      optInStatus.value = true
     }
   }
 

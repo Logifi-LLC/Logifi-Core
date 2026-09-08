@@ -7,8 +7,6 @@ import { useAuth } from '~/composables/useAuth'
 import { useTheme } from '~/composables/useTheme'
 import type { DigifiCapturePhoto, DigifiPageSide } from '~/utils/digifiTypes'
 
-const showDigifiLearningOptInModal = inject<(() => void) | null>('showDigifiLearningOptInModal', null)
-
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
 interface ScanQueueItem {
@@ -288,10 +286,6 @@ async function processFile(
   scanningSide.value = pageSide
   updateQueueStatus()
   
-  if (!options?.fromQueue && showDigifiLearningOptInModal) {
-    showDigifiLearningOptInModal()
-  }
-  
   try {
     await scanPage(file, pageSide)
   } finally {
@@ -473,24 +467,6 @@ onUnmounted(() => {
       </p>
       <DigifiCreditsIndicator compact @open-checkout="showAddCreditsModal = true" />
     </div>
-
-    <p
-      class="text-xs mb-4 rounded-lg px-3 py-2 border"
-      :class="isDark ? 'border-blue-500/30 bg-blue-500/10 text-blue-200' : 'border-blue-200 bg-blue-50 text-blue-800'"
-    >
-      <strong>Digifi gets better as you use it.</strong>
-      Each spread you import adds to your Logbook Catalog and teaches Digifi your tail numbers and aircraft.
-      Fix any misreads before importing — those corrections apply to future scans.
-      Re-scans of the same spread do not use another credit.
-    </p>
-
-    <p
-      class="text-xs mb-4 rounded-lg px-3 py-2 border inline-block"
-      :class="isDark ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-900'"
-    >
-      AI may misread handwriting. You are responsible for verifying all entries before importing.
-      See Common mistakes above for what to double-check first.
-    </p>
 
     <p
       v-if="scanRowWarning"

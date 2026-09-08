@@ -67,10 +67,10 @@
         <div class="flex items-start justify-between gap-3">
           <div class="flex-1">
             <p class="text-sm font-semibold mb-1" :class="isDarkMode ? 'text-white' : 'text-gray-900'">
-              Save corrections & vocabulary
+              Learning enabled
             </p>
             <p class="text-xs" :class="isDarkMode ? 'text-gray-400' : 'text-gray-600'">
-              Improve future scans by learning from your corrections and vocabulary
+              Save corrections & vocabulary to improve future scans. Turn off to stop learning.
             </p>
           </div>
           <button
