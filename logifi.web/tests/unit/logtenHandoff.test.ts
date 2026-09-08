@@ -52,43 +52,50 @@ describe('buildLogTenFlightEntity', () => {
 
     expect(entity.entity_name).toBe('Flight')
     expect(entity.flight_key).toBe('test-123')
-    expect(entity.flight_flightDate).toBe('2024-01-15')
+    expect(entity.flight_flightDate).toBe('01/15/2024')
     expect(entity.flight_from).toBe('KPHX')
     expect(entity.flight_to).toBe('KSDL')
     expect(entity.flight_totalTime).toBe('1.5')
   })
 
-  it('preserves date without timezone shifting', () => {
+  it('preserves date without timezone shifting - MDY format per Coradine API', () => {
     const entry = createBaseEntry()
     entry.date = '2026-09-08'
     const entity = buildLogTenFlightEntity(entry)
 
-    // Date should stay as YYYY-MM-DD string, not shift to adjacent day
-    expect(entity.flight_flightDate).toBe('2026-09-08')
+    // Date should be formatted as MM/dd/yyyy to match LogTen metadata
+    expect(entity.flight_flightDate).toBe('09/08/2026')
     expect(typeof entity.flight_flightDate).toBe('string')
   })
 
-  it('reproduces Derek bug: 9/8 entry should become 2026-09-08 in package, not 2026-09-07', () => {
+  it('reproduces Derek bug: 9/8 entry should become 09/08/2026 in package, not 09/07/2026', () => {
     // Derek enters 9/8 with defaultYear 2026
-    // Expected: LogTen package should contain '2026-09-08'
-    // Bug: LogTen package might contain '2026-09-07' (UTC -1 day shift)
+    // Expected: LogTen package should contain '09/08/2026' (MDY format)
+    // Bug: ISO '2026-09-08' was parsed as UTC midnight by LogTen NSDateFormatter,
+    //      displaying as 09/07/2026 in US Central (UTC-6)
     const entry = createBaseEntry()
     entry.date = '2026-09-08' // After normalization from 9/8 + defaultYear 2026
     
     const pkg = buildLogTenPackage([entry])
     const entity = pkg.entities[0]
     
-    // Verify the exact date string in the package
-    expect(entity.flight_flightDate).toBe('2026-09-08')
-    expect(entity.flight_flightDate).not.toBe('2026-09-07')
+    // Verify metadata matches Coradine sample
+    expect(pkg.metadata.dateFormat).toBe('MM/dd/yyyy')
+    expect(pkg.metadata.dateAndTimeFormat).toBe('MM/dd/yyyy HH:mm')
+    
+    // Verify the exact date string in the package is MDY format
+    expect(entity.flight_flightDate).toBe('09/08/2026')
+    expect(entity.flight_flightDate).not.toBe('09/07/2026')
+    expect(entity.flight_flightDate).not.toBe('2026-09-08') // No longer ISO
     
     // Verify it's a plain string, not influenced by Date object timezone conversion
     expect(typeof entity.flight_flightDate).toBe('string')
     
     // Verify the JSON encoding doesn't alter the date
     const jsonString = JSON.stringify(pkg)
-    expect(jsonString).toContain('"flight_flightDate":"2026-09-08"')
-    expect(jsonString).not.toContain('"flight_flightDate":"2026-09-07"')
+    expect(jsonString).toContain('"flight_flightDate":"09/08/2026"')
+    expect(jsonString).not.toContain('"flight_flightDate":"09/07/2026"')
+    expect(jsonString).not.toContain('"flight_flightDate":"2026-09-08"')
   })
 
   it('maps aircraft fields', () => {
@@ -476,7 +483,7 @@ describe('buildLogTenFlightEntity', () => {
 
     // Verify core fields
     expect(entity.flight_key).toBe('full-test')
-    expect(entity.flight_flightDate).toBe('2024-03-20')
+    expect(entity.flight_flightDate).toBe('03/20/2024')
     
     // Verify aircraft
     expect(entity.flight_selectedAircraftID).toBe('N5678Z')
@@ -521,15 +528,15 @@ describe('buildLogTenFlightEntity', () => {
 })
 
 describe('buildLogTenPackage', () => {
-  it('creates package with correct metadata', () => {
+  it('creates package with correct metadata matching Coradine sample', () => {
     const entry = createBaseEntry()
     const pkg = buildLogTenPackage([entry])
 
     expect(pkg.metadata.application).toBe('Digifi/Logifi')
     expect(pkg.metadata.version).toBe('1.0')
     expect(pkg.metadata.serviceID).toBe('com.logifi.digifi')
-    expect(pkg.metadata.dateFormat).toBe('yyyy-MM-dd')
-    expect(pkg.metadata.dateAndTimeFormat).toBe("yyyy-MM-dd'T'HH:mm:ss'Z'")
+    expect(pkg.metadata.dateFormat).toBe('MM/dd/yyyy')
+    expect(pkg.metadata.dateAndTimeFormat).toBe('MM/dd/yyyy HH:mm')
     expect(pkg.metadata.timesAreZulu).toBe(true)
   })
 

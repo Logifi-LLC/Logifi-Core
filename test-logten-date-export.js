@@ -15,7 +15,7 @@ const mockEntry = {
   performance: {},
 };
 
-// Simulate formatExportDate (from formatters.ts)
+// Simulate formatExportDate (from formatters.ts) - AFTER FIX
 function formatExportDate(isoDate, target) {
   const trimmed = (isoDate || '').trim();
   const isoMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
@@ -23,18 +23,18 @@ function formatExportDate(isoDate, target) {
     const year = isoMatch[1];
     const month = parseInt(isoMatch[2], 10);
     const day = parseInt(isoMatch[3], 10);
-    if (target === 'mdy') return `${month}/${day}/${year}`;
+    if (target === 'mdy') return `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/${year}`;
     return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   }
   return trimmed;
 }
 
-// Simulate buildLogTenFlightEntity (simplified)
+// Simulate buildLogTenFlightEntity (simplified) - AFTER FIX
 function buildLogTenFlightEntity(entry) {
   return {
     entity_name: 'Flight',
     flight_key: entry.id,
-    flight_flightDate: formatExportDate(entry.date, 'iso'),
+    flight_flightDate: formatExportDate(entry.date, 'mdy'),
     flight_from: entry.departure,
     flight_to: entry.destination,
     flight_totalTime: String(entry.flightTime.total.toFixed(1)),
@@ -52,8 +52,8 @@ function buildLogTenPackage(entries) {
       application: 'Digifi/Logifi',
       version: '1.0',
       serviceID: 'com.logifi.digifi',
-      dateFormat: 'yyyy-MM-dd',
-      dateAndTimeFormat: "yyyy-MM-dd'T'HH:mm:ss'Z'",
+      dateFormat: 'MM/dd/yyyy',
+      dateAndTimeFormat: 'MM/dd/yyyy HH:mm',
       timesAreZulu: true,
     },
     entities: entries.map(buildLogTenFlightEntity),
@@ -69,13 +69,15 @@ console.log(jsonString);
 
 console.log('\n=== Key Assertion ===');
 console.log(`flight_flightDate: "${pkg.entities[0].flight_flightDate}"`);
-console.log(`Expected: "2026-09-08" (Sep 8, 2026)`);
-console.log(`NOT: "2026-09-07" (Sep 7, 2026 - UTC shift bug)`);
-console.log(`NOT: "2027-09-08" (Sep 8, 2027 - year rollover bug)`);
+console.log(`Expected: "09/08/2026" (Sep 8, 2026 in MM/dd/yyyy format per Coradine API)`);
+console.log(`NOT: "09/07/2026" (Sep 7, 2026 - LogTen NSDateFormatter UTC parsing bug)`);
+console.log(`NOT: "2026-09-08" (ISO format - causes UTC midnight parsing)`);
 
 // Verify exact match
-if (pkg.entities[0].flight_flightDate === '2026-09-08') {
-  console.log('\n✅ PASS: Date is correct!');
+if (pkg.entities[0].flight_flightDate === '09/08/2026') {
+  console.log('\n✅ PASS: Date is correct in MDY format!');
+  console.log('LogTen will parse this as a local calendar date (Sep 8, 2026).');
+  console.log('No UTC midnight conversion, no timezone shift.');
 } else {
-  console.log(`\n❌ FAIL: Got "${pkg.entities[0].flight_flightDate}" instead of "2026-09-08"`);
+  console.log(`\n❌ FAIL: Got "${pkg.entities[0].flight_flightDate}" instead of "09/08/2026"`);
 }
