@@ -162,7 +162,64 @@ if (yRaw.length === 2) {
 
 ---
 
-### Bug #2: LogTen Date Export (Minor / Informational)
+### Bug #2: UTC Date Fallback in gridToEntries
+
+**Affected file:** `app/composables/useLogbookBuilderImport.ts` (line 324, OLD CODE)
+
+**Code (BEFORE FIX):**
+```ts
+date = normalizeDateWithRollover(date, defaultYear, lastDateIso)
+if (!date) date = new Date().toISOString().slice(0, 10)  // ❌ BUG!
+```
+
+**Problem:**
+- When `normalizeDateWithRollover` returns an empty string (shouldn't happen with valid input, but possible edge case)
+- Fallback creates a UTC timestamp via `new Date().toISOString()`
+- `.slice(0, 10)` extracts date portion: `"YYYY-MM-DD"`
+- **BUT:** `toISOString()` returns **UTC** time, not local time
+
+**Example (America/Chicago, UTC-5):**
+- Local time: Sept 8, 2026, 10:00 PM CDT (UTC-5)
+- UTC time: Sept 9, 2026, 3:00 AM
+- `toISOString()` → `"2026-09-09T03:00:00.000Z"`
+- `.slice(0, 10)` → `"2026-09-09"` ❌ (should be `"2026-09-08"` for local calendar)
+
+**Derek's symptom:**
+- Entered `9/8` with defaultYear 2026
+- Expected: `2026-09-08`
+- Got in LogTen: `Sep 7, 2026` (−1 day shift)
+
+**Why −1 day instead of +1 day?**
+- If Derek tested in morning/afternoon local time (e.g., 2 PM CDT = 7 PM UTC same day)
+- UTC date would be correct: Sept 8 UTC = Sept 8 local ✓
+- **BUT:** Another possibility is validation or export path had additional UTC conversion
+- Or Derek's timezone offset caused different shift direction
+
+**The FIX:**
+Replace UTC fallback with **local calendar date** construction:
+```ts
+if (!date) {
+  const now = new Date()
+  const year = now.getFullYear()         // Local year
+  const month = String(now.getMonth() + 1).padStart(2, '0')  // Local month (0-indexed → 1-indexed)
+  const day = String(now.getDate()).padStart(2, '0')         // Local day
+  date = `${year}-${month}-${day}`
+}
+```
+
+**Why this works:**
+- `getFullYear()`, `getMonth()`, `getDate()` return **local** calendar values
+- No UTC conversion involved
+- Date string matches user's wall-clock calendar day
+
+**Note:**
+- This fallback should **rarely trigger** (only if `normalizeDateWithRollover` returns empty)
+- Primary bug Derek hit was the two-digit year rollover (Bug #1)
+- This UTC fallback was a **latent bug** that could cause ±1 day shifts in edge cases
+
+---
+
+### Bug #3 (Investigated, No Code Bug Found): LogTen Date Export Format
 
 **Affected file:** `app/utils/logtenHandoff.ts` (line 26)
 
@@ -228,6 +285,11 @@ metadata: {
    - Change: Identical 50-year window rule for two-digit years
    - Used by: Grid-to-entries conversion (manual entry + Digifi import)
 
+3. **`app/composables/useLogbookBuilderImport.ts`** (line 324)
+   - Function: `gridToEntries(...)` date fallback
+   - Change: Fixed UTC date fallback bug - replaced `new Date().toISOString().slice(0, 10)` with local calendar date construction
+   - Impact: Prevents ±1 day shifts when fallback triggers in non-UTC timezones
+
 ### Tests
 3. **`tests/unit/dateNormalization.test.ts`** (NEW FILE)
    - Comprehensive test suite covering:
@@ -239,7 +301,9 @@ metadata: {
 
 4. **`tests/unit/logtenHandoff.test.ts`** (updated)
    - Added test: `'preserves date without timezone shifting'`
+   - Added test: `'reproduces Derek bug: 9/8 entry should become 2026-09-08 in package, not 2026-09-07'`
    - Verifies `flight_flightDate` stays as `YYYY-MM-DD` string, not shifted
+   - Verifies JSON encoding doesn't alter the date
 
 ### Unchanged (No Bugs Found)
 - `app/utils/validation.ts` - Future date validation logic correct; no longer triggers false positives
