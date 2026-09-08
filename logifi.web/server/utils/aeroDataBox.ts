@@ -14,6 +14,7 @@ export interface AeroDataBoxLookupResult {
   authRejected: boolean
   rateLimited: boolean
   detail: string | null
+  rateLimitResumeMs?: number
 }
 
 interface AeroAirport {
@@ -71,6 +72,7 @@ let minIntervalMs = ADB_DEFAULT_MIN_INTERVAL_MS
 let lastFetchStartedAt = 0
 let throttleTail: Promise<void> = Promise.resolve()
 let rateLimitedUntilMs = 0
+let retryAfterHeaderMs = 0
 const urlCache = new Map<string, CachedHttp>()
 
 const RATE_LIMIT_COOLDOWN_MS = 60_000
@@ -82,11 +84,13 @@ export function resetAeroDataBoxClientStateForTests(): void {
   urlCache.clear()
   minIntervalMs = ADB_DEFAULT_MIN_INTERVAL_MS
   rateLimitedUntilMs = 0
+  retryAfterHeaderMs = 0
 }
 
 /** Test-only: allow another lookup after a 429 without clearing the URL cache. */
 export function clearAeroDataBoxRateLimitForTests(): void {
   rateLimitedUntilMs = 0
+  retryAfterHeaderMs = 0
 }
 
 /** Test-only: 0 skips the 1 req/s wait so multi-prefix tests stay fast. */
@@ -384,6 +388,16 @@ async function fetchAdbHttp(
       },
     })
 
+    if (res.status === 429 && res.headers) {
+      const retryAfter = res.headers.get('Retry-After')
+      if (retryAfter) {
+        const seconds = parseInt(retryAfter, 10)
+        if (Number.isFinite(seconds) && seconds > 0) {
+          retryAfterHeaderMs = Date.now() + seconds * 1000
+        }
+      }
+    }
+
     let data: unknown = null
     const canParseJson =
       res.status !== 204 &&
@@ -497,12 +511,14 @@ export async function lookupFlightActuals(
     return { actuals: null, authRejected: false, rateLimited: false, detail: null }
   }
 
-  if (Date.now() < rateLimitedUntilMs) {
+  const cooldownUntilMs = Math.max(rateLimitedUntilMs, retryAfterHeaderMs)
+  if (Date.now() < cooldownUntilMs) {
     return {
       actuals: null,
       authRejected: false,
       rateLimited: true,
       detail: 'HTTP 429 cooldown',
+      rateLimitResumeMs: cooldownUntilMs,
     }
   }
 
@@ -511,6 +527,8 @@ export async function lookupFlightActuals(
 
   for (const candidate of candidates) {
     let last: OnceOutcome | null = null
+    let foundScheduleOnly = false
+    
     for (const url of candidateUrlVariants(apiHost, candidate, date)) {
       const outcome = await fetchFlightActualsOnce(
         url,
@@ -530,12 +548,17 @@ export async function lookupFlightActuals(
         }
       }
       if (outcome.rateLimited) {
-        rateLimitedUntilMs = Date.now() + RATE_LIMIT_COOLDOWN_MS
+        const cooldownUntilMs = Math.max(
+          Date.now() + RATE_LIMIT_COOLDOWN_MS,
+          retryAfterHeaderMs
+        )
+        rateLimitedUntilMs = cooldownUntilMs
         return {
           actuals: null,
           authRejected: false,
           rateLimited: true,
           detail: 'HTTP 429',
+          rateLimitResumeMs: cooldownUntilMs,
         }
       }
       if (outcome.usable && outcome.actuals) {
@@ -548,10 +571,15 @@ export async function lookupFlightActuals(
         }
       }
       if (outcome.status === 404) break
+      if (outcome.scheduleOnly) {
+        foundScheduleOnly = true
+        break
+      }
     }
     if (last) {
       statuses.push(compactAeroLookupStatus(candidate, last.status, outcomeKind(last)))
     }
+    if (foundScheduleOnly) continue
   }
 
   return {
