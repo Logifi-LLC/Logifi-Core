@@ -206,7 +206,7 @@ export function buildLogTenPackage(entries: LogEntry[]): LogTenPackage {
       serviceID: 'com.logifi.digifi',
       dateFormat: 'MM/dd/yyyy',
       dateAndTimeFormat: 'MM/dd/yyyy HH:mm',
-      timesAreZulu: true,
+      timesAreZulu: false,
     },
     entities: entries.map(buildLogTenFlightEntity),
   }

@@ -537,7 +537,7 @@ describe('buildLogTenPackage', () => {
     expect(pkg.metadata.serviceID).toBe('com.logifi.digifi')
     expect(pkg.metadata.dateFormat).toBe('MM/dd/yyyy')
     expect(pkg.metadata.dateAndTimeFormat).toBe('MM/dd/yyyy HH:mm')
-    expect(pkg.metadata.timesAreZulu).toBe(true)
+    expect(pkg.metadata.timesAreZulu).toBe(false)
   })
 
   it('includes all entries in entities array', () => {
