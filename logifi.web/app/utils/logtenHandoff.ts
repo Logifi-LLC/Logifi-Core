@@ -23,7 +23,7 @@ export function buildLogTenFlightEntity(entry: LogEntry): LogTenEntity {
   const entity: LogTenEntity = {
     entity_name: 'Flight',
     flight_key: entry.id,
-    flight_flightDate: formatExportDate(entry.date, 'iso'),
+    flight_flightDate: formatExportDate(entry.date, 'mdy'),
     flight_from: formatAirportCode(entry.departure),
     flight_to: formatAirportCode(entry.destination),
     flight_totalTime: formatDecimalHours(entry.flightTime.total),
@@ -204,9 +204,9 @@ export function buildLogTenPackage(entries: LogEntry[]): LogTenPackage {
       application: 'Digifi/Logifi',
       version: '1.0',
       serviceID: 'com.logifi.digifi',
-      dateFormat: 'yyyy-MM-dd',
-      dateAndTimeFormat: "yyyy-MM-dd'T'HH:mm:ss'Z'",
-      timesAreZulu: true,
+      dateFormat: 'MM/dd/yyyy',
+      dateAndTimeFormat: 'MM/dd/yyyy HH:mm',
+      timesAreZulu: false,
     },
     entities: entries.map(buildLogTenFlightEntity),
   }

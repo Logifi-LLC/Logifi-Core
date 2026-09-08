@@ -165,8 +165,16 @@ function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: st
       let y = year
       if (Number.isFinite(parsedY)) {
         if (yRaw.length === 2) {
-          const century = Math.floor(year / 100) * 100
-          y = century + parsedY
+          // Two-digit year: use current century, but allow reasonable range (1950-2049)
+          // E.g. 26 → 2026, 50 → 2050, 49 → 2049, but 50+ could be 1950-1999
+          const currentCentury = Math.floor(year / 100) * 100
+          const candidate = currentCentury + parsedY
+          // If candidate year is more than 50 years in the future, assume previous century
+          if (candidate > year + 50) {
+            y = currentCentury - 100 + parsedY
+          } else {
+            y = candidate
+          }
         } else if (parsedY >= 1000) {
           y = parsedY
         }
