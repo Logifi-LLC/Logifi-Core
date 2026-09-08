@@ -321,7 +321,14 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
         ? defaultYear
         : new Date().getFullYear()
     date = normalizeDateWithRollover(date, defaultYear, lastDateIso)
-    if (!date) date = new Date().toISOString().slice(0, 10)
+    if (!date) {
+      // Fallback to today's date in LOCAL calendar (not UTC to avoid timezone shifts)
+      const now = new Date()
+      const year = now.getFullYear()
+      const month = String(now.getMonth() + 1).padStart(2, '0')
+      const day = String(now.getDate()).padStart(2, '0')
+      date = `${year}-${month}-${day}`
+    }
     if (rawDateStr.trim()) {
       lastDateIso = date
 

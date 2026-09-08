@@ -68,6 +68,29 @@ describe('buildLogTenFlightEntity', () => {
     expect(typeof entity.flight_flightDate).toBe('string')
   })
 
+  it('reproduces Derek bug: 9/8 entry should become 2026-09-08 in package, not 2026-09-07', () => {
+    // Derek enters 9/8 with defaultYear 2026
+    // Expected: LogTen package should contain '2026-09-08'
+    // Bug: LogTen package might contain '2026-09-07' (UTC -1 day shift)
+    const entry = createBaseEntry()
+    entry.date = '2026-09-08' // After normalization from 9/8 + defaultYear 2026
+    
+    const pkg = buildLogTenPackage([entry])
+    const entity = pkg.entities[0]
+    
+    // Verify the exact date string in the package
+    expect(entity.flight_flightDate).toBe('2026-09-08')
+    expect(entity.flight_flightDate).not.toBe('2026-09-07')
+    
+    // Verify it's a plain string, not influenced by Date object timezone conversion
+    expect(typeof entity.flight_flightDate).toBe('string')
+    
+    // Verify the JSON encoding doesn't alter the date
+    const jsonString = JSON.stringify(pkg)
+    expect(jsonString).toContain('"flight_flightDate":"2026-09-08"')
+    expect(jsonString).not.toContain('"flight_flightDate":"2026-09-07"')
+  })
+
   it('maps aircraft fields', () => {
     const entry = createBaseEntry()
     entry.registration = 'N999XY'
