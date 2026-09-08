@@ -40,13 +40,13 @@
                     class="text-lg font-bold mb-1"
                     :class="isDark ? 'text-white' : 'text-gray-900'"
                   >
-                    Help Digifi Learn
+                    Digifi Learning Active
                   </h2>
                   <p
                     class="text-sm leading-relaxed"
                     :class="isDark ? 'text-gray-300' : 'text-gray-700'"
                   >
-                    We can save your corrections and vocabulary (aircraft registrations and airports) to improve recognition on future scans.
+                    Digifi learns from your corrections to improve future scans. You can turn this off anytime in settings.
                   </p>
                 </div>
               </div>

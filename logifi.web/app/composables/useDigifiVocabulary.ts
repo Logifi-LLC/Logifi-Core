@@ -16,7 +16,9 @@ export async function persistDigifiVocabulary(
     .eq('id', userId)
     .single()
 
-  if (!profile?.digifi_learning_opt_in) {
+  // Treat null/undefined as opted in (default TRUE, opt-out model)
+  const isOptedIn = profile?.digifi_learning_opt_in ?? true
+  if (!isOptedIn) {
     return
   }
 

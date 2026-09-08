@@ -110,7 +110,9 @@ async function handleSendToLogTen() {
         .eq('id', user.value.id)
         .single()
 
-      if (profile?.digifi_learning_opt_in) {
+      // Treat null/undefined as opted in (default TRUE, opt-out model)
+      const isOptedIn = profile?.digifi_learning_opt_in ?? true
+      if (isOptedIn) {
         const { persistDigifiCorrectionFeedback } = await import('~/composables/useLogbookBuilderImport')
         const { persistDigifiVocabulary } = await import('~/composables/useDigifiVocabulary')
         try {

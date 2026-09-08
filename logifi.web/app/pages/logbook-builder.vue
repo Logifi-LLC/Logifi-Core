@@ -153,9 +153,8 @@ const { displayCredits, loading: creditsLoading } = useDigifiCredits()
 const { preferredSink, loadPreferredSink, setPreferredSink } = useDigifiDestination()
 
 provide('showDigifiLearningOptInModal', () => {
-  if (optInStatus.value === false) {
-    showDigifiLearningOptIn.value = true
-  }
+  // Learning is now on by default (opt-out), so no need to show the modal
+  // Users can turn it off in settings if they want
 })
 
 provide('digifiPreferredSink', preferredSink)
@@ -408,10 +407,38 @@ watchEffect(async (onCleanup) => {
         >
           Digifi
         </h1>
-        <nav class="flex items-center gap-3">
+        <nav class="flex items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            @click="showInstructions = !showInstructions"
+            class="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium font-quicksand transition-colors border"
+            :class="[
+              isDark
+                ? 'bg-white/5 hover:bg-white/10 border-white/10 text-gray-300'
+                : 'bg-gray-100 hover:bg-gray-200 border-gray-200 text-gray-700'
+            ]"
+            aria-label="Show Digifi directions"
+          >
+            <Icon name="ri:compass-line" size="14" />
+            Directions
+          </button>
+          <button
+            type="button"
+            @click="showDigifiCommonMistakes = !showDigifiCommonMistakes"
+            class="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium font-quicksand transition-colors border"
+            :class="[
+              isDark
+                ? 'bg-orange-600/10 hover:bg-orange-600/20 border-orange-500/30 text-orange-300'
+                : 'bg-orange-50 hover:bg-orange-100 border-orange-200 text-orange-700'
+            ]"
+            aria-label="Show common Digifi errors"
+          >
+            <Icon name="ri:error-warning-line" size="14" />
+            Common Errors
+          </button>
           <NuxtLink
             to="/feedback?from=digifi"
-            class="hidden sm:inline-block text-xs sm:text-sm font-medium font-quicksand transition-colors"
+            class="hidden md:inline-block text-xs font-medium font-quicksand transition-colors"
             :class="[
               isDark
                 ? 'text-gray-300 hover:text-orange-400'
@@ -510,7 +537,7 @@ watchEffect(async (onCleanup) => {
                 </button>
               </div>
               <ul
-                class="space-y-1.5 text-sm list-disc list-inside"
+                class="space-y-1.5 text-sm list-disc list-inside mb-3"
                 :class="isDark ? 'text-gray-300' : 'text-gray-700'"
               >
                 <li>Use the toolbar to set rows, layout, and columns before scanning.</li>
@@ -519,6 +546,17 @@ watchEffect(async (onCleanup) => {
                 <li>Use Validate to review totals and issues, then Import to add entries to your logbook.</li>
                 <li>You can also Send to LogTen Pro to open the entries directly in LogTen.</li>
               </ul>
+              <div
+                class="rounded-lg p-3 text-xs space-y-2"
+                :class="isDark ? 'bg-white/5 text-gray-400' : 'bg-gray-100 text-gray-600'"
+              >
+                <p>
+                  <strong>Digifi learns from your corrections.</strong> Each spread you import improves future scans by learning your tail numbers and airports. Re-scans of the same spread do not use another credit.
+                </p>
+                <p>
+                  <strong>AI may misread handwriting.</strong> You are responsible for verifying all entries before importing. See Common Errors for typical mistakes to double-check.
+                </p>
+              </div>
             </div>
           </div>
         </Transition>
