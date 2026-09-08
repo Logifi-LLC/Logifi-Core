@@ -58,6 +58,16 @@ describe('buildLogTenFlightEntity', () => {
     expect(entity.flight_totalTime).toBe('1.5')
   })
 
+  it('preserves date without timezone shifting', () => {
+    const entry = createBaseEntry()
+    entry.date = '2026-09-08'
+    const entity = buildLogTenFlightEntity(entry)
+
+    // Date should stay as YYYY-MM-DD string, not shift to adjacent day
+    expect(entity.flight_flightDate).toBe('2026-09-08')
+    expect(typeof entity.flight_flightDate).toBe('string')
+  })
+
   it('maps aircraft fields', () => {
     const entry = createBaseEntry()
     entry.registration = 'N999XY'
