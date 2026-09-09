@@ -4,19 +4,23 @@ import { isIosApp } from '~/utils/platform'
 import { useAuth } from '~/composables/useAuth'
 import { apiFetch } from '~/utils/apiFetch'
 
-// Dynamic import types for @capgo/native-purchases
-type NativePurchasesModule = typeof import('@capgo/native-purchases')
-type NativePurchases = NativePurchasesModule['NativePurchases']
-type PurchaseResult = NativePurchasesModule['PurchaseResult']
-type PURCHASE_TYPE = NativePurchasesModule['PURCHASE_TYPE']
+// Types for the dynamically imported module
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PurchaseResult = any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type NativePurchasesType = any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PurchaseTypeEnum = any
 
 let nativePurchasesModule: {
-  NativePurchases: NativePurchases
-  PURCHASE_TYPE: PURCHASE_TYPE
+  NativePurchases: NativePurchasesType
+  PURCHASE_TYPE: PurchaseTypeEnum
 } | null = null
 
 /**
- * Lazy-load the native purchases plugin only when needed on iOS
+ * Lazy-load the native purchases plugin only when needed on iOS.
+ * The module ID is constructed dynamically to prevent Vite/Rolldown from
+ * trying to resolve it at build time when it's not available.
  */
 async function loadNativePurchases() {
   if (nativePurchasesModule) return nativePurchasesModule
@@ -24,7 +28,9 @@ async function loadNativePurchases() {
     throw new Error('Native purchases not available on this platform')
   }
   try {
-    nativePurchasesModule = await import('@capgo/native-purchases')
+    // Construct module ID dynamically to avoid build-time resolution
+    const moduleId = ['@capgo', 'native-purchases'].join('/')
+    nativePurchasesModule = await import(/* @vite-ignore */ moduleId)
     return nativePurchasesModule
   } catch (err) {
     console.error('[iap] Failed to load native purchases module:', err)
