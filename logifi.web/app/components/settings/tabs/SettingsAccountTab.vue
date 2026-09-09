@@ -381,6 +381,9 @@ async function changeSink(sink: 'logten' | 'logifi') {
   if (preferredSink.value === sink) return
   try {
     await setPreferredSink(sink)
+    if (sink === 'logten') {
+      await setOptIn(true)
+    }
     const label = sink === 'logten' ? 'LogTen Pro' : 'Logifi logbook'
     showToast(`Digifi destination changed to ${label}`, { type: 'success' })
   } catch (error) {
