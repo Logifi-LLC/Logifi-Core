@@ -40,6 +40,7 @@ describe('POST /api/credits/iap/verify', () => {
     mockEvent = {
       node: {
         req: {
+          method: 'POST',
           headers: {
             'content-type': 'application/json',
           },
