@@ -31,11 +31,10 @@ async function loadNativePurchases() {
     const { registerPlugin } = await import('@capacitor/core')
     const NativePurchases = registerPlugin<NativePurchasesType>('NativePurchases')
     
-    // PURCHASE_TYPE enum values from @capgo/native-purchases
+    // PURCHASE_TYPE enum values from @capgo/native-purchases v8.x
     const PURCHASE_TYPE = {
       INAPP: 'inapp',
-      PAID_SUBSCRIPTION: 'paid subscription',
-      FREE_SUBSCRIPTION: 'free subscription',
+      SUBS: 'subs',
     }
     
     nativePurchasesModule = { NativePurchases, PURCHASE_TYPE }
@@ -93,29 +92,24 @@ export function useIapPurchase() {
       // Lazy-load the native module
       const { NativePurchases, PURCHASE_TYPE } = await loadNativePurchases()
 
-      // Initialize the plugin
-      await NativePurchases.initialize({
-        products: IAP_PRODUCTS.map((p) => ({
-          id: p.productId,
-          type: PURCHASE_TYPE.INAPP,
-        })),
-      })
-
       // Fetch product details from App Store
+      // Note: Capgo v8.x has NO initialize() method - just call getProducts directly
       const result = await NativePurchases.getProducts({
         productIdentifiers: IAP_PRODUCTS.map((p) => p.productId),
+        productType: PURCHASE_TYPE.INAPP,
       })
 
       // Map App Store product details to our product list
+      // Capgo Product fields: identifier, priceString (formatted), price (number), currencyCode
       products.value = IAP_PRODUCTS.map((p) => {
         const storeProduct = result.products?.find((sp) => sp.identifier === p.productId)
         return {
           productId: p.productId,
           credits: p.credits,
           label: p.label,
-          price: storeProduct?.price,
-          priceValue: storeProduct?.priceValue,
-          currency: storeProduct?.currency,
+          price: storeProduct?.priceString,
+          priceValue: storeProduct?.price,
+          currency: storeProduct?.currencyCode,
           available: Boolean(storeProduct),
         }
       })
@@ -162,16 +156,17 @@ export function useIapPurchase() {
       const { NativePurchases, PURCHASE_TYPE } = await loadNativePurchases()
 
       // Initiate purchase with Apple
-      const purchaseResult: PurchaseResult = await NativePurchases.purchaseProduct({
+      // Credits are consumable (user can buy multiple times)
+      // Note: purchaseProduct() returns Transaction directly, not { transaction: Transaction }
+      const transaction: PurchaseResult = await NativePurchases.purchaseProduct({
         productIdentifier: productId,
         productType: PURCHASE_TYPE.INAPP,
+        isConsumable: true,
       })
 
-      if (!purchaseResult.transaction) {
+      if (!transaction) {
         throw new Error('Purchase did not return a transaction')
       }
-
-      const transaction = purchaseResult.transaction
 
       // Verify receipt on server and credit account
       const token = getAccessToken()
@@ -179,6 +174,8 @@ export function useIapPurchase() {
         throw new Error('Authentication token not available')
       }
 
+      // Map Capgo Transaction fields to server API:
+      // Capgo: transactionId, productIdentifier, receipt?, jwsRepresentation?
       const verifyResponse = await apiFetch<IapPurchaseResponse>(
         '/api/credits/iap/verify',
         {
@@ -188,7 +185,7 @@ export function useIapPurchase() {
           },
           body: {
             productId: transaction.productIdentifier,
-            transactionId: transaction.transactionIdentifier,
+            transactionId: transaction.transactionId,
             receipt: transaction.receipt,
             jwsRepresentation: transaction.jwsRepresentation,
           },
