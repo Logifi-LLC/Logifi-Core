@@ -157,17 +157,16 @@ export function useIapPurchase() {
 
       // Initiate purchase with Apple
       // Credits are consumable (user can buy multiple times)
-      const purchaseResult: PurchaseResult = await NativePurchases.purchaseProduct({
+      // Note: purchaseProduct() returns Transaction directly, not { transaction: Transaction }
+      const transaction: PurchaseResult = await NativePurchases.purchaseProduct({
         productIdentifier: productId,
         productType: PURCHASE_TYPE.INAPP,
         isConsumable: true,
       })
 
-      if (!purchaseResult.transaction) {
+      if (!transaction) {
         throw new Error('Purchase did not return a transaction')
       }
-
-      const transaction = purchaseResult.transaction
 
       // Verify receipt on server and credit account
       const token = getAccessToken()
@@ -175,6 +174,8 @@ export function useIapPurchase() {
         throw new Error('Authentication token not available')
       }
 
+      // Map Capgo Transaction fields to server API:
+      // Capgo: transactionId, productIdentifier, receipt?, jwsRepresentation?
       const verifyResponse = await apiFetch<IapPurchaseResponse>(
         '/api/credits/iap/verify',
         {
@@ -184,7 +185,7 @@ export function useIapPurchase() {
           },
           body: {
             productId: transaction.productIdentifier,
-            transactionId: transaction.transactionIdentifier,
+            transactionId: transaction.transactionId,
             receipt: transaction.receipt,
             jwsRepresentation: transaction.jwsRepresentation,
           },
