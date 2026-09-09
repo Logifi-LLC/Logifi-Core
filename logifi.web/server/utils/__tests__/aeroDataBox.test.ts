@@ -486,6 +486,77 @@ describe('fetchFlightActuals', () => {
     expect(inbound?.actualOutLocal).toBeNull()
     expect(inbound?.actualOnLocal).toBe('2026-08-12 14:18:00')
   })
+
+  it('respects Retry-After header on 429 and returns rateLimitResumeMs', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      headers: new Headers({ 'Retry-After': '90' }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await lookupFlightActuals('5770', '2026-08-12', 'LGA', 'DCA')
+    expect(result.rateLimited).toBe(true)
+    expect(result.rateLimitResumeMs).toBeGreaterThan(Date.now())
+    expect(result.rateLimitResumeMs).toBeLessThanOrEqual(Date.now() + 91000)
+  })
+
+  it('stops on schedule-only 200 and tries next prefix without exhausting Both/Departure variants', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+      const u = String(url)
+      if (u.includes('/YX4442/') && u.includes('dateLocalRole=Both')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [
+            {
+              number: 'YX4442',
+              departure: {
+                airport: { iata: 'LGA' },
+                scheduledTimeLocal: '2026-08-12 10:59:00',
+              },
+              arrival: {
+                airport: { iata: 'RIC' },
+                scheduledTimeLocal: '2026-08-12 12:26:00',
+              },
+              aircraft: { model: 'E175' },
+            },
+          ],
+        }
+      }
+      if (u.includes('/RPA4442/') && u.includes('dateLocalRole=Both')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => [
+            {
+              number: 'RPA4442',
+              departure: {
+                airport: { iata: 'LGA' },
+                actualTimeLocal: '2026-08-12 11:02:00',
+                actualRunwayLocal: '2026-08-12 11:14:00',
+              },
+              arrival: {
+                airport: { iata: 'RIC' },
+                actualTimeLocal: '2026-08-12 12:30:00',
+                actualRunwayLocal: '2026-08-12 12:24:00',
+              },
+              aircraft: { reg: 'N999RPA', modelCode: 'E75' },
+            },
+          ],
+        }
+      }
+      return { ok: false, status: 204 }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    const yxCalls = fetchMock.mock.calls.filter((c) => String(c[0]).includes('/YX4442/'))
+    expect(yxCalls).toHaveLength(1)
+    expect(String(yxCalls[0]?.[0])).toContain('dateLocalRole=Both')
+    expect(result.actuals?.registration).toBe('N999RPA')
+    expect(result.detail).toBe('YX200s RPA200')
+  })
 })
 
 describe('extractAeroDataBoxActuals', () => {

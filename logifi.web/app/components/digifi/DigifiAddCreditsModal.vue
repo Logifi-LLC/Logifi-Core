@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, onMounted } from 'vue'
 import type { PaymentMethod } from '~/utils/creditsPricing'
 import { useDigifiCredits } from '~/composables/useDigifiCredits'
+import { useIapPurchase } from '~/composables/useIapPurchase'
 import { useTheme } from '~/composables/useTheme'
+import { canUseWebPayments } from '~/utils/platform'
 
 const props = defineProps<{
   isOpen: boolean
@@ -24,16 +26,37 @@ const {
   rateDollarsForMethod,
 } = useDigifiCredits()
 
-type Step = 'form' | 'loading' | 'lightning' | 'success'
+const {
+  isAvailable: isIapAvailable,
+  products: iapProducts,
+  initialize: initializeIap,
+  purchaseProduct: purchaseIapProduct,
+  loading: iapLoading,
+  error: iapError,
+} = useIapPurchase()
 
+type Step = 'form' | 'loading' | 'lightning' | 'success' | 'iap'
+
+const showWebPayments = canUseWebPayments()
 const paymentMethod = ref<PaymentMethod>('lightning')
 const pageCount = ref(25)
+const selectedIapProductId = ref<string | null>(null)
 const step = ref<Step>('form')
 const successCreditsAdded = ref(0)
 const checkoutError = ref<string | null>(null)
 const lightningCheckoutLink = ref<string | null>(null)
 const lightningInvoiceId = ref<string | null>(null)
 let lightningPollTimer: ReturnType<typeof setInterval> | null = null
+
+onMounted(async () => {
+  if (isIapAvailable.value) {
+    try {
+      await initializeIap()
+    } catch (err) {
+      console.error('[iap] failed to initialize:', err)
+    }
+  }
+})
 
 const rateLabel = computed(() => `$${rateDollarsForMethod(paymentMethod.value).toFixed(2)}`)
 const totalLabel = computed(() =>
@@ -154,6 +177,38 @@ async function proceedToPayment() {
       (err instanceof Error ? err.message : 'Payment failed')
   }
 }
+
+async function proceedToIapPurchase(productId: string) {
+  step.value = 'loading'
+  checkoutError.value = null
+  try {
+    const result = await purchaseIapProduct(productId)
+    
+    // Use server-granted credits from verify response, not local pack size
+    if (!result.granted) {
+      // Transaction was already processed (duplicate)
+      checkoutError.value = 'This purchase was already processed'
+      step.value = 'form'
+      return
+    }
+    
+    // Refresh balance from server to get the actual current balance
+    await fetchBalance()
+    
+    // Show success with pack size (amount added), not the new balance
+    const product = iapProducts.value.find((p) => p.productId === productId)
+    const creditsAdded = product?.credits ?? 0
+    successCreditsAdded.value = creditsAdded
+    step.value = 'success'
+    emit('purchased', creditsAdded)
+    setTimeout(() => emit('close'), 1500)
+  } catch (err: unknown) {
+    step.value = 'form'
+    checkoutError.value =
+      iapError.value ??
+      (err instanceof Error ? err.message : 'Purchase failed')
+  }
+}
 </script>
 
 <template>
@@ -237,7 +292,59 @@ async function proceedToPayment() {
         </div>
 
         <div v-else class="p-6 space-y-6">
-          <div class="space-y-2">
+          <!-- iOS IAP: Show product packs -->
+          <div v-if="isIapAvailable && !showWebPayments" class="space-y-4">
+            <p :class="['text-sm font-semibold font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              Choose a credit pack
+            </p>
+            <div class="grid grid-cols-1 gap-3">
+              <button
+                v-for="product in iapProducts"
+                :key="product.productId"
+                type="button"
+                class="relative text-left p-4 rounded-xl border-2 transition-all"
+                :class="[
+                  selectedIapProductId === product.productId
+                    ? isDarkMode
+                      ? 'border-blue-500 bg-blue-600/10'
+                      : 'border-blue-600 bg-blue-50'
+                    : isDarkMode
+                      ? 'border-gray-700 hover:border-gray-600'
+                      : 'border-gray-200 hover:border-gray-300',
+                  !product.available && 'opacity-50 cursor-not-allowed',
+                ]"
+                :disabled="!product.available"
+                @click="selectedIapProductId = product.productId"
+              >
+                <div class="flex items-center justify-between">
+                  <div>
+                    <p :class="['font-bold font-quicksand text-sm', isDarkMode ? 'text-white' : 'text-gray-900']">
+                      {{ product.label }}
+                    </p>
+                    <p v-if="product.available && product.price" :class="['text-xs mt-1 font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                      {{ product.price }}
+                    </p>
+                    <p v-else-if="!product.available" :class="['text-xs mt-1 font-quicksand', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
+                      Not available
+                    </p>
+                  </div>
+                  <Icon
+                    v-if="selectedIapProductId === product.productId"
+                    name="ri:checkbox-circle-fill"
+                    class="text-blue-500"
+                    size="24"
+                  />
+                </div>
+              </button>
+            </div>
+            <p v-if="iapProducts.length === 0" :class="['text-sm text-center font-quicksand', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
+              Loading products...
+            </p>
+          </div>
+
+          <!-- Web: Show Stripe/Lightning selector and custom amount -->
+          <div v-else class="space-y-6">
+            <div class="space-y-2">
             <label
               :class="['block text-sm font-semibold font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']"
             >
@@ -330,9 +437,12 @@ async function proceedToPayment() {
                 </p>
               </button>
             </div>
+            </div>
           </div>
 
+          <!-- Common: Price summary or selection prompt -->
           <p
+            v-if="showWebPayments"
             :class="[
               'text-center text-base font-semibold font-quicksand py-3 rounded-xl',
               isDarkMode ? 'bg-gray-800 text-gray-100' : 'bg-gray-50 text-gray-900',
@@ -346,6 +456,22 @@ async function proceedToPayment() {
           </p>
 
           <button
+            v-if="isIapAvailable && !showWebPayments"
+            type="button"
+            class="w-full py-3 rounded-xl font-bold font-quicksand text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            :class="[
+              isDarkMode
+                ? 'bg-blue-600 text-white hover:bg-blue-500'
+                : 'bg-blue-600 text-white hover:bg-blue-700',
+            ]"
+            :disabled="!selectedIapProductId || iapLoading"
+            @click="selectedIapProductId && proceedToIapPurchase(selectedIapProductId)"
+          >
+            Purchase with Apple
+          </button>
+
+          <button
+            v-else
             type="button"
             class="w-full py-3 rounded-xl font-bold font-quicksand text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             :class="[

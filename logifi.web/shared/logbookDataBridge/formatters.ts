@@ -138,7 +138,7 @@ export function formatExportDate(isoDate: string, target: ExportDateFormat): str
     const year = isoMatch[1]!
     const month = parseInt(isoMatch[2]!, 10)
     const day = parseInt(isoMatch[3]!, 10)
-    if (target === 'mdy') return `${month}/${day}/${year}`
+    if (target === 'mdy') return `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/${year}`
     return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
   }
 
@@ -147,7 +147,7 @@ export function formatExportDate(isoDate: string, target: ExportDateFormat): str
     const month = parseInt(mdyMatch[1]!, 10)
     const day = parseInt(mdyMatch[2]!, 10)
     const year = mdyMatch[3]!
-    if (target === 'mdy') return `${month}/${day}/${year}`
+    if (target === 'mdy') return `${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}/${year}`
     return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
   }
 

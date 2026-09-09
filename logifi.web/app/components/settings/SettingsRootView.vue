@@ -30,12 +30,14 @@
       <SettingsListRow
         v-for="item in itemsForGroup(group)"
         :key="item.id"
-        :label="item.label"
+        :label="item.id === 'digifi' ? 'Open Digifi' : item.label"
         :subtitle="rowSubtitle(item)"
         :icon="item.id === 'profile' && profilePreview ? undefined : item.icon"
         :badge="item.id === 'updates' && updatesBadge ? updatesBadge : undefined"
         :is-dark-mode="isDarkMode"
-        @click="$emit('navigate', item.id)"
+        :tag="item.id === 'digifi' ? 'NuxtLink' : undefined"
+        :to="item.id === 'digifi' ? digifiRoute : undefined"
+        @click="item.id === 'digifi' ? $emit('close') : $emit('navigate', item.id)"
       />
     </SettingsListGroup>
 
@@ -64,6 +66,7 @@
 import { computed } from 'vue'
 import SettingsListGroup from './SettingsListGroup.vue'
 import SettingsListRow from './SettingsListRow.vue'
+import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
 import {
   SETTINGS_NAV_GROUPS,
   navItemsByGroup,
@@ -84,12 +87,17 @@ defineEmits<{
   logout: []
 }>()
 
+const { isIos } = useCapacitorPlatform()
 const navGroups = SETTINGS_NAV_GROUPS
 
 const profilePreviewSubtitle = computed(() => {
   if (!props.profilePreview) return ''
   const { callsign } = props.profilePreview
   return callsign ? `Callsign ${callsign}` : 'Tap to edit profile'
+})
+
+const digifiRoute = computed(() => {
+  return isIos.value ? '/digifi-eye' : '/logbook-builder?digifi=open'
 })
 
 function itemsForGroup(group: string): SettingsNavItem[] {

@@ -169,7 +169,7 @@ describe('logbookDataBridge formatters', () => {
 
   it('formats and parses dates per platform', () => {
     expect(formatExportDate('2024-06-13', 'iso')).toBe('2024-06-13')
-    expect(formatExportDate('2024-06-13', 'mdy')).toBe('6/13/2024')
+    expect(formatExportDate('2024-06-13', 'mdy')).toBe('06/13/2024')
     expect(parseImportDate('6/13/2024')).toBe('2024-06-13')
   })
 
@@ -539,7 +539,7 @@ describe('logbookDataBridge export', () => {
   it('maps MyFlightbook row with exact headers', () => {
     const row = mapEntryToMyFlightbookRow(createTestEntry())
     const obj = buildHeaderRowObject(MYFLIGHTBOOK_HEADERS, row)
-    expect(obj['Date']).toBe('6/13/2024')
+    expect(obj['Date']).toBe('06/13/2024')
     expect(obj['Tail Number']).toBe('N172P')
     expect(obj['Total Flight Time']).toBe('1.5')
     expect(obj['Route']).toBe('KIND KORD')

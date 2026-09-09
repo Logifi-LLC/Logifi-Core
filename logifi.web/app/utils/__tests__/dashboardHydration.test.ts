@@ -23,8 +23,8 @@ describe('getDisplayedPilotInitials', () => {
     expect(getDisplayedPilotInitials('Derek Farmer', true)).toBe('DF')
   })
 
-  it('uses PP only after load when the name is still empty', () => {
-    expect(getDisplayedPilotInitials('', true)).toBe('PP')
+  it('returns empty string after load when name is empty (for paper airplane avatar fallback)', () => {
+    expect(getDisplayedPilotInitials('', true)).toBe('')
   })
 })
 

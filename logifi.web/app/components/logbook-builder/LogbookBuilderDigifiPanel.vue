@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, inject } from 'vue'
 import { useLogbookBuilderDigifi } from '~/composables/useLogbookBuilderDigifi'
 import { useDigifiCompanionCapture } from '~/composables/useDigifiCompanionCapture'
 import { useDigifiCredits } from '~/composables/useDigifiCredits'
@@ -285,6 +285,7 @@ async function processFile(
   successMessage.value = null
   scanningSide.value = pageSide
   updateQueueStatus()
+  
   try {
     await scanPage(file, pageSide)
   } finally {
@@ -466,24 +467,6 @@ onUnmounted(() => {
       </p>
       <DigifiCreditsIndicator compact @open-checkout="showAddCreditsModal = true" />
     </div>
-
-    <p
-      class="text-xs mb-4 rounded-lg px-3 py-2 border"
-      :class="isDark ? 'border-blue-500/30 bg-blue-500/10 text-blue-200' : 'border-blue-200 bg-blue-50 text-blue-800'"
-    >
-      <strong>Digifi gets better as you use it.</strong>
-      Each spread you import adds to your Logbook Catalog and teaches Digifi your tail numbers and aircraft.
-      Fix any misreads before importing — those corrections apply to future scans.
-      Re-scans of the same spread do not use another credit.
-    </p>
-
-    <p
-      class="text-xs mb-4 rounded-lg px-3 py-2 border inline-block"
-      :class="isDark ? 'border-amber-500/30 bg-amber-500/10 text-amber-200' : 'border-amber-200 bg-amber-50 text-amber-900'"
-    >
-      AI may misread handwriting. You are responsible for verifying all entries before importing.
-      See Common mistakes above for what to double-check first.
-    </p>
 
     <p
       v-if="scanRowWarning"
@@ -685,15 +668,11 @@ onUnmounted(() => {
           <img :src="qrDataUrl" alt="Phone capture QR code" class="h-[200px] w-[200px] rounded-lg">
         </div>
         <div class="space-y-2">
-          <p class="text-xs break-all" :class="isDark ? 'text-gray-400' : 'text-gray-600'">{{ mobileUrl }}</p>
-          <p v-if="companionCaptureOrigin" class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-500'">
-            QR uses <code class="text-[11px]">{{ companionCaptureOrigin }}</code> (same Wi‑Fi). On your phone, open that
-            URL once and accept the dev certificate before scanning. Prefer
-            <code class="text-[11px]">{{ companionCaptureOrigin }}/logbook-builder</code> on this laptop instead of
-            <code class="text-[11px]">0.0.0.0</code>.
+          <p class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
+            Scan the QR code or use the Copy link button below to open the capture page on your phone.
           </p>
-          <p class="text-xs" :class="isDark ? 'text-gray-500' : 'text-gray-500'">
-            Or open <strong>Digifi Eye (Beta)</strong> in the Logifi iOS app. It can detect this session when signed in.
+          <p class="text-xs" :class="isDark ? 'text-gray-400' : 'text-gray-600'">
+            Or open <strong>Digifi Eye (Beta)</strong> in the Logifi iOS app to detect this session automatically.
           </p>
           <div class="flex flex-wrap gap-2">
             <button

@@ -129,9 +129,16 @@ function normalizeDateWithRollover(
         // Fall back to the default/base year if year part is not a valid number.
         y = year
       } else if (yRaw.length === 2) {
-        // Two-digit year: keep the same century as the base year and override the last two digits.
-        const century = Math.floor(year / 100) * 100
-        y = century + parsedY
+        // Two-digit year: use current century, but allow reasonable range (1950-2049)
+        // E.g. 26 → 2026, 50 → 2050, 49 → 2049, but 50+ could be 1950-1999
+        const currentCentury = Math.floor(year / 100) * 100
+        const candidate = currentCentury + parsedY
+        // If candidate year is more than 50 years in the future, assume previous century
+        if (candidate > year + 50) {
+          y = currentCentury - 100 + parsedY
+        } else {
+          y = candidate
+        }
       } else if (parsedY >= 1000) {
         // Full four-digit year: use as-is.
         y = parsedY
@@ -314,7 +321,14 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
         ? defaultYear
         : new Date().getFullYear()
     date = normalizeDateWithRollover(date, defaultYear, lastDateIso)
-    if (!date) date = new Date().toISOString().slice(0, 10)
+    if (!date) {
+      // Fallback to today's date in LOCAL calendar (not UTC to avoid timezone shifts)
+      const now = new Date()
+      const year = now.getFullYear()
+      const month = String(now.getMonth() + 1).padStart(2, '0')
+      const day = String(now.getDate()).padStart(2, '0')
+      date = `${year}-${month}-${day}`
+    }
     if (rawDateStr.trim()) {
       lastDateIso = date
 
@@ -614,10 +628,22 @@ function collectDigifiCorrectionFeedback(
   return [...feedbackItems.values()]
 }
 
-async function persistDigifiCorrectionFeedback(
+export async function persistDigifiCorrectionFeedback(
   grid: ReturnType<typeof useLogbookBuilderGrid>,
   userId: string
 ): Promise<void> {
+  const { data: profile } = await (supabase as any)
+    .from('user_profiles')
+    .select('digifi_learning_opt_in')
+    .eq('id', userId)
+    .single()
+  
+  // Treat null/undefined as opted in (default TRUE, opt-out model)
+  const isOptedIn = profile?.digifi_learning_opt_in ?? true
+  if (!isOptedIn) {
+    return
+  }
+
   const feedbackItems = collectDigifiCorrectionFeedback(grid)
   if (feedbackItems.length === 0) return
 
@@ -838,6 +864,13 @@ export async function runValidateAndImport(
       await persistDigifiCorrectionFeedback(grid, user.value.id)
     } catch (error) {
       console.warn('[digifi] failed to persist correction feedback', error)
+    }
+    
+    try {
+      const { persistDigifiVocabulary } = await import('~/composables/useDigifiVocabulary')
+      await persistDigifiVocabulary(grid, user.value.id)
+    } catch (error) {
+      console.warn('[digifi] failed to persist vocabulary', error)
     }
   }
 

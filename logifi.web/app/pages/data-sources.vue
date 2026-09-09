@@ -3,14 +3,16 @@
     :class="[
       'min-h-screen transition-colors duration-300 font-quicksand',
       isFromLanding
-        ? 'relative overflow-x-hidden bg-[#e4e8e7] text-gray-900'
+        ? 'relative overflow-x-hidden bg-[#0a0e1a] text-gray-100'
         : [
             'bg-gray-100 text-gray-900 dark:bg-gray-950 dark:text-gray-100',
             isIos ? 'overflow-x-hidden' : '',
           ],
     ]"
   >
-    <TechnicalTopographyBg v-if="isFromLanding" />
+    <!-- Subtle grid background for marketing mode -->
+    <div v-if="isFromLanding" class="fixed inset-0 z-0 opacity-[0.02]" style="background-image: linear-gradient(rgba(59, 130, 246, 0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(59, 130, 246, 0.4) 1px, transparent 1px); background-size: 40px 40px;"></div>
+    
     <div :class="isFromLanding ? 'relative z-10' : 'contents'">
     <MarketingHeader v-if="isFromLanding" active-page="data-sources" @open-auth="openAuth" />
 
@@ -64,10 +66,10 @@
     >
       <div
         :class="[
-          'max-w-4xl mx-auto prose prose-gray',
+          'max-w-4xl mx-auto prose prose-invert',
           isIos && !isFromLanding ? 'break-words overflow-x-hidden max-w-full' : '',
           isFromLanding
-            ? 'relative overflow-hidden rounded-[28px] border border-white/15 bg-white/10 backdrop-blur-md shadow-[0_0_42px_-12px_rgba(59,130,246,0.24),0_0_56px_-18px_rgba(37,99,235,0.14)] p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8'
+            ? 'relative overflow-hidden rounded-xl border border-gray-800/50 bg-gray-900/40 backdrop-blur-sm shadow-lg p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8'
             : '',
         ]"
       >
@@ -75,31 +77,31 @@
           :class="[
             'font-bold font-quicksand mb-2',
             isIos && !isFromLanding ? 'text-2xl' : 'text-3xl',
-            isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white',
+            isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white',
           ]"
         >
           Data sources &amp; third-party APIs
         </h1>
-        <p :class="['mb-8', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-600 dark:text-gray-400']">
+        <p :class="['mb-8', isFromLanding ? 'text-gray-400' : 'text-gray-600 dark:text-gray-400']">
           How Logifi uses external services for schedule import and Digifi scanning.
         </p>
 
         <section class="mb-10">
-          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">Airline schedule (FLICA)</h2>
-          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
+          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">Airline schedule (FLICA)</h2>
+          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             Autofi is in public beta with Republic (RJET). Other airlines are not supported yet.
           </p>
-          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
+          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             If you choose to connect FLICA, you provide your airline portal credentials in Logifi.
             Our
-            <strong :class="isFromLanding ? 'text-gray-950 dark:text-gray-900' : ''">server</strong> stores an encrypted copy associated with your Logifi user account and uses it only to
+            <strong :class="isFromLanding ? 'text-gray-100' : ''">server</strong> stores an encrypted copy associated with your Logifi user account and uses it only to
             fetch your schedule for logbook import. Credentials are not exposed to the browser after connect.
           </p>
-          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
+          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             Schedule enrichment may use third-party flight data APIs. We do not send your FLICA password
             to AI or LLM providers.
           </p>
-          <p :class="['leading-relaxed mb-4', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
+          <p :class="['leading-relaxed mb-4', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             To remove imported flights, use Logifi’s logbook tools. To revoke the FLICA connection
             and delete stored credentials, you can disconnect your account below.
           </p>
@@ -108,8 +110,8 @@
             v-if="isAuthenticated"
             :class="['not-prose border rounded-xl p-4 sm:p-6 shadow-sm transition-colors', isFromLanding ? 'bg-white/40 border-white/20 dark:bg-white/40 dark:border-white/20' : 'bg-white border-gray-200 dark:border-gray-700 dark:bg-gray-900 dark:shadow-lg dark:shadow-black/20']"
           >
-            <h3 :class="['text-base font-semibold mb-1', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">Manage Connection</h3>
-            <p :class="['text-sm mb-4', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-600 dark:text-gray-400']">
+            <h3 :class="['text-base font-semibold mb-1', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">Manage Connection</h3>
+            <p :class="['text-sm mb-4', isFromLanding ? 'text-gray-300' : 'text-gray-600 dark:text-gray-400']">
               Disconnecting will immediately delete your stored FLICA credentials from our servers. You will need to reconnect to import future flights.
             </p>
             <div :class="['flex gap-3', isIos ? 'flex-col items-stretch' : 'items-center']">
@@ -145,23 +147,23 @@
         </section>
 
         <section class="mb-10">
-          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">Digifi (paper logbook scanning)</h2>
-          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
-            If you use <strong :class="isFromLanding ? 'text-gray-950 dark:text-gray-900' : ''">Digifi</strong> on Add Pages
+          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">Digifi (paper logbook scanning)</h2>
+          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
+            If you use <strong :class="isFromLanding ? 'text-gray-100' : ''">Digifi</strong> on Add Pages
             (<NuxtLink to="/logbook-builder" class="text-blue-600 hover:underline dark:text-blue-400">/logbook-builder</NuxtLink>),
             you upload photos of your paper logbook. Our server sends those images and extracted text to
-            <strong :class="isFromLanding ? 'text-gray-950 dark:text-gray-900' : ''">Google Gemini</strong> to transcribe entries into the builder grid.
+            <strong :class="isFromLanding ? 'text-gray-100' : ''">Google Gemini</strong> to transcribe entries into the builder grid.
             You review and edit before importing into your digital logbook.
           </p>
-          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
-            Scan images are stored in our private storage bucket for up to <strong :class="isFromLanding ? 'text-gray-950 dark:text-gray-900' : ''">24 hours</strong>
+          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
+            Scan images are stored in our private storage bucket for up to <strong :class="isFromLanding ? 'text-gray-100' : ''">24 hours</strong>
             (for support), then deleted. We do not send airline portal credentials to Gemini or any other AI provider.
           </p>
         </section>
 
         <section class="mb-10">
-          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-950 dark:text-gray-900' : 'text-gray-900 dark:text-white']">Other services</h2>
-          <p :class="['leading-relaxed', isFromLanding ? 'text-gray-800 dark:text-gray-800' : 'text-gray-700 dark:text-gray-300']">
+          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">Other services</h2>
+          <p :class="['leading-relaxed', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             Authentication and primary database storage use Supabase. Hosting and analytics may use
             Vercel. See our
             <NuxtLink to="/privacy" class="text-blue-600 hover:underline dark:text-blue-400">
@@ -209,7 +211,6 @@ import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
 import AuthModal from '~/components/AuthModal.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
-import TechnicalTopographyBg from '~/components/TechnicalTopographyBg.vue'
 
 const route = useRoute()
 const router = useRouter()

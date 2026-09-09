@@ -51,6 +51,7 @@ async function enrichLegWithAeroDataBox(
   detail: string | null
   authRejected: boolean
   rateLimited: boolean
+  rateLimitResumeMs?: number
 }> {
   const date = leg.scheduled_out_local?.slice(0, 10) ?? ''
   if (!date || date > dateTo) {
@@ -99,6 +100,7 @@ async function enrichLegWithAeroDataBox(
       detail: lookup.detail,
       authRejected: false,
       rateLimited: true,
+      rateLimitResumeMs: lookup.rateLimitResumeMs,
     }
   }
   if (!lookup.actuals || !isUsableAeroDataBoxHit(lookup.actuals)) {
@@ -117,8 +119,6 @@ async function enrichLegWithAeroDataBox(
       ...leg,
       fcv_tail_number: lookup.actuals.registration ?? leg.fcv_tail_number,
       fcv_aircraft_type: lookup.actuals.aircraftType ?? leg.fcv_aircraft_type,
-      // Do not copy actual_out_local / actual_in_local from AeroDataBox — FLICA gate
-      // times (scheduled_out/in) are ground truth and are already actual for completed flights.
       actual_off_local: lookup.actuals.actualOffLocal ?? leg.actual_off_local,
       actual_on_local: lookup.actuals.actualOnLocal ?? leg.actual_on_local,
     },
@@ -146,7 +146,7 @@ async function enrichLegsSequential(
   let enrichAttempted = 0
   let enrichedCount = 0
   let authRejected = false
-  let rateLimited = false
+  let rateLimitResumeMs: number | undefined
   const details: string[] = []
 
   for (let i = 0; i < legs.length; i++) {
@@ -157,17 +157,15 @@ async function enrichLegsSequential(
       out.push(leg)
       continue
     }
-    if (rateLimited) {
-      out.push(leg)
-      continue
-    }
 
     const r = await enrichLegWithAeroDataBox(leg, dateTo, airlineCode)
     out.push(r.leg)
     if (r.attempted) enrichAttempted++
     if (r.enriched) enrichedCount++
     if (r.authRejected) authRejected = true
-    if (r.rateLimited) rateLimited = true
+    if (r.rateLimited && r.rateLimitResumeMs) {
+      rateLimitResumeMs = r.rateLimitResumeMs
+    }
     if (r.detail) details.push(r.detail)
   }
 
@@ -175,9 +173,11 @@ async function enrichLegsSequential(
   let enrichDetail: string | null = null
   if (authRejected) {
     enrichDetail = 'AeroDataBox rejected the API key'
-  } else if (rateLimited) {
-    enrichDetail =
-      'AeroDataBox rate limit (HTTP 429). Stopped early — wait a minute and fetch again.'
+  } else if (rateLimitResumeMs) {
+    const nowMs = Date.now()
+    const remainingSec = Math.ceil((rateLimitResumeMs - nowMs) / 1000)
+    const timeMsg = remainingSec > 0 ? ` Wait ${remainingSec}s and fetch again.` : ' Fetch again.'
+    enrichDetail = `AeroDataBox rate limit (HTTP 429).${timeMsg}`
   } else if (enrichAttempted > 0) {
     const ratio = `${enrichedCount}/${enrichAttempted}`
     if (enrichedCount === 0) {

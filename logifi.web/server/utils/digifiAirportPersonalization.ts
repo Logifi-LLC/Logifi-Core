@@ -97,10 +97,21 @@ export function isKnownDigifiLocationCode(code: string): boolean {
   return kind === 'airport' || kind === 'navaid'
 }
 
+interface VocabularyRow {
+  value: string
+  last_seen_at: string
+}
+
+interface PilotNotesPriors {
+  bases?: string[]
+}
+
 export function buildDigifiAirportIndex(options: {
   historyRows: AirportHistoryRow[]
   catalogRows: CatalogAirportRow[]
   feedbackRows: DigifiCorrectionFeedbackRow[]
+  vocabularyRows?: VocabularyRow[]
+  pilotNotesPriors?: PilotNotesPriors | null
 }): DigifiAirportIndex {
   const airportMap = new Map<string, AirportCandidateRecord>()
   const feedbackByRawContext = new Map<string, DigifiCorrectionFeedbackRow[]>()
@@ -144,6 +155,47 @@ export function buildDigifiAirportIndex(options: {
       catalogCount: 1,
       lastSeenAt: null,
     })
+  }
+
+  for (const row of (options.vocabularyRows ?? [])) {
+    const key = normalizeDigifiAirportKey(row.value ?? '')
+    if (!key) continue
+    const existing = airportMap.get(key)
+    if (existing) {
+      continue
+    }
+    airportMap.set(key, {
+      value: key,
+      key,
+      historyCount: 0,
+      catalogCount: 0,
+      lastSeenAt: row.last_seen_at ?? null,
+    })
+  }
+
+  // Add pilot notes bases as low-weight candidates (thin gate)
+  const totalExisting = Array.from(airportMap.values()).reduce(
+    (sum, rec) => sum + rec.historyCount + rec.catalogCount,
+    0
+  )
+  const isThin = totalExisting < 8 // Thin gate: < 8 known airports
+  
+  if (isThin && options.pilotNotesPriors?.bases) {
+    for (const base of options.pilotNotesPriors.bases) {
+      const key = normalizeDigifiAirportKey(base)
+      if (!key) continue
+      const existing = airportMap.get(key)
+      if (existing) {
+        continue
+      }
+      airportMap.set(key, {
+        value: key,
+        key,
+        historyCount: 0,
+        catalogCount: 0,
+        lastSeenAt: null,
+      })
+    }
   }
 
   for (const row of options.feedbackRows) {
