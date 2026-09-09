@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
 
-  if (!isAppleIapConfigured()) {
+  if (!(await isAppleIapConfigured())) {
     throw createError({
       statusCode: 503,
       statusMessage: 'Apple IAP verification is not configured on this server',

@@ -55,7 +55,13 @@ export default defineNuxtConfig({
     ],
     optimizeDeps: {
       include: ['suncalc'],
+      exclude: ['@capgo/native-purchases']
     },
+    ssr: {
+      // Don't try to resolve iOS-only modules during SSR
+      noExternal: [],
+      external: ['@capgo/native-purchases']
+    }
   },
   css: ['~/assets/css/main.css'],
   runtimeConfig: {

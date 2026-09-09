@@ -25,6 +25,7 @@
     "generate-web-icons": "node scripts/generate-web-icons.mjs"
   },
   "dependencies": {
+    "@apple/app-store-server-library": "^3.1.0",
     "@capacitor/app": "^8.0.0",
     "@capacitor/barcode-scanner": "^3.0.2",
     "@capacitor/browser": "^8.0.3",
@@ -32,6 +33,7 @@
     "@capacitor/core": "^8.4.0",
     "@capacitor/splash-screen": "^8.0.1",
     "@capgo/capacitor-social-login": "^8.3.40",
+    "@capgo/native-purchases": "^8.7.0",
     "@nuxt/icon": "2.2.0",
     "@nwpr/airport-codes": "^3.0.3",
     "@supabase/supabase-js": "^2.90.1",

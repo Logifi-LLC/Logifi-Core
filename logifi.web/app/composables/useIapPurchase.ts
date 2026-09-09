@@ -1,9 +1,42 @@
 import { ref, computed } from 'vue'
-import { NativePurchases, type PurchaseResult, PURCHASE_TYPE } from '@capgo/native-purchases'
 import { IAP_PRODUCTS, getIapProduct } from '~/utils/iapProducts'
 import { isIosApp } from '~/utils/platform'
 import { useAuth } from '~/composables/useAuth'
 import { apiFetch } from '~/utils/apiFetch'
+
+// Types for the dynamically imported module
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PurchaseResult = any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type NativePurchasesType = any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PurchaseTypeEnum = any
+
+let nativePurchasesModule: {
+  NativePurchases: NativePurchasesType
+  PURCHASE_TYPE: PurchaseTypeEnum
+} | null = null
+
+/**
+ * Lazy-load the native purchases plugin only when needed on iOS.
+ * The module ID is constructed dynamically to prevent Vite/Rolldown from
+ * trying to resolve it at build time when it's not available.
+ */
+async function loadNativePurchases() {
+  if (nativePurchasesModule) return nativePurchasesModule
+  if (!isIosApp()) {
+    throw new Error('Native purchases not available on this platform')
+  }
+  try {
+    // Construct module ID dynamically to avoid build-time resolution
+    const moduleId = ['@capgo', 'native-purchases'].join('/')
+    nativePurchasesModule = await import(/* @vite-ignore */ moduleId)
+    return nativePurchasesModule
+  } catch (err) {
+    console.error('[iap] Failed to load native purchases module:', err)
+    throw new Error('Failed to load native purchases module')
+  }
+}
 
 export interface IapProductWithPrice {
   productId: string
@@ -49,6 +82,9 @@ export function useIapPurchase() {
     error.value = null
 
     try {
+      // Lazy-load the native module
+      const { NativePurchases, PURCHASE_TYPE } = await loadNativePurchases()
+
       // Initialize the plugin
       await NativePurchases.initialize({
         products: IAP_PRODUCTS.map((p) => ({
@@ -114,6 +150,9 @@ export function useIapPurchase() {
     error.value = null
 
     try {
+      // Lazy-load the native module
+      const { NativePurchases, PURCHASE_TYPE } = await loadNativePurchases()
+
       // Initiate purchase with Apple
       const purchaseResult: PurchaseResult = await NativePurchases.purchaseProduct({
         productIdentifier: productId,
@@ -176,6 +215,9 @@ export function useIapPurchase() {
     error.value = null
 
     try {
+      // Lazy-load the native module
+      const { NativePurchases } = await loadNativePurchases()
+
       await NativePurchases.restorePurchases()
       // Note: consumable products like credits typically cannot be restored,
       // but this is required by App Store guidelines for other product types
