@@ -215,7 +215,7 @@ describe('Date Normalization', () => {
     })
   })
 
-  describe('Bug reproduction: Derek's scenario', () => {
+  describe("Bug reproduction: Derek's scenario", () => {
     it('should NOT create 2027-09-08 when user types 9/8/26 with defaultYear 2026', () => {
       // Derek set default year to 2026 at top of Digifi
       // Typed 9/8/26 for a row

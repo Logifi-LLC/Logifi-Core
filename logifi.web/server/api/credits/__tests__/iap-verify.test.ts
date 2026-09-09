@@ -39,7 +39,11 @@ describe('POST /api/credits/iap/verify', () => {
 
     mockEvent = {
       node: {
-        req: {},
+        req: {
+          headers: {
+            'content-type': 'application/json',
+          },
+        },
         res: {},
       },
     } as Partial<H3Event>
