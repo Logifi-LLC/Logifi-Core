@@ -1,15 +1,23 @@
-import {
-  SignedDataVerifier,
-  Environment,
-  type JWSTransactionDecodedPayload,
-} from '@apple/app-store-server-library'
-
 /**
  * Apple App Store receipt verification using official App Store Server Library.
  * Verifies JWS transactions from StoreKit 2.
+ * 
+ * Uses dynamic imports to avoid bundling Apple's library during prerender.
  */
 
+// Dynamic import types
+type SignedDataVerifier = any
+type Environment = any
+type JWSTransactionDecodedPayload = any
+
 let verifier: SignedDataVerifier | null = null
+let appleLibrary: any = null
+
+async function loadAppleLibrary() {
+  if (appleLibrary) return appleLibrary
+  appleLibrary = await import('@apple/app-store-server-library')
+  return appleLibrary
+}
 
 function getAppleRootCAs(): Buffer[] {
   // Apple Root CA certificates (G3 and Inc Root)
@@ -68,12 +76,13 @@ UKqK1drk/NAJBzewdXUh
   return [appleRootCAG3, appleIncRootCertificate]
 }
 
-function getEnvironment(): Environment {
+async function getEnvironment(): Promise<Environment> {
+  const lib = await loadAppleLibrary()
   const env = process.env.APPLE_IAP_ENVIRONMENT
   if (env === 'production') {
-    return Environment.PRODUCTION
+    return lib.Environment.PRODUCTION
   }
-  return Environment.SANDBOX
+  return lib.Environment.SANDBOX
 }
 
 function getBundleId(): string {
@@ -81,9 +90,10 @@ function getBundleId(): string {
   return bundleId
 }
 
-function getAppAppleId(): number | undefined {
-  const env = getEnvironment()
-  if (env === Environment.PRODUCTION) {
+async function getAppAppleId(): Promise<number | undefined> {
+  const lib = await loadAppleLibrary()
+  const env = await getEnvironment()
+  if (env === lib.Environment.PRODUCTION) {
     const appAppleId = process.env.APPLE_APP_ID
     if (!appAppleId) {
       throw new Error('APPLE_APP_ID environment variable is required for production environment')
@@ -93,14 +103,15 @@ function getAppAppleId(): number | undefined {
   return undefined
 }
 
-function initializeVerifier(): SignedDataVerifier {
+async function initializeVerifier(): Promise<SignedDataVerifier> {
+  const lib = await loadAppleLibrary()
   const appleRootCAs = getAppleRootCAs()
   const enableOnlineChecks = true
-  const environment = getEnvironment()
+  const environment = await getEnvironment()
   const bundleId = getBundleId()
-  const appAppleId = getAppAppleId()
+  const appAppleId = await getAppAppleId()
 
-  return new SignedDataVerifier(
+  return new lib.SignedDataVerifier(
     appleRootCAs,
     enableOnlineChecks,
     environment,
@@ -109,9 +120,9 @@ function initializeVerifier(): SignedDataVerifier {
   )
 }
 
-export function getVerifier(): SignedDataVerifier {
+export async function getVerifier(): Promise<SignedDataVerifier> {
   if (!verifier) {
-    verifier = initializeVerifier()
+    verifier = await initializeVerifier()
   }
   return verifier
 }
@@ -122,7 +133,7 @@ export function getVerifier(): SignedDataVerifier {
 export async function verifyTransaction(
   jwsRepresentation: string
 ): Promise<JWSTransactionDecodedPayload> {
-  const verifier = getVerifier()
+  const verifier = await getVerifier()
 
   try {
     const payload = await verifier.verifyAndDecodeTransaction(jwsRepresentation)
@@ -152,9 +163,9 @@ export async function verifyTransaction(
 /**
  * Check if Apple IAP verification is configured
  */
-export function isAppleIapConfigured(): boolean {
+export async function isAppleIapConfigured(): Promise<boolean> {
   try {
-    getVerifier()
+    await getVerifier()
     return true
   } catch {
     return false
