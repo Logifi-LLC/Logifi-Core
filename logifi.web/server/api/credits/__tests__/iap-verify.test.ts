@@ -6,13 +6,15 @@ import * as supabaseServiceUtils from '../../../utils/supabaseService'
 import * as creditsPaymentUtils from '../../../utils/creditsPayment'
 import * as appleIapUtils from '../../../utils/appleIapVerification'
 
+// Mock readBody function that tests can configure (must use vi.hoisted for vi.mock factory)
+const { mockReadBody } = vi.hoisted(() => ({
+  mockReadBody: vi.fn(),
+}))
+
 vi.mock('../../../utils/supabase')
 vi.mock('../../../utils/supabaseService')
 vi.mock('../../../utils/creditsPayment')
 vi.mock('../../../utils/appleIapVerification')
-
-// Mock readBody function that tests can configure
-const mockReadBody = vi.fn()
 
 vi.mock('h3', async () => {
   const actual = await vi.importActual<typeof import('h3')>('h3')
