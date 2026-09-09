@@ -31,11 +31,10 @@ async function loadNativePurchases() {
     const { registerPlugin } = await import('@capacitor/core')
     const NativePurchases = registerPlugin<NativePurchasesType>('NativePurchases')
     
-    // PURCHASE_TYPE enum values from @capgo/native-purchases
+    // PURCHASE_TYPE enum values from @capgo/native-purchases v8.x
     const PURCHASE_TYPE = {
       INAPP: 'inapp',
-      PAID_SUBSCRIPTION: 'paid subscription',
-      FREE_SUBSCRIPTION: 'free subscription',
+      SUBS: 'subs',
     }
     
     nativePurchasesModule = { NativePurchases, PURCHASE_TYPE }
@@ -93,29 +92,24 @@ export function useIapPurchase() {
       // Lazy-load the native module
       const { NativePurchases, PURCHASE_TYPE } = await loadNativePurchases()
 
-      // Initialize the plugin
-      await NativePurchases.initialize({
-        products: IAP_PRODUCTS.map((p) => ({
-          id: p.productId,
-          type: PURCHASE_TYPE.INAPP,
-        })),
-      })
-
       // Fetch product details from App Store
+      // Note: Capgo v8.x has NO initialize() method - just call getProducts directly
       const result = await NativePurchases.getProducts({
         productIdentifiers: IAP_PRODUCTS.map((p) => p.productId),
+        productType: PURCHASE_TYPE.INAPP,
       })
 
       // Map App Store product details to our product list
+      // Capgo Product fields: identifier, priceString (formatted), price (number), currencyCode
       products.value = IAP_PRODUCTS.map((p) => {
         const storeProduct = result.products?.find((sp) => sp.identifier === p.productId)
         return {
           productId: p.productId,
           credits: p.credits,
           label: p.label,
-          price: storeProduct?.price,
-          priceValue: storeProduct?.priceValue,
-          currency: storeProduct?.currency,
+          price: storeProduct?.priceString,
+          priceValue: storeProduct?.price,
+          currency: storeProduct?.currencyCode,
           available: Boolean(storeProduct),
         }
       })
@@ -162,9 +156,11 @@ export function useIapPurchase() {
       const { NativePurchases, PURCHASE_TYPE } = await loadNativePurchases()
 
       // Initiate purchase with Apple
+      // Credits are consumable (user can buy multiple times)
       const purchaseResult: PurchaseResult = await NativePurchases.purchaseProduct({
         productIdentifier: productId,
         productType: PURCHASE_TYPE.INAPP,
+        isConsumable: true,
       })
 
       if (!purchaseResult.transaction) {
