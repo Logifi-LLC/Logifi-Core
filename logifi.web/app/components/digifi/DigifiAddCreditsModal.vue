@@ -195,10 +195,12 @@ async function proceedToIapPurchase(productId: string) {
     // Refresh balance from server to get the actual current balance
     await fetchBalance()
     
-    // Show success with server-reported credits
-    successCreditsAdded.value = result.credits
+    // Show success with pack size (amount added), not the new balance
+    const product = iapProducts.value.find((p) => p.productId === productId)
+    const creditsAdded = product?.credits ?? 0
+    successCreditsAdded.value = creditsAdded
     step.value = 'success'
-    emit('purchased', result.credits)
+    emit('purchased', creditsAdded)
     setTimeout(() => emit('close'), 1500)
   } catch (err: unknown) {
     step.value = 'form'
