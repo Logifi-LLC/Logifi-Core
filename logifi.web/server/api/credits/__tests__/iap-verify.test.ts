@@ -6,14 +6,21 @@ import * as supabaseServiceUtils from '../../../utils/supabaseService'
 import * as creditsPaymentUtils from '../../../utils/creditsPayment'
 import * as appleIapUtils from '../../../utils/appleIapVerification'
 
+// Mock readBody function that tests can configure (must use vi.hoisted for vi.mock factory)
+const { mockReadBody } = vi.hoisted(() => ({
+  mockReadBody: vi.fn(),
+}))
+
 vi.mock('../../../utils/supabase')
 vi.mock('../../../utils/supabaseService')
 vi.mock('../../../utils/creditsPayment')
 vi.mock('../../../utils/appleIapVerification')
+
 vi.mock('h3', async () => {
   const actual = await vi.importActual<typeof import('h3')>('h3')
   return {
     ...actual,
+    readBody: mockReadBody,
     createError: (opts: { statusCode: number; statusMessage: string }) => {
       const error = new Error(opts.statusMessage) as Error & {
         statusCode: number
@@ -39,7 +46,12 @@ describe('POST /api/credits/iap/verify', () => {
 
     mockEvent = {
       node: {
-        req: {},
+        req: {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+          },
+        },
         res: {},
       },
     } as Partial<H3Event>
@@ -71,7 +83,7 @@ describe('POST /api/credits/iap/verify', () => {
       jwsRepresentation: mockJwsRepresentation,
     }
 
-    vi.mocked(global as any).readBody = vi.fn().mockResolvedValue(body)
+    mockReadBody.mockResolvedValue(body)
 
     const result = await handler(mockEvent as H3Event)
 
@@ -108,7 +120,7 @@ describe('POST /api/credits/iap/verify', () => {
   })
 
   it('should reject if product ID is missing', async () => {
-    vi.mocked(global as any).readBody = vi.fn().mockResolvedValue({
+    mockReadBody.mockResolvedValue({
       transactionId: mockTransactionId,
       jwsRepresentation: mockJwsRepresentation,
     })
@@ -117,7 +129,7 @@ describe('POST /api/credits/iap/verify', () => {
   })
 
   it('should reject if transaction ID is missing', async () => {
-    vi.mocked(global as any).readBody = vi.fn().mockResolvedValue({
+    mockReadBody.mockResolvedValue({
       productId: mockProductId,
       jwsRepresentation: mockJwsRepresentation,
     })
@@ -126,7 +138,7 @@ describe('POST /api/credits/iap/verify', () => {
   })
 
   it('should reject if JWS representation is missing', async () => {
-    vi.mocked(global as any).readBody = vi.fn().mockResolvedValue({
+    mockReadBody.mockResolvedValue({
       productId: mockProductId,
       transactionId: mockTransactionId,
     })
@@ -137,7 +149,7 @@ describe('POST /api/credits/iap/verify', () => {
   })
 
   it('should reject if product is not in catalog', async () => {
-    vi.mocked(global as any).readBody = vi.fn().mockResolvedValue({
+    mockReadBody.mockResolvedValue({
       productId: 'io.logifi.app.credits.999',
       transactionId: mockTransactionId,
       jwsRepresentation: mockJwsRepresentation,
@@ -151,7 +163,7 @@ describe('POST /api/credits/iap/verify', () => {
       new Error('Invalid signature')
     )
 
-    vi.mocked(global as any).readBody = vi.fn().mockResolvedValue({
+    mockReadBody.mockResolvedValue({
       productId: mockProductId,
       transactionId: mockTransactionId,
       jwsRepresentation: mockJwsRepresentation,
@@ -170,7 +182,7 @@ describe('POST /api/credits/iap/verify', () => {
 
     vi.mocked(appleIapUtils.verifyTransaction).mockResolvedValue(mockVerifiedPayload as any)
 
-    vi.mocked(global as any).readBody = vi.fn().mockResolvedValue({
+    mockReadBody.mockResolvedValue({
       productId: mockProductId,
       transactionId: mockTransactionId,
       jwsRepresentation: mockJwsRepresentation,
@@ -189,7 +201,7 @@ describe('POST /api/credits/iap/verify', () => {
 
     vi.mocked(appleIapUtils.verifyTransaction).mockResolvedValue(mockVerifiedPayload as any)
 
-    vi.mocked(global as any).readBody = vi.fn().mockResolvedValue({
+    mockReadBody.mockResolvedValue({
       productId: mockProductId,
       transactionId: mockTransactionId,
       jwsRepresentation: mockJwsRepresentation,
@@ -212,7 +224,7 @@ describe('POST /api/credits/iap/verify', () => {
       granted: false, // Already granted
     })
 
-    vi.mocked(global as any).readBody = vi.fn().mockResolvedValue({
+    mockReadBody.mockResolvedValue({
       productId: mockProductId,
       transactionId: mockTransactionId,
       jwsRepresentation: mockJwsRepresentation,
