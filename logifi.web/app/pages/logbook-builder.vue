@@ -243,6 +243,9 @@ watchEffect(() => {
 async function handleDestinationSelect(sink: 'logten' | 'logifi') {
   try {
     await setPreferredSink(sink)
+    if (sink === 'logten') {
+      await setOptIn(true)
+    }
     showDigifiDestinationModal.value = false
     const label = sink === 'logten' ? 'LogTen Pro' : 'Logifi logbook'
     showToast(`Destination set to ${label}`, { type: 'success' })
