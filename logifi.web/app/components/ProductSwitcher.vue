@@ -14,7 +14,7 @@
       Logifi
     </NuxtLink>
     <NuxtLink
-      to="/digifi"
+      :to="digifiRoute"
       :class="[
         'px-6 py-2.5 text-sm font-bold transition-all border-l',
         activeProduct === 'digifi'
@@ -31,15 +31,22 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
 
 const props = defineProps<{
   activeProduct: 'logifi' | 'digifi'
   isDark?: boolean
 }>()
 
+const { isIos } = useCapacitorPlatform()
+
 const borderClass = computed(() => {
   return props.isDark
     ? 'border-white/10'
     : 'border-gray-200'
+})
+
+const digifiRoute = computed(() => {
+  return isIos.value ? '/digifi-eye' : '/digifi'
 })
 </script>

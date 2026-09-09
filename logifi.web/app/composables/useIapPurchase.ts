@@ -18,6 +18,33 @@ let nativePurchasesModule: {
 } | null = null
 
 /**
+ * Detect Xcode StoreKit Testing by decoding the JWS payload.
+ * Xcode-signed JWTs have environment: "Xcode" and are signed with kid: "Apple_Xcode_Key"
+ * These cannot be verified by Apple's production/sandbox roots.
+ * 
+ * @param jwsRepresentation - JWS string in format "header.payload.signature"
+ * @returns true if this is an Xcode StoreKit Testing transaction
+ */
+function detectXcodeStoreKitTesting(jwsRepresentation: string): boolean {
+  try {
+    // JWS format: header.payload.signature
+    const parts = jwsRepresentation.split('.')
+    if (parts.length !== 3) return false
+    
+    // Decode the payload (middle part) from base64url
+    const payload = parts[1]
+    const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
+    const json = JSON.parse(decoded)
+    
+    // Check if environment is "Xcode"
+    return json.environment === 'Xcode'
+  } catch (err) {
+    console.warn('[iap] Failed to decode JWS payload:', err)
+    return false
+  }
+}
+
+/**
  * Lazy-load the native purchases plugin only when needed on iOS.
  * Uses Capacitor's registerPlugin for reliable native module loading.
  */
@@ -168,6 +195,17 @@ export function useIapPurchase() {
         throw new Error('Purchase did not return a transaction')
       }
 
+      // Detect Xcode StoreKit Testing (local Xcode Configuration file)
+      // These JWTs are signed with "Apple_Xcode_Key" and have environment: "Xcode"
+      // The server correctly rejects them because they're not signed by Apple production/sandbox roots
+      if (transaction.jwsRepresentation) {
+        const isXcodeEnvironment = detectXcodeStoreKitTesting(transaction.jwsRepresentation)
+        if (isXcodeEnvironment) {
+          console.warn('[iap] Xcode StoreKit Testing detected — cannot credit server')
+          throw new Error('Xcode StoreKit Testing can't credit the server — use App Store sandbox or TestFlight')
+        }
+      }
+
       // Verify receipt on server and credit account
       const token = getAccessToken()
       if (!token) {
@@ -194,6 +232,14 @@ export function useIapPurchase() {
 
       return verifyResponse
     } catch (err: unknown) {
+      // Enhanced logging for verify failures
+      if ((err as { statusCode?: number })?.statusCode) {
+        const statusCode = (err as { statusCode?: number }).statusCode
+        const statusMessage = (err as { data?: { statusMessage?: string } })?.data?.statusMessage
+        const body = (err as { data?: unknown })?.data
+        console.error('[iap] verify failed:', { statusCode, statusMessage, body })
+      }
+      
       const message =
         (err as { data?: { statusMessage?: string } })?.data?.statusMessage ??
         (err instanceof Error ? err.message : 'Purchase failed')

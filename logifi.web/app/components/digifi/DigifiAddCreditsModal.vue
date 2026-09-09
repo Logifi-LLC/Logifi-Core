@@ -183,8 +183,21 @@ async function proceedToIapPurchase(productId: string) {
   checkoutError.value = null
   try {
     const result = await purchaseIapProduct(productId)
+    
+    // Use server-granted credits from verify response, not local pack size
+    if (!result.granted) {
+      // Transaction was already processed (duplicate)
+      checkoutError.value = 'This purchase was already processed'
+      step.value = 'form'
+      return
+    }
+    
+    // Refresh balance from server to get the actual current balance
     await fetchBalance()
-    const creditsAdded = iapProducts.value.find((p) => p.productId === productId)?.credits ?? 0
+    
+    // Show success with pack size (amount added), not the new balance
+    const product = iapProducts.value.find((p) => p.productId === productId)
+    const creditsAdded = product?.credits ?? 0
     successCreditsAdded.value = creditsAdded
     step.value = 'success'
     emit('purchased', creditsAdded)
