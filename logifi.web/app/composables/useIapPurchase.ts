@@ -19,8 +19,7 @@ let nativePurchasesModule: {
 
 /**
  * Lazy-load the native purchases plugin only when needed on iOS.
- * The module ID is constructed dynamically to prevent Vite/Rolldown from
- * trying to resolve it at build time when it's not available.
+ * Uses Capacitor's registerPlugin for reliable native module loading.
  */
 async function loadNativePurchases() {
   if (nativePurchasesModule) return nativePurchasesModule
@@ -28,9 +27,18 @@ async function loadNativePurchases() {
     throw new Error('Native purchases not available on this platform')
   }
   try {
-    // Construct module ID dynamically to avoid build-time resolution
-    const moduleId = ['@capgo', 'native-purchases'].join('/')
-    nativePurchasesModule = await import(/* @vite-ignore */ moduleId)
+    // On iOS native: use Capacitor registerPlugin to load the native bridge
+    const { registerPlugin } = await import('@capacitor/core')
+    const NativePurchases = registerPlugin<NativePurchasesType>('NativePurchases')
+    
+    // PURCHASE_TYPE enum values from @capgo/native-purchases
+    const PURCHASE_TYPE = {
+      INAPP: 'inapp',
+      PAID_SUBSCRIPTION: 'paid subscription',
+      FREE_SUBSCRIPTION: 'free subscription',
+    }
+    
+    nativePurchasesModule = { NativePurchases, PURCHASE_TYPE }
     return nativePurchasesModule
   } catch (err) {
     console.error('[iap] Failed to load native purchases module:', err)
