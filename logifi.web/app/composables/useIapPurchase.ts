@@ -202,7 +202,7 @@ export function useIapPurchase() {
         const isXcodeEnvironment = detectXcodeStoreKitTesting(transaction.jwsRepresentation)
         if (isXcodeEnvironment) {
           console.warn('[iap] Xcode StoreKit Testing detected — cannot credit server')
-          throw new Error('Xcode StoreKit Testing can't credit the server — use App Store sandbox or TestFlight')
+          throw new Error("Xcode StoreKit Testing cannot credit the server — use App Store sandbox or TestFlight")
         }
       }
 
