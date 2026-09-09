@@ -176,6 +176,7 @@ import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
 import ProductSwitcher from '~/components/ProductSwitcher.vue'
 import { useAuth } from '~/composables/useAuth'
+import { isIosApp } from '~/utils/platform'
 
 const { theme, isDark, applyDocumentTheme } = useTheme()
 const { isAuthenticated } = useAuth()
@@ -201,12 +202,20 @@ const openAuth = (tab: 'signin' | 'signup') => {
 }
 
 const handleAuthSuccess = () => {
-  router.push('/logbook-builder?digifi=open')
+  if (isIosApp()) {
+    router.push('/digifi-eye')
+  } else {
+    router.push('/logbook-builder?digifi=open')
+  }
 }
 
 const handleStartScanning = () => {
   if (isAuthenticated.value) {
-    router.push('/logbook-builder?digifi=open')
+    if (isIosApp()) {
+      router.push('/digifi-eye')
+    } else {
+      router.push('/logbook-builder?digifi=open')
+    }
   } else {
     authTab.value = 'signup'
     showAuth.value = true
