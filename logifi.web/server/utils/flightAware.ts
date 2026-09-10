@@ -57,7 +57,7 @@ interface CachedHttp {
   data: unknown | null
 }
 
-const FA_DEFAULT_MIN_INTERVAL_MS = 1000
+const FA_DEFAULT_MIN_INTERVAL_MS = 200
 const RATE_LIMIT_COOLDOWN_MS = 60_000
 
 let minIntervalMs = FA_DEFAULT_MIN_INTERVAL_MS
