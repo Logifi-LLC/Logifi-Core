@@ -2,11 +2,11 @@ import { defineEventHandler, readBody, createError } from 'h3'
 import { DateTime } from 'luxon'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import {
-  isAeroDataBoxConfigured,
-  isUsableAeroDataBoxHit,
+  isEnrichProviderConfigured,
   lookupFlightActuals,
-  summarizeAeroLookupDetails,
-} from '../../utils/aeroDataBox'
+  getFlightEnrichProvider,
+  getProviderDisplayName,
+} from '../../utils/flightEnrichProvider'
 import { mapAirlineLegToFcvMappedEntry } from '../../utils/airlineLeg'
 import type { AirlineLeg } from '../../utils/airlineLeg'
 import {
@@ -40,7 +40,7 @@ interface FetchFlicaBody {
   airlineCode?: string
 }
 
-async function enrichLegWithAeroDataBox(
+async function enrichLegWithProvider(
   leg: AirlineLeg,
   dateTo: string,
   airlineCode: string
@@ -64,7 +64,7 @@ async function enrichLegWithAeroDataBox(
       rateLimited: false,
     }
   }
-  if (!isAeroDataBoxConfigured()) {
+  if (!isEnrichProviderConfigured()) {
     return {
       leg,
       attempted: false,
@@ -103,7 +103,7 @@ async function enrichLegWithAeroDataBox(
       rateLimitResumeMs: lookup.rateLimitResumeMs,
     }
   }
-  if (!lookup.actuals || !isUsableAeroDataBoxHit(lookup.actuals)) {
+  if (!lookup.actuals) {
     return {
       leg,
       attempted: true,
@@ -119,6 +119,8 @@ async function enrichLegWithAeroDataBox(
       ...leg,
       fcv_tail_number: lookup.actuals.registration ?? leg.fcv_tail_number,
       fcv_aircraft_type: lookup.actuals.aircraftType ?? leg.fcv_aircraft_type,
+      actual_out_local: lookup.actuals.actualOutLocal ?? leg.actual_out_local,
+      actual_in_local: lookup.actuals.actualInLocal ?? leg.actual_in_local,
       actual_off_local: lookup.actuals.actualOffLocal ?? leg.actual_off_local,
       actual_on_local: lookup.actuals.actualOnLocal ?? leg.actual_on_local,
     },
@@ -152,13 +154,13 @@ async function enrichLegsSequential(
   for (let i = 0; i < legs.length; i++) {
     const leg = legs[i]!
     const date = leg.scheduled_out_local?.slice(0, 10) ?? ''
-    const eligible = Boolean(date && date <= dateTo && isAeroDataBoxConfigured())
+    const eligible = Boolean(date && date <= dateTo && isEnrichProviderConfigured())
     if (!eligible || skipIndices.has(i)) {
       out.push(leg)
       continue
     }
 
-    const r = await enrichLegWithAeroDataBox(leg, dateTo, airlineCode)
+    const r = await enrichLegWithProvider(leg, dateTo, airlineCode)
     out.push(r.leg)
     if (r.attempted) enrichAttempted++
     if (r.enriched) enrichedCount++
@@ -169,23 +171,19 @@ async function enrichLegsSequential(
     if (r.detail) details.push(r.detail)
   }
 
-  const shown = summarizeAeroLookupDetails(details)
+  const providerName = getProviderDisplayName()
   let enrichDetail: string | null = null
   if (authRejected) {
-    enrichDetail = 'AeroDataBox rejected the API key'
+    enrichDetail = `${providerName} rejected the API key`
   } else if (rateLimitResumeMs) {
     const nowMs = Date.now()
     const remainingSec = Math.ceil((rateLimitResumeMs - nowMs) / 1000)
     const timeMsg = remainingSec > 0 ? ` Wait ${remainingSec}s and fetch again.` : ' Fetch again.'
-    enrichDetail = `AeroDataBox rate limit (HTTP 429).${timeMsg}`
+    enrichDetail = `${providerName} rate limit (HTTP 429).${timeMsg}`
   } else if (enrichAttempted > 0) {
     const ratio = `${enrichedCount}/${enrichAttempted}`
     if (enrichedCount === 0) {
-      enrichDetail = shown
-        ? `${ratio} no usable AeroDataBox hit (${shown})`
-        : `${ratio} no usable AeroDataBox hit`
-    } else if (shown) {
-      enrichDetail = `${ratio} (${shown})`
+      enrichDetail = `${ratio} no usable ${providerName} hit`
     } else {
       enrichDetail = ratio
     }
@@ -429,17 +427,18 @@ export default defineEventHandler(async (event) => {
   const mapped: FcvMappedEntry[] = filtered.map(mapAirlineLegToFcvMappedEntry)
 
   const warningParts: string[] = []
-  if (!isAeroDataBoxConfigured() && filtered.length > 0) {
+  const providerName = getProviderDisplayName()
+  if (!isEnrichProviderConfigured() && filtered.length > 0) {
     warningParts.push(
-      'Schedule enrichment is not configured (AERODATABOX_API_KEY). Tail and actual times were not added.'
+      `Schedule enrichment is not configured (${providerName === 'FlightAware' ? 'FLIGHTAWARE_API_KEY' : 'AERODATABOX_API_KEY'}). Tail and actual times were not added.`
     )
   } else if (authRejected) {
-    warningParts.push('AeroDataBox rejected the API key. Tail and actual times were not added.')
+    warningParts.push(`${providerName} rejected the API key. Tail and actual times were not added.`)
   } else if (enrichAttempted > 0 && enrichedCount === 0) {
     warningParts.push(
       enrichDetail
-        ? `Could not enrich flights from AeroDataBox. ${enrichDetail}. Preview shows FLICA schedule times only.`
-        : `Could not enrich ${enrichAttempted} flight(s) from AeroDataBox. Preview shows FLICA schedule times only.`
+        ? `Could not enrich flights from ${providerName}. ${enrichDetail}. Preview shows FLICA schedule times only.`
+        : `Could not enrich ${enrichAttempted} flight(s) from ${providerName}. Preview shows FLICA schedule times only.`
     )
   }
   if (parsed.length === 0) {

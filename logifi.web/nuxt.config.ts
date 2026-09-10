@@ -97,6 +97,12 @@ export default defineNuxtConfig({
     aeroDataBoxApiKey: process.env.AERODATABOX_API_KEY || '',
     aeroDataBoxApiHost:
       process.env.AERODATABOX_API_HOST || 'aerodatabox.p.rapidapi.com',
+    // FlightAware AeroAPI (server-only; Flica schedule enrichment alternative)
+    flightAwareApiKey: process.env.FLIGHTAWARE_API_KEY || '',
+    flightAwareApiBase:
+      process.env.FLIGHTAWARE_API_BASE || 'https://aeroapi.flightaware.com/aeroapi',
+    // Flight enrichment provider (aerodatabox or flightaware)
+    flightEnrichProvider: process.env.FLIGHT_ENRICH_PROVIDER || 'aerodatabox',
     /** AES-256 key for sealing FLICA passwords (base64 or hex). */
     flicaCredentialsKey: process.env.FLICA_CREDENTIALS_KEY || '',
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
