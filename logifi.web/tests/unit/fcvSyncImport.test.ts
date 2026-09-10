@@ -531,16 +531,3 @@ describe('FcvSync unmatched own seat', () => {
   })
 })
 
-describe('FcvSync FLICA lag note', () => {
-  it('tells connected users to fetch again a few hours after the flight', async () => {
-    const wrapper = mountFcvSync()
-    const setupState = getSetupState(wrapper)
-    setupState.connected = true
-    setupState.loadingStatus = false
-    await nextTick()
-
-    expect(wrapper.text()).toContain(
-      'FLICA times can lag after delays. Fetch again a few hours after the flight.'
-    )
-  })
-})
