@@ -7,6 +7,7 @@ import {
   getFlightEnrichProvider,
   getProviderDisplayName,
 } from '../../utils/flightEnrichProvider'
+import { beginFlightAwareEnrichPass } from '../../utils/flightAware'
 import { mapAirlineLegToFcvMappedEntry } from '../../utils/airlineLeg'
 import type { AirlineLeg } from '../../utils/airlineLeg'
 import {
@@ -150,6 +151,10 @@ async function enrichLegsSequential(
   let authRejected = false
   let rateLimitResumeMs: number | undefined
   const details: string[] = []
+
+  if (getFlightEnrichProvider() === 'flightaware') {
+    beginFlightAwareEnrichPass()
+  }
 
   for (let i = 0; i < legs.length; i++) {
     const leg = legs[i]!
