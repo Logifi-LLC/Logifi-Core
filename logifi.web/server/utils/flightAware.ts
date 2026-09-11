@@ -1,5 +1,5 @@
 import { getFlightAwareEnv } from './flightAwareEnv'
-import { flightAwareSearchIdents } from './flightEnrichCandidates'
+import { flightAwareSearchIdentTiers } from './flightEnrichCandidates'
 
 export interface FlightAwareActuals {
   registration: string | null
@@ -56,17 +56,29 @@ interface CachedHttp {
   status: number
   ok: boolean
   data: unknown | null
+  retryAfterWaitMs?: number
 }
 
 const FA_DEFAULT_MIN_INTERVAL_MS = 200
 const RATE_LIMIT_COOLDOWN_MS = 60_000
+const DEFAULT_429_RETRY_MS = 3_000
 
 let minIntervalMs = FA_DEFAULT_MIN_INTERVAL_MS
 let lastFetchStartedAt = 0
 let throttleTail: Promise<void> = Promise.resolve()
 let rateLimitedUntilMs = 0
 let retryAfterHeaderMs = 0
+let enrichStickyPrefix: string | null = null
 const urlCache = new Map<string, CachedHttp>()
+
+/** Call at the start of a multi-leg enrich pass (e.g. FLICA fetch). */
+export function beginFlightAwareEnrichPass(): void {
+  enrichStickyPrefix = null
+}
+
+export function getFlightAwareEnrichStickyPrefixForTests(): string | null {
+  return enrichStickyPrefix
+}
 
 export function resetFlightAwareClientStateForTests(): void {
   lastFetchStartedAt = 0
@@ -75,6 +87,23 @@ export function resetFlightAwareClientStateForTests(): void {
   minIntervalMs = FA_DEFAULT_MIN_INTERVAL_MS
   rateLimitedUntilMs = 0
   retryAfterHeaderMs = 0
+  enrichStickyPrefix = null
+}
+
+/** AeroAPI `start`/`end` query params expect date-time, not bare YYYY-MM-DD. */
+export function flightAwareDateQueryWindow(dateYYYYMMDD: string): {
+  start: string
+  end: string
+} {
+  return {
+    start: `${dateYYYYMMDD}T00:00:00Z`,
+    end: `${dateYYYYMMDD}T23:59:59Z`,
+  }
+}
+
+function identPrefixFromSearchIdent(searchIdent: string): string | null {
+  const m = /^([A-Z]{2,3})(\d+)$/.exec(searchIdent.trim().toUpperCase())
+  return m?.[1] ?? null
 }
 
 export function clearFlightAwareRateLimitForTests(): void {
@@ -119,17 +148,18 @@ function parseIsoToLocal(iso: string | undefined): string | null {
   if (!iso || typeof iso !== 'string') return null
   const trimmed = iso.trim()
   if (!trimmed || trimmed.length < 10) return null
-  
+
   const dt = new Date(trimmed)
   if (isNaN(dt.getTime())) return null
-  
-  const year = dt.getFullYear()
-  const month = String(dt.getMonth() + 1).padStart(2, '0')
-  const day = String(dt.getDate()).padStart(2, '0')
-  const hours = String(dt.getHours()).padStart(2, '0')
-  const minutes = String(dt.getMinutes()).padStart(2, '0')
-  const seconds = String(dt.getSeconds()).padStart(2, '0')
-  
+
+  // Use UTC wall clock — Vercel runs in UTC; airport-local TZ would need station data.
+  const year = dt.getUTCFullYear()
+  const month = String(dt.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(dt.getUTCDate()).padStart(2, '0')
+  const hours = String(dt.getUTCHours()).padStart(2, '0')
+  const minutes = String(dt.getUTCMinutes()).padStart(2, '0')
+  const seconds = String(dt.getUTCSeconds()).padStart(2, '0')
+
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
 }
 
@@ -198,6 +228,23 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function retryAfterWaitMsFromHeaders(headers: Headers | undefined): number {
+  if (!headers) return DEFAULT_429_RETRY_MS
+  const retryAfter = headers.get('Retry-After')
+  if (!retryAfter) return DEFAULT_429_RETRY_MS
+  const seconds = parseInt(retryAfter, 10)
+  if (Number.isFinite(seconds) && seconds > 0) return seconds * 1000
+  const dateMs = Date.parse(retryAfter)
+  if (Number.isFinite(dateMs) && dateMs > Date.now()) return dateMs - Date.now()
+  return DEFAULT_429_RETRY_MS
+}
+
+function shouldCacheFlightAwareHttp(status: number, data: unknown): boolean {
+  if (status === 404 || status === 204) return true
+  if (status === 200) return parseFlightAwareResponse(data).length > 0
+  return false
+}
+
 async function throttleSlot(): Promise<void> {
   let release!: () => void
   const mine = new Promise<void>((r) => {
@@ -233,16 +280,6 @@ async function fetchFlightAwareHttp(
       },
     })
 
-    if (res.status === 429 && res.headers) {
-      const retryAfter = res.headers.get('Retry-After')
-      if (retryAfter) {
-        const seconds = parseInt(retryAfter, 10)
-        if (Number.isFinite(seconds) && seconds > 0) {
-          retryAfterHeaderMs = Date.now() + seconds * 1000
-        }
-      }
-    }
-
     let data: unknown = null
     const canParseJson =
       res.status !== 204 &&
@@ -259,9 +296,14 @@ async function fetchFlightAwareHttp(
       }
     }
 
-    const stored: CachedHttp = { status: res.status, ok: res.ok, data }
-    const cacheable = res.status === 200 || res.status === 204 || res.status === 404
-    if (cacheable) urlCache.set(url, stored)
+    const stored: CachedHttp = {
+      status: res.status,
+      ok: res.ok,
+      data,
+      retryAfterWaitMs:
+        res.status === 429 ? retryAfterWaitMsFromHeaders(res.headers) : undefined,
+    }
+    if (shouldCacheFlightAwareHttp(res.status, data)) urlCache.set(url, stored)
     return stored
   } catch {
     return { status: 0, ok: false, data: null }
@@ -295,9 +337,15 @@ async function lookupFlightActualsOnce(
   apiKey: string,
   apiBase: string
 ): Promise<OnceLookupOutcome> {
-  const url = `${apiBase}/flights/${encodeURIComponent(searchIdent)}?ident_type=designator&start=${date}&end=${date}&max_pages=1`
+  const { start, end } = flightAwareDateQueryWindow(date)
+  const url = `${apiBase}/flights/${encodeURIComponent(searchIdent)}?ident_type=designator&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&max_pages=1`
 
-  const http = await fetchFlightAwareHttp(url, apiKey)
+  let http = await fetchFlightAwareHttp(url, apiKey)
+
+  if (http.status === 429) {
+    await wait(http.retryAfterWaitMs ?? DEFAULT_429_RETRY_MS)
+    http = await fetchFlightAwareHttp(url, apiKey)
+  }
 
   if (http.status === 401 || http.status === 403) {
     return {
@@ -310,10 +358,9 @@ async function lookupFlightActualsOnce(
     }
   }
   if (http.status === 429) {
-    const cooldownUntilMs = Math.max(
-      Date.now() + RATE_LIMIT_COOLDOWN_MS,
-      retryAfterHeaderMs
-    )
+    const retryMs = http.retryAfterWaitMs ?? DEFAULT_429_RETRY_MS
+    retryAfterHeaderMs = Date.now() + retryMs
+    const cooldownUntilMs = Math.max(Date.now() + RATE_LIMIT_COOLDOWN_MS, retryAfterHeaderMs)
     rateLimitedUntilMs = cooldownUntilMs
     return {
       actuals: null,
@@ -419,49 +466,55 @@ export async function lookupFlightActuals(
     }
   }
 
-  const candidates = flightAwareSearchIdents(num, airlineCode)
-  if (!candidates.length) {
+  const tiers = flightAwareSearchIdentTiers(num, airlineCode, enrichStickyPrefix)
+  if (!tiers.length || !tiers.some((t) => t.length)) {
     return { actuals: null, authRejected: false, rateLimited: false, detail: null }
   }
 
   const statuses: string[] = []
 
-  for (const searchIdent of candidates) {
-    const outcome = await lookupFlightActualsOnce(
-      searchIdent,
-      date,
-      depIcao,
-      arrIcao,
-      apiKey,
-      apiBase
-    )
-    if (outcome.authRejected) {
-      return {
-        actuals: null,
-        authRejected: true,
-        rateLimited: false,
-        detail: outcome.detail,
+  for (const tier of tiers) {
+    for (const searchIdent of tier) {
+      const outcome = await lookupFlightActualsOnce(
+        searchIdent,
+        date,
+        depIcao,
+        arrIcao,
+        apiKey,
+        apiBase
+      )
+      if (outcome.authRejected) {
+        return {
+          actuals: null,
+          authRejected: true,
+          rateLimited: false,
+          detail: outcome.detail,
+        }
       }
-    }
-    if (outcome.rateLimited) {
-      return {
-        actuals: null,
-        authRejected: false,
-        rateLimited: true,
-        detail: outcome.detail,
-        rateLimitResumeMs: outcome.rateLimitResumeMs,
+      if (outcome.rateLimited) {
+        return {
+          actuals: null,
+          authRejected: false,
+          rateLimited: true,
+          detail: outcome.detail,
+          rateLimitResumeMs: outcome.rateLimitResumeMs,
+        }
       }
-    }
-    if (outcome.usable && outcome.actuals) {
-      statuses.push(outcome.detail ?? compactFlightAwareLookupStatus(searchIdent, outcome.status, 'ok'))
-      return {
-        actuals: outcome.actuals,
-        authRejected: false,
-        rateLimited: false,
-        detail: statuses.join(' '),
+      if (outcome.usable && outcome.actuals) {
+        const prefix = identPrefixFromSearchIdent(searchIdent)
+        if (prefix) enrichStickyPrefix = prefix
+        statuses.push(
+          outcome.detail ?? compactFlightAwareLookupStatus(searchIdent, outcome.status, 'ok')
+        )
+        return {
+          actuals: outcome.actuals,
+          authRejected: false,
+          rateLimited: false,
+          detail: statuses.join(' '),
+        }
       }
+      if (outcome.detail) statuses.push(outcome.detail)
     }
-    if (outcome.detail) statuses.push(outcome.detail)
   }
 
   return {

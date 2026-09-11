@@ -2,6 +2,8 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import {
   extractFlightAwareActuals,
   fetchFlightActuals,
+  flightAwareDateQueryWindow,
+  getFlightAwareEnrichStickyPrefixForTests,
   isFlightAwareConfigured,
   isUsableFlightAwareHit,
   lookupFlightActuals,
@@ -11,6 +13,7 @@ import {
 } from '../flightAware'
 import {
   aeroDataBoxFlightNumberCandidates,
+  flightAwareSearchIdentTiers,
   flightAwareSearchIdents,
 } from '../flightEnrichCandidates'
 
@@ -140,20 +143,26 @@ describe('fetchFlightActuals', () => {
     expect(result.detail).toMatch(/403/)
   })
 
-  it('stops on 429 and returns rate limit info', async () => {
+  it('stops on 429 after one retry on the same candidate', async () => {
+    vi.useFakeTimers()
     const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 429 })
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'YX')
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const resultPromise = lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'YX')
+    await vi.runAllTimersAsync()
+    const result = await resultPromise
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(result.actuals).toBeNull()
     expect(result.rateLimited).toBe(true)
     expect(result.detail).toBe('HTTP 429')
   })
 
   it('does not cache HTTP 429 so a later lookup can retry', async () => {
+    vi.useFakeTimers()
     const fetchMock = vi
       .fn()
+      .mockResolvedValueOnce({ ok: false, status: 429 })
       .mockResolvedValueOnce({ ok: false, status: 429 })
       .mockResolvedValueOnce({
         ok: true,
@@ -175,18 +184,23 @@ describe('fetchFlightActuals', () => {
       })
     vi.stubGlobal('fetch', fetchMock)
 
-    const first = await lookupFlightActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
+    const firstPromise = lookupFlightActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
+    await vi.runAllTimersAsync()
+    const first = await firstPromise
     expect(first.rateLimited).toBe(true)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
 
     clearFlightAwareRateLimitForTests()
-    const second = await lookupFlightActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const secondPromise = lookupFlightActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
+    await vi.runAllTimersAsync()
+    const second = await secondPromise
+    expect(fetchMock).toHaveBeenCalledTimes(3)
     expect(second.rateLimited).toBe(false)
     expect(second.actuals?.registration).toBe('N421YX')
   })
 
   it('respects Retry-After header on 429 and returns rateLimitResumeMs', async () => {
+    vi.useFakeTimers()
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
       status: 429,
@@ -194,7 +208,11 @@ describe('fetchFlightActuals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await lookupFlightActuals('5770', '2026-08-12', 'LGA', 'DCA', 'AA')
+    const resultPromise = lookupFlightActuals('5770', '2026-08-12', 'LGA', 'DCA', 'AA')
+    await vi.runAllTimersAsync()
+    const result = await resultPromise
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(result.rateLimited).toBe(true)
     expect(result.rateLimitResumeMs).toBeGreaterThan(Date.now())
     expect(result.rateLimitResumeMs).toBeLessThanOrEqual(Date.now() + 91000)
@@ -286,6 +304,128 @@ describe('fetchFlightActuals', () => {
     expect(result).toBeNull()
   })
 
+  it('does not cache 200 responses with an empty flights array', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ flights: [] }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchFlightActuals('9999', '2026-08-12', 'LGA', 'RIC', 'AA')
+    await fetchFlightActuals('9999', '2026-08-12', 'LGA', 'RIC', 'AA')
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses UTC date-time window in FlightAware query params', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        flights: [
+          {
+            ident: 'AA5770',
+            registration: 'N12345',
+            origin: { code_iata: 'LGA' },
+            destination: { code_iata: 'DCA' },
+            actual_out: '2026-08-04T10:08:00Z',
+            actual_in: '2026-08-04T11:15:00Z',
+          },
+        ],
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchFlightActuals('5770', '2026-08-04', 'LGA', 'DCA', 'AA')
+    const url = String(fetchMock.mock.calls[0]?.[0])
+    expect(url).toContain('start=2026-08-04T00%3A00%3A00Z')
+    expect(url).toContain('end=2026-08-04T23%3A59%3A59Z')
+    expect(flightAwareDateQueryWindow('2026-08-04')).toEqual({
+      start: '2026-08-04T00:00:00Z',
+      end: '2026-08-04T23:59:59Z',
+    })
+  })
+
+  it('retries once after 429 then succeeds on the same candidate', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 429 })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          flights: [
+            {
+              ident: 'AA4442',
+              registration: 'N421YX',
+              origin: { code_iata: 'LGA' },
+              destination: { code_iata: 'RIC' },
+              actual_out: '2026-08-12T15:02:00Z',
+              actual_in: '2026-08-12T16:30:00Z',
+            },
+          ],
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const resultPromise = lookupFlightActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
+    await vi.runAllTimersAsync()
+    const result = await resultPromise
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(result.rateLimited).toBe(false)
+    expect(result.actuals?.registration).toBe('N421YX')
+  })
+
+  it('keeps sticky RJET prefix across legs after a hit', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 404 })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          flights: [
+            {
+              ident: 'RPA4442',
+              registration: 'N421YX',
+              origin: { code_iata: 'LGA' },
+              destination: { code_iata: 'RIC' },
+              actual_out: '2026-08-12T15:02:00Z',
+              actual_in: '2026-08-12T16:30:00Z',
+            },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          flights: [
+            {
+              ident: 'RPA5501',
+              registration: 'N550YX',
+              origin: { code_iata: 'RIC' },
+              destination: { code_iata: 'LGA' },
+              actual_out: '2026-08-12T17:02:00Z',
+              actual_in: '2026-08-12T18:30:00Z',
+            },
+          ],
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const first = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    expect(first.actuals?.registration).toBe('N421YX')
+    expect(getFlightAwareEnrichStickyPrefixForTests()).toBe('RPA')
+
+    const second = await lookupFlightActuals('5501', '2026-08-12', 'RIC', 'LGA', 'RJET')
+    expect(second.actuals?.registration).toBe('N550YX')
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain('/flights/RPA5501')
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
   it('builds RJET FlightAware idents as YX then RPA/AA/UA/DL then bare number', () => {
     expect(flightAwareSearchIdents('4442', 'RJET')).toEqual([
       'YX4442',
@@ -295,9 +435,38 @@ describe('fetchFlightActuals', () => {
       'DL4442',
       '4442',
     ])
+    expect(flightAwareSearchIdentTiers('4442', 'RJET')).toEqual([
+      ['YX4442', 'RPA4442'],
+      ['AA4442', 'UA4442', 'DL4442', '4442'],
+    ])
     expect(aeroDataBoxFlightNumberCandidates('4442', 'RJET')).toEqual(
       flightAwareSearchIdents('4442', 'RJET')
     )
+  })
+
+  it('does not query tier-2 RJET idents when tier-1 YX hits', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        flights: [
+          {
+            ident: 'YX4442',
+            registration: 'N421YX',
+            origin: { code_iata: 'LGA' },
+            destination: { code_iata: 'RIC' },
+            actual_out: '2026-08-12T15:02:00Z',
+            actual_in: '2026-08-12T16:30:00Z',
+          },
+        ],
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/flights/YX4442')
+    expect(String(fetchMock.mock.calls[0]?.[0])).not.toContain('/flights/AA4442')
   })
 
   it('queries YX4442 first for RJET and never uses RJET ident', async () => {
