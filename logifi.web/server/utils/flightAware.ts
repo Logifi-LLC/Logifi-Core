@@ -1,4 +1,5 @@
 import { getFlightAwareEnv } from './flightAwareEnv'
+import { flightAwareSearchIdents } from './flightEnrichCandidates'
 
 export interface FlightAwareActuals {
   registration: string | null
@@ -276,6 +277,119 @@ function compactFlightAwareLookupStatus(
   return `FA-${flightNumber}-${status}`
 }
 
+interface OnceLookupOutcome {
+  actuals: FlightAwareActuals | null
+  authRejected: boolean
+  rateLimited: boolean
+  detail: string | null
+  rateLimitResumeMs?: number
+  usable: boolean
+  status: number
+}
+
+async function lookupFlightActualsOnce(
+  searchIdent: string,
+  date: string,
+  depIcao: string | undefined,
+  arrIcao: string | undefined,
+  apiKey: string,
+  apiBase: string
+): Promise<OnceLookupOutcome> {
+  const url = `${apiBase}/flights/${encodeURIComponent(searchIdent)}?ident_type=designator&start=${date}&end=${date}&max_pages=1`
+
+  const http = await fetchFlightAwareHttp(url, apiKey)
+
+  if (http.status === 401 || http.status === 403) {
+    return {
+      actuals: null,
+      authRejected: true,
+      rateLimited: false,
+      detail: compactFlightAwareLookupStatus(searchIdent, http.status, 'auth'),
+      usable: false,
+      status: http.status,
+    }
+  }
+  if (http.status === 429) {
+    const cooldownUntilMs = Math.max(
+      Date.now() + RATE_LIMIT_COOLDOWN_MS,
+      retryAfterHeaderMs
+    )
+    rateLimitedUntilMs = cooldownUntilMs
+    return {
+      actuals: null,
+      authRejected: false,
+      rateLimited: true,
+      detail: 'HTTP 429',
+      rateLimitResumeMs: cooldownUntilMs,
+      usable: false,
+      status: http.status,
+    }
+  }
+  if (http.status === 404 || http.status === 204 || http.status >= 500 || !http.ok) {
+    return {
+      actuals: null,
+      authRejected: false,
+      rateLimited: false,
+      detail: compactFlightAwareLookupStatus(searchIdent, http.status),
+      usable: false,
+      status: http.status,
+    }
+  }
+
+  const flights = parseFlightAwareResponse(http.data)
+  if (!flights.length) {
+    return {
+      actuals: null,
+      authRejected: false,
+      rateLimited: false,
+      detail: compactFlightAwareLookupStatus(searchIdent, http.status),
+      usable: false,
+      status: http.status,
+    }
+  }
+
+  const match = selectMatchingFlight(flights, depIcao, arrIcao)
+  if (!match) {
+    return {
+      actuals: null,
+      authRejected: false,
+      rateLimited: false,
+      detail: compactFlightAwareLookupStatus(searchIdent, http.status),
+      usable: false,
+      status: http.status,
+    }
+  }
+
+  if (depIcao || arrIcao) {
+    const origin = match.origin?.code_iata ?? match.origin?.code_icao
+    const destination = match.destination?.code_iata ?? match.destination?.code_icao
+    if (!airportsMatch(origin, destination, depIcao, arrIcao)) {
+      return {
+        actuals: null,
+        authRejected: false,
+        rateLimited: false,
+        detail: compactFlightAwareLookupStatus(searchIdent, http.status),
+        usable: false,
+        status: http.status,
+      }
+    }
+  }
+
+  const actuals = extractFlightAwareActuals(match)
+  const usable = isUsableFlightAwareHit(actuals)
+
+  return {
+    actuals: usable ? actuals : null,
+    authRejected: false,
+    rateLimited: false,
+    detail: usable
+      ? compactFlightAwareLookupStatus(searchIdent, http.status, 'ok')
+      : compactFlightAwareLookupStatus(searchIdent, http.status),
+    usable,
+    status: http.status,
+  }
+}
+
 export async function lookupFlightActuals(
   flightNumber: string,
   dateYYYYMMDD: string,
@@ -305,83 +419,56 @@ export async function lookupFlightActuals(
     }
   }
 
-  const searchIdent = airlineCode ? `${airlineCode}${num}` : num
-  const url = `${apiBase}/flights/${encodeURIComponent(searchIdent)}?ident_type=designator&start=${date}&end=${date}&max_pages=1`
-
-  const http = await fetchFlightAwareHttp(url, apiKey)
-
-  if (http.status === 401 || http.status === 403) {
-    return {
-      actuals: null,
-      authRejected: true,
-      rateLimited: false,
-      detail: compactFlightAwareLookupStatus(searchIdent, http.status, 'auth'),
-    }
+  const candidates = flightAwareSearchIdents(num, airlineCode)
+  if (!candidates.length) {
+    return { actuals: null, authRejected: false, rateLimited: false, detail: null }
   }
-  if (http.status === 429) {
-    const cooldownUntilMs = Math.max(
-      Date.now() + RATE_LIMIT_COOLDOWN_MS,
-      retryAfterHeaderMs
+
+  const statuses: string[] = []
+
+  for (const searchIdent of candidates) {
+    const outcome = await lookupFlightActualsOnce(
+      searchIdent,
+      date,
+      depIcao,
+      arrIcao,
+      apiKey,
+      apiBase
     )
-    rateLimitedUntilMs = cooldownUntilMs
-    return {
-      actuals: null,
-      authRejected: false,
-      rateLimited: true,
-      detail: 'HTTP 429',
-      rateLimitResumeMs: cooldownUntilMs,
+    if (outcome.authRejected) {
+      return {
+        actuals: null,
+        authRejected: true,
+        rateLimited: false,
+        detail: outcome.detail,
+      }
     }
-  }
-  if (http.status === 404 || http.status === 204 || http.status >= 500 || !http.ok) {
-    return {
-      actuals: null,
-      authRejected: false,
-      rateLimited: false,
-      detail: compactFlightAwareLookupStatus(searchIdent, http.status),
-    }
-  }
-
-  const flights = parseFlightAwareResponse(http.data)
-  if (!flights.length) {
-    return {
-      actuals: null,
-      authRejected: false,
-      rateLimited: false,
-      detail: compactFlightAwareLookupStatus(searchIdent, http.status),
-    }
-  }
-
-  const match = selectMatchingFlight(flights, depIcao, arrIcao)
-  if (!match) {
-    return {
-      actuals: null,
-      authRejected: false,
-      rateLimited: false,
-      detail: compactFlightAwareLookupStatus(searchIdent, http.status),
-    }
-  }
-
-  if (depIcao || arrIcao) {
-    const origin = match.origin?.code_iata ?? match.origin?.code_icao
-    const destination = match.destination?.code_iata ?? match.destination?.code_icao
-    if (!airportsMatch(origin, destination, depIcao, arrIcao)) {
+    if (outcome.rateLimited) {
       return {
         actuals: null,
         authRejected: false,
-        rateLimited: false,
-        detail: compactFlightAwareLookupStatus(searchIdent, http.status),
+        rateLimited: true,
+        detail: outcome.detail,
+        rateLimitResumeMs: outcome.rateLimitResumeMs,
       }
     }
+    if (outcome.usable && outcome.actuals) {
+      statuses.push(outcome.detail ?? compactFlightAwareLookupStatus(searchIdent, outcome.status, 'ok'))
+      return {
+        actuals: outcome.actuals,
+        authRejected: false,
+        rateLimited: false,
+        detail: statuses.join(' '),
+      }
+    }
+    if (outcome.detail) statuses.push(outcome.detail)
   }
 
-  const actuals = extractFlightAwareActuals(match)
-  const usable = isUsableFlightAwareHit(actuals)
-  
   return {
-    actuals: usable ? actuals : null,
+    actuals: null,
     authRejected: false,
     rateLimited: false,
-    detail: usable ? compactFlightAwareLookupStatus(searchIdent, http.status, 'ok') : compactFlightAwareLookupStatus(searchIdent, http.status),
+    detail: statuses.length ? statuses.join(' ') : null,
   }
 }
 
