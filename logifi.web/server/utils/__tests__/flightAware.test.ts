@@ -9,6 +9,10 @@ import {
   setFlightAwareMinIntervalForTests,
   clearFlightAwareRateLimitForTests,
 } from '../flightAware'
+import {
+  aeroDataBoxFlightNumberCandidates,
+  flightAwareSearchIdents,
+} from '../flightEnrichCandidates'
 
 vi.mock('../flightAwareEnv', () => ({
   getFlightAwareEnv: () => ({
@@ -280,6 +284,81 @@ describe('fetchFlightActuals', () => {
 
     const result = await fetchFlightActuals('9999', '2026-08-12', 'LGA', 'RIC', 'AA')
     expect(result).toBeNull()
+  })
+
+  it('builds RJET FlightAware idents as YX then RPA/AA/UA/DL then bare number', () => {
+    expect(flightAwareSearchIdents('4442', 'RJET')).toEqual([
+      'YX4442',
+      'RPA4442',
+      'AA4442',
+      'UA4442',
+      'DL4442',
+      '4442',
+    ])
+    expect(aeroDataBoxFlightNumberCandidates('4442', 'RJET')).toEqual(
+      flightAwareSearchIdents('4442', 'RJET')
+    )
+  })
+
+  it('queries YX4442 first for RJET and never uses RJET ident', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        flights: [
+          {
+            ident: 'YX4442',
+            registration: 'N421YX',
+            origin: { code_iata: 'LGA' },
+            destination: { code_iata: 'RIC' },
+            actual_out: '2026-08-12T15:02:00Z',
+            actual_in: '2026-08-12T16:30:00Z',
+          },
+        ],
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const url = String(fetchMock.mock.calls[0]?.[0])
+    expect(url).toContain('/flights/YX4442')
+    expect(url).not.toContain('RJET')
+    expect(result.actuals?.registration).toBe('N421YX')
+  })
+
+  it('falls through RJET candidates until a usable hit', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 404 })
+      .mockResolvedValueOnce({ ok: false, status: 404 })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          flights: [
+            {
+              ident: 'AA4442',
+              registration: 'N421YX',
+              origin: { code_iata: 'LGA' },
+              destination: { code_iata: 'RIC' },
+              actual_out: '2026-08-12T15:02:00Z',
+              actual_in: '2026-08-12T16:30:00Z',
+            },
+          ],
+        }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/flights/YX4442')
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/flights/RPA4442')
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain('/flights/AA4442')
+    for (const call of fetchMock.mock.calls) {
+      expect(String(call[0])).not.toContain('RJET')
+    }
+    expect(result.actuals?.registration).toBe('N421YX')
   })
 
   it('normalizes K-prefix ICAO codes to IATA', async () => {

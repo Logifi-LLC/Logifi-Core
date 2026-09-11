@@ -63,8 +63,9 @@ interface CachedHttp {
   data: unknown | null
 }
 
-/** YX (IATA), RPA (ICAO), then major-airline marketed numbers. */
-const RJET_FLIGHT_NUMBER_PREFIXES = ['YX', 'RPA', 'AA', 'UA', 'DL'] as const
+import { aeroDataBoxFlightNumberCandidates } from './flightEnrichCandidates'
+
+export { aeroDataBoxFlightNumberCandidates }
 
 const ADB_DEFAULT_MIN_INTERVAL_MS = 1000
 
@@ -100,31 +101,6 @@ export function setAeroDataBoxMinIntervalForTests(ms: number): void {
 
 export function isAeroDataBoxConfigured(): boolean {
   return Boolean(getAeroDataBoxEnv().apiKey)
-}
-
-/**
- * AeroDataBox search numbers for a schedule flight number.
- * RJET: YX / RPA / AA / UA / DL + digits, then the bare number.
- */
-export function aeroDataBoxFlightNumberCandidates(
-  flightNumber: string,
-  airlineCode?: string
-): string[] {
-  const raw = flightNumber.trim().toUpperCase().replace(/\s+/g, '')
-  if (!raw) return []
-  if (/^[A-Z]{2}\d/.test(raw)) return [raw]
-
-  const digits = raw.replace(/^[A-Z]+/, '') || raw
-  const code = (airlineCode ?? '').trim().toUpperCase()
-  if (code === 'RJET') {
-    const out: string[] = []
-    for (const prefix of RJET_FLIGHT_NUMBER_PREFIXES) {
-      out.push(`${prefix}${digits}`)
-    }
-    out.push(digits)
-    return out
-  }
-  return [raw]
 }
 
 function normalizeAirportCode(code: string | undefined): string {
