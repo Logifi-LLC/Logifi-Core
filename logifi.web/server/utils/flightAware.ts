@@ -1,3 +1,5 @@
+import { DateTime } from 'luxon'
+import { getAirportIanaTimezone } from '../../shared/airportTimezone'
 import { getFlightAwareEnv } from './flightAwareEnv'
 import { flightAwareSearchIdentTiers } from './flightEnrichCandidates'
 
@@ -144,23 +146,27 @@ function airportsMatch(
   return Boolean((ld && ro) || (la && rd))
 }
 
-function parseIsoToLocal(iso: string | undefined): string | null {
+function airportCodeFromFa(airport?: FlightAwareAirport): string | undefined {
+  const iata = airport?.code_iata?.trim()
+  const icao = airport?.code_icao?.trim()
+  return icao || iata || undefined
+}
+
+/** FlightAware actual_* timestamps are UTC; format wall clock at the relevant airport. */
+export function parseIsoToAirportLocal(
+  iso: string | undefined,
+  airportCode: string | undefined
+): string | null {
   if (!iso || typeof iso !== 'string') return null
   const trimmed = iso.trim()
   if (!trimmed || trimmed.length < 10) return null
 
-  const dt = new Date(trimmed)
-  if (isNaN(dt.getTime())) return null
+  const parsed = DateTime.fromISO(trimmed, { zone: 'utc' })
+  if (!parsed.isValid) return null
 
-  // Use UTC wall clock — Vercel runs in UTC; airport-local TZ would need station data.
-  const year = dt.getUTCFullYear()
-  const month = String(dt.getUTCMonth() + 1).padStart(2, '0')
-  const day = String(dt.getUTCDate()).padStart(2, '0')
-  const hours = String(dt.getUTCHours()).padStart(2, '0')
-  const minutes = String(dt.getUTCMinutes()).padStart(2, '0')
-  const seconds = String(dt.getUTCSeconds()).padStart(2, '0')
-
-  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+  const iana = airportCode ? getAirportIanaTimezone(airportCode) : null
+  const local = iana ? parsed.setZone(iana) : parsed
+  return local.toFormat('yyyy-MM-dd HH:mm:ss')
 }
 
 function nonEmptyString(value: unknown): string | null {
@@ -170,13 +176,15 @@ function nonEmptyString(value: unknown): string | null {
 }
 
 export function extractFlightAwareActuals(flight: FlightAwareFlight): FlightAwareActuals {
+  const dep = airportCodeFromFa(flight.origin)
+  const arr = airportCodeFromFa(flight.destination)
   return {
     registration: nonEmptyString(flight.registration) || nonEmptyString(flight.aircraft_type),
     aircraftType: nonEmptyString(flight.aircraft_type),
-    actualOutLocal: parseIsoToLocal(flight.actual_out),
-    actualOffLocal: parseIsoToLocal(flight.actual_off),
-    actualOnLocal: parseIsoToLocal(flight.actual_on),
-    actualInLocal: parseIsoToLocal(flight.actual_in),
+    actualOutLocal: parseIsoToAirportLocal(flight.actual_out, dep),
+    actualOffLocal: parseIsoToAirportLocal(flight.actual_off, dep),
+    actualOnLocal: parseIsoToAirportLocal(flight.actual_on, arr),
+    actualInLocal: parseIsoToAirportLocal(flight.actual_in, arr),
   }
 }
 

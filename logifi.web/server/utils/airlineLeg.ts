@@ -83,13 +83,9 @@ function firstHHMM(actual: string | null, scheduled: string | null): string | nu
 }
 
 function buildOooiFromLeg(leg: AirlineLeg): FcvMappedOooi | null {
-  // out/in: FLICA gate times are ground truth — for completed flights FLICA replaces
-  // the scheduled times with actuals, so scheduled_out/in already carry the real values.
-  // AeroDataBox gate actuals (actual_out_local / actual_in_local) have lower data quality
-  // and must not overwrite the FLICA times.
-  const out = parseFcvLocalDatetimeToHHMM(leg.scheduled_out_local)
-  const inn = parseFcvLocalDatetimeToHHMM(leg.scheduled_in_local)
-  // off/on: wheels-off/wheels-on come from AeroDataBox; FLICA does not provide these.
+  // FlightAware (or AeroDataBox) actuals on the leg win; FLICA scheduled fills gaps.
+  const out = firstHHMM(leg.actual_out_local, leg.scheduled_out_local)
+  const inn = firstHHMM(leg.actual_in_local, leg.scheduled_in_local)
   const off = parseFcvLocalDatetimeToHHMM(leg.actual_off_local)
   const on = parseFcvLocalDatetimeToHHMM(leg.actual_on_local)
   if (out == null && off == null && on == null && inn == null) return null

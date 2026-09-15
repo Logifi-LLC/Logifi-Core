@@ -7,6 +7,7 @@ import {
   isFlightAwareConfigured,
   isUsableFlightAwareHit,
   lookupFlightActuals,
+  parseIsoToAirportLocal,
   resetFlightAwareClientStateForTests,
   setFlightAwareMinIntervalForTests,
   clearFlightAwareRateLimitForTests,
@@ -83,10 +84,10 @@ describe('fetchFlightActuals', () => {
     expect(result).toEqual({
       registration: 'N12345',
       aircraftType: 'E75L',
-      actualOutLocal: expect.stringContaining('2026-08-04'),
-      actualOffLocal: expect.stringContaining('2026-08-04'),
-      actualOnLocal: expect.stringContaining('2026-08-04'),
-      actualInLocal: expect.stringContaining('2026-08-04'),
+      actualOutLocal: '2026-08-04 06:08:00',
+      actualOffLocal: '2026-08-04 06:20:00',
+      actualOnLocal: '2026-08-04 07:05:00',
+      actualInLocal: '2026-08-04 07:15:00',
     })
   })
 
@@ -556,12 +557,25 @@ describe('fetchFlightActuals', () => {
   })
 })
 
+describe('parseIsoToAirportLocal', () => {
+  it('converts Zulu ISO to departure-airport local wall time (EDT)', () => {
+    expect(parseIsoToAirportLocal('2026-09-15T13:54:00Z', 'KLGA')).toBe(
+      '2026-09-15 09:54:00'
+    )
+    expect(parseIsoToAirportLocal('2026-09-15T14:38:00Z', 'KBOS')).toBe(
+      '2026-09-15 10:38:00'
+    )
+  })
+})
+
 describe('extractFlightAwareActuals', () => {
   it('extracts all four OOOI times when present', () => {
     const actuals = extractFlightAwareActuals({
       ident: 'AA5770',
       registration: 'N12345',
       aircraft_type: 'E75L',
+      origin: { code_iata: 'LGA', code_icao: 'KLGA' },
+      destination: { code_iata: 'DCA', code_icao: 'KDCA' },
       actual_out: '2026-08-04T10:08:00Z',
       actual_off: '2026-08-04T10:20:00Z',
       actual_on: '2026-08-04T11:05:00Z',
@@ -569,10 +583,10 @@ describe('extractFlightAwareActuals', () => {
     })
     expect(actuals.registration).toBe('N12345')
     expect(actuals.aircraftType).toBe('E75L')
-    expect(actuals.actualOutLocal).toContain('2026-08-04')
-    expect(actuals.actualOffLocal).toContain('2026-08-04')
-    expect(actuals.actualOnLocal).toContain('2026-08-04')
-    expect(actuals.actualInLocal).toContain('2026-08-04')
+    expect(actuals.actualOutLocal).toBe('2026-08-04 06:08:00')
+    expect(actuals.actualOffLocal).toBe('2026-08-04 06:20:00')
+    expect(actuals.actualOnLocal).toBe('2026-08-04 07:05:00')
+    expect(actuals.actualInLocal).toBe('2026-08-04 07:15:00')
     expect(isUsableFlightAwareHit(actuals)).toBe(true)
   })
 
@@ -594,13 +608,15 @@ describe('extractFlightAwareActuals', () => {
     const actuals = extractFlightAwareActuals({
       ident: 'AA5770',
       registration: 'N12345',
+      origin: { code_iata: 'LGA', code_icao: 'KLGA' },
+      destination: { code_iata: 'DCA', code_icao: 'KDCA' },
       actual_off: '2026-08-04T10:20:00Z',
       actual_on: '2026-08-04T11:05:00Z',
     })
     expect(actuals.registration).toBe('N12345')
     expect(actuals.actualOutLocal).toBeNull()
-    expect(actuals.actualOffLocal).toContain('2026-08-04')
-    expect(actuals.actualOnLocal).toContain('2026-08-04')
+    expect(actuals.actualOffLocal).toBe('2026-08-04 06:20:00')
+    expect(actuals.actualOnLocal).toBe('2026-08-04 07:05:00')
     expect(actuals.actualInLocal).toBeNull()
     expect(isUsableFlightAwareHit(actuals)).toBe(true)
   })
