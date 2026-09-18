@@ -1,3 +1,4 @@
+import type { DigifiFewShotPair } from '../../app/utils/digifiFewShot'
 import { analyzeDigifiScanRows } from '../../app/utils/digifiScanDiagnostics'
 import type { DigifiScanRow, DigifiScanStrategy } from '../../app/utils/digifiTypes'
 import type { DigifiTemplateColumn } from '../../app/utils/digifiTypes'
@@ -44,6 +45,7 @@ export interface RunDigifiScanOrchestrationOptions {
   providerUsed: DigifiProvider
   callRows: DigifiRowsCaller
   logLabel: string
+  fewShotExamples?: DigifiFewShotPair[]
 }
 
 export async function runDigifiScanOrchestration(
@@ -60,6 +62,7 @@ export async function runDigifiScanOrchestration(
     providerUsed,
     callRows,
     logLabel,
+    fewShotExamples,
   } = options
 
   const allowedColumnIds = new Set(targetColumns.map((column) => column.id))
@@ -89,6 +92,7 @@ export async function runDigifiScanOrchestration(
       includeRowBands: sendRowBands,
       chunkImages: labeledChunks,
       focusRows,
+      fewShotExamples,
     })
 
   const runModelChainFallback = async () => {

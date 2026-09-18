@@ -14,6 +14,7 @@ import { analyzeDigifiScanRows } from '../../../app/utils/digifiScanDiagnostics'
 import { assertCanScanSpread } from '../../utils/creditsBalance'
 import { buildDigifiScanSessionPayload } from '../../utils/digifiScanPayload'
 import { finalizeDigifiScanBilling } from '../../utils/digifiScanBilling'
+import { loadDigifiFewShotExamples } from '../../utils/digifiFewShot'
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
@@ -180,6 +181,13 @@ export default defineEventHandler(async (event) => {
 
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
 
+  let fewShotExamples: Awaited<ReturnType<typeof loadDigifiFewShotExamples>> = []
+  try {
+    fewShotExamples = await loadDigifiFewShotExamples(supabase, userId)
+  } catch (error) {
+    console.warn('[digifi] few-shot examples skipped:', error)
+  }
+
   let scanResult
   try {
     mark('extractStart')
@@ -188,6 +196,7 @@ export default defineEventHandler(async (event) => {
       mimeType: imageMime,
       meta,
       chunkImages,
+      fewShotExamples,
     })
     mark('afterExtract')
   } catch (e) {

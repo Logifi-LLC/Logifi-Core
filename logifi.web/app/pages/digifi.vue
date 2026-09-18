@@ -177,6 +177,7 @@ import MarketingHeader from '~/components/MarketingHeader.vue'
 import ProductSwitcher from '~/components/ProductSwitcher.vue'
 import { useAuth } from '~/composables/useAuth'
 import { isIosApp } from '~/utils/platform'
+import { resolveDigifiAppRoute } from '~/utils/digifiMobileReview'
 
 const { theme, isDark, applyDocumentTheme } = useTheme()
 const { isAuthenticated } = useAuth()
@@ -202,20 +203,12 @@ const openAuth = (tab: 'signin' | 'signup') => {
 }
 
 const handleAuthSuccess = () => {
-  if (isIosApp()) {
-    router.push('/digifi-eye')
-  } else {
-    router.push('/logbook-builder?digifi=open')
-  }
+  router.push(resolveDigifiAppRoute({ isIos: isIosApp() }))
 }
 
 const handleStartScanning = () => {
   if (isAuthenticated.value) {
-    if (isIosApp()) {
-      router.push('/digifi-eye')
-    } else {
-      router.push('/logbook-builder?digifi=open')
-    }
+    router.push(resolveDigifiAppRoute({ isIos: isIosApp() }))
   } else {
     authTab.value = 'signup'
     showAuth.value = true

@@ -6957,6 +6957,7 @@ import {
 } from '../../shared/aircraftTailIndex'
 import { useCurrency } from '../composables/useCurrency'
 import { useCapacitorPlatform, isCapacitorNative } from '../composables/useCapacitorPlatform'
+import { resolveDigifiAppRoute } from '../utils/digifiMobileReview'
 import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGestures'
 import { usePullToRefresh } from '../composables/usePullToRefresh'
 import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
@@ -10275,11 +10276,7 @@ const showDashboardImportModal = ref(false)
 
 function openDigifiFromEmptyState(): void {
   showDashboardImportModal.value = false
-  if (isIos.value) {
-    void router.push('/digifi-eye')
-  } else {
-    void router.push({ path: '/logbook-builder', query: { digifi: 'open' } })
-  }
+  void router.push(resolveDigifiAppRoute({ isIos: isIos.value }))
 }
 
 function onDashboardImportProviderFile(payload: { file: File; provider: ImportProviderKey }): void {

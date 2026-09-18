@@ -23,6 +23,10 @@ vi.mock('~/composables/useDigifiCredits', () => ({
   }),
 }))
 
+vi.mock('~/utils/apiFetch', () => ({
+  apiFetch: (...args: unknown[]) => (globalThis as { $fetch: (...fetchArgs: unknown[]) => unknown }).$fetch(...args),
+}))
+
 describe('useLogbookBuilderDigifi draft save', () => {
   const originalCreateImageBitmap = globalThis.createImageBitmap
   const canvasProto = HTMLCanvasElement.prototype
