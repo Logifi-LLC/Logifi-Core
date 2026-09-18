@@ -9265,16 +9265,44 @@ async function saveInlineEdit(): Promise<boolean> {
   // Save to Supabase if authenticated, otherwise save to localStorage
   if (isAuthenticated.value && user.value) {
     try {
-      // Get old entry data before updating (maybeSingle: 0 rows = null, no throw)
-      const { data: oldEntryData, error: fetchError } = await (supabase
-        .from('log_entries') as any)
-        .select('*')
-        .eq('id', targetId)
-        .maybeSingle()
-      
-      if (fetchError) {
-        console.error('[SaveInlineEdit] Failed to fetch old entry data:', fetchError)
-        throw fetchError
+      await checkOnlineStatus()
+
+      let oldEntryData: Record<string, unknown> | null = null
+
+      if (!isOnline.value) {
+        const idbEntry = await getEntryFromIndexedDB(targetId).catch(() => null)
+        if (idbEntry && idbEntry._synced === false) {
+          oldEntryData = null
+        } else {
+          const localSnapshot =
+            logEntries.value.find((e) => e.id === targetId) ?? updatedEntry
+          oldEntryData = {
+            logbook_type: localSnapshot.logbookType ?? 'flight',
+            flagged: localSnapshot.flagged ?? false,
+            signature_pending: localSnapshot.signaturePending ?? false,
+            pending_instructor_id: localSnapshot.pendingInstructorId ?? null,
+            amends_entry_id: localSnapshot.amendsEntryId ?? null,
+            is_void: localSnapshot.isVoid === true,
+            is_imported: localSnapshot.isImported ?? false,
+            import_source: localSnapshot.importSource ?? null,
+            import_batch_id: localSnapshot.importBatchId ?? null,
+            original_entry_date: localSnapshot.originalEntryDate ?? null,
+            import_metadata: localSnapshot.importMetadata ?? null,
+          }
+        }
+      } else {
+        // Get old entry data before updating (maybeSingle: 0 rows = null, no throw)
+        const { data: fetchedOld, error: fetchError } = await (supabase
+          .from('log_entries') as any)
+          .select('*')
+          .eq('id', targetId)
+          .maybeSingle()
+
+        if (fetchError) {
+          console.error('[SaveInlineEdit] Failed to fetch old entry data:', fetchError)
+          throw fetchError
+        }
+        oldEntryData = fetchedOld
       }
 
       // Convert to database format (id/user_id only for queue insert, not for update body)
@@ -9398,6 +9426,18 @@ async function saveInlineEdit(): Promise<boolean> {
           existsLocally
             ? logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
             : [...logEntries.value, updatedEntry]
+        )
+        afterInlineSaveSuccess(updatedEntry)
+        return true
+      }
+
+      if (!isOnline.value) {
+        console.log('[SaveInlineEdit] Offline — queueing update for:', targetId)
+        await updateEntryInIndexedDB(updatedEntry, { userId: user.value.id, synced: false })
+        const awaitSync = shouldAwaitSyncForSigningIntent()
+        await addToQueue('update', targetId, dbEntry, user.value.id, { awaitSync })
+        logEntries.value = sortEntriesByDateAndOOOI(
+          logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
         )
         afterInlineSaveSuccess(updatedEntry)
         return true
@@ -16821,8 +16861,18 @@ async function loadEntriesInternal(options: LoadEntriesOptions = {}): Promise<nu
       const canSyncRemote = hasUsableAuthSession() && (isOnline.value || browserOnline)
 
       if (!canSyncRemote) {
-        if (isIos.value && hasUsableAuthSession()) {
-          updateIosSyncBanner('error', 'Sync skipped: offline or no session')
+        if (isIos.value) {
+          if (hasUsableAuthSession() && !isOnline.value && !browserOnline) {
+            const count = logEntries.value.length
+            if (count > 0) {
+              updateIosSyncBanner(
+                'success',
+                `Offline — showing ${count} cached ${count === 1 ? 'entry' : 'entries'}`
+              )
+            }
+          } else if (!hasUsableAuthSession() && (isOnline.value || browserOnline)) {
+            updateIosSyncBanner('error', 'Sync skipped: no session')
+          }
         }
       } else {
         const sessionReady = await ensureSupabaseClientSession()
