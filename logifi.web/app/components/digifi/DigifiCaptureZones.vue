@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useTheme } from '~/composables/useTheme'
 import type { DigifiPageSide } from '~/utils/digifiTypes'
+
+const { isDark: isDarkMode } = useTheme()
 
 const props = defineProps<{
   uploadingSide: DigifiPageSide | null
@@ -17,9 +20,12 @@ const rightInputRef = ref<HTMLInputElement | null>(null)
 
 function zoneClasses(pageSide: DigifiPageSide): string[] {
   const busy = props.uploadingSide === pageSide
+  const idleBorder = isDarkMode.value
+    ? 'border-white/15 bg-white/5'
+    : 'border-gray-200 bg-white shadow-sm'
   const base = [
     'rounded-2xl border-2 p-4 space-y-3 transition-colors',
-    busy ? 'border-blue-400 bg-blue-500/15' : 'border-white/15 bg-white/5',
+    busy ? 'border-blue-400 bg-blue-500/15' : idleBorder,
   ]
   if (pageSide === 'left' && !busy) {
     base.push('ring-1 ring-blue-500/30')
@@ -71,14 +77,14 @@ function onFileSelected(pageSide: DigifiPageSide, event: Event) {
     <section :class="zoneClasses('left')" aria-labelledby="capture-left-heading">
       <div class="flex items-start justify-between gap-2">
         <div>
-          <p id="capture-left-heading" class="text-base font-semibold text-blue-200">
+          <p id="capture-left-heading" :class="['text-base font-semibold', isDarkMode ? 'text-blue-200' : 'text-blue-700']">
             1. Left page
           </p>
-          <p class="text-xs text-slate-400 mt-0.5">
+          <p :class="['text-xs mt-0.5', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
             Photo of the left side of your open logbook spread
           </p>
         </div>
-        <span class="shrink-0 rounded-full bg-blue-500/20 px-2.5 py-1 text-[11px] font-semibold text-blue-200">
+        <span :class="['shrink-0 rounded-full bg-blue-500/20 px-2.5 py-1 text-[11px] font-semibold', isDarkMode ? 'text-blue-200' : 'text-blue-800']">
           LEFT
         </span>
       </div>
@@ -103,14 +109,14 @@ function onFileSelected(pageSide: DigifiPageSide, event: Event) {
     <section :class="zoneClasses('right')" aria-labelledby="capture-right-heading">
       <div class="flex items-start justify-between gap-2">
         <div>
-          <p id="capture-right-heading" class="text-base font-semibold text-violet-200">
+          <p id="capture-right-heading" :class="['text-base font-semibold', isDarkMode ? 'text-violet-200' : 'text-violet-700']">
             2. Right page
           </p>
-          <p class="text-xs text-slate-400 mt-0.5">
+          <p :class="['text-xs mt-0.5', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
             Photo of the right side of your open logbook spread
           </p>
         </div>
-        <span class="shrink-0 rounded-full bg-violet-500/20 px-2.5 py-1 text-[11px] font-semibold text-violet-200">
+        <span :class="['shrink-0 rounded-full bg-violet-500/20 px-2.5 py-1 text-[11px] font-semibold', isDarkMode ? 'text-violet-200' : 'text-violet-800']">
           RIGHT
         </span>
       </div>

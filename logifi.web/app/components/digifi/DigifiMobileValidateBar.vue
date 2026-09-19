@@ -4,6 +4,7 @@ import type { Ref } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import type { ValidateOnlyResult } from '~/composables/useLogbookBuilderImport'
 import { useAuth } from '~/composables/useAuth'
+import { useTheme } from '~/composables/useTheme'
 import { useToast } from '~/composables/useToast'
 import { supabase } from '~/lib/supabase'
 import { gridToEntries } from '~/composables/useLogbookBuilderImport'
@@ -11,6 +12,8 @@ import { triggerLogTenHandoff } from '~/utils/logtenHandoff'
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
 if (!grid) throw new Error('DigifiMobileValidateBar requires logbookBuilderGrid')
+
+const { isDark: isDarkMode } = useTheme()
 
 const preferredSink = inject<Ref<'logten' | 'logifi' | null>>('digifiPreferredSink', ref(null))
 const { showToast } = useToast()
@@ -115,14 +118,19 @@ async function handleSendToLogTen() {
 
 <template>
   <div class="space-y-2">
-    <p v-if="errorMessage" class="text-xs text-rose-300">{{ errorMessage }}</p>
-    <p v-else-if="validRowCount != null" class="text-xs text-slate-300">
+    <p v-if="errorMessage" :class="['text-xs', isDarkMode ? 'text-rose-300' : 'text-rose-600']">{{ errorMessage }}</p>
+    <p v-else-if="validRowCount != null" :class="['text-xs', isDarkMode ? 'text-gray-300' : 'text-gray-600']">
       {{ validRowCount }} row(s) ready.
     </p>
     <div class="flex gap-2">
       <button
         type="button"
-        class="flex-1 rounded-xl border border-white/15 px-3 py-3 text-sm font-semibold text-slate-100 disabled:opacity-50"
+        class="flex-1 rounded-xl border px-3 py-3 text-sm font-semibold disabled:opacity-50"
+        :class="
+          isDarkMode
+            ? 'border-white/15 text-gray-100'
+            : 'border-gray-300 bg-white text-gray-900 hover:bg-gray-50'
+        "
         :disabled="validating"
         @click="handleValidate"
       >
@@ -140,7 +148,12 @@ async function handleSendToLogTen() {
     <button
       v-if="preferredSink === 'logten' && validRowCount != null"
       type="button"
-      class="w-full rounded-xl border border-orange-400/40 px-3 py-2 text-xs font-semibold text-orange-200 disabled:opacity-50"
+      class="w-full rounded-xl border px-3 py-2 text-xs font-semibold disabled:opacity-50"
+      :class="
+        isDarkMode
+          ? 'border-orange-400/40 text-orange-200'
+          : 'border-orange-400/60 text-orange-700 hover:bg-orange-50'
+      "
       :disabled="sendingToLogTen"
       @click="handleSendToLogTen"
     >

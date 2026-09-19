@@ -12,6 +12,10 @@ vi.mock('~/composables/useAuth', () => ({
   }),
 }))
 
+vi.mock('~/composables/useTheme', () => ({
+  useTheme: () => ({ isDark: { value: true }, theme: { value: 'dark' } }),
+}))
+
 vi.mock('~/composables/useLogbookBuilderLastTemplate', () => ({
   persistLastTemplateId: vi.fn(),
 }))
