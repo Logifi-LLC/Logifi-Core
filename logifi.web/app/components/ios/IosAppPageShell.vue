@@ -1,19 +1,24 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useTheme } from '~/composables/useTheme'
 
 const props = withDefaults(
   defineProps<{
     title: string
+    /** When omitted, follows `useTheme()` (app appearance setting). */
     isDark?: boolean
     showBack?: boolean
     backFallback?: string
   }>(),
   {
-    isDark: true,
     showBack: true,
     backFallback: '/dashboard',
   }
 )
+
+const { isDark: themeIsDark } = useTheme()
+const isDark = computed(() => props.isDark ?? themeIsDark.value)
 
 const router = useRouter()
 
