@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useAuth } from '~/composables/useAuth'
 import { apiFetch } from '~/utils/apiFetch'
 import { messageFromFlicaApiError } from '~/utils/flicaApiError'
@@ -1145,9 +1145,9 @@ watch(includeAlreadyImportedInImport, (on) => {
   selectedFcvFlightIds.value = next
 })
 
-onMounted(() => {
-  if (isAuthenticated.value) checkStatus()
-})
+watch(isAuthenticated, (authed) => {
+  if (authed) void checkStatus()
+}, { immediate: true })
 
 /** Logifi brand: plane blue + sun (warm gradient on hover). */
 const btnConnectFcvClass = computed(() =>
