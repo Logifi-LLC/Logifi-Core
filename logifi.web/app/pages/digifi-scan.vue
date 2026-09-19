@@ -20,8 +20,10 @@ import {
 import { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { loadLastTemplateIfAny } from '~/composables/useLogbookBuilderLastTemplate'
 import { DIGIFI_EYE_PATH, scanSideForPageShape, type DigifiPageShape } from '~/utils/digifiMobileReview'
+import { useTheme } from '~/composables/useTheme'
 
 const { initAuth, isAuthenticated, user } = useAuth()
+const { isDark: isDarkMode } = useTheme()
 const { fetchBalance } = useDigifiCredits()
 const { preferredSink, loadPreferredSink } = useDigifiDestination()
 
@@ -106,7 +108,7 @@ onUnmounted(() => {
     <template #trailing>
       <NuxtLink
         :to="DIGIFI_EYE_PATH"
-        class="text-xs font-semibold text-slate-300"
+        :class="['text-xs font-semibold', isDarkMode ? 'text-gray-300' : 'text-gray-600']"
       >
         Eye
       </NuxtLink>
@@ -124,9 +126,9 @@ onUnmounted(() => {
         @change="onFile"
       >
 
-      <p v-if="error" class="text-sm text-rose-300">{{ error }}</p>
-      <p v-else-if="scanPhase" class="text-sm text-slate-300">{{ scanPhase }}</p>
-      <p v-if="scanRowWarning" class="text-xs text-amber-200">{{ scanRowWarning }}</p>
+      <p v-if="error" :class="['text-sm', isDarkMode ? 'text-rose-300' : 'text-rose-600']">{{ error }}</p>
+      <p v-else-if="scanPhase" :class="['text-sm', isDarkMode ? 'text-gray-300' : 'text-gray-600']">{{ scanPhase }}</p>
+      <p v-if="scanRowWarning" :class="['text-xs', isDarkMode ? 'text-amber-200' : 'text-amber-700']">{{ scanRowWarning }}</p>
 
       <DigifiMobileLayoutWizard
         v-if="phase === 'setup'"
@@ -141,7 +143,7 @@ onUnmounted(() => {
         <DigifiMobileColumnCarousel />
         <button
           type="button"
-          class="w-full py-2 text-sm font-medium text-slate-400"
+          :class="['w-full py-2 text-sm font-medium', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
           @click="backToSetup"
         >
           Scan again

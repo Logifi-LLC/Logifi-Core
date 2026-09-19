@@ -14,8 +14,10 @@ import {
   pageShapeFromLayout,
   type DigifiPageShape,
 } from '~/utils/digifiMobileReview'
+import { useTheme } from '~/composables/useTheme'
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
+const { isDark: isDarkMode } = useTheme()
 if (!grid) throw new Error('DigifiMobileLayoutWizard requires logbookBuilderGrid')
 
 const { user, isAuthenticated } = useAuth()
@@ -135,41 +137,56 @@ onMounted(() => {
 <template>
   <div class="space-y-4">
     <section class="space-y-2">
-      <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Template</p>
+      <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Template</p>
       <div v-if="templates.length" class="flex gap-2 overflow-x-auto pb-1">
         <button
           v-for="template in templates"
           :key="template.id"
           type="button"
-          class="shrink-0 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-100"
+          class="shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold"
+          :class="
+            isDarkMode
+              ? 'border-white/15 bg-white/5 text-gray-100'
+              : 'border-gray-200 bg-gray-100 text-gray-900'
+          "
           @click="applyTemplate(template)"
         >
           {{ template.name }}
         </button>
       </div>
-      <p v-else class="text-xs text-slate-500">No saved layouts.</p>
+      <p v-else :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">No saved layouts.</p>
       <div class="flex gap-2">
         <input
           v-model="templateName"
           type="text"
           maxlength="40"
           placeholder="Save as"
-          class="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
+          class="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm"
+          :class="
+            isDarkMode
+              ? 'border-white/10 bg-white/5 text-gray-100 placeholder:text-gray-500'
+              : 'border-gray-200 bg-white text-gray-900 placeholder:text-gray-400'
+          "
         >
         <button
           type="button"
-          class="rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-slate-200 disabled:opacity-40"
+          class="rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-40"
+          :class="
+            isDarkMode
+              ? 'border-white/15 text-gray-200'
+              : 'border-gray-300 text-gray-800 hover:bg-gray-50'
+          "
           :disabled="saving || !templateName.trim()"
           @click="saveTemplate"
         >
           Save
         </button>
       </div>
-      <p v-if="templateError" class="text-xs text-rose-300">{{ templateError }}</p>
+      <p v-if="templateError" :class="['text-xs', isDarkMode ? 'text-rose-300' : 'text-rose-600']">{{ templateError }}</p>
     </section>
 
     <section class="space-y-2">
-      <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Page</p>
+      <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Page</p>
       <div class="grid grid-cols-3 gap-2">
         <button
           v-for="option in ([
@@ -182,8 +199,12 @@ onMounted(() => {
           class="rounded-xl border px-2 py-2 text-sm font-semibold"
           :class="
             pageShape === option.value
-              ? 'border-orange-400/60 bg-orange-500/15 text-orange-100'
-              : 'border-white/10 bg-white/5 text-slate-300'
+              ? isDarkMode
+                ? 'border-orange-400/60 bg-orange-500/15 text-orange-100'
+                : 'border-orange-400 bg-orange-50 text-orange-800'
+              : isDarkMode
+                ? 'border-white/10 bg-white/5 text-gray-300'
+                : 'border-gray-200 bg-gray-100 text-gray-700'
           "
           @click="setShape(option.value)"
         >
@@ -192,21 +213,34 @@ onMounted(() => {
       </div>
     </section>
 
-    <section class="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-      <p class="text-sm font-semibold text-slate-100">Flight lines</p>
+    <section
+      class="flex items-center justify-between gap-3 rounded-xl border px-3 py-2"
+      :class="isDarkMode ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white shadow-sm'"
+    >
+      <p :class="['text-sm font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900']">Flight lines</p>
       <div class="flex items-center gap-2">
         <button
           type="button"
-          class="h-9 w-9 rounded-lg border border-white/15 text-lg font-semibold text-slate-100"
+          class="h-9 w-9 rounded-lg border text-lg font-semibold"
+          :class="
+            isDarkMode
+              ? 'border-white/15 text-gray-100'
+              : 'border-gray-300 text-gray-900 hover:bg-gray-50'
+          "
           :disabled="grid.rowCount.value <= 1"
           @click="bumpRows(-1)"
         >
           −
         </button>
-        <span class="w-8 text-center font-mono text-sm tabular-nums text-slate-100">{{ grid.rowCount.value }}</span>
+        <span :class="['w-8 text-center font-mono text-sm tabular-nums', isDarkMode ? 'text-gray-100' : 'text-gray-900']">{{ grid.rowCount.value }}</span>
         <button
           type="button"
-          class="h-9 w-9 rounded-lg border border-white/15 text-lg font-semibold text-slate-100"
+          class="h-9 w-9 rounded-lg border text-lg font-semibold"
+          :class="
+            isDarkMode
+              ? 'border-white/15 text-gray-100'
+              : 'border-gray-300 text-gray-900 hover:bg-gray-50'
+          "
           :disabled="grid.rowCount.value >= 100"
           @click="bumpRows(1)"
         >
@@ -216,7 +250,7 @@ onMounted(() => {
     </section>
 
     <section class="space-y-2">
-      <p class="text-xs font-semibold uppercase tracking-wide text-slate-400">Columns</p>
+      <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Columns</p>
       <div class="flex flex-wrap gap-1.5">
         <button
           v-for="item in DIGIFI_SCAN_FIELD_CHECKLIST"
@@ -225,8 +259,12 @@ onMounted(() => {
           class="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
           :class="
             selectedFieldKeys.has(item.fieldKey)
-              ? 'border-blue-400/50 bg-blue-500/20 text-blue-100'
-              : 'border-white/10 bg-white/5 text-slate-400'
+              ? isDarkMode
+                ? 'border-blue-400/50 bg-blue-500/20 text-blue-100'
+                : 'border-blue-400 bg-blue-50 text-blue-800'
+              : isDarkMode
+                ? 'border-white/10 bg-white/5 text-gray-400'
+                : 'border-gray-200 bg-gray-100 text-gray-600'
           "
           @click="toggleField(item.fieldKey)"
         >
