@@ -354,6 +354,7 @@ export async function scanLogbookImageWithGemini(
     labeledChunks,
     providerUsed: 'gemini',
     logLabel: 'gemini generateContent',
+    fewShotExamples: options.fewShotExamples,
     callRows: (models, prompt, overview, chunks, allowedColumnIds, maxRowCount, focusRows, opts) =>
       callGeminiRows(
         models,

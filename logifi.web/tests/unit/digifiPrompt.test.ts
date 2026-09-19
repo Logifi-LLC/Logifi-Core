@@ -63,6 +63,31 @@ describe('buildScanPrompt', () => {
     expect(prompt).toContain('keep a distinct rowIndex for each ruled band')
   })
 
+  it('embeds few-shot correction pairs when provided', () => {
+    const prompt = buildScanPrompt(
+      baseMeta,
+      [
+        { id: 'pic', label: 'PIC', fieldKey: 'pic', order: 1 },
+        { id: 'remarks', label: 'Remarks', fieldKey: 'remarks', order: 2 },
+      ],
+      {
+        includeRowBands: false,
+        chunkImages: [],
+        fewShotExamples: [
+          {
+            fieldKey: 'identification',
+            rawValue: 'N12SAB',
+            correctedValue: 'N123AB',
+            sampleCount: 4,
+            lastCorrectedAt: '2026-05-01T00:00:00Z',
+          },
+        ],
+      }
+    )
+    expect(prompt).toContain('Pilot correction examples')
+    expect(prompt).toContain('identification: "N12SAB" → "N123AB"')
+  })
+
   it('includes remarks-focused band hint when row bands and remarks column present', () => {
     const prompt = buildScanPrompt(
       baseMeta,

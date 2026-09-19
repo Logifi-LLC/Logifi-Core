@@ -32,6 +32,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
+import { resolveDigifiAppRoute } from '~/utils/digifiMobileReview'
 
 const props = defineProps<{
   activeProduct: 'logifi' | 'digifi'
@@ -47,6 +48,6 @@ const borderClass = computed(() => {
 })
 
 const digifiRoute = computed(() => {
-  return isIos.value ? '/digifi-eye' : '/digifi'
+  return resolveDigifiAppRoute({ isIos: isIos.value, webPath: 'marketing' })
 })
 </script>

@@ -77,6 +77,34 @@ export function isBuilderSelectField(column: {
 /** Digifi does not OCR these — set manually (toolbar default role, Pilot Role dropdown). */
 export const DIGIFI_MANUAL_ONLY_FIELD_KEYS: LogbookColumnKey[] = ['role', 'pilotRole']
 
+/** Compact mobile wizard checklist (scan-able Digifi field keys). */
+export const DIGIFI_SCAN_FIELD_CHECKLIST: { fieldKey: LogbookColumnKey; label: string }[] = [
+  { fieldKey: 'date', label: 'Date' },
+  { fieldKey: 'aircraft', label: 'Aircraft' },
+  { fieldKey: 'identification', label: 'Ident' },
+  { fieldKey: 'flightNumber', label: 'Flt #' },
+  { fieldKey: 'departure', label: 'From' },
+  { fieldKey: 'destination', label: 'To' },
+  { fieldKey: 'route', label: 'Route' },
+  { fieldKey: 'remarks', label: 'Remarks' },
+  { fieldKey: 'pic', label: 'PIC' },
+  { fieldKey: 'sic', label: 'SIC' },
+  { fieldKey: 'dualR', label: 'Dual R' },
+  { fieldKey: 'solo', label: 'Solo' },
+  { fieldKey: 'night', label: 'Night' },
+  { fieldKey: 'actual', label: 'Actual' },
+  { fieldKey: 'hood', label: 'Hood' },
+  { fieldKey: 'dualG', label: 'Dual G' },
+  { fieldKey: 'xc', label: 'XC' },
+  { fieldKey: 'dayLandings', label: 'Day ldg' },
+  { fieldKey: 'nightLandings', label: 'Night ldg' },
+  { fieldKey: 'approach', label: 'Appr' },
+  { fieldKey: 'approachType', label: 'Appr type' },
+  { fieldKey: 'total', label: 'Total' },
+  { fieldKey: 'categoryClass', label: 'Cat/class' },
+  { fieldKey: 'simulator', label: 'Sim' },
+]
+
 export function isDigifiManualOnlyField(fieldKey: LogbookColumnKey | null): boolean {
   return fieldKey != null && DIGIFI_MANUAL_ONLY_FIELD_KEYS.includes(fieldKey)
 }

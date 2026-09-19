@@ -3,6 +3,7 @@ import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { useAuth } from '~/composables/useAuth'
 import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { saveDraftNow } from '~/composables/useLogbookBuilderDraft'
+import { apiFetch } from '~/utils/apiFetch'
 import type {
   DigifiScanChunkMeta,
   DigifiPageSide,
@@ -183,10 +184,13 @@ async function prepareScanAssets(
   }
 }
 
-export function useLogbookBuilderDigifi() {
-  const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
+export function useLogbookBuilderDigifi(
+  gridOverride?: ReturnType<typeof useLogbookBuilderGrid>
+) {
+  const grid =
+    gridOverride ?? inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
   if (!grid) {
-    throw new Error('useLogbookBuilderDigifi must be used inside logbook-builder page')
+    throw new Error('useLogbookBuilderDigifi must be used inside a page that provides logbookBuilderGrid')
   }
 
   const { getAccessToken, isAuthenticated, user } = useAuth()
@@ -302,7 +306,7 @@ export function useLogbookBuilderDigifi() {
       }
       form.append('meta', JSON.stringify(buildMeta(pageSide, prepared.chunkMeta, templateName)))
 
-      const result = await $fetch<DigifiScanResponse>('/api/digifi/scan', {
+      const result = await apiFetch<DigifiScanResponse>('/api/digifi/scan', {
         method: 'POST',
         headers: authHeaders(),
         body: form,

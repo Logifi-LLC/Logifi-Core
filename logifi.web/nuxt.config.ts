@@ -72,6 +72,8 @@ export default defineNuxtConfig({
       apiBase: process.env.NUXT_PUBLIC_API_BASE || '',
       /** `off` | `beta` | `coming_soon` — see useFcvUiLabel (integrations page + Settings connect UI only). */
       fcvUiLabel: process.env.NUXT_PUBLIC_FCV_UI_LABEL || 'off',
+      /** `on` (default) routes iOS Digifi entries to /digifi-scan. `off` keeps /digifi-eye. Route always exists. */
+      digifiMobileReview: process.env.NUXT_PUBLIC_DIGIFI_MOBILE_REVIEW || 'on',
       /** Lightning / LNURL-pay / Lightning address shown on /developers (Open Source donation). */
       /** Base URL for Digifi phone capture QR/links. Unset in dev to auto-detect LAN IP. */
       companionCaptureOrigin: process.env.NUXT_PUBLIC_COMPANION_CAPTURE_ORIGIN || '',
