@@ -61,12 +61,12 @@ function columnCardClass(index: number): string {
   const focused = index === focusedIndex.value
   if (isDarkMode.value) {
     return focused
-      ? 'border-white/20 opacity-100'
-      : 'border-white/5 opacity-40 blur-[2px] scale-[0.96]'
+      ? 'border-green-400/60 opacity-100 ring-1 ring-green-500/30'
+      : 'border-white/5 opacity-35 blur-[3px] scale-[0.97]'
   }
   return focused
-    ? 'border-gray-300 bg-white opacity-100 shadow-md'
-    : 'border-gray-200 bg-gray-50 opacity-50 blur-[1px] scale-[0.96]'
+    ? 'border-green-500/50 bg-white opacity-100 shadow-md ring-1 ring-green-500/20'
+    : 'border-gray-200 bg-gray-50 opacity-40 blur-[2px] scale-[0.97]'
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -104,14 +104,14 @@ watch(
 
 <template>
   <div class="space-y-3">
-    <div class="flex items-baseline justify-between gap-2">
-      <p :class="['text-sm font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
-        {{ focusedColumn?.label ?? 'Column' }}
-      </p>
-      <p :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">
-        {{ focusedIndex + 1 }}/{{ columns.length }}
-      </p>
-    </div>
+    <p
+      :class="[
+        'min-h-[1.25rem] text-center text-base font-semibold tracking-tight',
+        isDarkMode ? 'text-green-100' : 'text-green-900',
+      ]"
+    >
+      {{ focusedColumn?.label ?? 'Column' }}
+    </p>
 
     <div
       ref="scroller"
@@ -121,7 +121,7 @@ watch(
       <section
         v-for="(column, index) in columns"
         :key="column.id"
-        class="w-[78%] shrink-0 snap-center px-[3%]"
+        class="w-1/2 shrink-0 snap-center px-[2%]"
       >
         <div
           class="rounded-2xl border p-3 transition-[opacity,filter,transform] duration-200"
@@ -130,10 +130,7 @@ watch(
             columnCardClass(index),
           ]"
         >
-          <p :class="['mb-2 truncate text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-            {{ column.label }}
-          </p>
-          <ol class="max-h-[55dvh] space-y-2 overflow-y-auto">
+          <ol class="max-h-[58dvh] space-y-2.5 overflow-y-auto">
             <li
               v-for="(_, rowIdx) in grid.rows.value"
               :key="`${column.id}-${rowIdx}`"
@@ -149,7 +146,7 @@ watch(
                 autocomplete="off"
                 :aria-label="`${column.label} row ${rowIdx + 1}`"
                 :class="[
-                  'min-w-0 flex-1 rounded-lg border px-2.5 py-2 text-sm',
+                  'min-w-0 flex-1 rounded-xl border px-3 py-2.5 text-sm',
                   isDarkMode ? 'bg-gray-950/80 text-gray-100' : 'bg-gray-50 text-gray-900',
                   cellNeedsReview(rowIdx, column.id)
                     ? 'border-amber-400/70'
@@ -161,21 +158,6 @@ watch(
           </ol>
         </div>
       </section>
-    </div>
-
-    <div class="flex justify-center gap-1.5">
-      <button
-        v-for="(column, index) in columns"
-        :key="`dot-${column.id}`"
-        type="button"
-        class="h-2 rounded-full transition-all"
-        :class="[
-          index === focusedIndex ? 'w-5 bg-orange-400' : isDarkMode ? 'w-2 bg-white/25' : 'w-2 bg-gray-300',
-          reviewedIds.has(column.id) ? '' : 'opacity-50',
-        ]"
-        :aria-label="column.label"
-        @click="scrollToIndex(index)"
-      />
     </div>
   </div>
 </template>
