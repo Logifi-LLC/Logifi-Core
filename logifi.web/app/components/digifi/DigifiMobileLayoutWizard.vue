@@ -7,8 +7,10 @@ import { persistLastTemplateId } from '~/composables/useLogbookBuilderLastTempla
 import { readLastTemplateId } from '~/utils/logbookBuilderDraft'
 import {
   DIGIFI_SCAN_FIELD_CHECKLIST,
+  ROLE_OPTIONS,
   type BuilderTemplateColumn,
 } from '~/utils/logbookBuilderTypes'
+import { ACCOUNT_SCOPED_STORAGE_KEYS, getScopedItem, setScopedItem } from '~/utils/userScopedStorage'
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
 import {
   layoutFromPageShape,
@@ -23,6 +25,29 @@ const { isDark: isDarkMode } = useTheme()
 if (!grid) throw new Error('DigifiMobileLayoutWizard requires logbookBuilderGrid')
 
 const { user, isAuthenticated } = useAuth()
+
+const DEFAULT_ROLE_STORAGE_KEY = ACCOUNT_SCOPED_STORAGE_KEYS.BUILDER_DEFAULT_ROLE
+
+const defaultYearValue = computed({
+  get: () => grid.defaultYear.value ?? new Date().getFullYear(),
+  set: (v: number) => {
+    const n = typeof v === 'number' && Number.isFinite(v) ? v : new Date().getFullYear()
+    grid.defaultYear.value = Math.min(2100, Math.max(1900, n))
+  },
+})
+
+function onDefaultRoleChange(e: Event) {
+  const value = (e.target as HTMLSelectElement).value
+  grid.defaultImportRole.value = value
+  try {
+    const userId = user.value?.id
+    if (userId) {
+      setScopedItem(DEFAULT_ROLE_STORAGE_KEY, userId, value)
+    } else {
+      localStorage.setItem(DEFAULT_ROLE_STORAGE_KEY, value)
+    }
+  } catch (_) {}
+}
 
 defineProps<{
   scanning: boolean
@@ -165,6 +190,15 @@ async function saveTemplate() {
 }
 
 onMounted(() => {
+  try {
+    const userId = user.value?.id
+    const stored = userId
+      ? getScopedItem(DEFAULT_ROLE_STORAGE_KEY, userId)
+      : localStorage.getItem(DEFAULT_ROLE_STORAGE_KEY)
+    if (stored && ROLE_OPTIONS.some((o) => o.value === stored)) {
+      grid.defaultImportRole.value = stored
+    }
+  } catch (_) {}
   if (readLastTemplateId()) {
     columnsEditorExpanded.value = false
   }
@@ -245,6 +279,43 @@ onMounted(() => {
           {{ option.label }}
         </button>
       </div>
+    </section>
+
+    <section
+      class="grid grid-cols-2 gap-3 rounded-2xl border px-4 py-3 opacity-90"
+      :class="isDarkMode ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white shadow-sm'"
+    >
+      <label class="min-w-0 space-y-1">
+        <span :class="['block text-[11px] font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Year</span>
+        <input
+          v-model.number="defaultYearValue"
+          type="number"
+          min="1900"
+          max="2100"
+          inputmode="numeric"
+          class="w-full rounded-xl border px-3 py-2.5 text-sm font-mono tabular-nums"
+          :class="
+            isDarkMode
+              ? 'border-white/10 bg-black/20 text-gray-100'
+              : 'border-gray-200 bg-white text-gray-900 shadow-sm'
+          "
+        >
+      </label>
+      <label class="min-w-0 space-y-1">
+        <span :class="['block text-[11px] font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Default role</span>
+        <select
+          :value="grid.defaultImportRole.value"
+          class="w-full rounded-xl border px-3 py-2.5 text-sm font-semibold"
+          :class="
+            isDarkMode
+              ? 'border-white/10 bg-black/20 text-gray-100'
+              : 'border-gray-200 bg-white text-gray-900 shadow-sm'
+          "
+          @change="onDefaultRoleChange"
+        >
+          <option v-for="opt in ROLE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
+      </label>
     </section>
 
     <section
