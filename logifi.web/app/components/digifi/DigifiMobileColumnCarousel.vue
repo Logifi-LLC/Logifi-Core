@@ -62,11 +62,11 @@ function columnCardClass(index: number): string {
   if (isDarkMode.value) {
     return focused
       ? 'border-green-400/60 opacity-100 ring-1 ring-green-500/30'
-      : 'border-white/5 opacity-35 blur-[3px] scale-[0.97]'
+      : 'border-white/5 opacity-55 blur-[1px] scale-[0.98]'
   }
   return focused
     ? 'border-green-500/50 bg-white opacity-100 shadow-md ring-1 ring-green-500/20'
-    : 'border-gray-200 bg-gray-50 opacity-40 blur-[2px] scale-[0.97]'
+    : 'border-gray-200 bg-gray-50 opacity-60 blur-[1px] scale-[0.98]'
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -130,7 +130,7 @@ watch(
             columnCardClass(index),
           ]"
         >
-          <ol class="max-h-[58dvh] space-y-2.5 overflow-y-auto">
+          <ol class="space-y-2.5">
             <li
               v-for="(_, rowIdx) in grid.rows.value"
               :key="`${column.id}-${rowIdx}`"
