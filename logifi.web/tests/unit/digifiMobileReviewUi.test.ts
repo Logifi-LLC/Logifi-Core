@@ -121,4 +121,9 @@ describe('DigifiMobileColumnCarousel', () => {
     await nextTick()
     expect(grid.rows.value[0]?.cells[firstCol!.id]).toBe('01/02')
   })
+
+  it('includes trailing scroll spacer so the last column can snap to center', () => {
+    const { wrapper } = mountWithGrid(DigifiMobileColumnCarousel)
+    expect(wrapper.find('[aria-hidden="true"]').exists()).toBe(true)
+  })
 })
