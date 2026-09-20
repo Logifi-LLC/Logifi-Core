@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import DigifiMobileColumnCarousel from '../../app/components/digifi/DigifiMobileColumnCarousel.vue'
+import DigifiMobileCameraCapture from '../../app/components/digifi/DigifiMobileCameraCapture.vue'
 import DigifiMobileLayoutWizard from '../../app/components/digifi/DigifiMobileLayoutWizard.vue'
 import { useLogbookBuilderGrid } from '../../app/composables/useLogbookBuilderGrid'
 import { readLastTemplateId } from '~/utils/logbookBuilderDraft'
@@ -46,19 +47,17 @@ function mountWithGrid(component: object, props?: Record<string, unknown>) {
 }
 
 describe('DigifiMobileLayoutWizard', () => {
-  it('emits page shape and capture, and toggles a column', async () => {
+  it('sets two-page layout and emits capture, and toggles a column', async () => {
     const { wrapper, grid } = mountWithGrid(DigifiMobileLayoutWizard, {
       scanning: false,
-      pageShape: 'left',
       captureLabel: 'Photograph page',
     })
 
     const before = grid.columns.value.length
-    await wrapper.get('button:nth-of-type(1)').trigger('click')
-    const shapeButtons = wrapper.findAll('button').filter((button) => button.text() === 'Two-page')
-    expect(shapeButtons.length).toBe(1)
-    await shapeButtons[0]!.trigger('click')
-    expect(wrapper.emitted('update:pageShape')?.at(-1)).toEqual(['two-page'])
+    const spreadButtons = wrapper.findAll('button').filter((button) => button.text() === 'Two-page spread')
+    expect(spreadButtons.length).toBe(1)
+    await spreadButtons[0]!.trigger('click')
+    expect(grid.layout.value).toBe('two-page')
 
     const addField = wrapper.get('[aria-label="Add column field"]')
     await addField.setValue('remarks')
@@ -73,7 +72,6 @@ describe('DigifiMobileLayoutWizard', () => {
   it('reorders visible columns via ordered list controls', async () => {
     const { wrapper, grid } = mountWithGrid(DigifiMobileLayoutWizard, {
       scanning: false,
-      pageShape: 'left',
       captureLabel: 'Photograph page',
     })
 
@@ -94,7 +92,6 @@ describe('DigifiMobileLayoutWizard', () => {
 
     const { wrapper } = mountWithGrid(DigifiMobileLayoutWizard, {
       scanning: false,
-      pageShape: 'left',
       captureLabel: 'Photograph page',
     })
     await nextTick()
@@ -104,6 +101,32 @@ describe('DigifiMobileLayoutWizard', () => {
 
     await wrapper.get('button[aria-label="Edit columns"]').trigger('click')
     expect(wrapper.find('button[aria-label="Move column down"]').exists()).toBe(true)
+  })
+
+  it('collapses column editor on first visit via Done', async () => {
+    const { wrapper } = mountWithGrid(DigifiMobileLayoutWizard, {
+      scanning: false,
+      captureLabel: 'Photograph page',
+    })
+    await nextTick()
+
+    expect(wrapper.find('button[aria-label="Move column down"]').exists()).toBe(true)
+    await wrapper.get('button[aria-label="Done editing columns"]').trigger('click')
+    expect(wrapper.text()).toMatch(/Tap to edit/)
+    expect(wrapper.find('button[aria-label="Move column down"]').exists()).toBe(false)
+  })
+})
+
+describe('DigifiMobileCameraCapture', () => {
+  it('shows level guide copy instead of crop frame text', () => {
+    const wrapper = mount(DigifiMobileCameraCapture, {
+      global: {
+        stubs: { video: true },
+      },
+    })
+    expect(wrapper.text()).toContain('Keep the page level and fill the view')
+    expect(wrapper.text()).not.toContain('Fit the logbook page in the frame')
+    expect(wrapper.find('.border-green-400').exists()).toBe(false)
   })
 })
 

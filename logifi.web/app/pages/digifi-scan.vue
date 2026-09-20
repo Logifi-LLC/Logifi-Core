@@ -20,7 +20,8 @@ import {
 } from '~/composables/useLogbookBuilderDraft'
 import { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { loadLastTemplateIfAny } from '~/composables/useLogbookBuilderLastTemplate'
-import { DIGIFI_EYE_PATH, scanSideForPageShape, type DigifiPageShape } from '~/utils/digifiMobileReview'
+import { DIGIFI_EYE_PATH } from '~/utils/digifiMobileReview'
+import type { DigifiPageSide } from '~/utils/digifiTypes'
 import { useTheme } from '~/composables/useTheme'
 
 const { initAuth, isAuthenticated, user } = useAuth()
@@ -44,18 +45,22 @@ const {
 
 const phase = ref<'setup' | 'review'>('setup')
 const showCamera = ref(false)
-const pageShape = ref<DigifiPageShape>('left')
 let stopAutosave: (() => void) | null = null
 let stopDraftFlush: (() => void) | null = null
 
 const title = computed(() => (phase.value === 'review' ? 'Review' : 'Digifi'))
-const captureSide = computed(() => scanSideForPageShape(pageShape.value, leftPageScanned.value))
+const captureSide = computed((): DigifiPageSide => {
+  if (grid.layout.value === 'two-page' && leftPageScanned.value) return 'right'
+  return 'left'
+})
 const captureLabel = computed(() => {
-  if (pageShape.value === 'two-page' && leftPageScanned.value) return 'Photograph right page'
-  if (pageShape.value === 'right') return 'Photograph right page'
-  if (pageShape.value === 'two-page') return 'Photograph left page'
+  if (grid.layout.value === 'two-page' && leftPageScanned.value) return 'Photograph right page'
+  if (grid.layout.value === 'two-page') return 'Photograph left page'
   return 'Photograph page'
 })
+const awaitingRightPagePhoto = computed(
+  () => grid.layout.value === 'two-page' && leftPageScanned.value && phase.value === 'setup'
+)
 
 function openCapture() {
   if (!canScan.value || scanning.value) return
@@ -66,7 +71,7 @@ async function onCaptureFile(file: File) {
   showCamera.value = false
   await scanPage(file, captureSide.value)
   if (error.value) return
-  const needsRight = pageShape.value === 'two-page' && captureSide.value === 'left'
+  const needsRight = grid.layout.value === 'two-page' && captureSide.value === 'left'
   phase.value = needsRight ? 'setup' : 'review'
 }
 
@@ -146,12 +151,17 @@ onUnmounted(() => {
       <p v-else-if="scanPhase" :class="['text-sm', isDarkMode ? 'text-gray-300' : 'text-gray-600']">{{ scanPhase }}</p>
       <p v-if="scanRowWarning" :class="['text-xs', isDarkMode ? 'text-amber-200' : 'text-amber-700']">{{ scanRowWarning }}</p>
 
+      <p
+        v-if="awaitingRightPagePhoto"
+        :class="['text-sm font-medium', isDarkMode ? 'text-green-200' : 'text-green-800']"
+      >
+        Left page captured. Photograph the right page next — one page per photo.
+      </p>
+
       <DigifiMobileLayoutWizard
         v-if="phase === 'setup'"
         :scanning="scanning"
-        :page-shape="pageShape"
         :capture-label="captureLabel"
-        @update:page-shape="pageShape = $event"
         @capture="openCapture"
       />
 
