@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import DigifiMobileColumnCarousel from '../../app/components/digifi/DigifiMobileColumnCarousel.vue'
 import DigifiMobileLayoutWizard from '../../app/components/digifi/DigifiMobileLayoutWizard.vue'
 import { useLogbookBuilderGrid } from '../../app/composables/useLogbookBuilderGrid'
+import { readLastTemplateId } from '~/utils/logbookBuilderDraft'
 
 vi.mock('~/composables/useAuth', () => ({
   useAuth: () => ({
@@ -19,6 +20,18 @@ vi.mock('~/composables/useTheme', () => ({
 vi.mock('~/composables/useLogbookBuilderLastTemplate', () => ({
   persistLastTemplateId: vi.fn(),
 }))
+
+vi.mock('~/utils/logbookBuilderDraft', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../app/utils/logbookBuilderDraft')>()
+  return {
+    ...actual,
+    readLastTemplateId: vi.fn(() => null),
+  }
+})
+
+beforeEach(() => {
+  vi.mocked(readLastTemplateId).mockReturnValue(null)
+})
 
 function mountWithGrid(component: object, props?: Record<string, unknown>) {
   const grid = useLogbookBuilderGrid()
@@ -47,9 +60,8 @@ describe('DigifiMobileLayoutWizard', () => {
     await shapeButtons[0]!.trigger('click')
     expect(wrapper.emitted('update:pageShape')?.at(-1)).toEqual(['two-page'])
 
-    const remarks = wrapper.findAll('button').filter((button) => button.text() === 'Remarks')
-    expect(remarks.length).toBe(1)
-    await remarks[0]!.trigger('click')
+    const addField = wrapper.get('[aria-label="Add column field"]')
+    await addField.setValue('remarks')
     expect(grid.columns.value.length).toBe(before + 1)
 
     const capture = wrapper.findAll('button').filter((button) => button.text() === 'Photograph page')
@@ -58,7 +70,7 @@ describe('DigifiMobileLayoutWizard', () => {
     expect(wrapper.emitted('capture')).toHaveLength(1)
   })
 
-  it('reorders visible columns via page order controls', async () => {
+  it('reorders visible columns via ordered list controls', async () => {
     const { wrapper, grid } = mountWithGrid(DigifiMobileLayoutWizard, {
       scanning: false,
       pageShape: 'left',
@@ -75,6 +87,23 @@ describe('DigifiMobileLayoutWizard', () => {
     const after = grid.visibleColumns.value.map((column) => column.id)
     expect(after[0]).toBe(initial[1])
     expect(after[1]).toBe(initial[0])
+  })
+
+  it('collapses column editor when last template id is present on mount', async () => {
+    vi.mocked(readLastTemplateId).mockReturnValue('template-1')
+
+    const { wrapper } = mountWithGrid(DigifiMobileLayoutWizard, {
+      scanning: false,
+      pageShape: 'left',
+      captureLabel: 'Photograph page',
+    })
+    await nextTick()
+
+    expect(wrapper.text()).toMatch(/Tap to edit/)
+    expect(wrapper.find('button[aria-label="Move column down"]').exists()).toBe(false)
+
+    await wrapper.get('button[aria-label="Edit columns"]').trigger('click')
+    expect(wrapper.find('button[aria-label="Move column down"]').exists()).toBe(true)
   })
 })
 

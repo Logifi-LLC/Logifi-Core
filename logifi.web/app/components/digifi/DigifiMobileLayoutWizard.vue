@@ -4,6 +4,7 @@ import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { useAuth } from '~/composables/useAuth'
 import { supabase } from '~/lib/supabase'
 import { persistLastTemplateId } from '~/composables/useLogbookBuilderLastTemplate'
+import { readLastTemplateId } from '~/utils/logbookBuilderDraft'
 import {
   DIGIFI_SCAN_FIELD_CHECKLIST,
   type BuilderTemplateColumn,
@@ -38,6 +39,8 @@ const templates = ref<{ id: string; name: string; layout: string; default_row_co
 const templateName = ref('')
 const templateError = ref<string | null>(null)
 const saving = ref(false)
+const columnsEditorExpanded = ref(true)
+const addFieldKey = ref<LogbookColumnKey | ''>('')
 
 const selectedFieldKeys = computed(() => {
   return new Set(
@@ -60,20 +63,39 @@ function bumpRows(delta: number) {
   grid.setRowCount(next)
 }
 
-function toggleField(fieldKey: LogbookColumnKey) {
-  const existing = grid.columns.value.find((column) => column.fieldKey === fieldKey)
-  if (existing) {
-    if (grid.columns.value.length <= 1) return
-    grid.removeColumn(existing.id)
-    return
-  }
+const orderedColumns = computed(() => grid.visibleColumns.value)
+
+const availableFieldsToAdd = computed(() =>
+  DIGIFI_SCAN_FIELD_CHECKLIST.filter((item) => !selectedFieldKeys.value.has(item.fieldKey))
+)
+
+function addField(fieldKey: LogbookColumnKey) {
   grid.addColumn(fieldKey)
+  addFieldKey.value = ''
+  columnsEditorExpanded.value = true
 }
 
-const pageOrderColumns = computed(() => grid.visibleColumns.value)
+function onAddFieldChange() {
+  if (!addFieldKey.value) return
+  addField(addFieldKey.value)
+}
 
-function movePageOrderColumn(index: number, direction: 'up' | 'down') {
-  const cols = pageOrderColumns.value
+function removeField(columnId: string) {
+  if (grid.columns.value.length <= 1) return
+  grid.removeColumn(columnId)
+}
+
+function expandColumnEditor() {
+  columnsEditorExpanded.value = true
+}
+
+const columnSummaryLabel = computed(() => {
+  const n = orderedColumns.value.length
+  return `${n} column${n === 1 ? '' : 's'} · Tap to edit`
+})
+
+function moveOrderedColumn(index: number, direction: 'up' | 'down') {
+  const cols = orderedColumns.value
   const swapWith = direction === 'up' ? index - 1 : index + 1
   if (swapWith < 0 || swapWith >= cols.length) return
   const ids = cols.map((column) => column.id)
@@ -107,6 +129,7 @@ function applyTemplate(template: (typeof templates.value)[0]) {
   })
   persistLastTemplateId(template.id)
   emit('update:pageShape', pageShapeFromLayout(template.layout as 'single' | 'two-page'))
+  columnsEditorExpanded.value = true
 }
 
 async function saveTemplate() {
@@ -142,6 +165,9 @@ async function saveTemplate() {
 }
 
 onMounted(() => {
+  if (readLastTemplateId()) {
+    columnsEditorExpanded.value = false
+  }
   void loadTemplates()
 })
 </script>
@@ -197,8 +223,8 @@ onMounted(() => {
       <p v-if="templateError" :class="['text-xs', isDarkMode ? 'text-rose-300' : 'text-rose-600']">{{ templateError }}</p>
     </section>
 
-    <section class="space-y-2">
-      <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Page</p>
+    <section class="space-y-2 opacity-90">
+      <p :class="['text-[11px] font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Page</p>
       <div class="grid grid-cols-3 gap-2">
         <button
           v-for="option in ([
@@ -222,10 +248,10 @@ onMounted(() => {
     </section>
 
     <section
-      class="flex items-center justify-between gap-3 rounded-2xl border px-4 py-3"
+      class="flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 opacity-90"
       :class="isDarkMode ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white shadow-sm'"
     >
-      <p :class="['text-sm font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900']">Flight lines</p>
+      <p :class="['text-sm font-medium', isDarkMode ? 'text-gray-200' : 'text-gray-700']">Flight lines</p>
       <div class="flex items-center gap-2">
         <button
           type="button"
@@ -259,78 +285,108 @@ onMounted(() => {
 
     <section class="space-y-2">
       <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Columns</p>
-      <div class="flex flex-wrap gap-1.5">
-        <button
-          v-for="item in DIGIFI_SCAN_FIELD_CHECKLIST"
-          :key="item.fieldKey"
-          type="button"
-          class="rounded-full border px-3 py-1.5 text-xs font-semibold"
-          :class="
-            selectedFieldKeys.has(item.fieldKey)
-              ? digifiMobileAccentSelected(isDarkMode)
-              : digifiMobileAccentIdle(isDarkMode)
-          "
-          @click="toggleField(item.fieldKey)"
-        >
-          {{ item.label }}
-        </button>
-      </div>
-    </section>
 
-    <section v-if="pageOrderColumns.length" class="space-y-2">
-      <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-        Page order
-      </p>
-      <ol class="space-y-2">
-        <li
-          v-for="(column, index) in pageOrderColumns"
-          :key="column.id"
-          class="flex items-center gap-2 rounded-2xl border px-3 py-2"
-          :class="isDarkMode ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white shadow-sm'"
-        >
-          <span
-            :class="[
-              'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold tabular-nums',
-              isDarkMode ? 'bg-green-500/20 text-green-200' : 'bg-green-50 text-green-800',
-            ]"
+      <button
+        v-if="!columnsEditorExpanded && orderedColumns.length"
+        type="button"
+        class="flex w-full min-h-[48px] items-center justify-between rounded-2xl border px-4 py-3 text-left"
+        :class="isDarkMode ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white shadow-sm'"
+        aria-label="Edit columns"
+        @click="expandColumnEditor"
+      >
+        <span :class="['text-sm font-semibold', isDarkMode ? 'text-green-200' : 'text-green-800']">
+          {{ columnSummaryLabel }}
+        </span>
+        <span :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">›</span>
+      </button>
+
+      <template v-else>
+        <ol v-if="orderedColumns.length" class="space-y-2">
+          <li
+            v-for="(column, index) in orderedColumns"
+            :key="column.id"
+            class="flex items-center gap-2 rounded-2xl border px-3 py-2"
+            :class="isDarkMode ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white shadow-sm'"
           >
-            {{ index + 1 }}
-          </span>
-          <span :class="['min-w-0 flex-1 text-sm font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
-            {{ column.label }}
-          </span>
-          <div class="flex shrink-0 gap-1">
-            <button
-              type="button"
-              class="flex h-11 w-11 items-center justify-center rounded-xl border text-lg font-semibold disabled:opacity-30"
-              :class="
-                isDarkMode
-                  ? 'border-white/15 text-gray-100'
-                  : 'border-gray-300 text-gray-900 hover:bg-gray-50'
-              "
-              :disabled="index === 0"
-              aria-label="Move column up"
-              @click="movePageOrderColumn(index, 'up')"
+            <span
+              :class="[
+                'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold tabular-nums',
+                isDarkMode ? 'bg-green-500/20 text-green-200' : 'bg-green-50 text-green-800',
+              ]"
             >
-              ↑
-            </button>
-            <button
-              type="button"
-              class="flex h-11 w-11 items-center justify-center rounded-xl border text-lg font-semibold disabled:opacity-30"
-              :class="
-                isDarkMode
-                  ? 'border-white/15 text-gray-100'
-                  : 'border-gray-300 text-gray-900 hover:bg-gray-50'
-              "
-              :disabled="index === pageOrderColumns.length - 1"
-              aria-label="Move column down"
-              @click="movePageOrderColumn(index, 'down')"
-            >
-              ↓
-            </button>
-          </div>
-        </li>
-      </ol>
+              {{ index + 1 }}
+            </span>
+            <span :class="['min-w-0 flex-1 text-sm font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
+              {{ column.label }}
+            </span>
+            <div class="flex shrink-0 gap-1">
+              <button
+                type="button"
+                class="flex h-11 w-11 items-center justify-center rounded-xl border text-lg font-semibold disabled:opacity-30"
+                :class="
+                  isDarkMode
+                    ? 'border-white/15 text-gray-100'
+                    : 'border-gray-300 text-gray-900 hover:bg-gray-50'
+                "
+                :disabled="index === 0"
+                aria-label="Move column up"
+                @click="moveOrderedColumn(index, 'up')"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                class="flex h-11 w-11 items-center justify-center rounded-xl border text-lg font-semibold disabled:opacity-30"
+                :class="
+                  isDarkMode
+                    ? 'border-white/15 text-gray-100'
+                    : 'border-gray-300 text-gray-900 hover:bg-gray-50'
+                "
+                :disabled="index === orderedColumns.length - 1"
+                aria-label="Move column down"
+                @click="moveOrderedColumn(index, 'down')"
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                class="flex h-11 w-11 items-center justify-center rounded-xl border text-lg font-semibold disabled:opacity-30"
+                :class="
+                  isDarkMode
+                    ? 'border-white/15 text-rose-200'
+                    : 'border-gray-300 text-rose-700 hover:bg-gray-50'
+                "
+                :disabled="grid.columns.value.length <= 1"
+                aria-label="Remove column"
+                @click="removeField(column.id)"
+              >
+                ×
+              </button>
+            </div>
+          </li>
+        </ol>
+
+        <div v-if="availableFieldsToAdd.length" class="pt-1">
+          <label class="sr-only" for="digifi-add-column-field">Add column field</label>
+          <select
+            id="digifi-add-column-field"
+            v-model="addFieldKey"
+            class="w-full rounded-2xl border px-4 py-3 text-sm font-semibold"
+            :class="
+              isDarkMode
+                ? 'border-white/10 bg-white/5 text-gray-100'
+                : 'border-gray-200 bg-white text-gray-900 shadow-sm'
+            "
+            aria-label="Add column field"
+            @change="onAddFieldChange"
+          >
+            <option value="">Add field…</option>
+            <option v-for="item in availableFieldsToAdd" :key="item.fieldKey" :value="item.fieldKey">
+              {{ item.label }}
+            </option>
+          </select>
+        </div>
+      </template>
     </section>
 
     <button
