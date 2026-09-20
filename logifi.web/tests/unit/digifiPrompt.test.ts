@@ -63,6 +63,34 @@ describe('buildScanPrompt', () => {
     expect(prompt).toContain('keep a distinct rowIndex for each ruled band')
   })
 
+  it('embeds session context from earlier spread pages when provided', () => {
+    const prompt = buildScanPrompt(
+      baseMeta,
+      [
+        { id: 'pic', label: 'PIC', fieldKey: 'pic', order: 1 },
+        { id: 'remarks', label: 'Remarks', fieldKey: 'remarks', order: 2 },
+      ],
+      {
+        includeRowBands: false,
+        chunkImages: [],
+        sessionPriorPages: [
+          {
+            pageSide: 'left',
+            rows: [
+              {
+                rowIndex: 0,
+                cells: { date: '02/01/24', pic: '1.2' },
+              },
+            ],
+          },
+        ],
+      }
+    )
+    expect(prompt).toContain('Session so far')
+    expect(prompt).toContain('LEFT page')
+    expect(prompt).toContain('date=02/01/24')
+  })
+
   it('embeds few-shot correction pairs when provided', () => {
     const prompt = buildScanPrompt(
       baseMeta,

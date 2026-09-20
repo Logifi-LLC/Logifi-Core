@@ -21,7 +21,7 @@ Compare these between local `.env` and the beta host (Coolify, Vercel, etc.):
 | `DIGIFI_ENABLE_CAPACITY_MODEL_FALLBACK` | `true` | On 429/503, may fall back to `gemini-3.5-flash` (logged server-side). |
 | `DIGIFI_MODEL_FALLBACKS` | (empty) | Comma-separated extra models when capacity fallback is on. Default chain adds `gemini-3.5-flash` if unset. |
 | `DIGIFI_SEND_ROW_BANDS` | `true` | Set to `false` only if intentionally disabling client row-band crops (`disableRowBandsToGemini`). |
-| `DIGIFI_ENABLE_RESCUE_SCAN` | `false` | Second Gemini pass for missing rows; costs extra latency/credits. |
+| `DIGIFI_ENABLE_RESCUE_SCAN` | `true` | Optional second pass when primary scan leaves missing rows; set `false` to disable. |
 | `DIGIFI_GEMINI_MEDIA_RESOLUTION` | `MEDIA_RESOLUTION_HIGH` | `LOW` reduces accuracy. |
 | `DIGIFI_GEMINI_MAX_OUTPUT_TOKENS` | capped at 20000 | Truncation on dense pages causes incomplete rows. |
 | `DIGIFI_GEMINI_THINKING_LEVEL` | `low` | Higher levels share the output token budget on Gemini 3.x. |

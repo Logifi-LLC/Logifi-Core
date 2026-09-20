@@ -181,13 +181,13 @@ export function getDigifiEnv() {
       capacityFallbackRaw === ''
         ? true
         : capacityFallbackRaw.toLowerCase() === 'true',
-    /** When false (default), skip second Gemini call for missing rows. */
+    /** When true (default), second Gemini call for missing rows (set env to false to disable). */
     enableRescueScan:
       pick(
         process.env.NUXT_DIGIFI_ENABLE_RESCUE_SCAN,
         process.env.DIGIFI_ENABLE_RESCUE_SCAN,
-        'false'
-      ).toLowerCase() === 'true',
+        'true'
+      ).toLowerCase() !== 'false',
     geminiMediaResolution:
       pick(
         process.env.NUXT_DIGIFI_GEMINI_MEDIA_RESOLUTION,

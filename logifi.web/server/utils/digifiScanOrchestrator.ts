@@ -1,4 +1,5 @@
 import type { DigifiFewShotPair } from '../../app/utils/digifiFewShot'
+import type { DigifiSessionPriorPage } from './digifiSessionContext'
 import { analyzeDigifiScanRows } from '../../app/utils/digifiScanDiagnostics'
 import type { DigifiScanRow, DigifiScanStrategy } from '../../app/utils/digifiTypes'
 import type { DigifiTemplateColumn } from '../../app/utils/digifiTypes'
@@ -46,6 +47,7 @@ export interface RunDigifiScanOrchestrationOptions {
   callRows: DigifiRowsCaller
   logLabel: string
   fewShotExamples?: DigifiFewShotPair[]
+  sessionPriorPages?: DigifiSessionPriorPage[]
 }
 
 export async function runDigifiScanOrchestration(
@@ -63,6 +65,7 @@ export async function runDigifiScanOrchestration(
     callRows,
     logLabel,
     fewShotExamples,
+    sessionPriorPages,
   } = options
 
   const allowedColumnIds = new Set(targetColumns.map((column) => column.id))
@@ -93,6 +96,7 @@ export async function runDigifiScanOrchestration(
       chunkImages: labeledChunks,
       focusRows,
       fewShotExamples,
+      sessionPriorPages,
     })
 
   const runModelChainFallback = async () => {
