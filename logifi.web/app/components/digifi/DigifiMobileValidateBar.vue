@@ -125,11 +125,11 @@ async function handleSendToLogTen() {
     <div class="flex gap-2">
       <button
         type="button"
-        class="flex-1 rounded-xl border px-3 py-3 text-sm font-semibold disabled:opacity-50"
+        class="flex-1 min-h-[52px] rounded-2xl border-2 px-3 py-3 text-sm font-semibold disabled:opacity-50"
         :class="
           isDarkMode
-            ? 'border-white/15 text-gray-100'
-            : 'border-gray-300 bg-white text-gray-900 hover:bg-gray-50'
+            ? 'border-green-400/50 bg-green-500/15 text-green-100'
+            : 'border-green-600 bg-green-50 text-green-900'
         "
         :disabled="validating"
         @click="handleValidate"
@@ -138,7 +138,7 @@ async function handleSendToLogTen() {
       </button>
       <button
         type="button"
-        class="flex-1 rounded-xl bg-green-600 px-3 py-3 text-sm font-semibold text-white disabled:opacity-40"
+        class="flex-1 min-h-[52px] rounded-2xl bg-green-600 px-3 py-3 text-sm font-semibold text-white shadow-sm disabled:opacity-40"
         :disabled="importing || validRowCount == null"
         @click="handleImport"
       >

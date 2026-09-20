@@ -52,7 +52,9 @@ describe('DigifiMobileLayoutWizard', () => {
     await remarks[0]!.trigger('click')
     expect(grid.columns.value.length).toBe(before + 1)
 
-    await wrapper.get('button.bg-orange-600').trigger('click')
+    const capture = wrapper.findAll('button').filter((button) => button.text() === 'Photograph page')
+    expect(capture.length).toBe(1)
+    await capture[0]!.trigger('click')
     expect(wrapper.emitted('capture')).toHaveLength(1)
   })
 })
@@ -65,6 +67,7 @@ describe('DigifiMobileColumnCarousel', () => {
 
     const inputs = wrapper.findAll('input')
     expect(inputs.length).toBe(grid.rows.value.length * grid.visibleColumns.value.length)
+    expect(wrapper.findAll('button[aria-label]').length).toBe(0)
 
     await inputs[0]!.setValue('01/02')
     await nextTick()

@@ -15,6 +15,7 @@ import {
   type DigifiPageShape,
 } from '~/utils/digifiMobileReview'
 import { useTheme } from '~/composables/useTheme'
+import { digifiMobileAccentIdle, digifiMobileAccentSelected } from '~/utils/digifiMobileTheme'
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
 const { isDark: isDarkMode } = useTheme()
@@ -135,7 +136,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-5">
     <section class="space-y-2">
       <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Template</p>
       <div v-if="templates.length" class="flex gap-2 overflow-x-auto pb-1">
@@ -143,11 +144,11 @@ onMounted(() => {
           v-for="template in templates"
           :key="template.id"
           type="button"
-          class="shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold"
+          class="shrink-0 rounded-full border px-4 py-2 text-xs font-semibold"
           :class="
             isDarkMode
               ? 'border-white/15 bg-white/5 text-gray-100'
-              : 'border-gray-200 bg-gray-100 text-gray-900'
+              : 'border-gray-200 bg-white text-gray-900 shadow-sm'
           "
           @click="applyTemplate(template)"
         >
@@ -196,15 +197,11 @@ onMounted(() => {
           ] as const)"
           :key="option.value"
           type="button"
-          class="rounded-xl border px-2 py-2 text-sm font-semibold"
+          class="min-h-[48px] rounded-2xl border px-2 py-3 text-sm font-semibold"
           :class="
             pageShape === option.value
-              ? isDarkMode
-                ? 'border-orange-400/60 bg-orange-500/15 text-orange-100'
-                : 'border-orange-400 bg-orange-50 text-orange-800'
-              : isDarkMode
-                ? 'border-white/10 bg-white/5 text-gray-300'
-                : 'border-gray-200 bg-gray-100 text-gray-700'
+              ? digifiMobileAccentSelected(isDarkMode)
+              : digifiMobileAccentIdle(isDarkMode)
           "
           @click="setShape(option.value)"
         >
@@ -214,14 +211,14 @@ onMounted(() => {
     </section>
 
     <section
-      class="flex items-center justify-between gap-3 rounded-xl border px-3 py-2"
+      class="flex items-center justify-between gap-3 rounded-2xl border px-4 py-3"
       :class="isDarkMode ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white shadow-sm'"
     >
       <p :class="['text-sm font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900']">Flight lines</p>
       <div class="flex items-center gap-2">
         <button
           type="button"
-          class="h-9 w-9 rounded-lg border text-lg font-semibold"
+          class="h-11 w-11 rounded-xl border text-lg font-semibold"
           :class="
             isDarkMode
               ? 'border-white/15 text-gray-100'
@@ -235,7 +232,7 @@ onMounted(() => {
         <span :class="['w-8 text-center font-mono text-sm tabular-nums', isDarkMode ? 'text-gray-100' : 'text-gray-900']">{{ grid.rowCount.value }}</span>
         <button
           type="button"
-          class="h-9 w-9 rounded-lg border text-lg font-semibold"
+          class="h-11 w-11 rounded-xl border text-lg font-semibold"
           :class="
             isDarkMode
               ? 'border-white/15 text-gray-100'
@@ -256,15 +253,11 @@ onMounted(() => {
           v-for="item in DIGIFI_SCAN_FIELD_CHECKLIST"
           :key="item.fieldKey"
           type="button"
-          class="rounded-full border px-2.5 py-1 text-[11px] font-semibold"
+          class="rounded-full border px-3 py-1.5 text-xs font-semibold"
           :class="
             selectedFieldKeys.has(item.fieldKey)
-              ? isDarkMode
-                ? 'border-blue-400/50 bg-blue-500/20 text-blue-100'
-                : 'border-blue-400 bg-blue-50 text-blue-800'
-              : isDarkMode
-                ? 'border-white/10 bg-white/5 text-gray-400'
-                : 'border-gray-200 bg-gray-100 text-gray-600'
+              ? digifiMobileAccentSelected(isDarkMode)
+              : digifiMobileAccentIdle(isDarkMode)
           "
           @click="toggleField(item.fieldKey)"
         >
@@ -275,7 +268,7 @@ onMounted(() => {
 
     <button
       type="button"
-      class="w-full rounded-xl bg-orange-600 px-4 py-3.5 text-sm font-semibold text-white disabled:opacity-50"
+      class="w-full min-h-[52px] rounded-2xl bg-green-600 px-4 py-4 text-base font-semibold text-white shadow-sm disabled:opacity-50"
       :disabled="scanning || selectedFieldKeys.size === 0"
       @click="emit('capture')"
     >

@@ -4,6 +4,7 @@ import { navigateTo } from '#app'
 import DigifiCreditsIndicator from '~/components/digifi/DigifiCreditsIndicator.vue'
 import DigifiMobileColumnCarousel from '~/components/digifi/DigifiMobileColumnCarousel.vue'
 import DigifiMobileLayoutWizard from '~/components/digifi/DigifiMobileLayoutWizard.vue'
+import DigifiMobileCameraCapture from '~/components/digifi/DigifiMobileCameraCapture.vue'
 import DigifiMobileValidateBar from '~/components/digifi/DigifiMobileValidateBar.vue'
 import IosAppPageShell from '~/components/ios/IosAppPageShell.vue'
 import { useAuth } from '~/composables/useAuth'
@@ -42,8 +43,8 @@ const {
 } = useLogbookBuilderDigifi(grid)
 
 const phase = ref<'setup' | 'review'>('setup')
+const showCamera = ref(false)
 const pageShape = ref<DigifiPageShape>('left')
-const fileInput = ref<HTMLInputElement | null>(null)
 let stopAutosave: (() => void) | null = null
 let stopDraftFlush: (() => void) | null = null
 
@@ -56,9 +57,17 @@ const captureLabel = computed(() => {
   return 'Photograph page'
 })
 
-function openFilePicker() {
+function openCapture() {
   if (!canScan.value || scanning.value) return
-  fileInput.value?.click()
+  showCamera.value = true
+}
+
+async function onCaptureFile(file: File) {
+  showCamera.value = false
+  await scanPage(file, captureSide.value)
+  if (error.value) return
+  const needsRight = pageShape.value === 'two-page' && captureSide.value === 'left'
+  phase.value = needsRight ? 'setup' : 'review'
 }
 
 async function onFile(event: Event) {
@@ -66,10 +75,7 @@ async function onFile(event: Event) {
   const file = input.files?.[0]
   input.value = ''
   if (!file) return
-  await scanPage(file, captureSide.value)
-  if (error.value) return
-  const needsRight = pageShape.value === 'two-page' && captureSide.value === 'left'
-  phase.value = needsRight ? 'setup' : 'review'
+  await onCaptureFile(file)
 }
 
 function backToSetup() {
@@ -136,7 +142,15 @@ onUnmounted(() => {
         :page-shape="pageShape"
         :capture-label="captureLabel"
         @update:page-shape="pageShape = $event"
-        @capture="openFilePicker"
+        @capture="openCapture"
+      />
+
+      <DigifiMobileCameraCapture
+        v-if="showCamera"
+        :disabled="scanning"
+        :shutter-label="captureLabel"
+        @capture="onCaptureFile"
+        @cancel="showCamera = false"
       />
 
       <template v-else>
