@@ -102,14 +102,17 @@ onUnmounted(() => {
       class="absolute inset-0 h-full w-full object-cover"
     />
 
-    <div class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-4 pb-36 pt-4 sm:px-6">
+    <div class="pointer-events-none absolute inset-0">
+      <div class="absolute inset-x-0 top-[32%] h-px bg-white/50" aria-hidden="true" />
+      <div class="absolute inset-x-0 top-[68%] h-px bg-white/50" aria-hidden="true" />
       <div
-        class="aspect-[3/4] w-[min(92vw,22rem)] max-h-[min(58vh,32rem)] rounded-2xl border-2 border-green-400/90 shadow-[0_0_0_100vmax_rgba(0,0,0,0.55)] sm:w-[min(88vw,26rem)]"
+        class="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/45"
+        aria-hidden="true"
       />
-      <p class="relative z-10 mt-4 max-w-[min(92vw,22rem)] text-center text-sm font-semibold text-white sm:max-w-[min(88vw,26rem)]">
-        Fit the logbook page in the frame
+      <p class="absolute inset-x-4 bottom-36 text-center text-sm font-semibold text-white">
+        Keep the page level and fill the view
       </p>
-      <p class="relative z-10 mt-1 text-center text-xs text-white/70">Hold steady in good light</p>
+      <p class="absolute inset-x-4 bottom-[8.25rem] text-center text-xs text-white/70">Hold steady in good light</p>
     </div>
 
     <p

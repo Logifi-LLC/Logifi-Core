@@ -8,15 +8,11 @@ import { readLastTemplateId } from '~/utils/logbookBuilderDraft'
 import {
   DIGIFI_SCAN_FIELD_CHECKLIST,
   ROLE_OPTIONS,
+  type BuilderLayout,
   type BuilderTemplateColumn,
 } from '~/utils/logbookBuilderTypes'
 import { ACCOUNT_SCOPED_STORAGE_KEYS, getScopedItem, setScopedItem } from '~/utils/userScopedStorage'
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
-import {
-  layoutFromPageShape,
-  pageShapeFromLayout,
-  type DigifiPageShape,
-} from '~/utils/digifiMobileReview'
 import { useTheme } from '~/composables/useTheme'
 import { digifiMobileAccentIdle, digifiMobileAccentSelected } from '~/utils/digifiMobileTheme'
 
@@ -51,12 +47,10 @@ function onDefaultRoleChange(e: Event) {
 
 defineProps<{
   scanning: boolean
-  pageShape: DigifiPageShape
   captureLabel: string
 }>()
 
 const emit = defineEmits<{
-  'update:pageShape': [shape: DigifiPageShape]
   capture: []
 }>()
 
@@ -75,12 +69,17 @@ const selectedFieldKeys = computed(() => {
   )
 })
 
-function setShape(shape: DigifiPageShape) {
-  grid.layout.value = layoutFromPageShape(shape)
-  if (shape === 'two-page' && grid.visibleColumns.value.length > 1) {
+function setLayout(value: BuilderLayout) {
+  if (grid.layout.value === value) return
+  grid.layout.value = value
+  if (value === 'two-page' && grid.visibleColumns.value.length > 1) {
     grid.setTwoPageSplitIndex(Math.ceil(grid.visibleColumns.value.length / 2))
   }
-  emit('update:pageShape', shape)
+  grid.resetDigifiPageState()
+}
+
+function collapseColumnEditor() {
+  columnsEditorExpanded.value = false
 }
 
 function bumpRows(delta: number) {
@@ -153,7 +152,6 @@ function applyTemplate(template: (typeof templates.value)[0]) {
     two_page_split_index: template.two_page_split_index,
   })
   persistLastTemplateId(template.id)
-  emit('update:pageShape', pageShapeFromLayout(template.layout as 'single' | 'two-page'))
   columnsEditorExpanded.value = true
 }
 
@@ -258,27 +256,32 @@ onMounted(() => {
     </section>
 
     <section class="space-y-2 opacity-90">
-      <p :class="['text-[11px] font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Page</p>
-      <div class="grid grid-cols-3 gap-2">
+      <p :class="['text-[11px] font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Layout</p>
+      <div class="grid grid-cols-2 gap-2">
         <button
           v-for="option in ([
-            { value: 'left', label: 'Left' },
-            { value: 'right', label: 'Right' },
-            { value: 'two-page', label: 'Two-page' },
+            { value: 'single', label: 'Single page' },
+            { value: 'two-page', label: 'Two-page spread' },
           ] as const)"
           :key="option.value"
           type="button"
           class="min-h-[48px] rounded-2xl border px-2 py-3 text-sm font-semibold"
           :class="
-            pageShape === option.value
+            grid.layout.value === option.value
               ? digifiMobileAccentSelected(isDarkMode)
               : digifiMobileAccentIdle(isDarkMode)
           "
-          @click="setShape(option.value)"
+          @click="setLayout(option.value)"
         >
           {{ option.label }}
         </button>
       </div>
+      <p :class="['text-xs leading-snug', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+        <template v-if="grid.layout.value === 'two-page'">
+          Photograph the left page, then the right page — one photo per page, not both at once.
+        </template>
+        <template v-else>One photograph for the full page.</template>
+      </p>
     </section>
 
     <section
@@ -355,8 +358,23 @@ onMounted(() => {
     </section>
 
     <section class="space-y-2">
-      <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Columns</p>
-
+      <div class="flex items-center justify-between gap-2">
+        <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Columns</p>
+        <button
+          v-if="columnsEditorExpanded && orderedColumns.length"
+          type="button"
+          class="min-h-[44px] rounded-xl px-3 py-2 text-xs font-semibold"
+          :class="
+            isDarkMode
+              ? 'text-gray-300 hover:bg-white/5'
+              : 'text-gray-600 hover:bg-gray-50'
+          "
+          aria-label="Done editing columns"
+          @click="collapseColumnEditor"
+        >
+          Done
+        </button>
+      </div>
       <button
         v-if="!columnsEditorExpanded && orderedColumns.length"
         type="button"
