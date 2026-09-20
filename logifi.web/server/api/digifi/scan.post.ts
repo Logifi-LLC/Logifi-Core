@@ -15,6 +15,7 @@ import { assertCanScanSpread } from '../../utils/creditsBalance'
 import { buildDigifiScanSessionPayload } from '../../utils/digifiScanPayload'
 import { finalizeDigifiScanBilling } from '../../utils/digifiScanBilling'
 import { loadDigifiFewShotExamples } from '../../utils/digifiFewShot'
+import { loadDigifiSpreadSessionContext } from '../../utils/digifiSessionContext'
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
@@ -188,6 +189,18 @@ export default defineEventHandler(async (event) => {
     console.warn('[digifi] few-shot examples skipped:', error)
   }
 
+  let sessionPriorPages: Awaited<ReturnType<typeof loadDigifiSpreadSessionContext>> = []
+  try {
+    sessionPriorPages = await loadDigifiSpreadSessionContext(
+      supabase,
+      userId,
+      meta.spreadId,
+      meta.pageSide
+    )
+  } catch (error) {
+    console.warn('[digifi] session context skipped:', error)
+  }
+
   let scanResult
   try {
     mark('extractStart')
@@ -197,6 +210,7 @@ export default defineEventHandler(async (event) => {
       meta,
       chunkImages,
       fewShotExamples,
+      sessionPriorPages,
     })
     mark('afterExtract')
   } catch (e) {

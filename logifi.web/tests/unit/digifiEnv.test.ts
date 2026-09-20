@@ -3,6 +3,7 @@ import {
   buildDigifiModelChain,
   buildDigifiThinkingConfig,
   DEFAULT_GEMINI_DIGIFI_MODEL,
+  getDigifiEnv,
   inferDigifiProvider,
   isDigifiConfigured,
   normalizeDigifiModelId,
@@ -120,6 +121,37 @@ describe('buildDigifiThinkingConfig', () => {
     expect(buildDigifiThinkingConfig('gemini-2.5-flash', 'low')).toEqual({
       thinkingBudget: 0,
     })
+  })
+})
+
+describe('getDigifiEnv enableRescueScan', () => {
+  const originalEnv = { ...process.env }
+
+  beforeEach(() => {
+    vi.stubGlobal('useRuntimeConfig', () => ({
+      geminiApiKey: '',
+      anthropicApiKey: '',
+      digifiModel: 'gemini-3.6-flash',
+      digifiModelFallbacks: '',
+      digifiEnableCapacityModelFallback: '',
+      digifiMaxScansPerDay: 10,
+    }))
+  })
+
+  afterEach(() => {
+    process.env = { ...originalEnv }
+    vi.unstubAllGlobals()
+  })
+
+  it('defaults rescue scan to enabled', () => {
+    delete process.env.NUXT_DIGIFI_ENABLE_RESCUE_SCAN
+    delete process.env.DIGIFI_ENABLE_RESCUE_SCAN
+    expect(getDigifiEnv().enableRescueScan).toBe(true)
+  })
+
+  it('allows disabling rescue scan via env', () => {
+    process.env.NUXT_DIGIFI_ENABLE_RESCUE_SCAN = 'false'
+    expect(getDigifiEnv().enableRescueScan).toBe(false)
   })
 })
 
