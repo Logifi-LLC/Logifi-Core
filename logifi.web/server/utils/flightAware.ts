@@ -445,7 +445,7 @@ async function lookupFlightActualsOnce(
   }
 }
 
-export async function lookupFlightActuals(
+export async function lookupFlightAwareActuals(
   flightNumber: string,
   dateYYYYMMDD: string,
   depIcao?: string,
@@ -533,14 +533,14 @@ export async function lookupFlightActuals(
   }
 }
 
-export async function fetchFlightActuals(
+export async function fetchFlightAwareActuals(
   flightNumber: string,
   dateYYYYMMDD: string,
   depIcao?: string,
   arrIcao?: string,
   airlineCode?: string
 ): Promise<FlightAwareActuals | null> {
-  const result = await lookupFlightActuals(
+  const result = await lookupFlightAwareActuals(
     flightNumber,
     dateYYYYMMDD,
     depIcao,

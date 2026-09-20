@@ -14,7 +14,7 @@ vi.mock('h3', () => ({
 
 vi.mock('../aeroDataBox', () => ({
   isAeroDataBoxConfigured: () => true,
-  lookupFlightActuals: vi.fn().mockResolvedValue({
+  lookupAeroDataBoxActuals: vi.fn().mockResolvedValue({
     actuals: {
       registration: 'N-ADB',
       aircraftType: 'E75',
@@ -31,7 +31,7 @@ vi.mock('../aeroDataBox', () => ({
 
 vi.mock('../flightAware', () => ({
   isFlightAwareConfigured: () => true,
-  lookupFlightActuals: vi.fn().mockResolvedValue({
+  lookupFlightAwareActuals: vi.fn().mockResolvedValue({
     actuals: {
       registration: 'N-FA',
       aircraftType: 'E75L',

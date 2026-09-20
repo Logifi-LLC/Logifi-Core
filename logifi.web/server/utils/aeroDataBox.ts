@@ -65,8 +65,6 @@ interface CachedHttp {
 
 import { aeroDataBoxFlightNumberCandidates } from './flightEnrichCandidates'
 
-export { aeroDataBoxFlightNumberCandidates }
-
 const ADB_DEFAULT_MIN_INTERVAL_MS = 1000
 
 let minIntervalMs = ADB_DEFAULT_MIN_INTERVAL_MS
@@ -469,7 +467,7 @@ async function fetchFlightActualsOnce(
 /**
  * Lookup actuals + tail. Never throws. Never logs the API key.
  */
-export async function lookupFlightActuals(
+export async function lookupAeroDataBoxActuals(
   flightNumber: string,
   dateYYYYMMDD: string,
   depIcao?: string,
@@ -570,14 +568,14 @@ export async function lookupFlightActuals(
  * Fetch gate/runway actuals and tail from AeroDataBox by flight number + date.
  * Returns null on missing config, 404, schedule-only hits, rate limits, or no route match — never throws.
  */
-export async function fetchFlightActuals(
+export async function fetchAeroDataBoxActuals(
   flightNumber: string,
   dateYYYYMMDD: string,
   depIcao?: string,
   arrIcao?: string,
   airlineCode?: string
 ): Promise<AeroDataBoxActuals | null> {
-  const result = await lookupFlightActuals(
+  const result = await lookupAeroDataBoxActuals(
     flightNumber,
     dateYYYYMMDD,
     depIcao,
