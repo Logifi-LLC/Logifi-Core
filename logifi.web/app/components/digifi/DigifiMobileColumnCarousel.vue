@@ -25,16 +25,19 @@ function markFocusedReviewed() {
   reviewedIds.value = markColumnReviewed(reviewedIds.value, column.id)
 }
 
-function stride(): number {
+function columnStride(): number {
   const el = scroller.value
   if (!el || columns.value.length === 0) return 0
-  return el.scrollWidth / columns.value.length
+  const firstSection = el.querySelector('[data-digifi-column]') as HTMLElement | null
+  if (firstSection?.offsetWidth) return firstSection.offsetWidth
+  return el.clientWidth * 0.58
 }
 
 function syncFromScroll() {
   const el = scroller.value
   if (!el) return
-  focusedIndex.value = focusedColumnIndexFromScroll(el.scrollLeft, stride(), columns.value.length)
+  const stride = columnStride()
+  focusedIndex.value = focusedColumnIndexFromScroll(el.scrollLeft, stride, columns.value.length)
   markFocusedReviewed()
 }
 
@@ -43,7 +46,7 @@ function scrollToIndex(index: number) {
   if (!el) return
   const next = Math.min(columns.value.length - 1, Math.max(0, index))
   focusedIndex.value = next
-  el.scrollTo({ left: next * stride(), behavior: 'smooth' })
+  el.scrollTo({ left: next * columnStride(), behavior: 'smooth' })
   markFocusedReviewed()
 }
 
@@ -57,16 +60,16 @@ function cellNeedsReview(rowIdx: number, colId: string): boolean {
   return grid.rows.value[rowIdx]?.digifiCellMeta?.[colId]?.needsReview === true
 }
 
-function columnCardClass(index: number): string {
+function columnStripClass(index: number): string {
   const focused = index === focusedIndex.value
   if (isDarkMode.value) {
     return focused
-      ? 'border-green-400/60 opacity-100 ring-1 ring-green-500/30'
-      : 'border-white/5 opacity-55 blur-[1px] scale-[0.98]'
+      ? 'bg-gray-900 opacity-100 ring-1 ring-inset ring-green-500/35'
+      : 'bg-gray-950/40 opacity-70'
   }
   return focused
-    ? 'border-green-500/50 bg-white opacity-100 shadow-md ring-1 ring-green-500/20'
-    : 'border-gray-200 bg-gray-50 opacity-60 blur-[1px] scale-[0.98]'
+    ? 'bg-white opacity-100 ring-1 ring-inset ring-green-500/25'
+    : 'bg-gray-50/90 opacity-75'
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -103,7 +106,7 @@ watch(
 </script>
 
 <template>
-  <div class="space-y-3">
+  <div class="space-y-2">
     <p
       :class="[
         'min-h-[1.25rem] text-center text-base font-semibold tracking-tight',
@@ -114,29 +117,39 @@ watch(
     </p>
 
     <div
-      ref="scroller"
-      class="flex snap-x snap-mandatory overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-      @scroll.passive="syncFromScroll"
+      :class="[
+        'overflow-hidden rounded-xl border',
+        isDarkMode ? 'border-white/10 bg-gray-950' : 'border-gray-200 bg-white',
+      ]"
     >
-      <section
-        v-for="(column, index) in columns"
-        :key="column.id"
-        class="w-1/2 shrink-0 snap-center px-[2%]"
+      <div
+        ref="scroller"
+        class="flex snap-x snap-mandatory overflow-x-auto scroll-px-[21%] pb-px [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        @scroll.passive="syncFromScroll"
       >
-        <div
-          class="rounded-2xl border p-3 transition-[opacity,filter,transform] duration-200"
+        <section
+          v-for="(column, index) in columns"
+          :key="column.id"
+          data-digifi-column
+          class="w-[58%] shrink-0 snap-center border-r transition-[opacity,background-color] duration-200 last:border-r-0"
           :class="[
-            isDarkMode ? 'bg-gray-900/80' : 'bg-white',
-            columnCardClass(index),
+            isDarkMode ? 'border-white/10' : 'border-gray-200',
+            columnStripClass(index),
           ]"
         >
-          <ol class="space-y-2.5">
+          <ol>
             <li
               v-for="(_, rowIdx) in grid.rows.value"
               :key="`${column.id}-${rowIdx}`"
-              class="flex items-center gap-2"
+              class="flex items-stretch border-b last:border-b-0"
+              :class="isDarkMode ? 'border-white/10' : 'border-gray-200'"
             >
-              <span :class="['w-6 shrink-0 text-right font-mono text-[11px] tabular-nums', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
+              <span
+                :class="[
+                  'flex w-7 shrink-0 items-center justify-end border-r px-1 font-mono text-[10px] tabular-nums',
+                  isDarkMode ? 'border-white/10 bg-black/20 text-gray-500' : 'border-gray-200 bg-gray-100/80 text-gray-400',
+                ]"
+              >
                 {{ rowIdx + 1 }}
               </span>
               <input
@@ -146,18 +159,24 @@ watch(
                 autocomplete="off"
                 :aria-label="`${column.label} row ${rowIdx + 1}`"
                 :class="[
-                  'min-w-0 flex-1 rounded-xl border px-3 py-2.5 text-sm',
-                  isDarkMode ? 'bg-gray-950/80 text-gray-100' : 'bg-gray-50 text-gray-900',
+                  'min-w-0 flex-1 border-0 bg-transparent px-2 py-2 text-sm outline-none focus:ring-1 focus:ring-inset',
+                  isDarkMode ? 'text-gray-100 focus:ring-green-500/40' : 'text-gray-900 focus:ring-green-500/30',
                   cellNeedsReview(rowIdx, column.id)
-                    ? 'border-amber-400/70'
-                    : isDarkMode ? 'border-white/10' : 'border-gray-200',
+                    ? isDarkMode
+                      ? 'bg-amber-500/10 focus:ring-amber-400/50'
+                      : 'bg-amber-50 focus:ring-amber-400/40'
+                    : '',
                 ]"
                 @input="onCellInput(rowIdx, column.id, $event)"
               >
             </li>
           </ol>
-        </div>
-      </section>
+        </section>
+        <div
+          class="w-[21%] shrink-0 snap-none"
+          aria-hidden="true"
+        />
+      </div>
     </div>
   </div>
 </template>

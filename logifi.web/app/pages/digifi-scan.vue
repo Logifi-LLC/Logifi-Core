@@ -112,12 +112,22 @@ onUnmounted(() => {
 <template>
   <IosAppPageShell :title="title">
     <template #trailing>
-      <NuxtLink
-        :to="DIGIFI_EYE_PATH"
-        :class="['text-xs font-semibold', isDarkMode ? 'text-gray-300' : 'text-gray-600']"
-      >
-        Eye
-      </NuxtLink>
+      <div class="flex flex-col items-end gap-0.5 leading-tight">
+        <button
+          v-if="phase === 'review'"
+          type="button"
+          :class="['text-[11px] font-medium', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+          @click="backToSetup"
+        >
+          Scan again
+        </button>
+        <NuxtLink
+          :to="DIGIFI_EYE_PATH"
+          :class="['text-xs font-semibold', isDarkMode ? 'text-gray-300' : 'text-gray-600']"
+        >
+          Eye
+        </NuxtLink>
+      </div>
     </template>
 
     <div class="space-y-4">
@@ -153,16 +163,7 @@ onUnmounted(() => {
         @cancel="showCamera = false"
       />
 
-      <template v-else>
-        <DigifiMobileColumnCarousel />
-        <button
-          type="button"
-          :class="['w-full py-2 text-sm font-medium', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
-          @click="backToSetup"
-        >
-          Scan again
-        </button>
-      </template>
+      <DigifiMobileColumnCarousel v-else-if="phase === 'review'" />
     </div>
 
     <template v-if="phase === 'review'" #footer>
