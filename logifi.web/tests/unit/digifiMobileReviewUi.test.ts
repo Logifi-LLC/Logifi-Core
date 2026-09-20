@@ -115,6 +115,25 @@ describe('DigifiMobileLayoutWizard', () => {
     expect(wrapper.text()).toMatch(/Tap to edit/)
     expect(wrapper.find('button[aria-label="Move column down"]').exists()).toBe(false)
   })
+
+  it('lets the pilot edit default year without per-keystroke clamping', async () => {
+    const { wrapper, grid } = mountWithGrid(DigifiMobileLayoutWizard, {
+      scanning: false,
+      captureLabel: 'Photograph page',
+    })
+    await nextTick()
+
+    const yearInput = wrapper.get('input[inputmode="numeric"]')
+    await yearInput.trigger('focus')
+    await yearInput.setValue('')
+    await yearInput.setValue('2024')
+    expect(grid.defaultYear.value).not.toBe(1900)
+
+    await yearInput.trigger('blur')
+    await nextTick()
+    expect(grid.defaultYear.value).toBe(2024)
+    expect((yearInput.element as HTMLInputElement).value).toBe('2024')
+  })
 })
 
 describe('DigifiMobileCameraCapture', () => {
@@ -124,7 +143,8 @@ describe('DigifiMobileCameraCapture', () => {
         stubs: { video: true },
       },
     })
-    expect(wrapper.text()).toContain('Keep the page level and fill the view')
+    expect(wrapper.text()).toContain('Match the vertical guides to keep the page level')
+    expect(wrapper.html()).toContain('inset-y-0 left-[32%]')
     expect(wrapper.text()).not.toContain('Fit the logbook page in the frame')
     expect(wrapper.find('.border-green-400').exists()).toBe(false)
   })

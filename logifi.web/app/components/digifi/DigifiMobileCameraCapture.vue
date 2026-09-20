@@ -103,14 +103,14 @@ onUnmounted(() => {
     />
 
     <div class="pointer-events-none absolute inset-0">
-      <div class="absolute inset-x-0 top-[32%] h-px bg-white/50" aria-hidden="true" />
-      <div class="absolute inset-x-0 top-[68%] h-px bg-white/50" aria-hidden="true" />
+      <div class="absolute inset-y-0 left-[32%] w-px bg-white/50" aria-hidden="true" />
+      <div class="absolute inset-y-0 left-[68%] w-px bg-white/50" aria-hidden="true" />
       <div
         class="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/45"
         aria-hidden="true"
       />
       <p class="absolute inset-x-4 bottom-36 text-center text-sm font-semibold text-white">
-        Keep the page level and fill the view
+        Match the vertical guides to keep the page level
       </p>
       <p class="absolute inset-x-4 bottom-[8.25rem] text-center text-xs text-white/70">Hold steady in good light</p>
     </div>
