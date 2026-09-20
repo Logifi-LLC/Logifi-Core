@@ -57,6 +57,25 @@ describe('DigifiMobileLayoutWizard', () => {
     await capture[0]!.trigger('click')
     expect(wrapper.emitted('capture')).toHaveLength(1)
   })
+
+  it('reorders visible columns via page order controls', async () => {
+    const { wrapper, grid } = mountWithGrid(DigifiMobileLayoutWizard, {
+      scanning: false,
+      pageShape: 'left',
+      captureLabel: 'Photograph page',
+    })
+
+    const initial = grid.visibleColumns.value.map((column) => column.id)
+    expect(initial.length).toBeGreaterThan(1)
+
+    const downButtons = wrapper.findAll('button[aria-label="Move column down"]')
+    expect(downButtons.length).toBe(initial.length)
+    await downButtons[0]!.trigger('click')
+
+    const after = grid.visibleColumns.value.map((column) => column.id)
+    expect(after[0]).toBe(initial[1])
+    expect(after[1]).toBe(initial[0])
+  })
 })
 
 describe('DigifiMobileColumnCarousel', () => {
