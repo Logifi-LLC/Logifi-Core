@@ -70,6 +70,17 @@ function toggleField(fieldKey: LogbookColumnKey) {
   grid.addColumn(fieldKey)
 }
 
+const pageOrderColumns = computed(() => grid.visibleColumns.value)
+
+function movePageOrderColumn(index: number, direction: 'up' | 'down') {
+  const cols = pageOrderColumns.value
+  const swapWith = direction === 'up' ? index - 1 : index + 1
+  if (swapWith < 0 || swapWith >= cols.length) return
+  const ids = cols.map((column) => column.id)
+  ;[ids[index], ids[swapWith]] = [ids[swapWith]!, ids[index]!]
+  grid.reorderColumns(ids)
+}
+
 async function loadTemplates() {
   if (!isAuthenticated.value || !user.value) return
   templateError.value = null
@@ -264,6 +275,62 @@ onMounted(() => {
           {{ item.label }}
         </button>
       </div>
+    </section>
+
+    <section v-if="pageOrderColumns.length" class="space-y-2">
+      <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+        Page order
+      </p>
+      <ol class="space-y-2">
+        <li
+          v-for="(column, index) in pageOrderColumns"
+          :key="column.id"
+          class="flex items-center gap-2 rounded-2xl border px-3 py-2"
+          :class="isDarkMode ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white shadow-sm'"
+        >
+          <span
+            :class="[
+              'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold tabular-nums',
+              isDarkMode ? 'bg-green-500/20 text-green-200' : 'bg-green-50 text-green-800',
+            ]"
+          >
+            {{ index + 1 }}
+          </span>
+          <span :class="['min-w-0 flex-1 text-sm font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
+            {{ column.label }}
+          </span>
+          <div class="flex shrink-0 gap-1">
+            <button
+              type="button"
+              class="flex h-11 w-11 items-center justify-center rounded-xl border text-lg font-semibold disabled:opacity-30"
+              :class="
+                isDarkMode
+                  ? 'border-white/15 text-gray-100'
+                  : 'border-gray-300 text-gray-900 hover:bg-gray-50'
+              "
+              :disabled="index === 0"
+              aria-label="Move column up"
+              @click="movePageOrderColumn(index, 'up')"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              class="flex h-11 w-11 items-center justify-center rounded-xl border text-lg font-semibold disabled:opacity-30"
+              :class="
+                isDarkMode
+                  ? 'border-white/15 text-gray-100'
+                  : 'border-gray-300 text-gray-900 hover:bg-gray-50'
+              "
+              :disabled="index === pageOrderColumns.length - 1"
+              aria-label="Move column down"
+              @click="movePageOrderColumn(index, 'down')"
+            >
+              ↓
+            </button>
+          </div>
+        </li>
+      </ol>
     </section>
 
     <button
