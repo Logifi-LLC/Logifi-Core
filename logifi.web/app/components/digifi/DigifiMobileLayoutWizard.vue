@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, onMounted, ref } from 'vue'
+import { computed, inject, onMounted, ref, watch } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { useAuth } from '~/composables/useAuth'
 import { supabase } from '~/lib/supabase'
@@ -24,13 +24,39 @@ const { user, isAuthenticated } = useAuth()
 
 const DEFAULT_ROLE_STORAGE_KEY = ACCOUNT_SCOPED_STORAGE_KEYS.BUILDER_DEFAULT_ROLE
 
-const defaultYearValue = computed({
-  get: () => grid.defaultYear.value ?? new Date().getFullYear(),
-  set: (v: number) => {
-    const n = typeof v === 'number' && Number.isFinite(v) ? v : new Date().getFullYear()
-    grid.defaultYear.value = Math.min(2100, Math.max(1900, n))
-  },
-})
+const defaultYearDraft = ref('')
+const defaultYearFocused = ref(false)
+
+function syncDefaultYearDraftFromGrid() {
+  defaultYearDraft.value = String(grid.defaultYear.value ?? new Date().getFullYear())
+}
+
+function commitDefaultYearDraft() {
+  const trimmed = defaultYearDraft.value.trim()
+  const parsed = trimmed === '' ? NaN : Number.parseInt(trimmed, 10)
+  const fallback = new Date().getFullYear()
+  const n = Number.isFinite(parsed) ? parsed : fallback
+  const clamped = Math.min(2100, Math.max(1900, n))
+  grid.defaultYear.value = clamped
+  defaultYearDraft.value = String(clamped)
+}
+
+function onDefaultYearFocus() {
+  defaultYearFocused.value = true
+  syncDefaultYearDraftFromGrid()
+}
+
+function onDefaultYearBlur() {
+  defaultYearFocused.value = false
+  commitDefaultYearDraft()
+}
+
+watch(
+  () => grid.defaultYear.value,
+  () => {
+    if (!defaultYearFocused.value) syncDefaultYearDraftFromGrid()
+  }
+)
 
 function onDefaultRoleChange(e: Event) {
   const value = (e.target as HTMLSelectElement).value
@@ -188,6 +214,7 @@ async function saveTemplate() {
 }
 
 onMounted(() => {
+  syncDefaultYearDraftFromGrid()
   try {
     const userId = user.value?.id
     const stored = userId
@@ -291,12 +318,14 @@ onMounted(() => {
       <label class="min-w-0 space-y-1">
         <span :class="['block text-[11px] font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Year</span>
         <input
-          v-model.number="defaultYearValue"
-          type="number"
-          min="1900"
-          max="2100"
+          v-model="defaultYearDraft"
+          type="text"
           inputmode="numeric"
+          maxlength="4"
+          autocomplete="off"
           class="w-full rounded-xl border px-3 py-2.5 text-sm font-mono tabular-nums"
+          @focus="onDefaultYearFocus"
+          @blur="onDefaultYearBlur"
           :class="
             isDarkMode
               ? 'border-white/10 bg-black/20 text-gray-100'
