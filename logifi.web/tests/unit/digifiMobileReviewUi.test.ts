@@ -134,17 +134,37 @@ describe('DigifiMobileLayoutWizard', () => {
     expect(grid.defaultYear.value).toBe(2024)
     expect((yearInput.element as HTMLInputElement).value).toBe('2024')
   })
+
+  it('shows two-page capture progress when layout is two-page', async () => {
+    const { wrapper, grid } = mountWithGrid(DigifiMobileLayoutWizard, {
+      scanning: false,
+      captureLabel: 'Photograph left page',
+      twoPageStep: 1,
+      leftPageScanned: false,
+    })
+    grid.layout.value = 'two-page'
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Two-page photos')
+    expect(wrapper.text()).toContain('1 · Left')
+    expect(wrapper.text()).toContain('2 · Right')
+    expect(wrapper.text()).toContain('Photograph left page')
+  })
 })
 
 describe('DigifiMobileCameraCapture', () => {
-  it('shows level guide copy instead of crop frame text', () => {
+  it('uses a bottom shutter control without level guide overlays', () => {
     const wrapper = mount(DigifiMobileCameraCapture, {
+      props: { shutterLabel: 'Photograph left page', twoPageStep: 1 },
       global: {
         stubs: { video: true },
       },
     })
-    expect(wrapper.text()).toContain('Match the vertical guides to keep the page level')
-    expect(wrapper.html()).toContain('inset-y-0 left-[32%]')
+    expect(wrapper.find('[aria-label="Take picture"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Photograph left page')
+    expect(wrapper.text()).toContain('Page 1 of 2')
+    expect(wrapper.text()).toContain('Tap the white button to take a photo')
+    expect(wrapper.html()).not.toContain('inset-y-0 left-[32%]')
     expect(wrapper.text()).not.toContain('Fit the logbook page in the frame')
     expect(wrapper.find('.border-green-400').exists()).toBe(false)
   })
