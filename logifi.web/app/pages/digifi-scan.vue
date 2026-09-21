@@ -58,6 +58,10 @@ const captureLabel = computed(() => {
   if (grid.layout.value === 'two-page') return 'Photograph left page'
   return 'Photograph page'
 })
+const twoPageCaptureStep = computed((): 1 | 2 | null => {
+  if (grid.layout.value !== 'two-page') return null
+  return leftPageScanned.value ? 2 : 1
+})
 const awaitingRightPagePhoto = computed(
   () => grid.layout.value === 'two-page' && leftPageScanned.value && phase.value === 'setup'
 )
@@ -68,11 +72,17 @@ function openCapture() {
 }
 
 async function onCaptureFile(file: File) {
+  const pageSide = captureSide.value
   showCamera.value = false
-  await scanPage(file, captureSide.value)
+  await scanPage(file, pageSide)
   if (error.value) return
-  const needsRight = grid.layout.value === 'two-page' && captureSide.value === 'left'
-  phase.value = needsRight ? 'setup' : 'review'
+  const needsRight = grid.layout.value === 'two-page' && pageSide === 'left'
+  if (needsRight) {
+    phase.value = 'setup'
+    showCamera.value = true
+    return
+  }
+  phase.value = 'review'
 }
 
 async function onFile(event: Event) {
@@ -162,6 +172,8 @@ onUnmounted(() => {
         v-if="phase === 'setup'"
         :scanning="scanning"
         :capture-label="captureLabel"
+        :two-page-step="twoPageCaptureStep"
+        :left-page-scanned="leftPageScanned"
         @capture="openCapture"
       />
 
@@ -169,6 +181,7 @@ onUnmounted(() => {
         v-if="showCamera"
         :disabled="scanning"
         :shutter-label="captureLabel"
+        :two-page-step="twoPageCaptureStep"
         @capture="onCaptureFile"
         @cancel="showCamera = false"
       />

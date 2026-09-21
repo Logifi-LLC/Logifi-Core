@@ -74,6 +74,8 @@ function onDefaultRoleChange(e: Event) {
 defineProps<{
   scanning: boolean
   captureLabel: string
+  twoPageStep?: 1 | 2 | null
+  leftPageScanned?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -505,6 +507,41 @@ onMounted(() => {
           </select>
         </div>
       </template>
+    </section>
+
+    <section
+      v-if="grid.layout.value === 'two-page'"
+      class="space-y-2 rounded-2xl border px-4 py-3"
+      :class="isDarkMode ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white shadow-sm'"
+      aria-label="Two-page capture progress"
+    >
+      <p :class="['text-[11px] font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
+        Two-page photos
+      </p>
+      <ol class="flex gap-2">
+        <li
+          class="flex min-h-[44px] flex-1 flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold"
+          :class="
+            leftPageScanned || twoPageStep === 1
+              ? digifiMobileAccentSelected(isDarkMode)
+              : digifiMobileAccentIdle(isDarkMode)
+          "
+        >
+          <span class="text-[10px] uppercase tracking-wide opacity-80">1 · Left</span>
+          <span>{{ leftPageScanned ? 'Done' : 'Next' }}</span>
+        </li>
+        <li
+          class="flex min-h-[44px] flex-1 flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold"
+          :class="
+            twoPageStep === 2
+              ? digifiMobileAccentSelected(isDarkMode)
+              : digifiMobileAccentIdle(isDarkMode)
+          "
+        >
+          <span class="text-[10px] uppercase tracking-wide opacity-80">2 · Right</span>
+          <span>{{ leftPageScanned ? 'Next' : 'After left' }}</span>
+        </li>
+      </ol>
     </section>
 
     <button

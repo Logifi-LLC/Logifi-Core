@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useTheme } from '~/composables/useTheme'
 
-defineProps<{
+const props = defineProps<{
   disabled?: boolean
   shutterLabel?: string
+  /** 1-based step when capturing a two-page spread (e.g. 1 = left, 2 = right). */
+  twoPageStep?: 1 | 2 | null
 }>()
 
 const emit = defineEmits<{
@@ -19,6 +21,11 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const stream = ref<MediaStream | null>(null)
 const cameraError = ref<string | null>(null)
 const capturing = ref(false)
+
+const progressLine = computed(() => {
+  if (props.twoPageStep == null) return null
+  return `Page ${props.twoPageStep} of 2`
+})
 
 async function startCamera() {
   cameraError.value = null
@@ -102,19 +109,6 @@ onUnmounted(() => {
       class="absolute inset-0 h-full w-full object-cover"
     />
 
-    <div class="pointer-events-none absolute inset-0">
-      <div class="absolute inset-y-0 left-[32%] w-px bg-white/50" aria-hidden="true" />
-      <div class="absolute inset-y-0 left-[68%] w-px bg-white/50" aria-hidden="true" />
-      <div
-        class="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/45"
-        aria-hidden="true"
-      />
-      <p class="absolute inset-x-4 bottom-36 text-center text-sm font-semibold text-white">
-        Match the vertical guides to keep the page level
-      </p>
-      <p class="absolute inset-x-4 bottom-[8.25rem] text-center text-xs text-white/70">Hold steady in good light</p>
-    </div>
-
     <p
       v-if="cameraError"
       class="relative z-10 mx-4 mt-3 rounded-xl px-3 py-2 text-center text-xs"
@@ -124,30 +118,46 @@ onUnmounted(() => {
     </p>
 
     <div
-      class="relative z-10 flex shrink-0 items-center gap-3 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3"
+      class="relative z-10 mt-auto flex flex-col items-center gap-3 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-4"
     >
-      <button
-        type="button"
-        class="min-h-[48px] rounded-xl px-4 py-3 text-sm font-semibold text-white/90"
-        @click="emit('cancel')"
-      >
-        Cancel
-      </button>
-      <button
-        type="button"
-        class="min-h-[52px] flex-1 rounded-2xl bg-green-600 px-4 py-3.5 text-sm font-semibold text-white disabled:opacity-50"
-        :disabled="disabled || capturing"
-        @click="takePhoto"
-      >
-        {{ capturing ? 'Saving…' : (shutterLabel ?? 'Capture page') }}
-      </button>
-      <button
-        type="button"
-        class="min-h-[48px] rounded-xl px-3 py-3 text-xs font-semibold text-white/80 underline-offset-2 hover:underline"
-        @click="fileInputRef?.click()"
-      >
-        Library
-      </button>
+      <p v-if="progressLine" class="text-xs font-semibold uppercase tracking-wide text-white/80">
+        {{ progressLine }}
+      </p>
+      <p class="text-center text-sm font-semibold text-white">
+        {{ shutterLabel ?? 'Photograph page' }}
+      </p>
+
+      <div class="flex w-full max-w-md items-center justify-between gap-2">
+        <button
+          type="button"
+          class="min-h-[48px] min-w-[4.5rem] rounded-xl px-3 py-3 text-sm font-semibold text-white/90"
+          @click="emit('cancel')"
+        >
+          Cancel
+        </button>
+
+        <button
+          type="button"
+          class="flex h-[4.5rem] w-[4.5rem] shrink-0 items-center justify-center rounded-full border-[3px] border-white bg-white/15 p-1 disabled:opacity-50"
+          :disabled="disabled || capturing"
+          aria-label="Take picture"
+          @click="takePhoto"
+        >
+          <span class="block h-full w-full rounded-full bg-white" />
+        </button>
+
+        <button
+          type="button"
+          class="min-h-[48px] min-w-[4.5rem] rounded-xl px-2 py-3 text-xs font-semibold text-white/80 underline-offset-2 hover:underline"
+          @click="fileInputRef?.click()"
+        >
+          Library
+        </button>
+      </div>
+
+      <p class="text-center text-xs text-white/60">
+        {{ capturing ? 'Saving…' : 'Tap the white button to take a photo' }}
+      </p>
     </div>
 
     <input
