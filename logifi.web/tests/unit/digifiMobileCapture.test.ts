@@ -3,7 +3,10 @@ import { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import {
   isMobileCaptureSideComplete,
   isTwoPageSpreadFullyCaptured,
-  mobileCaptureLabel,
+  mobileSetupCaptureLabel,
+  mobileTwoPageChipLabel,
+  mobileTwoPageLeftChipState,
+  mobileTwoPageRightChipState,
   nextMobileCaptureSide,
 } from '~/utils/digifiMobileCapture'
 
@@ -18,7 +21,7 @@ describe('digifiMobileCapture', () => {
       rightPhotoCaptured: false,
     })
     expect(side).toBe('right')
-    expect(mobileCaptureLabel(side, grid.layout.value)).toBe('Photograph right page')
+    expect(mobileSetupCaptureLabel(grid.layout.value, side, false)).toBe('Photograph right page')
   })
 
   it('does not ask for right when right scan is already on the grid', () => {
@@ -53,19 +56,43 @@ describe('digifiMobileCapture', () => {
     expect(isTwoPageSpreadFullyCaptured(grid)).toBe(true)
   })
 
-  it('labels the continue action when both two-page sides are already captured', () => {
-    expect(mobileCaptureLabel(null, 'two-page')).toBe('Review flights')
+  it('shows Review flights only when both sides have scan data applied', () => {
+    const grid = useLogbookBuilderGrid()
+    grid.layout.value = 'two-page'
+    const session = { leftPhotoCaptured: true, rightPhotoCaptured: true }
+    expect(nextMobileCaptureSide(grid.layout.value, grid, session)).toBeNull()
+    expect(mobileSetupCaptureLabel('two-page', null, false)).toBe('Scanning…')
+    grid.leftPageScanned.value = true
+    const rightCol = grid.visibleColumns.value.at(-1)!
+    grid.setCell(0, rightCol.id, '1.0')
+    expect(mobileSetupCaptureLabel('two-page', null, true)).toBe('Review flights')
   })
 
-  it('treats session right photo as complete even before scan lands', () => {
+  it('keeps chip labels coherent when right scan lands before left', () => {
     const grid = useLogbookBuilderGrid()
     grid.layout.value = 'two-page'
     grid.leftPageScanned.value = true
+    const rightCol = grid.visibleColumns.value.at(-1)!
+    grid.setCell(0, rightCol.id, '1.0')
+    const session = { leftPhotoCaptured: true, rightPhotoCaptured: true }
+    const photoNext = nextMobileCaptureSide(grid.layout.value, grid, session)
+    expect(mobileTwoPageChipLabel(mobileTwoPageLeftChipState(grid, session, photoNext))).toBe(
+      'Done · Retake'
+    )
+    expect(mobileTwoPageChipLabel(mobileTwoPageRightChipState(grid, session, photoNext))).toBe(
+      'Done · Retake'
+    )
+  })
 
-    const side = nextMobileCaptureSide(grid.layout.value, grid, {
-      leftPhotoCaptured: true,
-      rightPhotoCaptured: true,
-    })
-    expect(side).toBeNull()
+  it('shows right as scanning when photo taken but scan not applied yet', () => {
+    const grid = useLogbookBuilderGrid()
+    grid.layout.value = 'two-page'
+    grid.leftPageScanned.value = true
+    const session = { leftPhotoCaptured: true, rightPhotoCaptured: true }
+    const photoNext = nextMobileCaptureSide(grid.layout.value, grid, session)
+    expect(mobileTwoPageChipLabel(mobileTwoPageRightChipState(grid, session, photoNext))).toBe(
+      'Scanning…'
+    )
+    expect(mobileSetupCaptureLabel('two-page', photoNext, false)).toBe('Scanning…')
   })
 })

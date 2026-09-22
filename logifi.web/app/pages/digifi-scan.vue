@@ -30,8 +30,12 @@ import {
 } from '~/composables/useDigifiSpreadRecovery'
 import {
   isMobileCaptureSideComplete,
-  mobileCaptureLabel,
+  isTwoPageReadyForReview,
+  mobileSetupCaptureLabel,
   mobileTwoPageCaptureStep,
+  mobileTwoPageChipLabel,
+  mobileTwoPageLeftChipState,
+  mobileTwoPageRightChipState,
   nextMobileCaptureSide,
   type MobileCaptureSession,
 } from '~/utils/digifiMobileCapture'
@@ -92,7 +96,23 @@ const nextCaptureSide = computed(() =>
 
 const captureSide = computed((): DigifiPageSide => nextCaptureSide.value ?? 'left')
 
-const captureLabel = computed(() => mobileCaptureLabel(nextCaptureSide.value, grid.layout.value))
+const readyForReview = computed(() => isTwoPageReadyForReview(grid))
+
+const captureLabel = computed(() =>
+  mobileSetupCaptureLabel(grid.layout.value, nextCaptureSide.value, readyForReview.value)
+)
+
+const leftChipLabel = computed(() =>
+  mobileTwoPageChipLabel(
+    mobileTwoPageLeftChipState(grid, captureSession.value, nextCaptureSide.value)
+  )
+)
+
+const rightChipLabel = computed(() =>
+  mobileTwoPageChipLabel(
+    mobileTwoPageRightChipState(grid, captureSession.value, nextCaptureSide.value)
+  )
+)
 
 const twoPageCaptureStep = computed(() => mobileTwoPageCaptureStep(nextCaptureSide.value))
 
@@ -203,7 +223,9 @@ watch(
 function openCapture() {
   if (!canScan.value || captureBlockedByScan.value) return
   if (nextCaptureSide.value === null) {
-    phase.value = 'review'
+    if (readyForReview.value) {
+      phase.value = 'review'
+    }
     return
   }
   showCamera.value = true
@@ -304,12 +326,7 @@ async function finishPageInit() {
         phase.value = 'review'
       } else if (grid.layout.value === 'two-page') {
         syncCaptureSessionFromGrid()
-        const captureNext = nextMobileCaptureSide(
-          grid.layout.value,
-          grid,
-          captureSession.value
-        )
-        if (recoveredPages >= 2 || captureNext === null) {
+        if (recoveredPages >= 2 || isTwoPageReadyForReview(grid)) {
           phase.value = 'review'
         } else if (grid.leftPageScanned.value) {
           phase.value = 'setup'
@@ -407,10 +424,9 @@ onUnmounted(() => {
         :scanning="scanning"
         :capture-label="captureLabel"
         :two-page-step="twoPageCaptureStep"
-        :left-page-scanned="leftPageScanned"
-        :left-page-photo-captured="leftPagePhotoCaptured"
-        :left-capture-complete="leftCaptureComplete"
-        :right-capture-complete="rightCaptureComplete"
+        :left-chip-label="leftChipLabel"
+        :right-chip-label="rightChipLabel"
+        :ready-for-review="readyForReview"
         :template-preloaded="templatePreloaded"
         @capture="openCapture"
         @retake="retakeCaptureSide"

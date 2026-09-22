@@ -135,14 +135,14 @@ describe('DigifiMobileLayoutWizard', () => {
     expect((yearInput.element as HTMLInputElement).value).toBe('2024')
   })
 
-  it('enables review CTA when both two-page sides are done', async () => {
+  it('enables review CTA when both two-page sides are ready for review', async () => {
     const { wrapper, grid } = mountWithGrid(DigifiMobileLayoutWizard, {
       scanning: false,
       captureLabel: 'Review flights',
       twoPageStep: null,
-      leftPageScanned: true,
-      leftCaptureComplete: true,
-      rightCaptureComplete: true,
+      leftChipLabel: 'Done · Retake',
+      rightChipLabel: 'Done · Retake',
+      readyForReview: true,
     })
     grid.layout.value = 'two-page'
     await nextTick()
@@ -151,7 +151,24 @@ describe('DigifiMobileLayoutWizard', () => {
       .findAll('button')
       .find((button) => button.text().includes('Review flights'))
     expect(cta).toBeTruthy()
-    expect(cta!.element as HTMLButtonElement).property('disabled').toBe(false)
+    expect((cta!.element as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('disables CTA while scans are still in flight', async () => {
+    const { wrapper, grid } = mountWithGrid(DigifiMobileLayoutWizard, {
+      scanning: true,
+      captureLabel: 'Scanning…',
+      twoPageStep: null,
+      leftChipLabel: 'Scanning…',
+      rightChipLabel: 'Done · Retake',
+      readyForReview: false,
+    })
+    grid.layout.value = 'two-page'
+    await nextTick()
+
+    const cta = wrapper.get('button.w-full.min-h-\\[52px\\]')
+    expect(cta.text()).toContain('Scanning')
+    expect((cta.element as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('shows two-page capture progress when layout is two-page', async () => {

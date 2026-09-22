@@ -75,33 +75,42 @@ const props = defineProps<{
   scanning: boolean
   captureLabel: string
   twoPageStep?: 1 | 2 | null
-  leftPageScanned?: boolean
-  leftPagePhotoCaptured?: boolean
-  leftCaptureComplete?: boolean
-  rightCaptureComplete?: boolean
+  leftChipLabel?: string
+  rightChipLabel?: string
+  readyForReview?: boolean
   /** Set when parent finishes async loadLastTemplateIfAny (wizard may mount earlier). */
   templatePreloaded?: boolean
 }>()
 
-const leftDone = computed(
-  () =>
-    Boolean(
-      props.leftCaptureComplete || props.leftPagePhotoCaptured || props.leftPageScanned
-    )
-)
-const rightDone = computed(() => Boolean(props.rightCaptureComplete))
+const leftChipActive = computed(() => {
+  const label = props.leftChipLabel ?? ''
+  return label !== 'Next' && label !== 'After left' && label !== ''
+})
 
-const bothPagesCaptured = computed(
-  () => props.twoPageStep === null && leftDone.value && rightDone.value
-)
+const rightChipActive = computed(() => {
+  const label = props.rightChipLabel ?? ''
+  return label !== 'After left' && label !== ''
+})
+
+const leftRetakeEnabled = computed(() => {
+  const label = props.leftChipLabel ?? ''
+  return label === 'Done · Retake' || label === 'Scanning…'
+})
+
+const rightRetakeEnabled = computed(() => {
+  const label = props.rightChipLabel ?? ''
+  return label === 'Done · Retake' || label === 'Scanning…'
+})
 
 const captureButtonDisabled = computed(() => {
-  if (bothPagesCaptured.value) {
+  if (props.readyForReview && props.twoPageStep === null) {
     return selectedFieldKeys.value.size === 0
   }
+  if (props.captureLabel === 'Scanning…') {
+    return true
+  }
   if (props.scanning) {
-    const canShootRightWhileLeftScans =
-      props.twoPageStep === 2 && leftDone.value && !props.leftPageScanned
+    const canShootRightWhileLeftScans = props.twoPageStep === 2
     if (!canShootRightWhileLeftScans) return true
   }
   return selectedFieldKeys.value.size === 0
@@ -592,16 +601,16 @@ watch(
             type="button"
             class="flex min-h-[44px] w-full flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold disabled:cursor-default"
             :class="
-              leftDone || twoPageStep === 1
+              leftChipActive || twoPageStep === 1
                 ? digifiMobileAccentSelected(isDarkMode)
                 : digifiMobileAccentIdle(isDarkMode)
             "
-            :disabled="!leftDone"
-            :aria-label="leftDone ? 'Retake left page photo' : 'Left page — capture next'"
-            @click="leftDone && emit('retake', 'left')"
+            :disabled="!leftRetakeEnabled"
+            :aria-label="leftRetakeEnabled ? 'Retake left page photo' : 'Left page — capture next'"
+            @click="leftRetakeEnabled && emit('retake', 'left')"
           >
             <span class="text-[10px] uppercase tracking-wide opacity-80">1 · Left</span>
-            <span>{{ leftDone ? (leftPageScanned ? 'Done · Retake' : 'Scanning…') : 'Next' }}</span>
+            <span>{{ leftChipLabel || 'Next' }}</span>
           </button>
         </li>
         <li class="flex-1">
@@ -609,16 +618,16 @@ watch(
             type="button"
             class="flex min-h-[44px] w-full flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold disabled:cursor-default"
             :class="
-              twoPageStep === 2 || rightDone
+              twoPageStep === 2 || rightChipActive
                 ? digifiMobileAccentSelected(isDarkMode)
                 : digifiMobileAccentIdle(isDarkMode)
             "
-            :disabled="!rightDone"
-            :aria-label="rightDone ? 'Retake right page photo' : 'Right page'"
-            @click="rightDone && emit('retake', 'right')"
+            :disabled="!rightRetakeEnabled"
+            :aria-label="rightRetakeEnabled ? 'Retake right page photo' : 'Right page'"
+            @click="rightRetakeEnabled && emit('retake', 'right')"
           >
             <span class="text-[10px] uppercase tracking-wide opacity-80">2 · Right</span>
-            <span>{{ rightDone ? 'Done · Retake' : leftDone ? 'Next' : 'After left' }}</span>
+            <span>{{ rightChipLabel || 'After left' }}</span>
           </button>
         </li>
       </ol>

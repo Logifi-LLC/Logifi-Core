@@ -9,14 +9,22 @@ type CaptureGrid = Pick<
 >
 
 export function isTwoPageSpreadFullyCaptured(grid: CaptureGrid): boolean {
-  if (grid.layout.value !== 'two-page') return false
-  const fullGrid = grid as ReturnType<typeof useLogbookBuilderGrid>
-  return pageHasScanData(fullGrid, 'left') && pageHasScanData(fullGrid, 'right')
+  return isTwoPageReadyForReview(grid)
 }
 
 export type MobileCaptureSession = {
   leftPhotoCaptured: boolean
   rightPhotoCaptured: boolean
+}
+
+/** Scan results are on the grid (or left flag set) — safe for Review / Done · Retake. */
+export function isMobileCaptureSideScanApplied(
+  grid: CaptureGrid,
+  pageSide: DigifiPageSide
+): boolean {
+  if (pageSide === 'left' && grid.leftPageScanned.value) return true
+  if (pageSide === 'right' && grid.digifiScanStatusByPage.value.right) return true
+  return pageHasScanData(grid as ReturnType<typeof useLogbookBuilderGrid>, pageSide)
 }
 
 /** True when this spread side already has a photo or applied scan — do not re-prompt capture. */
@@ -26,9 +34,68 @@ export function isMobileCaptureSideComplete(
   photoCapturedThisSession: boolean
 ): boolean {
   if (photoCapturedThisSession) return true
-  if (pageSide === 'left' && grid.leftPageScanned.value) return true
-  if (pageSide === 'right' && grid.digifiScanStatusByPage.value.right) return true
-  return pageHasScanData(grid as ReturnType<typeof useLogbookBuilderGrid>, pageSide)
+  return isMobileCaptureSideScanApplied(grid, pageSide)
+}
+
+export function isTwoPageReadyForReview(grid: CaptureGrid): boolean {
+  if (grid.layout.value !== 'two-page') {
+    return isMobileCaptureSideScanApplied(grid, 'left')
+  }
+  return (
+    isMobileCaptureSideScanApplied(grid, 'left') &&
+    isMobileCaptureSideScanApplied(grid, 'right')
+  )
+}
+
+export type MobileTwoPageChipState = 'waiting' | 'next' | 'scanning' | 'done'
+
+export function mobileTwoPageChipLabel(state: MobileTwoPageChipState): string {
+  switch (state) {
+    case 'done':
+      return 'Done · Retake'
+    case 'scanning':
+      return 'Scanning…'
+    case 'next':
+      return 'Next'
+    case 'waiting':
+      return 'After left'
+  }
+}
+
+export function mobileTwoPageLeftChipState(
+  grid: CaptureGrid,
+  session: MobileCaptureSession,
+  photoNext: DigifiPageSide | null
+): MobileTwoPageChipState {
+  if (isMobileCaptureSideScanApplied(grid, 'left')) return 'done'
+  if (isMobileCaptureSideComplete(grid, 'left', session.leftPhotoCaptured)) return 'scanning'
+  if (photoNext === 'left') return 'next'
+  return 'waiting'
+}
+
+export function mobileTwoPageRightChipState(
+  grid: CaptureGrid,
+  session: MobileCaptureSession,
+  photoNext: DigifiPageSide | null
+): MobileTwoPageChipState {
+  if (isMobileCaptureSideScanApplied(grid, 'right')) return 'done'
+  if (isMobileCaptureSideComplete(grid, 'right', session.rightPhotoCaptured)) return 'scanning'
+  if (photoNext === 'right') return 'next'
+  if (photoNext === 'left') return 'waiting'
+  if (photoNext === null) return 'scanning'
+  return 'waiting'
+}
+
+/** Primary setup CTA: photograph next side, wait for scans, or open review. */
+export function mobileSetupCaptureLabel(
+  layout: BuilderLayout,
+  photoNext: DigifiPageSide | null,
+  readyForReview: boolean
+): string {
+  if (layout === 'two-page' && photoNext === null) {
+    return readyForReview ? 'Review flights' : 'Scanning…'
+  }
+  return mobileCaptureLabel(photoNext, layout)
 }
 
 /** Next page to photograph for two-page spreads; null when both sides are already captured. */
