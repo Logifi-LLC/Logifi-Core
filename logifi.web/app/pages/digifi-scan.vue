@@ -40,6 +40,7 @@ import {
   mobileTwoPageLeftChipState,
   mobileTwoPageRightChipState,
   nextMobileCaptureSide,
+  shouldAutoOpenTwoPageReviewFromSetup,
   type MobileCaptureSession,
 } from '~/utils/digifiMobileCapture'
 import { DIGIFI_EYE_PATH } from '~/utils/digifiMobileReview'
@@ -85,6 +86,8 @@ const templatePreloaded = ref(false)
 let stopAutosave: (() => void) | null = null
 let stopDraftFlush: (() => void) | null = null
 let pageInitDone = false
+/** True after the pilot photographs a page this spread — enables async auto-review. */
+const autoReviewAfterCapture = ref(false)
 
 const title = computed(() => (phase.value === 'review' ? 'Review' : 'Digifi'))
 
@@ -157,6 +160,7 @@ function resetCaptureSession() {
   leftPagePhotoCaptured.value = false
   rightPagePhotoCaptured.value = false
   pendingScans.value = []
+  autoReviewAfterCapture.value = false
 }
 
 function queryWantsNewSpread(): boolean {
@@ -225,12 +229,29 @@ watch(
   { immediate: true }
 )
 
+watch(readyForReview, (now, was) => {
+  if (!pageInitDone || !autoReviewAfterCapture.value) return
+  if (was || !now) return
+  openReviewIfReady()
+})
+
+function openReviewIfReady() {
+  if (!shouldAutoOpenTwoPageReviewFromSetup(
+    grid.layout.value,
+    nextCaptureSide.value,
+    readyForReview.value,
+    phase.value
+  )) {
+    return
+  }
+  if (error.value) return
+  phase.value = 'review'
+}
+
 function openCapture() {
   if (!canScan.value || captureBlockedByScan.value) return
   if (nextCaptureSide.value === null) {
-    if (readyForReview.value) {
-      phase.value = 'review'
-    }
+    openReviewIfReady()
     return
   }
   showCamera.value = true
@@ -252,6 +273,7 @@ function retakeCaptureSide(pageSide: DigifiPageSide) {
 }
 
 async function onCaptureFile(file: File) {
+  autoReviewAfterCapture.value = true
   const pageSide = captureSide.value
 
   if (pageSide === 'left' && grid.layout.value === 'two-page') {
