@@ -122,3 +122,16 @@ export function mobileTwoPageCaptureStep(side: DigifiPageSide | null): 1 | 2 | n
   if (side === 'right') return 2
   return null
 }
+
+/** Same gate as the setup "Review flights" CTA (both photos taken, both scans applied). */
+export function shouldAutoOpenTwoPageReviewFromSetup(
+  layout: BuilderLayout,
+  photoNext: DigifiPageSide | null,
+  readyForReview: boolean,
+  phase: 'setup' | 'review'
+): boolean {
+  if (phase !== 'setup') return false
+  if (layout !== 'two-page') return false
+  if (!readyForReview) return false
+  return photoNext === null
+}
