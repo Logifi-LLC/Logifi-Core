@@ -7,6 +7,15 @@ import {
   markColumnReviewed,
 } from '~/utils/digifiMobileReview'
 
+const props = defineProps<{
+  remarksRescanOffers?: Array<{ rowIndex: number; focusRows: number[] }>
+  rescanBusy?: boolean
+}>()
+
+const emit = defineEmits<{
+  'rescan-remarks-band': [rowIndex: number]
+}>()
+
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
 if (!grid) throw new Error('DigifiMobileColumnCarousel requires logbookBuilderGrid')
 
@@ -64,6 +73,10 @@ function onCellInput(rowIdx: number, colId: string, event: Event) {
 
 function cellNeedsReview(rowIdx: number, colId: string): boolean {
   return grid.rows.value[rowIdx]?.digifiCellMeta?.[colId]?.needsReview === true
+}
+
+function remarksRescanOfferForRow(rowIdx: number) {
+  return props.remarksRescanOffers?.some((offer) => offer.rowIndex === rowIdx) ?? false
 }
 
 function columnStripClass(index: number): string {
@@ -167,23 +180,34 @@ watch(
               >
                 {{ rowIdx + 1 }}
               </span>
-              <input
-                :value="grid.rows.value[rowIdx]?.cells?.[column.id] ?? ''"
-                type="text"
-                inputmode="text"
-                autocomplete="off"
-                :aria-label="`${column.label} row ${rowIdx + 1}`"
-                :class="[
-                  'min-w-0 flex-1 border-0 bg-transparent px-2 py-2 text-sm outline-none focus:ring-1 focus:ring-inset',
-                  isDarkMode ? 'text-gray-100 focus:ring-green-500/40' : 'text-gray-900 focus:ring-green-500/30',
-                  cellNeedsReview(rowIdx, column.id)
-                    ? isDarkMode
-                      ? 'bg-amber-500/10 focus:ring-amber-400/50'
-                      : 'bg-amber-50 focus:ring-amber-400/40'
-                    : '',
-                ]"
-                @input="onCellInput(rowIdx, column.id, $event)"
-              >
+              <div class="min-w-0 flex-1">
+                <input
+                  :value="grid.rows.value[rowIdx]?.cells?.[column.id] ?? ''"
+                  type="text"
+                  inputmode="text"
+                  autocomplete="off"
+                  :aria-label="`${column.label} row ${rowIdx + 1}`"
+                  :class="[
+                    'w-full border-0 bg-transparent px-2 py-2 text-sm outline-none focus:ring-1 focus:ring-inset',
+                    isDarkMode ? 'text-gray-100 focus:ring-green-500/40' : 'text-gray-900 focus:ring-green-500/30',
+                    cellNeedsReview(rowIdx, column.id)
+                      ? isDarkMode
+                        ? 'bg-amber-500/10 focus:ring-amber-400/50'
+                        : 'bg-amber-50 focus:ring-amber-400/40'
+                      : '',
+                  ]"
+                  @input="onCellInput(rowIdx, column.id, $event)"
+                >
+                <button
+                  v-if="column.fieldKey === 'remarks' && remarksRescanOfferForRow(rowIdx)"
+                  type="button"
+                  class="mx-2 mb-1 block rounded-lg px-2 py-1 text-left text-[11px] font-semibold text-green-700 underline-offset-2 hover:underline disabled:opacity-50 dark:text-green-300"
+                  :disabled="rescanBusy"
+                  @click="emit('rescan-remarks-band', rowIdx)"
+                >
+                  Re-scan remarks (uses 1 credit)
+                </button>
+              </div>
             </li>
           </ol>
         </section>

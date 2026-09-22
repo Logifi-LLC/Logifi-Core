@@ -44,6 +44,7 @@ export interface DigifiScanMeta {
     overlapRows: number
     chunks: DigifiScanChunkMeta[]
   }
+  remarksFocusRows?: number[]
 }
 
 export interface DigifiScanCellCandidate {
@@ -163,6 +164,7 @@ export interface DigifiScanResponse {
   strippedRowIndices?: number[]
   reviewMessages?: string[]
   reviewRequiredCount?: number
+  remarksRescanOffers?: Array<{ rowIndex: number; focusRows: number[] }>
 }
 
 export interface DigifiCaptureSessionResponse {

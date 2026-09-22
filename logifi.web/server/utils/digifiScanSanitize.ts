@@ -1,5 +1,9 @@
 import type { DigifiScanRow, DigifiTemplateColumn } from '../../app/utils/digifiTypes'
 import type { LogbookColumnKey } from '../../app/utils/logbookTypes'
+import {
+  detectPageFooterOutlierRowIndex,
+  rowHasThinFlightIdentity,
+} from '../../app/utils/digifiScanRowReview'
 
 const TOTALS_KEYWORD_RE =
   /\b(total|totals|brought forward|carried forward|amount forward|page total)\b/i
@@ -60,9 +64,11 @@ function isTotalsShapedNumericRow(
 function shouldStripRow(
   row: DigifiScanRow,
   targetColumns: DigifiTemplateColumn[],
-  expectedRowCount: number
+  expectedRowCount: number,
+  footerOutlierRowIndex: number | null
 ): boolean {
   if (row.rowIndex < 0 || row.rowIndex >= expectedRowCount) return true
+  if (footerOutlierRowIndex != null && row.rowIndex === footerOutlierRowIndex) return true
   if (rowHasTotalsKeyword(row)) return true
   return isTotalsShapedNumericRow(row, targetColumns)
 }
@@ -71,12 +77,17 @@ export function sanitizeDigifiScanRows(
   rows: DigifiScanRow[],
   targetColumns: DigifiTemplateColumn[],
   expectedRowCount: number
-): { rows: DigifiScanRow[]; strippedRowIndices: number[] } {
+): { rows: DigifiScanRow[]; strippedRowIndices: number[]; footerOutlierRowIndex: number | null } {
+  const footerOutlierRowIndex = detectPageFooterOutlierRowIndex(
+    rows,
+    targetColumns,
+    expectedRowCount
+  )
   const strippedRowIndices: number[] = []
   const kept: DigifiScanRow[] = []
 
   for (const row of rows) {
-    if (shouldStripRow(row, targetColumns, expectedRowCount)) {
+    if (shouldStripRow(row, targetColumns, expectedRowCount, footerOutlierRowIndex)) {
       if (row.rowIndex >= 0 && row.rowIndex < expectedRowCount) {
         strippedRowIndices.push(row.rowIndex)
       }
@@ -88,5 +99,8 @@ export function sanitizeDigifiScanRows(
   return {
     rows: kept,
     strippedRowIndices: [...new Set(strippedRowIndices)].sort((a, b) => a - b),
+    footerOutlierRowIndex,
   }
 }
+
+export { rowHasThinFlightIdentity }

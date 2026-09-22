@@ -66,6 +66,26 @@ describe('sanitizeDigifiScanRows', () => {
     expect(rows[0].cells.pic).toBe('1.5')
   })
 
+  it('strips last-row dualG page total outlier', () => {
+    const dualOnly: DigifiTemplateColumn[] = [
+      { id: 'dualg', label: 'Dual G', fieldKey: 'dualG', order: 0 },
+    ]
+    const rows = Array.from({ length: 12 }, (_, rowIndex) => ({
+      rowIndex,
+      cells: { dualg: '1.2' },
+    }))
+    rows.push({ rowIndex: 12, cells: { dualg: '17.2' } })
+
+    const { rows: kept, strippedRowIndices, footerOutlierRowIndex } = sanitizeDigifiScanRows(
+      rows,
+      dualOnly,
+      13
+    )
+    expect(footerOutlierRowIndex).toBe(12)
+    expect(strippedRowIndices).toContain(12)
+    expect(kept).toHaveLength(12)
+  })
+
   it('drops overflow rowIndex values', () => {
     const { rows, strippedRowIndices } = sanitizeDigifiScanRows(
       [{ rowIndex: 15, cells: { pic: '2.0' } }],

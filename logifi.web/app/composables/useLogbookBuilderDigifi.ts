@@ -223,10 +223,21 @@ export function useLogbookBuilderDigifi(
     chunkCount: number
     rescueRecoveredCount: number
   } | null>(null)
+  const lastPreparedScan = ref<{
+    pageSide: DigifiPageSide
+    prepared: PreparedScanAssets
+  } | null>(null)
+  const remarksRescanOffers = ref<Array<{ rowIndex: number; focusRows: number[] }>>([])
+  const lastScanPageSide = ref<DigifiPageSide>('left')
 
   const canScan = computed(() => isAuthenticated.value && visibleColumns.value.length > 0)
 
-  function buildMeta(pageSide: DigifiPageSide, chunkMeta: DigifiScanChunkMeta[], templateName?: string): DigifiScanMeta {
+  function buildMeta(
+    pageSide: DigifiPageSide,
+    chunkMeta: DigifiScanChunkMeta[],
+    templateName?: string,
+    remarksFocusRows?: number[]
+  ): DigifiScanMeta {
     const columns: DigifiTemplateColumn[] = visibleColumns.value.map((c) => ({
       id: c.id,
       label: c.label,
@@ -251,6 +262,8 @@ export function useLogbookBuilderDigifi(
             chunks: chunkMeta,
           }
         : undefined,
+      remarksFocusRows:
+        remarksFocusRows && remarksFocusRows.length > 0 ? remarksFocusRows : undefined,
     }
   }
 
@@ -260,7 +273,12 @@ export function useLogbookBuilderDigifi(
     return { Authorization: `Bearer ${token}` }
   }
 
-  async function scanPage(file: File, pageSide: DigifiPageSide, templateName?: string) {
+  async function scanPage(
+    file: File,
+    pageSide: DigifiPageSide,
+    templateName?: string,
+    options?: { remarksFocusRows?: number[] }
+  ) {
     if (scanning.value) {
       console.warn('[digifi] scan already in progress — ignoring duplicate request')
       return
@@ -304,7 +322,17 @@ export function useLogbookBuilderDigifi(
       for (const chunk of prepared.chunkFiles) {
         form.append(chunk.partName, chunk.file)
       }
-      form.append('meta', JSON.stringify(buildMeta(pageSide, prepared.chunkMeta, templateName)))
+      form.append(
+        'meta',
+        JSON.stringify(
+          buildMeta(pageSide, prepared.chunkMeta, templateName, options?.remarksFocusRows)
+        )
+      )
+
+      if (!options?.remarksFocusRows?.length) {
+        lastPreparedScan.value = { pageSide, prepared }
+        lastScanPageSide.value = pageSide
+      }
 
       const result = await apiFetch<DigifiScanResponse>('/api/digifi/scan', {
         method: 'POST',
@@ -331,10 +359,10 @@ export function useLogbookBuilderDigifi(
             }
           : analyzeDigifiScanRows(result.rows, rowCount.value)
       const rowWarning = formatDigifiScanWarning(diagnostics, rowCount.value, result.rows)
+      remarksRescanOffers.value = result.remarksRescanOffers ?? []
+      const scanReviewNotes = (result.reviewMessages ?? []).filter(Boolean)
       const reviewWarning =
-        (result.reviewMessages?.length ?? 0) > 0
-          ? `${result.reviewRequiredCount ?? result.reviewMessages?.length ?? 0} identification/airport value(s) need review.`
-          : null
+        scanReviewNotes.length > 0 ? scanReviewNotes.join(' ') : null
       const fallbackWarning =
         result.fallbackUsed && (result.modelsAttempted?.length ?? 0) > 1
           ? `Used fallback model path (${result.modelsAttempted?.join(' -> ')}).`
@@ -417,6 +445,18 @@ export function useLogbookBuilderDigifi(
     }
   }
 
+  async function rescanRemarksBand(rowIndex: number) {
+    const offer = remarksRescanOffers.value.find((item) => item.rowIndex === rowIndex)
+    const session = lastPreparedScan.value
+    if (!offer || !session) {
+      error.value = 'Re-scan the page first, then try remarks band re-scan.'
+      return
+    }
+    await scanPage(session.prepared.imageFile, session.pageSide, undefined, {
+      remarksFocusRows: offer.focusRows,
+    })
+  }
+
   return {
     scanning,
     error,
@@ -428,6 +468,9 @@ export function useLogbookBuilderDigifi(
     scanDetail,
     canScan,
     scanPage,
+    rescanRemarksBand,
+    remarksRescanOffers,
+    lastScanPageSide,
     resetDigifiPageState,
     leftPageScanned,
     layout,
