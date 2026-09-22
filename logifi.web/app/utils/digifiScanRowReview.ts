@@ -43,6 +43,80 @@ function rowMaxTimeValue(row: DigifiScanRow, columns: DigifiTemplateColumn[]): n
   return max
 }
 
+const PRIMARY_TIME_FIELD_ORDER: LogbookColumnKey[] = [
+  'total',
+  'pic',
+  'dualG',
+  'dualR',
+  'sic',
+  'solo',
+  'night',
+  'actual',
+  'hood',
+  'xc',
+]
+
+/** Primary duration on the row (total / PIC / Dual G, etc.) for same-duration cluster checks. */
+export function rowPrimaryTimeValue(
+  row: DigifiScanRow,
+  columns: DigifiTemplateColumn[]
+): number | null {
+  for (const fieldKey of PRIMARY_TIME_FIELD_ORDER) {
+    const column = columnByField(columns, fieldKey)
+    if (!column) continue
+    const n = parseTimeCell(row.cells[column.id] ?? '')
+    if (n != null) return n
+  }
+  return rowMaxTimeValue(row, columns)
+}
+
+const SAME_DURATION_EPSILON = 0.05
+
+function timesMatch(a: number, b: number): boolean {
+  return Math.abs(a - b) < SAME_DURATION_EPSILON
+}
+
+/** Row indices that sit in a run of 2+ consecutive lines with the same primary duration. */
+export function findSameDurationClusterRowIndices(
+  rows: DigifiScanRow[],
+  columns: DigifiTemplateColumn[],
+  expectedRowCount: number
+): Set<number> {
+  const inRange = rows
+    .filter((row) => row.rowIndex >= 0 && row.rowIndex < expectedRowCount)
+    .sort((a, b) => a.rowIndex - b.rowIndex)
+
+  const clusterRows = new Set<number>()
+  let runStart = 0
+
+  while (runStart < inRange.length) {
+    const anchorTime = rowPrimaryTimeValue(inRange[runStart]!, columns)
+    if (anchorTime == null) {
+      runStart += 1
+      continue
+    }
+
+    let runEnd = runStart
+    while (runEnd + 1 < inRange.length) {
+      const next = inRange[runEnd + 1]!
+      if (next.rowIndex !== inRange[runEnd]!.rowIndex + 1) break
+      const nextTime = rowPrimaryTimeValue(next, columns)
+      if (nextTime == null || !timesMatch(anchorTime, nextTime)) break
+      runEnd += 1
+    }
+
+    const runLength = runEnd - runStart + 1
+    if (runLength >= 2) {
+      for (let i = runStart; i <= runEnd; i++) {
+        clusterRows.add(inRange[i]!.rowIndex)
+      }
+    }
+    runStart = runEnd + 1
+  }
+
+  return clusterRows
+}
+
 function columnByField(columns: DigifiTemplateColumn[], fieldKey: LogbookColumnKey) {
   return columns.find((c) => c.fieldKey === fieldKey)
 }
@@ -135,25 +209,37 @@ export function findRemarksMergeSuspects(
   const nonZero = pipeCounts.filter((n) => n > 0)
   const pageMedian = nonZero.length > 0 ? median(nonZero) : 0
 
+  const sameDurationClusterRows = findSameDurationClusterRowIndices(
+    rows,
+    columns,
+    expectedRowCount
+  )
   const suspects: RemarksMergeSuspect[] = []
 
   for (const row of inRange) {
     const remarks = (row.cells[remarksCol.id] ?? '').trim()
-    if (!remarks) continue
-    const pipes = countRemarksPipes(remarks)
+    const inSameDurationCluster = sameDurationClusterRows.has(row.rowIndex)
+    const pipes = remarks ? countRemarksPipes(remarks) : 0
     const relativeHigh = pipes > 0 && pipes >= Math.max(pageMedian * 2, pageMedian + 2, 3)
     const fat = remarks.length >= 100 && pipes >= Math.max(1, pageMedian)
-    const neighborSameDuration = hasSameDurationNeighbor(row, inRange, columns)
 
-    if (!relativeHigh && !fat && !neighborSameDuration) continue
+    if (!remarks && !inSameDurationCluster) continue
+    if (remarks && !relativeHigh && !fat && !inSameDurationCluster) continue
+    if (!remarks && inSameDurationCluster) {
+      // Cluster signal only — still offer band re-scan without requiring remarks text.
+    } else if (!relativeHigh && !fat && !inSameDurationCluster) {
+      continue
+    }
 
     const focusRows = [row.rowIndex - 1, row.rowIndex, row.rowIndex + 1].filter(
       (idx) => idx >= 0 && idx < expectedRowCount
     )
     const parts: string[] = []
+    if (inSameDurationCluster) {
+      parts.push('consecutive rows with the same duration (possible skipped or merged line)')
+    }
     if (relativeHigh) parts.push('unusually many remark segments for this page')
     if (fat) parts.push('long remarks block')
-    if (neighborSameDuration) parts.push('same duration as a neighbor row')
     suspects.push({
       rowIndex: row.rowIndex,
       focusRows,
@@ -162,22 +248,6 @@ export function findRemarksMergeSuspects(
   }
 
   return suspects
-}
-
-function hasSameDurationNeighbor(
-  row: DigifiScanRow,
-  rows: DigifiScanRow[],
-  columns: DigifiTemplateColumn[]
-): boolean {
-  const value = rowMaxTimeValue(row, columns)
-  if (value == null) return false
-  for (const delta of [-1, 1]) {
-    const neighbor = rows.find((item) => item.rowIndex === row.rowIndex + delta)
-    if (!neighbor) continue
-    const neighborValue = rowMaxTimeValue(neighbor, columns)
-    if (neighborValue != null && Math.abs(neighborValue - value) < 0.05) return true
-  }
-  return false
 }
 
 export function applyRemarksMergeSuspectMeta(

@@ -3,6 +3,7 @@ import {
   countRemarksPipes,
   detectPageFooterOutlierRowIndex,
   findRemarksMergeSuspects,
+  findSameDurationClusterRowIndices,
 } from '../../app/utils/digifiScanRowReview'
 import type { DigifiTemplateColumn } from '../../app/utils/digifiTypes'
 
@@ -51,6 +52,24 @@ describe('findRemarksMergeSuspects', () => {
     const suspects = findRemarksMergeSuspects(rows, columns, 3)
     expect(suspects.some((s) => s.rowIndex === 2)).toBe(true)
     expect(suspects.some((s) => s.rowIndex === 0)).toBe(false)
+  })
+})
+
+describe('findSameDurationClusterRowIndices', () => {
+  it('marks runs of 2+ adjacent rows with equal Dual G / PIC time', () => {
+    const columns: DigifiTemplateColumn[] = [
+      { id: 'dualg', label: 'Dual G', fieldKey: 'dualG', order: 0 },
+      { id: 'remarks', label: 'Remarks', fieldKey: 'remarks', order: 1 },
+    ]
+    const rows = [0, 1, 2, 3].map((rowIndex) => ({
+      rowIndex,
+      cells: { dualg: '1.3', remarks: rowIndex === 2 ? 'a | b' : '' },
+    }))
+    const cluster = findSameDurationClusterRowIndices(rows, columns, 4)
+    expect([...cluster].sort()).toEqual([0, 1, 2, 3])
+    const suspects = findRemarksMergeSuspects(rows, columns, 4)
+    expect(suspects.length).toBeGreaterThanOrEqual(1)
+    expect(suspects.some((s) => s.message.includes('same duration'))).toBe(true)
   })
 })
 
