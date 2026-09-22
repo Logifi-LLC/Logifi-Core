@@ -39,6 +39,10 @@ describe('digifiMobileCapture', () => {
     expect(side).toBeNull()
   })
 
+  it('labels the continue action when both two-page sides are already captured', () => {
+    expect(mobileCaptureLabel(null, 'two-page')).toBe('Review flights')
+  })
+
   it('treats session right photo as complete even before scan lands', () => {
     const grid = useLogbookBuilderGrid()
     grid.layout.value = 'two-page'

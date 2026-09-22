@@ -38,6 +38,7 @@ export function nextMobileCaptureSide(
 }
 
 export function mobileCaptureLabel(side: DigifiPageSide | null, layout: BuilderLayout): string {
+  if (side === null) return 'Review flights'
   if (layout === 'two-page' && side === 'right') return 'Photograph right page'
   if (layout === 'two-page') return 'Photograph left page'
   return 'Photograph page'

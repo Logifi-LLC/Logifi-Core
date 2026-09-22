@@ -84,22 +84,32 @@ const props = defineProps<{
 }>()
 
 const leftDone = computed(
-  () => props.leftCaptureComplete ?? props.leftPagePhotoCaptured ?? props.leftPageScanned ?? false
+  () =>
+    Boolean(
+      props.leftCaptureComplete || props.leftPagePhotoCaptured || props.leftPageScanned
+    )
 )
-const rightDone = computed(() => props.rightCaptureComplete ?? false)
+const rightDone = computed(() => Boolean(props.rightCaptureComplete))
+
+const bothPagesCaptured = computed(
+  () => props.twoPageStep === null && leftDone.value && rightDone.value
+)
 
 const captureButtonDisabled = computed(() => {
+  if (bothPagesCaptured.value) {
+    return selectedFieldKeys.value.size === 0
+  }
   if (props.scanning) {
     const canShootRightWhileLeftScans =
       props.twoPageStep === 2 && leftDone.value && !props.leftPageScanned
     if (!canShootRightWhileLeftScans) return true
   }
-  if (props.twoPageStep === null && leftDone.value && rightDone.value) return true
   return selectedFieldKeys.value.size === 0
 })
 
 const emit = defineEmits<{
   capture: []
+  retake: [pageSide: 'left' | 'right']
 }>()
 
 const templates = ref<{ id: string; name: string; layout: string; default_row_count: number; columns: BuilderTemplateColumn[]; tags_column_width?: number; default_import_role?: string; two_page_split_index?: number }[]>([])
@@ -577,27 +587,39 @@ watch(
         Two-page photos
       </p>
       <ol class="flex gap-2">
-        <li
-          class="flex min-h-[44px] flex-1 flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold"
-          :class="
-            leftDone || twoPageStep === 1
-              ? digifiMobileAccentSelected(isDarkMode)
-              : digifiMobileAccentIdle(isDarkMode)
-          "
-        >
-          <span class="text-[10px] uppercase tracking-wide opacity-80">1 · Left</span>
-          <span>{{ leftDone ? (leftPageScanned ? 'Done' : 'Scanning…') : 'Next' }}</span>
+        <li class="flex-1">
+          <button
+            type="button"
+            class="flex min-h-[44px] w-full flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold disabled:cursor-default"
+            :class="
+              leftDone || twoPageStep === 1
+                ? digifiMobileAccentSelected(isDarkMode)
+                : digifiMobileAccentIdle(isDarkMode)
+            "
+            :disabled="!leftDone"
+            :aria-label="leftDone ? 'Retake left page photo' : 'Left page — capture next'"
+            @click="leftDone && emit('retake', 'left')"
+          >
+            <span class="text-[10px] uppercase tracking-wide opacity-80">1 · Left</span>
+            <span>{{ leftDone ? (leftPageScanned ? 'Done · Retake' : 'Scanning…') : 'Next' }}</span>
+          </button>
         </li>
-        <li
-          class="flex min-h-[44px] flex-1 flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold"
-          :class="
-            twoPageStep === 2 || rightDone
-              ? digifiMobileAccentSelected(isDarkMode)
-              : digifiMobileAccentIdle(isDarkMode)
-          "
-        >
-          <span class="text-[10px] uppercase tracking-wide opacity-80">2 · Right</span>
-          <span>{{ rightDone ? 'Done' : leftDone ? 'Next' : 'After left' }}</span>
+        <li class="flex-1">
+          <button
+            type="button"
+            class="flex min-h-[44px] w-full flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold disabled:cursor-default"
+            :class="
+              twoPageStep === 2 || rightDone
+                ? digifiMobileAccentSelected(isDarkMode)
+                : digifiMobileAccentIdle(isDarkMode)
+            "
+            :disabled="!rightDone"
+            :aria-label="rightDone ? 'Retake right page photo' : 'Right page'"
+            @click="rightDone && emit('retake', 'right')"
+          >
+            <span class="text-[10px] uppercase tracking-wide opacity-80">2 · Right</span>
+            <span>{{ rightDone ? 'Done · Retake' : leftDone ? 'Next' : 'After left' }}</span>
+          </button>
         </li>
       </ol>
     </section>

@@ -23,7 +23,10 @@ import {
 } from '~/composables/useLogbookBuilderDraft'
 import { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { loadLastTemplateIfAny } from '~/composables/useLogbookBuilderLastTemplate'
-import { recoverDigifiSpreadFromServer } from '~/composables/useDigifiSpreadRecovery'
+import {
+  clearDigifiPageSideCells,
+  recoverDigifiSpreadFromServer,
+} from '~/composables/useDigifiSpreadRecovery'
 import {
   isMobileCaptureSideComplete,
   mobileCaptureLabel,
@@ -121,9 +124,6 @@ function syncCaptureSessionFromGrid() {
   if (rightCaptureComplete.value) {
     rightPagePhotoCaptured.value = true
   }
-  if (nextMobileCaptureSide(grid.layout.value, grid, captureSession.value) === null) {
-    phase.value = 'review'
-  }
 }
 
 function resetCaptureSession() {
@@ -181,6 +181,21 @@ function openCapture() {
     return
   }
   showCamera.value = true
+}
+
+function retakeCaptureSide(pageSide: DigifiPageSide) {
+  if (pageSide === 'left') {
+    leftPagePhotoCaptured.value = false
+    grid.leftPageScanned.value = false
+  } else {
+    rightPagePhotoCaptured.value = false
+  }
+  grid.clearDigifiScanStatus(pageSide)
+  clearDigifiPageSideCells(grid, pageSide)
+  pendingScans.value = pendingScans.value.filter((item) => item.pageSide !== pageSide)
+  phase.value = 'setup'
+  showCamera.value = false
+  openCapture()
 }
 
 async function onCaptureFile(file: File) {
@@ -250,7 +265,12 @@ async function finishPageInit() {
       const recoveredPages = await recoverSpreadIfNeeded(userId)
       if (grid.layout.value === 'two-page') {
         syncCaptureSessionFromGrid()
-        if (recoveredPages >= 2) {
+        const captureNext = nextMobileCaptureSide(
+          grid.layout.value,
+          grid,
+          captureSession.value
+        )
+        if (recoveredPages >= 2 || captureNext === null) {
           phase.value = 'review'
         } else if (grid.leftPageScanned.value) {
           phase.value = 'setup'
@@ -352,6 +372,7 @@ onUnmounted(() => {
         :right-capture-complete="rightCaptureComplete"
         :template-preloaded="templatePreloaded"
         @capture="openCapture"
+        @retake="retakeCaptureSide"
       />
 
       <DigifiMobileCameraCapture
