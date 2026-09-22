@@ -71,12 +71,22 @@ function onDefaultRoleChange(e: Event) {
   } catch (_) {}
 }
 
-defineProps<{
+const props = defineProps<{
   scanning: boolean
   captureLabel: string
   twoPageStep?: 1 | 2 | null
   leftPageScanned?: boolean
+  leftPagePhotoCaptured?: boolean
 }>()
+
+const captureButtonDisabled = computed(() => {
+  if (props.scanning) {
+    const canShootRightWhileLeftScans =
+      props.twoPageStep === 2 && props.leftPagePhotoCaptured && !props.leftPageScanned
+    if (!canShootRightWhileLeftScans) return true
+  }
+  return selectedFieldKeys.value.size === 0
+})
 
 const emit = defineEmits<{
   capture: []
@@ -522,13 +532,13 @@ onMounted(() => {
         <li
           class="flex min-h-[44px] flex-1 flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold"
           :class="
-            leftPageScanned || twoPageStep === 1
+            leftPagePhotoCaptured || leftPageScanned || twoPageStep === 1
               ? digifiMobileAccentSelected(isDarkMode)
               : digifiMobileAccentIdle(isDarkMode)
           "
         >
           <span class="text-[10px] uppercase tracking-wide opacity-80">1 · Left</span>
-          <span>{{ leftPageScanned ? 'Done' : 'Next' }}</span>
+          <span>{{ leftPageScanned ? 'Done' : leftPagePhotoCaptured ? 'Scanning…' : 'Next' }}</span>
         </li>
         <li
           class="flex min-h-[44px] flex-1 flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold"
@@ -539,7 +549,7 @@ onMounted(() => {
           "
         >
           <span class="text-[10px] uppercase tracking-wide opacity-80">2 · Right</span>
-          <span>{{ leftPageScanned ? 'Next' : 'After left' }}</span>
+          <span>{{ leftPagePhotoCaptured ? 'Next' : 'After left' }}</span>
         </li>
       </ol>
     </section>
@@ -547,10 +557,10 @@ onMounted(() => {
     <button
       type="button"
       class="w-full min-h-[52px] rounded-2xl bg-green-600 px-4 py-4 text-base font-semibold text-white shadow-sm disabled:opacity-50"
-      :disabled="scanning || selectedFieldKeys.size === 0"
+      :disabled="captureButtonDisabled"
       @click="emit('capture')"
     >
-      {{ scanning ? 'Scanning…' : captureLabel }}
+      {{ scanning && captureButtonDisabled ? 'Scanning…' : captureLabel }}
     </button>
   </div>
 </template>
