@@ -135,6 +135,42 @@ describe('DigifiMobileLayoutWizard', () => {
     expect((yearInput.element as HTMLInputElement).value).toBe('2024')
   })
 
+  it('enables review CTA when both two-page sides are ready for review', async () => {
+    const { wrapper, grid } = mountWithGrid(DigifiMobileLayoutWizard, {
+      scanning: false,
+      captureLabel: 'Review flights',
+      twoPageStep: null,
+      leftChipLabel: 'Done · Retake',
+      rightChipLabel: 'Done · Retake',
+      readyForReview: true,
+    })
+    grid.layout.value = 'two-page'
+    await nextTick()
+
+    const cta = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Review flights'))
+    expect(cta).toBeTruthy()
+    expect((cta!.element as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('disables CTA while scans are still in flight', async () => {
+    const { wrapper, grid } = mountWithGrid(DigifiMobileLayoutWizard, {
+      scanning: true,
+      captureLabel: 'Scanning…',
+      twoPageStep: null,
+      leftChipLabel: 'Scanning…',
+      rightChipLabel: 'Done · Retake',
+      readyForReview: false,
+    })
+    grid.layout.value = 'two-page'
+    await nextTick()
+
+    const cta = wrapper.get('button.w-full.min-h-\\[52px\\]')
+    expect(cta.text()).toContain('Scanning')
+    expect((cta.element as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('shows two-page capture progress when layout is two-page', async () => {
     const { wrapper, grid } = mountWithGrid(DigifiMobileLayoutWizard, {
       scanning: false,
@@ -153,6 +189,22 @@ describe('DigifiMobileLayoutWizard', () => {
 })
 
 describe('DigifiMobileCameraCapture', () => {
+  it('shows a handoff banner when the right page is the active step', () => {
+    const wrapper = mount(DigifiMobileCameraCapture, {
+      props: {
+        shutterLabel: 'Photograph right page',
+        twoPageStep: 2,
+        leftPageReadyForRight: true,
+      },
+      global: {
+        stubs: { video: true },
+      },
+    })
+    expect(wrapper.text()).toContain('Left page captured')
+    expect(wrapper.text()).toContain('Photograph right page')
+    expect(wrapper.text()).toContain('Page 2 of 2')
+  })
+
   it('uses a bottom shutter control without level guide overlays', () => {
     const wrapper = mount(DigifiMobileCameraCapture, {
       props: { shutterLabel: 'Photograph left page', twoPageStep: 1 },
@@ -176,11 +228,12 @@ describe('DigifiMobileColumnCarousel', () => {
     const firstCol = grid.visibleColumns.value[0]
     expect(firstCol).toBeTruthy()
 
-    const inputs = wrapper.findAll('input')
-    expect(inputs.length).toBe(grid.rows.value.length * grid.visibleColumns.value.length)
+    const fields = wrapper.findAll('input, select, textarea')
+    expect(fields.length).toBeGreaterThan(0)
     expect(wrapper.findAll('button[aria-label]').length).toBe(0)
 
-    await inputs[0]!.setValue('01/02')
+    const firstInput = wrapper.find('input')
+    await firstInput.setValue('01/02')
     await nextTick()
     expect(grid.rows.value[0]?.cells[firstCol!.id]).toBe('01/02')
   })

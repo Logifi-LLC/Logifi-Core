@@ -7,7 +7,7 @@ import type {
 
 type Grid = ReturnType<typeof useLogbookBuilderGrid>
 
-function columnIdsForPageSide(
+export function columnIdsForPageSide(
   grid: Grid,
   pageSide: DigifiPageSide
 ): string[] {
@@ -36,6 +36,17 @@ export function pageHasScanData(grid: Grid, pageSide: DigifiPageSide): boolean {
   }
 
   return false
+}
+
+/** Clears scanned cells (and Digifi meta) for one spread side so the pilot can re-photograph. */
+export function clearDigifiPageSideCells(grid: Grid, pageSide: DigifiPageSide): void {
+  const colIds = columnIdsForPageSide(grid, pageSide)
+  for (let rowIdx = 0; rowIdx < grid.rows.value.length; rowIdx++) {
+    for (const colId of colIds) {
+      grid.setCell(rowIdx, colId, '')
+      grid.setDigifiCellMeta(rowIdx, colId, null)
+    }
+  }
 }
 
 function authHeaders(getAccessToken: () => string | null): Record<string, string> {
@@ -104,5 +115,6 @@ export function useDigifiSpreadRecovery() {
     recoverDigifiSpreadFromServer,
     pageHasScanData,
     columnIdsForPageSide,
+    clearDigifiPageSideCells,
   }
 }

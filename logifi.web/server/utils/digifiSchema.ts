@@ -63,6 +63,8 @@ export const digifiScanMetaSchema = z.object({
     overlapRows: z.number().int().min(0).max(10),
     chunks: z.array(digifiScanChunkSchema).min(1).max(40),
   }).optional(),
+  /** Pilot-opt-in remarks band re-scan (row indices); uses row-band images + focus prompt only. */
+  remarksFocusRows: z.array(z.number().int().min(0).max(99)).min(1).max(5).optional(),
 })
 
 const geminiCellSchema = z.object({

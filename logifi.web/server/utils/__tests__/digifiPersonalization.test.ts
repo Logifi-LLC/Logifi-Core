@@ -205,4 +205,30 @@ describe('Digifi registration personalization', () => {
     expect(row.cells['aircraft-col']).toBe('DA20-C1')
     expect(row.cellMeta?.['aircraft-col']?.strategy).toBe('tail_match')
   })
+
+  it('backfills aircraft from history when OCR type conflicts on the same spread', () => {
+    const columns: DigifiTemplateColumn[] = [
+      { id: 'aircraft-col', fieldKey: 'aircraft', label: 'Aircraft', order: 0 },
+      { id: 'ident-col', fieldKey: 'identification', label: 'Ident', order: 1 },
+    ]
+    const tailIndex = buildAircraftTailIndex([
+      {
+        registration: 'N564CA',
+        aircraft_make_model: 'C172S',
+        updated_at: '2026-06-01T00:00:00Z',
+      },
+    ])
+    const row: DigifiScanRow = {
+      rowIndex: 0,
+      cells: {
+        'aircraft-col': 'DA20C1',
+        'ident-col': 'N564CA',
+      },
+    }
+
+    backfillDigifiAircraftFromTail(row, 'N564CA', tailIndex, columns)
+
+    expect(row.cells['aircraft-col']).toBe('C172S')
+    expect(row.cellMeta?.['aircraft-col']?.strategy).toBe('tail_match')
+  })
 })

@@ -7,6 +7,8 @@ const props = defineProps<{
   shutterLabel?: string
   /** 1-based step when capturing a two-page spread (e.g. 1 = left, 2 = right). */
   twoPageStep?: 1 | 2 | null
+  /** Show a clear handoff after the left page photo (right page is the active step). */
+  leftPageReadyForRight?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -139,6 +141,13 @@ onUnmounted(() => {
     >
       {{ cameraError }}
     </p>
+
+    <div
+      v-if="leftPageReadyForRight"
+      class="relative z-10 mx-4 mt-3 rounded-xl bg-green-600/90 px-3 py-2.5 text-center text-sm font-semibold text-white shadow-lg"
+    >
+      Left page captured — photograph the right page next.
+    </div>
 
     <div
       class="relative z-10 mt-auto flex flex-col items-center gap-3 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-4"

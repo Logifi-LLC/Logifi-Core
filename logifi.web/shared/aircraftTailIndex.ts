@@ -115,16 +115,20 @@ export function buildAircraftTailIndex(rows: AircraftTailIndexSourceRow[]): Airc
   return index
 }
 
+/** True when logbook canonical make/model should replace the scanned value for a known tail. */
 export function shouldApplyTailCanonicalMakeModel(
   scannedMakeModel: string,
   canonicalMakeModel: string
 ): boolean {
-  const scanned = (scannedMakeModel || '').trim()
   const canonical = (canonicalMakeModel || '').trim()
-  if (!canonical) return false
+  if (!canonical || canonical.toLowerCase() === 'unknown') return false
+  const scanned = (scannedMakeModel || '').trim()
   if (!scanned || scanned.toLowerCase() === 'unknown') return true
-  if (scanned === canonical) return false
-  return isMakeModelSpellingVariant(scanned, canonical)
+  if (scanned === canonical || isMakeModelSpellingVariant(scanned, canonical)) {
+    return scanned !== canonical
+  }
+  // Known tail: history/catalog type wins over conflicting OCR on the same spread.
+  return true
 }
 
 export interface ResolveAircraftByTailResult {

@@ -2,6 +2,9 @@ import type { BuilderLayout } from './logbookBuilderTypes'
 import type { DigifiPageSide } from './digifiTypes'
 
 export const DIGIFI_MOBILE_SCAN_PATH = '/digifi-scan'
+
+/** Open Digifi mobile with a fresh spread (does not restore the saved builder draft). */
+export const DIGIFI_MOBILE_SCAN_NEW_PATH = '/digifi-scan?new=1'
 export const DIGIFI_EYE_PATH = '/digifi-eye'
 export const DIGIFI_WEB_BUILDER_PATH = '/logbook-builder?digifi=open'
 

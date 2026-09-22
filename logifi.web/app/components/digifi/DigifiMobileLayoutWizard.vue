@@ -75,16 +75,42 @@ const props = defineProps<{
   scanning: boolean
   captureLabel: string
   twoPageStep?: 1 | 2 | null
-  leftPageScanned?: boolean
-  leftPagePhotoCaptured?: boolean
+  leftChipLabel?: string
+  rightChipLabel?: string
+  readyForReview?: boolean
   /** Set when parent finishes async loadLastTemplateIfAny (wizard may mount earlier). */
   templatePreloaded?: boolean
 }>()
 
+const leftChipActive = computed(() => {
+  const label = props.leftChipLabel ?? ''
+  return label !== 'Next' && label !== 'After left' && label !== ''
+})
+
+const rightChipActive = computed(() => {
+  const label = props.rightChipLabel ?? ''
+  return label !== 'After left' && label !== ''
+})
+
+const leftRetakeEnabled = computed(() => {
+  const label = props.leftChipLabel ?? ''
+  return label === 'Done · Retake' || label === 'Scanning…'
+})
+
+const rightRetakeEnabled = computed(() => {
+  const label = props.rightChipLabel ?? ''
+  return label === 'Done · Retake' || label === 'Scanning…'
+})
+
 const captureButtonDisabled = computed(() => {
+  if (props.readyForReview && props.twoPageStep === null) {
+    return selectedFieldKeys.value.size === 0
+  }
+  if (props.captureLabel === 'Scanning…') {
+    return true
+  }
   if (props.scanning) {
-    const canShootRightWhileLeftScans =
-      props.twoPageStep === 2 && props.leftPagePhotoCaptured && !props.leftPageScanned
+    const canShootRightWhileLeftScans = props.twoPageStep === 2
     if (!canShootRightWhileLeftScans) return true
   }
   return selectedFieldKeys.value.size === 0
@@ -92,6 +118,7 @@ const captureButtonDisabled = computed(() => {
 
 const emit = defineEmits<{
   capture: []
+  retake: [pageSide: 'left' | 'right']
 }>()
 
 const templates = ref<{ id: string; name: string; layout: string; default_row_count: number; columns: BuilderTemplateColumn[]; tags_column_width?: number; default_import_role?: string; two_page_split_index?: number }[]>([])
@@ -569,27 +596,39 @@ watch(
         Two-page photos
       </p>
       <ol class="flex gap-2">
-        <li
-          class="flex min-h-[44px] flex-1 flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold"
-          :class="
-            leftPagePhotoCaptured || leftPageScanned || twoPageStep === 1
-              ? digifiMobileAccentSelected(isDarkMode)
-              : digifiMobileAccentIdle(isDarkMode)
-          "
-        >
-          <span class="text-[10px] uppercase tracking-wide opacity-80">1 · Left</span>
-          <span>{{ leftPageScanned ? 'Done' : leftPagePhotoCaptured ? 'Scanning…' : 'Next' }}</span>
+        <li class="flex-1">
+          <button
+            type="button"
+            class="flex min-h-[44px] w-full flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold disabled:cursor-default"
+            :class="
+              leftChipActive || twoPageStep === 1
+                ? digifiMobileAccentSelected(isDarkMode)
+                : digifiMobileAccentIdle(isDarkMode)
+            "
+            :disabled="!leftRetakeEnabled"
+            :aria-label="leftRetakeEnabled ? 'Retake left page photo' : 'Left page — capture next'"
+            @click="leftRetakeEnabled && emit('retake', 'left')"
+          >
+            <span class="text-[10px] uppercase tracking-wide opacity-80">1 · Left</span>
+            <span>{{ leftChipLabel || 'Next' }}</span>
+          </button>
         </li>
-        <li
-          class="flex min-h-[44px] flex-1 flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold"
-          :class="
-            twoPageStep === 2
-              ? digifiMobileAccentSelected(isDarkMode)
-              : digifiMobileAccentIdle(isDarkMode)
-          "
-        >
-          <span class="text-[10px] uppercase tracking-wide opacity-80">2 · Right</span>
-          <span>{{ leftPagePhotoCaptured ? 'Next' : 'After left' }}</span>
+        <li class="flex-1">
+          <button
+            type="button"
+            class="flex min-h-[44px] w-full flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold disabled:cursor-default"
+            :class="
+              twoPageStep === 2 || rightChipActive
+                ? digifiMobileAccentSelected(isDarkMode)
+                : digifiMobileAccentIdle(isDarkMode)
+            "
+            :disabled="!rightRetakeEnabled"
+            :aria-label="rightRetakeEnabled ? 'Retake right page photo' : 'Right page'"
+            @click="rightRetakeEnabled && emit('retake', 'right')"
+          >
+            <span class="text-[10px] uppercase tracking-wide opacity-80">2 · Right</span>
+            <span>{{ rightChipLabel || 'After left' }}</span>
+          </button>
         </li>
       </ol>
     </section>

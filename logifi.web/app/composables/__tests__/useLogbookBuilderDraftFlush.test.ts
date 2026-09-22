@@ -29,6 +29,7 @@ function createGridWithContent() {
     rows: ref([{ cells: { date: '01/02' } }]),
     leftPageScanned: ref(true),
     singleLayoutRightStartRow: ref(0),
+    digifiMobilePhase: ref(null),
   }
 }
 

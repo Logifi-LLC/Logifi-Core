@@ -8,6 +8,7 @@ import {
   isMakeModelSpellingVariant,
   normalizeAircraftTailKey,
   resolveAircraftByTail,
+  shouldApplyTailCanonicalMakeModel,
 } from '../aircraftTailIndex'
 import { UNKNOWN_AIRCRAFT_FAMILY } from '../catalogAircraftFamily'
 
@@ -88,6 +89,41 @@ describe('resolveAircraftByTail', () => {
     const resolved = resolveAircraftByTail('N999ZZ', 'DA-20-C1', index)
     expect(resolved.fromTail).toBe(false)
     expect(resolved.aircraftMakeModel).toBe('DA-20-C1')
+  })
+
+  it('replaces conflicting OCR make/model with logbook canonical for known tails', () => {
+    const index = buildAircraftTailIndex([
+      {
+        registration: 'N564CA',
+        aircraft_make_model: 'C172S',
+        aircraft_category_class: 'ASEL',
+        updated_at: '2026-06-01T00:00:00Z',
+      },
+    ])
+
+    const resolved = resolveAircraftByTail('N564CA', 'DA20-C1', index)
+    expect(resolved.fromTail).toBe(true)
+    expect(resolved.aircraftMakeModel).toBe('C172S')
+    expect(resolved.aircraftCategoryClass).toBe('ASEL')
+  })
+})
+
+describe('shouldApplyTailCanonicalMakeModel', () => {
+  it('applies canonical for empty or unknown OCR', () => {
+    expect(shouldApplyTailCanonicalMakeModel('', 'C172S')).toBe(true)
+    expect(shouldApplyTailCanonicalMakeModel('Unknown', 'C172S')).toBe(true)
+  })
+
+  it('does not apply when OCR already matches canonical', () => {
+    expect(shouldApplyTailCanonicalMakeModel('C172S', 'C172S')).toBe(false)
+  })
+
+  it('applies canonical when OCR conflicts with history type', () => {
+    expect(shouldApplyTailCanonicalMakeModel('DA20-C1', 'C172S')).toBe(true)
+  })
+
+  it('applies canonical for spelling variants', () => {
+    expect(shouldApplyTailCanonicalMakeModel('DA-20-C1', 'DA20-C1')).toBe(true)
   })
 })
 

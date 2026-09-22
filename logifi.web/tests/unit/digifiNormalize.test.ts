@@ -137,7 +137,7 @@ describe('normalizeScanRows year rollover', () => {
     expect(rows[0].cells.dt).toBe('2023-01-05')
   })
 
-  it('full four-digit year in date is never overridden by rollover', () => {
+  it('January after December still rolls when defaultYear is locked', () => {
     const rows = normalizeScanRows(
       [
         { rowIndex: 0, cells: { dt: '12/31' } },
@@ -148,5 +148,52 @@ describe('normalizeScanRows year rollover', () => {
     )
     expect(rows[0].cells.dt).toBe('2022-12-31')
     expect(rows[1].cells.dt).toBe('2023-01-05')
+  })
+
+  it('keeps locked defaultYear when OCR returns a later year mid-page', () => {
+    const rows = normalizeScanRows(
+      [
+        { rowIndex: 0, cells: { dt: '2023-01-28' } },
+        { rowIndex: 1, cells: { dt: '2023-01-31' } },
+        { rowIndex: 2, cells: { dt: '2024-01-31' } },
+        { rowIndex: 3, cells: { dt: '2024-02-01' } },
+        { rowIndex: 4, cells: { dt: '2/2' } },
+      ],
+      dateOnlyColumns,
+      2023
+    )
+    expect(rows.map((row) => row.cells.dt)).toEqual([
+      '2023-01-28',
+      '2023-01-31',
+      '2023-01-31',
+      '2023-02-01',
+      '2023-02-02',
+    ])
+  })
+
+  it('rolls 12/31 then 1/6 to the next calendar year when defaultYear is locked', () => {
+    const rows = normalizeScanRows(
+      [
+        { rowIndex: 0, cells: { dt: '12/31' } },
+        { rowIndex: 1, cells: { dt: '1/6' } },
+      ],
+      dateOnlyColumns,
+      2023
+    )
+    expect(rows[0].cells.dt).toBe('2023-12-31')
+    expect(rows[1].cells.dt).toBe('2024-01-06')
+  })
+
+  it('does not bump year on duplicate month/day when defaultYear is locked', () => {
+    const rows = normalizeScanRows(
+      [
+        { rowIndex: 0, cells: { dt: '1/28' } },
+        { rowIndex: 1, cells: { dt: '1/31' } },
+        { rowIndex: 2, cells: { dt: '1/31' } },
+      ],
+      dateOnlyColumns,
+      2023
+    )
+    expect(rows[2].cells.dt).toBe('2023-01-31')
   })
 })

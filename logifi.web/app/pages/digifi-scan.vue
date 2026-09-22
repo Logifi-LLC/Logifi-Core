@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue'
-import { navigateTo } from '#app'
+import { navigateTo, useRoute } from '#app'
 import DigifiCreditsIndicator from '~/components/digifi/DigifiCreditsIndicator.vue'
 import DigifiMobileColumnCarousel from '~/components/digifi/DigifiMobileColumnCarousel.vue'
 import DigifiMobileLayoutWizard from '~/components/digifi/DigifiMobileLayoutWizard.vue'
@@ -18,12 +18,30 @@ import {
   saveDraftNow,
   setupBuilderDraftAutosave,
   setupBuilderDraftFlush,
+  clearBuilderDraft,
   storedDraftHasContent,
   suspendDraftAutosave,
 } from '~/composables/useLogbookBuilderDraft'
+import { useDigifiBuilderPilotNames } from '~/composables/useDigifiBuilderPilotNames'
 import { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { loadLastTemplateIfAny } from '~/composables/useLogbookBuilderLastTemplate'
-import { recoverDigifiSpreadFromServer } from '~/composables/useDigifiSpreadRecovery'
+import {
+  clearDigifiPageSideCells,
+  recoverDigifiSpreadFromServer,
+} from '~/composables/useDigifiSpreadRecovery'
+import { renormalizeBuilderGridDates } from '~/utils/digifiGridDates'
+import { seedDigifiManualFieldDefaults } from '~/utils/digifiManualFieldDefaults'
+import {
+  isMobileCaptureSideComplete,
+  isTwoPageReadyForReview,
+  mobileSetupCaptureLabel,
+  mobileTwoPageCaptureStep,
+  mobileTwoPageChipLabel,
+  mobileTwoPageLeftChipState,
+  mobileTwoPageRightChipState,
+  nextMobileCaptureSide,
+  type MobileCaptureSession,
+} from '~/utils/digifiMobileCapture'
 import { DIGIFI_EYE_PATH } from '~/utils/digifiMobileReview'
 import {
   pickNextPendingMobileScan,
@@ -33,13 +51,16 @@ import {
 import type { DigifiPageSide } from '~/utils/digifiTypes'
 import { useTheme } from '~/composables/useTheme'
 
+const route = useRoute()
 const { initAuth, isAuthenticated, user, getAccessToken } = useAuth()
 const { isDark: isDarkMode } = useTheme()
 const { fetchBalance } = useDigifiCredits()
 const { preferredSink, loadPreferredSink } = useDigifiDestination()
 
 const grid = useLogbookBuilderGrid()
+const builderPilots = useDigifiBuilderPilotNames()
 provide('logbookBuilderGrid', grid)
+provide('builderPilots', builderPilots)
 provide('digifiPreferredSink', preferredSink)
 
 const {
@@ -50,6 +71,8 @@ const {
   canScan,
   scanPage,
   leftPageScanned,
+  rescanRemarksBand,
+  remarksRescanOffers,
 } = useLogbookBuilderDigifi(grid)
 
 const phase = ref<'setup' | 'review'>('setup')
@@ -64,36 +87,92 @@ let stopDraftFlush: (() => void) | null = null
 let pageInitDone = false
 
 const title = computed(() => (phase.value === 'review' ? 'Review' : 'Digifi'))
-const captureSide = computed((): DigifiPageSide => {
-  if (grid.layout.value === 'two-page' && leftPagePhotoCaptured.value) return 'right'
-  return 'left'
-})
-const captureLabel = computed(() => {
-  if (grid.layout.value === 'two-page' && leftPagePhotoCaptured.value) return 'Photograph right page'
-  if (grid.layout.value === 'two-page') return 'Photograph left page'
-  return 'Photograph page'
-})
-const twoPageCaptureStep = computed((): 1 | 2 | null => {
-  if (grid.layout.value !== 'two-page') return null
-  return leftPagePhotoCaptured.value ? 2 : 1
-})
+
+const captureSession = computed(
+  (): MobileCaptureSession => ({
+    leftPhotoCaptured: leftPagePhotoCaptured.value,
+    rightPhotoCaptured: rightPagePhotoCaptured.value,
+  })
+)
+
+const nextCaptureSide = computed(() =>
+  nextMobileCaptureSide(grid.layout.value, grid, captureSession.value)
+)
+
+const captureSide = computed((): DigifiPageSide => nextCaptureSide.value ?? 'left')
+
+const readyForReview = computed(() => isTwoPageReadyForReview(grid))
+
+const captureLabel = computed(() =>
+  mobileSetupCaptureLabel(grid.layout.value, nextCaptureSide.value, readyForReview.value)
+)
+
+const leftChipLabel = computed(() =>
+  mobileTwoPageChipLabel(
+    mobileTwoPageLeftChipState(grid, captureSession.value, nextCaptureSide.value)
+  )
+)
+
+const rightChipLabel = computed(() =>
+  mobileTwoPageChipLabel(
+    mobileTwoPageRightChipState(grid, captureSession.value, nextCaptureSide.value)
+  )
+)
+
+const twoPageCaptureStep = computed(() => mobileTwoPageCaptureStep(nextCaptureSide.value))
+
+const leftCaptureComplete = computed(() =>
+  isMobileCaptureSideComplete(grid, 'left', leftPagePhotoCaptured.value)
+)
+
+const rightCaptureComplete = computed(() =>
+  isMobileCaptureSideComplete(grid, 'right', rightPagePhotoCaptured.value)
+)
+
 const awaitingRightPagePhoto = computed(
   () =>
     grid.layout.value === 'two-page' &&
-    leftPagePhotoCaptured.value &&
-    !rightPagePhotoCaptured.value &&
-    phase.value === 'setup'
+    nextCaptureSide.value === 'right' &&
+    phase.value === 'setup' &&
+    !showCamera.value
 )
+
 const captureBlockedByScan = computed(() => {
   if (!scanning.value) return false
   if (grid.layout.value !== 'two-page') return true
-  return !leftPagePhotoCaptured.value || captureSide.value !== 'right'
+  return !leftCaptureComplete.value || captureSide.value !== 'right'
 })
+
+function syncCaptureSessionFromGrid() {
+  if (grid.layout.value !== 'two-page') return
+  if (leftCaptureComplete.value) {
+    leftPagePhotoCaptured.value = true
+  }
+  if (rightCaptureComplete.value) {
+    rightPagePhotoCaptured.value = true
+  }
+}
 
 function resetCaptureSession() {
   leftPagePhotoCaptured.value = false
   rightPagePhotoCaptured.value = false
   pendingScans.value = []
+}
+
+function queryWantsNewSpread(): boolean {
+  const value = route.query.new
+  return value === '1' || value === 'true'
+}
+
+/** Fresh spread for a new logbook page: new spreadId, empty scan cells, keep template/layout. */
+function beginNewDigifiSpreadSession() {
+  resetCaptureSession()
+  showCamera.value = false
+  grid.clearGrid()
+  phase.value = 'setup'
+  grid.digifiMobilePhase.value = 'setup'
+  clearBuilderDraft(user.value?.id)
+  saveDraftNow(grid, user.value?.id)
 }
 
 function scheduleScanDrain() {
@@ -138,9 +217,38 @@ watch(
   }
 )
 
+watch(
+  phase,
+  (value) => {
+    grid.digifiMobilePhase.value = value
+  },
+  { immediate: true }
+)
+
 function openCapture() {
   if (!canScan.value || captureBlockedByScan.value) return
+  if (nextCaptureSide.value === null) {
+    if (readyForReview.value) {
+      phase.value = 'review'
+    }
+    return
+  }
   showCamera.value = true
+}
+
+function retakeCaptureSide(pageSide: DigifiPageSide) {
+  if (pageSide === 'left') {
+    leftPagePhotoCaptured.value = false
+    grid.leftPageScanned.value = false
+  } else {
+    rightPagePhotoCaptured.value = false
+  }
+  grid.clearDigifiScanStatus(pageSide)
+  clearDigifiPageSideCells(grid, pageSide)
+  pendingScans.value = pendingScans.value.filter((item) => item.pageSide !== pageSide)
+  phase.value = 'setup'
+  showCamera.value = false
+  openCapture()
 }
 
 async function onCaptureFile(file: File) {
@@ -178,8 +286,7 @@ async function onFile(event: Event) {
 }
 
 function backToSetup() {
-  phase.value = 'setup'
-  resetCaptureSession()
+  beginNewDigifiSpreadSession()
 }
 
 async function recoverSpreadIfNeeded(userId: string | undefined): Promise<number> {
@@ -202,13 +309,31 @@ async function finishPageInit() {
   suspendDraftAutosave()
   const userId = user.value?.id
 
+  if (queryWantsNewSpread()) {
+    clearBuilderDraft(userId)
+    if (userId) {
+      templatePreloaded.value = await loadLastTemplateIfAny(grid, userId)
+    }
+    beginNewDigifiSpreadSession()
+    pageInitDone = true
+    resumeDraftAutosave()
+    stopAutosave?.()
+    stopAutosave = setupBuilderDraftAutosave(grid, userId)
+    return
+  }
+
   if (storedDraftHasContent(userId)) {
     const draft = getStoredDraft(userId)
     if (draft) {
       restoreDraftToGrid(grid, draft)
+      renormalizeBuilderGridDates(grid)
+      seedDigifiManualFieldDefaults(grid)
       const recoveredPages = await recoverSpreadIfNeeded(userId)
-      if (grid.layout.value === 'two-page') {
-        if (recoveredPages >= 2) {
+      if (draft.digifiMobilePhase === 'review') {
+        phase.value = 'review'
+      } else if (grid.layout.value === 'two-page') {
+        syncCaptureSessionFromGrid()
+        if (recoveredPages >= 2 || isTwoPageReadyForReview(grid)) {
           phase.value = 'review'
         } else if (grid.leftPageScanned.value) {
           phase.value = 'setup'
@@ -225,7 +350,12 @@ async function finishPageInit() {
   if (userId) {
     templatePreloaded.value = await loadLastTemplateIfAny(grid, userId)
     await recoverSpreadIfNeeded(userId)
+    if (grid.layout.value === 'two-page') {
+      syncCaptureSessionFromGrid()
+    }
   }
+  phase.value = 'setup'
+  grid.digifiMobilePhase.value = 'setup'
   pageInitDone = true
   resumeDraftAutosave()
   stopAutosave?.()
@@ -262,7 +392,7 @@ onUnmounted(() => {
           :class="['text-[11px] font-medium', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
           @click="backToSetup"
         >
-          Scan again
+          New spread
         </button>
         <NuxtLink
           :to="DIGIFI_EYE_PATH"
@@ -301,10 +431,12 @@ onUnmounted(() => {
         :scanning="scanning"
         :capture-label="captureLabel"
         :two-page-step="twoPageCaptureStep"
-        :left-page-scanned="leftPageScanned"
-        :left-page-photo-captured="leftPagePhotoCaptured"
+        :left-chip-label="leftChipLabel"
+        :right-chip-label="rightChipLabel"
+        :ready-for-review="readyForReview"
         :template-preloaded="templatePreloaded"
         @capture="openCapture"
+        @retake="retakeCaptureSide"
       />
 
       <DigifiMobileCameraCapture
@@ -312,11 +444,17 @@ onUnmounted(() => {
         :disabled="captureBlockedByScan"
         :shutter-label="captureLabel"
         :two-page-step="twoPageCaptureStep"
+        :left-page-ready-for-right="awaitingRightPagePhoto || twoPageCaptureStep === 2"
         @capture="onCaptureFile"
         @cancel="showCamera = false"
       />
 
-      <DigifiMobileColumnCarousel v-else-if="phase === 'review'" />
+      <DigifiMobileColumnCarousel
+        v-else-if="phase === 'review'"
+        :remarks-rescan-offers="remarksRescanOffers"
+        :rescan-busy="scanning"
+        @rescan-remarks-band="(rowIndex) => void rescanRemarksBand(rowIndex)"
+      />
     </div>
 
     <template v-if="phase === 'review'" #footer>

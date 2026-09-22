@@ -1,16 +1,31 @@
 <script setup lang="ts">
-import { computed, inject, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
+import LogbookBuilderCell from '~/components/logbook-builder/LogbookBuilderCell.vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { useTheme } from '~/composables/useTheme'
+import type { LogbookColumnKey } from '~/utils/logbookTypes'
 import {
   focusedColumnIndexFromScroll,
   markColumnReviewed,
 } from '~/utils/digifiMobileReview'
 
+const props = defineProps<{
+  remarksRescanOffers?: Array<{ rowIndex: number; focusRows: number[] }>
+  rescanBusy?: boolean
+}>()
+
+const emit = defineEmits<{
+  'rescan-remarks-band': [rowIndex: number]
+}>()
+
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
 if (!grid) throw new Error('DigifiMobileColumnCarousel requires logbookBuilderGrid')
 
+const builderPilots = inject<Ref<string[]>>('builderPilots', ref([]))
+
 const { isDark: isDarkMode } = useTheme()
+
+const activeEdit = ref<{ rowIdx: number; colId: string } | null>(null)
 
 const scroller = ref<HTMLElement | null>(null)
 const focusedIndex = ref(0)
@@ -56,14 +71,35 @@ function onColumnSelectChange(event: Event) {
   scrollToIndex(index)
 }
 
-function onCellInput(rowIdx: number, colId: string, event: Event) {
-  const value = (event.target as HTMLInputElement).value
+function onCellInput(rowIdx: number, colId: string, value: string) {
   grid.setCell(rowIdx, colId, value)
   grid.noteDigifiCellManualEdit(rowIdx, colId, value)
 }
 
+function cellSuggestions(fieldKey: LogbookColumnKey | null): string[] {
+  if (fieldKey === 'pilots') return builderPilots.value ?? []
+  return []
+}
+
+function isCellEditing(rowIdx: number, colId: string, fieldKey: LogbookColumnKey | null): boolean {
+  if (fieldKey === 'pilots' || fieldKey === 'role' || fieldKey === 'pilotRole') return true
+  return activeEdit.value?.rowIdx === rowIdx && activeEdit.value?.colId === colId
+}
+
+function onCellFocus(rowIdx: number, colId: string) {
+  activeEdit.value = { rowIdx, colId }
+}
+
+function onCellBlur() {
+  activeEdit.value = null
+}
+
 function cellNeedsReview(rowIdx: number, colId: string): boolean {
   return grid.rows.value[rowIdx]?.digifiCellMeta?.[colId]?.needsReview === true
+}
+
+function remarksRescanOfferForRow(rowIdx: number) {
+  return props.remarksRescanOffers?.some((offer) => offer.rowIndex === rowIdx) ?? false
 }
 
 function columnStripClass(index: number): string {
@@ -167,23 +203,44 @@ watch(
               >
                 {{ rowIdx + 1 }}
               </span>
-              <input
-                :value="grid.rows.value[rowIdx]?.cells?.[column.id] ?? ''"
-                type="text"
-                inputmode="text"
-                autocomplete="off"
-                :aria-label="`${column.label} row ${rowIdx + 1}`"
-                :class="[
-                  'min-w-0 flex-1 border-0 bg-transparent px-2 py-2 text-sm outline-none focus:ring-1 focus:ring-inset',
-                  isDarkMode ? 'text-gray-100 focus:ring-green-500/40' : 'text-gray-900 focus:ring-green-500/30',
+              <div
+                class="min-w-0 flex-1"
+                :class="
                   cellNeedsReview(rowIdx, column.id)
                     ? isDarkMode
-                      ? 'bg-amber-500/10 focus:ring-amber-400/50'
-                      : 'bg-amber-50 focus:ring-amber-400/40'
-                    : '',
-                ]"
-                @input="onCellInput(rowIdx, column.id, $event)"
+                      ? 'bg-amber-500/10'
+                      : 'bg-amber-50'
+                    : ''
+                "
               >
+                <LogbookBuilderCell
+                  :model-value="grid.rows.value[rowIdx]?.cells?.[column.id] ?? ''"
+                  :field-key="column.fieldKey"
+                  :category-class-value="column.categoryClassValue"
+                  :default-role="
+                    column.fieldKey === 'role' ? (grid.defaultImportRole.value ?? 'PIC') : undefined
+                  "
+                  :suggestions="cellSuggestions(column.fieldKey)"
+                  :builder-row="rowIdx"
+                  :builder-col="index"
+                  :is-editing="isCellEditing(rowIdx, column.id, column.fieldKey)"
+                  @update:model-value="(v) => onCellInput(rowIdx, column.id, v)"
+                  @focus="onCellFocus(rowIdx, column.id)"
+                  @blur="onCellBlur"
+                />
+                <button
+                  v-if="
+                    column.fieldKey === 'remarks' &&
+                    (remarksRescanOfferForRow(rowIdx) || cellNeedsReview(rowIdx, column.id))
+                  "
+                  type="button"
+                  class="mx-2 mb-1 block rounded-lg px-2 py-1 text-left text-[11px] font-semibold text-green-700 underline-offset-2 hover:underline disabled:opacity-50 dark:text-green-300"
+                  :disabled="rescanBusy"
+                  @click="emit('rescan-remarks-band', rowIdx)"
+                >
+                  Re-scan remarks (uses 1 credit)
+                </button>
+              </div>
             </li>
           </ol>
         </section>
