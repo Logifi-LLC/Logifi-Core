@@ -12,14 +12,18 @@ import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { useDigifiDestination } from '~/composables/useDigifiDestination'
 import { useLogbookBuilderDigifi } from '~/composables/useLogbookBuilderDigifi'
 import {
+  getStoredDraft,
   resumeDraftAutosave,
+  restoreDraftToGrid,
   saveDraftNow,
   setupBuilderDraftAutosave,
   setupBuilderDraftFlush,
+  storedDraftHasContent,
   suspendDraftAutosave,
 } from '~/composables/useLogbookBuilderDraft'
 import { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { loadLastTemplateIfAny } from '~/composables/useLogbookBuilderLastTemplate'
+import { recoverDigifiSpreadFromServer } from '~/composables/useDigifiSpreadRecovery'
 import { DIGIFI_EYE_PATH } from '~/utils/digifiMobileReview'
 import {
   pickNextPendingMobileScan,
@@ -29,7 +33,7 @@ import {
 import type { DigifiPageSide } from '~/utils/digifiTypes'
 import { useTheme } from '~/composables/useTheme'
 
-const { initAuth, isAuthenticated, user } = useAuth()
+const { initAuth, isAuthenticated, user, getAccessToken } = useAuth()
 const { isDark: isDarkMode } = useTheme()
 const { fetchBalance } = useDigifiCredits()
 const { preferredSink, loadPreferredSink } = useDigifiDestination()
@@ -57,6 +61,7 @@ let scanDrainChain: Promise<void> = Promise.resolve()
 const templatePreloaded = ref(false)
 let stopAutosave: (() => void) | null = null
 let stopDraftFlush: (() => void) | null = null
+let pageInitDone = false
 
 const title = computed(() => (phase.value === 'review' ? 'Review' : 'Digifi'))
 const captureSide = computed((): DigifiPageSide => {
@@ -177,6 +182,56 @@ function backToSetup() {
   resetCaptureSession()
 }
 
+async function recoverSpreadIfNeeded(userId: string | undefined): Promise<number> {
+  if (!isAuthenticated.value || !userId) return 0
+  const spreadId = grid.spreadId.value
+  if (!spreadId) return 0
+  const { recoveredPages } = await recoverDigifiSpreadFromServer({
+    grid,
+    spreadId,
+    getAccessToken,
+  })
+  if (recoveredPages > 0) {
+    saveDraftNow(grid, userId)
+  }
+  return recoveredPages
+}
+
+async function finishPageInit() {
+  if (pageInitDone) return
+  suspendDraftAutosave()
+  const userId = user.value?.id
+
+  if (storedDraftHasContent(userId)) {
+    const draft = getStoredDraft(userId)
+    if (draft) {
+      restoreDraftToGrid(grid, draft)
+      const recoveredPages = await recoverSpreadIfNeeded(userId)
+      if (grid.layout.value === 'two-page') {
+        if (recoveredPages >= 2) {
+          phase.value = 'review'
+        } else if (grid.leftPageScanned.value) {
+          phase.value = 'setup'
+        }
+      }
+      pageInitDone = true
+      resumeDraftAutosave()
+      stopAutosave?.()
+      stopAutosave = setupBuilderDraftAutosave(grid, userId)
+      return
+    }
+  }
+
+  if (userId) {
+    templatePreloaded.value = await loadLastTemplateIfAny(grid, userId)
+    await recoverSpreadIfNeeded(userId)
+  }
+  pageInitDone = true
+  resumeDraftAutosave()
+  stopAutosave?.()
+  stopAutosave = setupBuilderDraftAutosave(grid, userId)
+}
+
 onMounted(async () => {
   await initAuth()
   if (!isAuthenticated.value) {
@@ -185,16 +240,9 @@ onMounted(async () => {
   }
   void fetchBalance()
   void loadPreferredSink()
-  suspendDraftAutosave()
-  const userId = user.value?.id
-  if (userId) {
-    templatePreloaded.value = await loadLastTemplateIfAny(grid, userId)
-  }
-  resumeDraftAutosave()
-  stopAutosave?.()
-  stopAutosave = setupBuilderDraftAutosave(grid, userId)
+  await finishPageInit()
   stopDraftFlush?.()
-  stopDraftFlush = setupBuilderDraftFlush(grid, userId)
+  stopDraftFlush = setupBuilderDraftFlush(grid, user.value?.id)
 })
 
 onUnmounted(() => {
