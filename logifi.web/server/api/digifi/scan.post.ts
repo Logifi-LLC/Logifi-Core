@@ -328,6 +328,7 @@ export default defineEventHandler(async (event) => {
   let creditResult = await finalizeDigifiScanBilling(service, userId, {
     spreadId: meta.spreadId,
     layout: meta.layout,
+    pageSide: meta.pageSide,
     scanId,
     insertError,
     fallbackBalance: scanEligibility.balance,

@@ -1,5 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { finalizeDigifiScanBilling } from '../digifiScanBilling'
+import {
+  finalizeDigifiScanBilling,
+  shouldDeferDigifiSpreadBilling,
+} from '../digifiScanBilling'
 
 const consumeCreditForSpread = vi.fn()
 const linkSpreadChargeToScanSession = vi.fn()
@@ -8,6 +11,15 @@ vi.mock('../creditsBalance', () => ({
   consumeCreditForSpread: (...args: unknown[]) => consumeCreditForSpread(...args),
   linkSpreadChargeToScanSession: (...args: unknown[]) => linkSpreadChargeToScanSession(...args),
 }))
+
+describe('shouldDeferDigifiSpreadBilling', () => {
+  it('defers billing for two-page left scans only', () => {
+    expect(shouldDeferDigifiSpreadBilling('two-page', 'left')).toBe(true)
+    expect(shouldDeferDigifiSpreadBilling('two-page', 'right')).toBe(false)
+    expect(shouldDeferDigifiSpreadBilling('single', 'left')).toBe(false)
+    expect(shouldDeferDigifiSpreadBilling('single', 'right')).toBe(false)
+  })
+})
 
 describe('finalizeDigifiScanBilling', () => {
   beforeEach(() => {
@@ -19,6 +31,7 @@ describe('finalizeDigifiScanBilling', () => {
     const result = await finalizeDigifiScanBilling({} as never, 'user-1', {
       spreadId: '550e8400-e29b-41d4-a716-446655440000',
       layout: 'single',
+      pageSide: 'left',
       scanId: 'scan-1',
       insertError: { message: 'insert failed' },
       fallbackBalance: 4,
@@ -29,6 +42,20 @@ describe('finalizeDigifiScanBilling', () => {
     expect(linkSpreadChargeToScanSession).not.toHaveBeenCalled()
   })
 
+  it('does not charge two-page left page until right page completes', async () => {
+    const result = await finalizeDigifiScanBilling({} as never, 'user-1', {
+      spreadId: '550e8400-e29b-41d4-a716-446655440000',
+      layout: 'two-page',
+      pageSide: 'left',
+      scanId: 'scan-left',
+      insertError: null,
+      fallbackBalance: 4,
+    })
+
+    expect(result).toEqual({ ok: true, charged: false, balance: 4 })
+    expect(consumeCreditForSpread).not.toHaveBeenCalled()
+  })
+
   it('charges only after successful session persist', async () => {
     consumeCreditForSpread.mockResolvedValue({ ok: true, charged: true, balance: 3 })
     linkSpreadChargeToScanSession.mockResolvedValue(undefined)
@@ -36,6 +63,7 @@ describe('finalizeDigifiScanBilling', () => {
     const result = await finalizeDigifiScanBilling({} as never, 'user-1', {
       spreadId: '550e8400-e29b-41d4-a716-446655440000',
       layout: 'two-page',
+      pageSide: 'right',
       scanId: 'scan-1',
       insertError: null,
       fallbackBalance: 4,
@@ -60,6 +88,7 @@ describe('finalizeDigifiScanBilling', () => {
     await finalizeDigifiScanBilling({} as never, 'user-1', {
       spreadId: '550e8400-e29b-41d4-a716-446655440000',
       layout: 'single',
+      pageSide: 'left',
       scanId: 'scan-2',
       insertError: null,
       fallbackBalance: 3,
