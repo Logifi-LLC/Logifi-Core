@@ -7,6 +7,7 @@ import {
   resolveDigifiSpreadYear,
 } from '../../app/utils/digifiSpreadYear'
 import type { LogbookColumnKey } from '../../app/utils/logbookTypes'
+import { normalizeDigifiRemarksCell } from '../../app/utils/digifiRemarksNormalize'
 
 const NUMERIC_KEYS: Set<LogbookColumnKey> = new Set([
   'pic',
@@ -119,14 +120,7 @@ function reconcileRowAirports(
 
 /** TSV-safe remarks: turn literal \\n and real newlines into " | " separators. */
 export function normalizeRemarks(val: string): string {
-  return val
-    .replace(/\\r\\n/g, ' | ')
-    .replace(/\\n/g, ' | ')
-    .replace(/\\r/g, ' | ')
-    .replace(/\r?\n/g, ' | ')
-    .replace(/\s*\|\s*/g, ' | ')
-    .replace(/(?: \| )+/g, ' | ')
-    .trim()
+  return normalizeDigifiRemarksCell(val)
 }
 
 function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: string | null): string {

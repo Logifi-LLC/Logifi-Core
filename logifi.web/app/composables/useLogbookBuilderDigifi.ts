@@ -17,6 +17,9 @@ import {
 } from '~/utils/digifiScanDiagnostics'
 import { renormalizeBuilderGridDates } from '~/utils/digifiGridDates'
 import { seedDigifiManualFieldDefaults } from '~/utils/digifiManualFieldDefaults'
+import { normalizeGridRemarksCells } from '~/utils/digifiRemarksNormalize'
+import { sanitizeDigifiScanRows } from '~/utils/digifiScanSanitize'
+import { buildDigifiTargetColumnsForPage } from '~/utils/digifiScanTargetColumns'
 import {
   computeRemarksColumnCrop,
   computeRowBandRect,
@@ -345,8 +348,15 @@ export function useLogbookBuilderDigifi(
 
       setCreditsFromScan(result.credits)
 
-      const applied = applyScanResults(pageSide, result.rows)
+      const targetColumns = buildDigifiTargetColumnsForPage(grid, pageSide)
+      const { rows: sanitizedRows } = sanitizeDigifiScanRows(
+        result.rows,
+        targetColumns,
+        rowCount.value
+      )
+      const applied = applyScanResults(pageSide, sanitizedRows)
       renormalizeBuilderGridDates(grid)
+      normalizeGridRemarksCells(grid)
       seedDigifiManualFieldDefaults(grid)
       lastFilledCount.value = applied.filled
       saveDraftNow(grid, user.value?.id)

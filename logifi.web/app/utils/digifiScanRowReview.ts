@@ -173,8 +173,46 @@ export function detectPageFooterOutlierRowIndex(
   const outlier =
     lastTime >= Math.max(otherMax * 2.5, medianOther * 3, otherMax + 4) && lastTime >= 5
   if (!outlier) return null
-  if (!rowHasThinFlightIdentity(lastFilled.row, columns)) return null
+
+  const otherRowModels = others.map((item) => item.row)
+  const looksLikeFooter =
+    rowHasThinFlightIdentity(lastFilled.row, columns) ||
+    lastRowMatchesColumnPageTotal(lastFilled.row, otherRowModels, columns)
+  if (!looksLikeFooter) return null
   return lastIndex
+}
+
+const COLUMN_SUM_FOOTER_FIELDS: LogbookColumnKey[] = [
+  'dualG',
+  'total',
+  'pic',
+  'dualR',
+  'sic',
+  'night',
+  'xc',
+]
+
+/** Last row time ≈ sum of the same column on other rows (page total strip). */
+export function lastRowMatchesColumnPageTotal(
+  lastRow: DigifiScanRow,
+  otherRows: DigifiScanRow[],
+  columns: DigifiTemplateColumn[]
+): boolean {
+  for (const fieldKey of COLUMN_SUM_FOOTER_FIELDS) {
+    const col = columnByField(columns, fieldKey)
+    if (!col) continue
+    const lastVal = parseTimeCell(lastRow.cells[col.id] ?? '')
+    if (lastVal == null || lastVal < 5) continue
+    const sum = otherRows.reduce((acc, row) => {
+      const v = parseTimeCell(row.cells[col.id] ?? '')
+      return acc + (v ?? 0)
+    }, 0)
+    if (sum < 4) continue
+    if (Math.abs(lastVal - sum) <= 1.5) return true
+    const ratio = lastVal / sum
+    if (ratio >= 0.8 && ratio <= 1.12) return true
+  }
+  return false
 }
 
 function median(values: number[]): number {
@@ -222,12 +260,14 @@ export function findRemarksMergeSuspects(
     const pipes = remarks ? countRemarksPipes(remarks) : 0
     const relativeHigh = pipes > 0 && pipes >= Math.max(pageMedian * 2, pageMedian + 2, 3)
     const fat = remarks.length >= 100 && pipes >= Math.max(1, pageMedian)
+    const abnormalSpacing =
+      remarks.length > 0 && /[ \t]{3,}/.test(remarks)
 
     if (!remarks && !inSameDurationCluster) continue
-    if (remarks && !relativeHigh && !fat && !inSameDurationCluster) continue
+    if (remarks && !relativeHigh && !fat && !inSameDurationCluster && !abnormalSpacing) continue
     if (!remarks && inSameDurationCluster) {
       // Cluster signal only — still offer band re-scan without requiring remarks text.
-    } else if (!relativeHigh && !fat && !inSameDurationCluster) {
+    } else if (!relativeHigh && !fat && !inSameDurationCluster && !abnormalSpacing) {
       continue
     }
 
@@ -240,6 +280,7 @@ export function findRemarksMergeSuspects(
     }
     if (relativeHigh) parts.push('unusually many remark segments for this page')
     if (fat) parts.push('long remarks block')
+    if (abnormalSpacing) parts.push('uneven spacing (possible merged lines)')
     suspects.push({
       rowIndex: row.rowIndex,
       focusRows,

@@ -229,7 +229,10 @@ watch(
                   @blur="onCellBlur"
                 />
                 <button
-                  v-if="column.fieldKey === 'remarks' && remarksRescanOfferForRow(rowIdx)"
+                  v-if="
+                    column.fieldKey === 'remarks' &&
+                    (remarksRescanOfferForRow(rowIdx) || cellNeedsReview(rowIdx, column.id))
+                  "
                   type="button"
                   class="mx-2 mb-1 block rounded-lg px-2 py-1 text-left text-[11px] font-semibold text-green-700 underline-offset-2 hover:underline disabled:opacity-50 dark:text-green-300"
                   :disabled="rescanBusy"
