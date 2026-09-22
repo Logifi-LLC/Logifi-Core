@@ -77,16 +77,24 @@ const props = defineProps<{
   twoPageStep?: 1 | 2 | null
   leftPageScanned?: boolean
   leftPagePhotoCaptured?: boolean
+  leftCaptureComplete?: boolean
+  rightCaptureComplete?: boolean
   /** Set when parent finishes async loadLastTemplateIfAny (wizard may mount earlier). */
   templatePreloaded?: boolean
 }>()
 
+const leftDone = computed(
+  () => props.leftCaptureComplete ?? props.leftPagePhotoCaptured ?? props.leftPageScanned ?? false
+)
+const rightDone = computed(() => props.rightCaptureComplete ?? false)
+
 const captureButtonDisabled = computed(() => {
   if (props.scanning) {
     const canShootRightWhileLeftScans =
-      props.twoPageStep === 2 && props.leftPagePhotoCaptured && !props.leftPageScanned
+      props.twoPageStep === 2 && leftDone.value && !props.leftPageScanned
     if (!canShootRightWhileLeftScans) return true
   }
+  if (props.twoPageStep === null && leftDone.value && rightDone.value) return true
   return selectedFieldKeys.value.size === 0
 })
 
@@ -572,24 +580,24 @@ watch(
         <li
           class="flex min-h-[44px] flex-1 flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold"
           :class="
-            leftPagePhotoCaptured || leftPageScanned || twoPageStep === 1
+            leftDone || twoPageStep === 1
               ? digifiMobileAccentSelected(isDarkMode)
               : digifiMobileAccentIdle(isDarkMode)
           "
         >
           <span class="text-[10px] uppercase tracking-wide opacity-80">1 · Left</span>
-          <span>{{ leftPageScanned ? 'Done' : leftPagePhotoCaptured ? 'Scanning…' : 'Next' }}</span>
+          <span>{{ leftDone ? (leftPageScanned ? 'Done' : 'Scanning…') : 'Next' }}</span>
         </li>
         <li
           class="flex min-h-[44px] flex-1 flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold"
           :class="
-            twoPageStep === 2
+            twoPageStep === 2 || rightDone
               ? digifiMobileAccentSelected(isDarkMode)
               : digifiMobileAccentIdle(isDarkMode)
           "
         >
           <span class="text-[10px] uppercase tracking-wide opacity-80">2 · Right</span>
-          <span>{{ leftPagePhotoCaptured ? 'Next' : 'After left' }}</span>
+          <span>{{ rightDone ? 'Done' : leftDone ? 'Next' : 'After left' }}</span>
         </li>
       </ol>
     </section>

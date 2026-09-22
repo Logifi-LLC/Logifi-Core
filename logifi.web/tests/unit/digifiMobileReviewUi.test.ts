@@ -153,6 +153,22 @@ describe('DigifiMobileLayoutWizard', () => {
 })
 
 describe('DigifiMobileCameraCapture', () => {
+  it('shows a handoff banner when the right page is the active step', () => {
+    const wrapper = mount(DigifiMobileCameraCapture, {
+      props: {
+        shutterLabel: 'Photograph right page',
+        twoPageStep: 2,
+        leftPageReadyForRight: true,
+      },
+      global: {
+        stubs: { video: true },
+      },
+    })
+    expect(wrapper.text()).toContain('Left page captured')
+    expect(wrapper.text()).toContain('Photograph right page')
+    expect(wrapper.text()).toContain('Page 2 of 2')
+  })
+
   it('uses a bottom shutter control without level guide overlays', () => {
     const wrapper = mount(DigifiMobileCameraCapture, {
       props: { shutterLabel: 'Photograph left page', twoPageStep: 1 },

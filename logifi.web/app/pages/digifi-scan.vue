@@ -24,6 +24,13 @@ import {
 import { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { loadLastTemplateIfAny } from '~/composables/useLogbookBuilderLastTemplate'
 import { recoverDigifiSpreadFromServer } from '~/composables/useDigifiSpreadRecovery'
+import {
+  isMobileCaptureSideComplete,
+  mobileCaptureLabel,
+  mobileTwoPageCaptureStep,
+  nextMobileCaptureSide,
+  type MobileCaptureSession,
+} from '~/utils/digifiMobileCapture'
 import { DIGIFI_EYE_PATH } from '~/utils/digifiMobileReview'
 import {
   pickNextPendingMobileScan,
@@ -64,31 +71,58 @@ let stopDraftFlush: (() => void) | null = null
 let pageInitDone = false
 
 const title = computed(() => (phase.value === 'review' ? 'Review' : 'Digifi'))
-const captureSide = computed((): DigifiPageSide => {
-  if (grid.layout.value === 'two-page' && leftPagePhotoCaptured.value) return 'right'
-  return 'left'
-})
-const captureLabel = computed(() => {
-  if (grid.layout.value === 'two-page' && leftPagePhotoCaptured.value) return 'Photograph right page'
-  if (grid.layout.value === 'two-page') return 'Photograph left page'
-  return 'Photograph page'
-})
-const twoPageCaptureStep = computed((): 1 | 2 | null => {
-  if (grid.layout.value !== 'two-page') return null
-  return leftPagePhotoCaptured.value ? 2 : 1
-})
+
+const captureSession = computed(
+  (): MobileCaptureSession => ({
+    leftPhotoCaptured: leftPagePhotoCaptured.value,
+    rightPhotoCaptured: rightPagePhotoCaptured.value,
+  })
+)
+
+const nextCaptureSide = computed(() =>
+  nextMobileCaptureSide(grid.layout.value, grid, captureSession.value)
+)
+
+const captureSide = computed((): DigifiPageSide => nextCaptureSide.value ?? 'left')
+
+const captureLabel = computed(() => mobileCaptureLabel(nextCaptureSide.value, grid.layout.value))
+
+const twoPageCaptureStep = computed(() => mobileTwoPageCaptureStep(nextCaptureSide.value))
+
+const leftCaptureComplete = computed(() =>
+  isMobileCaptureSideComplete(grid, 'left', leftPagePhotoCaptured.value)
+)
+
+const rightCaptureComplete = computed(() =>
+  isMobileCaptureSideComplete(grid, 'right', rightPagePhotoCaptured.value)
+)
+
 const awaitingRightPagePhoto = computed(
   () =>
     grid.layout.value === 'two-page' &&
-    leftPagePhotoCaptured.value &&
-    !rightPagePhotoCaptured.value &&
-    phase.value === 'setup'
+    nextCaptureSide.value === 'right' &&
+    phase.value === 'setup' &&
+    !showCamera.value
 )
+
 const captureBlockedByScan = computed(() => {
   if (!scanning.value) return false
   if (grid.layout.value !== 'two-page') return true
-  return !leftPagePhotoCaptured.value || captureSide.value !== 'right'
+  return !leftCaptureComplete.value || captureSide.value !== 'right'
 })
+
+function syncCaptureSessionFromGrid() {
+  if (grid.layout.value !== 'two-page') return
+  if (leftCaptureComplete.value) {
+    leftPagePhotoCaptured.value = true
+  }
+  if (rightCaptureComplete.value) {
+    rightPagePhotoCaptured.value = true
+  }
+  if (nextMobileCaptureSide(grid.layout.value, grid, captureSession.value) === null) {
+    phase.value = 'review'
+  }
+}
 
 function resetCaptureSession() {
   leftPagePhotoCaptured.value = false
@@ -140,6 +174,10 @@ watch(
 
 function openCapture() {
   if (!canScan.value || captureBlockedByScan.value) return
+  if (nextCaptureSide.value === null) {
+    phase.value = 'review'
+    return
+  }
   showCamera.value = true
 }
 
@@ -180,6 +218,7 @@ async function onFile(event: Event) {
 function backToSetup() {
   phase.value = 'setup'
   resetCaptureSession()
+  syncCaptureSessionFromGrid()
 }
 
 async function recoverSpreadIfNeeded(userId: string | undefined): Promise<number> {
@@ -208,6 +247,7 @@ async function finishPageInit() {
       restoreDraftToGrid(grid, draft)
       const recoveredPages = await recoverSpreadIfNeeded(userId)
       if (grid.layout.value === 'two-page') {
+        syncCaptureSessionFromGrid()
         if (recoveredPages >= 2) {
           phase.value = 'review'
         } else if (grid.leftPageScanned.value) {
@@ -225,6 +265,9 @@ async function finishPageInit() {
   if (userId) {
     templatePreloaded.value = await loadLastTemplateIfAny(grid, userId)
     await recoverSpreadIfNeeded(userId)
+    if (grid.layout.value === 'two-page') {
+      syncCaptureSessionFromGrid()
+    }
   }
   pageInitDone = true
   resumeDraftAutosave()
@@ -303,6 +346,8 @@ onUnmounted(() => {
         :two-page-step="twoPageCaptureStep"
         :left-page-scanned="leftPageScanned"
         :left-page-photo-captured="leftPagePhotoCaptured"
+        :left-capture-complete="leftCaptureComplete"
+        :right-capture-complete="rightCaptureComplete"
         :template-preloaded="templatePreloaded"
         @capture="openCapture"
       />
@@ -312,6 +357,7 @@ onUnmounted(() => {
         :disabled="captureBlockedByScan"
         :shutter-label="captureLabel"
         :two-page-step="twoPageCaptureStep"
+        :left-page-ready-for-right="awaitingRightPagePhoto || twoPageCaptureStep === 2"
         @capture="onCaptureFile"
         @cancel="showCamera = false"
       />
