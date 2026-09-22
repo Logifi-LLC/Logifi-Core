@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, provide, ref } from 'vue'
+import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { navigateTo } from '#app'
 import DigifiCreditsIndicator from '~/components/digifi/DigifiCreditsIndicator.vue'
 import DigifiMobileColumnCarousel from '~/components/digifi/DigifiMobileColumnCarousel.vue'
@@ -21,6 +21,11 @@ import {
 import { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { loadLastTemplateIfAny } from '~/composables/useLogbookBuilderLastTemplate'
 import { DIGIFI_EYE_PATH } from '~/utils/digifiMobileReview'
+import {
+  pickNextPendingMobileScan,
+  upsertPendingMobileScan,
+  type PendingMobileScan,
+} from '~/utils/digifiMobileScanQueue'
 import type { DigifiPageSide } from '~/utils/digifiTypes'
 import { useTheme } from '~/composables/useTheme'
 
@@ -45,44 +50,117 @@ const {
 
 const phase = ref<'setup' | 'review'>('setup')
 const showCamera = ref(false)
+const leftPagePhotoCaptured = ref(false)
+const rightPagePhotoCaptured = ref(false)
+const pendingScans = ref<PendingMobileScan[]>([])
+let scanDrainChain: Promise<void> = Promise.resolve()
 let stopAutosave: (() => void) | null = null
 let stopDraftFlush: (() => void) | null = null
 
 const title = computed(() => (phase.value === 'review' ? 'Review' : 'Digifi'))
 const captureSide = computed((): DigifiPageSide => {
-  if (grid.layout.value === 'two-page' && leftPageScanned.value) return 'right'
+  if (grid.layout.value === 'two-page' && leftPagePhotoCaptured.value) return 'right'
   return 'left'
 })
 const captureLabel = computed(() => {
-  if (grid.layout.value === 'two-page' && leftPageScanned.value) return 'Photograph right page'
+  if (grid.layout.value === 'two-page' && leftPagePhotoCaptured.value) return 'Photograph right page'
   if (grid.layout.value === 'two-page') return 'Photograph left page'
   return 'Photograph page'
 })
 const twoPageCaptureStep = computed((): 1 | 2 | null => {
   if (grid.layout.value !== 'two-page') return null
-  return leftPageScanned.value ? 2 : 1
+  return leftPagePhotoCaptured.value ? 2 : 1
 })
 const awaitingRightPagePhoto = computed(
-  () => grid.layout.value === 'two-page' && leftPageScanned.value && phase.value === 'setup'
+  () =>
+    grid.layout.value === 'two-page' &&
+    leftPagePhotoCaptured.value &&
+    !rightPagePhotoCaptured.value &&
+    phase.value === 'setup'
+)
+const captureBlockedByScan = computed(() => {
+  if (!scanning.value) return false
+  if (grid.layout.value !== 'two-page') return true
+  return !leftPagePhotoCaptured.value || captureSide.value !== 'right'
+})
+
+function resetCaptureSession() {
+  leftPagePhotoCaptured.value = false
+  rightPagePhotoCaptured.value = false
+  pendingScans.value = []
+}
+
+function scheduleScanDrain() {
+  scanDrainChain = scanDrainChain.then(() => drainPendingScans()).catch(() => {})
+}
+
+async function drainPendingScans() {
+  if (scanning.value || !canScan.value) return
+
+  const next = pickNextPendingMobileScan(
+    pendingScans.value,
+    grid.layout.value,
+    leftPageScanned.value
+  )
+  if (!next) return
+
+  pendingScans.value = pendingScans.value.filter((item) => item.pageSide !== next.pageSide)
+  await scanPage(next.file, next.pageSide)
+  scheduleScanDrain()
+}
+
+async function waitForScanPipelineIdle() {
+  scheduleScanDrain()
+  await scanDrainChain
+  while (pendingScans.value.length > 0 || scanning.value) {
+    scheduleScanDrain()
+    await scanDrainChain
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+}
+
+watch(scanning, (isScanning, wasScanning) => {
+  if (wasScanning && !isScanning) {
+    scheduleScanDrain()
+  }
+})
+
+watch(
+  () => grid.layout.value,
+  () => {
+    resetCaptureSession()
+  }
 )
 
 function openCapture() {
-  if (!canScan.value || scanning.value) return
+  if (!canScan.value || captureBlockedByScan.value) return
   showCamera.value = true
 }
 
 async function onCaptureFile(file: File) {
   const pageSide = captureSide.value
-  showCamera.value = false
-  await scanPage(file, pageSide)
-  if (error.value) return
-  const needsRight = grid.layout.value === 'two-page' && pageSide === 'left'
-  if (needsRight) {
+
+  if (pageSide === 'left' && grid.layout.value === 'two-page') {
+    leftPagePhotoCaptured.value = true
+  }
+  if (pageSide === 'right') {
+    rightPagePhotoCaptured.value = true
+  }
+
+  pendingScans.value = upsertPendingMobileScan(pendingScans.value, pageSide, file)
+  scheduleScanDrain()
+
+  const needsRightPhoto = grid.layout.value === 'two-page' && pageSide === 'left'
+  if (needsRightPhoto) {
     phase.value = 'setup'
-    showCamera.value = true
     return
   }
-  phase.value = 'review'
+
+  showCamera.value = false
+  await waitForScanPipelineIdle()
+  if (!error.value) {
+    phase.value = 'review'
+  }
 }
 
 async function onFile(event: Event) {
@@ -95,6 +173,7 @@ async function onFile(event: Event) {
 
 function backToSetup() {
   phase.value = 'setup'
+  resetCaptureSession()
 }
 
 onMounted(async () => {
@@ -174,12 +253,13 @@ onUnmounted(() => {
         :capture-label="captureLabel"
         :two-page-step="twoPageCaptureStep"
         :left-page-scanned="leftPageScanned"
+        :left-page-photo-captured="leftPagePhotoCaptured"
         @capture="openCapture"
       />
 
       <DigifiMobileCameraCapture
         v-if="showCamera"
-        :disabled="scanning"
+        :disabled="captureBlockedByScan"
         :shutter-label="captureLabel"
         :two-page-step="twoPageCaptureStep"
         @capture="onCaptureFile"

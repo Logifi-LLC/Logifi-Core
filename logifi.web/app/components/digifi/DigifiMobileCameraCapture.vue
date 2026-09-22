@@ -27,6 +27,19 @@ const progressLine = computed(() => {
   return `Page ${props.twoPageStep} of 2`
 })
 
+async function applyMaxPhotoResolution(track: MediaStreamTrack) {
+  const caps = track.getCapabilities?.()
+  if (!caps?.width?.max || !caps.height?.max) return
+  try {
+    await track.applyConstraints({
+      width: { ideal: caps.width.max },
+      height: { ideal: caps.height.max },
+    })
+  } catch {
+    // Keep the stream from getUserMedia if the device rejects a max-size request.
+  }
+}
+
 async function startCamera() {
   cameraError.value = null
   if (!navigator.mediaDevices?.getUserMedia) {
@@ -35,9 +48,17 @@ async function startCamera() {
   }
   try {
     const media = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      video: {
+        facingMode: { ideal: 'environment' },
+        width: { ideal: 3840, min: 1280 },
+        height: { ideal: 2160, min: 720 },
+      },
       audio: false,
     })
+    const track = media.getVideoTracks()[0]
+    if (track) {
+      await applyMaxPhotoResolution(track)
+    }
     stream.value = media
     const video = videoRef.value
     if (video) {
@@ -69,8 +90,10 @@ async function takePhoto() {
     canvas.height = video.videoHeight
     const ctx = canvas.getContext('2d')
     if (!ctx) throw new Error('Could not capture frame')
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = 'high'
     ctx.drawImage(video, 0, 0)
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92))
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.95))
     if (!blob) throw new Error('Could not save photo')
     emit('capture', new File([blob], `digifi-${Date.now()}.jpg`, { type: 'image/jpeg' }))
   } catch {
