@@ -28,6 +28,7 @@ export default defineComponent({
     builderRow: { type: Number, default: undefined },
     builderCol: { type: Number, default: undefined },
     isEditing: { type: Boolean, default: false },
+    rowLock: { type: Boolean, default: false },
   },
   emits: ['update:modelValue', 'focus', 'blur', 'dropdown-commit'],
   setup(props, { emit }) {
@@ -103,7 +104,13 @@ export default defineComponent({
         : 'text-gray-900 placeholder-gray-400'
       const align = isRemarks.value ? 'text-left whitespace-pre-wrap resize-none' : 'text-center'
       const minH = isRemarks.value ? 'min-h-[2.75rem]' : 'min-h-[1.75rem]'
-      const base = `block h-full w-full min-w-0 border-0 bg-transparent px-1.5 py-0.5 text-sm font-quicksand outline-none ${minH} ${align} ${colors}`
+      const rowLockClass =
+        props.rowLock && isRemarks.value
+          ? 'max-h-[4.5rem] overflow-y-auto resize-none'
+          : props.rowLock
+            ? 'overflow-hidden text-ellipsis'
+            : ''
+      const base = `block h-full w-full min-w-0 border-0 bg-transparent px-1.5 py-0.5 text-sm font-quicksand outline-none ${minH} ${align} ${colors} ${rowLockClass}`
       const mono = (isNumeric.value || isCategoryClassTimeColumn.value) ? 'font-mono' : ''
       return `${base} ${mono}`
     })

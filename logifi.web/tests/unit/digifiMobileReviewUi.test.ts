@@ -248,4 +248,19 @@ describe('DigifiMobileColumnCarousel', () => {
     const select = wrapper.get('[aria-label="Column"]')
     expect(select.findAll('option').length).toBe(grid.visibleColumns.value.length)
   })
+
+  it('applies shared row min-heights on each column strip', () => {
+    const { wrapper, grid } = mountWithGrid(DigifiMobileColumnCarousel)
+    grid.setRowCount(2)
+    const remarks = grid.visibleColumns.value.find((c) => c.fieldKey === 'remarks')
+    if (remarks) {
+      grid.setCell(1, remarks.id, 'Long | remarks | block')
+    }
+    wrapper.vm.$forceUpdate?.()
+    const rowItems = wrapper.findAll('ol li')
+    expect(rowItems.length).toBeGreaterThan(1)
+    const heights = rowItems.map((li) => (li.element as HTMLElement).style.minHeight)
+    const unique = new Set(heights.filter(Boolean))
+    expect(unique.size).toBeGreaterThan(0)
+  })
 })

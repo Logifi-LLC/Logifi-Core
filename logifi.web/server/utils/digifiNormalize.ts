@@ -217,7 +217,8 @@ export function normalizeScanRows(
   const colById = new Map(columns.map((c) => [c.id, c]))
   const dateCol = columns.find((c) => c.fieldKey === 'date')
   let lastDateIso: string | null = null
-  return rows.map((row) => {
+  const ordered = [...rows].sort((a, b) => a.rowIndex - b.rowIndex)
+  return ordered.map((row) => {
     const reconciledRaw = reconcileRowAirports(row.cells, columns)
     const cells: Record<string, string> = {}
     for (const [colId, raw] of Object.entries(reconciledRaw)) {

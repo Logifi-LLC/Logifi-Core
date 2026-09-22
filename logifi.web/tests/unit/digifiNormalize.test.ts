@@ -184,6 +184,27 @@ describe('normalizeScanRows year rollover', () => {
     expect(rows[1].cells.dt).toBe('2024-01-06')
   })
 
+  it('normalizes dates in rowIndex order even when scan rows arrive out of order', () => {
+    const rows = normalizeScanRows(
+      [
+        { rowIndex: 4, cells: { dt: '2/2' } },
+        { rowIndex: 0, cells: { dt: '1/28' } },
+        { rowIndex: 1, cells: { dt: '1/31' } },
+        { rowIndex: 2, cells: { dt: '2024-01-31' } },
+        { rowIndex: 3, cells: { dt: '2/1' } },
+      ],
+      dateOnlyColumns,
+      2023
+    )
+    expect(rows.map((row) => row.cells.dt)).toEqual([
+      '2023-01-28',
+      '2023-01-31',
+      '2023-01-31',
+      '2023-02-01',
+      '2023-02-02',
+    ])
+  })
+
   it('does not bump year on duplicate month/day when defaultYear is locked', () => {
     const rows = normalizeScanRows(
       [

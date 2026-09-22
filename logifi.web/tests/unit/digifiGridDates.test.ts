@@ -14,6 +14,32 @@ describe('renormalizeBuilderGridDates', () => {
     renormalizeBuilderGridDates(grid)
     expect(grid.rows.value[1]?.cells?.[dateCol!.id]).toBe('2023-01-31')
   })
+
+  it('keeps two 1/31 then three 2/1 on a locked spread after OCR year noise', () => {
+    const grid = useLogbookBuilderGrid()
+    grid.defaultYear.value = 2023
+    const dateCol = grid.visibleColumns.value.find((c) => c.fieldKey === 'date')
+    expect(dateCol).toBeTruthy()
+    const iso = [
+      '2023-01-28',
+      '2023-01-31',
+      '2024-01-31',
+      '2024-02-01',
+      '2023-02-01',
+      '2024-02-01',
+    ]
+    iso.forEach((value, rowIdx) => grid.setCell(rowIdx, dateCol!.id, value))
+    renormalizeBuilderGridDates(grid)
+    const values = grid.rows.value.slice(0, 6).map((row) => row.cells?.[dateCol!.id])
+    expect(values).toEqual([
+      '2023-01-28',
+      '2023-01-31',
+      '2023-01-31',
+      '2023-02-01',
+      '2023-02-01',
+      '2023-02-01',
+    ])
+  })
 })
 
 describe('seedDigifiManualFieldDefaults', () => {

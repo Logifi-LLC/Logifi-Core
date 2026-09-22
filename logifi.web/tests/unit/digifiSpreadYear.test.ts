@@ -11,8 +11,12 @@ describe('resolveDigifiSpreadYear', () => {
   })
 
   it('keeps the same year when month/day matches the previous line', () => {
-    expect(resolveDigifiSpreadYear(1, 31, 2023, '2024-01-31')).toBe(2024)
+    expect(resolveDigifiSpreadYear(1, 31, 2023, '2024-01-31')).toBe(2023)
     expect(resolveDigifiSpreadYear(1, 31, 2023, '2023-01-31')).toBe(2023)
+  })
+
+  it('does not carry an OCR-inflated year into February on a locked spread', () => {
+    expect(resolveDigifiSpreadYear(2, 1, 2023, '2024-01-31')).toBe(2023)
   })
 
   it('does not roll mid-month backtracks', () => {
