@@ -131,29 +131,53 @@ function parseIsoDateParts(iso: string): { y: number; m: number; d: number } | n
   return { y, m, d }
 }
 
+function formatIsoDate(y: number, m: number, d: number): string {
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+}
+
+/** Year for MM/DD on a spread when the pilot locked defaultYear (Dec→Jan may roll to defaultYear + 1). */
+function resolveSpreadYear(
+  m: number,
+  d: number,
+  defaultYear: number,
+  lastDateIso?: string | null
+): number {
+  let y = defaultYear
+  if (!lastDateIso) return y
+  const last = parseIsoDateParts(lastDateIso)
+  if (!last) return y
+  const candidateTime = new Date(y, m - 1, d).getTime()
+  const lastTime = new Date(last.y, last.m - 1, last.d).getTime()
+  if (candidateTime < lastTime) y = defaultYear + 1
+  return y
+}
+
 function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: string | null): string {
   const s = val.trim()
   if (!s) return ''
-  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) return s
-  const year =
-    typeof defaultYear === 'number' && Number.isFinite(defaultYear)
-      ? defaultYear
-      : new Date().getFullYear()
+  const lockedYear =
+    typeof defaultYear === 'number' && Number.isFinite(defaultYear) ? defaultYear : null
+  const year = lockedYear ?? new Date().getFullYear()
+
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
+    const parts = parseIsoDateParts(s)
+    if (!parts) return s
+    if (lockedYear != null) {
+      return formatIsoDate(resolveSpreadYear(parts.m, parts.d, lockedYear, lastDateIso), parts.m, parts.d)
+    }
+    return s
+  }
+
   const slashParts = s.split(/[/-]/).map((p) => p.trim())
   if (slashParts.length === 2) {
     const m = parseInt(slashParts[0], 10)
     const d = parseInt(slashParts[1], 10)
     if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      let y = year
-      if (lastDateIso) {
-        const last = parseIsoDateParts(lastDateIso)
-        if (last) {
-          const candidateTime = new Date(y, m - 1, d).getTime()
-          const lastTime = new Date(last.y, last.m - 1, last.d).getTime()
-          if (candidateTime <= lastTime) y = year + 1
-        }
-      }
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      const y =
+        lockedYear != null
+          ? resolveSpreadYear(m, d, lockedYear, lastDateIso)
+          : resolveSpreadYear(m, d, year, lastDateIso)
+      return formatIsoDate(y, m, d)
     }
   }
   if (slashParts.length === 3) {
@@ -162,6 +186,10 @@ function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: st
     const yRaw = slashParts[2]
     const parsedY = parseInt(yRaw, 10)
     if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      if (lockedYear != null) {
+        const y = resolveSpreadYear(m, d, lockedYear, lastDateIso)
+        return formatIsoDate(y, m, d)
+      }
       let y = year
       if (Number.isFinite(parsedY)) {
         if (yRaw.length === 2) {
@@ -179,7 +207,7 @@ function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: st
           y = parsedY
         }
       }
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      return formatIsoDate(y, m, d)
     }
   }
   return s

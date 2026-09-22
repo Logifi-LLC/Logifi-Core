@@ -27,7 +27,7 @@ function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: st
         if (last) {
           const candidateTime = new Date(y, m - 1, d).getTime()
           const lastTime = new Date(last.y, last.m - 1, last.d).getTime()
-          if (candidateTime <= lastTime) y = year + 1
+          if (candidateTime < lastTime) y = year + 1
         }
       }
       return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
