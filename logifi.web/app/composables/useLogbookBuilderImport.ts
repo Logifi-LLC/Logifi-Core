@@ -35,6 +35,11 @@ import {
   type SimDeviceType,
 } from '~/utils/importSimulator'
 import { sanitizeFlightConditions } from '~/utils/flightConditions'
+import {
+  formatDigifiIsoDate,
+  parseDigifiIsoDateParts,
+  resolveDigifiSpreadYear,
+} from '~/utils/digifiSpreadYear'
 
 function generateEntryId(): string {
   return crypto.randomUUID?.() ?? `entry-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
@@ -91,9 +96,7 @@ function parseIsoDate(iso: string): { y: number; m: number; d: number } | null {
 }
 
 /** Normalize date string to YYYY-MM-DD. Handles MM/DD, M/D, MM-DD, MM/DD/YY, MM/DD/YYYY, YYYY-MM-DD.
-* When date is MM/DD only: uses defaultYear; if lastDateIso is set and (defaultYear, MM, DD) would be
-* before or equal to lastDateIso (e.g. Dec 28 -> Jan 5), uses defaultYear+1 so the page can span year-end.
-* When date is MM/DD/YY: uses the same century as defaultYear/current year and lets YY override the year. */
+ * Locked defaultYear: Dec→Jan rolls to defaultYear+1; duplicate/out-of-order days stay on defaultYear. */
 function normalizeDateWithRollover(
   dateStr: string,
   defaultYear: number | null | undefined,
@@ -101,21 +104,30 @@ function normalizeDateWithRollover(
 ): string {
   const s = (dateStr || '').trim()
   if (!s) return ''
-  const year = typeof defaultYear === 'number' && Number.isFinite(defaultYear) ? defaultYear : new Date().getFullYear()
-  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) return s
+  const lockedYear =
+    typeof defaultYear === 'number' && Number.isFinite(defaultYear) ? defaultYear : null
+  const year = lockedYear ?? new Date().getFullYear()
+
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
+    const parts = parseDigifiIsoDateParts(s)
+    if (!parts) return s
+    if (lockedYear != null) {
+      return formatDigifiIsoDate(
+        resolveDigifiSpreadYear(parts.m, parts.d, lockedYear, lastDateIso),
+        parts.m,
+        parts.d
+      )
+    }
+    return s
+  }
+
   const slashParts = s.split(/[/-]/).map((p) => p.trim())
   if (slashParts.length === 2) {
     const m = parseInt(slashParts[0], 10)
     const d = parseInt(slashParts[1], 10)
     if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      let y = year
-      const last = lastDateIso ? parseIsoDate(lastDateIso) : null
-      if (last) {
-        const candidateTime = new Date(y, m - 1, d).getTime()
-        const lastTime = new Date(last.y, last.m - 1, last.d).getTime()
-        if (candidateTime <= lastTime) y = year + 1
-      }
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      const y = resolveDigifiSpreadYear(m, d, year, lastDateIso)
+      return formatDigifiIsoDate(y, m, d)
     }
   }
   if (slashParts.length === 3) {
@@ -124,29 +136,27 @@ function normalizeDateWithRollover(
     const yRaw = slashParts[2]
     const parsedY = parseInt(yRaw, 10)
     if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      if (lockedYear != null) {
+        const y = resolveDigifiSpreadYear(m, d, lockedYear, lastDateIso)
+        return formatDigifiIsoDate(y, m, d)
+      }
       let y: number
       if (!Number.isFinite(parsedY)) {
-        // Fall back to the default/base year if year part is not a valid number.
         y = year
       } else if (yRaw.length === 2) {
-        // Two-digit year: use current century, but allow reasonable range (1950-2049)
-        // E.g. 26 → 2026, 50 → 2050, 49 → 2049, but 50+ could be 1950-1999
         const currentCentury = Math.floor(year / 100) * 100
         const candidate = currentCentury + parsedY
-        // If candidate year is more than 50 years in the future, assume previous century
         if (candidate > year + 50) {
           y = currentCentury - 100 + parsedY
         } else {
           y = candidate
         }
       } else if (parsedY >= 1000) {
-        // Full four-digit year: use as-is.
         y = parsedY
       } else {
-        // Short/ambiguous year (e.g. "5"): fall back to the base year.
         y = year
       }
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      return formatDigifiIsoDate(y, m, d)
     }
   }
   return s

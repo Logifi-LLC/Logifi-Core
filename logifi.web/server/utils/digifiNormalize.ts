@@ -1,6 +1,11 @@
 import type { DigifiTemplateColumn } from '../../app/utils/digifiTypes'
 import { isDigifiManualOnlyField } from '../../app/utils/logbookBuilderTypes'
 import { normalizeDigifiRegistrationKey } from '../../app/utils/digifiFeedback'
+import {
+  formatDigifiIsoDate,
+  parseDigifiIsoDateParts,
+  resolveDigifiSpreadYear,
+} from '../../app/utils/digifiSpreadYear'
 import type { LogbookColumnKey } from '../../app/utils/logbookTypes'
 
 const NUMERIC_KEYS: Set<LogbookColumnKey> = new Set([
@@ -124,34 +129,6 @@ export function normalizeRemarks(val: string): string {
     .trim()
 }
 
-function parseIsoDateParts(iso: string): { y: number; m: number; d: number } | null {
-  const parts = iso.split('-').map(Number)
-  if (parts.length !== 3 || parts.some((p) => !Number.isFinite(p))) return null
-  const [y, m, d] = parts
-  return { y, m, d }
-}
-
-function formatIsoDate(y: number, m: number, d: number): string {
-  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-}
-
-/** Year for MM/DD on a spread when the pilot locked defaultYear (Dec→Jan may roll to defaultYear + 1). */
-function resolveSpreadYear(
-  m: number,
-  d: number,
-  defaultYear: number,
-  lastDateIso?: string | null
-): number {
-  let y = defaultYear
-  if (!lastDateIso) return y
-  const last = parseIsoDateParts(lastDateIso)
-  if (!last) return y
-  const candidateTime = new Date(y, m - 1, d).getTime()
-  const lastTime = new Date(last.y, last.m - 1, last.d).getTime()
-  if (candidateTime < lastTime) y = defaultYear + 1
-  return y
-}
-
 function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: string | null): string {
   const s = val.trim()
   if (!s) return ''
@@ -160,10 +137,14 @@ function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: st
   const year = lockedYear ?? new Date().getFullYear()
 
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
-    const parts = parseIsoDateParts(s)
+    const parts = parseDigifiIsoDateParts(s)
     if (!parts) return s
     if (lockedYear != null) {
-      return formatIsoDate(resolveSpreadYear(parts.m, parts.d, lockedYear, lastDateIso), parts.m, parts.d)
+      return formatDigifiIsoDate(
+        resolveDigifiSpreadYear(parts.m, parts.d, lockedYear, lastDateIso),
+        parts.m,
+        parts.d
+      )
     }
     return s
   }
@@ -175,9 +156,9 @@ function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: st
     if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
       const y =
         lockedYear != null
-          ? resolveSpreadYear(m, d, lockedYear, lastDateIso)
-          : resolveSpreadYear(m, d, year, lastDateIso)
-      return formatIsoDate(y, m, d)
+          ? resolveDigifiSpreadYear(m, d, lockedYear, lastDateIso)
+          : resolveDigifiSpreadYear(m, d, year, lastDateIso)
+      return formatDigifiIsoDate(y, m, d)
     }
   }
   if (slashParts.length === 3) {
@@ -187,8 +168,8 @@ function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: st
     const parsedY = parseInt(yRaw, 10)
     if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
       if (lockedYear != null) {
-        const y = resolveSpreadYear(m, d, lockedYear, lastDateIso)
-        return formatIsoDate(y, m, d)
+        const y = resolveDigifiSpreadYear(m, d, lockedYear, lastDateIso)
+        return formatDigifiIsoDate(y, m, d)
       }
       let y = year
       if (Number.isFinite(parsedY)) {
@@ -207,7 +188,7 @@ function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: st
           y = parsedY
         }
       }
-      return formatIsoDate(y, m, d)
+      return formatDigifiIsoDate(y, m, d)
     }
   }
   return s

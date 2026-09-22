@@ -171,6 +171,19 @@ describe('normalizeScanRows year rollover', () => {
     ])
   })
 
+  it('rolls 12/31 then 1/6 to the next calendar year when defaultYear is locked', () => {
+    const rows = normalizeScanRows(
+      [
+        { rowIndex: 0, cells: { dt: '12/31' } },
+        { rowIndex: 1, cells: { dt: '1/6' } },
+      ],
+      dateOnlyColumns,
+      2023
+    )
+    expect(rows[0].cells.dt).toBe('2023-12-31')
+    expect(rows[1].cells.dt).toBe('2024-01-06')
+  })
+
   it('does not bump year on duplicate month/day when defaultYear is locked', () => {
     const rows = normalizeScanRows(
       [
