@@ -8,6 +8,7 @@ import {
   mobileTwoPageLeftChipState,
   mobileTwoPageRightChipState,
   nextMobileCaptureSide,
+  shouldAutoOpenTwoPageReviewFromSetup,
 } from '~/utils/digifiMobileCapture'
 
 describe('digifiMobileCapture', () => {
@@ -82,6 +83,24 @@ describe('digifiMobileCapture', () => {
     expect(mobileTwoPageChipLabel(mobileTwoPageRightChipState(grid, session, photoNext))).toBe(
       'Done · Retake'
     )
+  })
+
+  it('allows auto-review only when two-page setup has both photos and scans applied', () => {
+    expect(
+      shouldAutoOpenTwoPageReviewFromSetup('two-page', null, true, 'setup')
+    ).toBe(true)
+    expect(
+      shouldAutoOpenTwoPageReviewFromSetup('two-page', 'right', true, 'setup')
+    ).toBe(false)
+    expect(
+      shouldAutoOpenTwoPageReviewFromSetup('two-page', null, false, 'setup')
+    ).toBe(false)
+    expect(
+      shouldAutoOpenTwoPageReviewFromSetup('two-page', null, true, 'review')
+    ).toBe(false)
+    expect(
+      shouldAutoOpenTwoPageReviewFromSetup('single', null, true, 'setup')
+    ).toBe(false)
   })
 
   it('shows right as scanning when photo taken but scan not applied yet', () => {
