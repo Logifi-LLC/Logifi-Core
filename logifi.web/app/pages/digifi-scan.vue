@@ -22,12 +22,15 @@ import {
   storedDraftHasContent,
   suspendDraftAutosave,
 } from '~/composables/useLogbookBuilderDraft'
+import { useDigifiBuilderPilotNames } from '~/composables/useDigifiBuilderPilotNames'
 import { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { loadLastTemplateIfAny } from '~/composables/useLogbookBuilderLastTemplate'
 import {
   clearDigifiPageSideCells,
   recoverDigifiSpreadFromServer,
 } from '~/composables/useDigifiSpreadRecovery'
+import { renormalizeBuilderGridDates } from '~/utils/digifiGridDates'
+import { seedDigifiManualFieldDefaults } from '~/utils/digifiManualFieldDefaults'
 import {
   isMobileCaptureSideComplete,
   isTwoPageReadyForReview,
@@ -55,7 +58,9 @@ const { fetchBalance } = useDigifiCredits()
 const { preferredSink, loadPreferredSink } = useDigifiDestination()
 
 const grid = useLogbookBuilderGrid()
+const builderPilots = useDigifiBuilderPilotNames()
 provide('logbookBuilderGrid', grid)
+provide('builderPilots', builderPilots)
 provide('digifiPreferredSink', preferredSink)
 
 const {
@@ -321,6 +326,8 @@ async function finishPageInit() {
     const draft = getStoredDraft(userId)
     if (draft) {
       restoreDraftToGrid(grid, draft)
+      renormalizeBuilderGridDates(grid)
+      seedDigifiManualFieldDefaults(grid)
       const recoveredPages = await recoverSpreadIfNeeded(userId)
       if (draft.digifiMobilePhase === 'review') {
         phase.value = 'review'

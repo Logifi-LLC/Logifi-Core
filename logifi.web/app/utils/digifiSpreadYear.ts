@@ -23,6 +23,10 @@ export function resolveDigifiSpreadYear(
   const last = parseDigifiIsoDateParts(lastDateIso)
   if (!last) return defaultYear
 
+  if (last.m === m && last.d === d) {
+    return last.y
+  }
+
   const atDefaultYear = new Date(defaultYear, m - 1, d).getTime()
   const atLastYear = new Date(last.y, m - 1, d).getTime()
   const lastTime = new Date(last.y, last.m - 1, last.d).getTime()

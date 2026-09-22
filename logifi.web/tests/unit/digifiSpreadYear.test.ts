@@ -10,6 +10,11 @@ describe('resolveDigifiSpreadYear', () => {
     expect(resolveDigifiSpreadYear(1, 31, 2023, '2023-01-31')).toBe(2023)
   })
 
+  it('keeps the same year when month/day matches the previous line', () => {
+    expect(resolveDigifiSpreadYear(1, 31, 2023, '2024-01-31')).toBe(2024)
+    expect(resolveDigifiSpreadYear(1, 31, 2023, '2023-01-31')).toBe(2023)
+  })
+
   it('does not roll mid-month backtracks', () => {
     expect(resolveDigifiSpreadYear(9, 8, 2026, '2026-09-30')).toBe(2026)
   })

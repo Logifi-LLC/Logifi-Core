@@ -35,11 +35,7 @@ import {
   type SimDeviceType,
 } from '~/utils/importSimulator'
 import { sanitizeFlightConditions } from '~/utils/flightConditions'
-import {
-  formatDigifiIsoDate,
-  parseDigifiIsoDateParts,
-  resolveDigifiSpreadYear,
-} from '~/utils/digifiSpreadYear'
+import { normalizeDigifiDateCell } from '~/utils/digifiDateNormalize'
 
 function generateEntryId(): string {
   return crypto.randomUUID?.() ?? `entry-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
@@ -95,72 +91,7 @@ function parseIsoDate(iso: string): { y: number; m: number; d: number } | null {
   return { y, m, d }
 }
 
-/** Normalize date string to YYYY-MM-DD. Handles MM/DD, M/D, MM-DD, MM/DD/YY, MM/DD/YYYY, YYYY-MM-DD.
- * Locked defaultYear: Dec→Jan rolls to defaultYear+1; duplicate/out-of-order days stay on defaultYear. */
-function normalizeDateWithRollover(
-  dateStr: string,
-  defaultYear: number | null | undefined,
-  lastDateIso: string | null
-): string {
-  const s = (dateStr || '').trim()
-  if (!s) return ''
-  const lockedYear =
-    typeof defaultYear === 'number' && Number.isFinite(defaultYear) ? defaultYear : null
-  const year = lockedYear ?? new Date().getFullYear()
-
-  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
-    const parts = parseDigifiIsoDateParts(s)
-    if (!parts) return s
-    if (lockedYear != null) {
-      return formatDigifiIsoDate(
-        resolveDigifiSpreadYear(parts.m, parts.d, lockedYear, lastDateIso),
-        parts.m,
-        parts.d
-      )
-    }
-    return s
-  }
-
-  const slashParts = s.split(/[/-]/).map((p) => p.trim())
-  if (slashParts.length === 2) {
-    const m = parseInt(slashParts[0], 10)
-    const d = parseInt(slashParts[1], 10)
-    if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      const y = resolveDigifiSpreadYear(m, d, year, lastDateIso)
-      return formatDigifiIsoDate(y, m, d)
-    }
-  }
-  if (slashParts.length === 3) {
-    const m = parseInt(slashParts[0], 10)
-    const d = parseInt(slashParts[1], 10)
-    const yRaw = slashParts[2]
-    const parsedY = parseInt(yRaw, 10)
-    if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      if (lockedYear != null) {
-        const y = resolveDigifiSpreadYear(m, d, lockedYear, lastDateIso)
-        return formatDigifiIsoDate(y, m, d)
-      }
-      let y: number
-      if (!Number.isFinite(parsedY)) {
-        y = year
-      } else if (yRaw.length === 2) {
-        const currentCentury = Math.floor(year / 100) * 100
-        const candidate = currentCentury + parsedY
-        if (candidate > year + 50) {
-          y = currentCentury - 100 + parsedY
-        } else {
-          y = candidate
-        }
-      } else if (parsedY >= 1000) {
-        y = parsedY
-      } else {
-        y = year
-      }
-      return formatDigifiIsoDate(y, m, d)
-    }
-  }
-  return s
-}
+const normalizeDateWithRollover = normalizeDigifiDateCell
 
 /** Normalize role from builder cell (e.g. "Student" -> "Dual Received"). */
 function normalizeRoleFromCell(val: string): string {
