@@ -8,6 +8,12 @@ type CaptureGrid = Pick<
   'layout' | 'leftPageScanned' | 'digifiScanStatusByPage' | 'rows' | 'visibleColumns' | 'effectiveSplitIndex'
 >
 
+export function isTwoPageSpreadFullyCaptured(grid: CaptureGrid): boolean {
+  if (grid.layout.value !== 'two-page') return false
+  const fullGrid = grid as ReturnType<typeof useLogbookBuilderGrid>
+  return pageHasScanData(fullGrid, 'left') && pageHasScanData(fullGrid, 'right')
+}
+
 export type MobileCaptureSession = {
   leftPhotoCaptured: boolean
   rightPhotoCaptured: boolean

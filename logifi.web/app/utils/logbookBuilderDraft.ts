@@ -30,6 +30,8 @@ export interface LogbookBuilderDraft {
   rows: BuilderRow[]
   leftPageScanned: boolean
   singleLayoutRightStartRow: number
+  /** Mobile Digifi scan screen phase (resume review vs setup). */
+  digifiMobilePhase?: 'setup' | 'review'
 }
 
 export function draftHasContent(draft: LogbookBuilderDraft): boolean {

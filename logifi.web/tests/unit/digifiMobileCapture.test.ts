@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import {
   isMobileCaptureSideComplete,
+  isTwoPageSpreadFullyCaptured,
   mobileCaptureLabel,
   nextMobileCaptureSide,
 } from '~/utils/digifiMobileCapture'
@@ -37,6 +38,19 @@ describe('digifiMobileCapture', () => {
       rightPhotoCaptured: false,
     })
     expect(side).toBeNull()
+  })
+
+  it('detects when both two-page sides have grid scan data', () => {
+    const grid = useLogbookBuilderGrid()
+    grid.layout.value = 'two-page'
+    expect(isTwoPageSpreadFullyCaptured(grid)).toBe(false)
+    const leftCol = grid.visibleColumns.value[0]
+    const rightCol = grid.visibleColumns.value.at(-1)
+    expect(leftCol && rightCol).toBeTruthy()
+    grid.setCell(0, leftCol!.id, '1.0')
+    expect(isTwoPageSpreadFullyCaptured(grid)).toBe(false)
+    grid.setCell(0, rightCol!.id, '1.0')
+    expect(isTwoPageSpreadFullyCaptured(grid)).toBe(true)
   })
 
   it('labels the continue action when both two-page sides are already captured', () => {

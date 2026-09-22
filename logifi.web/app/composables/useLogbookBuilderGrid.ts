@@ -134,6 +134,8 @@ export function useLogbookBuilderGrid() {
   const leftPageScanned: Ref<boolean> = ref(false)
   /** One credit covers left + right scans for this builder spread session. */
   const spreadId: Ref<string> = ref(createBuilderSpreadId())
+  /** Persisted in builder draft for mobile Digifi setup vs review resume. */
+  const digifiMobilePhase: Ref<'setup' | 'review' | null> = ref(null)
   const digifiScanStatusByPage: Ref<Partial<Record<DigifiPageSide, DigifiAppliedScanStatus>>> = ref({})
   const undoStack: Ref<GridUndoSnapshot[]> = ref([])
   const redoStack: Ref<GridUndoSnapshot[]> = ref([])
@@ -330,6 +332,7 @@ export function useLogbookBuilderGrid() {
     singleLayoutRightStartRow.value = 0
     leftPageScanned.value = false
     digifiScanStatusByPage.value = {}
+    digifiMobilePhase.value = null
     regenerateSpreadId()
     clearUndoHistory()
   }
@@ -513,6 +516,7 @@ export function useLogbookBuilderGrid() {
     applyScanResults,
     leftPageScanned,
     spreadId,
+    digifiMobilePhase,
     regenerateSpreadId,
     singleLayoutRightStartRow,
     digifiScanStatusByPage,

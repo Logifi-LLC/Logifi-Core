@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue'
-import { navigateTo } from '#app'
+import { navigateTo, useRoute } from '#app'
 import DigifiCreditsIndicator from '~/components/digifi/DigifiCreditsIndicator.vue'
 import DigifiMobileColumnCarousel from '~/components/digifi/DigifiMobileColumnCarousel.vue'
 import DigifiMobileLayoutWizard from '~/components/digifi/DigifiMobileLayoutWizard.vue'
@@ -18,6 +18,7 @@ import {
   saveDraftNow,
   setupBuilderDraftAutosave,
   setupBuilderDraftFlush,
+  clearBuilderDraft,
   storedDraftHasContent,
   suspendDraftAutosave,
 } from '~/composables/useLogbookBuilderDraft'
@@ -43,6 +44,7 @@ import {
 import type { DigifiPageSide } from '~/utils/digifiTypes'
 import { useTheme } from '~/composables/useTheme'
 
+const route = useRoute()
 const { initAuth, isAuthenticated, user, getAccessToken } = useAuth()
 const { isDark: isDarkMode } = useTheme()
 const { fetchBalance } = useDigifiCredits()
@@ -132,6 +134,22 @@ function resetCaptureSession() {
   pendingScans.value = []
 }
 
+function queryWantsNewSpread(): boolean {
+  const value = route.query.new
+  return value === '1' || value === 'true'
+}
+
+/** Fresh spread for a new logbook page: new spreadId, empty scan cells, keep template/layout. */
+function beginNewDigifiSpreadSession() {
+  resetCaptureSession()
+  showCamera.value = false
+  grid.clearGrid()
+  phase.value = 'setup'
+  grid.digifiMobilePhase.value = 'setup'
+  clearBuilderDraft(user.value?.id)
+  saveDraftNow(grid, user.value?.id)
+}
+
 function scheduleScanDrain() {
   scanDrainChain = scanDrainChain.then(() => drainPendingScans()).catch(() => {})
 }
@@ -172,6 +190,14 @@ watch(
   () => {
     resetCaptureSession()
   }
+)
+
+watch(
+  phase,
+  (value) => {
+    grid.digifiMobilePhase.value = value
+  },
+  { immediate: true }
 )
 
 function openCapture() {
@@ -233,9 +259,7 @@ async function onFile(event: Event) {
 }
 
 function backToSetup() {
-  phase.value = 'setup'
-  resetCaptureSession()
-  syncCaptureSessionFromGrid()
+  beginNewDigifiSpreadSession()
 }
 
 async function recoverSpreadIfNeeded(userId: string | undefined): Promise<number> {
@@ -258,12 +282,27 @@ async function finishPageInit() {
   suspendDraftAutosave()
   const userId = user.value?.id
 
+  if (queryWantsNewSpread()) {
+    clearBuilderDraft(userId)
+    if (userId) {
+      templatePreloaded.value = await loadLastTemplateIfAny(grid, userId)
+    }
+    beginNewDigifiSpreadSession()
+    pageInitDone = true
+    resumeDraftAutosave()
+    stopAutosave?.()
+    stopAutosave = setupBuilderDraftAutosave(grid, userId)
+    return
+  }
+
   if (storedDraftHasContent(userId)) {
     const draft = getStoredDraft(userId)
     if (draft) {
       restoreDraftToGrid(grid, draft)
       const recoveredPages = await recoverSpreadIfNeeded(userId)
-      if (grid.layout.value === 'two-page') {
+      if (draft.digifiMobilePhase === 'review') {
+        phase.value = 'review'
+      } else if (grid.layout.value === 'two-page') {
         syncCaptureSessionFromGrid()
         const captureNext = nextMobileCaptureSide(
           grid.layout.value,
@@ -291,6 +330,8 @@ async function finishPageInit() {
       syncCaptureSessionFromGrid()
     }
   }
+  phase.value = 'setup'
+  grid.digifiMobilePhase.value = 'setup'
   pageInitDone = true
   resumeDraftAutosave()
   stopAutosave?.()
@@ -327,7 +368,7 @@ onUnmounted(() => {
           :class="['text-[11px] font-medium', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
           @click="backToSetup"
         >
-          Scan again
+          New spread
         </button>
         <NuxtLink
           :to="DIGIFI_EYE_PATH"
