@@ -50,6 +50,12 @@ function scrollToIndex(index: number) {
   markFocusedReviewed()
 }
 
+function onColumnSelectChange(event: Event) {
+  const index = Number.parseInt((event.target as HTMLSelectElement).value, 10)
+  if (!Number.isFinite(index)) return
+  scrollToIndex(index)
+}
+
 function onCellInput(rowIdx: number, colId: string, event: Event) {
   const value = (event.target as HTMLInputElement).value
   grid.setCell(rowIdx, colId, value)
@@ -107,14 +113,23 @@ watch(
 
 <template>
   <div class="space-y-2">
-    <p
-      :class="[
-        'min-h-[1.25rem] text-center text-base font-semibold tracking-tight',
-        isDarkMode ? 'text-green-100' : 'text-green-900',
-      ]"
+    <label class="sr-only" for="digifi-review-column-select">Column</label>
+    <select
+      id="digifi-review-column-select"
+      :value="String(focusedIndex)"
+      class="w-full rounded-2xl border px-4 py-2.5 text-sm font-semibold"
+      :class="
+        isDarkMode
+          ? 'border-white/10 bg-white/5 text-green-100'
+          : 'border-gray-200 bg-white text-green-900 shadow-sm'
+      "
+      aria-label="Column"
+      @change="onColumnSelectChange"
     >
-      {{ focusedColumn?.label ?? 'Column' }}
-    </p>
+      <option v-for="(column, index) in columns" :key="column.id" :value="String(index)">
+        {{ index + 1 }}. {{ column.label }}
+      </option>
+    </select>
 
     <div
       :class="[

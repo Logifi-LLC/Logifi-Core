@@ -189,4 +189,10 @@ describe('DigifiMobileColumnCarousel', () => {
     const { wrapper } = mountWithGrid(DigifiMobileColumnCarousel)
     expect(wrapper.find('[aria-hidden="true"]').exists()).toBe(true)
   })
+
+  it('renders a column jump dropdown', () => {
+    const { wrapper, grid } = mountWithGrid(DigifiMobileColumnCarousel)
+    const select = wrapper.get('[aria-label="Column"]')
+    expect(select.findAll('option').length).toBe(grid.visibleColumns.value.length)
+  })
 })

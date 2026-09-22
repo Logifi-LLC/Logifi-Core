@@ -468,6 +468,10 @@ export interface ColumnTotalRow {
   isInteger: boolean
 }
 
+export function formatColumnTotal(row: ColumnTotalRow): string {
+  return row.isInteger ? String(row.total) : row.total.toFixed(1)
+}
+
 export interface ValidateOnlyResult {
   valid: boolean
   errors: { rowIndex: number; message: string }[]

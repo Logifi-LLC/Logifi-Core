@@ -2,6 +2,7 @@
 import { inject, ref, computed } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import type { ValidateOnlyResult, ColumnTotalRow } from '~/composables/useLogbookBuilderImport'
+import { formatColumnTotal } from '~/composables/useLogbookBuilderImport'
 import { useTheme } from '~/composables/useTheme'
 import { useToast } from '~/composables/useToast'
 import { useAuth } from '~/composables/useAuth'
@@ -79,10 +80,6 @@ async function handleImport() {
   } finally {
     importing.value = false
   }
-}
-
-function formatTotal(row: ColumnTotalRow): string {
-  return row.isInteger ? String(row.total) : row.total.toFixed(1)
 }
 
 async function handleSendToLogTen() {
@@ -212,7 +209,7 @@ function downloadLogTenPackage() {
           <ul class="space-y-1 text-sm text-gray-800 dark:text-gray-200">
             <li v-for="row in confirmResult.columnTotals" :key="row.fieldKey" class="flex justify-between gap-4">
               <span>{{ row.label }}</span>
-              <span class="font-mono tabular-nums">{{ formatTotal(row) }}</span>
+              <span class="font-mono tabular-nums">{{ formatColumnTotal(row) }}</span>
             </li>
           </ul>
         </div>
