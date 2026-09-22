@@ -8,6 +8,7 @@ import {
   focusedColumnIndexFromScroll,
   markColumnReviewed,
 } from '~/utils/digifiMobileReview'
+import { computeDigifiMobileReviewRowMinHeights } from '~/utils/digifiMobileReviewRows'
 
 const props = defineProps<{
   remarksRescanOffers?: Array<{ rowIndex: number; focusRows: number[] }>
@@ -33,6 +34,23 @@ const reviewedIds = ref<Set<string>>(new Set())
 
 const columns = computed(() => grid.visibleColumns.value)
 const focusedColumn = computed(() => columns.value[focusedIndex.value] ?? null)
+
+const remarksRescanRowIndices = computed(() => {
+  const indices = new Set<number>()
+  for (const offer of props.remarksRescanOffers ?? []) {
+    indices.add(offer.rowIndex)
+  }
+  return indices
+})
+
+const rowMinHeightsPx = computed(() =>
+  computeDigifiMobileReviewRowMinHeights({
+    rowCount: grid.rows.value.length,
+    rows: grid.rows.value,
+    columns: columns.value,
+    remarksRescanRowIndices: remarksRescanRowIndices.value,
+  })
+)
 
 function markFocusedReviewed() {
   const column = focusedColumn.value
@@ -194,6 +212,7 @@ watch(
               :key="`${column.id}-${rowIdx}`"
               class="flex items-stretch border-b last:border-b-0"
               :class="isDarkMode ? 'border-white/10' : 'border-gray-200'"
+              :style="{ minHeight: `${rowMinHeightsPx[rowIdx] ?? 28}px` }"
             >
               <span
                 :class="[
@@ -204,7 +223,7 @@ watch(
                 {{ rowIdx + 1 }}
               </span>
               <div
-                class="min-w-0 flex-1"
+                class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
                 :class="
                   cellNeedsReview(rowIdx, column.id)
                     ? isDarkMode
@@ -214,6 +233,7 @@ watch(
                 "
               >
                 <LogbookBuilderCell
+                  row-lock
                   :model-value="grid.rows.value[rowIdx]?.cells?.[column.id] ?? ''"
                   :field-key="column.fieldKey"
                   :category-class-value="column.categoryClassValue"
