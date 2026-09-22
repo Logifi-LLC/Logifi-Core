@@ -54,6 +54,7 @@ const leftPagePhotoCaptured = ref(false)
 const rightPagePhotoCaptured = ref(false)
 const pendingScans = ref<PendingMobileScan[]>([])
 let scanDrainChain: Promise<void> = Promise.resolve()
+const templatePreloaded = ref(false)
 let stopAutosave: (() => void) | null = null
 let stopDraftFlush: (() => void) | null = null
 
@@ -187,7 +188,7 @@ onMounted(async () => {
   suspendDraftAutosave()
   const userId = user.value?.id
   if (userId) {
-    await loadLastTemplateIfAny(grid, userId)
+    templatePreloaded.value = await loadLastTemplateIfAny(grid, userId)
   }
   resumeDraftAutosave()
   stopAutosave?.()
@@ -254,6 +255,7 @@ onUnmounted(() => {
         :two-page-step="twoPageCaptureStep"
         :left-page-scanned="leftPageScanned"
         :left-page-photo-captured="leftPagePhotoCaptured"
+        :template-preloaded="templatePreloaded"
         @capture="openCapture"
       />
 

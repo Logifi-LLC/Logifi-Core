@@ -77,6 +77,8 @@ const props = defineProps<{
   twoPageStep?: 1 | 2 | null
   leftPageScanned?: boolean
   leftPagePhotoCaptured?: boolean
+  /** Set when parent finishes async loadLastTemplateIfAny (wizard may mount earlier). */
+  templatePreloaded?: boolean
 }>()
 
 const captureButtonDisabled = computed(() => {
@@ -93,10 +95,13 @@ const emit = defineEmits<{
 }>()
 
 const templates = ref<{ id: string; name: string; layout: string; default_row_count: number; columns: BuilderTemplateColumn[]; tags_column_width?: number; default_import_role?: string; two_page_split_index?: number }[]>([])
+const selectedTemplateId = ref('')
 const templateName = ref('')
 const templateError = ref<string | null>(null)
 const saving = ref(false)
 const columnsEditorExpanded = ref(true)
+/** Avoid re-collapsing after the pilot expands the column editor (e.g. when templates fetch completes). */
+let didAutoCollapseColumnsForTemplate = false
 const addFieldKey = ref<LogbookColumnKey | ''>('')
 
 const selectedFieldKeys = computed(() => {
@@ -190,7 +195,30 @@ function applyTemplate(template: (typeof templates.value)[0]) {
     two_page_split_index: template.two_page_split_index,
   })
   persistLastTemplateId(template.id)
-  columnsEditorExpanded.value = true
+  selectedTemplateId.value = template.id
+  columnsEditorExpanded.value = false
+}
+
+function onTemplateSelectChange(e: Event) {
+  const id = (e.target as HTMLSelectElement).value
+  if (!id) return
+  const template = templates.value.find((t) => t.id === id)
+  if (template) applyTemplate(template)
+}
+
+function syncSelectedTemplateFromStorage() {
+  const id = readLastTemplateId()
+  if (id && templates.value.some((t) => t.id === id)) {
+    selectedTemplateId.value = id
+  }
+}
+
+function collapseColumnsIfTemplateApplied() {
+  if (didAutoCollapseColumnsForTemplate) return
+  if (readLastTemplateId() || props.templatePreloaded) {
+    columnsEditorExpanded.value = false
+    didAutoCollapseColumnsForTemplate = true
+  }
 }
 
 async function saveTemplate() {
@@ -236,32 +264,44 @@ onMounted(() => {
       grid.defaultImportRole.value = stored
     }
   } catch (_) {}
-  if (readLastTemplateId()) {
-    columnsEditorExpanded.value = false
-  }
-  void loadTemplates()
+  collapseColumnsIfTemplateApplied()
+  void loadTemplates().then(() => {
+    syncSelectedTemplateFromStorage()
+    collapseColumnsIfTemplateApplied()
+  })
 })
+
+watch(
+  () => props.templatePreloaded,
+  (loaded) => {
+    if (loaded) collapseColumnsIfTemplateApplied()
+  }
+)
 </script>
 
 <template>
   <div class="space-y-5">
     <section class="space-y-2">
       <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Template</p>
-      <div v-if="templates.length" class="flex gap-2 overflow-x-auto pb-1">
-        <button
-          v-for="template in templates"
-          :key="template.id"
-          type="button"
-          class="shrink-0 rounded-full border px-4 py-2 text-xs font-semibold"
+      <div v-if="templates.length">
+        <label class="sr-only" for="digifi-template-select">Saved layout</label>
+        <select
+          id="digifi-template-select"
+          v-model="selectedTemplateId"
+          class="w-full rounded-2xl border px-4 py-3 text-sm font-semibold"
           :class="
             isDarkMode
-              ? 'border-white/15 bg-white/5 text-gray-100'
+              ? 'border-white/10 bg-white/5 text-gray-100'
               : 'border-gray-200 bg-white text-gray-900 shadow-sm'
           "
-          @click="applyTemplate(template)"
+          aria-label="Saved layout"
+          @change="onTemplateSelectChange"
         >
-          {{ template.name }}
-        </button>
+          <option value="">Choose saved layout…</option>
+          <option v-for="template in templates" :key="template.id" :value="template.id">
+            {{ template.name }}
+          </option>
+        </select>
       </div>
       <p v-else :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">No saved layouts.</p>
       <div class="flex gap-2">
