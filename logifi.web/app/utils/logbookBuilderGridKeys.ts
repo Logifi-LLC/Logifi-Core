@@ -16,7 +16,7 @@ export function shouldDeferGridKeydown(options: DeferGridKeydownOptions): boolea
     return true
   }
 
-  if (fieldKey === 'pilots' && pilotMenuOpen) {
+  if ((fieldKey === 'pilots' || fieldKey === 'pilotRole') && pilotMenuOpen) {
     if (key === 'ArrowUp' || key === 'ArrowDown' || key === 'Escape') {
       return true
     }

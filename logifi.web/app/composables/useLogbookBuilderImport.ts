@@ -18,10 +18,15 @@ import { useValidation } from '~/composables/useValidation'
 import { useAuth } from '~/composables/useAuth'
 import { supabase } from '~/lib/supabase'
 import {
-  saveSyncedEntryToIndexedDB,
+  saveEntryToIndexedDB,
   initIndexedDB,
   getAllEntriesFromIndexedDB,
+  getSyncQueue,
+  updateSyncQueueEntry,
+  getEntryFromIndexedDB,
+  updateEntryInIndexedDB,
 } from '~/utils/indexedDB'
+import { useSyncQueue } from '~/composables/useSyncQueue'
 import { clearBuilderDraft } from '~/composables/useLogbookBuilderDraft'
 import {
   buildAircraftTailIndex,
@@ -640,6 +645,117 @@ export async function persistDigifiCorrectionFeedback(
   }
 }
 
+function buildLogbookBuilderDbRow(
+  entry: LogEntry,
+  userId: string,
+  importBatchId: string | null,
+  importedAt: string
+): Record<string, unknown> {
+  return {
+    id: entry.id,
+    user_id: userId,
+    date: entry.date,
+    role: entry.role,
+    aircraft_category_class: entry.aircraftCategoryClass,
+    category_class_time: entry.categoryClassTime,
+    aircraft_make_model: entry.aircraftMakeModel,
+    registration: entry.registration,
+    flight_number: entry.flightNumber,
+    departure: entry.departure,
+    destination: entry.destination,
+    route: entry.route,
+    training_elements: entry.trainingElements,
+    training_instructor: entry.trainingInstructor,
+    instructor_certificate: entry.instructorCertificate,
+    pic_name: (entry.picName || '').trim() || null,
+    sic_name: (entry.sicName || '').trim() || null,
+    flight_conditions: entry.flightConditions,
+    tags: entry.tags ?? [],
+    remarks: entry.remarks,
+    logbook_type: entry.logbookType ?? 'flight',
+    flight_time: entry.flightTime,
+    performance: entry.performance,
+    oooi: entry.oooi,
+    flagged: entry.flagged ?? false,
+    is_imported: true,
+    import_source: 'logbook_builder',
+    import_batch_id: importBatchId,
+    original_entry_date: entry.date ? new Date(entry.date).toISOString() : null,
+    import_metadata: { importedAt },
+  }
+}
+
+async function attachImportBatchToQueuedEntries(
+  userId: string,
+  entryIds: Set<string>,
+  importBatchId: string
+): Promise<void> {
+  const queue = await getSyncQueue(userId)
+  for (const item of queue) {
+    if (item.operation !== 'insert' || !entryIds.has(item.entryId) || !item.entryData) continue
+    await updateSyncQueueEntry(item.id, {
+      entryData: { ...item.entryData, import_batch_id: importBatchId },
+    })
+  }
+  for (const entryId of entryIds) {
+    try {
+      const local = await getEntryFromIndexedDB(entryId)
+      if (!local) continue
+      await updateEntryInIndexedDB(
+        { ...local, importBatchId },
+        { userId, synced: local._synced ?? false }
+      )
+    } catch {
+      // non-fatal
+    }
+  }
+}
+
+function runLogbookBuilderImportBatchSideEffects(
+  userId: string,
+  entryIds: string[],
+  importedCount: number
+): void {
+  void (async () => {
+    try {
+      const { data: batch, error: batchError } = await (supabase as any)
+        .from('import_batches')
+        .insert({
+          user_id: userId,
+          source_type: 'logbook_builder',
+          file_name: null,
+          file_size: null,
+          total_entries: importedCount,
+          successful_imports: importedCount,
+          duplicates_skipped: 0,
+          errors: 0,
+          import_metadata: { importedAt: new Date().toISOString() },
+        })
+        .select()
+        .single()
+      if (!batchError && batch?.id) {
+        await attachImportBatchToQueuedEntries(userId, new Set(entryIds), batch.id as string)
+      }
+    } catch (error) {
+      console.warn('[logbook-builder] import batch metadata sync failed', error)
+    }
+  })()
+}
+
+function runLogbookBuilderDigifiLearningSideEffects(
+  grid: ReturnType<typeof useLogbookBuilderGrid>,
+  userId: string
+): void {
+  void persistDigifiCorrectionFeedback(grid, userId).catch((error) => {
+    console.warn('[digifi] failed to persist correction feedback', error)
+  })
+  void import('~/composables/useDigifiVocabulary')
+    .then(({ persistDigifiVocabulary }) => persistDigifiVocabulary(grid, userId))
+    .catch((error) => {
+      console.warn('[digifi] failed to persist vocabulary', error)
+    })
+}
+
 export async function runValidateAndImport(
   grid: ReturnType<typeof useLogbookBuilderGrid>
 ): Promise<ValidateAndImportResult> {
@@ -690,138 +806,37 @@ export async function runValidateAndImport(
   }
 
   await initIndexedDB()
-  let importBatchId: string | null = null
-
-  if (isAuthenticated.value && user.value) {
-    try {
-      const { data: batch, error: batchError } = await (supabase as any)
-        .from('import_batches')
-        .insert({
-          user_id: user.value.id,
-          source_type: 'logbook_builder',
-          file_name: null,
-          file_size: null,
-          total_entries: entries.length,
-          successful_imports: 0,
-          duplicates_skipped: 0,
-          errors: 0,
-          import_metadata: { importedAt: new Date().toISOString() },
-        })
-        .select()
-        .single()
-      if (batchError) throw batchError
-      importBatchId = (batch as any).id
-    } catch (e: any) {
-      result.errors.push({ rowIndex: -1, message: e?.message ?? 'Failed to create import batch' })
-      return result
-    }
-  }
+  const userId = user.value!.id
+  const importedAt = new Date().toISOString()
+  const { addToQueue } = useSyncQueue()
+  const queuedEntryIds: string[] = []
 
   for (const entry of entries) {
-    const importedAt = new Date().toISOString()
-    const dbEntry = {
-      id: entry.id,
-      user_id: user.value?.id,
-      date: entry.date,
-      role: entry.role,
-      aircraft_category_class: entry.aircraftCategoryClass,
-      category_class_time: entry.categoryClassTime,
-      aircraft_make_model: entry.aircraftMakeModel,
-      registration: entry.registration,
-      flight_number: entry.flightNumber,
-      departure: entry.departure,
-      destination: entry.destination,
-      route: entry.route,
-      training_elements: entry.trainingElements,
-      training_instructor: entry.trainingInstructor,
-      instructor_certificate: entry.instructorCertificate,
-      pic_name: (entry.picName || '').trim() || null,
-      sic_name: (entry.sicName || '').trim() || null,
-      flight_conditions: entry.flightConditions,
-      tags: entry.tags ?? [],
-      remarks: entry.remarks,
-      logbook_type: entry.logbookType ?? 'flight',
-      flight_time: entry.flightTime,
-      performance: entry.performance,
-      oooi: entry.oooi,
-      flagged: entry.flagged ?? false,
-      is_imported: true,
-      import_source: 'logbook_builder',
-      import_batch_id: importBatchId,
-      original_entry_date: entry.date ? new Date(entry.date).toISOString() : null,
-      import_metadata: { importedAt },
-    }
-    let insertedRow: any = null
-
-    if (isAuthenticated.value && user.value) {
-      try {
-        const { data, error: insertError } = await (supabase as any)
-          .from('log_entries')
-          .insert(dbEntry)
-          .select()
-          .single()
-        if (insertError) throw insertError
-        insertedRow = data
-      } catch (e: any) {
-        result.errors.push({
-          rowIndex: -1,
-          message: `Save failed: ${e?.message ?? 'Unknown error'}`,
-        })
-        continue
-      }
-    }
-
     const entryToStore: LogEntry = {
       ...entry,
       isImported: true,
       importSource: 'logbook_builder',
-      importBatchId: importBatchId ?? undefined,
       originalEntryDate: entry.date,
       importMetadata: { importedAt },
-      version: insertedRow?.version ?? entry.version,
-      dataHash: insertedRow?.data_hash ?? entry.dataHash,
-      createdAt: insertedRow?.created_at ?? entry.createdAt,
-      updatedAt: insertedRow?.updated_at ?? entry.updatedAt,
     }
-    try {
-      await saveSyncedEntryToIndexedDB(entryToStore, user.value!.id)
-    } catch (_) {
-      // non-fatal
-    }
-    result.imported++
-  }
+    const dbEntry = buildLogbookBuilderDbRow(entry, userId, null, importedAt)
 
-  if (importBatchId && isAuthenticated.value && user.value) {
     try {
-      await (supabase as any)
-        .from('import_batches')
-        .update({
-          successful_imports: result.imported,
-          duplicates_skipped: 0,
-          errors: result.errors.length,
-        })
-        .eq('id', importBatchId)
-    } catch (_) {}
-  }
-
-  if (result.imported > 0 && isAuthenticated.value && user.value) {
-    try {
-      await persistDigifiCorrectionFeedback(grid, user.value.id)
-    } catch (error) {
-      console.warn('[digifi] failed to persist correction feedback', error)
-    }
-    
-    try {
-      const { persistDigifiVocabulary } = await import('~/composables/useDigifiVocabulary')
-      await persistDigifiVocabulary(grid, user.value.id)
-    } catch (error) {
-      console.warn('[digifi] failed to persist vocabulary', error)
+      await saveEntryToIndexedDB(entryToStore, userId)
+      await addToQueue('insert', entry.id, dbEntry, userId)
+      queuedEntryIds.push(entry.id)
+      result.imported++
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to save locally'
+      result.errors.push({ rowIndex: -1, message: `Save failed: ${message}` })
     }
   }
 
   if (result.imported > 0) {
+    runLogbookBuilderDigifiLearningSideEffects(grid, userId)
+    runLogbookBuilderImportBatchSideEffects(userId, queuedEntryIds, result.imported)
     grid.clearGrid()
-    clearBuilderDraft(user.value?.id)
+    clearBuilderDraft(userId)
   }
   return result
 }
