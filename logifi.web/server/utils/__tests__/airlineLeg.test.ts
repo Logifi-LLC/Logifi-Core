@@ -74,8 +74,8 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
     expect(entry.training_elements).toBe('SUTTON, DREW')
     expect(entry.flight_conditions).toContain('ifr')
     expect(entry.flight_conditions).toContain('crossCountry')
-    expect(entry.oooi?.out).toBe('0605')
-    expect(entry.oooi?.in).toBe('0712')
+    expect(entry.oooi?.out).toBe('0608')
+    expect(entry.oooi?.in).toBe('0715')
     expect(entry.oooi?.off).toBe('0620')
   })
 
@@ -173,7 +173,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
     expect((entry.flight_time as Record<string, unknown>).sic).toBeUndefined()
   })
 
-  it('keeps FLICA scheduled Out/In when AeroDataBox only has runway times', () => {
+  it('prefers enrich actual Out/In over FLICA scheduled when both are present', () => {
     const entry = mapAirlineLegToFcvMappedEntry({
       external_flight_id: 'FLICA_20260819_4349_LGA',
       import_source: 'flica_aerodatabox',
@@ -195,16 +195,16 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: 128,
     })
     expect(entry.oooi).toEqual({
-      out: '1144',
+      out: '1150',
       off: '1159',
       on: '1346',
-      in: '1352',
+      in: '1430',
       isZulu: false,
     })
     expect((entry.flight_time as Record<string, unknown>).total).toBe(2.1)
   })
 
-  it('keeps FLICA scheduled Out/In when AeroDataBox only has runway times (RIC turn)', () => {
+  it('uses FLICA scheduled Out/In when enrich has only runway times (RIC turn)', () => {
     const entry = mapAirlineLegToFcvMappedEntry({
       external_flight_id: 'FLICA_20260812_4442_RIC',
       import_source: 'flica_aerodatabox',
@@ -236,7 +236,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
     expect(entry.destination).toBe('KLGA')
   })
 
-  it('keeps completed FLICA Out/In and block when AeroDataBox has Off/On (4809 ATL-LGA)', () => {
+  it('uses enrich gate actuals for Out/In when present (4809 ATL-LGA)', () => {
     const entry = mapAirlineLegToFcvMappedEntry({
       external_flight_id: 'FLICA_20260820_4809_ATL',
       import_source: 'flica_aerodatabox',
@@ -261,14 +261,44 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: 123,
     })
     expect(entry.oooi).toEqual({
-      out: '0606',
+      out: '0609',
       off: '0622',
       on: '0804',
-      in: '0809',
+      in: '0825',
       isZulu: false,
     })
     expect((entry.flight_time as Record<string, unknown>).total).toBe(2.1)
     expect(entry.category_class_time).toBe(2.1)
+  })
+
+  it('uses all four enrich OOOI in airport-local wall time without mixing scheduled gate times', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20260915_5759_LGA',
+      import_source: 'flica_aerodatabox',
+      flight_number: '5759',
+      trip_number: 'L8X01',
+      role: 'PIC',
+      dep_airport: 'LGA',
+      arr_airport: 'BOS',
+      scheduled_out_local: '2026-09-15 09:32:00',
+      scheduled_in_local: '2026-09-15 10:47:00',
+      actual_out_local: '2026-09-15 09:35:00',
+      actual_in_local: '2026-09-15 10:50:00',
+      actual_off_local: '2026-09-15 09:54:00',
+      actual_on_local: '2026-09-15 10:38:00',
+      fcv_tail_number: 'N234JQ',
+      fcv_aircraft_type: 'E75',
+      crew: [],
+      is_deadhead: false,
+      block_minutes: 78,
+    })
+    expect(entry.oooi).toEqual({
+      out: '0935',
+      off: '0954',
+      on: '1038',
+      in: '1050',
+      isZulu: false,
+    })
   })
 
   it('uses FLICA Out→In hours when the pairing omits the block column', () => {

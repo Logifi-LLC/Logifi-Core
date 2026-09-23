@@ -58,7 +58,7 @@ export async function lookupFlightActuals(
   const p = provider ?? getFlightEnrichProvider()
   
   if (p === 'flightaware') {
-    return await flightAware.lookupFlightActuals(
+    return await flightAware.lookupFlightAwareActuals(
       flightNumber,
       dateYYYYMMDD,
       depIcao,
@@ -67,7 +67,7 @@ export async function lookupFlightActuals(
     )
   }
   
-  return await aeroDataBox.lookupFlightActuals(
+  return await aeroDataBox.lookupAeroDataBoxActuals(
     flightNumber,
     dateYYYYMMDD,
     depIcao,

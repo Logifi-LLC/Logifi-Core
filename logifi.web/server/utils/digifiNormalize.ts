@@ -1,7 +1,13 @@
 import type { DigifiTemplateColumn } from '../../app/utils/digifiTypes'
 import { isDigifiManualOnlyField } from '../../app/utils/logbookBuilderTypes'
 import { normalizeDigifiRegistrationKey } from '../../app/utils/digifiFeedback'
+import {
+  formatDigifiIsoDate,
+  parseDigifiIsoDateParts,
+  resolveDigifiSpreadYear,
+} from '../../app/utils/digifiSpreadYear'
 import type { LogbookColumnKey } from '../../app/utils/logbookTypes'
+import { normalizeDigifiRemarksCell } from '../../app/utils/digifiRemarksNormalize'
 
 const NUMERIC_KEYS: Set<LogbookColumnKey> = new Set([
   'pic',
@@ -114,46 +120,39 @@ function reconcileRowAirports(
 
 /** TSV-safe remarks: turn literal \\n and real newlines into " | " separators. */
 export function normalizeRemarks(val: string): string {
-  return val
-    .replace(/\\r\\n/g, ' | ')
-    .replace(/\\n/g, ' | ')
-    .replace(/\\r/g, ' | ')
-    .replace(/\r?\n/g, ' | ')
-    .replace(/\s*\|\s*/g, ' | ')
-    .replace(/(?: \| )+/g, ' | ')
-    .trim()
-}
-
-function parseIsoDateParts(iso: string): { y: number; m: number; d: number } | null {
-  const parts = iso.split('-').map(Number)
-  if (parts.length !== 3 || parts.some((p) => !Number.isFinite(p))) return null
-  const [y, m, d] = parts
-  return { y, m, d }
+  return normalizeDigifiRemarksCell(val)
 }
 
 function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: string | null): string {
   const s = val.trim()
   if (!s) return ''
-  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) return s
-  const year =
-    typeof defaultYear === 'number' && Number.isFinite(defaultYear)
-      ? defaultYear
-      : new Date().getFullYear()
+  const lockedYear =
+    typeof defaultYear === 'number' && Number.isFinite(defaultYear) ? defaultYear : null
+  const year = lockedYear ?? new Date().getFullYear()
+
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
+    const parts = parseDigifiIsoDateParts(s)
+    if (!parts) return s
+    if (lockedYear != null) {
+      return formatDigifiIsoDate(
+        resolveDigifiSpreadYear(parts.m, parts.d, lockedYear, lastDateIso),
+        parts.m,
+        parts.d
+      )
+    }
+    return s
+  }
+
   const slashParts = s.split(/[/-]/).map((p) => p.trim())
   if (slashParts.length === 2) {
     const m = parseInt(slashParts[0], 10)
     const d = parseInt(slashParts[1], 10)
     if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      let y = year
-      if (lastDateIso) {
-        const last = parseIsoDateParts(lastDateIso)
-        if (last) {
-          const candidateTime = new Date(y, m - 1, d).getTime()
-          const lastTime = new Date(last.y, last.m - 1, last.d).getTime()
-          if (candidateTime <= lastTime) y = year + 1
-        }
-      }
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      const y =
+        lockedYear != null
+          ? resolveDigifiSpreadYear(m, d, lockedYear, lastDateIso)
+          : resolveDigifiSpreadYear(m, d, year, lastDateIso)
+      return formatDigifiIsoDate(y, m, d)
     }
   }
   if (slashParts.length === 3) {
@@ -162,6 +161,10 @@ function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: st
     const yRaw = slashParts[2]
     const parsedY = parseInt(yRaw, 10)
     if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      if (lockedYear != null) {
+        const y = resolveDigifiSpreadYear(m, d, lockedYear, lastDateIso)
+        return formatDigifiIsoDate(y, m, d)
+      }
       let y = year
       if (Number.isFinite(parsedY)) {
         if (yRaw.length === 2) {
@@ -179,7 +182,7 @@ function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: st
           y = parsedY
         }
       }
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      return formatDigifiIsoDate(y, m, d)
     }
   }
   return s
@@ -214,7 +217,8 @@ export function normalizeScanRows(
   const colById = new Map(columns.map((c) => [c.id, c]))
   const dateCol = columns.find((c) => c.fieldKey === 'date')
   let lastDateIso: string | null = null
-  return rows.map((row) => {
+  const ordered = [...rows].sort((a, b) => a.rowIndex - b.rowIndex)
+  return ordered.map((row) => {
     const reconciledRaw = reconcileRowAirports(row.cells, columns)
     const cells: Record<string, string> = {}
     for (const [colId, raw] of Object.entries(reconciledRaw)) {

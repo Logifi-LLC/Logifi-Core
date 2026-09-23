@@ -72,6 +72,8 @@ export default defineNuxtConfig({
       apiBase: process.env.NUXT_PUBLIC_API_BASE || '',
       /** `off` | `beta` | `coming_soon` — see useFcvUiLabel (integrations page + Settings connect UI only). */
       fcvUiLabel: process.env.NUXT_PUBLIC_FCV_UI_LABEL || 'off',
+      /** `on` (default) routes iOS Digifi entries to /digifi-scan. `off` keeps /digifi-eye. Route always exists. */
+      digifiMobileReview: process.env.NUXT_PUBLIC_DIGIFI_MOBILE_REVIEW || 'on',
       /** Lightning / LNURL-pay / Lightning address shown on /developers (Open Source donation). */
       /** Base URL for Digifi phone capture QR/links. Unset in dev to auto-detect LAN IP. */
       companionCaptureOrigin: process.env.NUXT_PUBLIC_COMPANION_CAPTURE_ORIGIN || '',
@@ -109,7 +111,7 @@ export default defineNuxtConfig({
     // Digifi paper logbook scan (server-only)
     geminiApiKey: process.env.GEMINI_API_KEY || '',
     anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
-    digifiModel: process.env.NUXT_DIGIFI_MODEL || process.env.DIGIFI_MODEL || 'gemini-3.6-flash',
+    digifiModel: process.env.NUXT_DIGIFI_MODEL || process.env.DIGIFI_MODEL || 'gemini-3.8-flash',
     digifiModelFallbacks: process.env.NUXT_DIGIFI_MODEL_FALLBACKS || process.env.DIGIFI_MODEL_FALLBACKS || '',
     digifiEnableCapacityModelFallback: process.env.NUXT_DIGIFI_ENABLE_CAPACITY_MODEL_FALLBACK || '',
     digifiMaxScansPerDay: parseInt(process.env.NUXT_DIGIFI_MAX_SCANS_PER_DAY || process.env.DIGIFI_MAX_SCANS_PER_DAY || '10', 10) || 10,

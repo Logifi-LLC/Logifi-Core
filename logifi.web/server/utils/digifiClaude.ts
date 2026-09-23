@@ -403,6 +403,8 @@ export async function scanLogbookImageWithClaude(
     labeledChunks,
     providerUsed: 'anthropic',
     logLabel: 'claude messages',
+    fewShotExamples: options.fewShotExamples,
+    sessionPriorPages: options.sessionPriorPages,
     callRows: (models, prompt, overview, chunks, allowedColumnIds, maxRowCount, focusRows, opts) =>
       callClaudeRows(
         models,

@@ -4,7 +4,7 @@
       <div class="px-4 py-3">
         <p class="text-sm" :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">
           <template v-if="isIos">
-            Set up and review on your computer. Use Digifi Eye to photograph logbook pages from the iOS app.
+            Scan and review pages on this phone. Digifi Eye still captures for desktop Add Pages.
           </template>
           <template v-else>
             Digifi uses AI to pre-fill rows from photos of your paper logbook pages on Add Pages.
@@ -15,6 +15,15 @@
     </SettingsListGroup>
 
     <SettingsListGroup v-if="isIos" title="Scanner" :is-dark-mode="isDarkMode">
+      <SettingsListRow
+        v-if="mobileReviewEnabled"
+        label="Scan pages"
+        subtitle="Photo, review, import"
+        icon="ri:qr-scan-2-line"
+        to="/digifi-scan"
+        :is-dark-mode="isDarkMode"
+        @click="$emit('close')"
+      />
       <SettingsListRow
         label="Digifi Eye"
         subtitle="Camera for desktop Add Pages"
@@ -122,6 +131,7 @@ import { ref, onMounted } from 'vue'
 import SettingsListGroup from '../SettingsListGroup.vue'
 import SettingsListRow from '../SettingsListRow.vue'
 import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
+import { isDigifiMobileReviewEnabled } from '~/utils/digifiMobileReview'
 import { useDigifiLearning } from '~/composables/useDigifiLearning'
 import { useDigifiDestination } from '~/composables/useDigifiDestination'
 import { useToast } from '~/composables/useToast'
@@ -139,6 +149,7 @@ defineEmits<{
 
 const showAddCreditsModal = ref(false)
 const { isIos } = useCapacitorPlatform()
+const mobileReviewEnabled = isDigifiMobileReviewEnabled()
 const { showToast } = useToast()
 const { isOptedIn: isLearningOptedIn, isLoading: learningLoading, loadOptInStatus, setOptIn, eraseDigifiLearningData } = useDigifiLearning()
 const { preferredSink, loadPreferredSink } = useDigifiDestination()

@@ -11,9 +11,16 @@ import { normalizeScanRows } from '../../utils/digifiNormalize'
 import { sanitizeDigifiScanRows } from '../../utils/digifiScanSanitize'
 import { personalizeDigifiScanRows } from '../../utils/digifiPersonalization'
 import { analyzeDigifiScanRows } from '../../../app/utils/digifiScanDiagnostics'
+import {
+  applyRemarksMergeSuspectMeta,
+  findRemarksMergeSuspects,
+  formatPageFooterDropMessage,
+} from '../../../app/utils/digifiScanRowReview'
 import { assertCanScanSpread } from '../../utils/creditsBalance'
 import { buildDigifiScanSessionPayload } from '../../utils/digifiScanPayload'
 import { finalizeDigifiScanBilling } from '../../utils/digifiScanBilling'
+import { loadDigifiFewShotExamples } from '../../utils/digifiFewShot'
+import { loadDigifiSpreadSessionContext } from '../../utils/digifiSessionContext'
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
@@ -180,6 +187,25 @@ export default defineEventHandler(async (event) => {
 
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
 
+  let fewShotExamples: Awaited<ReturnType<typeof loadDigifiFewShotExamples>> = []
+  try {
+    fewShotExamples = await loadDigifiFewShotExamples(supabase, userId)
+  } catch (error) {
+    console.warn('[digifi] few-shot examples skipped:', error)
+  }
+
+  let sessionPriorPages: Awaited<ReturnType<typeof loadDigifiSpreadSessionContext>> = []
+  try {
+    sessionPriorPages = await loadDigifiSpreadSessionContext(
+      supabase,
+      userId,
+      meta.spreadId,
+      meta.pageSide
+    )
+  } catch (error) {
+    console.warn('[digifi] session context skipped:', error)
+  }
+
   let scanResult
   try {
     mark('extractStart')
@@ -188,6 +214,8 @@ export default defineEventHandler(async (event) => {
       mimeType: imageMime,
       meta,
       chunkImages,
+      fewShotExamples,
+      sessionPriorPages,
     })
     mark('afterExtract')
   } catch (e) {
@@ -228,13 +256,17 @@ export default defineEventHandler(async (event) => {
   }
 
   const targetColumns = buildTargetColumns(meta)
-  const { rows: sanitizedRows, strippedRowIndices } = sanitizeDigifiScanRows(
-    scanResult.rows,
-    targetColumns,
-    meta.rowCount
-  )
+  const {
+    rows: sanitizedRows,
+    strippedRowIndices,
+    footerOutlierRowIndex,
+  } = sanitizeDigifiScanRows(scanResult.rows, targetColumns, meta.rowCount)
   if (strippedRowIndices.length > 0) {
     console.info('[digifi] stripped summary rows:', strippedRowIndices)
+  }
+  const scanReviewMessages: string[] = []
+  if (footerOutlierRowIndex != null) {
+    scanReviewMessages.push(formatPageFooterDropMessage(footerOutlierRowIndex))
   }
 
   const normalizedRows = normalizeScanRows(sanitizedRows, meta.columns, meta.defaultYear)
@@ -252,12 +284,32 @@ export default defineEventHandler(async (event) => {
       columns: meta.columns,
     })
     personalizedRows = personalized.rows
-    reviewMessages = personalized.reviewMessages
+    reviewMessages = [...scanReviewMessages, ...personalized.reviewMessages]
     reviewRequiredCount = personalized.reviewRequiredCount
     t.personalizationMs = Date.now() - personalizationStartedAt
   } catch (error) {
     console.error('[digifi] personalization failed:', error)
+    reviewMessages = scanReviewMessages
   }
+
+  const mergeSuspects = meta.remarksFocusRows?.length
+    ? []
+    : findRemarksMergeSuspects(personalizedRows, meta.columns, meta.rowCount)
+  if (mergeSuspects.length > 0) {
+    personalizedRows = applyRemarksMergeSuspectMeta(personalizedRows, meta.columns, mergeSuspects)
+    reviewMessages = [
+      ...reviewMessages,
+      ...mergeSuspects.map((suspect) => suspect.message),
+    ]
+    reviewRequiredCount += mergeSuspects.length
+  } else if (reviewMessages.length === 0) {
+    reviewMessages = scanReviewMessages
+  }
+
+  const remarksRescanOffers = mergeSuspects.map((suspect) => ({
+    rowIndex: suspect.rowIndex,
+    focusRows: suspect.focusRows,
+  }))
 
   let filledCellCount = 0
   for (const row of personalizedRows) {
@@ -305,6 +357,7 @@ export default defineEventHandler(async (event) => {
   let creditResult = await finalizeDigifiScanBilling(service, userId, {
     spreadId: meta.spreadId,
     layout: meta.layout,
+    pageSide: meta.pageSide,
     scanId,
     insertError,
     fallbackBalance: scanEligibility.balance,
@@ -363,5 +416,6 @@ export default defineEventHandler(async (event) => {
     hasGaps: rowDiagnostics.hasGaps,
     reviewMessages,
     reviewRequiredCount,
+    remarksRescanOffers,
   }
 })

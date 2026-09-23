@@ -1,15 +1,15 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import {
-  aeroDataBoxFlightNumberCandidates,
   extractAeroDataBoxActuals,
-  fetchFlightActuals,
+  fetchAeroDataBoxActuals,
   isUsableAeroDataBoxHit,
-  lookupFlightActuals,
+  lookupAeroDataBoxActuals,
   resetAeroDataBoxClientStateForTests,
   setAeroDataBoxMinIntervalForTests,
   clearAeroDataBoxRateLimitForTests,
   summarizeAeroLookupDetails,
 } from '../aeroDataBox'
+import { aeroDataBoxFlightNumberCandidates } from '../flightEnrichCandidates'
 
 vi.mock('../aeroDataBoxEnv', () => ({
   getAeroDataBoxEnv: () => ({
@@ -18,7 +18,7 @@ vi.mock('../aeroDataBoxEnv', () => ({
   }),
 }))
 
-describe('fetchFlightActuals', () => {
+describe('fetchAeroDataBoxActuals', () => {
   beforeEach(() => {
     resetAeroDataBoxClientStateForTests()
     setAeroDataBoxMinIntervalForTests(0)
@@ -38,13 +38,13 @@ describe('fetchFlightActuals', () => {
         status: 404,
       })
     )
-    const result = await fetchFlightActuals('5770', '2026-08-04', 'LGA', 'DCA')
+    const result = await fetchAeroDataBoxActuals('5770', '2026-08-04', 'LGA', 'DCA')
     expect(result).toBeNull()
   })
 
   it('returns null on network error without throwing', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network')))
-    const result = await fetchFlightActuals('5770', '2026-08-04', 'LGA', 'DCA')
+    const result = await fetchAeroDataBoxActuals('5770', '2026-08-04', 'LGA', 'DCA')
     expect(result).toBeNull()
   })
 
@@ -73,7 +73,7 @@ describe('fetchFlightActuals', () => {
       })
     )
 
-    const result = await fetchFlightActuals('5770', '2026-08-04', 'LGA', 'DCA')
+    const result = await fetchAeroDataBoxActuals('5770', '2026-08-04', 'LGA', 'DCA')
     expect(result).toEqual({
       registration: 'N12345',
       aircraftType: 'E75',
@@ -100,7 +100,7 @@ describe('fetchFlightActuals', () => {
       })
     )
 
-    const result = await fetchFlightActuals('5770', '2026-08-04', 'LGA', 'DCA')
+    const result = await fetchAeroDataBoxActuals('5770', '2026-08-04', 'LGA', 'DCA')
     expect(result).toBeNull()
   })
 
@@ -138,7 +138,7 @@ describe('fetchFlightActuals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    const result = await lookupAeroDataBoxActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
       'https://aerodatabox.p.rapidapi.com/flights/number/YX4442/2026-08-12?dateLocalRole=Both'
@@ -196,7 +196,7 @@ describe('fetchFlightActuals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    const result = await lookupAeroDataBoxActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/YX4442/')
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('dateLocalRole=Both')
     expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/AA4442/'))).toBe(true)
@@ -232,7 +232,7 @@ describe('fetchFlightActuals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    const result = await lookupAeroDataBoxActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/YX4442/')
     expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/AA4442/'))).toBe(true)
     expect(result.actuals?.registration).toBe('N999AA')
@@ -266,7 +266,7 @@ describe('fetchFlightActuals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await lookupFlightActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
+    const result = await lookupAeroDataBoxActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('dateLocalRole=Both')
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain('dateLocalRole=Departure')
     expect(result.actuals?.registration).toBe('N204AA')
@@ -278,7 +278,7 @@ describe('fetchFlightActuals', () => {
       'fetch',
       vi.fn().mockResolvedValue({ ok: false, status: 204 })
     )
-    const result = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    const result = await lookupAeroDataBoxActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
     expect(result.actuals).toBeNull()
     expect(result.detail).toContain('YX204')
     expect(result.detail).toMatch(/AA204/)
@@ -306,7 +306,7 @@ describe('fetchFlightActuals', () => {
       })
     )
 
-    const result = await fetchFlightActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
+    const result = await fetchAeroDataBoxActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
     expect(result?.registration).toBe('N111AA')
   })
 
@@ -318,7 +318,7 @@ describe('fetchFlightActuals', () => {
         status: 401,
       })
     )
-    const result = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    const result = await lookupAeroDataBoxActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
     expect(result.actuals).toBeNull()
     expect(result.authRejected).toBe(true)
     expect(result.detail).toMatch(/401/)
@@ -351,8 +351,8 @@ describe('fetchFlightActuals', () => {
       })
     )
 
-    await fetchFlightActuals('AA1001', '2026-08-12', 'LGA', 'RIC')
-    await fetchFlightActuals('AA1002', '2026-08-12', 'LGA', 'RIC')
+    await fetchAeroDataBoxActuals('AA1001', '2026-08-12', 'LGA', 'RIC')
+    await fetchAeroDataBoxActuals('AA1002', '2026-08-12', 'LGA', 'RIC')
     expect(times).toHaveLength(2)
     expect(times[1]! - times[0]!).toBeGreaterThanOrEqual(1000)
   }, 4000)
@@ -361,7 +361,7 @@ describe('fetchFlightActuals', () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 429 })
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    const result = await lookupAeroDataBoxActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(result.actuals).toBeNull()
     expect(result.rateLimited).toBe(true)
@@ -391,12 +391,12 @@ describe('fetchFlightActuals', () => {
       })
     vi.stubGlobal('fetch', fetchMock)
 
-    const first = await lookupFlightActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
+    const first = await lookupAeroDataBoxActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
     expect(first.rateLimited).toBe(true)
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
     clearAeroDataBoxRateLimitForTests()
-    const second = await lookupFlightActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
+    const second = await lookupAeroDataBoxActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(second.rateLimited).toBe(false)
     expect(second.actuals?.registration).toBe('N421YX')
@@ -434,7 +434,7 @@ describe('fetchFlightActuals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    const result = await lookupAeroDataBoxActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
     const yxCalls = fetchMock.mock.calls.filter((c) => String(c[0]).includes('/YX4442/'))
     expect(yxCalls).toHaveLength(1)
     expect(result.actuals?.registration).toBe('N999AA')
@@ -477,8 +477,8 @@ describe('fetchFlightActuals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const outbound = await fetchFlightActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
-    const inbound = await fetchFlightActuals('AA4442', '2026-08-12', 'RIC', 'LGA')
+    const outbound = await fetchAeroDataBoxActuals('AA4442', '2026-08-12', 'LGA', 'RIC')
+    const inbound = await fetchAeroDataBoxActuals('AA4442', '2026-08-12', 'RIC', 'LGA')
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(outbound?.registration).toBe('N421YX')
     expect(outbound?.actualOutLocal).toBeNull()
@@ -495,7 +495,7 @@ describe('fetchFlightActuals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await lookupFlightActuals('5770', '2026-08-12', 'LGA', 'DCA')
+    const result = await lookupAeroDataBoxActuals('5770', '2026-08-12', 'LGA', 'DCA')
     expect(result.rateLimited).toBe(true)
     expect(result.rateLimitResumeMs).toBeGreaterThan(Date.now())
     expect(result.rateLimitResumeMs).toBeLessThanOrEqual(Date.now() + 91000)
@@ -550,7 +550,7 @@ describe('fetchFlightActuals', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
 
-    const result = await lookupFlightActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
+    const result = await lookupAeroDataBoxActuals('4442', '2026-08-12', 'LGA', 'RIC', 'RJET')
     const yxCalls = fetchMock.mock.calls.filter((c) => String(c[0]).includes('/YX4442/'))
     expect(yxCalls).toHaveLength(1)
     expect(String(yxCalls[0]?.[0])).toContain('dateLocalRole=Both')

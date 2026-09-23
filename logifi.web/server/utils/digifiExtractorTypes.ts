@@ -1,3 +1,5 @@
+import type { DigifiFewShotPair } from '../../app/utils/digifiFewShot'
+import type { DigifiSessionPriorPage } from './digifiSessionContext'
 import type { DigifiScanRow, DigifiScanStrategy } from '../../app/utils/digifiTypes'
 import type { DigifiScanMetaInput } from './digifiSchema'
 
@@ -46,6 +48,8 @@ export interface ScanLogbookImageOptions {
   imageBase64: string
   mimeType: string
   meta: DigifiScanMetaInput
+  fewShotExamples?: DigifiFewShotPair[]
+  sessionPriorPages?: DigifiSessionPriorPage[]
   chunkImages?: Array<{
     partName: string
     rowStart: number

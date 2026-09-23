@@ -67,6 +67,7 @@ import { computed } from 'vue'
 import SettingsListGroup from './SettingsListGroup.vue'
 import SettingsListRow from './SettingsListRow.vue'
 import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
+import { resolveDigifiAppRoute } from '~/utils/digifiMobileReview'
 import {
   SETTINGS_NAV_GROUPS,
   navItemsByGroup,
@@ -97,7 +98,7 @@ const profilePreviewSubtitle = computed(() => {
 })
 
 const digifiRoute = computed(() => {
-  return isIos.value ? '/digifi-eye' : '/logbook-builder?digifi=open'
+  return resolveDigifiAppRoute({ isIos: isIos.value })
 })
 
 function itemsForGroup(group: string): SettingsNavItem[] {

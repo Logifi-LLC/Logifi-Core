@@ -36,6 +36,9 @@ export function buildDraftFromGrid(grid: Grid): LogbookBuilderDraft {
     })),
     leftPageScanned: grid.leftPageScanned.value,
     singleLayoutRightStartRow: grid.singleLayoutRightStartRow.value,
+    ...(grid.digifiMobilePhase.value
+      ? { digifiMobilePhase: grid.digifiMobilePhase.value }
+      : {}),
   }
 }
 
@@ -67,6 +70,7 @@ export function restoreDraftToGrid(grid: Grid, draft: LogbookBuilderDraft): void
   grid.leftPageScanned.value = draft.leftPageScanned
   grid.singleLayoutRightStartRow.value = draft.singleLayoutRightStartRow
   grid.spreadId.value = draft.spreadId || createBuilderSpreadId()
+  grid.digifiMobilePhase.value = draft.digifiMobilePhase ?? null
 }
 
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null
@@ -124,6 +128,7 @@ export function setupBuilderDraftAutosave(grid: Grid, userId?: string, debounceM
   const stopLeft = watch(grid.leftPageScanned, scheduleSave)
   const stopRightStart = watch(grid.singleLayoutRightStartRow, scheduleSave)
   const stopSpreadId = watch(grid.spreadId, scheduleSave)
+  const stopMobilePhase = watch(grid.digifiMobilePhase, scheduleSave)
 
   return () => {
     if (autosaveTimer) clearTimeout(autosaveTimer)
@@ -138,6 +143,7 @@ export function setupBuilderDraftAutosave(grid: Grid, userId?: string, debounceM
     stopLeft()
     stopRightStart()
     stopSpreadId()
+    stopMobilePhase()
   }
 }
 

@@ -3,6 +3,7 @@ import {
   buildDigifiModelChain,
   buildDigifiThinkingConfig,
   DEFAULT_GEMINI_DIGIFI_MODEL,
+  getDigifiEnv,
   inferDigifiProvider,
   isDigifiConfigured,
   normalizeDigifiModelId,
@@ -28,10 +29,10 @@ describe('buildDigifiModelChain', () => {
     ).toEqual(['gemini-3.1-pro', 'gemini-3.5-flash'])
   })
 
-  it('default capacity fallback chain is 3.6 flash then 3.5 flash', () => {
+  it('default capacity fallback chain is 3.8 flash then 3.6 then 3.5 flash', () => {
     expect(
-      buildDigifiModelChain(DEFAULT_GEMINI_DIGIFI_MODEL, [], ['gemini-3.5-flash'])
-    ).toEqual(['gemini-3.6-flash', 'gemini-3.5-flash'])
+      buildDigifiModelChain(DEFAULT_GEMINI_DIGIFI_MODEL, [], ['gemini-3.6-flash', 'gemini-3.5-flash'])
+    ).toEqual(['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.5-flash'])
   })
 
   it('normalizes legacy Pro ids to 3.5 flash (not 3.6)', () => {
@@ -43,7 +44,8 @@ describe('buildDigifiModelChain', () => {
 })
 
 describe('omitsDigifiGeminiSamplingParams', () => {
-  it('omits temperature for Gemini 3.6 models only', () => {
+  it('omits temperature for Gemini 3.6+ models', () => {
+    expect(omitsDigifiGeminiSamplingParams('gemini-3.8-flash')).toBe(true)
     expect(omitsDigifiGeminiSamplingParams('gemini-3.6-flash')).toBe(true)
     expect(omitsDigifiGeminiSamplingParams('gemini-3.5-flash')).toBe(false)
     expect(omitsDigifiGeminiSamplingParams('gemini-3-flash-preview')).toBe(false)
@@ -119,6 +121,37 @@ describe('buildDigifiThinkingConfig', () => {
     expect(buildDigifiThinkingConfig('gemini-2.5-flash', 'low')).toEqual({
       thinkingBudget: 0,
     })
+  })
+})
+
+describe('getDigifiEnv enableRescueScan', () => {
+  const originalEnv = { ...process.env }
+
+  beforeEach(() => {
+    vi.stubGlobal('useRuntimeConfig', () => ({
+      geminiApiKey: '',
+      anthropicApiKey: '',
+      digifiModel: 'gemini-3.6-flash',
+      digifiModelFallbacks: '',
+      digifiEnableCapacityModelFallback: '',
+      digifiMaxScansPerDay: 10,
+    }))
+  })
+
+  afterEach(() => {
+    process.env = { ...originalEnv }
+    vi.unstubAllGlobals()
+  })
+
+  it('defaults rescue scan to enabled', () => {
+    delete process.env.NUXT_DIGIFI_ENABLE_RESCUE_SCAN
+    delete process.env.DIGIFI_ENABLE_RESCUE_SCAN
+    expect(getDigifiEnv().enableRescueScan).toBe(true)
+  })
+
+  it('allows disabling rescue scan via env', () => {
+    process.env.NUXT_DIGIFI_ENABLE_RESCUE_SCAN = 'false'
+    expect(getDigifiEnv().enableRescueScan).toBe(false)
   })
 })
 

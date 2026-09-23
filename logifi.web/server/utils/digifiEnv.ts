@@ -11,11 +11,11 @@ const pick = (...candidates: unknown[]) => {
 import type { DigifiExtractorErrorCode, DigifiProvider } from './digifiExtractorTypes'
 
 /** Stay in the Gemini 3.x line — avoid silent downgrade to 2.x (much weaker for logbook OCR). */
-/** Used only when 3.6 Flash hits capacity/outage (429/503/etc.), not for weak OCR. */
-const DEFAULT_MODEL_FALLBACKS = ['gemini-3.5-flash']
+/** Used when 3.8 Flash hits capacity/outage (429/503/etc.), not for weak OCR. */
+const DEFAULT_MODEL_FALLBACKS = ['gemini-3.6-flash', 'gemini-3.5-flash']
 
 /** Paid-tier Digifi default (Gemini path). */
-export const DEFAULT_GEMINI_DIGIFI_MODEL = 'gemini-3.6-flash'
+export const DEFAULT_GEMINI_DIGIFI_MODEL = 'gemini-3.8-flash'
 
 /** Current Anthropic Sonnet with vision — retired 3.5 snapshots map here. */
 export const DEFAULT_CLAUDE_DIGIFI_MODEL = 'claude-sonnet-4-6'
@@ -33,9 +33,9 @@ export function inferDigifiProvider(modelId: string): DigifiProvider {
 }
 
 /**
- * Paid-tier default is gemini-3.6-flash.
- * Legacy Pro ids map to 3.5 Flash (not 3.6) so env A/B against 3.5 stays intentional.
- * Do not auto-remap gemini-3.5-flash → 3.6.
+ * Paid-tier default is gemini-3.8-flash.
+ * Legacy Pro ids map to 3.5 Flash (not 3.8) so env A/B against 3.5 stays intentional.
+ * Do not auto-remap gemini-3.5-flash or gemini-3.6-flash to 3.8.
  */
 export function normalizeDigifiModelId(model: string): string {
   const trimmed = model.trim()
@@ -52,10 +52,10 @@ export function normalizeDigifiModelId(model: string): string {
 
 /**
  * Gemini 3.6+ Flash deprecates temperature/topP/topK (ignored now; may 400 later).
- * @see https://ai.google.dev/gemini-api/docs/models/gemini-3.6-flash
+ * @see https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
  */
 export function omitsDigifiGeminiSamplingParams(model: string): boolean {
-  return /gemini-3\.[67]/i.test(model.trim())
+  return /gemini-3\.[678]/i.test(model.trim())
 }
 
 /** Flash-Lite is excluded from automatic fallbacks (poor logbook OCR). */
@@ -88,7 +88,7 @@ export function buildDigifiModelChain(
   return chain
 }
 
-/** Primary gemini-3.6-flash; optional fallbacks when enableCapacityModelFallback is true. */
+/** Primary gemini-3.8-flash; optional fallbacks when enableCapacityModelFallback is true. */
 export function getDigifiModelChain(): string[] {
   const env = getDigifiEnv()
   if (inferDigifiProvider(env.model) === 'anthropic') {
@@ -176,18 +176,18 @@ export function getDigifiEnv() {
         )
       )
     ),
-    /** When true (default), try gemini-3.5-flash if 3.6 is unavailable (429/503/404). */
+    /** When true (default), try 3.6 then 3.5 Flash if 3.8 is unavailable (429/503/404). */
     enableCapacityModelFallback:
       capacityFallbackRaw === ''
         ? true
         : capacityFallbackRaw.toLowerCase() === 'true',
-    /** When false (default), skip second Gemini call for missing rows. */
+    /** When true (default), second Gemini call for missing rows (set env to false to disable). */
     enableRescueScan:
       pick(
         process.env.NUXT_DIGIFI_ENABLE_RESCUE_SCAN,
         process.env.DIGIFI_ENABLE_RESCUE_SCAN,
-        'false'
-      ).toLowerCase() === 'true',
+        'true'
+      ).toLowerCase() !== 'false',
     geminiMediaResolution:
       pick(
         process.env.NUXT_DIGIFI_GEMINI_MEDIA_RESOLUTION,

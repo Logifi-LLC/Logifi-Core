@@ -11,9 +11,18 @@ type ServiceClient = SupabaseClient<Database>
 export interface FinalizeDigifiScanBillingInput {
   spreadId: string
   layout: 'single' | 'two-page'
+  pageSide: 'left' | 'right'
   scanId: string
   insertError: { message: string } | null
   fallbackBalance: number
+}
+
+/** Two-page spreads bill once per spreadId, after the right page scan succeeds. */
+export function shouldDeferDigifiSpreadBilling(
+  layout: 'single' | 'two-page',
+  pageSide: 'left' | 'right'
+): boolean {
+  return layout === 'two-page' && pageSide === 'left'
 }
 
 /**
@@ -25,6 +34,14 @@ export async function finalizeDigifiScanBilling(
   input: FinalizeDigifiScanBillingInput
 ): Promise<ConsumeCreditForSpreadResult> {
   if (input.insertError) {
+    return {
+      ok: true,
+      charged: false,
+      balance: input.fallbackBalance,
+    }
+  }
+
+  if (shouldDeferDigifiSpreadBilling(input.layout, input.pageSide)) {
     return {
       ok: true,
       charged: false,

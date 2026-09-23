@@ -23,6 +23,10 @@ vi.mock('~/composables/useDigifiCredits', () => ({
   }),
 }))
 
+vi.mock('~/utils/apiFetch', () => ({
+  apiFetch: (...args: unknown[]) => (globalThis as { $fetch: (...fetchArgs: unknown[]) => unknown }).$fetch(...args),
+}))
+
 describe('useLogbookBuilderDigifi draft save', () => {
   const originalCreateImageBitmap = globalThis.createImageBitmap
   const canvasProto = HTMLCanvasElement.prototype
@@ -84,6 +88,9 @@ describe('useLogbookBuilderDigifi draft save', () => {
       rowCount: ref(10),
       effectiveSplitIndex: ref(1),
       defaultYear: ref(2026),
+      defaultImportRole: ref('PIC'),
+      rows: ref([{ cells: {} }]),
+      setCell: vi.fn(),
       leftPageScanned: ref(false),
       applyScanResults: vi.fn(() => ({
         filled: 1,

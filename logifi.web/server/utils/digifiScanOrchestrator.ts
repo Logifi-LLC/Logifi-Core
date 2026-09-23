@@ -1,3 +1,5 @@
+import type { DigifiFewShotPair } from '../../app/utils/digifiFewShot'
+import type { DigifiSessionPriorPage } from './digifiSessionContext'
 import { analyzeDigifiScanRows } from '../../app/utils/digifiScanDiagnostics'
 import type { DigifiScanRow, DigifiScanStrategy } from '../../app/utils/digifiTypes'
 import type { DigifiTemplateColumn } from '../../app/utils/digifiTypes'
@@ -44,6 +46,8 @@ export interface RunDigifiScanOrchestrationOptions {
   providerUsed: DigifiProvider
   callRows: DigifiRowsCaller
   logLabel: string
+  fewShotExamples?: DigifiFewShotPair[]
+  sessionPriorPages?: DigifiSessionPriorPage[]
 }
 
 export async function runDigifiScanOrchestration(
@@ -60,6 +64,8 @@ export async function runDigifiScanOrchestration(
     providerUsed,
     callRows,
     logLabel,
+    fewShotExamples,
+    sessionPriorPages,
   } = options
 
   const allowedColumnIds = new Set(targetColumns.map((column) => column.id))
@@ -89,6 +95,8 @@ export async function runDigifiScanOrchestration(
       includeRowBands: sendRowBands,
       chunkImages: labeledChunks,
       focusRows,
+      fewShotExamples,
+      sessionPriorPages,
     })
 
   const runModelChainFallback = async () => {
@@ -121,6 +129,62 @@ export async function runDigifiScanOrchestration(
     finalRows = fallbackMerged.rows
     duplicateRowIndices = new Set(fallbackMerged.duplicateRowIndices)
     rescueMs += Date.now() - rescueStartedAt
+  }
+
+  const remarksFocusRows = meta.remarksFocusRows?.length
+    ? [...new Set(meta.remarksFocusRows)].filter((row) => row >= 0 && row < meta.rowCount).sort((a, b) => a - b)
+    : []
+
+  if (remarksFocusRows.length > 0) {
+    const focusSet = new Set(remarksFocusRows)
+    const primaryStartedAt = Date.now()
+    const focusedResult = await callRows(
+      [modelChain[0]],
+      buildPromptForScan(remarksFocusRows),
+      overviewImage,
+      sendRowBands
+        ? labeledChunks
+            .filter((chunk) =>
+              remarksFocusRows.some((row) => row >= chunk.rowStart && row <= chunk.rowEnd)
+            )
+            .map((chunk) => ({
+              label: chunk.label,
+              imageBase64: chunk.imageBase64,
+              mimeType: chunk.mimeType,
+            }))
+        : [],
+      allowedColumnIds,
+      meta.rowCount,
+      focusSet,
+      { allowFallbackOnInvalidResponse: false, callStats }
+    )
+    primaryMs = Date.now() - primaryStartedAt
+    modelUsed = focusedResult.modelUsed
+    modelsAttempted.add(focusedResult.modelUsed)
+    const focusedMerged = mergeRowsByIndex(focusedResult.rows)
+    finalRows = focusedMerged.rows.filter((row) => focusSet.has(row.rowIndex))
+    duplicateRowIndices = new Set(
+      focusedMerged.duplicateRowIndices.filter((idx) => focusSet.has(idx))
+    )
+    const apiCallCount = callStats.apiRequests
+    return {
+      rows: finalRows,
+      modelUsed,
+      providerUsed,
+      strategyUsed,
+      chunkCount: chunkImages.length,
+      rescueAttempted: false,
+      rescueRecoveredCount: 0,
+      duplicateRowIndices: [...duplicateRowIndices].sort((a, b) => a - b),
+      fallbackUsed,
+      modelsAttempted: [...modelsAttempted],
+      apiCallCount,
+      timings: {
+        primaryMs,
+        rescueMs: 0,
+        totalMs: Date.now() - startedAt,
+      },
+    }
   }
 
   const primaryStartedAt = Date.now()

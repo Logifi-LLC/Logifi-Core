@@ -7,6 +7,11 @@ import type { DigifiTemplateColumn } from '../../app/utils/digifiTypes'
 import type { LogbookColumnKey } from '../../app/utils/logbookTypes'
 import type { DigifiScanMetaInput } from './digifiSchema'
 import { DIGIFI_COMMON_MISTAKE_PROMPT_RULES } from '../../app/utils/digifiCommonMistakes'
+import { formatFewShotPromptBlock, type DigifiFewShotPair } from '../../app/utils/digifiFewShot'
+import {
+  formatSessionContextPromptBlock,
+  type DigifiSessionPriorPage,
+} from './digifiSessionContext'
 
 function columnTypeHint(fieldKey: LogbookColumnKey | null): string {
   if (!fieldKey) return 'text'
@@ -153,6 +158,8 @@ export function buildScanPrompt(
     includeRowBands: boolean
     chunkImages: Array<{ rowStart: number; rowEnd: number }>
     focusRows?: number[]
+    fewShotExamples?: DigifiFewShotPair[]
+    sessionPriorPages?: DigifiSessionPriorPage[]
   }
 ): string {
   const colLines = targetColumns
@@ -162,10 +169,17 @@ export function buildScanPrompt(
   const airportRules = buildAirportPromptRules(targetColumns)
   const pageRules = buildPageSpecificRules(meta, targetColumns)
   const mistakeRules = DIGIFI_COMMON_MISTAKE_PROMPT_RULES
+  const fewShotRules = formatFewShotPromptBlock(options.fewShotExamples ?? [])
+  const sessionRules = formatSessionContextPromptBlock(
+    options.sessionPriorPages ?? [],
+    meta.columns
+  )
   const extraRules = [
     airportRules ? `Airports: ${airportRules}` : '',
     pageRules,
     mistakeRules,
+    sessionRules,
+    fewShotRules,
   ]
     .filter(Boolean)
     .join('\n\n')

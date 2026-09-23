@@ -18,10 +18,15 @@ import { useValidation } from '~/composables/useValidation'
 import { useAuth } from '~/composables/useAuth'
 import { supabase } from '~/lib/supabase'
 import {
-  saveSyncedEntryToIndexedDB,
+  saveEntryToIndexedDB,
   initIndexedDB,
   getAllEntriesFromIndexedDB,
+  getSyncQueue,
+  updateSyncQueueEntry,
+  getEntryFromIndexedDB,
+  updateEntryInIndexedDB,
 } from '~/utils/indexedDB'
+import { useSyncQueue } from '~/composables/useSyncQueue'
 import { clearBuilderDraft } from '~/composables/useLogbookBuilderDraft'
 import {
   buildAircraftTailIndex,
@@ -35,6 +40,7 @@ import {
   type SimDeviceType,
 } from '~/utils/importSimulator'
 import { sanitizeFlightConditions } from '~/utils/flightConditions'
+import { normalizeDigifiDateCell } from '~/utils/digifiDateNormalize'
 
 function generateEntryId(): string {
   return crypto.randomUUID?.() ?? `entry-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
@@ -90,67 +96,7 @@ function parseIsoDate(iso: string): { y: number; m: number; d: number } | null {
   return { y, m, d }
 }
 
-/** Normalize date string to YYYY-MM-DD. Handles MM/DD, M/D, MM-DD, MM/DD/YY, MM/DD/YYYY, YYYY-MM-DD.
-* When date is MM/DD only: uses defaultYear; if lastDateIso is set and (defaultYear, MM, DD) would be
-* before or equal to lastDateIso (e.g. Dec 28 -> Jan 5), uses defaultYear+1 so the page can span year-end.
-* When date is MM/DD/YY: uses the same century as defaultYear/current year and lets YY override the year. */
-function normalizeDateWithRollover(
-  dateStr: string,
-  defaultYear: number | null | undefined,
-  lastDateIso: string | null
-): string {
-  const s = (dateStr || '').trim()
-  if (!s) return ''
-  const year = typeof defaultYear === 'number' && Number.isFinite(defaultYear) ? defaultYear : new Date().getFullYear()
-  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) return s
-  const slashParts = s.split(/[/-]/).map((p) => p.trim())
-  if (slashParts.length === 2) {
-    const m = parseInt(slashParts[0], 10)
-    const d = parseInt(slashParts[1], 10)
-    if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      let y = year
-      const last = lastDateIso ? parseIsoDate(lastDateIso) : null
-      if (last) {
-        const candidateTime = new Date(y, m - 1, d).getTime()
-        const lastTime = new Date(last.y, last.m - 1, last.d).getTime()
-        if (candidateTime <= lastTime) y = year + 1
-      }
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    }
-  }
-  if (slashParts.length === 3) {
-    const m = parseInt(slashParts[0], 10)
-    const d = parseInt(slashParts[1], 10)
-    const yRaw = slashParts[2]
-    const parsedY = parseInt(yRaw, 10)
-    if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      let y: number
-      if (!Number.isFinite(parsedY)) {
-        // Fall back to the default/base year if year part is not a valid number.
-        y = year
-      } else if (yRaw.length === 2) {
-        // Two-digit year: use current century, but allow reasonable range (1950-2049)
-        // E.g. 26 → 2026, 50 → 2050, 49 → 2049, but 50+ could be 1950-1999
-        const currentCentury = Math.floor(year / 100) * 100
-        const candidate = currentCentury + parsedY
-        // If candidate year is more than 50 years in the future, assume previous century
-        if (candidate > year + 50) {
-          y = currentCentury - 100 + parsedY
-        } else {
-          y = candidate
-        }
-      } else if (parsedY >= 1000) {
-        // Full four-digit year: use as-is.
-        y = parsedY
-      } else {
-        // Short/ambiguous year (e.g. "5"): fall back to the base year.
-        y = year
-      }
-      return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    }
-  }
-  return s
-}
+const normalizeDateWithRollover = normalizeDigifiDateCell
 
 /** Normalize role from builder cell (e.g. "Student" -> "Dual Received"). */
 function normalizeRoleFromCell(val: string): string {
@@ -468,6 +414,10 @@ export interface ColumnTotalRow {
   isInteger: boolean
 }
 
+export function formatColumnTotal(row: ColumnTotalRow): string {
+  return row.isInteger ? String(row.total) : row.total.toFixed(1)
+}
+
 export interface ValidateOnlyResult {
   valid: boolean
   errors: { rowIndex: number; message: string }[]
@@ -695,6 +645,117 @@ export async function persistDigifiCorrectionFeedback(
   }
 }
 
+function buildLogbookBuilderDbRow(
+  entry: LogEntry,
+  userId: string,
+  importBatchId: string | null,
+  importedAt: string
+): Record<string, unknown> {
+  return {
+    id: entry.id,
+    user_id: userId,
+    date: entry.date,
+    role: entry.role,
+    aircraft_category_class: entry.aircraftCategoryClass,
+    category_class_time: entry.categoryClassTime,
+    aircraft_make_model: entry.aircraftMakeModel,
+    registration: entry.registration,
+    flight_number: entry.flightNumber,
+    departure: entry.departure,
+    destination: entry.destination,
+    route: entry.route,
+    training_elements: entry.trainingElements,
+    training_instructor: entry.trainingInstructor,
+    instructor_certificate: entry.instructorCertificate,
+    pic_name: (entry.picName || '').trim() || null,
+    sic_name: (entry.sicName || '').trim() || null,
+    flight_conditions: entry.flightConditions,
+    tags: entry.tags ?? [],
+    remarks: entry.remarks,
+    logbook_type: entry.logbookType ?? 'flight',
+    flight_time: entry.flightTime,
+    performance: entry.performance,
+    oooi: entry.oooi,
+    flagged: entry.flagged ?? false,
+    is_imported: true,
+    import_source: 'logbook_builder',
+    import_batch_id: importBatchId,
+    original_entry_date: entry.date ? new Date(entry.date).toISOString() : null,
+    import_metadata: { importedAt },
+  }
+}
+
+async function attachImportBatchToQueuedEntries(
+  userId: string,
+  entryIds: Set<string>,
+  importBatchId: string
+): Promise<void> {
+  const queue = await getSyncQueue(userId)
+  for (const item of queue) {
+    if (item.operation !== 'insert' || !entryIds.has(item.entryId) || !item.entryData) continue
+    await updateSyncQueueEntry(item.id, {
+      entryData: { ...item.entryData, import_batch_id: importBatchId },
+    })
+  }
+  for (const entryId of entryIds) {
+    try {
+      const local = await getEntryFromIndexedDB(entryId)
+      if (!local) continue
+      await updateEntryInIndexedDB(
+        { ...local, importBatchId },
+        { userId, synced: local._synced ?? false }
+      )
+    } catch {
+      // non-fatal
+    }
+  }
+}
+
+function runLogbookBuilderImportBatchSideEffects(
+  userId: string,
+  entryIds: string[],
+  importedCount: number
+): void {
+  void (async () => {
+    try {
+      const { data: batch, error: batchError } = await (supabase as any)
+        .from('import_batches')
+        .insert({
+          user_id: userId,
+          source_type: 'logbook_builder',
+          file_name: null,
+          file_size: null,
+          total_entries: importedCount,
+          successful_imports: importedCount,
+          duplicates_skipped: 0,
+          errors: 0,
+          import_metadata: { importedAt: new Date().toISOString() },
+        })
+        .select()
+        .single()
+      if (!batchError && batch?.id) {
+        await attachImportBatchToQueuedEntries(userId, new Set(entryIds), batch.id as string)
+      }
+    } catch (error) {
+      console.warn('[logbook-builder] import batch metadata sync failed', error)
+    }
+  })()
+}
+
+function runLogbookBuilderDigifiLearningSideEffects(
+  grid: ReturnType<typeof useLogbookBuilderGrid>,
+  userId: string
+): void {
+  void persistDigifiCorrectionFeedback(grid, userId).catch((error) => {
+    console.warn('[digifi] failed to persist correction feedback', error)
+  })
+  void import('~/composables/useDigifiVocabulary')
+    .then(({ persistDigifiVocabulary }) => persistDigifiVocabulary(grid, userId))
+    .catch((error) => {
+      console.warn('[digifi] failed to persist vocabulary', error)
+    })
+}
+
 export async function runValidateAndImport(
   grid: ReturnType<typeof useLogbookBuilderGrid>
 ): Promise<ValidateAndImportResult> {
@@ -745,138 +806,37 @@ export async function runValidateAndImport(
   }
 
   await initIndexedDB()
-  let importBatchId: string | null = null
-
-  if (isAuthenticated.value && user.value) {
-    try {
-      const { data: batch, error: batchError } = await (supabase as any)
-        .from('import_batches')
-        .insert({
-          user_id: user.value.id,
-          source_type: 'logbook_builder',
-          file_name: null,
-          file_size: null,
-          total_entries: entries.length,
-          successful_imports: 0,
-          duplicates_skipped: 0,
-          errors: 0,
-          import_metadata: { importedAt: new Date().toISOString() },
-        })
-        .select()
-        .single()
-      if (batchError) throw batchError
-      importBatchId = (batch as any).id
-    } catch (e: any) {
-      result.errors.push({ rowIndex: -1, message: e?.message ?? 'Failed to create import batch' })
-      return result
-    }
-  }
+  const userId = user.value!.id
+  const importedAt = new Date().toISOString()
+  const { addToQueue } = useSyncQueue()
+  const queuedEntryIds: string[] = []
 
   for (const entry of entries) {
-    const importedAt = new Date().toISOString()
-    const dbEntry = {
-      id: entry.id,
-      user_id: user.value?.id,
-      date: entry.date,
-      role: entry.role,
-      aircraft_category_class: entry.aircraftCategoryClass,
-      category_class_time: entry.categoryClassTime,
-      aircraft_make_model: entry.aircraftMakeModel,
-      registration: entry.registration,
-      flight_number: entry.flightNumber,
-      departure: entry.departure,
-      destination: entry.destination,
-      route: entry.route,
-      training_elements: entry.trainingElements,
-      training_instructor: entry.trainingInstructor,
-      instructor_certificate: entry.instructorCertificate,
-      pic_name: (entry.picName || '').trim() || null,
-      sic_name: (entry.sicName || '').trim() || null,
-      flight_conditions: entry.flightConditions,
-      tags: entry.tags ?? [],
-      remarks: entry.remarks,
-      logbook_type: entry.logbookType ?? 'flight',
-      flight_time: entry.flightTime,
-      performance: entry.performance,
-      oooi: entry.oooi,
-      flagged: entry.flagged ?? false,
-      is_imported: true,
-      import_source: 'logbook_builder',
-      import_batch_id: importBatchId,
-      original_entry_date: entry.date ? new Date(entry.date).toISOString() : null,
-      import_metadata: { importedAt },
-    }
-    let insertedRow: any = null
-
-    if (isAuthenticated.value && user.value) {
-      try {
-        const { data, error: insertError } = await (supabase as any)
-          .from('log_entries')
-          .insert(dbEntry)
-          .select()
-          .single()
-        if (insertError) throw insertError
-        insertedRow = data
-      } catch (e: any) {
-        result.errors.push({
-          rowIndex: -1,
-          message: `Save failed: ${e?.message ?? 'Unknown error'}`,
-        })
-        continue
-      }
-    }
-
     const entryToStore: LogEntry = {
       ...entry,
       isImported: true,
       importSource: 'logbook_builder',
-      importBatchId: importBatchId ?? undefined,
       originalEntryDate: entry.date,
       importMetadata: { importedAt },
-      version: insertedRow?.version ?? entry.version,
-      dataHash: insertedRow?.data_hash ?? entry.dataHash,
-      createdAt: insertedRow?.created_at ?? entry.createdAt,
-      updatedAt: insertedRow?.updated_at ?? entry.updatedAt,
     }
-    try {
-      await saveSyncedEntryToIndexedDB(entryToStore, user.value!.id)
-    } catch (_) {
-      // non-fatal
-    }
-    result.imported++
-  }
+    const dbEntry = buildLogbookBuilderDbRow(entry, userId, null, importedAt)
 
-  if (importBatchId && isAuthenticated.value && user.value) {
     try {
-      await (supabase as any)
-        .from('import_batches')
-        .update({
-          successful_imports: result.imported,
-          duplicates_skipped: 0,
-          errors: result.errors.length,
-        })
-        .eq('id', importBatchId)
-    } catch (_) {}
-  }
-
-  if (result.imported > 0 && isAuthenticated.value && user.value) {
-    try {
-      await persistDigifiCorrectionFeedback(grid, user.value.id)
-    } catch (error) {
-      console.warn('[digifi] failed to persist correction feedback', error)
-    }
-    
-    try {
-      const { persistDigifiVocabulary } = await import('~/composables/useDigifiVocabulary')
-      await persistDigifiVocabulary(grid, user.value.id)
-    } catch (error) {
-      console.warn('[digifi] failed to persist vocabulary', error)
+      await saveEntryToIndexedDB(entryToStore, userId)
+      await addToQueue('insert', entry.id, dbEntry, userId)
+      queuedEntryIds.push(entry.id)
+      result.imported++
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Failed to save locally'
+      result.errors.push({ rowIndex: -1, message: `Save failed: ${message}` })
     }
   }
 
   if (result.imported > 0) {
+    runLogbookBuilderDigifiLearningSideEffects(grid, userId)
+    runLogbookBuilderImportBatchSideEffects(userId, queuedEntryIds, result.imported)
     grid.clearGrid()
-    clearBuilderDraft(user.value?.id)
+    clearBuilderDraft(userId)
   }
   return result
 }
