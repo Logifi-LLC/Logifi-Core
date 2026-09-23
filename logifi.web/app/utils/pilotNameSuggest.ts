@@ -1,3 +1,18 @@
+export type LabelValueOption = { value: string; label: string }
+
+/** Filter label/value options (empty search returns all non-empty values). */
+export function filterLabelValueSuggestions(
+  options: readonly LabelValueOption[],
+  search: string
+): LabelValueOption[] {
+  const q = search.trim().toLowerCase()
+  const withValue = options.filter((o) => o.value !== '')
+  if (!q) return [...withValue]
+  return withValue.filter(
+    (o) => o.value.toLowerCase().includes(q) || o.label.toLowerCase().includes(q)
+  )
+}
+
 /** Filter pilot name suggestions (empty search returns full list). */
 export function filterPilotSuggestions(suggestions: string[], search: string): string[] {
   const q = search.trim().toLowerCase()
