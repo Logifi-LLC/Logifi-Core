@@ -16,13 +16,18 @@ export function computeTypeaheadMenuPosition(
 ): TypeaheadMenuPosition {
   const rect = anchor.getBoundingClientRect()
   const vv = window.visualViewport
-  const viewportTop = vv?.offsetTop ?? 0
-  const viewportLeft = vv?.offsetLeft ?? 0
+  const offsetTop = vv?.offsetTop ?? 0
+  const offsetLeft = vv?.offsetLeft ?? 0
   const viewportHeight = vv?.height ?? window.innerHeight
   const viewportWidth = vv?.width ?? window.innerWidth
 
-  const spaceBelow = viewportTop + viewportHeight - rect.bottom - gap
-  const spaceAbove = rect.top - viewportTop - gap
+  // Fixed positioning is relative to the visual viewport; layout rects need offset adjustment.
+  const anchorTop = rect.top - offsetTop
+  const anchorBottom = rect.bottom - offsetTop
+  const anchorLeft = rect.left - offsetLeft
+
+  const spaceBelow = viewportHeight - anchorBottom - gap
+  const spaceAbove = anchorTop - gap
 
   let placement: 'above' | 'below' = 'below'
   let available = spaceBelow
@@ -33,20 +38,17 @@ export function computeTypeaheadMenuPosition(
 
   const clampedMaxHeight = Math.max(80, Math.min(maxHeight, available - 4))
   const width = Math.max(rect.width, 120)
-  let left = rect.left
-  const minLeft = viewportLeft + 8
-  const maxLeft = viewportLeft + viewportWidth - width - 8
+  let left = anchorLeft
+  const minLeft = 8
+  const maxLeft = viewportWidth - width - 8
   left = Math.min(Math.max(left, minLeft), Math.max(minLeft, maxLeft))
 
   let top =
     placement === 'below'
-      ? rect.bottom + gap
-      : rect.top - gap - clampedMaxHeight
+      ? anchorBottom + gap
+      : anchorTop - gap - clampedMaxHeight
 
-  top = Math.max(
-    viewportTop + 4,
-    Math.min(top, viewportTop + viewportHeight - clampedMaxHeight - 4)
-  )
+  top = Math.max(4, Math.min(top, viewportHeight - clampedMaxHeight - 4))
 
   return { top, left, width, maxHeight: clampedMaxHeight, placement }
 }
