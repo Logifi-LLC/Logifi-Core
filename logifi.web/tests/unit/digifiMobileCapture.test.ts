@@ -78,10 +78,10 @@ describe('digifiMobileCapture', () => {
     const session = { leftPhotoCaptured: true, rightPhotoCaptured: true }
     const photoNext = nextMobileCaptureSide(grid.layout.value, grid, session)
     expect(mobileTwoPageChipLabel(mobileTwoPageLeftChipState(grid, session, photoNext))).toBe(
-      'Done · Retake'
+      'Ready'
     )
     expect(mobileTwoPageChipLabel(mobileTwoPageRightChipState(grid, session, photoNext))).toBe(
-      'Done · Retake'
+      'Ready'
     )
   })
 

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { computeDigifiMobileReviewRowMinHeights } from '~/utils/digifiMobileReviewRows'
+import {
+  computeDigifiMobileReviewRowMinHeights,
+  mergeDigifiMobileReviewRowHeights,
+} from '~/utils/digifiMobileReviewRows'
 
 describe('computeDigifiMobileReviewRowMinHeights', () => {
   it('uses the same height for every column at a row index (remarks + rescan reserve)', () => {
@@ -30,5 +33,10 @@ describe('computeDigifiMobileReviewRowMinHeights', () => {
       columns: [{ id: 'dualg', fieldKey: 'dualG' }],
     })
     expect(heights).toEqual([28, 28])
+  })
+
+  it('mergeDigifiMobileReviewRowHeights takes the max of measure and floor per row', () => {
+    const merged = mergeDigifiMobileReviewRowHeights(2, [40, 28], [28, 52])
+    expect(merged).toEqual([40, 52])
   })
 })

@@ -140,8 +140,8 @@ describe('DigifiMobileLayoutWizard', () => {
       scanning: false,
       captureLabel: 'Review flights',
       twoPageStep: null,
-      leftChipLabel: 'Done · Retake',
-      rightChipLabel: 'Done · Retake',
+      leftChipLabel: 'Ready',
+      rightChipLabel: 'Ready',
       readyForReview: true,
     })
     grid.layout.value = 'two-page'
@@ -160,7 +160,7 @@ describe('DigifiMobileLayoutWizard', () => {
       captureLabel: 'Scanning…',
       twoPageStep: null,
       leftChipLabel: 'Scanning…',
-      rightChipLabel: 'Done · Retake',
+      rightChipLabel: 'Ready',
       readyForReview: false,
     })
     grid.layout.value = 'two-page'
@@ -249,18 +249,16 @@ describe('DigifiMobileColumnCarousel', () => {
     expect(select.findAll('option').length).toBe(grid.visibleColumns.value.length)
   })
 
-  it('applies shared row min-heights on each column strip', () => {
+  it('tags each row for cross-column height measurement', async () => {
     const { wrapper, grid } = mountWithGrid(DigifiMobileColumnCarousel)
     grid.setRowCount(2)
-    const remarks = grid.visibleColumns.value.find((c) => c.fieldKey === 'remarks')
-    if (remarks) {
-      grid.setCell(1, remarks.id, 'Long | remarks | block')
-    }
-    wrapper.vm.$forceUpdate?.()
-    const rowItems = wrapper.findAll('ol li')
+    await nextTick()
+    const rowItems = wrapper.findAll('li[data-digifi-row]')
     expect(rowItems.length).toBeGreaterThan(1)
-    const heights = rowItems.map((li) => (li.element as HTMLElement).style.minHeight)
-    const unique = new Set(heights.filter(Boolean))
-    expect(unique.size).toBeGreaterThan(0)
+    const indices = new Set(
+      rowItems.map((li) => (li.element as HTMLElement).dataset.digifiRow)
+    )
+    expect(indices.has('0')).toBe(true)
+    expect(indices.has('1')).toBe(true)
   })
 })
