@@ -102,7 +102,12 @@ const nextCaptureSide = computed(() =>
   nextMobileCaptureSide(grid.layout.value, grid, captureSession.value)
 )
 
-const captureSide = computed((): DigifiPageSide => nextCaptureSide.value ?? 'left')
+const captureSideOverride = ref<DigifiPageSide | null>(null)
+
+const captureSide = computed((): DigifiPageSide => {
+  if (captureSideOverride.value) return captureSideOverride.value
+  return nextCaptureSide.value ?? 'left'
+})
 
 const readyForReview = computed(() => isTwoPageReadyForReview(grid))
 
@@ -161,6 +166,8 @@ function resetCaptureSession() {
   rightPagePhotoCaptured.value = false
   pendingScans.value = []
   autoReviewAfterCapture.value = false
+  captureSideOverride.value = null
+  showCamera.value = false
 }
 
 function queryWantsNewSpread(): boolean {
@@ -248,12 +255,26 @@ function openReviewIfReady() {
   phase.value = 'review'
 }
 
-function openCapture() {
-  if (!canScan.value || captureBlockedByScan.value) return
+function openCapture(pageSide?: DigifiPageSide) {
+  if (!canScan.value) return
   if (nextCaptureSide.value === null) {
     openReviewIfReady()
     return
   }
+
+  const side = pageSide ?? nextCaptureSide.value ?? 'left'
+  if (side === 'right' && grid.layout.value === 'two-page') {
+    if (!isMobileCaptureSideComplete(grid, 'left', leftPagePhotoCaptured.value)) return
+  }
+
+  if (scanning.value) {
+    if (grid.layout.value !== 'two-page') return
+    if (side === 'left') return
+  } else if (captureBlockedByScan.value && pageSide == null) {
+    return
+  }
+
+  captureSideOverride.value = side
   showCamera.value = true
 }
 
@@ -275,6 +296,8 @@ function retakeCaptureSide(pageSide: DigifiPageSide) {
 async function onCaptureFile(file: File) {
   autoReviewAfterCapture.value = true
   const pageSide = captureSide.value
+  captureSideOverride.value = null
+  showCamera.value = false
 
   if (pageSide === 'left' && grid.layout.value === 'two-page') {
     leftPagePhotoCaptured.value = true
@@ -286,15 +309,16 @@ async function onCaptureFile(file: File) {
   pendingScans.value = upsertPendingMobileScan(pendingScans.value, pageSide, file)
   scheduleScanDrain()
 
-  const needsRightPhoto = grid.layout.value === 'two-page' && pageSide === 'left'
-  if (needsRightPhoto) {
-    phase.value = 'setup'
-    return
-  }
+  phase.value = 'setup'
 
-  showCamera.value = false
+  const bothPhotosTaken =
+    grid.layout.value !== 'two-page' ||
+    (leftPagePhotoCaptured.value && rightPagePhotoCaptured.value)
+
+  if (!bothPhotosTaken) return
+
   await waitForScanPipelineIdle()
-  if (!error.value) {
+  if (!error.value && readyForReview.value) {
     phase.value = 'review'
   }
 }
@@ -457,7 +481,7 @@ onUnmounted(() => {
         :right-chip-label="rightChipLabel"
         :ready-for-review="readyForReview"
         :template-preloaded="templatePreloaded"
-        @capture="openCapture"
+        @capture="(side) => openCapture(side)"
         @retake="retakeCaptureSide"
       />
 

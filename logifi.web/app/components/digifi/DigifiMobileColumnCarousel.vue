@@ -8,7 +8,10 @@ import {
   focusedColumnIndexFromScroll,
   markColumnReviewed,
 } from '~/utils/digifiMobileReview'
-import { computeDigifiMobileReviewRowMinHeights } from '~/utils/digifiMobileReviewRows'
+import {
+  computeDigifiMobileReviewRowMinHeights,
+  mergeDigifiMobileReviewRowHeights,
+} from '~/utils/digifiMobileReviewRows'
 
 const props = defineProps<{
   remarksRescanOffers?: Array<{ rowIndex: number; focusRows: number[] }>
@@ -43,7 +46,9 @@ const remarksRescanRowIndices = computed(() => {
   return indices
 })
 
-const rowMinHeightsPx = computed(() =>
+const rowHeightsPx = ref<number[]>([])
+
+const rowHeightFloorPx = computed(() =>
   computeDigifiMobileReviewRowMinHeights({
     rowCount: grid.rows.value.length,
     rows: grid.rows.value,
@@ -51,6 +56,47 @@ const rowMinHeightsPx = computed(() =>
     remarksRescanRowIndices: remarksRescanRowIndices.value,
   })
 )
+
+let rowMeasureObserver: ResizeObserver | null = null
+let rowMeasureRaf = 0
+
+function measureRowHeightsFromDom(pass = 0) {
+  const el = scroller.value
+  const rowCount = grid.rows.value.length
+  if (!el || rowCount === 0) {
+    rowHeightsPx.value = []
+    return
+  }
+
+  const measured = new Array<number>(rowCount).fill(0)
+  const rowNodes = el.querySelectorAll<HTMLElement>('li[data-digifi-row]')
+  rowNodes.forEach((node) => {
+    const rowIdx = Number.parseInt(node.dataset.digifiRow ?? '', 10)
+    if (!Number.isFinite(rowIdx) || rowIdx < 0 || rowIdx >= rowCount) return
+    measured[rowIdx] = Math.max(measured[rowIdx], node.getBoundingClientRect().height)
+  })
+
+  const next = mergeDigifiMobileReviewRowHeights(rowCount, measured, rowHeightFloorPx.value)
+  const changed = next.some((height, idx) => height !== rowHeightsPx.value[idx])
+  rowHeightsPx.value = next
+  if (changed && pass < 4) {
+    requestAnimationFrame(() => measureRowHeightsFromDom(pass + 1))
+  }
+}
+
+function scheduleRowHeightMeasure() {
+  if (rowMeasureRaf) cancelAnimationFrame(rowMeasureRaf)
+  rowMeasureRaf = requestAnimationFrame(() => {
+    rowMeasureRaf = 0
+    measureRowHeightsFromDom()
+  })
+}
+
+function rowMinHeightStyle(rowIdx: number): string | undefined {
+  const height = rowHeightsPx.value[rowIdx]
+  if (!height) return undefined
+  return `${height}px`
+}
 
 function markFocusedReviewed() {
   const column = focusedColumn.value
@@ -145,11 +191,22 @@ function onKeydown(event: KeyboardEvent) {
 onMounted(() => {
   markFocusedReviewed()
   window.addEventListener('keydown', onKeydown)
-  void nextTick(() => syncFromScroll())
+  void nextTick(() => {
+    syncFromScroll()
+    scheduleRowHeightMeasure()
+    const el = scroller.value
+    if (el && typeof ResizeObserver !== 'undefined') {
+      rowMeasureObserver = new ResizeObserver(() => scheduleRowHeightMeasure())
+      rowMeasureObserver.observe(el)
+    }
+  })
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
+  rowMeasureObserver?.disconnect()
+  rowMeasureObserver = null
+  if (rowMeasureRaf) cancelAnimationFrame(rowMeasureRaf)
 })
 
 watch(
@@ -160,8 +217,19 @@ watch(
     void nextTick(() => {
       scroller.value?.scrollTo({ left: 0 })
       markFocusedReviewed()
+      scheduleRowHeightMeasure()
     })
   }
+)
+
+watch(
+  () => [
+    grid.rows.value.length,
+    grid.rows.value.map((row) => JSON.stringify(row.cells)).join('\n'),
+    props.remarksRescanOffers?.map((o) => o.rowIndex).join(','),
+  ],
+  () => scheduleRowHeightMeasure(),
+  { flush: 'post' }
 )
 </script>
 
@@ -210,9 +278,10 @@ watch(
             <li
               v-for="(_, rowIdx) in grid.rows.value"
               :key="`${column.id}-${rowIdx}`"
+              :data-digifi-row="String(rowIdx)"
               class="flex items-stretch border-b last:border-b-0"
               :class="isDarkMode ? 'border-white/10' : 'border-gray-200'"
-              :style="{ minHeight: `${rowMinHeightsPx[rowIdx] ?? 28}px` }"
+              :style="rowMinHeightStyle(rowIdx) ? { minHeight: rowMinHeightStyle(rowIdx) } : undefined"
             >
               <span
                 :class="[
@@ -223,7 +292,8 @@ watch(
                 {{ rowIdx + 1 }}
               </span>
               <div
-                class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+                data-digifi-row-content
+                class="flex min-h-0 min-w-0 flex-1 flex-col justify-center overflow-hidden"
                 :class="
                   cellNeedsReview(rowIdx, column.id)
                     ? isDarkMode

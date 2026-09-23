@@ -84,22 +84,25 @@ const props = defineProps<{
 
 const leftChipActive = computed(() => {
   const label = props.leftChipLabel ?? ''
-  return label !== 'Next' && label !== 'After left' && label !== ''
+  return label === 'Scanning…' || label === 'Ready' || label === 'Tap to photo'
 })
 
 const rightChipActive = computed(() => {
   const label = props.rightChipLabel ?? ''
-  return label !== 'After left' && label !== ''
+  return label === 'Scanning…' || label === 'Ready' || label === 'Tap to photo'
 })
 
-const leftRetakeEnabled = computed(() => {
+const leftZoneBusy = computed(() => props.leftChipLabel === 'Scanning…')
+const rightZoneBusy = computed(() => props.rightChipLabel === 'Scanning…')
+
+const leftZoneTappable = computed(() => {
   const label = props.leftChipLabel ?? ''
-  return label === 'Done · Retake' || label === 'Scanning…'
+  return label === 'Tap to photo' || label === 'Ready'
 })
 
-const rightRetakeEnabled = computed(() => {
+const rightZoneTappable = computed(() => {
   const label = props.rightChipLabel ?? ''
-  return label === 'Done · Retake' || label === 'Scanning…'
+  return label === 'Tap to photo' || label === 'Ready'
 })
 
 const captureButtonDisabled = computed(() => {
@@ -117,7 +120,7 @@ const captureButtonDisabled = computed(() => {
 })
 
 const emit = defineEmits<{
-  capture: []
+  capture: [pageSide?: 'left' | 'right']
   retake: [pageSide: 'left' | 'right']
 }>()
 
@@ -605,12 +608,20 @@ watch(
                 ? digifiMobileAccentSelected(isDarkMode)
                 : digifiMobileAccentIdle(isDarkMode)
             "
-            :disabled="!leftRetakeEnabled"
-            :aria-label="leftRetakeEnabled ? 'Retake left page photo' : 'Left page — capture next'"
-            @click="leftRetakeEnabled && emit('retake', 'left')"
+            :disabled="leftZoneBusy || !leftZoneTappable"
+            :aria-label="
+              leftZoneBusy
+                ? 'Left page scanning'
+                : leftChipLabel === 'Ready'
+                  ? 'Retake left page photo'
+                  : 'Photograph left page'
+            "
+            @click="
+              leftChipLabel === 'Ready' ? emit('retake', 'left') : leftZoneTappable && emit('capture', 'left')
+            "
           >
             <span class="text-[10px] uppercase tracking-wide opacity-80">1 · Left</span>
-            <span>{{ leftChipLabel || 'Next' }}</span>
+            <span>{{ leftChipLabel || 'Tap to photo' }}</span>
           </button>
         </li>
         <li class="flex-1">
@@ -622,9 +633,17 @@ watch(
                 ? digifiMobileAccentSelected(isDarkMode)
                 : digifiMobileAccentIdle(isDarkMode)
             "
-            :disabled="!rightRetakeEnabled"
-            :aria-label="rightRetakeEnabled ? 'Retake right page photo' : 'Right page'"
-            @click="rightRetakeEnabled && emit('retake', 'right')"
+            :disabled="rightZoneBusy || !rightZoneTappable"
+            :aria-label="
+              rightZoneBusy
+                ? 'Right page scanning'
+                : rightChipLabel === 'Ready'
+                  ? 'Retake right page photo'
+                  : 'Photograph right page'
+            "
+            @click="
+              rightChipLabel === 'Ready' ? emit('retake', 'right') : rightZoneTappable && emit('capture', 'right')
+            "
           >
             <span class="text-[10px] uppercase tracking-wide opacity-80">2 · Right</span>
             <span>{{ rightChipLabel || 'After left' }}</span>
@@ -637,7 +656,7 @@ watch(
       type="button"
       class="w-full min-h-[52px] rounded-2xl bg-green-600 px-4 py-4 text-base font-semibold text-white shadow-sm disabled:opacity-50"
       :disabled="captureButtonDisabled"
-      @click="emit('capture')"
+      @click="emit('capture', twoPageStep === 2 ? 'right' : twoPageStep === 1 ? 'left' : undefined)"
     >
       {{ scanning && captureButtonDisabled ? 'Scanning…' : captureLabel }}
     </button>

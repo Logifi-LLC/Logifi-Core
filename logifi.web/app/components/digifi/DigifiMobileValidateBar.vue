@@ -156,21 +156,12 @@ async function handleSendToLogTen() {
           </li>
         </ul>
       </div>
-      <button
-        type="button"
-        class="text-xs font-semibold"
-        :class="isDarkMode ? 'text-gray-400' : 'text-gray-500'"
-        @click="clearSummary"
-      >
-        Back to edit
-      </button>
     </div>
 
     <p v-if="errorMessage" :class="['text-xs', isDarkMode ? 'text-rose-300' : 'text-rose-600']">{{ errorMessage }}</p>
 
-    <div class="flex gap-2">
+    <div v-if="!showSummary" class="flex gap-2">
       <button
-        v-if="!showSummary"
         type="button"
         class="flex-1 min-h-[52px] rounded-2xl border-2 px-3 py-3 text-sm font-semibold disabled:opacity-50"
         :class="
@@ -183,10 +174,25 @@ async function handleSendToLogTen() {
       >
         {{ validating ? 'Checking…' : 'Validate' }}
       </button>
+    </div>
+
+    <div v-else class="flex gap-2">
+      <button
+        type="button"
+        class="flex-1 min-h-[52px] rounded-2xl border-2 px-3 py-3 text-sm font-semibold"
+        :class="
+          isDarkMode
+            ? 'border-white/15 bg-white/5 text-gray-100'
+            : 'border-gray-300 bg-white text-gray-900 shadow-sm'
+        "
+        @click="clearSummary"
+      >
+        Back to edit
+      </button>
       <button
         type="button"
         class="flex-1 min-h-[52px] rounded-2xl bg-green-600 px-3 py-3 text-sm font-semibold text-white shadow-sm disabled:opacity-40"
-        :disabled="importing || !showSummary"
+        :disabled="importing"
         @click="handleImport"
       >
         {{ importing ? 'Importing…' : 'Import' }}

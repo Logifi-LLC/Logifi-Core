@@ -52,11 +52,11 @@ export type MobileTwoPageChipState = 'waiting' | 'next' | 'scanning' | 'done'
 export function mobileTwoPageChipLabel(state: MobileTwoPageChipState): string {
   switch (state) {
     case 'done':
-      return 'Done · Retake'
+      return 'Ready'
     case 'scanning':
       return 'Scanning…'
     case 'next':
-      return 'Next'
+      return 'Tap to photo'
     case 'waiting':
       return 'After left'
   }

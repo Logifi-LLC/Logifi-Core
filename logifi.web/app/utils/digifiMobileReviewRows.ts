@@ -36,7 +36,22 @@ function rowNeedsRemarksRescanSpace(
   return row.digifiCellMeta?.[remarksColId]?.needsReview === true
 }
 
-/** Shared min-heights so carousel columns stay row-locked when peeking at neighbors. */
+/** Merge per-row measurements (e.g. from layout) with a floor per index. */
+export function mergeDigifiMobileReviewRowHeights(
+  rowCount: number,
+  measured: readonly number[],
+  floorHeights?: readonly number[]
+): number[] {
+  const heights: number[] = []
+  for (let rowIdx = 0; rowIdx < rowCount; rowIdx++) {
+    const floor = floorHeights?.[rowIdx] ?? BASE_ROW_PX
+    const fromLayout = measured[rowIdx] ?? 0
+    heights.push(Math.max(floor, fromLayout))
+  }
+  return heights
+}
+
+/** Heuristic min-heights before layout measure (remarks line count). */
 export function computeDigifiMobileReviewRowMinHeights(
   input: DigifiMobileReviewRowLayoutInput
 ): number[] {
