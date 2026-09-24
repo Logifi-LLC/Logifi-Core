@@ -9,6 +9,11 @@ dist
 # Node dependencies
 node_modules
 logifi.web/package-lock.json
+.pnpm-store/
+
+# Cursor local editor / MCP config (shared rules stay in .cursor/rules/)
+.cursor/mcp.json
+.cursor/settings.json
 
 # Logs
 logs
