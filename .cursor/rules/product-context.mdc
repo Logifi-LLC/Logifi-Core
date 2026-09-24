@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Product context
 
-Read `BUSINESS_CONTEXT.md` before product, UX, pricing, or copy decisions. Current work is in `TODO.txt`. Target PRs at `dev`, not `main`.
+Read `BUSINESS_CONTEXT.md` before product, UX, pricing, or copy decisions. Current work is in `docs/notes/TODO.txt`. Target PRs at `dev`, not `main`.
 
 ## Non-negotiables
 
