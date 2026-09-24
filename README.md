@@ -43,7 +43,7 @@ See [SETUP_INSTRUCTIONS.md](SETUP_INSTRUCTIONS.md) for detailed setup instructio
 - **[API.md](API.md)** - API reference for developers
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment and testing guide (Vercel, Netlify, local tunnels)
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history
-- **[TODO.txt](TODO.txt)** - Current product work
+- **[docs/notes/TODO.txt](docs/notes/TODO.txt)** - Current product work
 - **[docs/oss-ui-and-architecture-guardrails.md](docs/oss-ui-and-architecture-guardrails.md)** - UI and code-structure contribution guardrails
 
 ## Testing
@@ -74,7 +74,7 @@ Target PRs at `dev`, not `main`.
 
 ## Roadmap
 
-Current work lives in [TODO.txt](TODO.txt). Product direction lives in [BUSINESS_CONTEXT.md](BUSINESS_CONTEXT.md).
+Current work lives in [docs/notes/TODO.txt](docs/notes/TODO.txt). Product direction lives in [BUSINESS_CONTEXT.md](BUSINESS_CONTEXT.md).
 
 ## License
 

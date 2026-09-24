@@ -493,7 +493,7 @@ Mobile:
   ios/, capacitor.config.json, root Cap npm scripts
 
 Living status notes:
-  TODO.txt (offline gaps, branch merge notes)
+  docs/notes/TODO.txt (offline gaps, branch merge notes)
 
 
 --------------------------------------------------------------------------------

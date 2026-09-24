@@ -9,4 +9,4 @@ If `FOUNDER.md` exists at the repo root, read it before product, roadmap, or pri
 
 Treat it as private context (who Derek talked to, morale, weekly focus). Do not quote named people in public copy, PRs, or commit messages.
 
-Do not update `TODO.txt` from these notes unless Derek explicitly asks.
+Do not update `docs/notes/TODO.txt` from these notes unless Derek explicitly asks.
