@@ -245,6 +245,17 @@ const scrollToAutofi = () => {
     autofiSection.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 }
+
+useHead({
+  title: 'Logifi — Airline pilot logbook',
+  meta: [
+    {
+      name: 'description',
+      content:
+        'Free, open-source digital logbook for airline flying. Autofi FLICA import, Digifi paper scanning, import from other apps, and export.',
+    },
+  ],
+})
 </script>
 
 <style scoped>

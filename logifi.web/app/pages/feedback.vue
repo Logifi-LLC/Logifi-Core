@@ -416,4 +416,15 @@ onMounted(() => {
 onUnmounted(() => {
   if (clockTimer) clearInterval(clockTimer)
 })
+
+useHead({
+  title: 'Feedback | Logifi',
+  meta: [
+    {
+      name: 'description',
+      content:
+        'Send bugs, feature ideas, or general feedback to the Logifi team. GitHub and Discord are linked from the page too.',
+    },
+  ],
+})
 </script>
