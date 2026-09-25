@@ -1,6 +1,10 @@
 <template>
   <MarketingSecondaryPageShell>
-    <main class="min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-24 pb-16 text-center">
+    <div class="relative min-h-screen overflow-x-hidden">
+      <MarketingPaperPlanes />
+      <main
+        class="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 lg:px-8 pt-24 pb-16 text-center"
+      >
       <NuxtLink to="/" class="mb-10 inline-flex" @click.prevent="goHome">
         <img
           src="/images/logifi-logo.png"
@@ -29,11 +33,13 @@
         <span class="relative z-10">Back to home</span>
       </button>
     </main>
+    </div>
   </MarketingSecondaryPageShell>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount } from 'vue'
+import MarketingPaperPlanes from '~/components/MarketingPaperPlanes.vue'
 import MarketingSecondaryPageShell from '~/components/MarketingSecondaryPageShell.vue'
 
 const error = useError()
