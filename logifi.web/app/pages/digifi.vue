@@ -228,6 +228,17 @@ onMounted(() => {
     window.location.replace(next)
   }
 })
+
+useHead({
+  title: 'Digifi | Logifi',
+  meta: [
+    {
+      name: 'description',
+      content:
+        'Photograph paper logbook spreads and review Digifi transcription before import. Every account includes 10 free spreads; additional scans use credits.',
+    },
+  ],
+})
 </script>
 
 <style scoped>
