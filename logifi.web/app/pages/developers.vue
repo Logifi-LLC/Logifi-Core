@@ -446,4 +446,15 @@ onUnmounted(() => {
     clearInterval(clockTimer)
   }
 })
+
+useHead({
+  title: 'Developers | Logifi',
+  meta: [
+    {
+      name: 'description',
+      content:
+        'Logifi-Core is open source on GitHub. View the repo, report issues, read the contributing guide, and check the license.',
+    },
+  ],
+})
 </script>
