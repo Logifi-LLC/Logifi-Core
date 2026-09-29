@@ -102,7 +102,8 @@ html.capacitor-ios textarea {
     rgba(255, 255, 255, 0.12) 50%,
     transparent 62%
   );
-  animation: cta-shimmer 3.2s ease-in-out infinite;
+  transform: translateX(-140%) skewX(-14deg);
+  animation: cta-shimmer 3.2s ease-in-out 1;
 }
 
 @media (prefers-reduced-motion: reduce) {

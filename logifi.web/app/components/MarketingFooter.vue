@@ -8,18 +8,18 @@
       </p>
       <p class="text-sm font-medium text-gray-400 text-center">
         <NuxtLink to="/integrations" :class="linkClass('integrations')">Integrations</NuxtLink>
-        <span class="mx-2 text-gray-600">·</span>
+        <span class="mx-2 text-[#9ca3af]">·</span>
         <NuxtLink to="/pricing" :class="linkClass('pricing')">Pricing</NuxtLink>
-        <span class="mx-2 text-gray-600">·</span>
+        <span class="mx-2 text-[#9ca3af]">·</span>
         <NuxtLink to="/data-sources?from=landing" :class="linkClass('data-sources')">Data sources</NuxtLink>
-        <span class="mx-2 text-gray-600">·</span>
+        <span class="mx-2 text-[#9ca3af]">·</span>
         <NuxtLink to="/terms?from=landing" :class="linkClass('terms')">Terms of Service</NuxtLink>
-        <span class="mx-2 text-gray-600">·</span>
+        <span class="mx-2 text-[#9ca3af]">·</span>
         <NuxtLink to="/privacy?from=landing" :class="linkClass('privacy')">Privacy Policy</NuxtLink>
-        <span class="mx-2 text-gray-600">·</span>
+        <span class="mx-2 text-[#9ca3af]">·</span>
         <NuxtLink to="/developers?from=landing" :class="linkClass('developers')">Developers</NuxtLink>
       </p>
-      <p class="mt-4 text-xs text-gray-500 text-center">
+      <p class="mt-4 text-xs text-[#9ca3af] text-center">
         © {{ year }} Logifi. All rights reserved.
       </p>
     </div>
