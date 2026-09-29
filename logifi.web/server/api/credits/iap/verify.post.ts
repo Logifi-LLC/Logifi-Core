@@ -82,9 +82,12 @@ export default defineEventHandler(async (event) => {
     description: `Purchased ${product.credits} credits (Apple IAP)`,
   })
 
+  const outcome = result.granted ? 'credited' : 'already_granted'
+
   return {
     ok: true,
     credits: result.credits,
     granted: result.granted,
+    outcome,
   }
 })

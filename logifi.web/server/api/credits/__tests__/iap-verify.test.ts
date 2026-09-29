@@ -102,6 +102,7 @@ describe('POST /api/credits/iap/verify', () => {
       ok: true,
       credits: 100,
       granted: true,
+      outcome: 'credited',
     })
   })
 
@@ -236,6 +237,7 @@ describe('POST /api/credits/iap/verify', () => {
       ok: true,
       credits: 75,
       granted: false,
+      outcome: 'already_granted',
     })
   })
 })
