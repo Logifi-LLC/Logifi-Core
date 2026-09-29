@@ -6,7 +6,7 @@
   >
     <div class="paper-plane plane-1">
       <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" class="text-cyan-400" style="opacity: 0.5" />
+        <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" class="text-blue-400" style="opacity: 0.5" />
       </svg>
     </div>
 
@@ -24,7 +24,7 @@
 
     <div class="paper-plane plane-4">
       <svg width="72" height="72" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" class="text-cyan-300" style="opacity: 0.55" />
+        <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" class="text-blue-300" style="opacity: 0.55" />
       </svg>
     </div>
 
@@ -36,7 +36,7 @@
 
     <div class="paper-plane plane-6">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" class="text-cyan-500" style="opacity: 0.42" />
+        <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" class="text-blue-500" style="opacity: 0.42" />
       </svg>
     </div>
 
@@ -48,7 +48,7 @@
 
     <div class="paper-plane plane-8">
       <svg width="50" height="50" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" class="text-cyan-400" style="opacity: 0.38" />
+        <path d="M3 3l18 9-18 9 3-9-3-9z" fill="currentColor" class="text-blue-400" style="opacity: 0.38" />
       </svg>
     </div>
   </div>

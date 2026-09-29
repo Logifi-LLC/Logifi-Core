@@ -27,7 +27,7 @@
 
       <button
         type="button"
-        class="btn-cta-primary px-8 py-4 bg-blue-600 text-white text-lg font-bold rounded-lg hover:bg-blue-700 transition-all border border-blue-500/50 shadow-lg shadow-blue-900/50 hover:shadow-xl hover:shadow-blue-900/60 active:scale-[0.98]"
+        class="btn-cta-primary px-8 py-4 bg-blue-600 text-white text-lg font-bold rounded-lg hover:bg-blue-700 transition-all border border-blue-500/50 active:scale-[0.98]"
         @click="goHome"
       >
         <span class="relative z-10">Back to home</span>
