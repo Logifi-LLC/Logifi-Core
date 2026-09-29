@@ -3,6 +3,13 @@ import { IAP_PRODUCTS, getIapProduct } from '~/utils/iapProducts'
 import { isIosApp } from '~/utils/platform'
 import { useAuth } from '~/composables/useAuth'
 import { apiFetch } from '~/utils/apiFetch'
+import {
+  classifyIapPurchaseFailure,
+  IapPurchaseCancelledError,
+  normalizeIapVerifyResponse,
+  type IapPurchaseSuccessBody,
+  type NormalizedIapPurchaseResult,
+} from '~/utils/iapPurchaseOutcome'
 
 // Types for the dynamically imported module
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -82,11 +89,7 @@ export interface IapProductWithPrice {
   available: boolean
 }
 
-export interface IapPurchaseResponse {
-  ok: true
-  credits: number
-  granted: boolean
-}
+export type IapPurchaseResponse = NormalizedIapPurchaseResult
 
 const products = ref<IapProductWithPrice[]>([])
 const loading = ref(false)
@@ -214,7 +217,7 @@ export function useIapPurchase() {
 
       // Map Capgo Transaction fields to server API:
       // Capgo: transactionId, productIdentifier, receipt?, jwsRepresentation?
-      const verifyResponse = await apiFetch<IapPurchaseResponse>(
+      const verifyResponse = await apiFetch(
         '/api/credits/iap/verify',
         {
           method: 'POST',
@@ -230,8 +233,23 @@ export function useIapPurchase() {
         }
       )
 
-      return verifyResponse
+      return normalizeIapVerifyResponse(verifyResponse as IapPurchaseSuccessBody)
     } catch (err: unknown) {
+      const failureKind = classifyIapPurchaseFailure(err)
+      if (failureKind === 'cancelled') {
+        error.value = null
+        throw new IapPurchaseCancelledError()
+      }
+      if (failureKind === 'already_granted') {
+        error.value = null
+        return {
+          ok: true,
+          credits: 0,
+          granted: false,
+          outcome: 'already_granted',
+        }
+      }
+
       // Enhanced logging for verify failures
       if ((err as { statusCode?: number })?.statusCode) {
         const statusCode = (err as { statusCode?: number }).statusCode
@@ -239,7 +257,7 @@ export function useIapPurchase() {
         const body = (err as { data?: unknown })?.data
         console.error('[iap] verify failed:', { statusCode, statusMessage, body })
       }
-      
+
       const message =
         (err as { data?: { statusMessage?: string } })?.data?.statusMessage ??
         (err instanceof Error ? err.message : 'Purchase failed')

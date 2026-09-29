@@ -5,6 +5,10 @@ import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { useIapPurchase } from '~/composables/useIapPurchase'
 import { useTheme } from '~/composables/useTheme'
 import { canUseWebPayments } from '~/utils/platform'
+import {
+  IAP_ALREADY_GRANTED_MESSAGE,
+  isIapUserCancelled,
+} from '~/utils/iapPurchaseOutcome'
 
 const props = defineProps<{
   isOpen: boolean
@@ -43,6 +47,7 @@ const pageCount = ref(25)
 const selectedIapProductId = ref<string | null>(null)
 const step = ref<Step>('form')
 const successCreditsAdded = ref(0)
+const successAlreadyGranted = ref(false)
 const checkoutError = ref<string | null>(null)
 const lightningCheckoutLink = ref<string | null>(null)
 const lightningInvoiceId = ref<string | null>(null)
@@ -93,6 +98,7 @@ watch(
       step.value = 'form'
       checkoutError.value = null
       successCreditsAdded.value = 0
+      successAlreadyGranted.value = false
       lightningCheckoutLink.value = null
       lightningInvoiceId.value = null
       stopLightningPolling()
@@ -183,26 +189,31 @@ async function proceedToIapPurchase(productId: string) {
   checkoutError.value = null
   try {
     const result = await purchaseIapProduct(productId)
-    
-    // Use server-granted credits from verify response, not local pack size
-    if (!result.granted) {
-      // Transaction was already processed (duplicate)
-      checkoutError.value = 'This purchase was already processed'
-      step.value = 'form'
+
+    await fetchBalance()
+
+    if (result.outcome === 'already_granted') {
+      successAlreadyGranted.value = true
+      successCreditsAdded.value = 0
+      step.value = 'success'
+      emit('purchased', 0)
+      setTimeout(() => emit('close'), 2000)
       return
     }
-    
-    // Refresh balance from server to get the actual current balance
-    await fetchBalance()
-    
-    // Show success with pack size (amount added), not the new balance
+
     const product = iapProducts.value.find((p) => p.productId === productId)
     const creditsAdded = product?.credits ?? 0
+    successAlreadyGranted.value = false
     successCreditsAdded.value = creditsAdded
     step.value = 'success'
     emit('purchased', creditsAdded)
     setTimeout(() => emit('close'), 1500)
   } catch (err: unknown) {
+    if (isIapUserCancelled(err)) {
+      step.value = 'form'
+      checkoutError.value = null
+      return
+    }
     step.value = 'form'
     checkoutError.value =
       iapError.value ??
@@ -255,7 +266,12 @@ async function proceedToIapPurchase(productId: string) {
         <div v-if="step === 'success'" class="p-10 text-center space-y-3">
           <Icon name="ri:checkbox-circle-fill" class="mx-auto text-green-500" size="48" />
           <p :class="['text-lg font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
-            Success! {{ successCreditsAdded }} credits added
+            <template v-if="successAlreadyGranted">
+              {{ IAP_ALREADY_GRANTED_MESSAGE }}
+            </template>
+            <template v-else>
+              Success! {{ successCreditsAdded }} credits added
+            </template>
           </p>
         </div>
 
