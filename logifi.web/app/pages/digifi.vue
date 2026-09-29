@@ -70,19 +70,16 @@
         <!-- Subtle grid background pattern (orange/amber theme) -->
         <div class="absolute inset-0 z-0 opacity-[0.03]" style="background-image: linear-gradient(rgba(251, 146, 60, 0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(251, 146, 60, 0.4) 1px, transparent 1px); background-size: 40px 40px;"></div>
         
-        <!-- Gradient overlay -->
-        <div class="absolute inset-0 z-0 bg-gradient-to-b from-[#0a0e1a] via-[#0f1423] to-[#0a0e1a]"></div>
-
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <div class="flex flex-col items-center gap-4 mb-8">
             <ProductSwitcher active-product="digifi" />
-            <div class="inline-flex items-center px-3 py-1.5 rounded-lg bg-orange-950/40 border border-orange-800/30 text-orange-400 text-xs font-semibold backdrop-blur-sm">
+            <div class="inline-flex items-center px-3 py-1.5 rounded-lg bg-[#3a1d0c] border border-orange-800/40 text-[#fdba74] text-xs font-semibold">
               First 10 pages free
             </div>
           </div>
           
           <h1 class="text-5xl lg:text-7xl font-bold tracking-tight text-gray-100 mb-6 leading-[1.1]">
-            Scan your <span class="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-400">paper logbook</span>
+            Scan your <span class="text-[#fdba74]">paper logbook</span>
           </h1>
           
           <p class="max-w-2xl mx-auto text-xl text-gray-400 mb-12 leading-relaxed">
@@ -92,13 +89,13 @@
           <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button 
               @click="handleStartScanning"
-              class="btn-cta-primary w-full sm:w-auto px-8 py-4 bg-orange-600 text-white text-lg font-bold rounded-lg hover:bg-orange-700 transition-all border border-orange-500/50 shadow-lg shadow-orange-900/50 hover:shadow-xl hover:shadow-orange-900/60 active:scale-[0.98]"
+              class="btn-cta-primary w-full sm:w-auto px-8 py-4 bg-orange-600 text-white text-lg font-bold rounded-lg hover:bg-orange-700 transition-all border border-orange-500/50 active:scale-[0.98]"
             >
               <span class="relative z-10">{{ isAuthenticated ? 'Continue Scanning' : 'Start Scanning' }}</span>
             </button>
             <NuxtLink 
               to="/"
-              class="w-full sm:w-auto px-8 py-4 bg-gray-800/50 text-gray-100 text-lg font-bold rounded-lg border border-gray-700/50 backdrop-blur-sm hover:bg-gray-800/70 hover:border-gray-600/50 transition-all active:scale-[0.98]"
+              class="w-full sm:w-auto px-8 py-4 bg-gray-800 text-gray-100 text-lg font-bold rounded-lg border border-gray-700 hover:bg-gray-700 hover:border-gray-600 transition-all active:scale-[0.98]"
             >
               Learn More
             </NuxtLink>
@@ -107,46 +104,46 @@
       </section>
 
       <!-- How it Works -->
-      <section class="relative py-20 lg:py-28 overflow-hidden bg-gradient-to-b from-[#0a0e1a] via-[#0d1220] to-[#0a0e1a]">
+      <section class="relative py-20 lg:py-28 overflow-hidden bg-[#0a0e1a]">
         <!-- Subtle diagonal lines pattern (orange theme) -->
         <div class="absolute inset-0 z-0 opacity-[0.02]" style="background-image: repeating-linear-gradient(45deg, transparent, transparent 35px, rgba(251, 146, 60, 0.3) 35px, rgba(251, 146, 60, 0.3) 36px);"></div>
         
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div class="text-center mb-16">
-            <h2 class="text-3xl sm:text-4xl font-bold text-gray-100 mb-3">How Digifi Works</h2>
-            <p class="text-gray-400 text-lg">Photograph, transcribe, review</p>
+            <h2 class="text-3xl sm:text-4xl font-bold text-[#f3f4f6] mb-3">How Digifi Works</h2>
+            <p class="text-[#9ca3af] text-lg">Photograph, transcribe, review</p>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
             <!-- Step 1 -->
-            <div class="bg-gray-900/40 backdrop-blur-sm p-8 rounded-xl border border-gray-800/50 hover:border-orange-800/50 transition-all">
-              <div class="w-10 h-10 bg-orange-600/20 rounded-lg flex items-center justify-center text-orange-400 mb-4 font-bold text-xl">
+            <div class="bg-[#141a28] p-8 rounded-xl border border-gray-800/50 hover:border-orange-800/50 transition-all">
+              <div class="w-10 h-10 bg-[#431407] rounded-lg flex items-center justify-center text-orange-400 mb-4 font-bold text-xl">
                 1
               </div>
               <h3 class="text-xl font-bold text-gray-100 mb-3">Photograph Pages</h3>
-              <p class="text-gray-400 leading-relaxed">
+              <p class="text-[#9ca3af] leading-relaxed">
                 Take photos of your paper logbook pages. Flat, bright, and in frame work best.
               </p>
             </div>
 
             <!-- Step 2 -->
-            <div class="bg-gray-900/40 backdrop-blur-sm p-8 rounded-xl border border-gray-800/50 hover:border-orange-800/50 transition-all">
-              <div class="w-10 h-10 bg-orange-600/20 rounded-lg flex items-center justify-center text-orange-400 mb-4 font-bold text-xl">
+            <div class="bg-[#141a28] p-8 rounded-xl border border-gray-800/50 hover:border-orange-800/50 transition-all">
+              <div class="w-10 h-10 bg-[#431407] rounded-lg flex items-center justify-center text-orange-400 mb-4 font-bold text-xl">
                 2
               </div>
               <h3 class="text-xl font-bold text-gray-100 mb-3">AI Transcription</h3>
-              <p class="text-gray-400 leading-relaxed">
+              <p class="text-[#9ca3af] leading-relaxed">
                 Digifi extracts flight entries from the photos. About 70% accuracy tested on one logbook.
               </p>
             </div>
 
             <!-- Step 3 -->
-            <div class="bg-gray-900/40 backdrop-blur-sm p-8 rounded-xl border border-gray-800/50 hover:border-orange-800/50 transition-all">
-              <div class="w-10 h-10 bg-orange-600/20 rounded-lg flex items-center justify-center text-orange-400 mb-4 font-bold text-xl">
+            <div class="bg-[#141a28] p-8 rounded-xl border border-gray-800/50 hover:border-orange-800/50 transition-all">
+              <div class="w-10 h-10 bg-[#431407] rounded-lg flex items-center justify-center text-orange-400 mb-4 font-bold text-xl">
                 3
               </div>
               <h3 class="text-xl font-bold text-gray-100 mb-3">Review & Import</h3>
-              <p class="text-gray-400 leading-relaxed">
+              <p class="text-[#9ca3af] leading-relaxed">
                 Check every cell before importing to your digital logbook or exporting.
               </p>
             </div>
