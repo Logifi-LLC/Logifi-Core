@@ -200,7 +200,7 @@ All migrations are stored in `logifi.web/supabase/migrations/` and should be run
 
 Later files in `logifi.web/supabase/migrations/` continue this sequence through `20260811171011_security_advisor_function_grants.sql` (PUBLIC/anon EXECUTE sweep on Logifi SECURITY DEFINER RPCs).
 
-**Not in this repo (shared-project leftovers):** `get_logifi_analytics`, `get_logifi_analytics_timeseries`, `capture_analytics_snapshot`, `analytics_snapshots`, and Auth leaked-password protection (Supabase Dashboard → Authentication → Attack protection).
+**Not in this repo (shared-project leftovers):** `get_logifi_analytics`, `get_logifi_analytics_timeseries`, `capture_analytics_snapshot` (EXECUTE restricted to `service_role` in `20260929000076_analytics_rpc_grants_rls_initplan.sql`), `analytics_snapshots`, and Auth leaked-password protection (Supabase Dashboard → Authentication → Attack protection).
 
 ## Triggers
 
