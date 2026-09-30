@@ -25,6 +25,12 @@ import {
 import {
   catalogContainsPersonName,
 } from '../../../shared/catalogPersonNames'
+import {
+  applyCatalogPilotPick,
+  filterCatalogPilotNames,
+  seedPreviewCrewNames,
+  type PreviewCrewLeg,
+} from '../../../shared/flicaCrewName'
 import { applyCatalogFamilyToFcvPreview } from '../../../shared/aircraftTailIndex'
 import { OOOI_FIELD_ORDER } from '~/utils/logbookTypes'
 import { localCalendarYmd, normalizeCalendarYmd } from '../../../shared/localCalendarDate'
@@ -170,6 +176,8 @@ const crewPickSelection = ref<Record<string, string>>({})
 const crewRenameText = ref<Record<string, string>>({})
 /** Editable other-pilot name per flight id in import preview. */
 const perFlightCrewName = ref<Record<string, string>>({})
+/** Legs whose Other pilot field the user typed. A propagated catalog pick does not count. */
+const manuallyEditedCrewFlightIds = ref<Set<string>>(new Set())
 /** Full catalog from server when crew review is required (fallback path). */
 const crewReviewCatalogNames = ref<string[]>([])
 const activePilotPickerId = ref<string | null>(null)
@@ -473,14 +481,22 @@ function rawCrewNameFromFlight(f: FcvMappedEntry): string {
   return typeof nameRaw === 'string' ? nameRaw.trim() : ''
 }
 
-function initPerFlightCrewNames() {
-  const next: Record<string, string> = { ...perFlightCrewName.value }
+function previewCrewLegs(): PreviewCrewLeg[] {
+  const legs: PreviewCrewLeg[] = []
   for (const f of previewFlights.value) {
     const id = fcvIdFromFlight(f)
-    if (!id || id in next) continue
-    next[id] = rawCrewNameFromFlight(f)
+    if (!id) continue
+    legs.push({ id, rawName: rawCrewNameFromFlight(f) })
   }
-  perFlightCrewName.value = next
+  return legs
+}
+
+function initPerFlightCrewNames() {
+  perFlightCrewName.value = seedPreviewCrewNames(
+    previewCrewLegs(),
+    fullCatalogPersonNames.value,
+    perFlightCrewName.value
+  )
 }
 
 function getPerFlightCrewName(fcvFlightId: string): string {
@@ -491,6 +507,9 @@ function getPerFlightCrewName(fcvFlightId: string): string {
 function setPerFlightCrewName(fcvFlightId: string, value: string) {
   const id = fcvFlightId.trim()
   if (!id) return
+  const manual = new Set(manuallyEditedCrewFlightIds.value)
+  manual.add(id)
+  manuallyEditedCrewFlightIds.value = manual
   perFlightCrewName.value = { ...perFlightCrewName.value, [id]: value }
 }
 
@@ -511,7 +530,15 @@ function closePilotPickerSoon() {
 }
 
 function selectPilotFromCatalog(fcvFlightId: string, name: string) {
-  setPerFlightCrewName(fcvFlightId, name)
+  const applied = applyCatalogPilotPick(
+    previewCrewLegs(),
+    perFlightCrewName.value,
+    manuallyEditedCrewFlightIds.value,
+    fcvFlightId,
+    name
+  )
+  perFlightCrewName.value = applied.names
+  manuallyEditedCrewFlightIds.value = applied.manualIds
   activePilotPickerId.value = null
 }
 
@@ -529,10 +556,7 @@ const fullCatalogPersonNames = computed(() => {
 })
 
 function filteredPilotSuggestions(query: string): string[] {
-  const q = query.trim().toLowerCase()
-  const names = fullCatalogPersonNames.value
-  if (!q) return names.slice(0, 40)
-  return names.filter((n) => n.toLowerCase().includes(q)).slice(0, 40)
+  return filterCatalogPilotNames(fullCatalogPersonNames.value, query)
 }
 
 function resolveCrewOverrideMode(editedName: string, rawName: string): CrewOverrideMode {
@@ -557,6 +581,7 @@ function resetPreviewImportState() {
   perFlightEnrichment.value = {}
   expandedEnrichmentRows.value = new Set()
   perFlightCrewName.value = {}
+  manuallyEditedCrewFlightIds.value = new Set()
   crewReviewCandidates.value = []
   crewReviewCatalogNames.value = []
   crewResolutionMode.value = {}

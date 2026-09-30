@@ -155,6 +155,92 @@ describe('FcvSync proactive pilot editing', () => {
   })
 })
 
+const sameFoRawNames = ['SMITH, JOHN', 'smith, john', 'SMITH,  JOHN', 'SMITH, JOHN.']
+
+function mountFourLegPairing(catalogPersonNames: string[]) {
+  const wrapper = mountFcvSync(catalogPersonNames)
+  const setupState = getSetupState(wrapper)
+  setupState.connected = true
+  setupState.previewFlights = sameFoRawNames.map((training_elements, index) =>
+    buildPreviewFlight({
+      fcv_flight_id: `fcv-${index + 1}`,
+      date: `2026-05-${String(10 + index).padStart(2, '0')}`,
+      departure: index % 2 === 0 ? 'KSEA' : 'KPDX',
+      destination: index % 2 === 0 ? 'KPDX' : 'KSEA',
+      training_elements,
+    })
+  )
+  setupState.showPreviewModal = true
+  setupState.selectedFcvFlightIds = new Set(['fcv-1', 'fcv-2', 'fcv-3', 'fcv-4'])
+  return { wrapper, setupState }
+}
+
+function crewNames(setupState: Record<string, unknown>): Record<string, string> {
+  return setupState.perFlightCrewName as Record<string, string>
+}
+
+describe('FcvSync multi-leg First Officer matching', () => {
+  beforeEach(() => {
+    apiFetchMock.mockReset()
+  })
+
+  it('auto-matches every leg when the catalog has the pilot', async () => {
+    const { setupState } = mountFourLegPairing(['John Smith', 'Amy Beta'])
+    const init = setupState.initPerFlightCrewNames as () => void
+    init()
+    await nextTick()
+
+    expect(crewNames(setupState)).toEqual({
+      'fcv-1': 'John Smith',
+      'fcv-2': 'John Smith',
+      'fcv-3': 'John Smith',
+      'fcv-4': 'John Smith',
+    })
+  })
+
+  it('fills all 4 legs from one catalog pick when the FO does not auto-match', async () => {
+    const { wrapper, setupState } = mountFourLegPairing(['John Adam Smith', 'Amy Beta'])
+    const init = setupState.initPerFlightCrewNames as () => void
+    init()
+    await nextTick()
+
+    expect(crewNames(setupState)['fcv-1']).toBe('SMITH, JOHN')
+    expect(crewNames(setupState)['fcv-4']).toBe('SMITH, JOHN.')
+
+    const input = wrapper.find('input[placeholder="Pilot name"]')
+    await input.trigger('focus')
+    await nextTick()
+    expect(wrapper.text()).toContain('John Adam Smith')
+
+    const pick = setupState.selectPilotFromCatalog as (id: string, name: string) => void
+    pick('fcv-1', 'John Adam Smith')
+    await nextTick()
+
+    expect(crewNames(setupState)).toEqual({
+      'fcv-1': 'John Adam Smith',
+      'fcv-2': 'John Adam Smith',
+      'fcv-3': 'John Adam Smith',
+      'fcv-4': 'John Adam Smith',
+    })
+  })
+
+  it('does not override a manually edited leg', async () => {
+    const { setupState } = mountFourLegPairing(['John Adam Smith', 'Amy Beta'])
+    const init = setupState.initPerFlightCrewNames as () => void
+    init()
+    const edit = setupState.setPerFlightCrewName as (id: string, value: string) => void
+    edit('fcv-3', 'Kept Name')
+    const pick = setupState.selectPilotFromCatalog as (id: string, name: string) => void
+    pick('fcv-1', 'John Adam Smith')
+    await nextTick()
+
+    expect(crewNames(setupState)['fcv-1']).toBe('John Adam Smith')
+    expect(crewNames(setupState)['fcv-2']).toBe('John Adam Smith')
+    expect(crewNames(setupState)['fcv-3']).toBe('Kept Name')
+    expect(crewNames(setupState)['fcv-4']).toBe('John Adam Smith')
+  })
+})
+
 describe('FcvSync fetch omits already-in-logbook', () => {
   beforeEach(() => {
     apiFetchMock.mockReset()
