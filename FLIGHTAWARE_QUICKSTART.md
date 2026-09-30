@@ -1,22 +1,21 @@
 # FlightAware Quick Start for Derek
 
-## TL;DR: Key Drop Ready
+## TL;DR
 
-To enable FlightAware enrichment:
+FlightAware is the default. Set the key:
 
 ```bash
-# Set in production environment
 FLIGHTAWARE_API_KEY=<your-flightaware-api-key>
-FLIGHT_ENRICH_PROVIDER=flightaware
 ```
 
-To rollback to AeroDataBox:
+Do not set `FLIGHT_ENRICH_PROVIDER` unless you are rolling back. Confirm Production is not pinned to `aerodatabox`.
+
+To roll back to AeroDataBox:
+
 ```bash
-# Remove FLIGHT_ENRICH_PROVIDER or set to aerodatabox
 FLIGHT_ENRICH_PROVIDER=aerodatabox
+AERODATABOX_API_KEY=<existing-rapidapi-key>
 ```
-
-That's it. No code changes needed.
 
 ## What This Gets You
 
@@ -28,7 +27,7 @@ That's it. No code changes needed.
 - ✅ Tail/registration
 - ✅ Aircraft type
 
-**AeroDataBox** (current) only provides:
+**AeroDataBox** (rollback) only provides:
 - ❌ Out (falls back to FLICA scheduled)
 - ✅ Off
 - ✅ On
@@ -38,12 +37,11 @@ That's it. No code changes needed.
 
 ## Testing Without Live Key
 
-All unit tests use fixtures - no live API required:
+Unit tests use fixtures. Do not call AeroAPI from tests.
 
 ```bash
 cd logifi.web
 pnpm test
-# 936 tests pass (includes 22 new FlightAware tests)
 ```
 
 ## Testing With Live Key
@@ -101,7 +99,7 @@ Both providers:
 
 ## Questions to Consider
 
-1. Should we grandfather existing users at AeroDataBox if FlightAware becomes default?
+1. FlightAware is now the default. AeroDataBox remains an explicit env rollback.
 2. Do we want to expose provider selection in UI, or keep it env-only?
 3. Should we add provider metrics (hit rate, latency) to dashboard?
 

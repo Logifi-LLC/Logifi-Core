@@ -1,7 +1,12 @@
 import { DateTime } from 'luxon'
 import { getAirportIanaTimezone } from '../../shared/airportTimezone'
 import { normalizeCalendarYmd } from '../../shared/localCalendarDate'
-import { hhmmToLocalDatetime, type AirlineLeg, type AirlineLegCrewMember } from './airlineLeg'
+import {
+  FLICA_IMPORT_SOURCE,
+  hhmmToLocalDatetime,
+  type AirlineLeg,
+  type AirlineLegCrewMember,
+} from './airlineLeg'
 
 /** Republic pairings are Eastern-based; used when airport TZ is unknown and for naive `nowIso`. */
 export const FLICA_DEFAULT_NOW_ZONE = 'America/New_York'
@@ -878,7 +883,7 @@ export function parseFlicaSchedule(
 
     legs.push({
       external_flight_id: buildExternalFlightId(dateYmd, hit.flightNumber, hit.dep),
-      import_source: 'flica_aerodatabox',
+      import_source: FLICA_IMPORT_SOURCE,
       flight_number: hit.flightNumber,
       trip_number: currentTrip,
       role,

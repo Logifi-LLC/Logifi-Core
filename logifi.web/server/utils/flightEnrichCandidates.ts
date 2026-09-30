@@ -1,8 +1,8 @@
-/** YX (IATA), RPA (ICAO), then major-airline marketed numbers. Keep in sync across enrich providers. */
+/** AeroDataBox RJET search order: YX (IATA), RPA (ICAO), then marketed majors, then the bare number. */
 export const RJET_FLIGHT_NUMBER_PREFIXES = ['YX', 'RPA', 'AA', 'UA', 'DL'] as const
 
-/** FlightAware RJET: try Republic idents before marketed majors. */
-export const RJET_FLIGHT_AWARE_TIER1_PREFIXES = ['YX', 'RPA'] as const
+/** FlightAware RJET: ICAO (RPA) before IATA (YX). AeroAPI recommends ICAO idents. */
+export const RJET_FLIGHT_AWARE_TIER1_PREFIXES = ['RPA', 'YX'] as const
 export const RJET_FLIGHT_AWARE_TIER2_PREFIXES = ['AA', 'UA', 'DL'] as const
 
 function normalizeFlightNumberRaw(flightNumber: string): string {
@@ -56,7 +56,8 @@ function rjetFlightAwareIdentsForPrefixes(
 }
 
 /**
- * FlightAware AeroAPI idents in search tiers (RJET: YX/RPA then AA/UA/DL/bare).
+ * FlightAware AeroAPI idents in search tiers (RJET: RPA/YX then AA/UA/DL).
+ * Bare numbers are not designators, so they are not queried.
  */
 export function flightAwareSearchIdentTiers(
   flightNumber: string,
@@ -75,10 +76,11 @@ export function flightAwareSearchIdentTiers(
       RJET_FLIGHT_AWARE_TIER1_PREFIXES,
       stickyPrefix
     )
-    const tier2 = [
-      ...rjetFlightAwareIdentsForPrefixes(digits, RJET_FLIGHT_AWARE_TIER2_PREFIXES, stickyPrefix),
+    const tier2 = rjetFlightAwareIdentsForPrefixes(
       digits,
-    ]
+      RJET_FLIGHT_AWARE_TIER2_PREFIXES,
+      stickyPrefix
+    )
     return [tier1, tier2]
   }
   const single = code ? [`${code}${digits}`] : [flightNumber.trim()]

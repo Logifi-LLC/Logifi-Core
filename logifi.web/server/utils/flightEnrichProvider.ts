@@ -37,8 +37,9 @@ export function getFlightEnrichProvider(): FlightEnrichProvider {
     ''
   ).trim().toLowerCase()
   
-  if (envProvider === 'flightaware') return 'flightaware'
-  return 'aerodatabox'
+  // Explicit aerodatabox is the one-release rollback. Unset defaults to FlightAware.
+  if (envProvider === 'aerodatabox') return 'aerodatabox'
+  return 'flightaware'
 }
 
 export function isEnrichProviderConfigured(provider?: FlightEnrichProvider): boolean {
