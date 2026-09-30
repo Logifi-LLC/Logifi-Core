@@ -872,6 +872,88 @@ export type Database = {
           updated_at?: string
         }
       }
+      flight_lookup_cache: {
+        Row: {
+          ident: string
+          departure_date: string
+          dep_airport: string
+          arr_airport: string
+          registration: string | null
+          aircraft_type: string | null
+          actual_out: string | null
+          actual_off: string | null
+          actual_on: string | null
+          actual_in: string | null
+          scheduled_out: string | null
+          fa_flight_id: string | null
+          source: string
+          fetched_at: string
+          is_final: boolean
+        }
+        Insert: {
+          ident: string
+          departure_date: string
+          dep_airport: string
+          arr_airport: string
+          registration?: string | null
+          aircraft_type?: string | null
+          actual_out?: string | null
+          actual_off?: string | null
+          actual_on?: string | null
+          actual_in?: string | null
+          scheduled_out?: string | null
+          fa_flight_id?: string | null
+          source?: string
+          fetched_at?: string
+          is_final?: boolean
+        }
+        Update: {
+          ident?: string
+          departure_date?: string
+          dep_airport?: string
+          arr_airport?: string
+          registration?: string | null
+          aircraft_type?: string | null
+          actual_out?: string | null
+          actual_off?: string | null
+          actual_on?: string | null
+          actual_in?: string | null
+          scheduled_out?: string | null
+          fa_flight_id?: string | null
+          source?: string
+          fetched_at?: string
+          is_final?: boolean
+        }
+      }
+      airline_fleet_tails: {
+        Row: {
+          airline_icao: string
+          fleet_number: string
+          registration: string
+          aircraft_type: string | null
+          first_seen_date: string
+          last_seen_date: string
+          updated_at: string
+        }
+        Insert: {
+          airline_icao: string
+          fleet_number: string
+          registration: string
+          aircraft_type?: string | null
+          first_seen_date: string
+          last_seen_date: string
+          updated_at?: string
+        }
+        Update: {
+          airline_icao?: string
+          fleet_number?: string
+          registration?: string
+          aircraft_type?: string | null
+          first_seen_date?: string
+          last_seen_date?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       // Views will be added here

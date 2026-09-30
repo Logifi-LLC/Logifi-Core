@@ -28,6 +28,12 @@ vi.mock('../flightAwareEnv', () => ({
   }),
 }))
 
+vi.mock('../flightLookupCache', () => ({
+  readFlightLookupCache: vi.fn(async () => null),
+  writeFlightLookupCache: vi.fn(async () => undefined),
+  flightLookupIsFinal: vi.fn(() => false),
+}))
+
 describe('fetchFlightAwareActuals', () => {
   beforeEach(() => {
     resetFlightAwareClientStateForTests()
