@@ -405,4 +405,90 @@ describe('ImporterFactory', () => {
       landingsNight: 0,
     })
   })
+
+  it('parses LogTen H:MM durations, sim time, and an E170 type code', () => {
+    const tsv = [
+      [
+        'flight_flightDate',
+        'aircraft_aircraftID',
+        'aircraftType_type',
+        'flight_from',
+        'flight_to',
+        'flight_totalTime',
+        'flight_pic',
+        'flight_sic',
+        'flight_night',
+        'flight_simulator',
+        'flight_dayLandings',
+      ].join('\t'),
+      ['2025-11-11', 'A16', 'E170', 'KLGA', 'KDCA', '0:48', '1:17', '12:05', '0:48', '1:17', '1'].join(
+        '\t'
+      ),
+    ].join('\n')
+
+    const result = parseWithProvider('logten', tsv, { generateId: FIXED_ID })
+    const entry = result.entries[0]!
+    expect(entry.registration).toBe('A16')
+    expect(entry.aircraftMakeModel).toBe('E170')
+    expect(entry.aircraftCategoryClass).toBe('AMEL')
+    expect(entry.flightTime.total).toBe(0.8)
+    expect(entry.flightTime.pic).toBe(1.3)
+    expect(entry.flightTime.sic).toBe(12.1)
+    expect(entry.flightTime.night).toBe(0.8)
+    expect(entry.flightTime.atd).toBe(1.3)
+    expect(entry.performance.dayLandings).toBe(1)
+    expect(result.records[0]!.totalDuration).toBe(0.8)
+  })
+
+  it('parses ForeFlight H:MM totals and custom hour tags', () => {
+    const csv = [
+      'AircraftID,Make,Model,Category / Class',
+      'N172SP,Cessna,172S,ASEL',
+      '',
+      'Date,AircraftID,From,To,TotalTime,PIC,[Hours]135 XC Time',
+      '2024-06-13,N172SP,KIND,KORD,0:48,0:48,0:48',
+    ].join('\n')
+
+    const result = parseWithProvider('foreflight', csv, { generateId: FIXED_ID })
+    expect(result.entries[0]!.flightTime.total).toBe(0.8)
+    expect(result.entries[0]!.flightTime.pic).toBe(0.8)
+    expect(result.entries[0]!.tags).toContain('135 XC')
+  })
+
+  it('infers ForeFlight jet type codes as AMEL when FAA class is blank', () => {
+    const csv = [
+      'AircraftID,TypeCode,Make,Model',
+      'N430YX,E170,Embraer,175',
+      '',
+      'Date,AircraftID,From,To,TotalTime,PIC',
+      '2024-06-13,N430YX,KLGA,KDCA,1.2,1.2',
+    ].join('\n')
+
+    const result = parseWithProvider('foreflight', csv, { generateId: FIXED_ID })
+    expect(result.entries[0]!.aircraftCategoryClass).toBe('AMEL')
+    expect(result.entries[0]!.aircraftMakeModel.toLowerCase()).toContain('embraer')
+  })
+
+  it('parses MyFlightbook H:MM totals and keeps landing counts whole', () => {
+    const csv = [
+      'Date,Tail Number,Model,Total Flight Time,Route,PIC,Landings',
+      '6/13/2024,N172SP,C-172,0:48,KIND KORD,0:48,2',
+    ].join('\n')
+
+    const result = parseWithProvider('myflightbook', csv, { generateId: FIXED_ID })
+    expect(result.entries[0]!.flightTime.total).toBe(0.8)
+    expect(result.entries[0]!.flightTime.pic).toBe(0.8)
+    expect(result.entries[0]!.performance.dayLandings).toBe(2)
+  })
+
+  it('parses generic CSV H:MM totals', () => {
+    const csv = [
+      'Date,Aircraft ID,Total Time,PIC,Departure,Destination',
+      '2024-06-13,N12345,0:48,1:17,KPAE,KBFI',
+    ].join('\n')
+
+    const result = parseWithProvider('custom_csv', csv, { generateId: FIXED_ID })
+    expect(result.entries[0]!.flightTime.total).toBe(0.8)
+    expect(result.entries[0]!.flightTime.pic).toBe(1.3)
+  })
 })

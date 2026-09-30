@@ -7,6 +7,7 @@ import {
 import {
   formatRegistrationForExport,
   normalizeImportNumber,
+  parseImportDuration,
 } from '../../logbookDataBridge/formatters'
 import type { LogEntry } from '../../../app/utils/logbookTypes'
 import { createBridgeBackedImporter } from './baseDriver'
@@ -207,7 +208,7 @@ function applyCustomHourTags(
 
   for (const header of headerSet) {
     if (!/^\[Hours\]/i.test(header.trim())) continue
-    const hours = normalizeImportNumber(findFieldValue(raw, [header]) || raw[header])
+    const hours = parseImportDuration(findFieldValue(raw, [header]) || raw[header])
     if (hours == null || hours <= 0) continue
     const label = customHourTagLabel(header)
     if (!label) continue
