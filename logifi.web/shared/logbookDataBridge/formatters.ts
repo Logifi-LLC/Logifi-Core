@@ -220,6 +220,117 @@ export function normalizeImportNumber(
   return rounded >= 0 ? rounded : null
 }
 
+const IMPORT_CLOCK_DURATION_RE = /^(\d+)\s*([:+])\s*(\d{1,2})$/
+/** Raw H:MM / H+MM cells. Two minute digits, matching the preview check. */
+const RAW_CLOCK_DURATION_CELL_RE = /^\d+[:+]\d{2}$/
+
+/**
+ * Clock columns that look like H:MM but are times of day, not durations.
+ * Kept out of the truncation warning so Out/In 12:16 does not trip it.
+ */
+const NON_DURATION_CLOCK_KEYS = new Set([
+  'out',
+  'off',
+  'on',
+  'in',
+  'flight_actualdeparturetime',
+  'flight_actualarrivaltime',
+  'flight_takeofftime',
+  'flight_landingtime',
+  'flight_taxiouttime',
+  'flight_taxiintime',
+  'flight_takeofftime_zulu',
+  'flight_landingtime_zulu',
+  'timeout',
+  'timeoff',
+  'timeon',
+  'timein',
+  'time out',
+  'time off',
+  'time on',
+  'time in',
+])
+
+function roundImportHours(value: number): number | null {
+  if (!Number.isFinite(value) || value < 0) return null
+  return Math.round(value * 10) / 10
+}
+
+/**
+ * Shared duration reader for every import path.
+ * Accepts H:MM, HH:MM, H+MM, and decimals. Minutes >= 60 are rejected.
+ * Empty is null. Rounded to 0.1 like other imported hours.
+ */
+export function parseImportDuration(
+  value: number | null | string | undefined
+): number | null {
+  if (typeof value === 'number') return roundImportHours(value)
+  if (value === null || value === undefined) return null
+
+  const trimmed = String(value).trim()
+  if (!trimmed) return null
+
+  const clock = trimmed.match(IMPORT_CLOCK_DURATION_RE)
+  if (clock) {
+    const hours = Number(clock[1])
+    const minutes = Number(clock[3])
+    if (minutes >= 60) return null
+    return roundImportHours(hours + minutes / 60)
+  }
+
+  const numeric = trimmed.replace(/,/g, '')
+  if (!/^(\d+(\.\d*)?|\.\d+)$/.test(numeric)) return null
+  return roundImportHours(parseFloat(numeric))
+}
+
+export function isRawClockDurationCell(value: unknown): boolean {
+  return RAW_CLOCK_DURATION_CELL_RE.test(String(value ?? '').trim())
+}
+
+function valueHasClockDuration(value: unknown, key: string | null): boolean {
+  if (key && NON_DURATION_CLOCK_KEYS.has(key.trim().toLowerCase())) return false
+  if (typeof value === 'string' || typeof value === 'number') {
+    return isRawClockDurationCell(value)
+  }
+  if (Array.isArray(value)) {
+    return value.some((item) => valueHasClockDuration(item, key))
+  }
+  if (value && typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>).some(([childKey, child]) =>
+      valueHasClockDuration(child, childKey)
+    )
+  }
+  return false
+}
+
+export function rowHasClockDuration(row: Record<string, unknown>): boolean {
+  return valueHasClockDuration(row, null)
+}
+
+export function detectImportDurationFormat(
+  rows: Record<string, unknown>[]
+): 'h:mm' | 'decimal' {
+  return rows.some(rowHasClockDuration) ? 'h:mm' : 'decimal'
+}
+
+/**
+ * Warn when the file contains H:MM duration cells but every parsed duration
+ * is still a whole number (the parseFloat truncation bug).
+ */
+export function clockDurationTruncationWarning(
+  rows: Record<string, unknown>[],
+  parsedDurations: Array<number | null | undefined>
+): string | null {
+  if (!rows.some(rowHasClockDuration)) return null
+  const values = parsedDurations.filter(
+    (n): n is number => typeof n === 'number' && Number.isFinite(n)
+  )
+  if (values.length === 0) return null
+  const allWhole = values.every((n) => Math.abs(n - Math.round(n)) < 1e-6)
+  if (!allWhole) return null
+  return 'This file has H:MM durations, but every parsed duration is a whole number. Fractions may have been dropped.'
+}
+
 /** MyFlightbook exports Hold as "Yes"/blank; ForeFlight uses numeric Holds. */
 export function normalizeImportHoldCount(
   value: number | null | string | undefined | boolean

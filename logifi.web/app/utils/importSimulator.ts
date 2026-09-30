@@ -1,6 +1,7 @@
 import type { LogEntry } from './logbookTypes'
 import { isTrainingDevice, mapCategoryTo8710 } from './form8710Types'
 import { getCatalogSimDeviceType } from './simDeviceCatalog'
+import { parseImportDuration } from '../../shared/logbookDataBridge/formatters'
 
 export type SimDeviceType = 'ffs' | 'ftd' | 'atd'
 
@@ -18,9 +19,10 @@ export interface SimImportHints {
 }
 
 function parseDecimal(value: unknown): number | null {
-  if (value === undefined || value === null || value === '') return null
-  const n = parseFloat(String(value).trim())
-  return Number.isFinite(n) && n >= 0 ? Math.round(n * 10) / 10 : null
+  if (typeof value === 'number' || typeof value === 'string' || value == null) {
+    return parseImportDuration(value)
+  }
+  return parseImportDuration(String(value))
 }
 
 function findFieldValue(rawEntry: Record<string, unknown>, possibleNames: string[]): string {
@@ -77,13 +79,18 @@ export function readSimHintsFromRawRow(raw: Record<string, unknown>): SimImportH
   ])
   const explicitLogbookType = logbookTypeStr ? parseLogbookType(logbookTypeStr) : null
 
-  const groundSimStr = findFieldValue(raw, [
-    'Ground Simulator',
-    'groundSimulator',
-    'flight_groundSimulator',
-    'Simulator Time',
-    'simulator time',
-  ])
+  const simulatorHours = parseDecimal(
+    findFieldValue(raw, ['flight_simulator', 'Flight Simulator'])
+  )
+  const namedGroundSim = parseDecimal(
+    findFieldValue(raw, [
+      'Ground Simulator',
+      'groundSimulator',
+      'flight_groundSimulator',
+      'Simulator Time',
+      'simulator time',
+    ])
+  )
 
   const ffs =
     parseDecimal(findFieldValue(raw, ['FFS', 'ffs', 'flight_ffs', 'Full Flight Simulator'])) ??
@@ -95,15 +102,39 @@ export function readSimHintsFromRawRow(raw: Record<string, unknown>): SimImportH
     parseDecimal(findFieldValue(raw, ['ATD', 'atd', 'flight_atd', 'Aviation Training Device'])) ??
     readNestedFlightTime(raw, 'atd')
 
-  const simulatorCellValue = findFieldValue(raw, ['Simulator', 'simulator', 'SIMULATOR'])
+  const simulatorCellRaw = findFieldValue(raw, ['Simulator', 'simulator', 'SIMULATOR'])
+  const simulatorCellHours = parseDecimal(simulatorCellRaw)
+  const simulatorCellIsDuration =
+    simulatorCellHours != null && /^\d/.test(simulatorCellRaw.trim())
+  const simulatorCellValue = simulatorCellIsDuration ? '' : simulatorCellRaw
+
+  // flight_ground is ground instruction on airplane rows and sim time on sim-only rows.
+  const flightGroundHours = parseDecimal(findFieldValue(raw, ['flight_ground', 'Flight Ground']))
+  const airplaneTotal = parseDecimal(
+    findFieldValue(raw, [
+      'flight_totalTime',
+      'Total Flight Time',
+      'TotalTime',
+      'Total Time',
+      'total',
+    ])
+  )
+  const flightGroundIsSim =
+    flightGroundHours != null &&
+    flightGroundHours > 0 &&
+    (airplaneTotal == null || airplaneTotal <= 0)
+
+  const groundSimTime =
+    (simulatorHours != null && simulatorHours > 0 ? simulatorHours : null) ??
+    (namedGroundSim != null && namedGroundSim > 0 ? namedGroundSim : null) ??
+    (simulatorCellIsDuration && (simulatorCellHours ?? 0) > 0 ? simulatorCellHours : null) ??
+    (flightGroundIsSim ? flightGroundHours : null)
 
   let simDeviceType: SimDeviceType | null = null
   if (ffs != null && ffs > 0) simDeviceType = 'ffs'
   else if (ftd != null && ftd > 0) simDeviceType = 'ftd'
   else if (atd != null && atd > 0) simDeviceType = 'atd'
   else simDeviceType = parseSimDeviceType(simulatorCellValue)
-
-  const groundSimTime = parseDecimal(groundSimStr)
 
   const isSimulator =
     explicitLogbookType === 'simulator' ||

@@ -55,6 +55,38 @@ describe('importSimulator', () => {
       expect(hints.isSimulator).toBe(true)
     })
 
+    it('reads LogTen flight_simulator H:MM as sim time', () => {
+      const hints = readSimHintsFromRawRow({ flight_simulator: '0:48' })
+      expect(hints.groundSimTime).toBe(0.8)
+      expect(hints.isSimulator).toBe(true)
+    })
+
+    it('reads a Simulator column when the cell is a duration', () => {
+      const hints = readSimHintsFromRawRow({ Simulator: '1:17' })
+      expect(hints.groundSimTime).toBe(1.3)
+      expect(hints.isSimulator).toBe(true)
+      expect(hints.simulatorCellValue).toBeUndefined()
+    })
+
+    it('keeps a Simulator device name for device type', () => {
+      const hints = readSimHintsFromRawRow({ Simulator: 'FFS' })
+      expect(hints.simDeviceType).toBe('ffs')
+      expect(hints.groundSimTime).toBeNull()
+    })
+
+    it('uses flight_ground only when the row has no airplane total', () => {
+      const simOnly = readSimHintsFromRawRow({ flight_ground: '0:48' })
+      expect(simOnly.groundSimTime).toBe(0.8)
+      expect(simOnly.isSimulator).toBe(true)
+
+      const airplane = readSimHintsFromRawRow({
+        flight_ground: '1:00',
+        flight_totalTime: '2:30',
+      })
+      expect(airplane.groundSimTime).toBeNull()
+      expect(airplane.isSimulator).toBeFalsy()
+    })
+
     it('reads FFS/FTD/ATD columns', () => {
       const hints = readSimHintsFromRawRow({
         ATD: '1.5',

@@ -1,6 +1,6 @@
 import type { LogEntry } from '../../app/utils/logbookTypes'
-import { normalizeImportNumber } from './formatters'
-import { findFieldValue } from './importMappers'
+import { normalizeImportNumber, parseImportDuration } from './formatters'
+import { findFieldValue, inferCategoryClassFromAircraftHints } from './importMappers'
 
 /** Column names from LogTen Dynamic Export (Tab) airline templates. */
 export const LOGTEN_DYNAMIC_EXPORT_HEADERS = [
@@ -111,13 +111,21 @@ export function enrichLogtenDynamicExportRow(
   }
 
   if (!entry.aircraftCategoryClass?.trim()) {
-    const melTime = normalizeImportNumber(
+    const melTime = parseImportDuration(
       findFieldValue(rawEntry, ['Multi-Engine Land', 'multi-engine land'])
     )
-    const jetTime = normalizeImportNumber(findFieldValue(rawEntry, ['Jet', 'jet']))
+    const jetTime = parseImportDuration(findFieldValue(rawEntry, ['Jet', 'jet']))
     if ((melTime ?? 0) > 0 || (jetTime ?? 0) > 0) {
       entry.aircraftCategoryClass = 'AMEL'
     }
+  }
+
+  if (!entry.aircraftCategoryClass?.trim()) {
+    const inferred = inferCategoryClassFromAircraftHints(
+      findFieldValue(rawEntry, ['Aircraft Type', 'aircraft type', 'Type', 'aircraftType_type']),
+      entry.aircraftMakeModel
+    )
+    if (inferred) entry.aircraftCategoryClass = inferred
   }
 
   const dayLdg = normalizeImportNumber(findFieldValue(rawEntry, ['Day Ldg', 'day ldg']))
@@ -140,7 +148,7 @@ export function enrichLogtenDynamicExportRow(
     entry.performance.nightTakeoffs = nightTo
   }
 
-  const actualInst = normalizeImportNumber(
+  const actualInst = parseImportDuration(
     findFieldValue(rawEntry, ['Actual Inst', 'actual inst'])
   )
   if (actualInst !== null && actualInst > 0) {
@@ -175,7 +183,7 @@ export function applyLogtenDynamicRoleAndTime(
   const pilotFlying = findFieldValue(rawEntry, ['Pilot Flying', 'pilot flying'])
   const userName = (pilotName || '').trim()
 
-  const sicTimeFromExport = normalizeImportNumber(
+  const sicTimeFromExport = parseImportDuration(
     findFieldValue(rawEntry, ['SIC', 'sic', 'flight_sic'])
   )
 

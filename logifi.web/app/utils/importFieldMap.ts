@@ -1,5 +1,7 @@
 /** Case-insensitive CSV/JSON column alias resolution for logbook import. */
 
+import { parseImportDuration } from '../../shared/logbookDataBridge/formatters'
+
 export type ImportNumericField =
   | 'total'
   | 'pic'
@@ -76,6 +78,10 @@ const NUMERIC_FIELD_ALIASES: Record<ImportNumericField, string[]> = {
 
 const AIRCRAFT_MAKE_MODEL_ALIASES = [
   'aircraftType_model',
+  'aircraftType_selectedModel',
+  'aircraftType_type',
+  'aircraft_aircraftType',
+  'flight_selectedAircraftType',
   'Aircraft Make/Model',
   'aircraft make/model',
   'Aircraft Type',
@@ -113,10 +119,10 @@ export function findImportFieldValue(
 }
 
 function parseImportDecimal(value: unknown): number | null {
-  if (value === undefined || value === null || value === '') return null
-  const n = parseFloat(String(value).trim())
-  if (!Number.isFinite(n) || n < 0) return null
-  return Math.round(n * 10) / 10
+  if (typeof value === 'number' || typeof value === 'string' || value == null) {
+    return parseImportDuration(value)
+  }
+  return parseImportDuration(String(value))
 }
 
 /** Resolve a numeric import field from aliases; returns null when absent or invalid. */
@@ -138,12 +144,28 @@ export function resolveImportNumber(
 }
 
 export function resolveImportAircraftMakeModel(rawEntry: Record<string, unknown>): string {
-  const direct = findImportFieldValue(rawEntry, AIRCRAFT_MAKE_MODEL_ALIASES)
-  if (direct) return direct
-  const make = findImportFieldValue(rawEntry, ['aircraftType_make'])
-  const model = findImportFieldValue(rawEntry, ['aircraftType_model'])
+  const make = findImportFieldValue(rawEntry, ['aircraftType_make', 'Make', 'make'])
+  const model = findImportFieldValue(rawEntry, [
+    'aircraftType_model',
+    'aircraftType_selectedModel',
+    'Model',
+    'model',
+  ])
+  const typeCode = findImportFieldValue(rawEntry, [
+    'aircraftType_type',
+    'aircraft_aircraftType',
+    'flight_selectedAircraftType',
+    'Aircraft Type',
+    'aircraft type',
+    'Type',
+    'type',
+  ])
   if (make && model) return `${make} ${model}`.trim()
-  return ''
+  if (model) return model
+  if (make && typeCode) return `${make} ${typeCode}`.trim()
+  if (typeCode) return typeCode
+  if (make) return make
+  return findImportFieldValue(rawEntry, AIRCRAFT_MAKE_MODEL_ALIASES)
 }
 
 const TRAINING_DEVICE_NAME_PATTERN =

@@ -5847,6 +5847,21 @@
 
         <!-- Content - Scrollable -->
         <div class="flex-1 overflow-y-auto p-6 space-y-6">
+          <div v-if="importPreviewMetadata.bridgeWarnings?.length">
+            <h4 :class="['text-sm font-semibold font-quicksand mb-2', isDarkMode ? 'text-gray-300' : 'text-gray-700']">
+              Notes
+            </h4>
+            <ul class="space-y-1">
+              <li
+                v-for="(warning, index) in importPreviewMetadata.bridgeWarnings"
+                :key="index"
+                :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']"
+              >
+                {{ warning }}
+              </li>
+            </ul>
+          </div>
+
           <!-- Summary Statistics -->
           <div>
             <h4 :class="['text-lg font-semibold font-quicksand mb-4', isDarkMode ? 'text-white' : 'text-gray-900']">
@@ -6889,7 +6904,16 @@ import {
   EXPORT_DESTINATION_HINTS,
   EXPORT_DESTINATION_LABELS,
 } from '../../shared/logbookDataBridge/types'
-import { findFieldValue, mapRawRowToLogEntry } from '../../shared/logbookDataBridge/importMappers'
+import {
+  findFieldValue,
+  inferCategoryClassFromAircraftHints,
+  mapRawRowToLogEntry,
+} from '../../shared/logbookDataBridge/importMappers'
+import {
+  clockDurationTruncationWarning,
+  detectImportDurationFormat,
+  parseImportDuration,
+} from '../../shared/logbookDataBridge/formatters'
 import { applyLogtenCrewFields } from '../utils/logbookImportEnrichments'
 import { parseBridgeFile } from '../../shared/logbookDataBridge/fileParser'
 import {
@@ -10363,6 +10387,7 @@ interface ImportMetadata {
   importedAt: string
   detectedSource?: string
   selectedProvider?: string | null
+  durationFormat?: 'h:mm' | 'decimal' | null
   bridgeWarnings?: string[]
 }
 
@@ -11275,6 +11300,21 @@ async function normalizeImportedEntry(
       enrichLogtenDynamicExportRow(entry, rawEntry, importerName)
     }
 
+    if (!entry.aircraftCategoryClass?.trim()) {
+      const inferred = inferCategoryClassFromAircraftHints(
+        findFieldValue(rawEntry, [
+          'aircraftType_type',
+          'aircraft_aircraftType',
+          'flight_selectedAircraftType',
+          'Aircraft Type',
+          'aircraft type',
+          'Type',
+        ]),
+        entry.aircraftMakeModel
+      )
+      if (inferred) entry.aircraftCategoryClass = inferred
+    }
+
     // Reset total for LogTen OOOI-derived block time (calculated below)
     const hasLogtenNativeKeys = !!findFieldValue(rawEntry, [
       'flight_flightDate',
@@ -11661,7 +11701,10 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
         fileType: importPreviewMetadata.value?.fileType,
         dateRange,
         aircraftList,
-        importedAt: new Date().toISOString()
+        importedAt: new Date().toISOString(),
+        detectedSource: importPreviewMetadata.value?.detectedSource ?? null,
+        selectedProvider: importPreviewMetadata.value?.selectedProvider ?? null,
+        durationFormat: importPreviewMetadata.value?.durationFormat ?? null,
       }
       
       const { data: batch, error: batchError } = await (supabase
@@ -12156,13 +12199,20 @@ async function processCSVFile(file: File, provider?: ImportProviderKey): Promise
     importPreviewAllEntries.value = entries
     importPreviewEntries.value = [...validEntries, ...errors.map((e) => e.entry)]
     importPreviewStatistics.value = statistics
+    const durationFormat = detectImportDurationFormat(parsed.rows)
+    const truncationWarning = clockDurationTruncationWarning(
+      parsed.rows,
+      parsedEntryDurations(entries)
+    )
     importPreviewMetadata.value = {
       fileName: file.name,
       fileType: parsed.delimiter === '\t' ? 'TSV' : 'CSV',
       importedAt: new Date().toISOString(),
       detectedSource: parsed.source,
       selectedProvider: provider ?? null,
+      durationFormat,
       bridgeWarnings: [
+        ...(truncationWarning ? [truncationWarning] : []),
         ...(parsed.skippedAircraftRows > 0
           ? [`Skipped ${parsed.skippedAircraftRows} aircraft table row(s)`]
           : []),
@@ -12240,10 +12290,18 @@ async function processJSONFile(file: File): Promise<void> {
     importPreviewAllEntries.value = normalizedEntries
     importPreviewEntries.value = [...validEntries, ...errors.map(e => e.entry)]
     importPreviewStatistics.value = statistics
+    const durationFormat = detectImportDurationFormat(entries)
+    const truncationWarning = clockDurationTruncationWarning(
+      entries,
+      parsedEntryDurations(normalizedEntries)
+    )
     importPreviewMetadata.value = {
       fileName: file.name,
       fileType: 'JSON',
-      importedAt: new Date().toISOString()
+      importedAt: new Date().toISOString(),
+      detectedSource: 'json',
+      durationFormat,
+      bridgeWarnings: truncationWarning ? [truncationWarning] : [],
     }
     importDuplicatesFlagged.value = false
     showImportPreview.value = true
@@ -14728,27 +14786,34 @@ async function validateEntryForImport(entry: LogEntry): Promise<string | null> {
 }
 
 function normalizeNumber(value: number | null | string | undefined): number | null {
-  // Handle string values (convert to number)
-  if (typeof value === 'string') {
-    const parsed = parseFloat(value)
-    if (isNaN(parsed) || !isFinite(parsed)) {
-      return null
+  return parseImportDuration(value)
+}
+
+function parsedEntryDurations(entries: LogEntry[]): number[] {
+  const values: number[] = []
+  for (const entry of entries) {
+    const ft = entry.flightTime
+    for (const value of [
+      ft?.total,
+      ft?.pic,
+      ft?.sic,
+      ft?.dual,
+      ft?.solo,
+      ft?.night,
+      ft?.nvg,
+      ft?.actualInstrument,
+      ft?.simulatedInstrument,
+      ft?.crossCountry,
+      ft?.dualGiven,
+      ft?.ffs,
+      ft?.ftd,
+      ft?.atd,
+      entry.categoryClassTime,
+    ]) {
+      if (typeof value === 'number' && Number.isFinite(value)) values.push(value)
     }
-    value = parsed
   }
-  
-  if (value === null || value === undefined || Number.isNaN(value)) {
-    return null
-  }
-  
-  // Ensure it's a number
-  const num = typeof value === 'number' ? value : Number(value)
-  if (isNaN(num) || !isFinite(num)) {
-    return null
-  }
-  
-  const rounded = Math.round(num * 10) / 10
-  return rounded >= 0 ? rounded : null
+  return values
 }
 
 /**
