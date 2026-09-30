@@ -2,9 +2,12 @@ import { describe, it, expect } from 'vitest'
 import {
   buildForeFlightRouteIntermediate,
   buildFullRoute,
+  clockDurationTruncationWarning,
+  detectImportDurationFormat,
   formatExportDate,
   formatRegistrationForExport,
   parseImportDate,
+  parseImportDuration,
 } from '../logbookDataBridge/formatters'
 import {
   FOREFLIGHT_FLIGHT_HEADERS,
@@ -16,7 +19,10 @@ import {
   mapEntryToLogifiNativeRow,
   mapEntryToMyFlightbookRow,
 } from '../logbookDataBridge/exportMappers'
-import { mapRawRowToLogEntry } from '../logbookDataBridge/importMappers'
+import {
+  inferCategoryClassFromAircraftHints,
+  mapRawRowToLogEntry,
+} from '../logbookDataBridge/importMappers'
 import {
   buildHeaderRowObject,
   exportToForeFlight,
@@ -159,6 +165,55 @@ function createTestEntry(overrides: Partial<LogEntry> = {}): LogEntry {
     ...overrides,
   }
 }
+
+describe('parseImportDuration', () => {
+  it('parses H:MM, H+MM, and decimals, and rejects minutes over 59', () => {
+    expect(parseImportDuration('0:48')).toBe(0.8)
+    expect(parseImportDuration('1:17')).toBe(1.3)
+    expect(parseImportDuration('12:05')).toBe(12.1)
+    expect(parseImportDuration('1+30')).toBe(1.5)
+    expect(parseImportDuration('0.8')).toBe(0.8)
+    expect(parseImportDuration(' 1 : 17 ')).toBe(1.3)
+    expect(parseImportDuration('')).toBeNull()
+    expect(parseImportDuration('   ')).toBeNull()
+    expect(parseImportDuration('1:60')).toBeNull()
+    expect(parseImportDuration(null)).toBeNull()
+  })
+})
+
+describe('category class inference', () => {
+  it('maps jet and airliner type codes to AMEL and leaves unknown types blank', () => {
+    expect(inferCategoryClassFromAircraftHints('E170', '')).toBe('AMEL')
+    expect(inferCategoryClassFromAircraftHints('E175', '')).toBe('AMEL')
+    expect(inferCategoryClassFromAircraftHints('E75L', '')).toBe('AMEL')
+    expect(inferCategoryClassFromAircraftHints('E190', '')).toBe('AMEL')
+    expect(inferCategoryClassFromAircraftHints('ERJ-175', '')).toBe('AMEL')
+    expect(inferCategoryClassFromAircraftHints('', 'EMB-175')).toBe('AMEL')
+    expect(inferCategoryClassFromAircraftHints('', 'Embraer 190')).toBe('AMEL')
+    expect(inferCategoryClassFromAircraftHints('CRJ-900', '')).toBe('AMEL')
+    expect(inferCategoryClassFromAircraftHints('CL-65', '')).toBe('AMEL')
+    expect(inferCategoryClassFromAircraftHints('B737', '')).toBe('AMEL')
+    expect(inferCategoryClassFromAircraftHints('A320', '')).toBe('AMEL')
+    expect(inferCategoryClassFromAircraftHints('DC-9', '')).toBe('AMEL')
+    expect(inferCategoryClassFromAircraftHints('MD-88', '')).toBe('AMEL')
+    expect(inferCategoryClassFromAircraftHints('DA42', '')).toBe('AMEL')
+    expect(inferCategoryClassFromAircraftHints('R22', '')).toBe('HELI')
+    expect(inferCategoryClassFromAircraftHints('C172', '')).toBe('')
+    expect(inferCategoryClassFromAircraftHints('', 'SR20')).toBe('')
+    expect(inferCategoryClassFromAircraftHints('', '')).toBe('')
+  })
+})
+
+describe('import duration preview warning', () => {
+  it('warns only when H:MM cells survive as whole hours', () => {
+    const rows = [{ flight_totalTime: '0:48', flight_pic: '1:17', Out: '12:16' }]
+    expect(detectImportDurationFormat(rows)).toBe('h:mm')
+    expect(clockDurationTruncationWarning(rows, [0.8, 1.3])).toBeNull()
+    expect(clockDurationTruncationWarning(rows, [0, 1])).toMatch(/whole number/i)
+    expect(clockDurationTruncationWarning([{ Out: '12:16', flight_totalTime: '1.5' }], [1.5])).toBeNull()
+    expect(detectImportDurationFormat([{ flight_totalTime: '1.5' }])).toBe('decimal')
+  })
+})
 
 describe('logbookDataBridge formatters', () => {
   it('prepends N to US bare tail numbers', () => {
@@ -471,6 +526,75 @@ describe('logbookDataBridge importMappers', () => {
     expect(parseLogtenApproach1('1;01;KDCA')).toEqual({ count: 1, type: '01' })
     expect(parseLogtenApproach1('1;30R;KSTL')).toEqual({ count: 1, type: '30R' })
     expect(parseLogtenApproach1('')).toBeNull()
+  })
+
+  it('keeps LogTen H:MM durations and reads a blank-make E170 as AMEL', () => {
+    const row = {
+      flight_flightDate: '2025-11-11',
+      flight_from: 'KLGA',
+      flight_to: 'KDCA',
+      aircraft_aircraftID: 'A16',
+      aircraftType_type: 'E170',
+      aircraftType_make: '',
+      aircraftType_model: '',
+      flight_totalTime: '0:48',
+      flight_pic: '1:17',
+      flight_sic: '12:05',
+      flight_night: '0:48',
+      flight_simulator: '1:17',
+      flight_dayLandings: '1',
+    }
+    const entry = mapRawRowToLogEntry(row, { source: 'logten' })
+    expect(entry).not.toBeNull()
+    expect(entry?.registration).toBe('A16')
+    expect(entry?.aircraftMakeModel).toBe('E170')
+    expect(entry?.aircraftCategoryClass).toBe('AMEL')
+    expect(entry?.flightTime.total).toBe(0.8)
+    expect(entry?.flightTime.pic).toBe(1.3)
+    expect(entry?.flightTime.sic).toBe(12.1)
+    expect(entry?.flightTime.night).toBe(0.8)
+    expect(entry?.performance.dayLandings).toBe(1)
+  })
+
+  it('reads LogTen type from aircraft_aircraftType and flight_selectedAircraftType', () => {
+    const fromAircraftType = mapRawRowToLogEntry(
+      {
+        flight_flightDate: '2025-11-11',
+        flight_from: 'KLGA',
+        flight_to: 'KDCA',
+        aircraft_aircraftID: 'A37',
+        aircraft_aircraftType: 'E175',
+        flight_totalTime: '1:00',
+      },
+      { source: 'logten' }
+    )
+    expect(fromAircraftType?.aircraftMakeModel).toBe('E175')
+    expect(fromAircraftType?.aircraftCategoryClass).toBe('AMEL')
+
+    const fromExportKey = mapRawRowToLogEntry(
+      {
+        date: '2025-11-12',
+        flight_selectedAircraftID: 'N430YX',
+        flight_selectedAircraftType: 'E190',
+        flight_totalTime: '0:48',
+      },
+      { source: 'logten' }
+    )
+    expect(fromExportKey?.registration).toBe('N430YX')
+    expect(fromExportKey?.aircraftMakeModel).toBe('E190')
+    expect(fromExportKey?.flightTime.total).toBe(0.8)
+  })
+
+  it('parses native JSON flightTime H:MM strings', () => {
+    const entry = mapRawRowToLogEntry({
+      date: '2024-06-13',
+      registration: 'N172SP',
+      departure: 'KIND',
+      destination: 'KORD',
+      flightTime: { total: '0:48', pic: '0:48' },
+    })
+    expect(entry?.flightTime.total).toBe(0.8)
+    expect(entry?.flightTime.pic).toBe(0.8)
   })
 
   it('maps LogTen native export row with flight_pic and approach', () => {

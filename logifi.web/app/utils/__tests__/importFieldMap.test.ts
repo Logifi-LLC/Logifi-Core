@@ -10,6 +10,7 @@ describe('importFieldMap', () => {
   it('resolves Total and Turbine aliases for total time', () => {
     expect(resolveImportNumber({ Total: '1.3' }, 'total')).toBe(1.3)
     expect(resolveImportNumber({ Turbine: '2.0' }, 'total')).toBe(2)
+    expect(resolveImportNumber({ flight_totalTime: '0:48' }, 'total')).toBe(0.8)
   })
 
   it('resolves Actual and Hood aliases for instrument time', () => {
@@ -24,6 +25,9 @@ describe('importFieldMap', () => {
 
   it('resolves Aircraft Type for make/model', () => {
     expect(resolveImportAircraftMakeModel({ 'Aircraft Type': 'UH-60L' })).toBe('UH-60L')
+    expect(
+      resolveImportAircraftMakeModel({ aircraftType_type: 'E170', aircraftType_make: '' })
+    ).toBe('E170')
   })
 
   it('infers Dual Received from dual time when role missing', () => {

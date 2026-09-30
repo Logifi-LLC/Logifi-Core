@@ -1,4 +1,5 @@
 import type { LogEntry } from '../../../app/utils/logbookTypes'
+import { applySimulatorImport, readSimHintsFromRawRow } from '../../../app/utils/importSimulator'
 import { parseBridgeFile } from '../../logbookDataBridge/fileParser'
 import { mapRawRowToLogEntry } from '../../logbookDataBridge/importMappers'
 import {
@@ -85,6 +86,7 @@ export function createBridgeBackedImporter(options: {
         }
 
         entry.importSource = bridgeSource
+        applySimulatorImport(entry, readSimHintsFromRawRow(row))
         entries.push(entry)
         acceptedRawRows.push(row)
       }

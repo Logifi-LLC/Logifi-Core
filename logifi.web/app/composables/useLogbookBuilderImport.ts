@@ -41,15 +41,21 @@ import {
 } from '~/utils/importSimulator'
 import { sanitizeFlightConditions } from '~/utils/flightConditions'
 import { normalizeDigifiDateCell } from '~/utils/digifiDateNormalize'
+import {
+  normalizeImportNumber,
+  parseImportDuration,
+} from '../../shared/logbookDataBridge/formatters'
 
 function generateEntryId(): string {
   return crypto.randomUUID?.() ?? `entry-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
-function parseDecimal(val: string | undefined): number | null {
-  if (val === undefined || val === null || val === '') return null
-  const n = parseFloat(String(val).trim())
-  return Number.isFinite(n) && n >= 0 ? Math.round(n * 10) / 10 : null
+function parseDurationCell(val: string | undefined): number | null {
+  return parseImportDuration(val)
+}
+
+function parseCountCell(val: string | undefined): number | null {
+  return normalizeImportNumber(val)
 }
 
 function parseFromTo(val: string): { departure: string; destination: string; route: string } {
@@ -177,7 +183,7 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
           const ccVal = (col as { categoryClassValue?: string }).categoryClassValue
           if (ccVal && val) {
             aircraftCategoryClass = ccVal
-            flightTime.total = parseDecimal(val) ?? flightTime.total
+            flightTime.total = parseDurationCell(val) ?? flightTime.total
           } else if (val) {
             aircraftCategoryClass = val.trim()
           }
@@ -206,43 +212,43 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
           if (val) remarks = val
           break
         case 'pic':
-          flightTime.pic = parseDecimal(val) ?? flightTime.pic
+          flightTime.pic = parseDurationCell(val) ?? flightTime.pic
           break
         case 'sic':
-          flightTime.sic = parseDecimal(val) ?? flightTime.sic
+          flightTime.sic = parseDurationCell(val) ?? flightTime.sic
           break
         case 'dualR':
-          flightTime.dual = parseDecimal(val) ?? flightTime.dual
+          flightTime.dual = parseDurationCell(val) ?? flightTime.dual
           break
         case 'solo':
-          flightTime.solo = parseDecimal(val) ?? flightTime.solo
+          flightTime.solo = parseDurationCell(val) ?? flightTime.solo
           break
         case 'night':
-          flightTime.night = parseDecimal(val) ?? flightTime.night
+          flightTime.night = parseDurationCell(val) ?? flightTime.night
           break
         case 'nvg':
-          flightTime.nvg = parseDecimal(val) ?? flightTime.nvg
+          flightTime.nvg = parseDurationCell(val) ?? flightTime.nvg
           break
         case 'actual':
-          flightTime.actualInstrument = parseDecimal(val) ?? flightTime.actualInstrument
+          flightTime.actualInstrument = parseDurationCell(val) ?? flightTime.actualInstrument
           break
         case 'hood':
-          flightTime.simulatedInstrument = parseDecimal(val) ?? flightTime.simulatedInstrument
+          flightTime.simulatedInstrument = parseDurationCell(val) ?? flightTime.simulatedInstrument
           break
         case 'dualG':
-          flightTime.dualGiven = parseDecimal(val) ?? flightTime.dualGiven
+          flightTime.dualGiven = parseDurationCell(val) ?? flightTime.dualGiven
           break
         case 'xc':
-          flightTime.crossCountry = parseDecimal(val) ?? flightTime.crossCountry
+          flightTime.crossCountry = parseDurationCell(val) ?? flightTime.crossCountry
           break
         case 'dayLandings':
-          performance.dayLandings = parseDecimal(val) ?? performance.dayLandings
+          performance.dayLandings = parseCountCell(val) ?? performance.dayLandings
           break
         case 'nightLandings':
-          performance.nightLandings = parseDecimal(val) ?? performance.nightLandings
+          performance.nightLandings = parseCountCell(val) ?? performance.nightLandings
           break
         case 'approach':
-          performance.approachCount = parseDecimal(val) ?? performance.approachCount
+          performance.approachCount = parseCountCell(val) ?? performance.approachCount
           break
         case 'approachType':
           if (val) performance.approachType = val
@@ -254,7 +260,7 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
           if (val) trainingInstructor = val
           break
         case 'total':
-          flightTime.total = parseDecimal(val) ?? flightTime.total
+          flightTime.total = parseDurationCell(val) ?? flightTime.total
           break
         default:
           break
@@ -485,7 +491,7 @@ export async function validateOnly(
       let total = 0
       for (const row of rows) {
         const val = (row.cells?.[col.id] ?? '').trim()
-        total += parseDecimal(val) ?? 0
+        total += parseDurationCell(val) ?? 0
       }
       columnTotals.push({
         fieldKey: 'total',

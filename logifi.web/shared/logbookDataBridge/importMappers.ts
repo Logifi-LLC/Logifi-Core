@@ -10,6 +10,7 @@ import {
   normalizeImportHoldCount,
   normalizeImportNumber,
   parseImportDate,
+  parseImportDuration,
   splitAirportCodes,
 } from './formatters'
 import { parseLogtenApproach1 } from './logtenDynamicExport'
@@ -41,6 +42,7 @@ export function findFieldValue(
 function findRegistration(rawEntry: Record<string, unknown>): string {
   let registration = findFieldValue(rawEntry, [
     'aircraft_aircraftID',
+    'flight_selectedAircraftID',
     'Aircraft_Registration',
     'Aircraft Registration',
     'aircraft_registration',
@@ -145,7 +147,14 @@ export function normalizeCategoryClassLabel(value: string): string {
 
 const MULTI_ENGINE_TYPE_CODES = /^(DA42|DA62|PA44|PA34|PA23|PA31|BE58|BE76|C310|C340|C402|C414|C421)/i
 
-/** Infer ASEL/AMEL from ForeFlight TypeCode or make/model when FAA class is blank. */
+/** Jets and airliners that are airplane multi-engine land. */
+const JET_AIRLINER_AMEL =
+  /\b(?:e-?170|e-?175|e-?190|e-?195|e-?75[a-z0-9]|erj(?:-?\d{2,3})?|emb-?1\d{2}|embraer|crj(?:-?\d{2,3})?|cl-?65|b-?7\d{2}|a-?3\d{2}|dc-?9\d?|md-?8\d)\b/i
+
+/**
+ * Infer category/class from type code or make/model when the FAA class is blank.
+ * Unknown types stay blank. Callers that still want a piston default decide that themselves.
+ */
 export function inferCategoryClassFromAircraftHints(
   typeCode: string,
   makeModel: string
@@ -159,11 +168,89 @@ export function inferCategoryClassFromAircraftHints(
   ) {
     return 'HELI'
   }
-  if (MULTI_ENGINE_TYPE_CODES.test(typeCode.trim()) || /\bda-?42\b|\bda-?62\b/.test(blob)) {
+  if (
+    MULTI_ENGINE_TYPE_CODES.test(typeCode.trim()) ||
+    /\bda-?42\b|\bda-?62\b/.test(blob) ||
+    JET_AIRLINER_AMEL.test(blob)
+  ) {
     return 'AMEL'
   }
-  if (typeCode.trim() || makeModel.trim()) return 'ASEL'
   return ''
+}
+
+const AIRCRAFT_MAKE_FIELDS = ['aircraftType_make', 'Make', 'make']
+
+const AIRCRAFT_MODEL_FIELDS = [
+  'aircraftType_model',
+  'aircraftType_selectedModel',
+  'Model',
+  'model',
+  'Aircraft Make/Model',
+  'aircraft make/model',
+]
+
+const AIRCRAFT_TYPE_CODE_FIELDS = [
+  'aircraftType_type',
+  'aircraft_aircraftType',
+  'flight_selectedAircraftType',
+  'Aircraft Type',
+  'aircraft type',
+  'Type',
+  'type',
+]
+
+/** Make/model from whichever LogTen (or generic) aircraft columns are present. Type code wins when make and model are blank. */
+export function resolveAircraftMakeModel(rawEntry: Record<string, unknown>): string {
+  const make = findFieldValue(rawEntry, AIRCRAFT_MAKE_FIELDS)
+  const model = findFieldValue(rawEntry, AIRCRAFT_MODEL_FIELDS)
+  const typeCode = findFieldValue(rawEntry, AIRCRAFT_TYPE_CODE_FIELDS)
+
+  let label = ''
+  if (make && model) label = `${make} ${model}`.trim()
+  else if (model) label = model
+  else if (make && typeCode) label = `${make} ${typeCode}`.trim()
+  else if (typeCode) label = typeCode
+  else if (make) label = make
+
+  return extractBaseModelName(label)
+}
+
+const NESTED_DURATION_KEYS = [
+  'total',
+  'pic',
+  'sic',
+  'dual',
+  'solo',
+  'night',
+  'nvg',
+  'actualInstrument',
+  'simulatedInstrument',
+  'crossCountry',
+  'dualGiven',
+  'ffs',
+  'ftd',
+  'atd',
+] as const
+
+/** JSON / native Logifi rows often carry hours on flightTime.* rather than flat columns. */
+function applyNestedDurationFields(
+  entry: LogEntry,
+  rawEntry: Record<string, unknown>
+): void {
+  const nested = rawEntry.flightTime
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+    const ft = nested as Record<string, unknown>
+    for (const key of NESTED_DURATION_KEYS) {
+      if (entry.flightTime[key] != null) continue
+      const parsed = parseImportDuration(ft[key] as number | string | null | undefined)
+      if (parsed != null) entry.flightTime[key] = parsed
+    }
+  }
+  if (entry.categoryClassTime == null && rawEntry.categoryClassTime != null) {
+    entry.categoryClassTime = parseImportDuration(
+      rawEntry.categoryClassTime as number | string | null | undefined
+    )
+  }
 }
 
 function extractBaseModelName(model: string): string {
@@ -251,7 +338,9 @@ const SIC_NAME_FIELDS = [
 ]
 
 function looksLikeHoursToken(value: string): boolean {
-  return /^\d+(\.\d+)?$/.test(value.trim())
+  const trimmed = value.trim()
+  if (/^\d+(\.\d+)?$/.test(trimmed)) return true
+  return /^\d{1,3}[:+]\d{2}$/.test(trimmed)
 }
 
 function normalizeCrewName(value: string): string | null {
@@ -421,16 +510,16 @@ export function mapRawRowToLogEntry(
 
   const { departure, destination, route } = parseRouteFields(rawEntry)
   const picTime =
-    normalizeImportNumber(
+    parseImportDuration(
       findFieldValue(rawEntry, ['flight_pic', 'PIC', 'pic', 'PilotInCommand']) ||
         rawEntry.flight_pic ||
         rawEntry.PIC
     ) ?? 0
   const sicTime =
-    normalizeImportNumber(
+    parseImportDuration(
       findFieldValue(rawEntry, ['flight_sic', 'SIC', 'sic']) || rawEntry.flight_sic
     ) ?? 0
-  const dualReceivedTime = normalizeImportNumber(
+  const dualReceivedTime = parseImportDuration(
     findFieldValue(rawEntry, [
       'flight_dualReceived',
       'DualReceived',
@@ -438,7 +527,7 @@ export function mapRawRowToLogEntry(
       'dual',
     ])
   )
-  const dualGivenTime = normalizeImportNumber(
+  const dualGivenTime = parseImportDuration(
     findFieldValue(rawEntry, [
       'flight_dualGiven',
       'DualGiven',
@@ -453,18 +542,10 @@ export function mapRawRowToLogEntry(
     findFieldValue(rawEntry, ['flight_actualArrivalTime'])
   )
 
-  const make = findFieldValue(rawEntry, ['aircraftType_make', 'Make', 'make'])
-  const model = findFieldValue(rawEntry, [
-    'aircraftType_model',
-    'Model',
-    'model',
-    'Aircraft Make/Model',
-    'Aircraft Type',
-    'aircraft type',
-  ])
-  const combinedModel = make && model ? `${make} ${model}`.trim() : model
+  const aircraftMakeModel = resolveAircraftMakeModel(rawEntry)
+  const aircraftTypeCode = findFieldValue(rawEntry, AIRCRAFT_TYPE_CODE_FIELDS)
 
-  const simulatedHours = normalizeImportNumber(
+  const simulatedHours = parseImportDuration(
     findFieldValue(rawEntry, ['SimulatedFlight', 'simulatedflight'])
   )
   const logbookType =
@@ -482,17 +563,22 @@ export function mapRawRowToLogEntry(
       if ((dualGivenTime ?? 0) > 0) return 'Instructor'
       return findFieldValue(rawEntry, ['Role', 'role', 'ROLE']) || ''
     })(),
-    aircraftCategoryClass: normalizeCategoryClassLabel(
-      findFieldValue(rawEntry, [
-        'aircraftType_selectedAircraftClass',
-        'aircraftType_selectedCategory',
-        'Category / Class',
-        'Aircraft Category/Class',
-        'Category/Class',
-        'categoryClass',
-      ])
-    ),
-    categoryClassTime: normalizeImportNumber(
+    aircraftCategoryClass: (() => {
+      const label = normalizeCategoryClassLabel(
+        findFieldValue(rawEntry, [
+          'aircraftType_selectedAircraftClass',
+          'aircraftType_selectedCategory',
+          'flight_selectedAircraftClass',
+          'Category / Class',
+          'Aircraft Category/Class',
+          'Category/Class',
+          'categoryClass',
+        ])
+      )
+      if (label.trim()) return label
+      return inferCategoryClassFromAircraftHints(aircraftTypeCode, aircraftMakeModel)
+    })(),
+    categoryClassTime: parseImportDuration(
       findFieldValue(rawEntry, [
         'flight_totalTime',
         'Total Flight Time',
@@ -501,7 +587,7 @@ export function mapRawRowToLogEntry(
         'total',
       ])
     ),
-    aircraftMakeModel: extractBaseModelName(combinedModel),
+    aircraftMakeModel,
     registration,
     flightNumber:
       findFieldValue(rawEntry, [
@@ -549,7 +635,7 @@ export function mapRawRowToLogEntry(
       ...createEmptyFlightTime(),
       total: hasLogtenOOOI
         ? null
-        : normalizeImportNumber(
+        : parseImportDuration(
             findFieldValue(rawEntry, [
               'flight_totalTime',
               'Total Flight Time',
@@ -558,17 +644,17 @@ export function mapRawRowToLogEntry(
               'total',
             ])
           ),
-      pic: normalizeImportNumber(
+      pic: parseImportDuration(
         findFieldValue(rawEntry, ['flight_pic', 'PIC', 'pic', 'PilotInCommand'])
       ),
-      sic: normalizeImportNumber(
+      sic: parseImportDuration(
         findFieldValue(rawEntry, ['flight_sic', 'SIC', 'sic'])
       ),
       dual: dualReceivedTime,
-      solo: normalizeImportNumber(
+      solo: parseImportDuration(
         findFieldValue(rawEntry, ['flight_solo', 'Solo', 'Solo Time', 'solo'])
       ),
-      night: normalizeImportNumber(
+      night: parseImportDuration(
         findFieldValue(rawEntry, [
           'flight_nightTime',
           'flight_night',
@@ -576,7 +662,7 @@ export function mapRawRowToLogEntry(
           'Night Time',
         ])
       ),
-      actualInstrument: normalizeImportNumber(
+      actualInstrument: parseImportDuration(
         findFieldValue(rawEntry, [
           'flight_actualInstrument',
           'ActualInstrument',
@@ -588,7 +674,7 @@ export function mapRawRowToLogEntry(
         ])
       ),
       dualGiven: dualGivenTime,
-      crossCountry: normalizeImportNumber(
+      crossCountry: parseImportDuration(
         findFieldValue(rawEntry, [
           'flight_crossCountry',
           'CrossCountry',
@@ -597,7 +683,7 @@ export function mapRawRowToLogEntry(
           'X-C',
         ])
       ),
-      simulatedInstrument: normalizeImportNumber(
+      simulatedInstrument: parseImportDuration(
         findFieldValue(rawEntry, [
           'flight_simulatedInstrument',
           'SimulatedInstrument',
@@ -675,6 +761,8 @@ export function mapRawRowToLogEntry(
     if (!entry.trainingElements.trim()) entry.trainingElements = otherCrew.name
     if (!entry.trainingInstructor.trim()) entry.trainingInstructor = otherCrew.job
   }
+
+  applyNestedDurationFields(entry, rawEntry)
 
   return entry
 }
