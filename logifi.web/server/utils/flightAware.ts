@@ -2,6 +2,12 @@ import { DateTime } from 'luxon'
 import { getAirportIanaTimezone } from '../../shared/airportTimezone'
 import { getFlightAwareEnv } from './flightAwareEnv'
 import { flightAwareSearchIdentTiers } from './flightEnrichCandidates'
+import {
+  flightLookupIsFinal,
+  readFlightLookupCache,
+  writeFlightLookupCache,
+  type FlightLookupCacheRecord,
+} from './flightLookupCache'
 
 export interface FlightAwareActuals {
   registration: string | null
@@ -427,6 +433,76 @@ function compactFlightAwareLookupStatus(
   return `FA-${flightNumber}-${status}`
 }
 
+function actualsFromCacheRow(
+  row: FlightLookupCacheRecord,
+  dep: string,
+  arr: string
+): FlightAwareActuals {
+  return {
+    registration: row.registration,
+    aircraftType: row.aircraftType,
+    actualOutLocal: parseIsoToAirportLocal(row.actualOut ?? undefined, dep),
+    actualOffLocal: parseIsoToAirportLocal(row.actualOff ?? undefined, dep),
+    actualOnLocal: parseIsoToAirportLocal(row.actualOn ?? undefined, arr),
+    actualInLocal: parseIsoToAirportLocal(row.actualIn ?? undefined, arr),
+  }
+}
+
+/** Final cache rows are returned with no AeroAPI call. Non-final rows are not a hit. */
+async function readTrustedCacheActuals(
+  searchIdent: string,
+  date: string,
+  depIcao: string | undefined,
+  arrIcao: string | undefined
+): Promise<FlightAwareActuals | null> {
+  const dep = normalizeAirportCode(depIcao)
+  const arr = normalizeAirportCode(arrIcao)
+  const ident = searchIdent.trim().toUpperCase()
+  if (!ident || !dep || !arr) return null
+  const row = await readFlightLookupCache({
+    ident,
+    departureDate: date,
+    depAirport: dep,
+    arrAirport: arr,
+  })
+  if (!row || !flightLookupIsFinal(row)) return null
+  const actuals = actualsFromCacheRow(row, dep, arr)
+  return isUsableFlightAwareHit(actuals) ? actuals : null
+}
+
+async function rememberFlightLookup(
+  searchIdent: string,
+  date: string,
+  depIcao: string | undefined,
+  arrIcao: string | undefined,
+  match: FlightAwareFlight,
+  actuals: FlightAwareActuals
+): Promise<void> {
+  const dep = normalizeAirportCode(depIcao)
+  const arr = normalizeAirportCode(arrIcao)
+  const ident = searchIdent.trim().toUpperCase()
+  if (!ident || !dep || !arr) return
+  const record: FlightLookupCacheRecord = {
+    ident,
+    departureDate: date,
+    depAirport: dep,
+    arrAirport: arr,
+    registration: actuals.registration,
+    aircraftType: actuals.aircraftType,
+    actualOut: nonEmptyString(match.actual_out),
+    actualOff: nonEmptyString(match.actual_off),
+    actualOn: nonEmptyString(match.actual_on),
+    actualIn: nonEmptyString(match.actual_in),
+    scheduledOut: nonEmptyString(match.scheduled_out),
+    faFlightId: nonEmptyString(match.fa_flight_id),
+    source: 'flightaware',
+    fetchedAt: new Date().toISOString(),
+    isFinal: false,
+  }
+  record.isFinal = flightLookupIsFinal(record)
+  await writeFlightLookupCache(record)
+}
+
 interface OnceLookupOutcome {
   actuals: FlightAwareActuals | null
   authRejected: boolean
@@ -546,6 +622,7 @@ async function lookupFlightActualsOnce(
 
   const actuals = extractFlightAwareActuals(match)
   const usable = isUsableFlightAwareHit(actuals)
+  if (usable) await rememberFlightLookup(searchIdent, date, depIcao, arrIcao, match, actuals)
 
   return {
     actuals: usable ? actuals : null,
@@ -577,6 +654,26 @@ export async function lookupFlightAwareActuals(
     return { actuals: null, authRejected: false, rateLimited: false, detail: null }
   }
 
+  const tiers = flightAwareSearchIdentTiers(num, airlineCode, enrichStickyPrefix)
+  if (!tiers.length || !tiers.some((t) => t.length)) {
+    return { actuals: null, authRejected: false, rateLimited: false, detail: null }
+  }
+
+  for (const tier of tiers) {
+    for (const searchIdent of tier) {
+      const cachedActuals = await readTrustedCacheActuals(searchIdent, date, depIcao, arrIcao)
+      if (!cachedActuals) continue
+      const prefix = identPrefixFromSearchIdent(searchIdent)
+      if (prefix) enrichStickyPrefix = prefix
+      return {
+        actuals: cachedActuals,
+        authRejected: false,
+        rateLimited: false,
+        detail: `FA-${searchIdent}-cache`,
+      }
+    }
+  }
+
   const cooldownUntilMs = Math.max(rateLimitedUntilMs, retryAfterHeaderMs)
   if (Date.now() < cooldownUntilMs) {
     return {
@@ -586,11 +683,6 @@ export async function lookupFlightAwareActuals(
       detail: 'HTTP 429 cooldown',
       rateLimitResumeMs: cooldownUntilMs,
     }
-  }
-
-  const tiers = flightAwareSearchIdentTiers(num, airlineCode, enrichStickyPrefix)
-  if (!tiers.length || !tiers.some((t) => t.length)) {
-    return { actuals: null, authRejected: false, rateLimited: false, detail: null }
   }
 
   const statuses: string[] = []
