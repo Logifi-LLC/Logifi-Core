@@ -19,6 +19,7 @@ import {
   findHeuristicMatchForFcvFlight,
   logEntryRowToExistingForDedup,
 } from '../../utils/fcvPreviewDuplicates'
+import { FLICA_IMPORT_SOURCE } from '../../utils/airlineLeg'
 
 type CrewOverrideMode = 'pick' | 'rename' | 'asis'
 type FcvFlightAction = 'import' | 'link' | 'skip'
@@ -87,7 +88,7 @@ interface CrewReviewCandidate {
 
 function resolveImportSource(aligned: FcvMappedEntry): string {
   const src = typeof aligned.import_source === 'string' ? aligned.import_source.trim() : ''
-  if (src === 'flica_aerodatabox' || src === 'fc_view') return src
+  if (src === FLICA_IMPORT_SOURCE || src === 'fc_view') return src
   return 'fc_view'
 }
 

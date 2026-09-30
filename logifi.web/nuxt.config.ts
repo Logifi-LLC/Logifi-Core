@@ -103,8 +103,8 @@ export default defineNuxtConfig({
     flightAwareApiKey: process.env.FLIGHTAWARE_API_KEY || '',
     flightAwareApiBase:
       process.env.FLIGHTAWARE_API_BASE || 'https://aeroapi.flightaware.com/aeroapi',
-    // Flight enrichment provider (aerodatabox or flightaware)
-    flightEnrichProvider: process.env.FLIGHT_ENRICH_PROVIDER || 'aerodatabox',
+    // Flight enrichment provider. flightaware is the default; aerodatabox is the explicit rollback.
+    flightEnrichProvider: process.env.FLIGHT_ENRICH_PROVIDER || 'flightaware',
     /** AES-256 key for sealing FLICA passwords (base64 or hex). */
     flicaCredentialsKey: process.env.FLICA_CREDENTIALS_KEY || '',
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',

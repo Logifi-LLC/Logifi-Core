@@ -2,14 +2,14 @@
 
 ## Overview
 
-This implementation adds FlightAware as a pluggable flight enrichment provider for Autofi (FLICA schedule import). FlightAware provides superior OOOI data compared to AeroDataBox, particularly for gate times (Out/In).
+FlightAware AeroAPI is the default flight-actuals provider for Autofi (FLICA schedule import). It supplies gate and runway times (Out, Off, On, In). AeroDataBox stays in the tree as an explicit rollback for one release.
 
 ## Key Benefits
 
 1. **Complete OOOI coverage**: FlightAware provides all four timestamps (Out, Off, On, In) vs AeroDataBox which only provides Off/On
-2. **Pluggable architecture**: Easy to switch between providers or add new ones
-3. **Safe rollforward**: AeroDataBox remains the default; FlightAware requires explicit opt-in
-4. **No breaking changes**: Existing AeroDataBox integration continues to work
+2. **Month-end imports**: dates older than about 9 days use `GET /history/flights/{ident}` (back to 2011-01-01, 7-day max window). Recent dates stay on `GET /flights/{ident}`
+3. **Pluggable architecture**: set `FLIGHT_ENRICH_PROVIDER=aerodatabox` to roll back
+4. **No import-source rename**: saved rows still use `import_source: 'flica_aerodatabox'`
 
 ## Environment Configuration
 
@@ -17,8 +17,9 @@ This implementation adds FlightAware as a pluggable flight enrichment provider f
 
 ```bash
 FLIGHTAWARE_API_KEY=your_api_key_here
-FLIGHT_ENRICH_PROVIDER=flightaware
 ```
+
+`FLIGHT_ENRICH_PROVIDER` defaults to `flightaware`. Set it only to override.
 
 ### Optional Overrides
 
@@ -30,10 +31,10 @@ FLIGHTAWARE_API_BASE=https://aeroapi.flightaware.com/aeroapi
 ### Rollback to AeroDataBox
 
 ```bash
-# Remove or set to aerodatabox
 FLIGHT_ENRICH_PROVIDER=aerodatabox
-# or simply unset FLIGHT_ENRICH_PROVIDER (defaults to aerodatabox)
 ```
+
+Unset `FLIGHT_ENRICH_PROVIDER` does not roll back. AeroDataBox also needs `AERODATABOX_API_KEY`.
 
 ## Implementation Details
 
@@ -73,12 +74,17 @@ interface EnrichmentActuals {
 
 ### FlightAware API Details
 
-**Endpoint**: `GET /flights/{ident}`
+**Endpoints** (same query params, same flight fields):
+
+- `GET /flights/{ident}` when the window starts within 9 days of now. AeroAPI only allows this endpoint's `start`/`end` within 10 days in the past and 2 days in the future. About $0.005 per result set.
+- `GET /history/flights/{ident}` when the window starts more than 9 days ago. Data back to 2011-01-01. The span must be at most 7 days. About $0.020 per result set (roughly $0.40 vs $1.60 per pilot-month at recent-vs-history rates).
 
 **Parameters**:
-- `ident_type=designator` (airline code + flight number)
-- `start={date}` and `end={date}` (YYYY-MM-DD)
-- `max_pages=1` (limit to first page)
+- `ident_type=designator` (ICAO ident preferred: `RPA4752`, not `YX4752` or a bare number)
+- `start` inclusive and `end` exclusive, UTC date-time built from the departure airport's local day (widened by 14 hours each side when the timezone is unknown)
+- `max_pages=1`
+
+HTTP 400 (date out of range) stops that leg. Registration is the tail only; `aircraft_type` is not copied into the tail field.
 
 **Authentication**: `x-apikey` header
 
@@ -127,7 +133,7 @@ pnpm test
 
 ### Manual Testing (with live key)
 
-1. Set `FLIGHTAWARE_API_KEY` and `FLIGHT_ENRICH_PROVIDER=flightaware`
+1. Set `FLIGHTAWARE_API_KEY` (provider already defaults to FlightAware)
 2. Connect FLICA in Logifi
 3. Navigate to Autofi → Fetch schedule
 4. Verify enriched flights show:
