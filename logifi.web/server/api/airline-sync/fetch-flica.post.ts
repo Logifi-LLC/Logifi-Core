@@ -199,7 +199,7 @@ async function enrichLegsSequential(
 const FCV_ID_IN_CHUNK = 120
 
 /**
- * Skip AeroDataBox for legs already in the logbook so Fetch does not burn quota on hidden rows.
+ * Skip enrichment for legs already in the logbook so Fetch does not burn quota on hidden rows.
  * Returns an empty set if the logbook query fails so enrichment still runs.
  */
 async function loadEnrichSkipIndices(
@@ -258,7 +258,8 @@ async function loadEnrichSkipIndices(
 }
 
 /**
- * Scrape connected FLICA schedule, enrich via AeroDataBox, return preview rows.
+ * Scrape connected FLICA schedule, enrich via FlightAware (or AeroDataBox when
+ * FLIGHT_ENRICH_PROVIDER=aerodatabox), return preview rows.
  */
 export default defineEventHandler(async (event) => {
   const userId = await getUserIdFromEvent(event)
@@ -434,8 +435,10 @@ export default defineEventHandler(async (event) => {
   const warningParts: string[] = []
   const providerName = getProviderDisplayName()
   if (!isEnrichProviderConfigured() && filtered.length > 0) {
+    const missingKey =
+      getFlightEnrichProvider() === 'aerodatabox' ? 'AERODATABOX_API_KEY' : 'FLIGHTAWARE_API_KEY'
     warningParts.push(
-      `Schedule enrichment is not configured (${providerName === 'FlightAware' ? 'FLIGHTAWARE_API_KEY' : 'AERODATABOX_API_KEY'}). Tail and actual times were not added.`
+      `Schedule enrichment is not configured (${missingKey}). Tail and actual times were not added.`
     )
   } else if (authRejected) {
     warningParts.push(`${providerName} rejected the API key. Tail and actual times were not added.`)

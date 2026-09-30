@@ -19,7 +19,13 @@ import {
   normalizeRegistrationKey,
 } from './fcvAlignment'
 
-export type AirlineImportSource = 'fc_view' | 'flica_aerodatabox'
+/**
+ * Legacy name, do not rename. Analytics DB functions, the import allowlist,
+ * and the (user_id, import_source, fcv_flight_id) unique index all key on this value.
+ */
+export const FLICA_IMPORT_SOURCE = 'flica_aerodatabox' as const
+
+export type AirlineImportSource = 'fc_view' | typeof FLICA_IMPORT_SOURCE
 
 export interface AirlineLegCrewMember {
   position: string
@@ -265,7 +271,7 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
   const fromFlicaBlock = blockMinutesToHours(leg.block_minutes)
   const fromGate = resolveFcvBlockHours(fcvShape)
   const blockHours =
-    leg.import_source === 'flica_aerodatabox'
+    leg.import_source === FLICA_IMPORT_SOURCE
       ? fromFlicaBlock ?? fromGate
       : fromGate ?? fromFlicaBlock
 

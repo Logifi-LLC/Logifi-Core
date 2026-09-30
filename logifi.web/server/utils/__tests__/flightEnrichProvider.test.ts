@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getFlightEnrichProvider,
   isEnrichProviderConfigured,
@@ -47,15 +47,30 @@ vi.mock('../flightAware', () => ({
 }))
 
 describe('flightEnrichProvider', () => {
-  it('defaults to aerodatabox provider', () => {
-    expect(getFlightEnrichProvider()).toBe('aerodatabox')
+  afterEach(() => {
+    delete process.env.FLIGHT_ENRICH_PROVIDER
+    delete process.env.NUXT_FLIGHT_ENRICH_PROVIDER
   })
 
-  it('routes to AeroDataBox by default', async () => {
+  it('defaults to flightaware provider', () => {
+    expect(getFlightEnrichProvider()).toBe('flightaware')
+  })
+
+  it('routes to FlightAware by default', async () => {
     const result = await lookupFlightActuals('5770', '2026-08-04', 'LGA', 'DCA', 'AA')
-    expect(result.actuals?.registration).toBe('N-ADB')
-    expect(result.actuals?.actualOutLocal).toBeNull()
+    expect(result.actuals?.registration).toBe('N-FA')
+    expect(result.actuals?.actualOutLocal).toBe('2026-08-04 10:08:00')
     expect(result.actuals?.actualOffLocal).toBe('2026-08-04 10:20:00')
+  })
+
+  it('keeps aerodatabox when explicitly selected', async () => {
+    process.env.FLIGHT_ENRICH_PROVIDER = 'aerodatabox'
+    expect(getFlightEnrichProvider()).toBe('aerodatabox')
+    const viaEnv = await lookupFlightActuals('5770', '2026-08-04', 'LGA', 'DCA', 'AA')
+    expect(viaEnv.actuals?.registration).toBe('N-ADB')
+    const viaArg = await lookupFlightActuals('5770', '2026-08-04', 'LGA', 'DCA', 'AA', 'aerodatabox')
+    expect(viaArg.actuals?.registration).toBe('N-ADB')
+    expect(viaArg.actuals?.actualOutLocal).toBeNull()
   })
 
   it('routes to FlightAware when explicitly requested', async () => {
