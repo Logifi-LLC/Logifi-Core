@@ -152,6 +152,13 @@ const JET_AIRLINER_AMEL =
   /\b(?:e-?170|e-?175|e-?190|e-?195|e-?75[a-z0-9]|erj(?:-?\d{2,3})?|emb-?1\d{2}|embraer|crj(?:-?\d{2,3})?|cl-?65|b-?7\d{2}|a-?3\d{2}|dc-?9\d?|md-?8\d)\b/i
 
 /**
+ * Common single-engine trainers. Checked after multi-engine so DA42 / PA44 stay AMEL.
+ * Without these, a blank class column fails Part 61 import validation.
+ */
+const SINGLE_ENGINE_ASEL =
+  /\b(?:c-?15[02]|c-?162|(?:c-?)?170[a-z]?|(?:c-?)?172[a-z]?|(?:c-?)?182[a-z]?|pa-?28(?:-\d+)?|sr-?2[02][a-z]?|da-?20[a-z]*|da-?40[a-z]*|bonanza|be-?3[356]|cherokee|warrior|archer|skyhawk)\b/i
+
+/**
  * Infer category/class from type code or make/model when the FAA class is blank.
  * Unknown types stay blank. Callers that still want a piston default decide that themselves.
  */
@@ -175,6 +182,7 @@ export function inferCategoryClassFromAircraftHints(
   ) {
     return 'AMEL'
   }
+  if (SINGLE_ENGINE_ASEL.test(blob)) return 'ASEL'
   return ''
 }
 

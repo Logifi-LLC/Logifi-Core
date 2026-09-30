@@ -173,6 +173,9 @@ describe('parseImportDuration', () => {
     expect(parseImportDuration('12:05')).toBe(12.1)
     expect(parseImportDuration('1+30')).toBe(1.5)
     expect(parseImportDuration('0.8')).toBe(0.8)
+    expect(parseImportDuration('.5')).toBe(0.5)
+    expect(parseImportDuration('.8')).toBe(0.8)
+    expect(parseImportDuration('1.')).toBe(1)
     expect(parseImportDuration(' 1 : 17 ')).toBe(1.3)
     expect(parseImportDuration('')).toBeNull()
     expect(parseImportDuration('   ')).toBeNull()
@@ -198,9 +201,35 @@ describe('category class inference', () => {
     expect(inferCategoryClassFromAircraftHints('MD-88', '')).toBe('AMEL')
     expect(inferCategoryClassFromAircraftHints('DA42', '')).toBe('AMEL')
     expect(inferCategoryClassFromAircraftHints('R22', '')).toBe('HELI')
-    expect(inferCategoryClassFromAircraftHints('C172', '')).toBe('')
-    expect(inferCategoryClassFromAircraftHints('', 'SR20')).toBe('')
     expect(inferCategoryClassFromAircraftHints('', '')).toBe('')
+    expect(inferCategoryClassFromAircraftHints('Lancair', '')).toBe('')
+  })
+
+  it('maps common single-engine trainers to ASEL', () => {
+    for (const hint of ['C172', 'C152', 'C150', 'C-172', 'PA-28', 'PA28', 'SR22', 'SR20', 'DA40', 'DA20']) {
+      expect(inferCategoryClassFromAircraftHints(hint, '')).toBe('ASEL')
+    }
+    expect(inferCategoryClassFromAircraftHints('', 'Bonanza')).toBe('ASEL')
+    expect(inferCategoryClassFromAircraftHints('', 'Cessna 172S')).toBe('ASEL')
+    expect(inferCategoryClassFromAircraftHints('', 'PA-28-181')).toBe('ASEL')
+    expect(inferCategoryClassFromAircraftHints('DA42', '')).toBe('AMEL')
+  })
+
+  it('does not leave a C172 with a blank class failing category validation', () => {
+    const entry = mapRawRowToLogEntry({
+      Date: '2024-06-13',
+      'Aircraft ID': 'N172SP',
+      'Aircraft Make/Model': 'C172',
+      From: 'KIND',
+      To: 'KORD',
+      'Total Time': '1.2',
+      PIC: '1.2',
+    })
+    expect(entry?.aircraftCategoryClass).toBe('ASEL')
+    const categoryErrors = validatePart61RequiredFields(entry!).filter(
+      (result) => result.field === 'aircraftCategoryClass'
+    )
+    expect(categoryErrors).toHaveLength(0)
   })
 })
 

@@ -279,7 +279,7 @@ export function parseImportDuration(
   }
 
   const numeric = trimmed.replace(/,/g, '')
-  if (!/^\d+(\.\d+)?$/.test(numeric)) return null
+  if (!/^(\d+(\.\d*)?|\.\d+)$/.test(numeric)) return null
   return roundImportHours(parseFloat(numeric))
 }
 
