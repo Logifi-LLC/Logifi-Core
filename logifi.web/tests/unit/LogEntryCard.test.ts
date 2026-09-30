@@ -194,3 +194,18 @@ describe('LogEntryCard metrics strip', () => {
     expect(wrapper.text()).toContain('IFR')
   })
 })
+
+describe('LogEntryCard tags', () => {
+  it('hides the crew person name marker and keeps other tags', () => {
+    const wrapper = mountCard({
+      entry: entry({
+        trainingElements: 'Jane Doe',
+        tags: ['Jane Doe', 'crew', 'IOE'],
+      }),
+    })
+
+    expect(wrapper.text()).not.toContain('Jane Doe')
+    expect(wrapper.text()).toContain('crew')
+    expect(wrapper.text()).toContain('IOE')
+  })
+})
