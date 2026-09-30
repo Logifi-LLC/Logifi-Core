@@ -68,3 +68,27 @@ export function catalogContainsPersonName(names: string[], candidate: string): b
   if (!key) return false
   return names.some((n) => normalizeCrewNameForMatching(n) === key)
 }
+
+/**
+ * Autofi's person-catalog marker: a tag whose text is the person's own name.
+ * Kept in `catalog_entity_tags` for FLICA matching. Not a user-facing tag.
+ * The generic `crew` fallback is never treated as this marker.
+ */
+export function isPersonCatalogNameMarker(
+  personName: string | null | undefined,
+  tag: string | null | undefined,
+): boolean {
+  const name = (personName ?? '').trim().toLowerCase()
+  const label = (tag ?? '').trim().toLowerCase()
+  if (!name || !label) return false
+  if (label === 'crew') return false
+  return label === name
+}
+
+/** Tags to show. Drops the person's own-name catalog marker; leaves stored tags unchanged. */
+export function tagsExcludingPersonNameMarker(
+  personName: string | null | undefined,
+  tags: readonly string[] | null | undefined,
+): string[] {
+  return (tags ?? []).filter((tag) => !isPersonCatalogNameMarker(personName, tag))
+}

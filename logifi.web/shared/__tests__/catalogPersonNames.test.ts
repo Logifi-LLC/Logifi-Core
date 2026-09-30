@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   buildCatalogPersonAlignmentSeeds,
   catalogContainsPersonName,
+  isPersonCatalogNameMarker,
   listCatalogPersonDisplayNames,
   normalizeCrewNameForMatching,
+  tagsExcludingPersonNameMarker,
 } from '../catalogPersonNames'
 
 describe('normalizeCrewNameForMatching', () => {
@@ -34,6 +36,26 @@ describe('listCatalogPersonDisplayNames', () => {
       { entity_id: 'amy', tag: 'Amy Beta' },
     ])
     expect(names).toEqual(['Amy Beta', 'Zoe Alpha'])
+  })
+})
+
+describe('isPersonCatalogNameMarker', () => {
+  it('matches the person name case-insensitively after trim', () => {
+    expect(isPersonCatalogNameMarker('Jane Doe', ' jane doe ')).toBe(true)
+    expect(isPersonCatalogNameMarker('Jane Doe', 'IOE')).toBe(false)
+  })
+
+  it('does not treat the crew fallback as the name marker', () => {
+    expect(isPersonCatalogNameMarker('Jane Doe', 'crew')).toBe(false)
+    expect(isPersonCatalogNameMarker('Crew', 'crew')).toBe(false)
+  })
+})
+
+describe('tagsExcludingPersonNameMarker', () => {
+  it('hides the own-name tag and keeps user tags and the crew fallback', () => {
+    expect(
+      tagsExcludingPersonNameMarker('Jane Doe', ['Jane Doe', 'crew', 'IOE']),
+    ).toEqual(['crew', 'IOE'])
   })
 })
 

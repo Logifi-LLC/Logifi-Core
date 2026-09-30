@@ -2022,16 +2022,6 @@
                     </select>
                   </div>
                 </div>
-                <div :class="['mt-3 grid gap-4', isIos ? 'entry-grid-ios-2' : 'md:grid-cols-2']">
-                  <div>
-                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">PIC / Captain</label>
-                    <input v-model="inlineEditEntry.picName" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" autocomplete="off" />
-                  </div>
-                  <div>
-                    <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">SIC / First Officer</label>
-                    <input v-model="inlineEditEntry.sicName" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" autocomplete="off" />
-                  </div>
-                </div>
                 <div
                   class="mt-4 pt-3 border-t grid gap-4 grid-cols-1 sm:grid-cols-2"
                   :class="[
@@ -2381,16 +2371,6 @@
                     {{ aircraft.registration }}
                   </button>
                 </div>
-              </div>
-            </div>
-            <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'md:grid-cols-2']">
-              <div>
-                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">PIC / Captain</label>
-                <input v-model="inlineEditEntry.picName" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" autocomplete="off" />
-              </div>
-              <div>
-                <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">SIC / First Officer</label>
-                <input v-model="inlineEditEntry.sicName" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" autocomplete="off" />
               </div>
             </div>
             <div :class="['grid gap-4 mb-2 items-end', isIos ? 'entry-grid-ios-1' : 'md:grid-cols-4']">
@@ -3249,16 +3229,6 @@
                         </select>
                       </div>
                     </div>
-                    <div :class="['mt-3 grid gap-4', isIos ? 'entry-grid-ios-2' : 'md:grid-cols-2']">
-                      <div>
-                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">PIC / Captain</label>
-                        <input v-model="newEntry.picName" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" autocomplete="off" />
-                      </div>
-                      <div>
-                        <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">SIC / First Officer</label>
-                        <input v-model="newEntry.sicName" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" autocomplete="off" />
-                      </div>
-                    </div>
                     <div
                       class="mt-4 pt-3 border-t grid gap-4 grid-cols-1 sm:grid-cols-2"
                       :class="[
@@ -3647,16 +3617,6 @@
                       {{ aircraft.registration }}
                     </button>
                   </div>
-                </div>
-              </div>
-              <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'md:grid-cols-2']">
-                <div>
-                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">PIC / Captain</label>
-                  <input v-model="newEntry.picName" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" autocomplete="off" />
-                </div>
-                <div>
-                  <label :class="['block text-[10px] uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">SIC / First Officer</label>
-                  <input v-model="newEntry.sicName" type="text" :class="['w-full rounded border px-2 py-1 text-sm', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" autocomplete="off" />
                 </div>
               </div>
               <div :class="['grid gap-4 mb-2 items-end', isIos ? 'entry-grid-ios-1' : 'md:grid-cols-4']">
@@ -5511,7 +5471,7 @@
               {{ crewModalLastTagEntryCount === 0 ? 'Tag added to this crew member.' : `Tag added to this crew member and to ${crewModalLastTagEntryCount} log entry${crewModalLastTagEntryCount === 1 ? '' : 's'}.` }}
             </div>
             <div class="flex flex-wrap gap-2 items-center">
-              <span v-for="tag in getEntityTags('person', currentCrewName)" :key="tag" class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm" :class="[isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-300 text-gray-800']">
+              <span v-for="tag in visiblePersonTags(currentCrewName)" :key="tag" class="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm" :class="[isDarkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-300 text-gray-800']">
                 {{ tag }}
                 <button type="button" aria-label="Remove tag" @click="removeEntityTag('person', currentCrewName, tag); crewModalNewTagInput = ''" :class="['rounded p-0.5', isDarkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-400']"><Icon name="ri:close-line" size="14" /></button>
               </span>
@@ -6182,8 +6142,8 @@
                     </div>
                     <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Landings:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (item.entry.performance.dayLandings ?? 0) + (item.entry.performance.nightLandings ?? 0) }}</span></div>
                     <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Approaches:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ getTotalApproachCount(item.entry.performance) }}</span></div>
-                    <div v-if="(item.entry.tags || []).length" class="col-span-2 flex flex-wrap gap-1">
-                      <span v-for="t in (item.entry.tags || [])" :key="t" :class="['inline-block rounded px-1.5 py-0.5 text-xs', isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700']">{{ t }}</span>
+                    <div v-if="visibleEntryTags(item.entry).length" class="col-span-2 flex flex-wrap gap-1">
+                      <span v-for="t in visibleEntryTags(item.entry)" :key="t" :class="['inline-block rounded px-1.5 py-0.5 text-xs', isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700']">{{ t }}</span>
                     </div>
                   </div>
                   <div v-if="item.entry.remarks" class="mt-2 text-xs" :class="[isDarkMode ? 'text-gray-300' : 'text-gray-600']">
@@ -6698,8 +6658,8 @@
                     <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">XC:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.flightTime.crossCountry ?? 0).toFixed(1) }}h</span></div>
                     <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Landings:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ (entry.performance.dayLandings ?? 0) + (entry.performance.nightLandings ?? 0) }}</span></div>
                     <div><span :class="[isDarkMode ? 'text-gray-400' : 'text-gray-500']">Approaches:</span> <span :class="[isDarkMode ? 'text-white' : 'text-gray-900']">{{ getTotalApproachCount(entry.performance) }}</span></div>
-                    <div v-if="(entry.tags || []).length" class="col-span-2 flex flex-wrap gap-1">
-                      <span v-for="t in (entry.tags || [])" :key="t" :class="['inline-block rounded px-1.5 py-0.5 text-xs', isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700']">{{ t }}</span>
+                    <div v-if="visibleEntryTags(entry).length" class="col-span-2 flex flex-wrap gap-1">
+                      <span v-for="t in visibleEntryTags(entry)" :key="t" :class="['inline-block rounded px-1.5 py-0.5 text-xs', isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700']">{{ t }}</span>
                     </div>
                   </div>
                   <div v-if="entry.remarks" class="mt-2 text-xs" :class="[isDarkMode ? 'text-gray-300' : 'text-gray-600']">{{ entry.remarks }}</div>
@@ -6876,7 +6836,7 @@ import { calculateNightTime } from '../utils/nightTimeCalculator'
 import { DateTime } from 'luxon'
 import { getAirportIanaTimezone, normalizeTimezoneToIANA } from '../../shared/airportTimezone'
 import { sortEntriesByDateAndOOOI } from '../../shared/oooiSort'
-import { listCatalogPersonDisplayNames } from '../../shared/catalogPersonNames'
+import { listCatalogPersonDisplayNames, tagsExcludingPersonNameMarker, isPersonCatalogNameMarker } from '../../shared/catalogPersonNames'
 import { calculateSectionII, calculateSectionIII } from '../utils/form8710Calculator'
 import type { Form8710Data, AircraftCategory8710, ComplianceMetadata } from '../utils/form8710Types'
 import { mapCategoryTo8710, isTrainingDevice } from '../utils/form8710Types'
@@ -7881,6 +7841,7 @@ async function removeEntityTag(entityType: EntityType, entityId: string, tag: st
 }
 
 async function backfillEntityTagToEntries(entityType: EntityType, entityId: string, tag: string): Promise<number> {
+  if (entityType === 'person' && isPersonCatalogNameMarker(entityId, tag)) return 0
   const matches = logEntries.value.filter((entry) => {
     if (entityType === 'family') {
       return effectiveFamilyKeyForEntry(entry) === entityId
@@ -7958,7 +7919,9 @@ function mergeEntityTagsIntoEntry(entry: { tags?: string[]; registration?: strin
   const person = (entry.trainingElements || '').trim()
   const aircraftTags = getEntityTags('aircraft', reg)
   const familyTags = family ? getEntityTags('family', family) : []
-  const personTags = person ? getEntityTags('person', person) : []
+  const personTags = person
+    ? tagsExcludingPersonNameMarker(person, getEntityTags('person', person))
+    : []
   const toAdd = [...aircraftTags, ...familyTags, ...personTags]
   if (toAdd.length === 0) return
   const existing = entry.tags || []
@@ -13271,9 +13234,19 @@ function removeTag(entry: { tags?: string[] }, tag: string): void {
 }
 
 /** Tags on entry that are not in the preset list (one-off customs). */
-function customTagsFor(entry: { tags?: string[] }): string[] {
-  const tags = entry.tags || []
+function customTagsFor(entry: { tags?: string[]; trainingElements?: string }): string[] {
+  const tags = visibleEntryTags(entry)
   return tags.filter((t) => !allTagOptions.value.includes(t))
+}
+
+/** Person-catalog chips. Hides Autofi's own-name marker; the row stays in the catalog. */
+function visiblePersonTags(personName: string): string[] {
+  return tagsExcludingPersonNameMarker(personName, getEntityTags('person', personName))
+}
+
+/** Entry tags for display. Does not remove a stored own-name marker from the entry. */
+function visibleEntryTags(entry: { tags?: string[] | null; trainingElements?: string | null }): string[] {
+  return tagsExcludingPersonNameMarker(entry.trainingElements, entry.tags)
 }
 
 function createBlankEntry(): EditableLogEntry {
@@ -17811,7 +17784,7 @@ const totals = computed(() => {
 const catalogTags = computed(() => {
   const set = new Set<string>()
   logEntries.value.forEach((entry) => {
-    ;(entry.tags || []).forEach((t) => {
+    visibleEntryTags(entry).forEach((t) => {
       if (t?.trim()) set.add(t.trim())
     })
   })

@@ -152,7 +152,7 @@
 
     <!-- Footer zone -->
     <div
-      v-if="(showRemarksFooter && entry.remarks?.trim()) || (entry.tags && entry.tags.length)"
+      v-if="(showRemarksFooter && entry.remarks?.trim()) || visibleTags.length"
       class="mt-3 pt-3 border-t min-w-0"
       :class="isDarkMode ? 'border-gray-700' : 'border-gray-200'"
     >
@@ -162,9 +162,9 @@
       >
         {{ entry.remarks }}
       </p>
-      <div v-if="entry.tags?.length" class="mt-2 flex flex-wrap gap-1.5">
+      <div v-if="visibleTags.length" class="mt-2 flex flex-wrap gap-1.5">
         <span
-          v-for="tag in entry.tags"
+          v-for="tag in visibleTags"
           :key="`${entry.id}-${tag}`"
           :class="[
             'rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold border',
@@ -180,6 +180,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { tagsExcludingPersonNameMarker } from '../../../shared/catalogPersonNames'
 import type { LogbookColumnConfig, LogEntry } from '~/utils/logbookTypes'
 import { isMetricZoneKey } from '~/utils/entryCardPresets'
 import {
@@ -231,6 +232,10 @@ const metricStripFields = computed(() =>
   props.visibleDetailFields.filter(
     (field) => isMetricZoneKey(field.key) && !getEntryFieldDisplay(props.entry, field.key).isEmpty,
   ),
+)
+
+const visibleTags = computed(() =>
+  tagsExcludingPersonNameMarker(props.entry.trainingElements, props.entry.tags),
 )
 
 const pilotsLine = computed(() => {
