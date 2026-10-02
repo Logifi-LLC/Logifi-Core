@@ -95,6 +95,29 @@ describe('FcvSync preview OOOI', () => {
   })
 })
 
+describe('FcvSync preview aircraft', () => {
+  it('hides empty registration parentheses', async () => {
+    const wrapper = mountFcvSync()
+    const setupState = (wrapper.vm as { $: { setupState: Record<string, unknown> } }).$.setupState
+
+    primePreviewModal(setupState, [buildPreviewFlight({ registration: '' })])
+    await nextTick()
+
+    expect(wrapper.text()).toContain('ERJ-175')
+    expect(wrapper.text()).not.toContain('ERJ-175 ()')
+  })
+
+  it('shows the tail in parentheses when registration is present', async () => {
+    const wrapper = mountFcvSync()
+    const setupState = (wrapper.vm as { $: { setupState: Record<string, unknown> } }).$.setupState
+
+    primePreviewModal(setupState, [buildPreviewFlight()])
+    await nextTick()
+
+    expect(wrapper.text()).toContain('ERJ-175 (N123LF)')
+  })
+})
+
 describe('FcvSync preview flight number', () => {
   it('shows the flight number badge when preview data includes one', async () => {
     const wrapper = mountFcvSync()

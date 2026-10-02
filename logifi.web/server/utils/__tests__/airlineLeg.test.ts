@@ -113,6 +113,34 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
     expect(entry.import_metadata?.own_role_unmatched).toBeUndefined()
   })
 
+  it('leaves the other pilot blank when a reserve FO seat was not listed', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20260804_5772_DCA',
+      import_source: 'flica_aerodatabox',
+      flight_number: '5772',
+      trip_number: 'L7513',
+      role: 'PIC',
+      dep_airport: 'DCA',
+      arr_airport: 'LGA',
+      scheduled_out_local: '2026-08-04 08:12:00',
+      scheduled_in_local: '2026-08-04 09:53:00',
+      actual_out_local: null,
+      actual_in_local: null,
+      actual_off_local: null,
+      actual_on_local: null,
+      fcv_tail_number: '',
+      fcv_aircraft_type: 'E75',
+      crew: [{ position: 'CA', name: 'FARMER, DEREK', employeeId: '624619' }],
+      is_deadhead: false,
+      block_minutes: 60,
+    })
+    expect(entry.role).toBe('PIC')
+    expect(entry.training_elements).toBeNull()
+    expect(entry.training_instructor).toBeNull()
+    const normalized = entry.import_metadata?.normalized as { crew_name_raw?: string | null }
+    expect(normalized.crew_name_raw).toBeNull()
+  })
+
   it('flags unmatched seat instead of guessing PIC', () => {
     const entry = mapAirlineLegToFcvMappedEntry({
       external_flight_id: 'FLICA_20260804_5772_DCA',
