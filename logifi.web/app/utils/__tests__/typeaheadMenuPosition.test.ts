@@ -1,10 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { computeTypeaheadMenuPosition } from '../typeaheadMenuPosition'
+import {
+  computeTypeaheadMenuPosition,
+  scrollTypeaheadAnchorIntoView,
+} from '../typeaheadMenuPosition'
 
-function mockAnchor(rect: DOMRect): HTMLElement {
+function mockAnchor(rect: DOMRect, scrollIntoView = vi.fn()): HTMLElement {
   return {
     getBoundingClientRect: () => rect,
-  } as HTMLElement
+    scrollIntoView,
+  } as unknown as HTMLElement
 }
 
 describe('computeTypeaheadMenuPosition', () => {
@@ -45,25 +49,87 @@ describe('computeTypeaheadMenuPosition', () => {
   it('places menu just below the anchor when space allows', () => {
     setVisualViewport({ offsetTop: 0, offsetLeft: 0, height: 400, width: 390 })
     const anchor = mockAnchor(new DOMRect(10, 200, 100, 28))
-    const pos = computeTypeaheadMenuPosition(anchor)
+    const pos = computeTypeaheadMenuPosition(anchor, 192, 2, {
+      fixedTracksVisualViewport: true,
+      safeArea: { top: 0, right: 0, bottom: 0, left: 0 },
+    })
     expect(pos.placement).toBe('below')
     expect(pos.top).toBe(200 + 28 + 2)
   })
 
-  it('accounts for visualViewport offset (iOS keyboard / scroll)', () => {
+  it('keeps an iOS menu next to the cell when the keyboard sets offsetTop', () => {
     setVisualViewport({ offsetTop: 320, offsetLeft: 0, height: 360, width: 390 })
-    const anchor = mockAnchor(new DOMRect(12, 500, 120, 30))
-    const pos = computeTypeaheadMenuPosition(anchor)
+    const anchor = mockAnchor(new DOMRect(12, 160, 120, 30))
+    const pos = computeTypeaheadMenuPosition(anchor, 192, 2, {
+      fixedTracksVisualViewport: true,
+      safeArea: { top: 0, right: 0, bottom: 0, left: 0 },
+    })
     expect(pos.placement).toBe('below')
-    expect(pos.top).toBe(500 + 30 - 320 + 2)
+    expect(pos.top).toBe(160 + 30 + 2)
     expect(pos.left).toBe(12)
+    expect(pos.top).toBeGreaterThan(50)
   })
 
-  it('does not clamp menu to offsetTop when anchor is in the visible band', () => {
+  it('adds visualViewport offset when fixed positioning uses the layout viewport', () => {
     setVisualViewport({ offsetTop: 280, offsetLeft: 0, height: 340, width: 390 })
-    const anchor = mockAnchor(new DOMRect(8, 420, 110, 28))
-    const pos = computeTypeaheadMenuPosition(anchor)
-    expect(pos.top).toBeGreaterThan(100)
-    expect(pos.top).toBeLessThan(200)
+    const anchor = mockAnchor(new DOMRect(8, 120, 110, 28))
+    const pos = computeTypeaheadMenuPosition(anchor, 192, 2, {
+      fixedTracksVisualViewport: false,
+      safeArea: { top: 0, right: 0, bottom: 0, left: 0 },
+    })
+    expect(pos.placement).toBe('below')
+    expect(pos.top).toBe(120 + 28 + 280 + 2)
+    expect(pos.left).toBe(8)
+  })
+
+  it('flips above the cell when the keyboard leaves no room below', () => {
+    setVisualViewport({ offsetTop: 400, offsetLeft: 0, height: 380, width: 390 })
+    const anchor = mockAnchor(new DOMRect(16, 340, 140, 28))
+    const pos = computeTypeaheadMenuPosition(anchor, 192, 2, {
+      fixedTracksVisualViewport: true,
+      safeArea: { top: 0, right: 0, bottom: 0, left: 0 },
+    })
+    expect(pos.placement).toBe('above')
+    expect(pos.top + pos.maxHeight).toBeLessThanOrEqual(340)
+    expect(pos.top).toBeGreaterThanOrEqual(4)
+  })
+
+  it('clamps the menu below the safe-area inset', () => {
+    setVisualViewport({ offsetTop: 0, offsetLeft: 0, height: 400, width: 390 })
+    const anchor = mockAnchor(new DOMRect(8, 10, 100, 20))
+    const pos = computeTypeaheadMenuPosition(anchor, 192, 2, {
+      fixedTracksVisualViewport: true,
+      safeArea: { top: 59, right: 0, bottom: 0, left: 0 },
+    })
+    expect(pos.top).toBeGreaterThanOrEqual(59)
+  })
+})
+
+describe('scrollTypeaheadAnchorIntoView', () => {
+  const originalVv = window.visualViewport
+
+  afterEach(() => {
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: originalVv,
+    })
+  })
+
+  it('does not scroll an anchor that is already in the visual viewport', () => {
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: {
+        offsetTop: 200,
+        offsetLeft: 0,
+        height: 400,
+        width: 390,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      },
+    })
+    const scrollIntoView = vi.fn()
+    const anchor = mockAnchor(new DOMRect(10, 80, 100, 28), scrollIntoView)
+    scrollTypeaheadAnchorIntoView(anchor)
+    expect(scrollIntoView).not.toHaveBeenCalled()
   })
 })

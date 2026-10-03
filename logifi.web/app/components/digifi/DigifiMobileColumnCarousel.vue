@@ -12,15 +12,7 @@ import {
   computeDigifiMobileReviewRowMinHeights,
   mergeDigifiMobileReviewRowHeights,
 } from '~/utils/digifiMobileReviewRows'
-
-const props = defineProps<{
-  remarksRescanOffers?: Array<{ rowIndex: number; focusRows: number[] }>
-  rescanBusy?: boolean
-}>()
-
-const emit = defineEmits<{
-  'rescan-remarks-band': [rowIndex: number]
-}>()
+import { mergePilotNameSuggestions } from '~/utils/pilotNameSuggest'
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
 if (!grid) throw new Error('DigifiMobileColumnCarousel requires logbookBuilderGrid')
@@ -38,14 +30,6 @@ const reviewedIds = ref<Set<string>>(new Set())
 const columns = computed(() => grid.visibleColumns.value)
 const focusedColumn = computed(() => columns.value[focusedIndex.value] ?? null)
 
-const remarksRescanRowIndices = computed(() => {
-  const indices = new Set<number>()
-  for (const offer of props.remarksRescanOffers ?? []) {
-    indices.add(offer.rowIndex)
-  }
-  return indices
-})
-
 const rowHeightsPx = ref<number[]>([])
 
 const rowHeightFloorPx = computed(() =>
@@ -53,7 +37,6 @@ const rowHeightFloorPx = computed(() =>
     rowCount: grid.rows.value.length,
     rows: grid.rows.value,
     columns: columns.value,
-    remarksRescanRowIndices: remarksRescanRowIndices.value,
   })
 )
 
@@ -141,8 +124,15 @@ function onCellInput(rowIdx: number, colId: string, value: string) {
 }
 
 function cellSuggestions(fieldKey: LogbookColumnKey | null): string[] {
-  if (fieldKey === 'pilots') return builderPilots.value ?? []
-  return []
+  if (fieldKey !== 'pilots') return []
+  const pilotsColumn = columns.value.find((column) => column.fieldKey === 'pilots')
+  const onPage: string[] = []
+  if (pilotsColumn) {
+    for (const row of grid.rows.value) {
+      onPage.push(row.cells?.[pilotsColumn.id] ?? '')
+    }
+  }
+  return mergePilotNameSuggestions([builderPilots.value ?? [], onPage])
 }
 
 function isCellEditing(rowIdx: number, colId: string, fieldKey: LogbookColumnKey | null): boolean {
@@ -160,10 +150,6 @@ function onCellBlur() {
 
 function cellNeedsReview(rowIdx: number, colId: string): boolean {
   return grid.rows.value[rowIdx]?.digifiCellMeta?.[colId]?.needsReview === true
-}
-
-function remarksRescanOfferForRow(rowIdx: number) {
-  return props.remarksRescanOffers?.some((offer) => offer.rowIndex === rowIdx) ?? false
 }
 
 function columnStripClass(index: number): string {
@@ -226,7 +212,6 @@ watch(
   () => [
     grid.rows.value.length,
     grid.rows.value.map((row) => JSON.stringify(row.cells)).join('\n'),
-    props.remarksRescanOffers?.map((o) => o.rowIndex).join(','),
   ],
   () => scheduleRowHeightMeasure(),
   { flush: 'post' }
@@ -318,18 +303,6 @@ watch(
                   @focus="onCellFocus(rowIdx, column.id)"
                   @blur="onCellBlur"
                 />
-                <button
-                  v-if="
-                    column.fieldKey === 'remarks' &&
-                    (remarksRescanOfferForRow(rowIdx) || cellNeedsReview(rowIdx, column.id))
-                  "
-                  type="button"
-                  class="mx-2 mb-1 block rounded-lg px-2 py-1 text-left text-[11px] font-semibold text-green-700 underline-offset-2 hover:underline disabled:opacity-50 dark:text-green-300"
-                  :disabled="rescanBusy"
-                  @click="emit('rescan-remarks-band', rowIdx)"
-                >
-                  Re-scan remarks (uses 1 credit)
-                </button>
               </div>
             </li>
           </ol>

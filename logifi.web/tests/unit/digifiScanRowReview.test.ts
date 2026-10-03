@@ -4,6 +4,7 @@ import {
   detectPageFooterOutlierRowIndex,
   findRemarksMergeSuspects,
   findSameDurationClusterRowIndices,
+  visibleDigifiReviewMessages,
 } from '../../app/utils/digifiScanRowReview'
 import type { DigifiTemplateColumn } from '../../app/utils/digifiTypes'
 
@@ -70,6 +71,20 @@ describe('findSameDurationClusterRowIndices', () => {
     const suspects = findRemarksMergeSuspects(rows, columns, 4)
     expect(suspects.length).toBeGreaterThanOrEqual(1)
     expect(suspects.some((s) => s.message.includes('same duration'))).toBe(true)
+  })
+})
+
+describe('visibleDigifiReviewMessages', () => {
+  it('drops merge-suspect sentences and keeps other review notes', () => {
+    const merge =
+      'Line 7 may merge two flights (consecutive rows with the same duration (possible skipped or merged line)). Re-scan remarks for this band if needed.'
+    expect(
+      visibleDigifiReviewMessages([
+        merge,
+        '  ',
+        'Review aircraft N12345.',
+      ])
+    ).toEqual(['Review aircraft N12345.'])
   })
 })
 

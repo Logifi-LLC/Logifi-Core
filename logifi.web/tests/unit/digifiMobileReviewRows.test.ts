@@ -5,7 +5,7 @@ import {
 } from '~/utils/digifiMobileReviewRows'
 
 describe('computeDigifiMobileReviewRowMinHeights', () => {
-  it('uses the same height for every column at a row index (remarks + rescan reserve)', () => {
+  it('uses remarks line count for row height and does not reserve rescan space', () => {
     const heights = computeDigifiMobileReviewRowMinHeights({
       rowCount: 3,
       rows: [
@@ -17,13 +17,11 @@ describe('computeDigifiMobileReviewRowMinHeights', () => {
         { id: 'dualg', fieldKey: 'dualG' },
         { id: 'remarks', fieldKey: 'remarks' },
       ],
-      remarksRescanRowIndices: new Set([2]),
     })
 
     expect(heights).toHaveLength(3)
     expect(heights[0]).toBeLessThan(heights[1])
-    expect(heights[2]).toBeGreaterThan(heights[0])
-    expect(heights[1]).toBe(heights[1])
+    expect(heights[2]).toBe(heights[0])
   })
 
   it('keeps numeric-only rows at the base height', () => {

@@ -101,6 +101,16 @@ export default defineComponent({
       }
     )
 
+    watch(
+      () => filteredTypeaheadSuggestions.value.length,
+      (len) => {
+        if (!props.isEditing || len === 0 || showTypeaheadDropdown.value) return
+        const el = inputRef.value
+        if (!el || document.activeElement !== el) return
+        openTypeaheadDropdown()
+      }
+    )
+
     function detachTypeaheadViewportListeners() {
       if (!typeaheadRepositionHandler) return
       const onReposition = typeaheadRepositionHandler
