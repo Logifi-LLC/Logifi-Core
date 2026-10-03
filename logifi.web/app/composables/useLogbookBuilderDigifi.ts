@@ -19,6 +19,7 @@ import { renormalizeBuilderGridDates } from '~/utils/digifiGridDates'
 import { seedDigifiManualFieldDefaults } from '~/utils/digifiManualFieldDefaults'
 import { normalizeGridRemarksCells } from '~/utils/digifiRemarksNormalize'
 import { sanitizeDigifiScanRows } from '~/utils/digifiScanSanitize'
+import { visibleDigifiReviewMessages } from '~/utils/digifiScanRowReview'
 import { buildDigifiTargetColumnsForPage } from '~/utils/digifiScanTargetColumns'
 import {
   computeRemarksColumnCrop,
@@ -374,7 +375,7 @@ export function useLogbookBuilderDigifi(
           : analyzeDigifiScanRows(result.rows, rowCount.value)
       const rowWarning = formatDigifiScanWarning(diagnostics, rowCount.value, result.rows)
       remarksRescanOffers.value = result.remarksRescanOffers ?? []
-      const scanReviewNotes = (result.reviewMessages ?? []).filter(Boolean)
+      const scanReviewNotes = visibleDigifiReviewMessages(result.reviewMessages)
       const reviewWarning =
         scanReviewNotes.length > 0 ? scanReviewNotes.join(' ') : null
       const fallbackWarning =

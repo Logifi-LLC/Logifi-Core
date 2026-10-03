@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { nextTick, ref } from 'vue'
 import DigifiMobileColumnCarousel from '../../app/components/digifi/DigifiMobileColumnCarousel.vue'
 import DigifiMobileCameraCapture from '../../app/components/digifi/DigifiMobileCameraCapture.vue'
 import DigifiMobileLayoutWizard from '../../app/components/digifi/DigifiMobileLayoutWizard.vue'
@@ -247,6 +247,55 @@ describe('DigifiMobileColumnCarousel', () => {
     const { wrapper, grid } = mountWithGrid(DigifiMobileColumnCarousel)
     const select = wrapper.get('[aria-label="Column"]')
     expect(select.findAll('option').length).toBe(grid.visibleColumns.value.length)
+  })
+
+  it('shows saved pilot names when the pilot cell is focused', async () => {
+    const grid = useLogbookBuilderGrid()
+    grid.setRowCount(2)
+    grid.addColumn('pilots')
+    const pilots = ref(['Ada Lovelace', 'Grace Hopper'])
+    const wrapper = mount(DigifiMobileColumnCarousel, {
+      global: {
+        provide: { logbookBuilderGrid: grid, builderPilots: pilots },
+      },
+    })
+    await nextTick()
+    const pilotInput = wrapper
+      .findAll('input')
+      .find((input) => (input.element as HTMLInputElement).placeholder === 'Pilot name')
+    expect(pilotInput).toBeTruthy()
+    await pilotInput!.trigger('focus')
+    await nextTick()
+    const menu = wrapper.get('[data-builder-typeahead-dropdown]')
+    expect(menu.classes()).toContain('absolute')
+    expect(menu.classes()).toContain('top-full')
+    expect(menu.classes()).toContain('w-full')
+    expect(menu.element.parentElement).toBe(pilotInput!.element.parentElement)
+    expect(wrapper.text()).toContain('Ada Lovelace')
+    expect(wrapper.text()).toContain('Grace Hopper')
+  })
+
+  it('does not offer a paid remarks re-scan', async () => {
+    const { wrapper, grid } = mountWithGrid(DigifiMobileColumnCarousel)
+    grid.addColumn('remarks')
+    await nextTick()
+    const remarks = grid.visibleColumns.value.find((column) => column.fieldKey === 'remarks')
+    expect(remarks).toBeTruthy()
+    grid.setDigifiCellMeta(0, remarks!.id, {
+      fieldKey: 'remarks',
+      rawValue: 'a | b',
+      resolvedValue: 'a | b',
+      strategy: 'raw',
+      confidence: 'low',
+      autoApplied: false,
+      needsReview: true,
+      message:
+        'Line 1 may merge two flights (consecutive rows with the same duration (possible skipped or merged line)). Re-scan remarks for this band if needed.',
+    })
+    await nextTick()
+    expect(wrapper.text()).not.toContain('Re-scan remarks')
+    expect(wrapper.text()).not.toContain('uses 1 credit')
+    expect(wrapper.text()).not.toContain('may merge two flights')
   })
 
   it('tags each row for cross-column height measurement', async () => {

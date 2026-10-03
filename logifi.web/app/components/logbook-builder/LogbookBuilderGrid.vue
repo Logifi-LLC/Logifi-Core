@@ -21,6 +21,7 @@ import {
   type SelectionRange,
 } from '~/utils/logbookBuilderCommands'
 import type { DigifiScanCellMeta } from '~/utils/digifiTypes'
+import { isDigifiMergeSuspectNotice } from '~/utils/digifiScanRowReview'
 import type { LogbookColumnConfig } from '~/utils/logbookTypes'
 import LogbookBuilderCell from './LogbookBuilderCell.vue'
 import LogbookBuilderHeader from './LogbookBuilderHeader.vue'
@@ -1459,17 +1460,23 @@ function getDigifiSuggestions(rowIdx: number, colId: string, fieldKey: string | 
   return []
 }
 
+function displayDigifiMetaMessage(message: string | undefined): string | undefined {
+  if (!message || isDigifiMergeSuspectNotice(message)) return undefined
+  return message
+}
+
 function getDigifiCellTitle(rowIdx: number, colId: string): string | undefined {
   const meta = getDigifiCellMeta(rowIdx, colId)
   if (!meta) return undefined
   if (meta.needsReview && (meta.candidates?.length ?? 0) > 0) {
     const preview = meta.candidates?.slice(0, 3).map((candidate) => candidate.value).join(', ')
-    return `${meta.message ?? 'Review this AI match.'}${preview ? ` Top matches: ${preview}.` : ''}`
+    const message = displayDigifiMetaMessage(meta.message) ?? 'Review this AI match.'
+    return `${message}${preview ? ` Top matches: ${preview}.` : ''}`
   }
   if (meta.autoApplied && meta.rawValue.trim() && meta.rawValue.trim() !== meta.resolvedValue.trim()) {
-    return meta.message ?? `AI changed "${meta.rawValue}" to "${meta.resolvedValue}".`
+    return displayDigifiMetaMessage(meta.message) ?? `AI changed "${meta.rawValue}" to "${meta.resolvedValue}".`
   }
-  return meta.message
+  return displayDigifiMetaMessage(meta.message)
 }
 
 function digifiCellState(rowIdx: number, colId: string): 'review' | 'auto' | 'confirmed' | null {

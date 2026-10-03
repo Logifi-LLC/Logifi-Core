@@ -1,69 +1,72 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { computeTypeaheadMenuPosition } from '../typeaheadMenuPosition'
+import { describe, it, expect } from 'vitest'
+import {
+  TYPEAHEAD_MENU_MAX_HEIGHT,
+  TYPEAHEAD_OPTION_HEIGHT,
+  TYPEAHEAD_VISIBLE_OPTIONS,
+  chooseTypeaheadPlacement,
+} from '../typeaheadMenuPosition'
 
-function mockAnchor(rect: DOMRect): HTMLElement {
-  return {
-    getBoundingClientRect: () => rect,
-  } as HTMLElement
-}
-
-describe('computeTypeaheadMenuPosition', () => {
-  const originalVv = window.visualViewport
-
-  beforeEach(() => {
-    vi.stubGlobal('innerHeight', 800)
-    vi.stubGlobal('innerWidth', 390)
+describe('chooseTypeaheadPlacement', () => {
+  it('keeps the preferred menu height to about five options', () => {
+    expect(TYPEAHEAD_VISIBLE_OPTIONS).toBe(5)
+    expect(TYPEAHEAD_MENU_MAX_HEIGHT).toBe(TYPEAHEAD_OPTION_HEIGHT * 5)
   })
 
-  afterEach(() => {
-    vi.unstubAllGlobals()
-    Object.defineProperty(window, 'visualViewport', {
-      configurable: true,
-      value: originalVv,
-    })
+  it('opens downward when the menu fits under the cell', () => {
+    expect(
+      chooseTypeaheadPlacement({
+        spaceAbove: 200,
+        spaceBelow: 400,
+        menuHeight: TYPEAHEAD_MENU_MAX_HEIGHT,
+      })
+    ).toEqual({ placement: 'down', maxHeight: TYPEAHEAD_MENU_MAX_HEIGHT })
   })
 
-  function setVisualViewport(opts: {
-    offsetTop: number
-    offsetLeft: number
-    height: number
-    width: number
-  }) {
-    Object.defineProperty(window, 'visualViewport', {
-      configurable: true,
-      value: {
-        offsetTop: opts.offsetTop,
-        offsetLeft: opts.offsetLeft,
-        height: opts.height,
-        width: opts.width,
-        addEventListener: () => {},
-        removeEventListener: () => {},
-      },
-    })
-  }
-
-  it('places menu just below the anchor when space allows', () => {
-    setVisualViewport({ offsetTop: 0, offsetLeft: 0, height: 400, width: 390 })
-    const anchor = mockAnchor(new DOMRect(10, 200, 100, 28))
-    const pos = computeTypeaheadMenuPosition(anchor)
-    expect(pos.placement).toBe('below')
-    expect(pos.top).toBe(200 + 28 + 2)
+  it('opens upward when the last row, footer, or keyboard leaves no room below', () => {
+    expect(
+      chooseTypeaheadPlacement({
+        spaceAbove: 420,
+        spaceBelow: 0,
+        menuHeight: TYPEAHEAD_MENU_MAX_HEIGHT,
+      })
+    ).toEqual({ placement: 'up', maxHeight: TYPEAHEAD_MENU_MAX_HEIGHT })
   })
 
-  it('accounts for visualViewport offset (iOS keyboard / scroll)', () => {
-    setVisualViewport({ offsetTop: 320, offsetLeft: 0, height: 360, width: 390 })
-    const anchor = mockAnchor(new DOMRect(12, 500, 120, 30))
-    const pos = computeTypeaheadMenuPosition(anchor)
-    expect(pos.placement).toBe('below')
-    expect(pos.top).toBe(500 + 30 - 320 + 2)
-    expect(pos.left).toBe(12)
+  it('opens upward when only part of the menu would fit below', () => {
+    expect(
+      chooseTypeaheadPlacement({
+        spaceAbove: 300,
+        spaceBelow: 40,
+        menuHeight: TYPEAHEAD_MENU_MAX_HEIGHT,
+      })
+    ).toEqual({ placement: 'up', maxHeight: TYPEAHEAD_MENU_MAX_HEIGHT })
   })
 
-  it('does not clamp menu to offsetTop when anchor is in the visible band', () => {
-    setVisualViewport({ offsetTop: 280, offsetLeft: 0, height: 340, width: 390 })
-    const anchor = mockAnchor(new DOMRect(8, 420, 110, 28))
-    const pos = computeTypeaheadMenuPosition(anchor)
-    expect(pos.top).toBeGreaterThan(100)
-    expect(pos.top).toBeLessThan(200)
+  it('caps the height to the larger side when neither side fits', () => {
+    expect(
+      chooseTypeaheadPlacement({
+        spaceAbove: 100,
+        spaceBelow: 48,
+        menuHeight: TYPEAHEAD_MENU_MAX_HEIGHT,
+      })
+    ).toEqual({ placement: 'up', maxHeight: 100 })
+
+    expect(
+      chooseTypeaheadPlacement({
+        spaceAbove: 36,
+        spaceBelow: 90,
+        menuHeight: TYPEAHEAD_MENU_MAX_HEIGHT,
+      })
+    ).toEqual({ placement: 'down', maxHeight: 90 })
+  })
+
+  it('prefers downward when both sides are equally short', () => {
+    expect(
+      chooseTypeaheadPlacement({
+        spaceAbove: 80,
+        spaceBelow: 80,
+        menuHeight: TYPEAHEAD_MENU_MAX_HEIGHT,
+      })
+    ).toEqual({ placement: 'down', maxHeight: 80 })
   })
 })
