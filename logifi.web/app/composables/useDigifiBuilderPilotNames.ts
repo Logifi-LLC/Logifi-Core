@@ -1,13 +1,19 @@
 import { ref, watchEffect, type Ref } from 'vue'
 import { useAuth } from '~/composables/useAuth'
 import { supabase } from '~/lib/supabase'
+import { getAllEntriesFromIndexedDB } from '~/utils/indexedDB'
+import { mergePilotNameSuggestions } from '~/utils/pilotNameSuggest'
 
-/** Pilot name suggestions for Digifi builder / mobile review (matches logbook-builder). */
+/**
+ * Pilot name suggestions for Digifi builder / mobile review.
+ * iOS keeps the logbook in IndexedDB (local-first). A Supabase-only read
+ * often comes back empty on device, which hides the Pilot typeahead.
+ */
 export function useDigifiBuilderPilotNames(): Ref<string[]> {
   const pilots = ref<string[]>([])
   const { user, isAuthenticated } = useAuth()
 
-  watchEffect(async (onCleanup) => {
+  watchEffect((onCleanup) => {
     const currentUser = user.value
     if (!isAuthenticated.value || !currentUser) {
       pilots.value = []
@@ -18,23 +24,41 @@ export function useDigifiBuilderPilotNames(): Ref<string[]> {
     onCleanup(() => {
       cancelled = true
     })
+    pilots.value = []
 
-    try {
-      const { data, error } = await (supabase as any)
-        .from('log_entries')
-        .select('training_elements')
-        .eq('user_id', currentUser.id)
+    void (async () => {
+      let localNames: string[] = []
+      try {
+        const entries = await getAllEntriesFromIndexedDB(currentUser.id)
+        localNames = entries.map((entry) => entry.trainingElements)
+      } catch {
+        localNames = []
+      }
+      if (cancelled) return
+      if (localNames.length > 0) {
+        pilots.value = mergePilotNameSuggestions([localNames])
+      }
 
-      if (error || !data || cancelled) return
+      try {
+        const { data, error } = await (supabase as any)
+          .from('log_entries')
+          .select('training_elements')
+          .eq('user_id', currentUser.id)
+          .not('training_elements', 'is', null)
+          .limit(1000)
 
-      const names = (data as { training_elements: string | null }[])
-        .map((row) => (row.training_elements || '').trim())
-        .filter(Boolean)
+        if (cancelled || error || !data) return
 
-      pilots.value = Array.from(new Set(names)).sort((a, b) => a.localeCompare(b))
-    } catch {
-      if (!cancelled) pilots.value = []
-    }
+        const remoteNames = (data as { training_elements: string | null }[]).map(
+          (row) => row.training_elements
+        )
+        pilots.value = mergePilotNameSuggestions([localNames, remoteNames])
+      } catch {
+        if (!cancelled && localNames.length > 0) {
+          pilots.value = mergePilotNameSuggestions([localNames])
+        }
+      }
+    })()
   })
 
   return pilots

@@ -72,8 +72,6 @@ const {
   canScan,
   scanPage,
   leftPageScanned,
-  rescanRemarksBand,
-  remarksRescanOffers,
 } = useLogbookBuilderDigifi(grid)
 
 const phase = ref<'setup' | 'review'>('setup')
@@ -495,12 +493,7 @@ onUnmounted(() => {
         @cancel="showCamera = false"
       />
 
-      <DigifiMobileColumnCarousel
-        v-else-if="phase === 'review'"
-        :remarks-rescan-offers="remarksRescanOffers"
-        :rescan-busy="scanning"
-        @rescan-remarks-band="(rowIndex) => void rescanRemarksBand(rowIndex)"
-      />
+      <DigifiMobileColumnCarousel v-else-if="phase === 'review'" />
     </div>
 
     <template v-if="phase === 'review'" #footer>

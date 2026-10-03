@@ -326,3 +326,17 @@ export function applyRemarksMergeSuspectMeta(
 export function formatPageFooterDropMessage(rowIndex: number): string {
   return `Removed line ${rowIndex + 1} as a likely page total (not a flight).`
 }
+
+/** User-facing copy for a remarks merge suspect. Kept for detection; not shown in Review. */
+export function isDigifiMergeSuspectNotice(message: string | null | undefined): boolean {
+  return (message ?? '').toLowerCase().includes('may merge two flights')
+}
+
+/** Review banner text with merge-suspect sentences removed. */
+export function visibleDigifiReviewMessages(
+  messages: readonly string[] | null | undefined
+): string[] {
+  return (messages ?? [])
+    .map((message) => message.trim())
+    .filter((message) => message.length > 0 && !isDigifiMergeSuspectNotice(message))
+}

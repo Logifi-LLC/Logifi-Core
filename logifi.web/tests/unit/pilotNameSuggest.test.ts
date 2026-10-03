@@ -3,9 +3,19 @@ import {
   filterPilotSuggestions,
   filterLabelValueSuggestions,
   handlePilotSuggestKeydown,
+  mergePilotNameSuggestions,
 } from '../../app/utils/pilotNameSuggest'
 
 describe('pilotNameSuggest', () => {
+  it('merges saved names and drops blanks and case duplicates', () => {
+    expect(
+      mergePilotNameSuggestions([
+        ['Ada Lovelace', '  ', 'ada lovelace'],
+        ['Grace Hopper', null],
+      ])
+    ).toEqual(['Ada Lovelace', 'Grace Hopper'])
+  })
+
   it('returns full list when search is empty', () => {
     expect(filterPilotSuggestions(['Alice', 'Bob'], '')).toEqual(['Alice', 'Bob'])
   })
