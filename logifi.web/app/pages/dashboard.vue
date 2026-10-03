@@ -175,13 +175,17 @@
           ? isDarkMode
             ? 'border-red-700/50 bg-red-950/90 text-red-200'
             : 'border-red-300 bg-red-50 text-red-800'
-          : iosSyncStatus === 'success'
+          : iosSyncStatus === 'offline'
             ? isDarkMode
-              ? 'border-green-700/50 bg-green-950/90 text-green-200'
-              : 'border-green-300 bg-green-50 text-green-800'
-            : isDarkMode
-              ? 'border-blue-700/50 bg-gray-900/95 text-gray-200'
-              : 'border-blue-200 bg-white text-gray-800'
+              ? 'border-amber-700/50 bg-amber-950/90 text-amber-200'
+              : 'border-amber-300 bg-amber-50 text-amber-800'
+            : iosSyncStatus === 'success'
+              ? isDarkMode
+                ? 'border-green-700/50 bg-green-950/90 text-green-200'
+                : 'border-green-300 bg-green-50 text-green-800'
+              : isDarkMode
+                ? 'border-blue-700/50 bg-gray-900/95 text-gray-200'
+                : 'border-blue-200 bg-white text-gray-800'
       ]"
     >
       <div class="flex items-center gap-2 min-w-0">
@@ -7343,7 +7347,7 @@ const isLoadEntriesRunning = ref(false)
 const isBulkLoadInProgress = ref(false)
 let loadEntriesInFlight: Promise<number> | null = null
 
-type IosSyncStatus = 'idle' | 'loading' | 'success' | 'error'
+type IosSyncStatus = 'idle' | 'loading' | 'success' | 'error' | 'offline'
 const iosSyncStatus = ref<IosSyncStatus>('idle')
 const iosSyncMessage = ref('')
 const iosSyncBannerVisible = ref(false)
@@ -16404,15 +16408,34 @@ function updateIosSyncBanner(status: Exclude<IosSyncStatus, 'idle'>, message: st
     clearTimeout(iosSyncSuccessTimer)
     iosSyncSuccessTimer = null
   }
+
+  const previousStatus = iosSyncStatus.value
+  const wasVisibleLoading = iosSyncBannerVisible.value && previousStatus === 'loading'
+  // Cached logbooks sync in the background. Keep loading on screen after Retry
+  // and while an empty-logbook load is already visible.
+  const quietLoading =
+    status === 'loading' &&
+    logEntries.value.length > 0 &&
+    previousStatus !== 'error' &&
+    !wasVisibleLoading
+
+  if (quietLoading || (status === 'success' && !wasVisibleLoading)) {
+    iosSyncBannerVisible.value = false
+    iosSyncStatus.value = status === 'loading' ? 'loading' : 'idle'
+    iosSyncMessage.value = status === 'success' ? '' : message
+    return
+  }
+
   iosSyncStatus.value = status
   iosSyncMessage.value = message
   iosSyncBannerVisible.value = true
-  if (status === 'success') {
+  const hideMs = status === 'success' ? 2000 : status === 'offline' ? 3000 : 0
+  if (hideMs > 0) {
     iosSyncSuccessTimer = setTimeout(() => {
       iosSyncBannerVisible.value = false
       iosSyncStatus.value = 'idle'
       iosSyncSuccessTimer = null
-    }, 3000)
+    }, hideMs)
   }
 }
 
@@ -16901,7 +16924,7 @@ async function loadEntriesInternal(options: LoadEntriesOptions = {}): Promise<nu
             const count = logEntries.value.length
             if (count > 0) {
               updateIosSyncBanner(
-                'success',
+                'offline',
                 `Offline — showing ${count} cached ${count === 1 ? 'entry' : 'entries'}`
               )
             }
