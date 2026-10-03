@@ -14,8 +14,9 @@ import {
 } from '~/utils/pilotNameSuggest'
 import {
   TYPEAHEAD_MENU_MAX_HEIGHT,
-  releaseTypeaheadMenuSpace,
-  scrollTypeaheadMenuIntoVisualViewport,
+  TYPEAHEAD_OPTION_HEIGHT,
+  placeTypeaheadMenu,
+  type TypeaheadPlacement,
 } from '~/utils/typeaheadMenuPosition'
 import { shouldDeferGridKeydown as shouldDeferGridKeydownUtil } from '~/utils/logbookBuilderGridKeys'
 import { useTheme } from '~/composables/useTheme'
@@ -61,6 +62,8 @@ export default defineComponent({
 
     const showTypeaheadDropdown = ref(false)
     const highlightedTypeaheadIndex = ref(-1)
+    const typeaheadPlacement = ref<TypeaheadPlacement>('down')
+    const typeaheadMaxHeight = ref(TYPEAHEAD_MENU_MAX_HEIGHT)
     let typeaheadBlurTimer: ReturnType<typeof setTimeout> | null = null
     let typeaheadRepositionHandler: (() => void) | null = null
     let typeaheadStackTarget: HTMLElement | null = null
@@ -107,7 +110,9 @@ export default defineComponent({
       const onReposition = typeaheadRepositionHandler
       const vv = window.visualViewport
       window.removeEventListener('resize', onReposition)
+      window.removeEventListener('scroll', onReposition, true)
       vv?.removeEventListener('resize', onReposition)
+      vv?.removeEventListener('scroll', onReposition)
       typeaheadRepositionHandler = null
     }
 
@@ -115,7 +120,9 @@ export default defineComponent({
       detachTypeaheadViewportListeners()
       const vv = window.visualViewport
       window.addEventListener('resize', onReposition)
+      window.addEventListener('scroll', onReposition, true)
       vv?.addEventListener('resize', onReposition)
+      vv?.addEventListener('scroll', onReposition)
       typeaheadRepositionHandler = onReposition
     }
 
@@ -141,22 +148,30 @@ export default defineComponent({
       row.style.zIndex = '40'
     }
 
-    function ensureTypeaheadMenuVisible() {
+    function desiredTypeaheadHeight(): number {
+      const rows = filteredTypeaheadSuggestions.value.length
+      if (rows <= 0) return TYPEAHEAD_MENU_MAX_HEIGHT
+      return Math.min(TYPEAHEAD_MENU_MAX_HEIGHT, rows * TYPEAHEAD_OPTION_HEIGHT)
+    }
+
+    function syncTypeaheadPlacement() {
       const anchor = inputRef.value
-      const menu = anchor?.parentElement?.querySelector('[data-builder-typeahead-dropdown]')
-      if (!anchor || !(menu instanceof HTMLElement)) return
-      scrollTypeaheadMenuIntoVisualViewport(anchor, menu)
+      if (!anchor) return
+      const decision = placeTypeaheadMenu(anchor, desiredTypeaheadHeight())
+      typeaheadPlacement.value = decision.placement
+      typeaheadMaxHeight.value = Math.max(decision.maxHeight, 0)
     }
 
     function openTypeaheadDropdown() {
       if (!props.isEditing || filteredTypeaheadSuggestions.value.length === 0) return
+      setTypeaheadRowStack(true)
+      syncTypeaheadPlacement()
       showTypeaheadDropdown.value = true
       highlightedTypeaheadIndex.value =
         filteredTypeaheadSuggestions.value.length > 0 ? 0 : -1
       nextTick(() => {
-        setTypeaheadRowStack(true)
-        ensureTypeaheadMenuVisible()
-        attachTypeaheadViewportListeners(() => ensureTypeaheadMenuVisible())
+        syncTypeaheadPlacement()
+        attachTypeaheadViewportListeners(() => syncTypeaheadPlacement())
       })
     }
 
@@ -165,12 +180,6 @@ export default defineComponent({
       highlightedTypeaheadIndex.value = -1
       detachTypeaheadViewportListeners()
       setTypeaheadRowStack(false)
-      // Another cell may already have opened its menu (blur is delayed).
-      nextTick(() => {
-        if (!document.querySelector('[data-builder-typeahead-dropdown]')) {
-          releaseTypeaheadMenuSpace()
-        }
-      })
     }
 
     function selectTypeaheadValue(value: string) {
@@ -182,7 +191,6 @@ export default defineComponent({
     onBeforeUnmount(() => {
       detachTypeaheadViewportListeners()
       setTypeaheadRowStack(false)
-      releaseTypeaheadMenuSpace()
       if (typeaheadBlurTimer) clearTimeout(typeaheadBlurTimer)
     })
 
@@ -404,7 +412,8 @@ export default defineComponent({
       isTypeaheadField,
       showTypeaheadDropdown,
       highlightedTypeaheadIndex,
-      typeaheadMenuMaxHeight: TYPEAHEAD_MENU_MAX_HEIGHT,
+      typeaheadPlacement,
+      typeaheadMaxHeight,
       filteredTypeaheadSuggestions,
       typeaheadSuggestionLabel,
       selectTypeaheadValue,
@@ -505,10 +514,14 @@ export default defineComponent({
     />
     <div
       v-if="showTypeaheadDropdown && isEditing && filteredTypeaheadSuggestions.length > 0"
-      class="absolute top-full left-0 z-30 w-full overflow-y-auto border shadow-lg font-quicksand text-sm"
-      :class="isDark ? 'border-white/10 bg-gray-900 text-gray-100' : 'border-gray-200 bg-white text-gray-900'"
-      :style="{ maxHeight: typeaheadMenuMaxHeight + 'px' }"
+      class="absolute left-0 z-30 w-full overflow-y-auto border shadow-lg font-quicksand text-sm"
+      :class="[
+        typeaheadPlacement === 'up' ? 'bottom-full' : 'top-full',
+        isDark ? 'border-white/10 bg-gray-900 text-gray-100' : 'border-gray-200 bg-white text-gray-900',
+      ]"
+      :style="{ maxHeight: typeaheadMaxHeight + 'px' }"
       data-builder-typeahead-dropdown
+      :data-typeahead-placement="typeaheadPlacement"
     >
         <button
           v-for="(item, index) in filteredTypeaheadSuggestions"

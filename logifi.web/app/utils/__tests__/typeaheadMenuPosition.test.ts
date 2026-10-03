@@ -3,71 +3,70 @@ import {
   TYPEAHEAD_MENU_MAX_HEIGHT,
   TYPEAHEAD_OPTION_HEIGHT,
   TYPEAHEAD_VISIBLE_OPTIONS,
-  typeaheadClipPadding,
-  typeaheadScrollDelta,
-  typeaheadScrollRoomShortfall,
+  chooseTypeaheadPlacement,
 } from '../typeaheadMenuPosition'
 
-describe('typeaheadScrollDelta', () => {
-  it('keeps the menu height to about five options', () => {
+describe('chooseTypeaheadPlacement', () => {
+  it('keeps the preferred menu height to about five options', () => {
     expect(TYPEAHEAD_VISIBLE_OPTIONS).toBe(5)
     expect(TYPEAHEAD_MENU_MAX_HEIGHT).toBe(TYPEAHEAD_OPTION_HEIGHT * 5)
   })
 
-  it('does not scroll when the menu already fits under the cell', () => {
+  it('opens downward when the menu fits under the cell', () => {
     expect(
-      typeaheadScrollDelta({
-        anchorTop: 200,
-        anchorBottom: 244,
+      chooseTypeaheadPlacement({
+        spaceAbove: 200,
+        spaceBelow: 400,
         menuHeight: TYPEAHEAD_MENU_MAX_HEIGHT,
-        viewportHeight: 844,
       })
-    ).toBe(0)
+    ).toEqual({ placement: 'down', maxHeight: TYPEAHEAD_MENU_MAX_HEIGHT })
   })
 
-  it('scrolls the cell up when the menu would run off the visual viewport', () => {
-    const anchorTop = 279
-    const anchorBottom = 323
-    const viewportHeight = 420
-    const delta = typeaheadScrollDelta({
-      anchorTop,
-      anchorBottom,
-      menuHeight: TYPEAHEAD_MENU_MAX_HEIGHT,
-      viewportHeight,
-    })
-    expect(delta).toBe(anchorBottom + TYPEAHEAD_MENU_MAX_HEIGHT - viewportHeight)
-    expect(delta).toBeGreaterThan(0)
-    expect(anchorTop - delta).toBeGreaterThanOrEqual(0)
+  it('opens upward when the last row, footer, or keyboard leaves no room below', () => {
+    expect(
+      chooseTypeaheadPlacement({
+        spaceAbove: 420,
+        spaceBelow: 0,
+        menuHeight: TYPEAHEAD_MENU_MAX_HEIGHT,
+      })
+    ).toEqual({ placement: 'up', maxHeight: TYPEAHEAD_MENU_MAX_HEIGHT })
   })
 
-  it('does not scroll the cell under the safe area to make room', () => {
-    const delta = typeaheadScrollDelta({
-      anchorTop: 40,
-      anchorBottom: 80,
-      menuHeight: TYPEAHEAD_MENU_MAX_HEIGHT,
-      viewportHeight: 200,
-      safeTop: 8,
-    })
-    expect(delta).toBe(40 - 8)
-  })
-})
-
-describe('typeaheadClipPadding', () => {
-  it('adds nothing when the menu already fits in the card', () => {
-    expect(typeaheadClipPadding(323, 550, TYPEAHEAD_MENU_MAX_HEIGHT)).toBe(0)
+  it('opens upward when only part of the menu would fit below', () => {
+    expect(
+      chooseTypeaheadPlacement({
+        spaceAbove: 300,
+        spaceBelow: 40,
+        menuHeight: TYPEAHEAD_MENU_MAX_HEIGHT,
+      })
+    ).toEqual({ placement: 'up', maxHeight: TYPEAHEAD_MENU_MAX_HEIGHT })
   })
 
-  it('pads the card when the last row menu would be clipped', () => {
-    expect(typeaheadClipPadding(754, 754, TYPEAHEAD_MENU_MAX_HEIGHT)).toBe(TYPEAHEAD_MENU_MAX_HEIGHT + 8)
-  })
-})
+  it('caps the height to the larger side when neither side fits', () => {
+    expect(
+      chooseTypeaheadPlacement({
+        spaceAbove: 100,
+        spaceBelow: 48,
+        menuHeight: TYPEAHEAD_MENU_MAX_HEIGHT,
+      })
+    ).toEqual({ placement: 'up', maxHeight: 100 })
 
-describe('typeaheadScrollRoomShortfall', () => {
-  it('is zero when the page can already scroll the cell up', () => {
-    expect(typeaheadScrollRoomShortfall(155, 1200, 844, 100)).toBe(0)
+    expect(
+      chooseTypeaheadPlacement({
+        spaceAbove: 36,
+        spaceBelow: 90,
+        menuHeight: TYPEAHEAD_MENU_MAX_HEIGHT,
+      })
+    ).toEqual({ placement: 'down', maxHeight: 90 })
   })
 
-  it('requests the missing padding when the last row is already fully scrolled', () => {
-    expect(typeaheadScrollRoomShortfall(155, 998, 844, 154)).toBe(155)
+  it('prefers downward when both sides are equally short', () => {
+    expect(
+      chooseTypeaheadPlacement({
+        spaceAbove: 80,
+        spaceBelow: 80,
+        menuHeight: TYPEAHEAD_MENU_MAX_HEIGHT,
+      })
+    ).toEqual({ placement: 'down', maxHeight: 80 })
   })
 })

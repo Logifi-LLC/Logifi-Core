@@ -2,54 +2,36 @@
 export const TYPEAHEAD_OPTION_HEIGHT = 36
 export const TYPEAHEAD_VISIBLE_OPTIONS = 5
 export const TYPEAHEAD_MENU_MAX_HEIGHT = TYPEAHEAD_OPTION_HEIGHT * TYPEAHEAD_VISIBLE_OPTIONS
-/** Keep the menu inside a rounded clip edge. */
-export const TYPEAHEAD_CLIP_GUTTER = 8
 
-export type TypeaheadScrollInput = {
-  anchorTop: number
-  anchorBottom: number
+export type TypeaheadPlacement = 'down' | 'up'
+
+export type TypeaheadPlacementInput = {
+  spaceAbove: number
+  spaceBelow: number
+  /** Preferred menu height, already capped at about five options. */
   menuHeight: number
-  viewportHeight: number
-  safeTop?: number
-  safeBottom?: number
+}
+
+export type TypeaheadPlacementDecision = {
+  placement: TypeaheadPlacement
+  maxHeight: number
 }
 
 /**
- * Pixels to scroll the page upward so a menu that hangs off the cell's bottom
- * edge stays inside the visual viewport. Never negative — the menu is not moved
- * above the cell.
+ * Open downward when the menu fits under the cell. Otherwise open upward.
+ * If neither side fits, use the larger side and cap the height to that space.
+ * Does not scroll the page.
  */
-export function typeaheadScrollDelta(input: TypeaheadScrollInput): number {
-  const safeTop = input.safeTop ?? 0
-  const safeBottom = input.safeBottom ?? 0
-  const bottomLimit = input.viewportHeight - safeBottom
-  const menuBottom = input.anchorBottom + input.menuHeight
-  let delta = menuBottom > bottomLimit ? menuBottom - bottomLimit : 0
-  const nextTop = input.anchorTop - delta
-  if (nextTop < safeTop) delta = Math.max(0, input.anchorTop - safeTop)
-  return delta
-}
-
-/** Extra padding so a menu that hangs past a clipping box stays inside it. */
-export function typeaheadClipPadding(
-  anchorBottom: number,
-  containerBottom: number,
-  menuHeight: number,
-  gutter = TYPEAHEAD_CLIP_GUTTER
-): number {
-  return Math.max(0, anchorBottom + menuHeight + gutter - containerBottom)
-}
-
-/** Extra padding when the scroller cannot move `delta` pixels. */
-export function typeaheadScrollRoomShortfall(
-  delta: number,
-  scrollHeight: number,
-  clientHeight: number,
-  scrollTop: number
-): number {
-  if (delta <= 0) return 0
-  const room = scrollHeight - clientHeight - scrollTop
-  return Math.max(0, delta - room)
+export function chooseTypeaheadPlacement(
+  input: TypeaheadPlacementInput
+): TypeaheadPlacementDecision {
+  const desired = Math.max(0, input.menuHeight)
+  const above = Math.max(0, input.spaceAbove)
+  const below = Math.max(0, input.spaceBelow)
+  if (below >= desired) return { placement: 'down', maxHeight: desired }
+  if (above >= desired) return { placement: 'up', maxHeight: desired }
+  if (above > below) return { placement: 'up', maxHeight: above }
+  return { placement: 'down', maxHeight: below }
 }
 
 export type TypeaheadSafeArea = {
@@ -94,47 +76,29 @@ export function readSafeAreaInsets(): TypeaheadSafeArea {
   return cachedSafeArea
 }
 
-/** Horizontal carousels set overflow-x only; CSS promotes overflow-y and would steal the scroll. */
-function isHorizontalOnlyScroller(node: HTMLElement): boolean {
-  const className = typeof node.className === 'string' ? node.className : ''
-  const horizontal =
-    /\boverflow-x-(auto|scroll)\b/.test(className) &&
-    !/\boverflow-y-(auto|scroll)\b/.test(className) &&
-    !/\boverflow-(auto|scroll)\b/.test(className)
-  return horizontal
+/** WKWebView reports rects in visual-viewport coordinates. Desktop Chrome does not. */
+function fixedTracksVisualViewport(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent
+  if (/iPad|iPhone|iPod/.test(ua)) return true
+  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
 }
 
-function verticalScroller(anchor: HTMLElement): HTMLElement | null {
-  let node: HTMLElement | null = anchor.parentElement
-  while (node) {
-    if (!isHorizontalOnlyScroller(node)) {
-      const style = getComputedStyle(node)
-      const overflowY = style.overflowY
-      if (
-        (overflowY === 'auto' || overflowY === 'scroll') &&
-        node.scrollHeight > node.clientHeight + 1
-      ) {
-        return node
-      }
-    }
-    node = node.parentElement
-  }
-  return null
-}
-
-/** Fixed Review chrome that would cover the cell or the menu. */
-function viewportChromeInsets(viewportHeight: number): { top: number; bottom: number } {
+function viewportLimits(): { top: number; bottom: number } {
+  const vv = window.visualViewport
+  const height = vv?.height ?? window.innerHeight
+  const top = fixedTracksVisualViewport() ? 0 : (vv?.offsetTop ?? 0)
+  const bottom = top + height
   const safe = readSafeAreaInsets()
-  let top = Math.max(4, safe.top)
-  let bottom = Math.max(4, safe.bottom)
-  if (typeof document === 'undefined') return { top, bottom }
+  let limitTop = top + Math.max(0, safe.top)
+  let limitBottom = bottom - Math.max(0, safe.bottom)
 
   const header = document.querySelector('header')
   if (header instanceof HTMLElement) {
     const style = getComputedStyle(header)
     if (style.position === 'fixed' || style.position === 'sticky') {
       const rect = header.getBoundingClientRect()
-      if (rect.bottom > 0 && rect.top < viewportHeight) top = Math.max(top, rect.bottom)
+      if (rect.bottom > limitTop && rect.top < limitBottom) limitTop = Math.max(limitTop, rect.bottom)
     }
   }
 
@@ -143,96 +107,48 @@ function viewportChromeInsets(viewportHeight: number): { top: number; bottom: nu
     const style = getComputedStyle(footer)
     if (style.position === 'fixed' || style.position === 'sticky') {
       const rect = footer.getBoundingClientRect()
-      if (rect.top < viewportHeight && rect.bottom > 0) {
-        bottom = Math.max(bottom, viewportHeight - rect.top)
-      }
+      if (rect.top < limitBottom && rect.bottom > limitTop) limitBottom = Math.min(limitBottom, rect.top)
     }
   }
 
-  return { top, bottom }
+  return { top: limitTop, bottom: limitBottom }
 }
 
-function intendedMenuHeight(menu: HTMLElement): number {
-  const content = Math.max(menu.scrollHeight, menu.getBoundingClientRect().height)
-  if (content <= 0) return TYPEAHEAD_MENU_MAX_HEIGHT
-  return Math.min(content, TYPEAHEAD_MENU_MAX_HEIGHT)
-}
-
-type PaddingRecord = { el: HTMLElement; previous: string }
-const paddingRecords: PaddingRecord[] = []
-
-function addBottomPadding(el: HTMLElement, extra: number) {
-  if (extra <= 1) return
-  let record = paddingRecords.find((item) => item.el === el)
-  if (!record) {
-    record = { el, previous: el.style.paddingBottom }
-    paddingRecords.push(record)
-    el.dataset.typeaheadPad = '1'
-  }
-  const base = el.style.paddingBottom
-    ? Number.parseFloat(el.style.paddingBottom) || 0
-    : Number.parseFloat(getComputedStyle(el).paddingBottom) || 0
-  el.style.paddingBottom = `${base + extra}px`
-}
-
-/** Drop padding added so a menu could clear the card or the footer. */
-export function releaseTypeaheadMenuSpace(): void {
-  for (const { el, previous } of paddingRecords) {
-    el.style.paddingBottom = previous
-    delete el.dataset.typeaheadPad
-  }
-  paddingRecords.length = 0
-}
-
-/** The review card clips overflow. Grow it so the menu is painted, still under the cell. */
-function expandClippingAncestors(anchor: HTMLElement, menuHeight: number) {
+/** Overflow on the review card clips a menu that leaves the column list. */
+function clipLimits(anchor: HTMLElement): { top: number; bottom: number } | null {
+  let top = -Infinity
+  let bottom = Infinity
+  let found = false
   let node: HTMLElement | null = anchor.parentElement
   while (node && node !== document.body && node !== document.documentElement) {
     const style = getComputedStyle(node)
-    if (style.overflowX !== 'visible' || style.overflowY !== 'visible') {
-      const extra = typeaheadClipPadding(
-        anchor.getBoundingClientRect().bottom,
-        node.getBoundingClientRect().bottom,
-        menuHeight
-      )
-      addBottomPadding(node, extra)
+    if (style.overflowY !== 'visible') {
+      const rect = node.getBoundingClientRect()
+      top = Math.max(top, rect.top)
+      bottom = Math.min(bottom, rect.bottom)
+      found = true
     }
     node = node.parentElement
   }
+  return found ? { top, bottom } : null
 }
 
-function growScrollRoom(el: HTMLElement, delta: number) {
-  const short = typeaheadScrollRoomShortfall(delta, el.scrollHeight, el.clientHeight, el.scrollTop)
-  addBottomPadding(el, short)
-}
-
-/** Scroll so the open menu, still attached under the cell, clears the keyboard. */
-export function scrollTypeaheadMenuIntoVisualViewport(
-  anchor: HTMLElement,
-  menu: HTMLElement
-): void {
-  const menuHeight = intendedMenuHeight(menu)
-  expandClippingAncestors(anchor, menuHeight)
-  const anchorRect = anchor.getBoundingClientRect()
-  const vv = window.visualViewport
-  const height = vv?.height ?? window.innerHeight
-  const chrome = viewportChromeInsets(height)
-  const delta = typeaheadScrollDelta({
-    anchorTop: anchorRect.top,
-    anchorBottom: anchorRect.bottom,
-    menuHeight,
-    viewportHeight: height,
-    safeTop: chrome.top,
-    safeBottom: chrome.bottom,
-  })
-  if (delta <= 0) return
-  const scroller = verticalScroller(anchor)
-  if (scroller) {
-    growScrollRoom(scroller, delta)
-    scroller.scrollTop += delta
-    return
+export function measureTypeaheadSpace(anchor: HTMLElement): { spaceAbove: number; spaceBelow: number } {
+  const rect = anchor.getBoundingClientRect()
+  const view = viewportLimits()
+  const clip = clipLimits(anchor)
+  const top = clip ? Math.max(view.top, clip.top) : view.top
+  const bottom = clip ? Math.min(view.bottom, clip.bottom) : view.bottom
+  return {
+    spaceAbove: rect.top - top,
+    spaceBelow: bottom - rect.bottom,
   }
-  const root = document.scrollingElement
-  if (root instanceof HTMLElement) growScrollRoom(root, delta)
-  window.scrollBy(0, delta)
+}
+
+export function placeTypeaheadMenu(
+  anchor: HTMLElement,
+  menuHeight: number
+): TypeaheadPlacementDecision {
+  const space = measureTypeaheadSpace(anchor)
+  return chooseTypeaheadPlacement({ ...space, menuHeight })
 }
