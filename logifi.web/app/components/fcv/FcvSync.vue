@@ -98,7 +98,6 @@ interface EnrichmentApproach {
 interface FlightEnrichment {
   userFlewLeg: boolean
   actualInstrument: number | null
-  simulatedInstrument: number | null
   holdingProcedures: number | null
   approaches: EnrichmentApproach[]
   remarks: string
@@ -226,7 +225,6 @@ function defaultEnrichment(): FlightEnrichment {
   return {
     userFlewLeg: false,
     actualInstrument: null,
-    simulatedInstrument: null,
     holdingProcedures: null,
     approaches: [],
     remarks: '',
@@ -283,9 +281,7 @@ function buildFlightForImport(f: FcvMappedEntry, idx: number): FcvMappedEntry {
   const nextPerformance = { ...((f.performance ?? {}) as Record<string, unknown>) }
 
   const actual = toNullableNumber(enrichment.actualInstrument)
-  const sim = toNullableNumber(enrichment.simulatedInstrument)
   if (actual !== null) nextFlightTime.actualInstrument = actual
-  if (sim !== null) nextFlightTime.simulatedInstrument = sim
 
   const holds = toNullableInt(enrichment.holdingProcedures)
   if (holds !== null) nextPerformance.holdingProcedures = holds
@@ -2120,16 +2116,10 @@ const previewModalOverlayClass = computed(() =>
                 I flew this leg (auto-credit one landing)
               </label>
               
-              <div class="grid grid-cols-2 gap-4 sm:col-span-2">
-                <label class="space-y-1.5">
-                  <span :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Actual instrument (h)</span>
-                  <input v-model="getOrCreateEnrichment(idx).actualInstrument" type="number" min="0" step="0.1" :class="[inputClass, 'w-full']" />
-                </label>
-                <label class="space-y-1.5">
-                  <span :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Hood / sim inst (h)</span>
-                  <input v-model="getOrCreateEnrichment(idx).simulatedInstrument" type="number" min="0" step="0.1" :class="[inputClass, 'w-full']" />
-                </label>
-              </div>
+              <label class="space-y-1.5">
+                <span :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Actual instrument (h)</span>
+                <input v-model="getOrCreateEnrichment(idx).actualInstrument" type="number" min="0" step="0.1" :class="[inputClass, 'w-full']" />
+              </label>
 
               <div class="grid grid-cols-2 gap-4 sm:col-span-2">
                 <label class="space-y-1.5">
