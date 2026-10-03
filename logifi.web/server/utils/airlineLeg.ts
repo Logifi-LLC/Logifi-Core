@@ -58,7 +58,12 @@ export interface AirlineLeg {
 function listedCrewFromLeg(leg: AirlineLeg): ListedCrewMember[] {
   return leg.crew
     .filter((m) => m.name.trim().length > 0)
-    .map((m) => ({ position: m.position, name: m.name }))
+    .map((m) => {
+      const employeeId = m.employeeId?.trim()
+      return employeeId
+        ? { position: m.position, name: m.name, employeeId }
+        : { position: m.position, name: m.name }
+    })
 }
 
 function unmatchedReasonForLeg(
@@ -295,6 +300,8 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
   const unmatchedReason = unmatchedReasonForLeg(leg, ownRole)
   const crewListed = listedCrewFromLeg(leg)
   const otherCrew = ownRole ? extractOtherCrewFromLeg(leg, ownRole) : null
+  const otherPilotName = otherCrew?.name.trim() || null
+  const otherPilotLabel = otherPilotName ? (otherCrew?.label ?? null) : null
   const flight_time = buildFlightTimeForLeg(blockHours, dep, arr, ownRole)
   const xcRaw = flight_time.crossCountry
   const xcHours =
@@ -315,8 +322,8 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
     departure: dep,
     destination: arr,
     route: null,
-    training_elements: otherCrew?.name ?? null,
-    training_instructor: otherCrew?.label ?? null,
+    training_elements: otherPilotName,
+    training_instructor: otherPilotLabel,
     flight_time,
     performance: {},
     oooi,
@@ -339,8 +346,8 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
         registration_key: normalizeRegistrationKey(registration),
         aircraft_type: aircraftType || null,
         aircraft_category_class: mapAircraftCategoryClass(sourceCategory),
-        crew_name_raw: otherCrew?.rawName ?? null,
-        crew_name_normalized: normalizeCrewNameForMatching(otherCrew?.name ?? ''),
+        crew_name_raw: otherPilotName,
+        crew_name_normalized: normalizeCrewNameForMatching(otherPilotName ?? ''),
       },
       airline_leg_raw: { ...leg },
     },

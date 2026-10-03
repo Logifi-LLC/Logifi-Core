@@ -4,6 +4,7 @@ export type OwnRoleUnmatchedReason = 'not_on_crew' | 'no_crew' | 'unknown_role'
 export interface ListedCrewMember {
   position: string
   name: string
+  employeeId?: string
 }
 
 /**
@@ -70,9 +71,19 @@ export function pickOppositeCrew(
   const members = crew.filter((m) => m.name.trim().length > 0)
   if (!members.length) return null
   const oppositeSeat: AirlineOwnSeat = ownRole === 'PIC' ? 'SIC' : 'PIC'
-  const opposite = members.find((m) => parseAirlineOwnSeat(m.position) === oppositeSeat)
-  const pick = opposite ?? members[0]
-  return { name: pick.name, label: oppositeCrewJobLabel(ownRole) }
+  const selfIds = new Set(
+    members
+      .filter((m) => parseAirlineOwnSeat(m.position) === ownRole)
+      .map((m) => m.employeeId?.trim() ?? '')
+      .filter((id) => id.length > 0)
+  )
+  const opposite = members.find((m) => {
+    if (parseAirlineOwnSeat(m.position) !== oppositeSeat) return false
+    const id = m.employeeId?.trim() ?? ''
+    return !(id && selfIds.has(id))
+  })
+  if (!opposite) return null
+  return { name: opposite.name.trim(), label: oppositeCrewJobLabel(ownRole) }
 }
 
 export function formatListedCrewHint(

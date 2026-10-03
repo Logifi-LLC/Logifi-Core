@@ -986,10 +986,12 @@ function listedCrewFromMappedFlight(f: FcvMappedEntry): ListedCrewMember[] {
   return listed
     .map((m) => {
       if (!m || typeof m !== 'object') return null
-      const rec = m as { name?: unknown; position?: unknown }
+      const rec = m as { name?: unknown; position?: unknown; employeeId?: unknown }
       const name = typeof rec.name === 'string' ? rec.name : ''
       const position = typeof rec.position === 'string' ? rec.position : ''
-      return name.trim() ? { name, position } : null
+      const employeeId = typeof rec.employeeId === 'string' ? rec.employeeId.trim() : ''
+      if (!name.trim()) return null
+      return employeeId ? { name, position, employeeId } : { name, position }
     })
     .filter((m): m is ListedCrewMember => m != null)
 }
@@ -1015,14 +1017,21 @@ function applyOwnSeatToFlight(f: FcvMappedEntry, role: AirlineOwnSeat): FcvMappe
     typeof f.training_elements === 'string' && f.training_elements.trim()
       ? f.training_elements.trim()
       : null
-  const otherName = picked?.name ?? existingName
+  const ownSeatNames = new Set(
+    crew
+      .filter((m) => parseAirlineOwnSeat(m.position) === role)
+      .map((m) => m.name.trim().toUpperCase())
+  )
+  const keptExisting =
+    existingName && !ownSeatNames.has(existingName.toUpperCase()) ? existingName : null
+  const otherName = picked?.name.trim() || keptExisting
   const metaRaw = f.import_metadata
   const meta =
     metaRaw && typeof metaRaw === 'object' ? { ...(metaRaw as Record<string, unknown>) } : {}
   delete meta.own_role_unmatched
   delete meta.own_role_unmatched_reason
   const otherLabel = otherName
-    ? picked?.label ?? (role === 'PIC' ? 'First Officer' : 'Captain')
+    ? (picked?.label ?? (role === 'PIC' ? 'First Officer' : 'Captain'))
     : null
   return {
     ...f,
@@ -1106,6 +1115,13 @@ function formatBlockHours(f: FcvMappedEntry): string {
 function formatFlightNumberPreview(f: FcvMappedEntry): string {
   const raw = typeof f.flight_number === 'string' ? f.flight_number.trim() : ''
   return raw ? `Flight ${raw}` : ''
+}
+
+function formatAircraftPreview(f: FcvMappedEntry): string {
+  const model = typeof f.aircraft_make_model === 'string' ? f.aircraft_make_model.trim() : ''
+  const tail = typeof f.registration === 'string' ? f.registration.trim() : ''
+  if (model && tail) return `${model} (${tail})`
+  return model || tail
 }
 
 /** OOOI stored as HHMM; show as HH:MM for preview. */
@@ -1721,7 +1737,7 @@ const previewModalOverlayClass = computed(() =>
             </div>
             <span>{{ f.departure }} → {{ f.destination }}</span>
             <span :class="isDarkMode ? 'text-gray-400' : 'text-gray-500'">
-              {{ f.aircraft_make_model }} ({{ f.registration }})
+              {{ formatAircraftPreview(f) }}
             </span>
             <span
               v-if="formatBlockHours(f)"
