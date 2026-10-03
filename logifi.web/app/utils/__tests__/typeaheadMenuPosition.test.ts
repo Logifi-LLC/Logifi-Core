@@ -3,7 +3,9 @@ import {
   TYPEAHEAD_MENU_MAX_HEIGHT,
   TYPEAHEAD_OPTION_HEIGHT,
   TYPEAHEAD_VISIBLE_OPTIONS,
+  typeaheadClipPadding,
   typeaheadScrollDelta,
+  typeaheadScrollRoomShortfall,
 } from '../typeaheadMenuPosition'
 
 describe('typeaheadScrollDelta', () => {
@@ -47,5 +49,25 @@ describe('typeaheadScrollDelta', () => {
       safeTop: 8,
     })
     expect(delta).toBe(40 - 8)
+  })
+})
+
+describe('typeaheadClipPadding', () => {
+  it('adds nothing when the menu already fits in the card', () => {
+    expect(typeaheadClipPadding(323, 550, TYPEAHEAD_MENU_MAX_HEIGHT)).toBe(0)
+  })
+
+  it('pads the card when the last row menu would be clipped', () => {
+    expect(typeaheadClipPadding(754, 754, TYPEAHEAD_MENU_MAX_HEIGHT)).toBe(TYPEAHEAD_MENU_MAX_HEIGHT + 8)
+  })
+})
+
+describe('typeaheadScrollRoomShortfall', () => {
+  it('is zero when the page can already scroll the cell up', () => {
+    expect(typeaheadScrollRoomShortfall(155, 1200, 844, 100)).toBe(0)
+  })
+
+  it('requests the missing padding when the last row is already fully scrolled', () => {
+    expect(typeaheadScrollRoomShortfall(155, 998, 844, 154)).toBe(155)
   })
 })

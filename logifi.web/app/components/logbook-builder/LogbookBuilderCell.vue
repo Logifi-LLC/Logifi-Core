@@ -14,6 +14,7 @@ import {
 } from '~/utils/pilotNameSuggest'
 import {
   TYPEAHEAD_MENU_MAX_HEIGHT,
+  releaseTypeaheadMenuSpace,
   scrollTypeaheadMenuIntoVisualViewport,
 } from '~/utils/typeaheadMenuPosition'
 import { shouldDeferGridKeydown as shouldDeferGridKeydownUtil } from '~/utils/logbookBuilderGridKeys'
@@ -164,6 +165,12 @@ export default defineComponent({
       highlightedTypeaheadIndex.value = -1
       detachTypeaheadViewportListeners()
       setTypeaheadRowStack(false)
+      // Another cell may already have opened its menu (blur is delayed).
+      nextTick(() => {
+        if (!document.querySelector('[data-builder-typeahead-dropdown]')) {
+          releaseTypeaheadMenuSpace()
+        }
+      })
     }
 
     function selectTypeaheadValue(value: string) {
@@ -175,6 +182,7 @@ export default defineComponent({
     onBeforeUnmount(() => {
       detachTypeaheadViewportListeners()
       setTypeaheadRowStack(false)
+      releaseTypeaheadMenuSpace()
       if (typeaheadBlurTimer) clearTimeout(typeaheadBlurTimer)
     })
 

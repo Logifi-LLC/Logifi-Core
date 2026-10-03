@@ -2,6 +2,8 @@
 export const TYPEAHEAD_OPTION_HEIGHT = 36
 export const TYPEAHEAD_VISIBLE_OPTIONS = 5
 export const TYPEAHEAD_MENU_MAX_HEIGHT = TYPEAHEAD_OPTION_HEIGHT * TYPEAHEAD_VISIBLE_OPTIONS
+/** Keep the menu inside a rounded clip edge. */
+export const TYPEAHEAD_CLIP_GUTTER = 8
 
 export type TypeaheadScrollInput = {
   anchorTop: number
@@ -26,6 +28,28 @@ export function typeaheadScrollDelta(input: TypeaheadScrollInput): number {
   const nextTop = input.anchorTop - delta
   if (nextTop < safeTop) delta = Math.max(0, input.anchorTop - safeTop)
   return delta
+}
+
+/** Extra padding so a menu that hangs past a clipping box stays inside it. */
+export function typeaheadClipPadding(
+  anchorBottom: number,
+  containerBottom: number,
+  menuHeight: number,
+  gutter = TYPEAHEAD_CLIP_GUTTER
+): number {
+  return Math.max(0, anchorBottom + menuHeight + gutter - containerBottom)
+}
+
+/** Extra padding when the scroller cannot move `delta` pixels. */
+export function typeaheadScrollRoomShortfall(
+  delta: number,
+  scrollHeight: number,
+  clientHeight: number,
+  scrollTop: number
+): number {
+  if (delta <= 0) return 0
+  const room = scrollHeight - clientHeight - scrollTop
+  return Math.max(0, delta - room)
 }
 
 export type TypeaheadSafeArea = {
@@ -128,17 +152,71 @@ function viewportChromeInsets(viewportHeight: number): { top: number; bottom: nu
   return { top, bottom }
 }
 
+function intendedMenuHeight(menu: HTMLElement): number {
+  const content = Math.max(menu.scrollHeight, menu.getBoundingClientRect().height)
+  if (content <= 0) return TYPEAHEAD_MENU_MAX_HEIGHT
+  return Math.min(content, TYPEAHEAD_MENU_MAX_HEIGHT)
+}
+
+type PaddingRecord = { el: HTMLElement; previous: string }
+const paddingRecords: PaddingRecord[] = []
+
+function addBottomPadding(el: HTMLElement, extra: number) {
+  if (extra <= 1) return
+  let record = paddingRecords.find((item) => item.el === el)
+  if (!record) {
+    record = { el, previous: el.style.paddingBottom }
+    paddingRecords.push(record)
+    el.dataset.typeaheadPad = '1'
+  }
+  const base = el.style.paddingBottom
+    ? Number.parseFloat(el.style.paddingBottom) || 0
+    : Number.parseFloat(getComputedStyle(el).paddingBottom) || 0
+  el.style.paddingBottom = `${base + extra}px`
+}
+
+/** Drop padding added so a menu could clear the card or the footer. */
+export function releaseTypeaheadMenuSpace(): void {
+  for (const { el, previous } of paddingRecords) {
+    el.style.paddingBottom = previous
+    delete el.dataset.typeaheadPad
+  }
+  paddingRecords.length = 0
+}
+
+/** The review card clips overflow. Grow it so the menu is painted, still under the cell. */
+function expandClippingAncestors(anchor: HTMLElement, menuHeight: number) {
+  let node: HTMLElement | null = anchor.parentElement
+  while (node && node !== document.body && node !== document.documentElement) {
+    const style = getComputedStyle(node)
+    if (style.overflowX !== 'visible' || style.overflowY !== 'visible') {
+      const extra = typeaheadClipPadding(
+        anchor.getBoundingClientRect().bottom,
+        node.getBoundingClientRect().bottom,
+        menuHeight
+      )
+      addBottomPadding(node, extra)
+    }
+    node = node.parentElement
+  }
+}
+
+function growScrollRoom(el: HTMLElement, delta: number) {
+  const short = typeaheadScrollRoomShortfall(delta, el.scrollHeight, el.clientHeight, el.scrollTop)
+  addBottomPadding(el, short)
+}
+
 /** Scroll so the open menu, still attached under the cell, clears the keyboard. */
 export function scrollTypeaheadMenuIntoVisualViewport(
   anchor: HTMLElement,
   menu: HTMLElement
 ): void {
+  const menuHeight = intendedMenuHeight(menu)
+  expandClippingAncestors(anchor, menuHeight)
   const anchorRect = anchor.getBoundingClientRect()
-  const menuRect = menu.getBoundingClientRect()
   const vv = window.visualViewport
   const height = vv?.height ?? window.innerHeight
   const chrome = viewportChromeInsets(height)
-  const menuHeight = Math.max(menuRect.height, Math.min(menu.scrollHeight, TYPEAHEAD_MENU_MAX_HEIGHT))
   const delta = typeaheadScrollDelta({
     anchorTop: anchorRect.top,
     anchorBottom: anchorRect.bottom,
@@ -149,6 +227,12 @@ export function scrollTypeaheadMenuIntoVisualViewport(
   })
   if (delta <= 0) return
   const scroller = verticalScroller(anchor)
-  if (scroller) scroller.scrollTop += delta
-  else window.scrollBy(0, delta)
+  if (scroller) {
+    growScrollRoom(scroller, delta)
+    scroller.scrollTop += delta
+    return
+  }
+  const root = document.scrollingElement
+  if (root instanceof HTMLElement) growScrollRoom(root, delta)
+  window.scrollBy(0, delta)
 }
