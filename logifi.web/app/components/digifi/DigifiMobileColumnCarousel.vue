@@ -278,7 +278,7 @@ watch(
               </span>
               <div
                 data-digifi-row-content
-                class="flex min-h-0 min-w-0 flex-1 flex-col justify-center overflow-hidden"
+                class="flex min-h-0 min-w-0 flex-1 flex-col justify-center overflow-visible"
                 :class="
                   cellNeedsReview(rowIdx, column.id)
                     ? isDarkMode

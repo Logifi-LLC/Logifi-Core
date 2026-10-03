@@ -266,8 +266,13 @@ describe('DigifiMobileColumnCarousel', () => {
     expect(pilotInput).toBeTruthy()
     await pilotInput!.trigger('focus')
     await nextTick()
-    expect(document.body.textContent).toContain('Ada Lovelace')
-    expect(document.body.textContent).toContain('Grace Hopper')
+    const menu = wrapper.get('[data-builder-typeahead-dropdown]')
+    expect(menu.classes()).toContain('absolute')
+    expect(menu.classes()).toContain('top-full')
+    expect(menu.classes()).toContain('w-full')
+    expect(menu.element.parentElement).toBe(pilotInput!.element.parentElement)
+    expect(wrapper.text()).toContain('Ada Lovelace')
+    expect(wrapper.text()).toContain('Grace Hopper')
   })
 
   it('does not offer a paid remarks re-scan', async () => {
