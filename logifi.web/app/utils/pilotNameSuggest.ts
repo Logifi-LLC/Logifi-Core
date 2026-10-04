@@ -13,6 +13,22 @@ export function filterLabelValueSuggestions(
   )
 }
 
+/** Unique, trimmed, case-insensitive pilot names from one or more lists. */
+export function mergePilotNameSuggestions(
+  groups: Array<Iterable<string | null | undefined>>
+): string[] {
+  const seen = new Map<string, string>()
+  for (const group of groups) {
+    for (const name of group) {
+      const trimmed = (name ?? '').trim()
+      if (!trimmed) continue
+      const key = trimmed.toLowerCase()
+      if (!seen.has(key)) seen.set(key, trimmed)
+    }
+  }
+  return [...seen.values()].sort((a, b) => a.localeCompare(b))
+}
+
 /** Filter pilot name suggestions (empty search returns full list). */
 export function filterPilotSuggestions(suggestions: string[], search: string): string[] {
   const q = search.trim().toLowerCase()

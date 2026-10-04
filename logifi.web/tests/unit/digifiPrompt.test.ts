@@ -31,6 +31,7 @@ describe('buildPageSpecificRules', () => {
     expect(rules).toContain('horizontal ruled lines')
     expect(rules).toContain('rowCount is flight lines only')
     expect(rules).toContain('Adjacent rows with the same total or PIC time')
+    expect(rules).toContain('Do not move any of it into Pilots')
     expect(rules).toContain('three 1.3 lines')
   })
 

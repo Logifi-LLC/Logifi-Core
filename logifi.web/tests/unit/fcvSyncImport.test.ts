@@ -615,5 +615,35 @@ describe('FcvSync unmatched own seat', () => {
     }) => boolean
     expect(isUnmatched(flights[0])).toBe(false)
   })
+
+  it('leaves the other pilot blank when the crew list has no opposite seat', async () => {
+    const wrapper = mountFcvSync()
+    const setupState = getSetupState(wrapper)
+    setupState.previewFlights = [
+      unmatchedFlight({
+        training_elements: 'FARMER, DEREK',
+        training_instructor: 'First Officer',
+        import_metadata: {
+          own_role_unmatched: true,
+          own_role_unmatched_reason: 'not_on_crew',
+          crew_listed: [{ position: 'CA', name: 'FARMER, DEREK', employeeId: '624619' }],
+        },
+      }),
+    ]
+    setupState.showPreviewModal = true
+    setupState.selectedFcvFlightIds = new Set(['fcv-1'])
+    await nextTick()
+
+    const applyAll = setupState.applyOwnSeatToAllUnmatched as (role: 'PIC' | 'SIC') => void
+    applyAll('PIC')
+    await nextTick()
+
+    const flights = setupState.previewFlights as Array<{
+      training_elements: string | null
+      training_instructor: string | null
+    }>
+    expect(flights[0]?.training_elements).toBeNull()
+    expect(flights[0]?.training_instructor).toBeNull()
+  })
 })
 

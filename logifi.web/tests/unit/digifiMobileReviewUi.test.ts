@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { nextTick, ref } from 'vue'
 import DigifiMobileColumnCarousel from '../../app/components/digifi/DigifiMobileColumnCarousel.vue'
+import LogbookBuilderGrid from '../../app/components/logbook-builder/LogbookBuilderGrid.vue'
 import DigifiMobileCameraCapture from '../../app/components/digifi/DigifiMobileCameraCapture.vue'
 import DigifiMobileLayoutWizard from '../../app/components/digifi/DigifiMobileLayoutWizard.vue'
 import { useLogbookBuilderGrid } from '../../app/composables/useLogbookBuilderGrid'
+import { createBuilderColumn } from '../../app/utils/logbookBuilderTypes'
 import { readLastTemplateId } from '~/utils/logbookBuilderDraft'
 
 vi.mock('~/composables/useAuth', () => ({
@@ -222,6 +224,45 @@ describe('DigifiMobileCameraCapture', () => {
   })
 })
 
+describe('LogbookBuilderGrid time mismatch', () => {
+  it('highlights Total and PIC on the review grid without an AI badge', async () => {
+    const grid = useLogbookBuilderGrid()
+    grid.columns.value = [
+      createBuilderColumn({ id: 'total', fieldKey: 'total', label: 'Total', order: 0, width: 70 }),
+      createBuilderColumn({ id: 'pic', fieldKey: 'pic', label: 'PIC', order: 1, width: 70 }),
+      createBuilderColumn({ id: 'dualg', fieldKey: 'dualG', label: 'Dual G', order: 2, width: 70 }),
+    ]
+    grid.setRowCount(1)
+    grid.setCell(0, 'total', '1.6')
+    grid.setCell(0, 'pic', '1.8')
+    grid.setCell(0, 'dualg', '1.8')
+
+    const wrapper = mount(LogbookBuilderGrid, {
+      global: { provide: { logbookBuilderGrid: grid } },
+    })
+    await nextTick()
+
+    const totalCell = wrapper.get('td[data-builder-col="0"]')
+    const picCell = wrapper.get('td[data-builder-col="1"]')
+    const dualCell = wrapper.get('td[data-builder-col="2"]')
+    expect(totalCell.classes()).toContain('bg-amber-500/10')
+    expect(picCell.classes()).toContain('bg-amber-500/10')
+    expect(dualCell.classes()).toContain('bg-amber-500/10')
+    expect(totalCell.attributes('title')).toBe('PIC 1.8 and Dual G 1.8 are greater than Total 1.6')
+    expect(totalCell.text()).not.toContain('?')
+    expect(wrapper.text()).not.toContain('may merge two flights')
+
+    await totalCell.get('input').setValue('1.8')
+    await nextTick()
+    expect(grid.rows.value[0]?.cells.total).toBe('1.8')
+    const totalAfter = wrapper.get('td[data-builder-col="0"]')
+    const picAfter = wrapper.get('td[data-builder-col="1"]')
+    expect(totalAfter.classes()).not.toContain('bg-amber-500/10')
+    expect(picAfter.classes()).not.toContain('bg-amber-500/10')
+    expect(totalAfter.attributes('title')).toBeUndefined()
+  })
+})
+
 describe('DigifiMobileColumnCarousel', () => {
   it('renders flight lines and writes an edit into the grid', async () => {
     const { wrapper, grid } = mountWithGrid(DigifiMobileColumnCarousel)
@@ -247,6 +288,96 @@ describe('DigifiMobileColumnCarousel', () => {
     const { wrapper, grid } = mountWithGrid(DigifiMobileColumnCarousel)
     const select = wrapper.get('[aria-label="Column"]')
     expect(select.findAll('option').length).toBe(grid.visibleColumns.value.length)
+  })
+
+  it('shows saved pilot names when the pilot cell is focused', async () => {
+    const grid = useLogbookBuilderGrid()
+    grid.setRowCount(2)
+    grid.addColumn('pilots')
+    const pilots = ref(['Ada Lovelace', 'Grace Hopper'])
+    const wrapper = mount(DigifiMobileColumnCarousel, {
+      global: {
+        provide: { logbookBuilderGrid: grid, builderPilots: pilots },
+      },
+    })
+    await nextTick()
+    const pilotInput = wrapper
+      .findAll('input')
+      .find((input) => (input.element as HTMLInputElement).placeholder === 'Pilot name')
+    expect(pilotInput).toBeTruthy()
+    await pilotInput!.trigger('focus')
+    await nextTick()
+    const menu = wrapper.get('[data-builder-typeahead-dropdown]')
+    expect(menu.classes()).toContain('absolute')
+    expect(menu.classes()).toContain('top-full')
+    expect(menu.classes()).toContain('w-full')
+    expect(menu.element.parentElement).toBe(pilotInput!.element.parentElement)
+    expect(wrapper.text()).toContain('Ada Lovelace')
+    expect(wrapper.text()).toContain('Grace Hopper')
+  })
+
+  it('does not offer a paid remarks re-scan', async () => {
+    const { wrapper, grid } = mountWithGrid(DigifiMobileColumnCarousel)
+    grid.addColumn('remarks')
+    await nextTick()
+    const remarks = grid.visibleColumns.value.find((column) => column.fieldKey === 'remarks')
+    expect(remarks).toBeTruthy()
+    grid.setDigifiCellMeta(0, remarks!.id, {
+      fieldKey: 'remarks',
+      rawValue: 'a | b',
+      resolvedValue: 'a | b',
+      strategy: 'raw',
+      confidence: 'low',
+      autoApplied: false,
+      needsReview: true,
+      message:
+        'Line 1 may merge two flights (consecutive rows with the same duration (possible skipped or merged line)). Re-scan remarks for this band if needed.',
+    })
+    await nextTick()
+    expect(wrapper.text()).not.toContain('Re-scan remarks')
+    expect(wrapper.text()).not.toContain('uses 1 credit')
+    expect(wrapper.text()).not.toContain('may merge two flights')
+  })
+
+  it('highlights Total and the role cell when role time is above Total, then clears on edit', async () => {
+    const grid = useLogbookBuilderGrid()
+    grid.columns.value = [
+      createBuilderColumn({ id: 'total', fieldKey: 'total', label: 'Total', order: 0 }),
+      createBuilderColumn({ id: 'pic', fieldKey: 'pic', label: 'PIC', order: 1 }),
+      createBuilderColumn({ id: 'dualg', fieldKey: 'dualG', label: 'Dual G', order: 2 }),
+    ]
+    grid.setRowCount(2)
+    grid.setCell(0, 'total', '1.2')
+    grid.setCell(0, 'pic', '1.2')
+    grid.setCell(1, 'total', '1.6')
+    grid.setCell(1, 'pic', '1.8')
+    grid.setCell(1, 'dualg', '1.8')
+
+    const wrapper = mount(DigifiMobileColumnCarousel, {
+      global: { provide: { logbookBuilderGrid: grid } },
+    })
+    await nextTick()
+
+    const sections = wrapper.findAll('[data-digifi-column]')
+    const totalRow = (index: number) => sections[0]!.findAll('[data-digifi-row-content]')[index]!
+    const picRow = (index: number) => sections[1]!.findAll('[data-digifi-row-content]')[index]!
+    const dualRow = (index: number) => sections[2]!.findAll('[data-digifi-row-content]')[index]!
+
+    expect(totalRow(0).classes()).not.toContain('bg-amber-500/10')
+    expect(totalRow(1).classes()).toContain('bg-amber-500/10')
+    expect(picRow(1).classes()).toContain('bg-amber-500/10')
+    expect(dualRow(1).classes()).toContain('bg-amber-500/10')
+    expect(totalRow(1).attributes('title')).toBe('PIC 1.8 and Dual G 1.8 are greater than Total 1.6')
+    expect(wrapper.text()).not.toContain('may merge two flights')
+
+    await sections[0]!.findAll('input')[1]!.setValue('1.8')
+    await nextTick()
+
+    expect(grid.rows.value[1]?.cells.total).toBe('1.8')
+    expect(totalRow(1).classes()).not.toContain('bg-amber-500/10')
+    expect(picRow(1).classes()).not.toContain('bg-amber-500/10')
+    expect(dualRow(1).classes()).not.toContain('bg-amber-500/10')
+    expect(totalRow(1).attributes('title')).toBeUndefined()
   })
 
   it('tags each row for cross-column height measurement', async () => {

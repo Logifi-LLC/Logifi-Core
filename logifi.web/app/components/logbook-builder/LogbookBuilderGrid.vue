@@ -21,6 +21,8 @@ import {
   type SelectionRange,
 } from '~/utils/logbookBuilderCommands'
 import type { DigifiScanCellMeta } from '~/utils/digifiTypes'
+import { isDigifiMergeSuspectNotice } from '~/utils/digifiScanRowReview'
+import { digifiRowTimeMismatchMap } from '~/utils/digifiRowTimeMismatch'
 import type { LogbookColumnConfig } from '~/utils/logbookTypes'
 import LogbookBuilderCell from './LogbookBuilderCell.vue'
 import LogbookBuilderHeader from './LogbookBuilderHeader.vue'
@@ -1459,17 +1461,40 @@ function getDigifiSuggestions(rowIdx: number, colId: string, fieldKey: string | 
   return []
 }
 
+function displayDigifiMetaMessage(message: string | undefined): string | undefined {
+  if (!message || isDigifiMergeSuspectNotice(message)) return undefined
+  return message
+}
+
+const timeMismatchByCell = computed(() =>
+  digifiRowTimeMismatchMap(grid.rows.value, grid.visibleColumns.value)
+)
+
+function timeMismatchMessage(rowIdx: number, colId: string): string | undefined {
+  return timeMismatchByCell.value.get(`${rowIdx}:${colId}`)
+}
+
 function getDigifiCellTitle(rowIdx: number, colId: string): string | undefined {
+  const mismatch = timeMismatchMessage(rowIdx, colId)
   const meta = getDigifiCellMeta(rowIdx, colId)
-  if (!meta) return undefined
-  if (meta.needsReview && (meta.candidates?.length ?? 0) > 0) {
-    const preview = meta.candidates?.slice(0, 3).map((candidate) => candidate.value).join(', ')
-    return `${meta.message ?? 'Review this AI match.'}${preview ? ` Top matches: ${preview}.` : ''}`
+  let metaTitle: string | undefined
+  if (meta) {
+    if (meta.needsReview && (meta.candidates?.length ?? 0) > 0) {
+      const preview = meta.candidates?.slice(0, 3).map((candidate) => candidate.value).join(', ')
+      const message = displayDigifiMetaMessage(meta.message) ?? 'Review this AI match.'
+      metaTitle = `${message}${preview ? ` Top matches: ${preview}.` : ''}`
+    } else if (meta.autoApplied && meta.rawValue.trim() && meta.rawValue.trim() !== meta.resolvedValue.trim()) {
+      metaTitle = displayDigifiMetaMessage(meta.message) ?? `AI changed "${meta.rawValue}" to "${meta.resolvedValue}".`
+    } else {
+      metaTitle = displayDigifiMetaMessage(meta.message)
+    }
   }
-  if (meta.autoApplied && meta.rawValue.trim() && meta.rawValue.trim() !== meta.resolvedValue.trim()) {
-    return meta.message ?? `AI changed "${meta.rawValue}" to "${meta.resolvedValue}".`
-  }
-  return meta.message
+  if (metaTitle && mismatch) return `${metaTitle} ${mismatch}`
+  return metaTitle ?? mismatch
+}
+
+function cellHasReviewHighlight(rowIdx: number, colId: string): boolean {
+  return digifiCellState(rowIdx, colId) === 'review' || timeMismatchMessage(rowIdx, colId) != null
 }
 
 function digifiCellState(rowIdx: number, colId: string): 'review' | 'auto' | 'confirmed' | null {
@@ -1670,7 +1695,7 @@ defineExpose({
               :class="[
                 'relative border p-0 text-center',
                 isDark ? 'border-white/10' : 'border-gray-200',
-                digifiCellState(rowIdx, col.id) === 'review' ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50/70') : '',
+                cellHasReviewHighlight(rowIdx, col.id) ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50/70') : '',
                 digifiCellState(rowIdx, col.id) === 'auto' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50/70') : '',
                 digifiCellState(rowIdx, col.id) === 'confirmed' ? (isDark ? 'bg-sky-500/10' : 'bg-sky-50/70') : '',
                 isCellInSelection(rowIdx, colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
@@ -1763,7 +1788,7 @@ defineExpose({
               :class="[
                 'relative border p-0 text-center',
                 isDark ? 'border-white/10' : 'border-gray-200',
-                digifiCellState(rowIdx, col.id) === 'review' ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50/70') : '',
+                cellHasReviewHighlight(rowIdx, col.id) ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50/70') : '',
                 digifiCellState(rowIdx, col.id) === 'auto' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50/70') : '',
                 digifiCellState(rowIdx, col.id) === 'confirmed' ? (isDark ? 'bg-sky-500/10' : 'bg-sky-50/70') : '',
                 isCellInSelection(rowIdx, splitIndex + colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',
@@ -1851,7 +1876,7 @@ defineExpose({
               :class="[
                 'relative border p-0 text-center',
                 isDark ? 'border-white/10' : 'border-gray-200',
-                digifiCellState(rowIdx, col.id) === 'review' ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50/70') : '',
+                cellHasReviewHighlight(rowIdx, col.id) ? (isDark ? 'bg-amber-500/10' : 'bg-amber-50/70') : '',
                 digifiCellState(rowIdx, col.id) === 'auto' ? (isDark ? 'bg-emerald-500/10' : 'bg-emerald-50/70') : '',
                 digifiCellState(rowIdx, col.id) === 'confirmed' ? (isDark ? 'bg-sky-500/10' : 'bg-sky-50/70') : '',
                 isCellInSelection(rowIdx, colIdx) ? (isDark ? 'bg-blue-500/20' : 'bg-blue-100/60') : '',

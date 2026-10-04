@@ -48,6 +48,22 @@ describe('pickOppositeCrew', () => {
     )
     expect(other).toEqual({ name: 'SUTTON, DREW', label: 'First Officer' })
   })
+
+  it('returns null when the opposite seat is missing', () => {
+    expect(pickOppositeCrew([{ position: 'CA', name: 'FARMER, DEREK' }], 'PIC')).toBeNull()
+  })
+
+  it('does not treat the user as the other pilot when the opposite row shares their employee id', () => {
+    expect(
+      pickOppositeCrew(
+        [
+          { position: 'CA', name: 'FARMER, DEREK', employeeId: '624619' },
+          { position: 'FO', name: 'FARMER, DEREK', employeeId: '624619' },
+        ],
+        'PIC'
+      )
+    ).toBeNull()
+  })
 })
 
 describe('formatListedCrewHint', () => {

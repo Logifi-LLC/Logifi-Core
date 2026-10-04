@@ -11,6 +11,7 @@ import { normalizeScanRows } from '../../utils/digifiNormalize'
 import { sanitizeDigifiScanRows } from '../../utils/digifiScanSanitize'
 import { personalizeDigifiScanRows } from '../../utils/digifiPersonalization'
 import { analyzeDigifiScanRows } from '../../../app/utils/digifiScanDiagnostics'
+import { foldExtractedPilotIntoRemarks } from '../../../app/utils/digifiRemarksPilotMatch'
 import {
   applyRemarksMergeSuspectMeta,
   findRemarksMergeSuspects,
@@ -291,6 +292,8 @@ export default defineEventHandler(async (event) => {
     console.error('[digifi] personalization failed:', error)
     reviewMessages = scanReviewMessages
   }
+
+  personalizedRows = foldExtractedPilotIntoRemarks(personalizedRows, meta.columns)
 
   const mergeSuspects = meta.remarksFocusRows?.length
     ? []
