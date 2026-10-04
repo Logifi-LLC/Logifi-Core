@@ -12,6 +12,7 @@ import {
   computeDigifiMobileReviewRowMinHeights,
   mergeDigifiMobileReviewRowHeights,
 } from '~/utils/digifiMobileReviewRows'
+import { digifiRowTimeMismatchMap } from '~/utils/digifiRowTimeMismatch'
 import { mergePilotNameSuggestions } from '~/utils/pilotNameSuggest'
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
@@ -148,8 +149,20 @@ function onCellBlur() {
   activeEdit.value = null
 }
 
+const timeMismatchByCell = computed(() =>
+  digifiRowTimeMismatchMap(grid.rows.value, columns.value)
+)
+
 function cellNeedsReview(rowIdx: number, colId: string): boolean {
   return grid.rows.value[rowIdx]?.digifiCellMeta?.[colId]?.needsReview === true
+}
+
+function cellTimeMismatchMessage(rowIdx: number, colId: string): string | undefined {
+  return timeMismatchByCell.value.get(`${rowIdx}:${colId}`)
+}
+
+function cellFlagged(rowIdx: number, colId: string): boolean {
+  return cellNeedsReview(rowIdx, colId) || cellTimeMismatchMessage(rowIdx, colId) != null
 }
 
 function columnStripClass(index: number): string {
@@ -280,12 +293,13 @@ watch(
                 data-digifi-row-content
                 class="flex min-h-0 min-w-0 flex-1 flex-col justify-center overflow-visible"
                 :class="
-                  cellNeedsReview(rowIdx, column.id)
+                  cellFlagged(rowIdx, column.id)
                     ? isDarkMode
                       ? 'bg-amber-500/10'
                       : 'bg-amber-50'
                     : ''
                 "
+                :title="cellTimeMismatchMessage(rowIdx, column.id)"
               >
                 <LogbookBuilderCell
                   row-lock
