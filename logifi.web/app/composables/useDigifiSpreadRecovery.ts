@@ -4,6 +4,7 @@ import type {
   DigifiSpreadRecoveryPage,
   DigifiSpreadRecoveryResponse,
 } from '~/utils/digifiTypes'
+import { foldExtractedPilotIntoRemarks } from '~/utils/digifiRemarksPilotMatch'
 
 type Grid = ReturnType<typeof useLogbookBuilderGrid>
 
@@ -90,7 +91,8 @@ export async function recoverDigifiSpreadFromServer(input: {
 }
 
 function applyRecoveryPage(grid: Grid, page: DigifiSpreadRecoveryPage): void {
-  const applied = grid.applyScanResults(page.pageSide, page.rows)
+  const foldedRows = foldExtractedPilotIntoRemarks(page.rows, grid.visibleColumns.value)
+  const applied = grid.applyScanResults(page.pageSide, foldedRows)
 
   grid.recordDigifiScanStatus({
     pageSide: page.pageSide,

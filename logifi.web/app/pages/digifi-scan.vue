@@ -31,6 +31,7 @@ import {
 } from '~/composables/useDigifiSpreadRecovery'
 import { renormalizeBuilderGridDates } from '~/utils/digifiGridDates'
 import { seedDigifiManualFieldDefaults } from '~/utils/digifiManualFieldDefaults'
+import { applyCatalogPilotsFromRemarks } from '~/utils/digifiRemarksPilotMatch'
 import {
   isMobileCaptureSideComplete,
   isTwoPageReadyForReview,
@@ -344,9 +345,14 @@ async function recoverSpreadIfNeeded(userId: string | undefined): Promise<number
   })
   if (recoveredPages > 0) {
     saveDraftNow(grid, userId)
+    applyCatalogPilotsFromRemarks(grid, builderPilots.value, { fillEmptyOnly: true })
   }
   return recoveredPages
 }
+
+watch(builderPilots, (names) => {
+  applyCatalogPilotsFromRemarks(grid, names, { fillEmptyOnly: true })
+})
 
 async function finishPageInit() {
   if (pageInitDone) return

@@ -38,7 +38,10 @@ function columnTypeHint(fieldKey: LogbookColumnKey | null): string {
   if (fieldKey === 'approachType') return APPROACH_TYPE_OPTIONS.join('|')
   if (fieldKey === 'categoryClass') return CATEGORY_CLASS_OPTIONS.join('|')
   if (fieldKey === 'remarks') {
-    return 'free text; stacked lines in one remarks box = one cell — join lines with " | " in the value (never the characters backslash-n); not separate rows/columns'
+    return 'free text; stacked lines in one remarks box = one cell — join lines with " | " in the value (never the characters backslash-n); not separate rows/columns; keep person names and lesson notes in this cell'
+  }
+  if (fieldKey === 'pilots') {
+    return 'leave empty; do not copy names or lesson notes out of remarks'
   }
   if (fieldKey === 'departure' || fieldKey === 'destination') return 'airport code'
   if (fieldKey === 'route') return 'route codes'
@@ -111,6 +114,7 @@ const REMARKS_ROW_RULES = `Remarks (critical):
 - Remarks ink below the ruled line under row N belongs to row N+1, not row N.
 - If handwriting crosses a ruled line, split at the line — never assign both sides to one rowIndex.
 - Transcribe only ink inside the remarks box for that row (not time or landing columns in the same band).
+- Keep every word of that remarks box in the remarks cell, including person names and lesson notes. Do not move any of it into Pilots or any other column.
 - Never put totals, footer, or carry-forward text into a remarks cell.`
 
 export function targetColumnsIncludeRemarks(columns: DigifiTemplateColumn[]): boolean {
