@@ -1,4 +1,4 @@
-import { ref, computed, inject } from 'vue'
+import { ref, computed, inject, type Ref } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { useAuth } from '~/composables/useAuth'
 import { useDigifiCredits } from '~/composables/useDigifiCredits'
@@ -18,6 +18,10 @@ import {
 import { renormalizeBuilderGridDates } from '~/utils/digifiGridDates'
 import { seedDigifiManualFieldDefaults } from '~/utils/digifiManualFieldDefaults'
 import { normalizeGridRemarksCells } from '~/utils/digifiRemarksNormalize'
+import {
+  applyCatalogPilotsFromRemarks,
+  foldExtractedPilotIntoRemarks,
+} from '~/utils/digifiRemarksPilotMatch'
 import { sanitizeDigifiScanRows } from '~/utils/digifiScanSanitize'
 import { visibleDigifiReviewMessages } from '~/utils/digifiScanRowReview'
 import { buildDigifiTargetColumnsForPage } from '~/utils/digifiScanTargetColumns'
@@ -200,6 +204,7 @@ export function useLogbookBuilderDigifi(
   }
 
   const { getAccessToken, isAuthenticated, user } = useAuth()
+  const builderPilots = inject<Ref<string[]> | null>('builderPilots', null)
   const { setCreditsFromScan, fetchBalance } = useDigifiCredits()
   const {
     visibleColumns,
@@ -355,10 +360,16 @@ export function useLogbookBuilderDigifi(
         targetColumns,
         rowCount.value
       )
-      const applied = applyScanResults(pageSide, sanitizedRows)
+      const foldedRows = foldExtractedPilotIntoRemarks(sanitizedRows, visibleColumns.value)
+      const applied = applyScanResults(pageSide, foldedRows)
       renormalizeBuilderGridDates(grid)
       normalizeGridRemarksCells(grid)
       seedDigifiManualFieldDefaults(grid)
+      applyCatalogPilotsFromRemarks(grid, builderPilots?.value ?? [], {
+        rowIndexes: foldedRows
+          .map((row) => applied.baseRow + row.rowIndex)
+          .filter((idx) => idx >= 0 && idx < grid.rows.value.length),
+      })
       lastFilledCount.value = applied.filled
       saveDraftNow(grid, user.value?.id)
 

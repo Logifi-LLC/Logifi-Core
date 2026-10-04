@@ -29,6 +29,7 @@ import DigifiLearningOptInModal from '~/components/digifi/DigifiLearningOptInMod
 import DigifiDestinationModal from '~/components/digifi/DigifiDestinationModal.vue'
 import DigifiSettingsModal from '~/components/settings/DigifiSettingsModal.vue'
 import { getDisplayedPilotInitials } from '~/utils/dashboardHydration'
+import { applyCatalogPilotsFromRemarks } from '~/utils/digifiRemarksPilotMatch'
 import type { Database } from '~/types/database'
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row']
@@ -63,6 +64,7 @@ async function recoverSpreadIfNeeded(userId: string | undefined): Promise<void> 
 
   if (recoveredPages > 0) {
     saveDraftNow(grid, userId)
+    applyCatalogPilotsFromRemarks(grid, builderPilots.value, { fillEmptyOnly: true })
   }
 }
 
@@ -204,6 +206,7 @@ watchEffect(async (onCleanup) => {
       .filter((name) => !!name)
 
     builderPilots.value = Array.from(new Set(names)).sort((a, b) => a.localeCompare(b))
+    applyCatalogPilotsFromRemarks(grid, builderPilots.value, { fillEmptyOnly: true })
   } catch (err) {
     console.error('Exception loading builder pilots:', err)
   }
