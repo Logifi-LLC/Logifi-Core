@@ -133,8 +133,8 @@ describe('POST /api/logbook-transfer-request', () => {
       to: [PILOT_EMAIL],
       subject: 'Got your Logifi logbook transfer request',
       reply_to: 'info@logifi.io',
-      text: "Hey, thanks for requesting a logbook transfer. I got your request and I'll email you from info@logifi.io to set up a time. No need to do anything else right now. If you have questions, just reply to this email. — Derek, Logifi",
-      html: "<p>Hey, thanks for requesting a logbook transfer. I got your request and I'll email you from info@logifi.io to set up a time. No need to do anything else right now.</p><p>If you have questions, just reply to this email.</p><p>— Derek, Logifi</p>",
+      text: "Hey, thanks for requesting a logbook transfer. I got your request and I'll email you from derek.farmer@logifi.io to set up a time. No need to do anything else right now. If you have questions, just reply to this email. — Derek, Logifi",
+      html: "<p>Hey, thanks for requesting a logbook transfer. I got your request and I'll email you from derek.farmer@logifi.io to set up a time. No need to do anything else right now.</p><p>If you have questions, just reply to this email.</p><p>— Derek, Logifi</p>",
     })
   })
 

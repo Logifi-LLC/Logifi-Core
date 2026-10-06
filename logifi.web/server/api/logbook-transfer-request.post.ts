@@ -12,9 +12,9 @@ const RESEND_EMAILS_URL = 'https://api.resend.com/emails'
 const DEFAULT_FROM_EMAIL = 'info@logifi.io'
 const CONFIRMATION_SUBJECT = 'Got your Logifi logbook transfer request'
 const CONFIRMATION_TEXT =
-  "Hey, thanks for requesting a logbook transfer. I got your request and I'll email you from info@logifi.io to set up a time. No need to do anything else right now. If you have questions, just reply to this email. — Derek, Logifi"
+  "Hey, thanks for requesting a logbook transfer. I got your request and I'll email you from derek.farmer@logifi.io to set up a time. No need to do anything else right now. If you have questions, just reply to this email. — Derek, Logifi"
 const CONFIRMATION_HTML = [
-  "<p>Hey, thanks for requesting a logbook transfer. I got your request and I'll email you from info@logifi.io to set up a time. No need to do anything else right now.</p>",
+  "<p>Hey, thanks for requesting a logbook transfer. I got your request and I'll email you from derek.farmer@logifi.io to set up a time. No need to do anything else right now.</p>",
   '<p>If you have questions, just reply to this email.</p>',
   '<p>— Derek, Logifi</p>',
 ].join('')
