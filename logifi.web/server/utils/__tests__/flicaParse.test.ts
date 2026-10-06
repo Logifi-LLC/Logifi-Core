@@ -6,8 +6,10 @@ import {
   filterAirlineLegsWithStats,
   overlayFlicaPairingLegs,
   parseFlicaLastUpdatedMs,
+  flicaHtmlHasTripHeader,
   parseFlicaSchedule,
   pickFlicaGateHhmm,
+  summarizeFlicaHtml,
 } from '../flicaParse'
 
 const FLICA_FIXTURE = `
@@ -448,6 +450,94 @@ CA 624619 FARMER, DEREK
       '2026-12-31',
       '2027-01-01',
     ])
+  })
+
+  /**
+   * SYNTHETIC / ANONYMIZED. Not a captured FLICA page.
+   * Ids are 9000–9999 with an allowed base letter, plus a single-letter suffix.
+   */
+  it('recognizes every allowed base letter and a B or C suffix', () => {
+    const letters = ['B', 'C', 'W', 'R', 'I', 'L', 'O', 'Z', 'P', 'D'] as const
+    const plain = letters.map((letter, i) => {
+      const day = i + 1
+      const id = `${letter}${9000 + day}`
+      return { id, day, flight: `${1100 + day}` }
+    })
+    const suffixed = [
+      { id: 'B9011B', day: 11, flight: '1111' },
+      { id: 'C9012C', day: 12, flight: '1112' },
+    ]
+    const rows = [...plain, ...suffixed]
+    const text = [
+      'August Schedule',
+      'SYNTHETIC PILOT',
+      '(100001)',
+      'Last Updated Aug 18, 2026 09:00:00 EDT',
+      ...rows.flatMap(({ id, day, flight }) => {
+        const dd = String(day).padStart(2, '0')
+        return [
+          `${id} : ${dd}AUG`,
+          'Base/Equip: XXX/EM7 CA01',
+          `TU ${dd}  ${flight} BOS-DCA 0800 0930 0130`,
+          'Crew:',
+          'CA 100001 SYNTHETIC, PILOT',
+        ]
+      }),
+    ].join('\n')
+
+    const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
+    expect(legs).toHaveLength(rows.length)
+    for (const row of rows) {
+      const leg = legs.find((l) => l.trip_number === row.id)
+      expect(leg?.flight_number).toBe(row.flight)
+      expect(leg?.scheduled_out_local).toBe(
+        `2026-08-${String(row.day).padStart(2, '0')} 08:00:00`
+      )
+      expect(leg?.fcv_aircraft_type).toBe('EM7')
+      expect(leg?.trip_number).not.toBe('4442')
+      expect(leg?.trip_number).not.toBe('EM7')
+    }
+    expect(summarizeFlicaHtml(text).tripCount).toBe(rows.length)
+    expect(flicaHtmlHasTripHeader('b9011b : 11aug')).toBe(true)
+  })
+
+  it('does not treat reserve codes, other short codes, flight numbers, or equipment as trips', () => {
+    const text = `
+August Schedule
+SYNTHETIC PILOT
+(100001)
+Last Updated Aug 12, 2026 09:00:00 EDT
+R11 : 03AUG
+R14 : 04AUG
+R1A : 05AUG
+V24 : 06AUG
+V28 : 06AUG
+HP1 : 07AUG
+IE6 : 08AUG
+IE8 : 08AUG
+IET : 08AUG
+OFF : 09AUG
+OFC : 09AUG
+CNA : 10AUG
+COL : 10AUG
+4442 : 11AUG
+EM7 : 12AUG
+GDO : 01AUG
+Location: /full/scheduledetail.cgi?GO=1
+B90011 : 02AUG
+AB9001 : 02AUG
+B9001BB : 02AUG
+Base/Equip: XXX/EM7 CA01
+WE 12  4442 LGA-RIC 1059 1226 0127
+`
+    const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
+    expect(legs).toHaveLength(1)
+    expect(legs[0]?.flight_number).toBe('4442')
+    expect(legs[0]?.trip_number).toBeNull()
+    expect(legs[0]?.fcv_aircraft_type).toBe('EM7')
+    expect(legs[0]?.scheduled_out_local).toBe('2026-01-12 10:59:00')
+    expect(summarizeFlicaHtml(text).tripCount).toBe(0)
+    expect(flicaHtmlHasTripHeader(text)).toBe(false)
   })
 })
 

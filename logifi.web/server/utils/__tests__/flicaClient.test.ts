@@ -105,6 +105,15 @@ describe('htmlLooksLikeScheduleDetail', () => {
     expect(htmlHasParseableScheduleLegs(html)).toBe(true)
   })
 
+  it('accepts a non-L trip header with a leg', () => {
+    const html = `
+B9001 : 12AUG
+Base/Equip: XXX/EM7 CA01
+WE 12  1101 BOS-DCA 0800 0930 0130
+`
+    expect(htmlLooksLikeScheduleDetail(html)).toBe(true)
+  })
+
   it('does not treat Location: as a trip header', () => {
     const warm = `
       <html><head><meta http-equiv="refresh" content="0;url=scheduledetail.cgi?GO=1"></head>
@@ -362,6 +371,21 @@ describe('isImportableScheduleHtml', () => {
   it('accepts a large GO=1 body with completed gate times', () => {
     expect(isImportableScheduleHtml(GO_ACTUALS_HTML)).toBe(true)
   })
+
+  it('accepts a large schedule whose only trip id is not L-prefixed', () => {
+    const html = padScheduleHtml(
+      `
+<html><body>
+<div>Last Updated Aug 12, 2026 09:00:00 EDT</div>
+<div>D9010 : 04AUG</div>
+<div>Base/Equip: XXX/EM7 CA01</div>
+<div>TU 04  1104 BOS-DCA 0800 0930 0130</div>
+</body></html>
+`,
+      FLICA_IMPORTABLE_SCHEDULE_MIN_BYTES
+    )
+    expect(isImportableScheduleHtml(html)).toBe(true)
+  })
 })
 
 describe('fetchScheduleHtml', () => {
@@ -511,6 +535,27 @@ describe('extractFlicaPairingLinks', () => {
     expect(links.some((l) => l.tripId === 'L7H18' && l.href.includes('viewpairing.cgi'))).toBe(
       true
     )
+  })
+
+  it('follows Trip= for every allowed letter and a suffix, and skips non-trips', () => {
+    const letters = ['B', 'C', 'W', 'R', 'I', 'L', 'O', 'Z', 'P', 'D']
+    const ids = [
+      ...letters.map((letter, i) => `${letter}${9001 + i}`),
+      'B9011B',
+      'C9012C',
+    ]
+    const rejected = ['R11', 'R14', 'R1A', 'V24', 'HP1', 'IE6', 'OFF', 'CNA', '4442', 'EM7', 'B90011', 'B9001BB']
+    const html = [
+      ...ids.map((id) => `<a href="viewpairing.cgi?Trip=${id}&token=abc">${id}</a>`),
+      ...rejected.map((id) => `<a href="viewpairing.cgi?Trip=${id}&token=abc">${id}</a>`),
+      '<a href="/full/D9010/viewpairing.cgi?token=abc">D9010</a>',
+      '<a href="/full/R11/viewpairing.cgi?token=abc">R11</a>',
+      '<a href="/full/scheduledetail.cgi?BlockDate=0826&token=000000006BF24E6901DD2A95679A3936">August</a>',
+      '<div>Base/Equip: XXX/EM7 CA01</div>',
+    ].join('\n')
+    const found = [...new Set(extractFlicaPairingLinks(html).map((l) => l.tripId))].sort()
+    expect(found).toEqual([...ids].sort())
+    for (const id of rejected) expect(found).not.toContain(id)
   })
 })
 
