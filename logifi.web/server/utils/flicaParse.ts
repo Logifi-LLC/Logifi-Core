@@ -43,8 +43,40 @@ const MONTH_MAP: Record<string, number> = {
   DEC: 12,
 }
 
-/** Republic pairing ids are L + digit + rest (L7G13, L7513). Avoids matching "Location:". */
-const TRIP_RE = /(L\d[\dA-Z]*)\s*:\s*(\d{1,2})([A-Z]{3})\b/gi
+/**
+ * Republic trip IDs: base letter + 4 digits + optional suffix.
+ * The letter is not the pilot's base — any allowed letter is accepted.
+ * Word boundaries reject reserve codes and other short tokens, and stop a
+ * longer token from matching as a prefix.
+ *
+ * Checked-in schedule text also uses letter + digit + letter + two digits on
+ * the same `ID : DDMMM` header. That shape stays accepted so those fixtures
+ * still parse.
+ */
+export const FLICA_TRIP_ID_PATTERN = '[BCWRILOZPD](?:\\d{4}[A-Z]?|\\d[A-Z]\\d{2})'
+
+const TRIP_MONTH_PATTERN = Object.keys(MONTH_MAP).join('|')
+
+const TRIP_ID_BOUNDED = `(?<![A-Z0-9])(${FLICA_TRIP_ID_PATTERN})(?![A-Z0-9])`
+
+/** `B9001 : 04AUG` / `B9001B : 04AUG`. Month must be a real abbreviation. */
+const TRIP_RE = new RegExp(
+  `${TRIP_ID_BOUNDED}\\s*:\\s*(\\d{1,2})(${TRIP_MONTH_PATTERN})\\b`,
+  'gi'
+)
+
+/** Same header, for detectors that only need a yes/no (no `g` flag). */
+const TRIP_HEADER_RE = new RegExp(
+  `${TRIP_ID_BOUNDED}\\s*:\\s*\\d{1,2}(?:${TRIP_MONTH_PATTERN})\\b`,
+  'i'
+)
+
+const TRIP_ID_SUFFIX_RE = new RegExp(`\\s+${TRIP_ID_BOUNDED}\\s*:.*`, 'i')
+
+export function flicaHtmlHasTripHeader(htmlOrText: string): boolean {
+  return TRIP_HEADER_RE.test(htmlOrText)
+}
+
 const EQUIP_RE = /Base\/Equip:[\s|]*[A-Z]{3}\/([A-Z0-9]+)((?:[\s|]*(?:CA|FO)\d{2})*)/gi
 const CREW_START_RE = /\b(?:CA|FO)[\s|]+\d{5,7}[\s|]+/gi
 const CREW_PAIR_RE =
@@ -552,8 +584,8 @@ export interface FlicaHtmlSummary {
 /** Redacted parse diagnostics for fetch/probe warnings (no cookies/HTML dump). */
 export function summarizeFlicaHtml(htmlOrText: string): FlicaHtmlSummary {
   const text = flicaHtmlToText(htmlOrText)
-  const trips = text.match(/L\d[\dA-Z]*\s*:/gi) ?? []
-  let sampleStart = text.search(/L\d[\dA-Z]*\s*:/i)
+  const trips = text.match(new RegExp(TRIP_HEADER_RE.source, 'gi')) ?? []
+  let sampleStart = text.search(TRIP_HEADER_RE)
   if (sampleStart < 0) {
     sampleStart = text.search(/\b(?:MO|TU|WE|TH|FR|SA|SU)\s+\d{1,2}\b/i)
   }
@@ -639,7 +671,7 @@ function shouldBreakOrphanGateAttach(line: string): boolean {
   if (/^Crew:/i.test(t)) return true
   if (/Base\/Equip:/i.test(t)) return true
   if (/^GDO\b/i.test(t)) return true
-  if (/L\d[\dA-Z]*\s*:/i.test(t)) return true
+  if (TRIP_HEADER_RE.test(t)) return true
   return false
 }
 
@@ -757,7 +789,7 @@ function collectHits(text: string): ParseHit[] {
     const line = text
       .slice(lineStart)
       .split('\n')[0]
-      ?.replace(/\s+L\d[\dA-Z]*\s*:.*/, '')
+      ?.replace(TRIP_ID_SUFFIX_RE, '')
       ?.trim()
     if (!line) continue
     const crew = parseCrewLine(line)
@@ -864,6 +896,7 @@ export function parseFlicaSchedule(
       continue
     }
 
+    // Header row supplies the month. JAN is only when no `ID : DDMMM` header matched.
     const monthAbbr = currentMonthAbbr ?? 'JAN'
     const dateYmd = ymdForTripLeg(hit.dayNum, monthAbbr, year, prevLegYmd)
     if (!dateYmd) continue

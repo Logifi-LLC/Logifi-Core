@@ -8,6 +8,77 @@ interface TransferRequestBody {
 
 const SOURCE_APPS = new Set(['logten', 'foreflight', 'csv', 'other'])
 
+const RESEND_EMAILS_URL = 'https://api.resend.com/emails'
+const DEFAULT_FROM_EMAIL = 'info@logifi.io'
+const CONFIRMATION_SUBJECT = 'Got your Logifi logbook transfer request'
+const CONFIRMATION_TEXT = `Hey, thanks for requesting a logbook transfer. I got your request.
+
+If you'd like to skip a call, just reply to this email with:
+- Your logbook export file (CSV or spreadsheet from ForeFlight, LogTen, MyFlightbook, or wherever you keep it)
+- Which app or format it came from
+- Your total time as of the export, so I can double-check the numbers
+- Anything I should know (custom columns, sim time, gaps, etc.)
+
+I'll take it from there. If anything's missing, I'll reach out from derek.farmer@logifi.io.
+
+— Derek, Logifi`
+const CONFIRMATION_HTML = [
+  '<p>Hey, thanks for requesting a logbook transfer. I got your request.</p>',
+  "<p>If you'd like to skip a call, just reply to this email with:</p>",
+  '<ul>',
+  '<li>Your logbook export file (CSV or spreadsheet from ForeFlight, LogTen, MyFlightbook, or wherever you keep it)</li>',
+  '<li>Which app or format it came from</li>',
+  '<li>Your total time as of the export, so I can double-check the numbers</li>',
+  '<li>Anything I should know (custom columns, sim time, gaps, etc.)</li>',
+  '</ul>',
+  "<p>I'll take it from there. If anything's missing, I'll reach out from derek.farmer@logifi.io.</p>",
+  '<p>— Derek, Logifi</p>',
+].join('')
+
+function confirmationFromHeader(): string {
+  const configured = process.env.LOGBOOK_TRANSFER_FROM_EMAIL?.trim()
+  const address = configured || DEFAULT_FROM_EMAIL
+  if (address.includes('<') && address.includes('>')) return address
+  return `Logifi <${address}>`
+}
+
+/** Pilot confirmation. Never throws — a mail failure must not fail the request. */
+async function sendTransferConfirmation(to: string) {
+  const apiKey = process.env.RESEND_API_KEY?.trim()
+  if (!apiKey) {
+    console.log('[logbook-transfer-request] RESEND_API_KEY unset; skipping confirmation email')
+    return
+  }
+
+  try {
+    const res = await fetch(RESEND_EMAILS_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: confirmationFromHeader(),
+        to: [to],
+        subject: CONFIRMATION_SUBJECT,
+        reply_to: DEFAULT_FROM_EMAIL,
+        text: CONFIRMATION_TEXT,
+        html: CONFIRMATION_HTML,
+      }),
+    })
+    if (!res.ok) {
+      const detail = await res.text().catch(() => '')
+      console.error(
+        '[logbook-transfer-request] confirmation email returned',
+        res.status,
+        detail.slice(0, 300),
+      )
+    }
+  } catch (error) {
+    console.error('[logbook-transfer-request] confirmation email error:', error)
+  }
+}
+
 function slackPayload(
   email: string,
   userId: string,
@@ -68,6 +139,8 @@ export default defineEventHandler(async (event) => {
     console.error('[logbook-transfer-request] insert failed:', insertError)
     throw createError({ statusCode: 500, statusMessage: 'Failed to save transfer request' })
   }
+
+  await sendTransferConfirmation(user.email)
 
   const webhookUrl = process.env.SLACK_LOGBOOK_TRANSFER_WEBHOOK
   if (webhookUrl) {

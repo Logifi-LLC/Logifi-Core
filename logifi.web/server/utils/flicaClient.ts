@@ -9,6 +9,8 @@
 import { normalizeCalendarYmd } from '../../shared/localCalendarDate'
 import type { AirlineLeg } from './airlineLeg'
 import {
+  FLICA_TRIP_ID_PATTERN,
+  flicaHtmlHasTripHeader,
   parseFlicaLastUpdatedMs,
   parseFlicaSchedule,
   summarizeFlicaHtml,
@@ -413,7 +415,14 @@ export interface FlicaPairingLink {
   href: string
 }
 
-const PAIRING_TRIP_QUERY_RE = /[?&](?:trip|pairing|pairid|pair)=?(L\d[\dA-Z]*)/i
+const PAIRING_TRIP_QUERY_RE = new RegExp(
+  `[?&](?:trip|pairing|pairid|pair)=?(${FLICA_TRIP_ID_PATTERN})(?![A-Z0-9])`,
+  'i'
+)
+const PAIRING_TRIP_PATH_RE = new RegExp(
+  `/(${FLICA_TRIP_ID_PATTERN})(?![A-Z0-9])(?:[/?&#]|$)`,
+  'i'
+)
 const PAIRING_CGI_RE =
   /(?:\/(?:online|full)\/)?[\w.-]*(?:pairing|opentrip|viewtrip|tripdetail)[\w.-]*\.cgi\?[^"'\\\s<>]*/gi
 
@@ -428,7 +437,7 @@ function resolvePairingHref(href: string): string[] {
 }
 
 /**
- * Pairing-detail CGI links from month refrigerator HTML (Trip=L7H18 etc.).
+ * Pairing-detail CGI links from month refrigerator HTML (`Trip=<id>`).
  */
 export function extractFlicaPairingLinks(html: string): FlicaPairingLink[] {
   const out: FlicaPairingLink[] = []
@@ -438,7 +447,7 @@ export function extractFlicaPairingLinks(html: string): FlicaPairingLink[] {
     if (!/\.cgi/i.test(cleaned)) return
     if (/scheduledetail\.cgi/i.test(cleaned) && !PAIRING_TRIP_QUERY_RE.test(cleaned)) return
     const tripMatch =
-      cleaned.match(PAIRING_TRIP_QUERY_RE) ?? cleaned.match(/\/(L\d[\dA-Z]*)(?:[/?&#]|$)/i)
+      cleaned.match(PAIRING_TRIP_QUERY_RE) ?? cleaned.match(PAIRING_TRIP_PATH_RE)
     if (!tripMatch) return
     const tripId = tripMatch[1].toUpperCase()
     for (const href of resolvePairingHref(cleaned)) {
@@ -698,10 +707,10 @@ export function findScheduleMonthLinks(
 
 /**
  * True only for refrigerator / trip-detail HTML — not crew mainmenu chrome.
- * Requires a trip header (e.g. L7G13 :) and at least one route/leg signal.
+ * Requires a pairing header (`ID : DDMMM`) and at least one route/leg signal.
  */
 export function htmlLooksLikeScheduleDetail(html: string): boolean {
-  const hasTrip = /L\d[\dA-Z]*\s*:/i.test(html)
+  const hasTrip = flicaHtmlHasTripHeader(html)
   const hasLeg =
     /\b(?:MO|TU|WE|TH|FR|SA|SU)\s+\d{1,2}\s+(?:\*\s+)?\d{3,4}\s+[A-Z]{3}-[A-Z]{3}/i.test(
       html
@@ -746,7 +755,7 @@ function isWarmScheduleStub(html: string): boolean {
 export function isImportableScheduleHtml(html: string): boolean {
   if (!html || isWarmScheduleStub(html)) return false
   if (html.length < FLICA_IMPORTABLE_SCHEDULE_MIN_BYTES) return false
-  return htmlHasParseableScheduleLegs(html) || /L\d[\dA-Z]*\s*:/i.test(html)
+  return htmlHasParseableScheduleLegs(html) || flicaHtmlHasTripHeader(html)
 }
 
 function redactTokenInUrl(url: string): string {
@@ -1141,7 +1150,7 @@ export async function probeFlicaMenu(
     scheduleDetailLinks,
     tokenFound,
     textSnippet: text.slice(0, 500),
-    hasTripHeader: /L\d[\dA-Z]*\s*:/i.test(html),
+    hasTripHeader: flicaHtmlHasTripHeader(html),
     hasRouteToken: /\b[A-Z]{3}-[A-Z]{3}\b/.test(html),
     scheduleHtmlLength: scheduleSummary.htmlLength,
     scheduleParsedLegCount: scheduleSummary.parsedLegCount,
