@@ -133,8 +133,29 @@ describe('POST /api/logbook-transfer-request', () => {
       to: [PILOT_EMAIL],
       subject: 'Got your Logifi logbook transfer request',
       reply_to: 'info@logifi.io',
-      text: "Hey, thanks for requesting a logbook transfer. I got your request and I'll email you from derek.farmer@logifi.io to set up a time. No need to do anything else right now. If you have questions, just reply to this email. — Derek, Logifi",
-      html: "<p>Hey, thanks for requesting a logbook transfer. I got your request and I'll email you from derek.farmer@logifi.io to set up a time. No need to do anything else right now.</p><p>If you have questions, just reply to this email.</p><p>— Derek, Logifi</p>",
+      text: `Hey, thanks for requesting a logbook transfer. I got your request.
+
+If you'd like to skip a call, just reply to this email with:
+- Your logbook export file (CSV or spreadsheet from ForeFlight, LogTen, MyFlightbook, or wherever you keep it)
+- Which app or format it came from
+- Your total time as of the export, so I can double-check the numbers
+- Anything I should know (custom columns, sim time, gaps, etc.)
+
+I'll take it from there. If anything's missing, I'll reach out from derek.farmer@logifi.io.
+
+— Derek, Logifi`,
+      html: [
+        '<p>Hey, thanks for requesting a logbook transfer. I got your request.</p>',
+        "<p>If you'd like to skip a call, just reply to this email with:</p>",
+        '<ul>',
+        '<li>Your logbook export file (CSV or spreadsheet from ForeFlight, LogTen, MyFlightbook, or wherever you keep it)</li>',
+        '<li>Which app or format it came from</li>',
+        '<li>Your total time as of the export, so I can double-check the numbers</li>',
+        '<li>Anything I should know (custom columns, sim time, gaps, etc.)</li>',
+        '</ul>',
+        "<p>I'll take it from there. If anything's missing, I'll reach out from derek.farmer@logifi.io.</p>",
+        '<p>— Derek, Logifi</p>',
+      ].join(''),
     })
   })
 
