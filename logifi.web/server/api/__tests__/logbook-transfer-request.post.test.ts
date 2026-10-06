@@ -105,6 +105,12 @@ describe('POST /api/logbook-transfer-request', () => {
     return fetchMock.mock.calls.filter((call) => call[0] === SLACK_URL)
   }
 
+  function requestInit(calls: ReadonlyArray<ReadonlyArray<unknown>>, index: number): RequestInit {
+    const init = calls[index]?.[1]
+    if (!init || typeof init !== 'object') throw new Error(`missing fetch call ${index}`)
+    return init as RequestInit
+  }
+
   it('emails the saved address after insert, then posts to Slack', async () => {
     process.env.RESEND_API_KEY = 're_test_key'
     process.env.SLACK_LOGBOOK_TRANSFER_WEBHOOK = SLACK_URL
@@ -114,9 +120,9 @@ describe('POST /api/logbook-transfer-request', () => {
     expect(result).toEqual({ success: true, alreadyRequested: false })
     expect(resendCalls()).toHaveLength(1)
     expect(slackCalls()).toHaveLength(1)
-    expect(resendCalls()[0][0]).toBe(fetchMock.mock.calls[0][0])
+    expect(resendCalls()[0]?.[0]).toBe(fetchMock.mock.calls[0]?.[0])
 
-    const init = resendCalls()[0][1] as RequestInit
+    const init = requestInit(resendCalls(), 0)
     expect(init.method).toBe('POST')
     expect(init.headers).toMatchObject({
       Authorization: 'Bearer re_test_key',
@@ -138,12 +144,12 @@ describe('POST /api/logbook-transfer-request', () => {
 
     await handler({} as H3Event)
 
-    const init = resendCalls()[0][1] as RequestInit
+    const init = requestInit(resendCalls(), 0)
     expect(JSON.parse(String(init.body)).from).toBe('Logifi <pilot@logifi.io>')
 
     process.env.LOGBOOK_TRANSFER_FROM_EMAIL = 'Hangar <crew@logifi.io>'
     await handler({} as H3Event)
-    const wrapped = resendCalls()[1][1] as RequestInit
+    const wrapped = requestInit(resendCalls(), 1)
     expect(JSON.parse(String(wrapped.body)).from).toBe('Hangar <crew@logifi.io>')
     expect(JSON.parse(String(wrapped.body)).reply_to).toBe('info@logifi.io')
   })
