@@ -41,6 +41,7 @@ const router = useRouter()
 const { showToast } = useToast()
 const { fetchBalance } = useDigifiCredits()
 const gridRef = ref<InstanceType<typeof LogbookBuilderGrid> | null>(null)
+const digifiPanelRef = ref<{ prepareForNextPage: () => Promise<void> } | null>(null)
 const digifiSectionRef = ref<HTMLElement | null>(null)
 const grid = useLogbookBuilderGrid()
 provide('logbookBuilderGrid', grid)
@@ -214,6 +215,16 @@ watchEffect(async (onCleanup) => {
 
 const { isDark } = useTheme()
 const showDigifiPanel = ref(false)
+
+async function startDigifiNextPage() {
+  grid.beginNextDigifiPage()
+  showDigifiPanel.value = true
+  await nextTick()
+  await digifiPanelRef.value?.prepareForNextPage()
+  digifiSectionRef.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+provide('startDigifiNextPage', startDigifiNextPage)
+
 const showInstructions = ref(false)
 const showDigifiChecklist = ref(false)
 const showDigifiCommonMistakes = ref(false)
@@ -765,7 +776,7 @@ watchEffect(async (onCleanup) => {
           leave-to-class="opacity-0 max-h-0"
         >
           <div v-if="showDigifiPanel" class="mt-4 overflow-hidden">
-            <LogbookBuilderDigifiPanel />
+            <LogbookBuilderDigifiPanel ref="digifiPanelRef" />
           </div>
         </Transition>
       </section>
