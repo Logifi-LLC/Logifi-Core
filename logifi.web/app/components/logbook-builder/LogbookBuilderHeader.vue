@@ -44,17 +44,37 @@ const FIELD_OPTIONS: { value: LogbookColumnKey | ''; label: string }[] = [
 ]
 
 const open = ref(false)
+/** Desktop hover flyout (teleported). Unchanged for a real mouse on a fine pointer. */
 const categorySubmenuOpen = ref(false)
+/** Touch / coarse pointer: class list inline under the Category/Class row. */
+const categoryInlineOpen = ref(false)
+const coarsePointer = ref(false)
 const categoryTriggerRef = ref<HTMLElement | null>(null)
 const mainDropdownRef = ref<HTMLElement | null>(null)
 const submenuRef = ref<HTMLElement | null>(null)
 const submenuPosition = ref({ top: 0, left: 0 })
 let closeTimeout: ReturnType<typeof setTimeout> | null = null
+let coarseMedia: MediaQueryList | null = null
+/** Last pointer that interacted with the row. Touch taps must not open the hover flyout. */
+const activePointerType = ref('mouse')
+
+function categoryTriggerElement(): HTMLElement | null {
+  const refVal = categoryTriggerRef.value
+  const el = Array.isArray(refVal) ? refVal[0] : refVal
+  return el ?? null
+}
+
+function wantsInlineMenu(): boolean {
+  return coarsePointer.value || activePointerType.value === 'touch' || activePointerType.value === 'pen'
+}
+
+function syncCoarsePointer() {
+  coarsePointer.value = coarseMedia?.matches ?? false
+}
 
 function updateSubmenuPositionFromTrigger() {
   nextTick(() => {
-    const refVal = categoryTriggerRef.value
-    const el = Array.isArray(refVal) ? refVal[0] : refVal
+    const el = categoryTriggerElement()
     if (el && el.getBoundingClientRect) {
       const rect = el.getBoundingClientRect()
       submenuPosition.value = { top: rect.top, left: rect.right + 4 }
@@ -62,10 +82,64 @@ function updateSubmenuPositionFromTrigger() {
   })
 }
 
+function onCategoryPointerEnter(e: PointerEvent) {
+  if (e.pointerType) activePointerType.value = e.pointerType
+  if (wantsInlineMenu()) {
+    categorySubmenuOpen.value = false
+    cancelClose()
+    return
+  }
+  onCategoryMouseEnter()
+}
+
+function onCategoryPointerDown(e: PointerEvent) {
+  if (e.pointerType) activePointerType.value = e.pointerType
+  if (wantsInlineMenu()) {
+    categorySubmenuOpen.value = false
+    cancelClose()
+  }
+}
+
 function onCategoryMouseEnter() {
+  if (wantsInlineMenu()) return
   categorySubmenuOpen.value = true
   cancelClose()
   updateSubmenuPositionFromTrigger()
+}
+
+function onCategoryMouseLeave() {
+  if (wantsInlineMenu()) return
+  scheduleClose()
+}
+
+function scrollInlineIntoView() {
+  nextTick(() => {
+    const menu = mainDropdownRef.value
+    const trigger = categoryTriggerElement()
+    if (!menu || !trigger) return
+    const top = trigger.offsetTop
+    const bottom = top + trigger.offsetHeight
+    const viewBottom = menu.scrollTop + menu.clientHeight
+    if (top < menu.scrollTop || bottom > viewBottom) {
+      menu.scrollTop = Math.max(0, top)
+    }
+  })
+}
+
+function onCategoryRowClick(e: MouseEvent) {
+  e.stopPropagation()
+  if (wantsInlineMenu()) {
+    categoryInlineOpen.value = !categoryInlineOpen.value
+    categorySubmenuOpen.value = false
+    cancelClose()
+    if (categoryInlineOpen.value) scrollInlineIntoView()
+    return
+  }
+  categorySubmenuOpen.value = !categorySubmenuOpen.value
+  if (categorySubmenuOpen.value) {
+    cancelClose()
+    updateSubmenuPositionFromTrigger()
+  }
 }
 
 function applyOption(value: LogbookColumnKey | '', label: string, categoryClassValue?: string) {
@@ -78,6 +152,7 @@ function applyOption(value: LogbookColumnKey | '', label: string, categoryClassV
   emit('update', props.column, updates)
   open.value = false
   categorySubmenuOpen.value = false
+  categoryInlineOpen.value = false
 }
 
 function onSelectOption(opt: { value: LogbookColumnKey | ''; label: string }) {
@@ -113,6 +188,7 @@ function handleClickOutside(e: MouseEvent) {
   if (el && !el.contains(target)) {
     open.value = false
     categorySubmenuOpen.value = false
+    categoryInlineOpen.value = false
   }
 }
 
@@ -120,9 +196,15 @@ const dropdownId = computed(() => `logbook-builder-header-${props.column.id}`)
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    coarseMedia = window.matchMedia('(hover: none), (pointer: coarse)')
+    syncCoarsePointer()
+    coarseMedia.addEventListener('change', syncCoarsePointer)
+  }
 })
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
+  coarseMedia?.removeEventListener('change', syncCoarsePointer)
   if (closeTimeout) clearTimeout(closeTimeout)
 })
 
@@ -177,23 +259,48 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
         >
           {{ opt.label }}
         </div>
-        <!-- Wrapper: submenu is teleported so it isn't clipped by overflow-y-auto -->
+        <!-- Hover flyout stays teleported. Touch opens an in-flow list so max-height scrolls instead of clipping. -->
         <div
           v-else
           ref="categoryTriggerRef"
-          class="relative flex cursor-pointer"
+          data-testid="category-class-trigger"
+          class="relative"
+          @pointerenter="onCategoryPointerEnter"
+          @pointerdown="onCategoryPointerDown"
           @mouseenter="onCategoryMouseEnter"
-          @mouseleave="scheduleClose()"
+          @mouseleave="onCategoryMouseLeave"
         >
+          <div class="flex cursor-pointer">
+            <div
+              data-testid="category-class-row"
+              class="lb-cat-row flex-1 px-2 py-1.5 text-xs text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/10"
+              :class="column.fieldKey === 'categoryClass' && !column.categoryClassValue ? 'bg-blue-50 dark:bg-blue-900/30' : ''"
+              @click.stop="onCategoryRowClick"
+            >
+              <span class="flex w-full items-center justify-between">
+                Category/Class
+                <span
+                  class="lb-cat-chevron ml-1 text-gray-400"
+                  :class="{ 'lb-cat-chevron-open': categoryInlineOpen }"
+                  aria-hidden="true"
+                >▸</span>
+              </span>
+            </div>
+          </div>
           <div
-            class="flex-1 px-2 py-1.5 text-xs text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/10"
-            :class="column.fieldKey === 'categoryClass' && !column.categoryClassValue ? 'bg-blue-50 dark:bg-blue-900/30' : ''"
-            @click.stop="categorySubmenuOpen = !categorySubmenuOpen"
+            v-if="categoryInlineOpen"
+            data-testid="category-inline"
           >
-            <span class="flex items-center justify-between">
-              Category/Class
-              <span class="ml-1 text-gray-400">▸</span>
-            </span>
+            <button
+              v-for="cc in categoryClassOptions"
+              :key="cc"
+              type="button"
+              class="lb-cat-option w-full cursor-pointer py-1.5 pl-6 pr-2 text-left text-xs text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/10"
+              :class="column.categoryClassValue === cc ? 'bg-blue-50 dark:bg-blue-900/30' : ''"
+              @click="onSelectCategoryClass(cc)"
+            >
+              {{ cc }}
+            </button>
           </div>
         </div>
       </template>
@@ -201,8 +308,9 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
     <!-- Submenu in body so it's never clipped by table/overflow -->
     <Teleport to="body">
       <div
-        v-if="open && categorySubmenuOpen"
+        v-if="open && categorySubmenuOpen && !wantsInlineMenu()"
         ref="submenuRef"
+        data-testid="category-flyout"
         class="fixed z-[100] w-[5rem] max-h-[11rem] overflow-y-auto rounded border bg-white py-px shadow dark:border-white/10 dark:bg-gray-900 dark:shadow-xl dark:shadow-black/50"
         :style="{ top: submenuPosition.top + 'px', left: submenuPosition.left + 'px' }"
         @mouseenter="cancelClose()"
@@ -222,3 +330,20 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+.lb-cat-chevron {
+  display: inline-block;
+}
+.lb-cat-chevron-open {
+  transform: rotate(90deg);
+}
+@media (pointer: coarse), (hover: none) {
+  .lb-cat-row,
+  .lb-cat-option {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+}
+</style>
