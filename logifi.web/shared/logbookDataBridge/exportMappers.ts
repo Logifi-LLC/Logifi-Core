@@ -67,6 +67,7 @@ export const MYFLIGHTBOOK_HEADERS = [
   'Landings',
   'IMC',
   'Simulated Instrument',
+  'Ground Simulator',
   'Dual Received',
   'CFI',
   'Approaches',
@@ -127,6 +128,12 @@ export const LOGTEN_HEADERS = [
   'flight_sic',
   'flight_nightTime',
   'flight_crossCountry',
+  'flight_actualInstrument',
+  'flight_simulatedInstrument',
+  'flight_dualReceived',
+  'flight_dualGiven',
+  'flight_solo',
+  'flight_simulator',
   'flight_dayLandings',
   'flight_nightLandings',
   'Remarks',
@@ -145,6 +152,9 @@ export const GENERIC_HEADERS = [
   'SIC',
   'Night',
   'Cross Country',
+  'Simulator Time',
+  'Actual Instrument',
+  'Simulated Instrument',
   'Day Landings',
   'Night Landings',
   'Remarks',
@@ -182,6 +192,9 @@ export const LOGIFI_NATIVE_HEADERS = [
   'Simulated Instrument',
   'Cross Country',
   'Ground Simulator',
+  'FFS',
+  'FTD',
+  'ATD',
   'Dual Given',
   'Day Landings',
   'Night Landings',
@@ -231,6 +244,43 @@ function getInstrumentSplit(entry: LogEntry): [string, string] {
   ]
 }
 
+/** FFS + FTD + ATD. Legacy sim rows may only have the duration copied onto total. */
+function simulatorHours(entry: LogEntry): number {
+  const ft = entry.flightTime
+  const buckets = (ft.ffs ?? 0) + (ft.ftd ?? 0) + (ft.atd ?? 0)
+  if (buckets > 0) return Math.round(buckets * 10) / 10
+  if (entry.logbookType === 'simulator') {
+    return Math.round((ft.total ?? 0) * 10) / 10
+  }
+  return 0
+}
+
+/**
+ * ForeFlight and MyFlightbook keep simulator time out of total flight time.
+ * A sim session in Logifi often copies that same duration onto total.
+ */
+function isSimOnlyForSeparatedExport(entry: LogEntry): boolean {
+  if (entry.logbookType === 'simulator') return true
+  if (entry.logbookType === 'flight') return false
+  const buckets = (entry.flightTime.ffs ?? 0) + (entry.flightTime.ftd ?? 0) + (entry.flightTime.atd ?? 0)
+  if (buckets <= 0) return false
+  const total = entry.flightTime.total ?? 0
+  return total <= 0 || Math.abs(total - buckets) < 0.001
+}
+
+function formatSeparatedTotal(entry: LogEntry): string {
+  if (isSimOnlyForSeparatedExport(entry)) return ''
+  return formatDecimalHours(entry.flightTime.total)
+}
+
+function formatSimulatorHours(entry: LogEntry, options?: { zeroAsEmpty?: boolean }): string {
+  const hours = simulatorHours(entry)
+  if (options?.zeroAsEmpty) {
+    return formatDecimalHours(hours, { emptyWhenZero: true })
+  }
+  return formatDecimalHours(hours)
+}
+
 export function mapEntriesToForeFlightAircraftTable(entries: LogEntry[]): string[][] {
   const byTail = new Map<string, LogEntry>()
 
@@ -268,7 +318,6 @@ export function mapEntryToForeFlightFlightRow(entry: LogEntry): string[] {
   const from = formatAirportCode(entry.departure)
   const to = formatAirportCode(entry.destination)
   const route = buildForeFlightRouteIntermediate(entry.departure, entry.route, entry.destination)
-  const isSimulator = entry.logbookType === 'simulator'
 
   return [
     formatExportDate(entry.date, 'iso'),
@@ -276,7 +325,7 @@ export function mapEntryToForeFlightFlightRow(entry: LogEntry): string[] {
     from,
     to,
     route,
-    formatDecimalHours(entry.flightTime.total),
+    formatSeparatedTotal(entry),
     formatDecimalHours(entry.flightTime.pic, { emptyWhenZero: true }),
     formatDecimalHours(entry.flightTime.sic, { emptyWhenZero: true }),
     formatDecimalHours(entry.flightTime.night, { emptyWhenZero: true }),
@@ -290,7 +339,7 @@ export function mapEntryToForeFlightFlightRow(entry: LogEntry): string[] {
     formatWholeNumber(entry.performance.nightLandings),
     formatWholeNumber(entry.performance.holdingProcedures),
     entry.remarks || '',
-    isSimulator ? formatDecimalHours(entry.flightTime.total) : '',
+    formatSimulatorHours(entry, { zeroAsEmpty: true }),
   ]
 }
 
@@ -306,7 +355,7 @@ export function mapEntryToMyFlightbookRow(entry: LogEntry): string[] {
     formatExportDate(entry.date, 'mdy'),
     tail,
     entry.aircraftMakeModel || '',
-    formatDecimalHours(entry.flightTime.total),
+    formatSeparatedTotal(entry),
     route,
     formatDecimalHours(entry.flightTime.pic, { emptyWhenZero: true }),
     formatDecimalHours(entry.flightTime.sic, { emptyWhenZero: true }),
@@ -315,6 +364,7 @@ export function mapEntryToMyFlightbookRow(entry: LogEntry): string[] {
     formatWholeNumber(landings),
     formatDecimalHours(entry.flightTime.actualInstrument, { emptyWhenZero: true }),
     formatDecimalHours(entry.flightTime.simulatedInstrument, { emptyWhenZero: true }),
+    formatSimulatorHours(entry, { zeroAsEmpty: true }),
     formatDecimalHours(entry.flightTime.dual, { emptyWhenZero: true }),
     formatDecimalHours(entry.flightTime.dualGiven, { emptyWhenZero: true }),
     formatWholeNumber(getTotalApproachCount(entry.performance)),
@@ -347,6 +397,12 @@ export function mapEntryToLogTenRow(entry: LogEntry): string[] {
     formatDecimalHours(entry.flightTime.sic, { emptyWhenZero: true }),
     formatDecimalHours(entry.flightTime.night, { emptyWhenZero: true }),
     formatDecimalHours(entry.flightTime.crossCountry, { emptyWhenZero: true }),
+    formatDecimalHours(entry.flightTime.actualInstrument, { emptyWhenZero: true }),
+    formatDecimalHours(entry.flightTime.simulatedInstrument, { emptyWhenZero: true }),
+    formatDecimalHours(entry.flightTime.dual, { emptyWhenZero: true }),
+    formatDecimalHours(entry.flightTime.dualGiven, { emptyWhenZero: true }),
+    formatDecimalHours(entry.flightTime.solo, { emptyWhenZero: true }),
+    formatSimulatorHours(entry, { zeroAsEmpty: true }),
     formatWholeNumber(entry.performance.dayLandings),
     formatWholeNumber(entry.performance.nightLandings),
     entry.remarks || '',
@@ -370,6 +426,9 @@ export function mapEntryToGenericRow(entry: LogEntry): string[] {
     formatDecimalHours(entry.flightTime.sic, { emptyWhenZero: true }),
     formatDecimalHours(entry.flightTime.night, { emptyWhenZero: true }),
     formatDecimalHours(entry.flightTime.crossCountry, { emptyWhenZero: true }),
+    formatSimulatorHours(entry, { zeroAsEmpty: true }),
+    formatDecimalHours(entry.flightTime.actualInstrument, { emptyWhenZero: true }),
+    formatDecimalHours(entry.flightTime.simulatedInstrument, { emptyWhenZero: true }),
     formatWholeNumber(entry.performance.dayLandings),
     formatWholeNumber(entry.performance.nightLandings),
     entry.remarks || '',
@@ -407,7 +466,10 @@ export function mapEntryToLogifiNativeRow(entry: LogEntry): string[] {
     formatDecimalHours(entry.flightTime.night),
     ...getInstrumentSplit(entry),
     formatDecimalHours(entry.flightTime.crossCountry),
-    '0.0',
+    formatSimulatorHours(entry),
+    formatDecimalHours(entry.flightTime.ffs),
+    formatDecimalHours(entry.flightTime.ftd),
+    formatDecimalHours(entry.flightTime.atd),
     formatDecimalHours(entry.flightTime.dualGiven),
     formatWholeNumber(entry.performance.dayLandings),
     formatWholeNumber(entry.performance.nightLandings),
