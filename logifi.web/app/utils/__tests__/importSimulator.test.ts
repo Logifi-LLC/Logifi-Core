@@ -185,6 +185,45 @@ describe('importSimulator', () => {
       expect(entry.flightTime.dual).toBe(1.5)
     })
 
+    it('keeps a flight that also has separate simulator time', () => {
+      const entry = createTestEntry({
+        aircraftCategoryClass: 'AMEL',
+        flightTime: {
+          ...createEmptyFlightTime(),
+          total: 0.8,
+          actualInstrument: 0.5,
+          simulatedInstrument: 0.3,
+          dual: 0.4,
+        },
+      })
+      const hints = readSimHintsFromRawRow({
+        'Ground Simulator': '1.3',
+        FTD: '1.3',
+      })
+      applySimulatorImport(entry, hints)
+      expect(entry.logbookType).toBe('flight')
+      expect(entry.flightTime.total).toBe(0.8)
+      expect(entry.flightTime.ftd).toBe(1.3)
+      expect(entry.flightTime.actualInstrument).toBe(0.5)
+      expect(entry.flightTime.simulatedInstrument).toBe(0.3)
+      expect(entry.aircraftCategoryClass).toBe('AMEL')
+    })
+
+    it('still classifies a copied sim duration as a simulator session', () => {
+      const entry = createTestEntry({
+        flightTime: {
+          ...createEmptyFlightTime(),
+          total: 1.3,
+          actualInstrument: 0.4,
+        },
+      })
+      applySimulatorImport(entry, readSimHintsFromRawRow({ 'Ground Simulator': '1.3' }))
+      expect(entry.logbookType).toBe('simulator')
+      expect(entry.flightTime.actualInstrument).toBeNull()
+      expect(entry.flightTime.simulatedInstrument).toBe(0.4)
+      expect((entry.flightTime.atd ?? 0) + (entry.flightTime.ftd ?? 0) + (entry.flightTime.ffs ?? 0)).toBe(1.3)
+    })
+
     it('round-trips Logbook Type + ATD export columns', () => {
       const raw = {
         'Logbook Type': 'simulator',
