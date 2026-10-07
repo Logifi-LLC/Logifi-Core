@@ -368,6 +368,9 @@ export function useLogbookBuilderGrid() {
         label: column.label,
         fieldKey: column.fieldKey,
         order: column.order,
+        width: column.width,
+        categoryClassValue: column.categoryClassValue,
+        columnKind: column.columnKind,
       })),
       layout: layout.value,
       defaultYear: defaultYear.value,
@@ -375,6 +378,7 @@ export function useLogbookBuilderGrid() {
       rowCount: rowCount.value,
     })
     clearGrid()
+    columns.value = next.columns.map((column) => ({ ...column }))
     layout.value = next.layout
     defaultYear.value = next.defaultYear
     twoPageSplitIndex.value = next.twoPageSplitIndex
