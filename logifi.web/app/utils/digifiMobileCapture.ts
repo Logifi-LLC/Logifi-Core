@@ -47,7 +47,7 @@ export function isTwoPageReadyForReview(grid: CaptureGrid): boolean {
   )
 }
 
-export type MobileTwoPageChipState = 'waiting' | 'next' | 'scanning' | 'done'
+export type MobileTwoPageChipState = 'waiting' | 'next' | 'scanning' | 'done' | 'error'
 
 export function mobileTwoPageChipLabel(state: MobileTwoPageChipState): string {
   switch (state) {
@@ -57,6 +57,8 @@ export function mobileTwoPageChipLabel(state: MobileTwoPageChipState): string {
       return 'Scanning…'
     case 'next':
       return 'Tap to photo'
+    case 'error':
+      return 'Retake'
     case 'waiting':
       return 'After left'
   }
@@ -65,8 +67,10 @@ export function mobileTwoPageChipLabel(state: MobileTwoPageChipState): string {
 export function mobileTwoPageLeftChipState(
   grid: CaptureGrid,
   session: MobileCaptureSession,
-  photoNext: DigifiPageSide | null
+  photoNext: DigifiPageSide | null,
+  failedSide: DigifiPageSide | null = null
 ): MobileTwoPageChipState {
+  if (failedSide === 'left' && !isMobileCaptureSideScanApplied(grid, 'left')) return 'error'
   if (isMobileCaptureSideScanApplied(grid, 'left')) return 'done'
   if (isMobileCaptureSideComplete(grid, 'left', session.leftPhotoCaptured)) return 'scanning'
   if (photoNext === 'left') return 'next'
@@ -76,8 +80,10 @@ export function mobileTwoPageLeftChipState(
 export function mobileTwoPageRightChipState(
   grid: CaptureGrid,
   session: MobileCaptureSession,
-  photoNext: DigifiPageSide | null
+  photoNext: DigifiPageSide | null,
+  failedSide: DigifiPageSide | null = null
 ): MobileTwoPageChipState {
+  if (failedSide === 'right' && !isMobileCaptureSideScanApplied(grid, 'right')) return 'error'
   if (isMobileCaptureSideScanApplied(grid, 'right')) return 'done'
   if (isMobileCaptureSideComplete(grid, 'right', session.rightPhotoCaptured)) return 'scanning'
   if (photoNext === 'right') return 'next'
@@ -102,10 +108,13 @@ export function mobileSetupCaptureLabel(
 export function nextMobileCaptureSide(
   layout: BuilderLayout,
   grid: CaptureGrid,
-  session: MobileCaptureSession
+  session: MobileCaptureSession,
+  failedSide: DigifiPageSide | null = null
 ): DigifiPageSide | null {
   if (layout !== 'two-page') return 'left'
+  if (failedSide === 'left' && !isMobileCaptureSideScanApplied(grid, 'left')) return 'left'
   if (!isMobileCaptureSideComplete(grid, 'left', session.leftPhotoCaptured)) return 'left'
+  if (failedSide === 'right' && !isMobileCaptureSideScanApplied(grid, 'right')) return 'right'
   if (!isMobileCaptureSideComplete(grid, 'right', session.rightPhotoCaptured)) return 'right'
   return null
 }

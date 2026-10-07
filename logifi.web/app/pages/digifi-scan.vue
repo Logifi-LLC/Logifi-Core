@@ -69,6 +69,8 @@ provide('digifiPreferredSink', preferredSink)
 const {
   scanning,
   error,
+  failedPageSide,
+  clearScanPageError,
   scanRowWarning,
   scanPhase,
   canScan,
@@ -99,7 +101,7 @@ const captureSession = computed(
 )
 
 const nextCaptureSide = computed(() =>
-  nextMobileCaptureSide(grid.layout.value, grid, captureSession.value)
+  nextMobileCaptureSide(grid.layout.value, grid, captureSession.value, failedPageSide.value)
 )
 
 const captureSideOverride = ref<DigifiPageSide | null>(null)
@@ -117,13 +119,23 @@ const captureLabel = computed(() =>
 
 const leftChipLabel = computed(() =>
   mobileTwoPageChipLabel(
-    mobileTwoPageLeftChipState(grid, captureSession.value, nextCaptureSide.value)
+    mobileTwoPageLeftChipState(
+      grid,
+      captureSession.value,
+      nextCaptureSide.value,
+      failedPageSide.value
+    )
   )
 )
 
 const rightChipLabel = computed(() =>
   mobileTwoPageChipLabel(
-    mobileTwoPageRightChipState(grid, captureSession.value, nextCaptureSide.value)
+    mobileTwoPageRightChipState(
+      grid,
+      captureSession.value,
+      nextCaptureSide.value,
+      failedPageSide.value
+    )
   )
 )
 
@@ -168,6 +180,7 @@ function resetCaptureSession() {
   autoReviewAfterCapture.value = false
   captureSideOverride.value = null
   showCamera.value = false
+  clearScanPageError()
 }
 
 function queryWantsNewSpread(): boolean {
@@ -288,6 +301,7 @@ function startDigifiNextPage() {
 provide('startDigifiNextPage', startDigifiNextPage)
 
 function retakeCaptureSide(pageSide: DigifiPageSide) {
+  clearScanPageError(pageSide)
   if (pageSide === 'left') {
     leftPagePhotoCaptured.value = false
     grid.leftPageScanned.value = false

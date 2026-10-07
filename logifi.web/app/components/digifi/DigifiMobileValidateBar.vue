@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { inject, ref, unref } from 'vue'
+import { prefillBuilderTemplateName, saveLogbookBuilderTemplate } from '~/composables/useLogbookBuilderLastTemplate'
+import { useLogbookBuilderTemplateMatch } from '~/composables/useLogbookBuilderTemplateMatch'
+import { formatBuilderValidationErrors } from '~/utils/builderValidationMessages'
 import type { Ref } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import type { ColumnTotalRow, ValidateOnlyResult } from '~/composables/useLogbookBuilderImport'
@@ -21,10 +24,15 @@ const startDigifiNextPage = inject<(() => void | Promise<void>) | null>('startDi
 const { showToast } = useToast()
 const { isAuthenticated, user } = useAuth()
 
+const { showSaveTemplate } = useLogbookBuilderTemplateMatch()
+const namingTemplate = ref(false)
+const templateName = ref('')
+const savingTemplate = ref(false)
+
 const validating = ref(false)
 const importing = ref(false)
 const sendingToLogTen = ref(false)
-const errorMessage = ref<string | null>(null)
+const errorLines = ref<string[]>([])
 const showSummary = ref(false)
 const summaryResult = ref<{ validRowCount: number; columnTotals: ColumnTotalRow[] } | null>(null)
 
@@ -33,18 +41,43 @@ function clearSummary() {
   summaryResult.value = null
 }
 
+async function beginNamingTemplate() {
+  if (!isAuthenticated.value || !user.value) {
+    showToast('Please sign in to save a template.', { type: 'info' })
+    return
+  }
+  templateName.value = await prefillBuilderTemplateName(grid!, user.value.id)
+  namingTemplate.value = true
+}
+
+async function saveNamedTemplate() {
+  const name = templateName.value.trim()
+  if (!user.value) {
+    showToast('Please sign in to save a template.', { type: 'info' })
+    return
+  }
+  if (!name) return
+  savingTemplate.value = true
+  const result = await saveLogbookBuilderTemplate(grid!, user.value.id, name)
+  savingTemplate.value = false
+  if ('error' in result) {
+    errorLines.value = [result.error]
+    return
+  }
+  templateName.value = ''
+  namingTemplate.value = false
+  showToast(result.updated ? 'Template updated' : 'Template saved', { type: 'success' })
+}
+
 async function handleValidate() {
   validating.value = true
-  errorMessage.value = null
+  errorLines.value = []
   clearSummary()
   try {
     const { validateOnly } = await import('~/composables/useLogbookBuilderImport')
     const result: ValidateOnlyResult = await validateOnly(grid!)
     if (!result.valid && result.errors.length > 0) {
-      errorMessage.value = result.errors
-        .slice(0, 4)
-        .map((item) => (item.rowIndex >= 0 ? `Row ${item.rowIndex}: ` : '') + item.message)
-        .join('; ')
+      errorLines.value = formatBuilderValidationErrors(result.errors)
       return
     }
     if (result.valid && result.validRowCount != null && result.columnTotals != null) {
@@ -55,28 +88,21 @@ async function handleValidate() {
       showSummary.value = true
     }
   } catch (error: unknown) {
-    errorMessage.value = error instanceof Error ? error.message : 'Validation failed'
+    errorLines.value = [error instanceof Error ? error.message : 'Validation failed']
   } finally {
     validating.value = false
   }
 }
 
-function formatImportErrors(errors: { rowIndex: number; message: string }[]): string {
-  return errors
-    .slice(0, 4)
-    .map((item) => (item.rowIndex >= 0 ? `Row ${item.rowIndex}: ` : '') + item.message)
-    .join('; ')
-}
-
 async function handleImport() {
   if (!summaryResult.value) return
   importing.value = true
-  errorMessage.value = null
+  errorLines.value = []
   try {
     const { runValidateAndImport } = await import('~/composables/useLogbookBuilderImport')
     const result = await runValidateAndImport(grid!)
     if (result.errors.length > 0) {
-      errorMessage.value = formatImportErrors(result.errors)
+      errorLines.value = formatBuilderValidationErrors(result.errors)
       clearSummary()
       return
     }
@@ -85,7 +111,7 @@ async function handleImport() {
       await navigateTo('/dashboard')
     }
   } catch (error: unknown) {
-    errorMessage.value = error instanceof Error ? error.message : 'Import failed'
+    errorLines.value = [error instanceof Error ? error.message : 'Import failed']
   } finally {
     importing.value = false
   }
@@ -94,13 +120,13 @@ async function handleImport() {
 async function handleImportAndScanNext() {
   if (!summaryResult.value || importing.value) return
   importing.value = true
-  errorMessage.value = null
+  errorLines.value = []
   try {
     const { runValidateAndImport } = await import('~/composables/useLogbookBuilderImport')
     const result = await runValidateAndImport(grid!)
     if (!digifiImportSucceeded(result)) {
       if (result.errors.length > 0) {
-        errorMessage.value = formatImportErrors(result.errors)
+        errorLines.value = formatBuilderValidationErrors(result.errors)
         clearSummary()
       }
       return
@@ -110,10 +136,10 @@ async function handleImportAndScanNext() {
     try {
       await startDigifiNextPage?.()
     } catch (nextError: unknown) {
-      errorMessage.value = nextError instanceof Error ? nextError.message : 'Could not open the next scan.'
+      errorLines.value = [nextError instanceof Error ? nextError.message : 'Could not open the next scan.']
     }
   } catch (error: unknown) {
-    errorMessage.value = error instanceof Error ? error.message : 'Import failed'
+    errorLines.value = [error instanceof Error ? error.message : 'Import failed']
   } finally {
     importing.value = false
   }
@@ -122,7 +148,7 @@ async function handleImportAndScanNext() {
 async function handleSendToLogTen() {
   if (!summaryResult.value) return
   sendingToLogTen.value = true
-  errorMessage.value = null
+  errorLines.value = []
   try {
     const entries = gridToEntries({
       columns: grid!.columns.value,
@@ -155,7 +181,7 @@ async function handleSendToLogTen() {
     if (!result.success) throw new Error(result.error || 'Failed to send to LogTen')
     showToast('Opened LogTen Pro', { type: 'success' })
   } catch (error: unknown) {
-    errorMessage.value = error instanceof Error ? error.message : 'Failed to send to LogTen'
+    errorLines.value = [error instanceof Error ? error.message : 'Failed to send to LogTen']
   } finally {
     sendingToLogTen.value = false
   }
@@ -192,7 +218,15 @@ async function handleSendToLogTen() {
       </div>
     </div>
 
-    <p v-if="errorMessage" :class="['text-xs', isDarkMode ? 'text-rose-300' : 'text-rose-600']">{{ errorMessage }}</p>
+    <div v-if="errorLines.length" class="space-y-1" role="alert">
+      <p
+        v-for="(line, index) in errorLines"
+        :key="index"
+        :class="['text-xs', isDarkMode ? 'text-rose-300' : 'text-rose-600']"
+      >
+        {{ line }}
+      </p>
+    </div>
 
     <div v-if="!showSummary" class="flex gap-2">
       <button
@@ -208,6 +242,36 @@ async function handleSendToLogTen() {
       >
         {{ validating ? 'Checking…' : 'Validate' }}
       </button>
+    </div>
+
+    <div v-if="showSaveTemplate && !showSummary" class="space-y-2">
+      <button
+        v-if="!namingTemplate"
+        type="button"
+        class="w-full min-h-[52px] rounded-2xl bg-blue-600 px-3 py-3 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
+        @click="beginNamingTemplate"
+      >
+        Save Template
+      </button>
+      <div v-else class="flex gap-2">
+        <input
+          v-model="templateName"
+          type="text"
+          maxlength="40"
+          placeholder="Template name"
+          class="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm"
+          :class="isDarkMode ? 'border-white/15 bg-white/5 text-gray-100' : 'border-gray-300 bg-white text-gray-900'"
+          @keydown.enter.prevent="saveNamedTemplate"
+        >
+        <button
+          type="button"
+          class="rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          :disabled="savingTemplate || !templateName.trim()"
+          @click="saveNamedTemplate"
+        >
+          {{ savingTemplate ? 'Saving…' : 'Save' }}
+        </button>
+      </div>
     </div>
 
     <div v-else class="flex gap-2">

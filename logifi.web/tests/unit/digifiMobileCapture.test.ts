@@ -103,6 +103,20 @@ describe('digifiMobileCapture', () => {
     ).toBe(false)
   })
 
+  it('marks the failed side for retake and keeps the next photo on that side', () => {
+    const grid = useLogbookBuilderGrid()
+    grid.layout.value = 'two-page'
+    const session = { leftPhotoCaptured: true, rightPhotoCaptured: false }
+    const photoNext = nextMobileCaptureSide(grid.layout.value, grid, session, 'left')
+    expect(photoNext).toBe('left')
+    expect(mobileTwoPageChipLabel(mobileTwoPageLeftChipState(grid, session, photoNext, 'left'))).toBe(
+      'Retake'
+    )
+    expect(mobileTwoPageChipLabel(mobileTwoPageRightChipState(grid, session, photoNext, 'left'))).toBe(
+      'After left'
+    )
+  })
+
   it('shows right as scanning when photo taken but scan not applied yet', () => {
     const grid = useLogbookBuilderGrid()
     grid.layout.value = 'two-page'

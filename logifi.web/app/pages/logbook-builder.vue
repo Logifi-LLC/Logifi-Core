@@ -510,7 +510,7 @@ watchEffect(async (onCleanup) => {
           class="text-2xl font-bold font-quicksand"
           :class="isDark ? 'text-white' : 'text-gray-900'"
         >
-          Add Pages
+          Start Scanning
         </h1>
         <NuxtLink
           to="/dashboard"
@@ -672,7 +672,7 @@ watchEffect(async (onCleanup) => {
               :class="isDark ? 'border-white/10 bg-white/[0.03]' : 'border-gray-200 bg-gray-50'"
             >
               <h2 class="text-sm font-semibold mb-2" :class="isDark ? 'text-white' : 'text-gray-900'">
-                Add Pages Instructions
+                Scanning instructions
               </h2>
               <ul
                 class="space-y-1.5 text-sm list-disc list-inside"

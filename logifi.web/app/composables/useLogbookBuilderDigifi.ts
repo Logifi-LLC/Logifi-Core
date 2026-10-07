@@ -24,6 +24,7 @@ import {
 } from '~/utils/digifiRemarksPilotMatch'
 import { sanitizeDigifiScanRows } from '~/utils/digifiScanSanitize'
 import { visibleDigifiReviewMessages } from '~/utils/digifiScanRowReview'
+import { digifiPageReadError } from '~/utils/digifiPageScanError'
 import { buildDigifiTargetColumnsForPage } from '~/utils/digifiScanTargetColumns'
 import {
   computeRemarksColumnCrop,
@@ -221,6 +222,8 @@ export function useLogbookBuilderDigifi(
 
   const scanning = ref(false)
   const error = ref<string | null>(null)
+  /** Side whose last scan could not be read. Cleared when that side is retried or succeeds. */
+  const failedPageSide = ref<DigifiPageSide | null>(null)
   const lastThumbnailUrl = ref<string | null>(null)
   const lastFilledCount = ref(0)
   const scanRowWarning = ref<string | null>(null)
@@ -310,6 +313,7 @@ export function useLogbookBuilderDigifi(
     scanPhase.value = 'Uploading image'
     scanDetail.value = null
     error.value = null
+    if (failedPageSide.value === pageSide) failedPageSide.value = null
     scanRowWarning.value = null
     lastFilledCount.value = 0
     lastScanSummary.value = null
@@ -444,7 +448,8 @@ export function useLogbookBuilderDigifi(
         .filter(Boolean)
         .join(' ')
     } catch (e: unknown) {
-      let msg = 'Scan failed. Try again with a clearer photo.'
+      let msg = digifiPageReadError(pageSide, layout.value)
+      let pageUnreadable = true
       if (e && typeof e === 'object') {
         const err = e as {
           statusCode?: number
@@ -453,23 +458,25 @@ export function useLogbookBuilderDigifi(
           message?: string
         }
         if (err.statusCode === 402) {
+          pageUnreadable = false
           msg =
             err.data?.statusMessage ??
             'Insufficient credits. Add pages from your dashboard.'
           void fetchBalance()
-        } else {
-          msg =
-            err.data?.statusMessage ??
-            err.data?.message ??
-            err.statusMessage ??
-            err.message ??
-            msg
         }
       }
+      failedPageSide.value = pageUnreadable ? pageSide : failedPageSide.value
       error.value = msg
     } finally {
       scanning.value = false
       scanPhase.value = null
+    }
+  }
+
+  function clearScanPageError(side?: DigifiPageSide) {
+    if (!side || failedPageSide.value === side) {
+      failedPageSide.value = null
+      error.value = null
     }
   }
 
@@ -488,6 +495,8 @@ export function useLogbookBuilderDigifi(
   return {
     scanning,
     error,
+    failedPageSide,
+    clearScanPageError,
     lastThumbnailUrl,
     lastFilledCount,
     lastScanSummary,

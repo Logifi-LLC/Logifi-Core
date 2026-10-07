@@ -4,10 +4,10 @@
       <div class="px-4 py-3">
         <p class="text-sm" :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">
           <template v-if="isIos">
-            Scan and review pages on this phone. Digifi Eye still captures for desktop Add Pages.
+            Scan and review pages on this phone. Digifi Eye still captures for desktop Start Scanning.
           </template>
           <template v-else>
-            Digifi uses AI to pre-fill rows from photos of your paper logbook pages on Add Pages.
+            Digifi uses AI to pre-fill rows from photos of your paper logbook pages on Start Scanning.
             You are responsible for verifying every entry before importing into your logbook.
           </template>
         </p>
@@ -26,7 +26,7 @@
       />
       <SettingsListRow
         label="Digifi Eye"
-        subtitle="Camera for desktop Add Pages"
+        subtitle="Camera for desktop Start Scanning"
         icon="ri:camera-line"
         badge="Beta"
         to="/digifi-eye"

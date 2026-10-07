@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { inject, ref, computed, unref } from 'vue'
 import { useRoute } from 'vue-router'
+import { formatBuilderValidationErrors } from '~/utils/builderValidationMessages'
+import { useLogbookBuilderTemplateMatch } from '~/composables/useLogbookBuilderTemplateMatch'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import type { ValidateOnlyResult, ColumnTotalRow } from '~/composables/useLogbookBuilderImport'
 import { formatColumnTotal } from '~/composables/useLogbookBuilderImport'
@@ -25,8 +27,10 @@ const { isDark } = useTheme()
 const { showToast } = useToast()
 const { isAuthenticated, user } = useAuth()
 
+const { showSaveTemplate } = useLogbookBuilderTemplateMatch()
+
 const validating = ref(false)
-const errorMessage = ref<string | null>(null)
+const errorLines = ref<string[]>([])
 const showConfirm = ref(false)
 const confirmResult = ref<{ validRowCount: number; columnTotals: ColumnTotalRow[] } | null>(null)
 const importing = ref(false)
@@ -36,20 +40,20 @@ const logTenFallbackUrl = ref<string>('')
 
 async function handleValidate() {
   validating.value = true
-  errorMessage.value = null
+  errorLines.value = []
   showConfirm.value = false
   confirmResult.value = null
   try {
     const { validateOnly } = await import('~/composables/useLogbookBuilderImport')
     const result: ValidateOnlyResult = await validateOnly(grid!)
     if (!result.valid && result.errors.length > 0) {
-      errorMessage.value = result.errors.slice(0, 5).map((e) => (e.rowIndex >= 0 ? `Row ${e.rowIndex}: ` : '') + e.message).join('; ')
+      errorLines.value = formatBuilderValidationErrors(result.errors)
     } else if (result.valid && result.validRowCount != null && result.columnTotals != null) {
       confirmResult.value = { validRowCount: result.validRowCount, columnTotals: result.columnTotals }
       showConfirm.value = true
     }
   } catch (e: any) {
-    errorMessage.value = e?.message ?? 'Validation failed'
+    errorLines.value = [e?.message ?? 'Validation failed']
   } finally {
     validating.value = false
   }
@@ -60,19 +64,15 @@ function handleBack() {
   confirmResult.value = null
 }
 
-function formatImportErrors(errors: { rowIndex: number; message: string }[]): string {
-  return errors.slice(0, 5).map((e) => (e.rowIndex >= 0 ? `Row ${e.rowIndex}: ` : '') + e.message).join('; ')
-}
-
 async function handleImport() {
   if (!confirmResult.value) return
   importing.value = true
-  errorMessage.value = null
+  errorLines.value = []
   try {
     const { runValidateAndImport } = await import('~/composables/useLogbookBuilderImport')
     const result = await runValidateAndImport(grid!)
     if (result.errors.length > 0) {
-      errorMessage.value = formatImportErrors(result.errors)
+      errorLines.value = formatBuilderValidationErrors(result.errors)
       showConfirm.value = false
       confirmResult.value = null
     } else if (result.imported > 0) {
@@ -82,7 +82,7 @@ async function handleImport() {
       await navigateTo('/dashboard')
     }
   } catch (e: any) {
-    errorMessage.value = e?.message ?? 'Import failed'
+    errorLines.value = [e?.message ?? 'Import failed']
   } finally {
     importing.value = false
   }
@@ -91,13 +91,13 @@ async function handleImport() {
 async function handleImportAndScanNext() {
   if (!confirmResult.value || importing.value) return
   importing.value = true
-  errorMessage.value = null
+  errorLines.value = []
   try {
     const { runValidateAndImport } = await import('~/composables/useLogbookBuilderImport')
     const result = await runValidateAndImport(grid!)
     if (!digifiImportSucceeded(result)) {
       if (result.errors.length > 0) {
-        errorMessage.value = formatImportErrors(result.errors)
+        errorLines.value = formatBuilderValidationErrors(result.errors)
         showConfirm.value = false
         confirmResult.value = null
       }
@@ -109,10 +109,10 @@ async function handleImportAndScanNext() {
     try {
       await startDigifiNextPage?.()
     } catch (nextError: any) {
-      errorMessage.value = nextError?.message ?? 'Could not open the next scan.'
+      errorLines.value = [nextError?.message ?? 'Could not open the next scan.']
     }
   } catch (e: any) {
-    errorMessage.value = e?.message ?? 'Import failed'
+    errorLines.value = [e?.message ?? 'Import failed']
   } finally {
     importing.value = false
   }
@@ -121,7 +121,7 @@ async function handleImportAndScanNext() {
 async function handleSendToLogTen() {
   if (!confirmResult.value) return
   sendingToLogTen.value = true
-  errorMessage.value = null
+  errorLines.value = []
 
   try {
     const entries = gridToEntries({
@@ -169,7 +169,7 @@ async function handleSendToLogTen() {
 
     showToast('Opened LogTen Pro with your entries', { type: 'success' })
   } catch (e: any) {
-    errorMessage.value = e?.message ?? 'Failed to send to LogTen'
+    errorLines.value = [e?.message ?? 'Failed to send to LogTen']
   } finally {
     sendingToLogTen.value = false
   }
@@ -230,9 +230,23 @@ function downloadLogTenPackage() {
         >
           {{ validating ? 'Validating…' : 'Validate' }}
         </button>
-        <p v-if="errorMessage" class="text-sm text-red-600 dark:text-red-400">
-          {{ errorMessage }}
-        </p>
+        <button
+          v-if="showSaveTemplate"
+          type="button"
+          class="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+          @click="grid.openSaveTemplate.value?.()"
+        >
+          Save Template
+        </button>
+        <div v-if="errorLines.length" class="min-w-0 flex-1 space-y-1" role="alert">
+          <p
+            v-for="(line, index) in errorLines"
+            :key="index"
+            class="text-sm text-red-600 dark:text-red-400"
+          >
+            {{ line }}
+          </p>
+        </div>
       </div>
     </template>
     <template v-else>
@@ -383,9 +397,15 @@ function downloadLogTenPackage() {
             {{ sendingToLogTen ? 'Sending…' : 'Send to LogTen Pro' }}
           </button>
         </div>
-        <p v-if="errorMessage" class="text-sm text-red-600 dark:text-red-400">
-          {{ errorMessage }}
-        </p>
+        <div v-if="errorLines.length" class="space-y-1" role="alert">
+          <p
+            v-for="(line, index) in errorLines"
+            :key="index"
+            class="text-sm text-red-600 dark:text-red-400"
+          >
+            {{ line }}
+          </p>
+        </div>
       </div>
     </template>
 

@@ -130,6 +130,23 @@ export function useLogbookBuilderGrid() {
   /** Index of the row that currently has focus in the grid (for highlighting). */
   const activeRowIndex: Ref<number | null> = ref(null)
 
+  /** Template currently applied to this grid. Signature is the column layout at apply time. */
+  const activeTemplateId: Ref<string | null> = ref(null)
+  const activeTemplateSignature: Ref<string | null> = ref(null)
+  /** Bumped when templates are saved or deleted so match checks refetch. */
+  const templateCatalogVersion: Ref<number> = ref(0)
+  /** Registered by the toolbar so the Validate bar can open the same save dialog. */
+  const openSaveTemplate: Ref<(() => void) | null> = ref(null)
+
+  function noteTemplateApplied(id: string, signature: string) {
+    activeTemplateId.value = id
+    activeTemplateSignature.value = signature
+  }
+
+  function bumpTemplateCatalog() {
+    templateCatalogVersion.value += 1
+  }
+
   /** After a left-page scan in single layout, right page rows start at this index. */
   const singleLayoutRightStartRow: Ref<number> = ref(0)
   const leftPageScanned: Ref<boolean> = ref(false)
@@ -559,6 +576,12 @@ export function useLogbookBuilderGrid() {
     updateColumn,
     reorderColumns,
     loadTemplate,
+    activeTemplateId,
+    activeTemplateSignature,
+    templateCatalogVersion,
+    openSaveTemplate,
+    noteTemplateApplied,
+    bumpTemplateCatalog,
     clearGrid,
     beginNextDigifiPage,
     deleteTemplate,

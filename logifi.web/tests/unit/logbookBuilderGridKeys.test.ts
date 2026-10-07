@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { isBuilderColumnTitleTarget, shouldDeferGridKeydown } from '../../app/utils/logbookBuilderGridKeys'
+import {
+  isBuilderColumnTitleTarget,
+  isBuilderTagEditorTarget,
+  shouldDeferGridKeydown,
+} from '../../app/utils/logbookBuilderGridKeys'
 
 describe('shouldDeferGridKeydown', () => {
   it('defers ArrowDown when native select is focused', () => {
@@ -84,6 +88,17 @@ describe('shouldDeferGridKeydown', () => {
         pilotHighlightIndex: 0,
       }),
     ).toBe(true)
+  })
+
+  it('leaves keystrokes inside the tags editor to that input', () => {
+    const wrap = document.createElement('div')
+    wrap.setAttribute('data-builder-row-tags', '')
+    const input = document.createElement('input')
+    wrap.appendChild(input)
+    document.body.appendChild(wrap)
+    expect(isBuilderTagEditorTarget(input)).toBe(true)
+    expect(isBuilderTagEditorTarget(document.body)).toBe(false)
+    wrap.remove()
   })
 
   it('leaves keystrokes in the custom column title to that input', () => {
