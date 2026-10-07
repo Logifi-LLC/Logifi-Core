@@ -86,6 +86,20 @@ describe('columnLayoutSignature', () => {
       })
     ).not.toBe(left)
   })
+
+  it('treats column kind as part of the layout', () => {
+    const day = columnLayoutSignature({
+      layout: 'single',
+      splitIndex: null,
+      columns: [{ fieldKey: null, label: 'Day', order: 0, columnKind: 'day' }],
+    })
+    const custom = columnLayoutSignature({
+      layout: 'single',
+      splitIndex: null,
+      columns: [{ fieldKey: null, label: 'Day', order: 0, columnKind: 'custom' }],
+    })
+    expect(day).not.toBe(custom)
+  })
 })
 
 describe('digifiPageReadError', () => {

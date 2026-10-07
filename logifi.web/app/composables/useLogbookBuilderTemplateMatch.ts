@@ -35,6 +35,7 @@ export function useLogbookBuilderTemplateMatch() {
         label: column.label,
         order: column.order,
         categoryClassValue: column.categoryClassValue,
+        columnKind: column.columnKind,
       })),
     })
   )

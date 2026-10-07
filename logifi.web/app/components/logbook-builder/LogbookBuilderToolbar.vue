@@ -10,6 +10,7 @@ import { useToast } from '~/composables/useToast'
 import {
   noteGridTemplateApplied,
   persistLastTemplateId,
+  prefillBuilderTemplateName,
   saveLogbookBuilderTemplate,
 } from '~/composables/useLogbookBuilderLastTemplate'
 import { useLogbookBuilderTemplateMatch } from '~/composables/useLogbookBuilderTemplateMatch'
@@ -22,7 +23,7 @@ const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGri
 if (!grid) throw new Error('LogbookBuilderToolbar must be used inside a page that provides logbookBuilderGrid')
 
 const { user, isAuthenticated } = useAuth()
-const { rowCount, setRowCount, addColumn, layout, columns, removeColumn, loadTemplate, deleteTemplate, visibleColumns, setTwoPageSplitIndex, twoPageSplitIndex, effectiveSplitIndex, tagsColumnWidth, defaultImportRole, defaultYear } = grid
+const { rowCount, setRowCount, addColumn, layout, columns, removeColumn, loadTemplate, deleteTemplate, visibleColumns, setTwoPageSplitIndex, effectiveSplitIndex, defaultImportRole, defaultYear } = grid
 
 const { isDark } = useTheme()
 const { showToast } = useToast()
@@ -90,8 +91,8 @@ async function handleSaveTemplate() {
     showToast('Please sign in to save a template.', { type: 'info' })
     return
   }
+  templateName.value = await prefillBuilderTemplateName(grid!, user.value.id)
   showSaveModal.value = true
-  templateName.value = ''
 }
 
 async function confirmSaveTemplate() {
@@ -313,18 +314,6 @@ function onRowCountInput(e: Event) {
         @click="handleLoadTemplate"
       >
         Load template
-      </button>
-      <button
-        type="button"
-        :class="[
-          'rounded border px-3 py-1.5 text-sm transition-colors whitespace-nowrap',
-          isDark 
-            ? 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 shadow-sm shadow-black/20' 
-            : 'border-gray-300 bg-gray-200 text-black hover:bg-gray-300 shadow-sm'
-        ]"
-        @click="handleSaveTemplate"
-      >
-        Save template
       </button>
     </div>
   </div>

@@ -23,11 +23,12 @@ import {
 import type { DigifiScanCellMeta } from '~/utils/digifiTypes'
 import { isDigifiMergeSuspectNotice } from '~/utils/digifiScanRowReview'
 import { digifiRowTimeMismatchMap } from '~/utils/digifiRowTimeMismatch'
+import { tagsForCustomColumns } from '~/utils/digifiDayAndCustomColumns'
 import type { LogbookColumnConfig } from '~/utils/logbookTypes'
+import { isBuilderColumnTitleTarget, isBuilderTagEditorTarget } from '~/utils/logbookBuilderGridKeys'
 import LogbookBuilderCell from './LogbookBuilderCell.vue'
 import LogbookBuilderHeader from './LogbookBuilderHeader.vue'
 import LogbookBuilderRowTags from './LogbookBuilderRowTags.vue'
-import { isBuilderTagEditorTarget } from '~/utils/logbookBuilderGridKeys'
 import { useTheme } from '~/composables/useTheme'
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
@@ -112,6 +113,10 @@ const editSnapshot = ref<string | null>(null)
 const editingCell = ref<ActiveCell | null>(null)
 
 function onHeaderDragStart(colId: string, e: DragEvent) {
+  if (isBuilderColumnTitleTarget(e.target) || isBuilderColumnTitleTarget(document.activeElement)) {
+    e.preventDefault()
+    return
+  }
   if (!e.dataTransfer) return
   draggedColumnId.value = colId
   e.dataTransfer.setData('text/plain', colId)
@@ -472,6 +477,7 @@ function isGridChromeMouseTarget(target: EventTarget | null): boolean {
   if (!target || !(target instanceof HTMLElement)) return false
   return (
     target.closest('thead') != null ||
+    target.closest('[data-builder-column-title]') != null ||
     target.closest('[aria-label="Drag to fill"]') != null ||
     target.closest('[aria-label="Drag to move"]') != null ||
     target.closest('.cursor-col-resize') != null ||
@@ -1060,6 +1066,7 @@ function shouldExitEditOnHorizontalArrow(key: string, input: HTMLInputElement): 
 
 function handleKeyDown(e: KeyboardEvent) {
   if (isBuilderTagEditorTarget(e.target)) return
+  if (isBuilderColumnTitleTarget(e.target)) return
 
   const inGrid =
     isEventInGrid(e.target) ||
@@ -1476,6 +1483,10 @@ const timeMismatchByCell = computed(() =>
 
 function timeMismatchMessage(rowIdx: number, colId: string): string | undefined {
   return timeMismatchByCell.value.get(`${rowIdx}:${colId}`)
+}
+
+function autoTagsForRow(row: { cells?: Record<string, string> | null }): string[] {
+  return tagsForCustomColumns(visibleColumns.value, row.cells)
 }
 
 function getDigifiCellTitle(rowIdx: number, colId: string): string | undefined {
@@ -1972,6 +1983,7 @@ defineExpose({
           >
             <LogbookBuilderRowTags
               :model-value="row.tags ?? []"
+              :auto-tags="autoTagsForRow(row)"
               @update:model-value="(tags) => setRowTags(rowIdx, tags)"
             />
           </td>

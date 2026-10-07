@@ -57,4 +57,25 @@ describe('LogbookBuilder row tags', () => {
     expect(grid.rows.value[0]?.tags ?? []).not.toContain('Nope')
     wrapper.unmount()
   })
+
+  it('shows a custom column mark as an auto-tag chip', async () => {
+    const grid = useLogbookBuilderGrid()
+    grid.addColumn(null, { columnKind: 'custom', label: 'Retractable Gear' })
+    const column = grid.visibleColumns.value.find((entry) => entry.label === 'Retractable Gear')
+    expect(column).toBeTruthy()
+    grid.setCell(0, column!.id, 'x')
+
+    const wrapper = mount(LogbookBuilderGrid, {
+      global: { provide: { logbookBuilderGrid: grid } },
+      attachTo: document.body,
+    })
+
+    const chips = wrapper.findAll('[data-testid="auto-tag"]')
+    expect(chips).toHaveLength(1)
+    expect(chips[0]!.text()).toBe('Retractable Gear')
+    await chips[0]!.trigger('click')
+    expect(grid.rows.value[0]?.tags ?? []).not.toContain('Retractable Gear')
+    expect(wrapper.get('[data-testid="auto-tag"]').text()).toBe('Retractable Gear')
+    wrapper.unmount()
+  })
 })

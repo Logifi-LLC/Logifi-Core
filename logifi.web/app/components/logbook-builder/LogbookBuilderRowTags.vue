@@ -2,7 +2,7 @@
 import { computed, nextTick, ref } from 'vue'
 import { useTheme } from '~/composables/useTheme'
 
-const props = defineProps<{ modelValue: string[] }>()
+const props = defineProps<{ modelValue: string[]; autoTags?: string[] }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
 
 const { isDark } = useTheme()
@@ -11,6 +11,23 @@ const presetTags = ['Checkride', 'Flight Review', 'IPC'] as const
 const customTags = computed(() => {
   const presets = new Set<string>(presetTags)
   return (props.modelValue ?? []).filter((tag) => !presets.has(tag))
+})
+/** Derived from custom-column cells. Not toggled off the manual tag list. */
+const autoTagChips = computed(() => {
+  const taken = new Set<string>([
+    ...presetTags.map((tag) => tag.toLowerCase()),
+    ...(props.modelValue ?? []).map((tag) => tag.trim().toLowerCase()),
+  ])
+  const seen = new Set<string>()
+  const chips: string[] = []
+  for (const tag of props.autoTags ?? []) {
+    const trimmed = tag.trim()
+    const key = trimmed.toLowerCase()
+    if (!key || taken.has(key) || seen.has(key)) continue
+    seen.add(key)
+    chips.push(trimmed)
+  }
+  return chips
 })
 const showCustomInput = ref(false)
 const customTagInput = ref('')
@@ -86,6 +103,17 @@ function onCustomBlur() {
     >
       {{ tag }}
     </button>
+    <span
+      v-for="tag in autoTagChips"
+      :key="`auto-${tag}`"
+      data-testid="auto-tag"
+      :class="[
+        'rounded border px-2 py-0.5 text-xs font-medium',
+        isDark ? 'border-blue-800 bg-blue-900/50 text-blue-200' : 'border-blue-200 bg-blue-50 text-blue-700'
+      ]"
+    >
+      {{ tag }}
+    </span>
     <button
       v-for="tag in customTags"
       :key="tag"

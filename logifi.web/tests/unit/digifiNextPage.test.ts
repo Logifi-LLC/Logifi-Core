@@ -130,6 +130,50 @@ describe('useLogbookBuilderGrid beginNextDigifiPage', () => {
     expect(grid.spreadId.value).not.toBe(spreadBefore)
   })
 
+  it('keeps Day and custom columns on the template', () => {
+    const grid = useLogbookBuilderGrid()
+    grid.loadTemplate({
+      layout: 'single',
+      default_row_count: 2,
+      columns: [
+        { id: 'date-col', label: 'Date', fieldKey: 'date', order: 0, width: 90 },
+        { id: 'asel-col', label: 'ASEL', fieldKey: 'categoryClass', order: 1, categoryClassValue: 'ASEL', width: 70 },
+        { id: 'day-col', label: 'Day', fieldKey: null, order: 2, columnKind: 'day', width: 70 },
+        { id: 'gear-col', label: 'Retractable Gear', fieldKey: null, order: 3, columnKind: 'custom', width: 120 },
+      ],
+    })
+    grid.setCell(0, 'day-col', '1.2')
+    grid.setCell(0, 'gear-col', '✓')
+
+    const next = grid.beginNextDigifiPage()
+
+    expect(next.columns.map((column) => ({
+      id: column.id,
+      label: column.label,
+      fieldKey: column.fieldKey,
+      columnKind: column.columnKind,
+      categoryClassValue: column.categoryClassValue,
+    }))).toEqual([
+      { id: 'date-col', label: 'Date', fieldKey: 'date', columnKind: undefined, categoryClassValue: undefined },
+      { id: 'asel-col', label: 'ASEL', fieldKey: 'categoryClass', columnKind: undefined, categoryClassValue: 'ASEL' },
+      { id: 'day-col', label: 'Day', fieldKey: null, columnKind: 'day', categoryClassValue: undefined },
+      { id: 'gear-col', label: 'Retractable Gear', fieldKey: null, columnKind: 'custom', categoryClassValue: undefined },
+    ])
+    expect(grid.columns.value.map((column) => ({
+      id: column.id,
+      label: column.label,
+      columnKind: column.columnKind,
+      categoryClassValue: column.categoryClassValue,
+      width: column.width,
+    }))).toEqual([
+      { id: 'date-col', label: 'Date', columnKind: undefined, categoryClassValue: undefined, width: 90 },
+      { id: 'asel-col', label: 'ASEL', columnKind: undefined, categoryClassValue: 'ASEL', width: 70 },
+      { id: 'day-col', label: 'Day', columnKind: 'day', categoryClassValue: undefined, width: 70 },
+      { id: 'gear-col', label: 'Retractable Gear', columnKind: 'custom', categoryClassValue: undefined, width: 120 },
+    ])
+    expect(grid.rows.value.every((row) => row.cells['day-col'] === '' && row.cells['gear-col'] === '')).toBe(true)
+  })
+
   it('keeps a single-page layout', () => {
     const grid = useLogbookBuilderGrid()
     grid.loadTemplate({

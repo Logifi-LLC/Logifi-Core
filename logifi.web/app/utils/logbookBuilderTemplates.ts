@@ -8,6 +8,7 @@ export interface ColumnLayoutInput {
     label: string
     order: number
     categoryClassValue?: string | null
+    columnKind?: 'day' | 'custom' | null
   }>
 }
 
@@ -20,6 +21,7 @@ export function columnLayoutSignature(input: ColumnLayoutInput): string {
       fieldKey: column.fieldKey,
       label: column.label.trim(),
       categoryClassValue: column.categoryClassValue ?? null,
+      columnKind: column.columnKind ?? null,
     }))
   const splitIndex = layout === 'two-page' ? (input.splitIndex ?? null) : null
   return JSON.stringify({ layout, splitIndex, columns })
@@ -38,6 +40,7 @@ export function columnLayoutSignatureFromTemplate(template: {
       label: column.label,
       order: column.order,
       categoryClassValue: column.categoryClassValue,
+      columnKind: column.columnKind,
     })),
   })
 }

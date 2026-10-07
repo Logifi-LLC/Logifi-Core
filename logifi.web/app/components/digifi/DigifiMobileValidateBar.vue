@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { inject, ref, unref } from 'vue'
-import { saveLogbookBuilderTemplate } from '~/composables/useLogbookBuilderLastTemplate'
+import { prefillBuilderTemplateName, saveLogbookBuilderTemplate } from '~/composables/useLogbookBuilderLastTemplate'
 import { useLogbookBuilderTemplateMatch } from '~/composables/useLogbookBuilderTemplateMatch'
 import { formatBuilderValidationErrors } from '~/utils/builderValidationMessages'
 import type { Ref } from 'vue'
@@ -41,12 +41,22 @@ function clearSummary() {
   summaryResult.value = null
 }
 
-async function saveNamedTemplate() {
-  const name = templateName.value.trim()
-  if (!name || !user.value) {
+async function beginNamingTemplate() {
+  if (!isAuthenticated.value || !user.value) {
     showToast('Please sign in to save a template.', { type: 'info' })
     return
   }
+  templateName.value = await prefillBuilderTemplateName(grid!, user.value.id)
+  namingTemplate.value = true
+}
+
+async function saveNamedTemplate() {
+  const name = templateName.value.trim()
+  if (!user.value) {
+    showToast('Please sign in to save a template.', { type: 'info' })
+    return
+  }
+  if (!name) return
   savingTemplate.value = true
   const result = await saveLogbookBuilderTemplate(grid!, user.value.id, name)
   savingTemplate.value = false
@@ -56,7 +66,7 @@ async function saveNamedTemplate() {
   }
   templateName.value = ''
   namingTemplate.value = false
-  showToast('Template saved', { type: 'success' })
+  showToast(result.updated ? 'Template updated' : 'Template saved', { type: 'success' })
 }
 
 async function handleValidate() {
@@ -239,7 +249,7 @@ async function handleSendToLogTen() {
         v-if="!namingTemplate"
         type="button"
         class="w-full min-h-[52px] rounded-2xl bg-blue-600 px-3 py-3 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
-        @click="namingTemplate = true"
+        @click="beginNamingTemplate"
       >
         Save Template
       </button>

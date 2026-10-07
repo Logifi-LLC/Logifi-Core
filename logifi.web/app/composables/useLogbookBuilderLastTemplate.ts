@@ -25,6 +25,7 @@ export function noteGridTemplateApplied(grid: Grid, templateId: string): void {
         label: column.label,
         order: column.order,
         categoryClassValue: column.categoryClassValue,
+        columnKind: column.columnKind,
       })),
     })
   )
@@ -65,17 +66,9 @@ export async function loadLastTemplateIfAny(
   return true
 }
 
-export async function saveLogbookBuilderTemplate(
-  grid: Grid,
-  userId: string,
-  name: string
-): Promise<{ id: string } | { error: string }> {
-  const trimmed = name.trim()
-  if (!trimmed) return { error: 'Enter a template name.' }
-
-  const payload = {
-    user_id: userId,
-    name: trimmed,
+function templateWriteFields(grid: Grid, name: string) {
+  return {
+    name,
     layout: grid.layout.value,
     default_row_count: grid.rowCount.value,
     tags_column_width: grid.tagsColumnWidth.value,
@@ -88,12 +81,72 @@ export async function saveLogbookBuilderTemplate(
       order: column.order,
       width: column.width,
       categoryClassValue: column.categoryClassValue,
+      columnKind: column.columnKind,
     })),
+  }
+}
+
+async function fetchOwnedTemplateName(
+  userId: string,
+  templateId: string
+): Promise<{ name: string } | { missing: true } | { error: string }> {
+  const { data, error } = await (supabase as any)
+    .from('logbook_builder_templates')
+    .select('id, name')
+    .eq('user_id', userId)
+    .eq('id', templateId)
+    .maybeSingle()
+  if (error) return { error: error.message ?? 'Could not save template.' }
+  if (!data) return { missing: true }
+  return { name: String(data.name ?? '') }
+}
+
+/** Name to show in the bottom Save Template field. Empty when nothing is loaded. */
+export async function prefillBuilderTemplateName(grid: Grid, userId: string): Promise<string> {
+  const id = grid.activeTemplateId.value
+  if (!id) return ''
+  const found = await fetchOwnedTemplateName(userId, id)
+  return 'name' in found ? found.name : ''
+}
+
+function finishTemplateSave(grid: Grid, userId: string, id: string, updated: boolean) {
+  persistLastTemplateId(id, userId)
+  noteGridTemplateApplied(grid, id)
+  grid.bumpTemplateCatalog()
+  return { id, updated }
+}
+
+export async function saveLogbookBuilderTemplate(
+  grid: Grid,
+  userId: string,
+  name: string
+): Promise<{ id: string; updated: boolean } | { error: string }> {
+  const trimmed = name.trim()
+  if (!trimmed) return { error: 'Enter a template name.' }
+
+  const fields = templateWriteFields(grid, trimmed)
+  const activeId = grid.activeTemplateId.value
+  if (activeId) {
+    const found = await fetchOwnedTemplateName(userId, activeId)
+    if ('error' in found) return found
+    if ('name' in found && found.name.trim() === trimmed) {
+      const { data, error } = await (supabase as any)
+        .from('logbook_builder_templates')
+        .update(fields)
+        .eq('id', activeId)
+        .eq('user_id', userId)
+        .select('id')
+        .maybeSingle()
+      if (error || !data?.id) {
+        return { error: error?.message ?? 'Could not save template.' }
+      }
+      return finishTemplateSave(grid, userId, data.id, true)
+    }
   }
 
   const { data, error } = await (supabase as any)
     .from('logbook_builder_templates')
-    .insert(payload)
+    .insert({ user_id: userId, ...fields })
     .select('id')
     .maybeSingle()
 
@@ -101,8 +154,5 @@ export async function saveLogbookBuilderTemplate(
     return { error: error?.message ?? 'Could not save template.' }
   }
 
-  persistLastTemplateId(data.id, userId)
-  noteGridTemplateApplied(grid, data.id)
-  grid.bumpTemplateCatalog()
-  return { id: data.id }
+  return finishTemplateSave(grid, userId, data.id, false)
 }

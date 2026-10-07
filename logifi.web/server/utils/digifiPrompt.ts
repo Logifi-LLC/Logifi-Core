@@ -4,7 +4,6 @@ import {
   isDigifiManualOnlyField,
 } from '../../app/utils/logbookBuilderTypes'
 import type { DigifiTemplateColumn } from '../../app/utils/digifiTypes'
-import type { LogbookColumnKey } from '../../app/utils/logbookTypes'
 import type { DigifiScanMetaInput } from './digifiSchema'
 import { DIGIFI_COMMON_MISTAKE_PROMPT_RULES } from '../../app/utils/digifiCommonMistakes'
 import { formatFewShotPromptBlock, type DigifiFewShotPair } from '../../app/utils/digifiFewShot'
@@ -13,7 +12,14 @@ import {
   type DigifiSessionPriorPage,
 } from './digifiSessionContext'
 
-function columnTypeHint(fieldKey: LogbookColumnKey | null): string {
+function columnTypeHint(column: DigifiTemplateColumn): string {
+  if (column.columnKind === 'day') {
+    return 'decimal time (daytime hours; not Night and not day landings)'
+  }
+  if (column.columnKind === 'custom') {
+    return 'custom column; checkmark, X, or decimal time in this column only — do not merge into neighboring columns'
+  }
+  const fieldKey = column.fieldKey
   if (!fieldKey) return 'text'
   if (fieldKey === 'date') return 'date'
   if (
@@ -46,6 +52,33 @@ function columnTypeHint(fieldKey: LogbookColumnKey | null): string {
   if (fieldKey === 'departure' || fieldKey === 'destination') return 'airport code'
   if (fieldKey === 'route') return 'route codes'
   return 'text'
+}
+
+function neighborLabel(column: DigifiTemplateColumn | undefined, edge: string): string {
+  const label = column?.label?.trim()
+  return label || edge
+}
+
+/** Custom paper columns in page order, with the columns on either side. */
+export function formatCustomColumnPromptBlock(columns: DigifiTemplateColumn[]): string {
+  const custom = columns
+    .map((column, index) => ({ column, index }))
+    .filter(({ column }) => column.columnKind === 'custom' && column.label.trim())
+  if (custom.length === 0) return ''
+  const lines = custom.map(({ column, index }, position) => {
+    const left = neighborLabel(columns[index - 1], 'the left edge')
+    const right = neighborLabel(columns[index + 1], 'the right edge')
+    const title = column.label.trim().replace(/"/g, "'")
+    return `${position + 1}. "${title}" (columnId ${column.id}) sits between "${left}" and "${right}". Read only the ink in this column. Do not mix it into ${left} or ${right}.`
+  })
+  return `Custom columns (in this order — each title is its own column; do not mix it into a neighbor such as ASEL):\n${lines.join('\n')}`
+}
+
+export function formatDayColumnPromptBlock(columns: DigifiTemplateColumn[]): string {
+  const day = columns.find((column) => column.columnKind === 'day')
+  if (!day) return ''
+  const title = (day.label.trim() || 'Day').replace(/"/g, "'")
+  return `Day time: columnId ${day.id} ("${title}") is daytime flight hours as a decimal. It is not Night and not Day Landings. Transcribe only that column into this columnId.`
 }
 
 function buildAirportPromptRules(columns: DigifiTemplateColumn[]): string {
@@ -167,10 +200,12 @@ export function buildScanPrompt(
   }
 ): string {
   const colLines = targetColumns
-    .map((c) => `${c.id} (${c.label}, ${columnTypeHint(c.fieldKey)})`)
+    .map((c, index) => `${index + 1}. ${c.id} (${c.label}, ${columnTypeHint(c)})`)
     .join('; ')
 
   const airportRules = buildAirportPromptRules(targetColumns)
+  const customColumnRules = formatCustomColumnPromptBlock(targetColumns)
+  const dayColumnRules = formatDayColumnPromptBlock(targetColumns)
   const pageRules = buildPageSpecificRules(meta, targetColumns)
   const mistakeRules = DIGIFI_COMMON_MISTAKE_PROMPT_RULES
   const fewShotRules = formatFewShotPromptBlock(options.fewShotExamples ?? [])
@@ -180,6 +215,8 @@ export function buildScanPrompt(
   )
   const extraRules = [
     airportRules ? `Airports: ${airportRules}` : '',
+    customColumnRules,
+    dayColumnRules,
     pageRules,
     mistakeRules,
     sessionRules,

@@ -3,8 +3,9 @@ import {
   buildPageSpecificRules,
   buildRowBandLabel,
   buildScanPrompt,
+  buildTargetColumns,
 } from '../../server/utils/digifiPrompt'
-import type { DigifiScanMetaInput } from '../../server/utils/digifiSchema'
+import { digifiScanMetaSchema, type DigifiScanMetaInput } from '../../server/utils/digifiSchema'
 
 const baseMeta: DigifiScanMetaInput = {
   spreadId: '00000000-0000-4000-8000-000000000001',
@@ -128,6 +129,57 @@ describe('buildScanPrompt', () => {
     )
     expect(prompt).toContain('zoomed to the remarks column')
     expect(prompt).toContain('horizontal ruled lines as hard row boundaries')
+  })
+})
+
+describe('custom and day columns in the scan prompt', () => {
+  it('includes custom column titles in page order and tells the model not to mix them into neighbors', () => {
+    const parsed = digifiScanMetaSchema.parse({
+      ...baseMeta,
+      pageSide: 'right',
+      layout: 'single',
+      twoPageSplitIndex: 1,
+      columns: [
+        { id: 'asel', label: 'ASEL', fieldKey: 'categoryClass', order: 0, categoryClassValue: 'ASEL' },
+        { id: 'gear', label: 'Retractable Gear', fieldKey: null, order: 1, columnKind: 'custom' },
+        { id: 'complex', label: 'Complex', fieldKey: null, order: 2, columnKind: 'custom' },
+        { id: 'hp', label: 'High Perf', fieldKey: null, order: 3, columnKind: 'custom' },
+      ],
+    })
+    const targets = buildTargetColumns(parsed)
+    expect(targets.map((column) => column.label)).toEqual([
+      'ASEL',
+      'Retractable Gear',
+      'Complex',
+      'High Perf',
+    ])
+    const prompt = buildScanPrompt(parsed, targets, { includeRowBands: false, chunkImages: [] })
+    const gearAt = prompt.indexOf('Retractable Gear')
+    const complexAt = prompt.indexOf('Complex')
+    const highPerfAt = prompt.indexOf('High Perf')
+    expect(gearAt).toBeGreaterThan(-1)
+    expect(gearAt).toBeLessThan(complexAt)
+    expect(complexAt).toBeLessThan(highPerfAt)
+    expect(prompt).toContain('do not mix it into a neighbor such as ASEL')
+    expect(prompt).toContain('sits between "ASEL" and "Complex"')
+    expect(prompt).toContain('sits between "Retractable Gear" and "High Perf"')
+    expect(prompt).toContain('sits between "Complex" and "the right edge"')
+  })
+
+  it('describes Day as daytime hours, separate from Night and day landings', () => {
+    const columns = [
+      { id: 'day', label: 'Day', fieldKey: null, order: 0, columnKind: 'day' as const },
+      { id: 'night', label: 'Night', fieldKey: 'night' as const, order: 1 },
+      { id: 'total', label: 'Total', fieldKey: 'total' as const, order: 2 },
+    ]
+    const prompt = buildScanPrompt(
+      { ...baseMeta, pageSide: 'left', layout: 'single', columns },
+      columns,
+      { includeRowBands: false, chunkImages: [] }
+    )
+    expect(prompt).toContain('Day time: columnId day ("Day")')
+    expect(prompt).toContain('not Night and not Day Landings')
+    expect(prompt).toContain('decimal time (daytime hours; not Night and not day landings)')
   })
 })
 
