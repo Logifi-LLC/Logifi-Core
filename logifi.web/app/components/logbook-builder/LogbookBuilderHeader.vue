@@ -59,6 +59,7 @@ const FIELD_OPTIONS: HeaderFieldOption[] = [
 ]
 
 const customTitle = ref('')
+const customTitleRef = ref<HTMLInputElement | null>(null)
 
 const open = ref(false)
 /** Desktop hover flyout (teleported). Unchanged for a real mouse on a fine pointer. */
@@ -196,6 +197,28 @@ function applyCustomTitle() {
     columnKind: 'custom',
   })
   closeMenu()
+}
+
+function cancelCustomTitle() {
+  customTitle.value = props.column.columnKind === 'custom' ? props.column.label : ''
+  closeMenu()
+}
+
+function focusCustomTitle() {
+  customTitleRef.value?.focus()
+}
+
+function onCustomTitleKeydown(event: KeyboardEvent) {
+  event.stopPropagation()
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    applyCustomTitle()
+    return
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    cancelCustomTitle()
+  }
 }
 
 function onSelectOption(opt: HeaderFieldOption) {
@@ -358,16 +381,22 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
       <form
         class="flex gap-1 border-t border-gray-200 p-1.5 dark:border-white/10"
         data-testid="custom-column-form"
+        data-builder-column-title
         @submit.prevent="applyCustomTitle"
         @click.stop
       >
         <input
+          ref="customTitleRef"
           v-model="customTitle"
           type="text"
           data-testid="custom-column-title"
+          draggable="false"
           placeholder="Custom column"
           aria-label="Custom column title"
           class="min-w-0 flex-1 rounded border px-1.5 py-1 text-xs text-gray-900 dark:border-white/10 dark:bg-black/20 dark:text-white"
+          @pointerdown.stop="focusCustomTitle"
+          @mousedown.stop="focusCustomTitle"
+          @keydown="onCustomTitleKeydown"
         />
         <button
           type="submit"
