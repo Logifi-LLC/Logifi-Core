@@ -12,6 +12,7 @@ import { useTheme } from '~/composables/useTheme'
 import { useToast } from '~/composables/useToast'
 import { supabase } from '~/lib/supabase'
 import { triggerLogTenHandoff } from '~/utils/logtenHandoff'
+import { digifiImportSucceeded } from '~/utils/digifiNextPage'
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
 if (!grid) throw new Error('DigifiMobileValidateBar requires logbookBuilderGrid')
@@ -19,6 +20,7 @@ if (!grid) throw new Error('DigifiMobileValidateBar requires logbookBuilderGrid'
 const { isDark: isDarkMode } = useTheme()
 
 const preferredSink = inject<Ref<'logten' | 'logifi' | null>>('digifiPreferredSink', ref(null))
+const startDigifiNextPage = inject<(() => void | Promise<void>) | null>('startDigifiNextPage', null)
 const { showToast } = useToast()
 const { isAuthenticated, user } = useAuth()
 
@@ -97,6 +99,34 @@ async function handleImport() {
     if (result.imported > 0) {
       showToast('Imported.', { type: 'success' })
       await navigateTo('/dashboard')
+    }
+  } catch (error: unknown) {
+    errorLines.value = [error instanceof Error ? error.message : 'Import failed']
+  } finally {
+    importing.value = false
+  }
+}
+
+async function handleImportAndScanNext() {
+  if (!summaryResult.value || importing.value) return
+  importing.value = true
+  errorLines.value = []
+  try {
+    const { runValidateAndImport } = await import('~/composables/useLogbookBuilderImport')
+    const result = await runValidateAndImport(grid!)
+    if (!digifiImportSucceeded(result)) {
+      if (result.errors.length > 0) {
+        errorLines.value = formatBuilderValidationErrors(result.errors)
+        clearSummary()
+      }
+      return
+    }
+    clearSummary()
+    showToast('Imported. Scan the next page.', { type: 'success' })
+    try {
+      await startDigifiNextPage?.()
+    } catch (nextError: unknown) {
+      errorLines.value = [nextError instanceof Error ? nextError.message : 'Could not open the next scan.']
     }
   } catch (error: unknown) {
     errorLines.value = [error instanceof Error ? error.message : 'Import failed']
@@ -188,6 +218,22 @@ async function handleSendToLogTen() {
       </p>
     </div>
 
+    <div v-if="!showSummary" class="flex gap-2">
+      <button
+        type="button"
+        class="flex-1 min-h-[52px] rounded-2xl border-2 px-3 py-3 text-sm font-semibold disabled:opacity-50"
+        :class="
+          isDarkMode
+            ? 'border-green-400/50 bg-green-500/15 text-green-100'
+            : 'border-green-600 bg-green-50 text-green-900'
+        "
+        :disabled="validating"
+        @click="handleValidate"
+      >
+        {{ validating ? 'Checking…' : 'Validate' }}
+      </button>
+    </div>
+
     <div v-if="showSaveTemplate && !showSummary" class="space-y-2">
       <button
         v-if="!namingTemplate"
@@ -218,22 +264,6 @@ async function handleSendToLogTen() {
       </div>
     </div>
 
-    <div v-if="!showSummary" class="flex gap-2">
-      <button
-        type="button"
-        class="flex-1 min-h-[52px] rounded-2xl border-2 px-3 py-3 text-sm font-semibold disabled:opacity-50"
-        :class="
-          isDarkMode
-            ? 'border-green-400/50 bg-green-500/15 text-green-100'
-            : 'border-green-600 bg-green-50 text-green-900'
-        "
-        :disabled="validating"
-        @click="handleValidate"
-      >
-        {{ validating ? 'Checking…' : 'Validate' }}
-      </button>
-    </div>
-
     <div v-else class="flex gap-2">
       <button
         type="button"
@@ -256,6 +286,21 @@ async function handleSendToLogTen() {
         {{ importing ? 'Importing…' : 'Import' }}
       </button>
     </div>
+    <button
+      v-if="showSummary"
+      type="button"
+      data-testid="import-and-scan-next"
+      class="w-full min-h-[52px] rounded-2xl border-2 px-3 py-3 text-sm font-semibold disabled:opacity-40"
+      :class="
+        isDarkMode
+          ? 'border-green-400/50 bg-green-500/10 text-green-100'
+          : 'border-green-700 bg-white text-green-900'
+      "
+      :disabled="importing"
+      @click="handleImportAndScanNext"
+    >
+      {{ importing ? 'Importing…' : 'Import and Scan Next Page' }}
+    </button>
     <button
       v-if="preferredSink === 'logten' && showSummary"
       type="button"
