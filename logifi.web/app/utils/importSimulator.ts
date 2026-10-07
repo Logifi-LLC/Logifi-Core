@@ -315,7 +315,17 @@ export function applySimulatorImport(entry: LogEntry, hints?: SimImportHints): L
     entry.flightTime.dual = simTime
   }
 
-  entry.logbookType = inferLogbookType(entry)
+  // Airplane total and sim time can share a row (0.8 flight + 1.3 FTD).
+  // Keep that a flight so actual instrument is not folded into hood time.
+  // A sim session copies the same duration onto total, so those stay simulators.
+  const airplaneTotal = entry.flightTime.total ?? 0
+  const separateAirplaneTime =
+    hints?.explicitLogbookType !== 'simulator' &&
+    simTime > 0 &&
+    airplaneTotal > 0 &&
+    Math.abs(airplaneTotal - simTime) > 0.001
+
+  entry.logbookType = separateAirplaneTime ? 'flight' : inferLogbookType(entry)
   normalizeSimulatorInstrumentTime(entry)
   return entry
 }

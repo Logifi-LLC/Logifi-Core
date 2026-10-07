@@ -13,6 +13,7 @@ import {
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
 import type { DigifiPageSide, DigifiScanCellMeta, DigifiScanRow, DigifiScanStrategy } from '~/utils/digifiTypes'
 import { createBuilderSpreadId } from '~/utils/logbookBuilderDraft'
+import { nextDigifiPageSettings } from '~/utils/digifiNextPage'
 
 const FIELD_LABELS: Record<LogbookColumnKey, string> = {
   date: 'Date',
@@ -355,6 +356,32 @@ export function useLogbookBuilderGrid() {
     clearUndoHistory()
   }
 
+  /**
+   * Empty the grid for another Digifi page. Column template, locked year,
+   * and single/two-page layout stay. A resolved date on the imported page
+   * does not change defaultYear.
+   */
+  function beginNextDigifiPage() {
+    const next = nextDigifiPageSettings({
+      columns: columns.value.map((column) => ({
+        id: column.id,
+        label: column.label,
+        fieldKey: column.fieldKey,
+        order: column.order,
+      })),
+      layout: layout.value,
+      defaultYear: defaultYear.value,
+      twoPageSplitIndex: twoPageSplitIndex.value,
+      rowCount: rowCount.value,
+    })
+    clearGrid()
+    layout.value = next.layout
+    defaultYear.value = next.defaultYear
+    twoPageSplitIndex.value = next.twoPageSplitIndex
+    if (rowCount.value !== next.rowCount) setRowCount(next.rowCount)
+    return next
+  }
+
   function columnIdsForPageSide(pageSide: DigifiPageSide): string[] {
     const cols = visibleColumns.value
     if (layout.value !== 'two-page') {
@@ -529,6 +556,7 @@ export function useLogbookBuilderGrid() {
     reorderColumns,
     loadTemplate,
     clearGrid,
+    beginNextDigifiPage,
     deleteTemplate,
     setActiveRowIndex,
     applyScanResults,

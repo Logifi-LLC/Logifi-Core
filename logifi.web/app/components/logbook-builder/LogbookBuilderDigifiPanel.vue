@@ -6,6 +6,7 @@ import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { useAuth } from '~/composables/useAuth'
 import { useTheme } from '~/composables/useTheme'
 import type { DigifiCapturePhoto, DigifiPageSide } from '~/utils/digifiTypes'
+import { planDigifiNextCapture } from '~/utils/digifiNextPage'
 
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
@@ -55,6 +56,7 @@ let drainChain: Promise<void> = Promise.resolve()
 const {
   creatingSession,
   sessionError,
+  sessionId,
   qrDataUrl,
   mobileUrl,
   photos,
@@ -347,6 +349,44 @@ async function onDrop(pageSide: DigifiPageSide, e: DragEvent) {
   await processFile(file, pageSide)
 }
 
+async function prepareForNextPage() {
+  successMessage.value = null
+  scanningSide.value = null
+  queueStatus.value = null
+  scanQueue.value = []
+  dragOverSide.value = null
+  error.value = null
+  scanRowWarning.value = null
+  for (const side of ['left', 'right'] as DigifiPageSide[]) {
+    setZonePreview(side, null)
+  }
+  for (const photo of photos.value) {
+    knownPhotoIds.value.add(photo.id)
+    processedPhotoIds.value.add(photo.id)
+  }
+
+  let qrSessionActive = false
+  if (sessionId.value) {
+    await refreshSessionStatus()
+    qrSessionActive = isSessionActive.value
+  }
+  const plan = planDigifiNextCapture({
+    method: sessionId.value ? 'qr' : 'file',
+    qrSessionActive,
+  })
+  if (plan.reuseQrSession) {
+    sessionError.value = null
+    companionMessage.value = 'Phone still connected.'
+    return
+  }
+  if (plan.qrExpired) {
+    companionMessage.value = null
+    sessionError.value = 'Phone link expired.'
+    return
+  }
+  companionMessage.value = null
+}
+
 async function createPhoneSession() {
   companionMessage.value = null
   knownPhotoIds.value = new Set()
@@ -447,6 +487,8 @@ function dropZoneHelperText(pageSide: DigifiPageSide): string {
   }
   return 'Drag & drop a photo here, or click to browse'
 }
+
+defineExpose({ prepareForNextPage })
 
 onUnmounted(() => {
   for (const side of ['left', 'right'] as DigifiPageSide[]) {
@@ -661,7 +703,7 @@ onUnmounted(() => {
       </div>
 
       <p v-if="sessionError" class="mt-2 text-xs text-red-500 dark:text-red-400">{{ sessionError }}</p>
-      <p v-else-if="companionMessage" class="mt-2 text-xs text-green-600 dark:text-green-400">{{ companionMessage }}</p>
+      <p v-else-if="companionMessage" data-testid="digifi-companion-message" class="mt-2 text-xs text-green-600 dark:text-green-400">{{ companionMessage }}</p>
 
       <div v-if="qrDataUrl" class="mt-4 grid gap-4 sm:grid-cols-[220px_1fr]">
         <div class="rounded-xl p-2 border inline-flex items-center justify-center" :class="isDark ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white'">

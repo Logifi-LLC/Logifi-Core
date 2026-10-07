@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { inject, ref, computed } from 'vue'
+import { inject, ref, computed, unref } from 'vue'
+import { useRoute } from 'vue-router'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import type { ValidateOnlyResult, ColumnTotalRow } from '~/composables/useLogbookBuilderImport'
 import { formatColumnTotal } from '~/composables/useLogbookBuilderImport'
@@ -9,12 +10,13 @@ import { useAuth } from '~/composables/useAuth'
 import { supabase } from '~/lib/supabase'
 import { gridToEntries } from '~/composables/useLogbookBuilderImport'
 import { triggerLogTenHandoff, copyToClipboard, buildLogTenPackage } from '~/utils/logtenHandoff'
-import { unref } from 'vue'
+import { digifiImportSucceeded } from '~/utils/digifiNextPage'
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
 if (!grid) throw new Error('LogbookBuilderValidateBar must be used inside a page that provides logbookBuilderGrid')
 
 const preferredSink = inject<Ref<'logten' | 'logifi' | null>>('digifiPreferredSink', ref(null))
+const startDigifiNextPage = inject<(() => void | Promise<void>) | null>('startDigifiNextPage', null)
 
 const route = useRoute()
 const isDigifiMode = computed(() => route.query.digifi === 'open')
@@ -58,6 +60,10 @@ function handleBack() {
   confirmResult.value = null
 }
 
+function formatImportErrors(errors: { rowIndex: number; message: string }[]): string {
+  return errors.slice(0, 5).map((e) => (e.rowIndex >= 0 ? `Row ${e.rowIndex}: ` : '') + e.message).join('; ')
+}
+
 async function handleImport() {
   if (!confirmResult.value) return
   importing.value = true
@@ -66,7 +72,7 @@ async function handleImport() {
     const { runValidateAndImport } = await import('~/composables/useLogbookBuilderImport')
     const result = await runValidateAndImport(grid!)
     if (result.errors.length > 0) {
-      errorMessage.value = result.errors.slice(0, 5).map((e) => (e.rowIndex >= 0 ? `Row ${e.rowIndex}: ` : '') + e.message).join('; ')
+      errorMessage.value = formatImportErrors(result.errors)
       showConfirm.value = false
       confirmResult.value = null
     } else if (result.imported > 0) {
@@ -74,6 +80,36 @@ async function handleImport() {
         type: 'success',
       })
       await navigateTo('/dashboard')
+    }
+  } catch (e: any) {
+    errorMessage.value = e?.message ?? 'Import failed'
+  } finally {
+    importing.value = false
+  }
+}
+
+async function handleImportAndScanNext() {
+  if (!confirmResult.value || importing.value) return
+  importing.value = true
+  errorMessage.value = null
+  try {
+    const { runValidateAndImport } = await import('~/composables/useLogbookBuilderImport')
+    const result = await runValidateAndImport(grid!)
+    if (!digifiImportSucceeded(result)) {
+      if (result.errors.length > 0) {
+        errorMessage.value = formatImportErrors(result.errors)
+        showConfirm.value = false
+        confirmResult.value = null
+      }
+      return
+    }
+    showConfirm.value = false
+    confirmResult.value = null
+    showToast('Imported. Scan the next page.', { type: 'success' })
+    try {
+      await startDigifiNextPage?.()
+    } catch (nextError: any) {
+      errorMessage.value = nextError?.message ?? 'Could not open the next scan.'
     }
   } catch (e: any) {
     errorMessage.value = e?.message ?? 'Import failed'
@@ -297,6 +333,18 @@ function downloadLogTenPackage() {
             >
               Or send to LogTen Pro
             </button>
+            <button
+              type="button"
+              data-testid="import-and-scan-next"
+              class="rounded px-4 py-2 text-sm font-medium disabled:opacity-50 shadow-sm border"
+              :class="isDark
+                ? 'border-blue-500/40 bg-blue-600/20 text-blue-300 hover:bg-blue-600/30'
+                : 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'"
+              :disabled="importing"
+              @click="handleImportAndScanNext"
+            >
+              {{ importing ? 'Importing…' : 'Import and Scan Next Page' }}
+            </button>
           </div>
         </div>
 
@@ -316,6 +364,15 @@ function downloadLogTenPackage() {
             @click="handleImport"
           >
             {{ importing ? 'Importing…' : 'Import' }}
+          </button>
+          <button
+            type="button"
+            data-testid="import-and-scan-next"
+            class="rounded border border-green-700 bg-white px-4 py-2 text-sm font-medium text-green-800 hover:bg-green-50 disabled:opacity-50 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-200 dark:hover:bg-green-500/20"
+            :disabled="importing"
+            @click="handleImportAndScanNext"
+          >
+            {{ importing ? 'Importing…' : 'Import and Scan Next Page' }}
           </button>
           <button
             type="button"

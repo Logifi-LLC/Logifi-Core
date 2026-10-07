@@ -45,6 +45,7 @@ import {
   type MobileCaptureSession,
 } from '~/utils/digifiMobileCapture'
 import { DIGIFI_EYE_PATH } from '~/utils/digifiMobileReview'
+import { planDigifiNextCapture } from '~/utils/digifiNextPage'
 import {
   pickNextPendingMobileScan,
   upsertPendingMobileScan,
@@ -178,7 +179,7 @@ function queryWantsNewSpread(): boolean {
 function beginNewDigifiSpreadSession() {
   resetCaptureSession()
   showCamera.value = false
-  grid.clearGrid()
+  grid.beginNextDigifiPage()
   phase.value = 'setup'
   grid.digifiMobilePhase.value = 'setup'
   clearBuilderDraft(user.value?.id)
@@ -276,6 +277,15 @@ function openCapture(pageSide?: DigifiPageSide) {
   captureSideOverride.value = side
   showCamera.value = true
 }
+
+function startDigifiNextPage() {
+  beginNewDigifiSpreadSession()
+  error.value = null
+  scanRowWarning.value = null
+  const plan = planDigifiNextCapture({ method: 'camera', qrSessionActive: false })
+  if (plan.openCamera) openCapture()
+}
+provide('startDigifiNextPage', startDigifiNextPage)
 
 function retakeCaptureSide(pageSide: DigifiPageSide) {
   if (pageSide === 'left') {
