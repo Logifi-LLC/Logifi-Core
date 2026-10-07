@@ -255,6 +255,7 @@ export function useLogbookBuilderDigifi(
       fieldKey: c.fieldKey,
       order: c.order,
       categoryClassValue: c.categoryClassValue,
+      columnKind: c.columnKind,
     }))
     return {
       spreadId: spreadId.value,
@@ -324,6 +325,7 @@ export function useLogbookBuilderDigifi(
           fieldKey: c.fieldKey,
           order: c.order,
           categoryClassValue: c.categoryClassValue,
+          columnKind: c.columnKind,
         })),
       })
       scanPhase.value = 'Reading page'

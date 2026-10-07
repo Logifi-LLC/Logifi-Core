@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import type { Ref } from 'vue'
-import type { BuilderColumn, BuilderRow, BuilderLayout, BuilderTemplateColumn } from '~/utils/logbookBuilderTypes'
+import type { BuilderColumn, BuilderColumnKind, BuilderRow, BuilderLayout, BuilderTemplateColumn } from '~/utils/logbookBuilderTypes'
 import { supabase } from '~/lib/supabase'
 import {
   DEFAULT_BUILDER_ROW_COUNT,
@@ -250,13 +250,20 @@ export function useLogbookBuilderGrid() {
     setRowCount(rows.value.length + count)
   }
 
-  function addColumn(fieldKey: LogbookColumnKey | null = null) {
-    const label = fieldKey ? FIELD_LABELS[fieldKey] : 'Notes'
+  function addColumn(
+    fieldKey: LogbookColumnKey | null = null,
+    extras?: { columnKind?: 'day' | 'custom'; label?: string }
+  ) {
+    const columnKind = extras?.columnKind
+    const label =
+      extras?.label?.trim() ||
+      (columnKind === 'day' ? 'Day' : fieldKey ? FIELD_LABELS[fieldKey] : 'Notes')
     const newCol = createBuilderColumn({
-      fieldKey,
+      fieldKey: columnKind ? null : fieldKey,
       label,
       order: columns.value.length,
       width: DEFAULT_COLUMN_WIDTH,
+      columnKind,
     })
     columns.value.push(newCol)
     for (const row of rows.value) {
@@ -271,14 +278,20 @@ export function useLogbookBuilderGrid() {
     }
   }
 
-  function updateColumn(colId: string, updates: Partial<Pick<BuilderColumn, 'fieldKey' | 'label' | 'order' | 'width' | 'categoryClassValue'>>) {
+  function updateColumn(
+    colId: string,
+    updates: Partial<Pick<BuilderColumn, 'fieldKey' | 'label' | 'order' | 'width' | 'categoryClassValue'>> & {
+      columnKind?: BuilderColumnKind | null
+    }
+  ) {
     const col = columns.value.find((c) => c.id === colId)
     if (!col) return
     if (updates.fieldKey !== undefined) col.fieldKey = updates.fieldKey
     if (updates.label !== undefined) col.label = updates.label
     if (updates.order !== undefined) col.order = updates.order
     if (updates.width !== undefined) col.width = updates.width
-    if (updates.categoryClassValue !== undefined) col.categoryClassValue = updates.categoryClassValue
+    if ('categoryClassValue' in updates) col.categoryClassValue = updates.categoryClassValue
+    if ('columnKind' in updates) col.columnKind = updates.columnKind ?? undefined
   }
 
   function setColumnWidth(colId: string, widthPx: number) {
@@ -299,7 +312,12 @@ export function useLogbookBuilderGrid() {
   function loadTemplate(template: { columns: BuilderTemplateColumn[]; layout: BuilderLayout; default_row_count?: number; tags_column_width?: number; default_import_role?: string; two_page_split_index?: number }) {
     const cols = template.columns
       .sort((a, b) => a.order - b.order)
-      .map((c) => createBuilderColumn({ ...c, width: c.width ?? DEFAULT_COLUMN_WIDTH, categoryClassValue: c.categoryClassValue }))
+      .map((c) => createBuilderColumn({
+        ...c,
+        width: c.width ?? DEFAULT_COLUMN_WIDTH,
+        categoryClassValue: c.categoryClassValue,
+        columnKind: c.columnKind,
+      }))
     columns.value = cols
     layout.value = template.layout
     const n = template.default_row_count ?? DEFAULT_BUILDER_ROW_COUNT

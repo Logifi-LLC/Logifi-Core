@@ -132,7 +132,8 @@ const saving = ref(false)
 const columnsEditorExpanded = ref(true)
 /** Avoid re-collapsing after the pilot expands the column editor (e.g. when templates fetch completes). */
 let didAutoCollapseColumnsForTemplate = false
-const addFieldKey = ref<LogbookColumnKey | ''>('')
+const addFieldKey = ref<string>('')
+const customColumnTitle = ref('')
 
 const selectedFieldKeys = computed(() => {
   return new Set(
@@ -172,9 +173,29 @@ function addField(fieldKey: LogbookColumnKey) {
   columnsEditorExpanded.value = true
 }
 
+function addDayColumn() {
+  grid.addColumn(null, { columnKind: 'day', label: 'Day' })
+  addFieldKey.value = ''
+  columnsEditorExpanded.value = true
+}
+
+function addCustomColumn() {
+  const title = customColumnTitle.value.trim()
+  if (!title) return
+  grid.addColumn(null, { columnKind: 'custom', label: title })
+  customColumnTitle.value = ''
+  addFieldKey.value = ''
+  columnsEditorExpanded.value = true
+}
+
 function onAddFieldChange() {
-  if (!addFieldKey.value) return
-  addField(addFieldKey.value)
+  const value = addFieldKey.value
+  if (!value) return
+  if (value === '__day') {
+    addDayColumn()
+    return
+  }
+  addField(value as LogbookColumnKey)
 }
 
 function removeField(columnId: string) {
@@ -271,6 +292,7 @@ async function saveTemplate() {
       order: column.order,
       width: column.width,
       categoryClassValue: column.categoryClassValue,
+      columnKind: column.columnKind,
     })),
   }
   const { error } = await (supabase as any).from('logbook_builder_templates').insert(payload)
@@ -566,7 +588,7 @@ watch(
           </li>
         </ol>
 
-        <div v-if="availableFieldsToAdd.length" class="pt-1">
+        <div class="pt-1">
           <label class="sr-only" for="digifi-add-column-field">Add column field</label>
           <select
             id="digifi-add-column-field"
@@ -581,10 +603,36 @@ watch(
             @change="onAddFieldChange"
           >
             <option value="">Add field…</option>
+            <option value="__day">Day</option>
             <option v-for="item in availableFieldsToAdd" :key="item.fieldKey" :value="item.fieldKey">
               {{ item.label }}
             </option>
           </select>
+          <form class="mt-2 flex gap-2" @submit.prevent="addCustomColumn">
+            <input
+              v-model="customColumnTitle"
+              type="text"
+              placeholder="Custom column"
+              aria-label="Custom column title"
+              class="min-w-0 flex-1 rounded-2xl border px-4 py-3 text-sm"
+              :class="
+                isDarkMode
+                  ? 'border-white/10 bg-white/5 text-gray-100'
+                  : 'border-gray-200 bg-white text-gray-900 shadow-sm'
+              "
+            />
+            <button
+              type="submit"
+              class="rounded-2xl border px-3 py-3 text-sm font-semibold"
+              :class="
+                isDarkMode
+                  ? 'border-white/15 text-gray-100'
+                  : 'border-gray-300 text-gray-900 hover:bg-gray-50'
+              "
+            >
+              Add
+            </button>
+          </form>
         </div>
       </template>
     </section>

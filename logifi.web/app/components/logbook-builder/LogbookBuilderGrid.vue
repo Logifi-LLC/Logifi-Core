@@ -23,6 +23,7 @@ import {
 import type { DigifiScanCellMeta } from '~/utils/digifiTypes'
 import { isDigifiMergeSuspectNotice } from '~/utils/digifiScanRowReview'
 import { digifiRowTimeMismatchMap } from '~/utils/digifiRowTimeMismatch'
+import { tagsForCustomColumns } from '~/utils/digifiDayAndCustomColumns'
 import type { LogbookColumnConfig } from '~/utils/logbookTypes'
 import LogbookBuilderCell from './LogbookBuilderCell.vue'
 import LogbookBuilderHeader from './LogbookBuilderHeader.vue'
@@ -1474,6 +1475,10 @@ function timeMismatchMessage(rowIdx: number, colId: string): string | undefined 
   return timeMismatchByCell.value.get(`${rowIdx}:${colId}`)
 }
 
+function autoTagsForRow(row: { cells?: Record<string, string> | null }): string[] {
+  return tagsForCustomColumns(visibleColumns.value, row.cells)
+}
+
 function getDigifiCellTitle(rowIdx: number, colId: string): string | undefined {
   const mismatch = timeMismatchMessage(rowIdx, colId)
   const meta = getDigifiCellMeta(rowIdx, colId)
@@ -1966,10 +1971,20 @@ defineExpose({
             @focusin="setActiveRowIndex(rowIdx)"
             @focusout="setActiveRowIndex(null)"
           >
-            <LogbookBuilderRowTags
-              :model-value="row.tags ?? []"
-              @update:model-value="(tags) => setRowTags(rowIdx, tags)"
-            />
+            <div class="flex flex-wrap items-center gap-1">
+              <span
+                v-for="tag in autoTagsForRow(row)"
+                :key="tag"
+                data-testid="auto-tag"
+                class="rounded border px-2 py-0.5 text-xs font-medium border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/50 dark:text-blue-200"
+              >
+                {{ tag }}
+              </span>
+              <LogbookBuilderRowTags
+                :model-value="row.tags ?? []"
+                @update:model-value="(tags) => setRowTags(rowIdx, tags)"
+              />
+            </div>
           </td>
         </tr>
       </tbody>

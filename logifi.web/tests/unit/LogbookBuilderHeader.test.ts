@@ -94,6 +94,7 @@ describe('LogbookBuilderHeader category/class menu', () => {
       fieldKey: 'categoryClass',
       label: 'ASEL',
       categoryClassValue: 'ASEL',
+      columnKind: null,
     })
     expect(wrapper.find('[data-testid="category-inline"]').exists()).toBe(false)
   })
@@ -144,6 +145,35 @@ describe('LogbookBuilderHeader category/class menu', () => {
       fieldKey: 'categoryClass',
       label: 'AMEL',
       categoryClassValue: 'AMEL',
+      columnKind: null,
+    })
+  })
+
+  it('offers Day as a builder column with no stored field', async () => {
+    installMatchMedia(false)
+    const wrapper = mountHeader()
+    await openMenu(wrapper)
+    expect(wrapper.text()).toContain('Day')
+    await wrapper.get('[data-testid="day-column-option"]').trigger('click')
+    expect(wrapper.emitted('update')?.[0]?.[1]).toEqual({
+      fieldKey: null,
+      label: 'Day',
+      categoryClassValue: undefined,
+      columnKind: 'day',
+    })
+  })
+
+  it('adds a custom column from a free-text title', async () => {
+    installMatchMedia(false)
+    const wrapper = mountHeader()
+    await openMenu(wrapper)
+    await wrapper.get('[data-testid="custom-column-title"]').setValue('Retractable Gear')
+    await wrapper.get('[data-testid="custom-column-form"]').trigger('submit')
+    expect(wrapper.emitted('update')?.[0]?.[1]).toEqual({
+      fieldKey: null,
+      label: 'Retractable Gear',
+      categoryClassValue: undefined,
+      columnKind: 'custom',
     })
   })
 })

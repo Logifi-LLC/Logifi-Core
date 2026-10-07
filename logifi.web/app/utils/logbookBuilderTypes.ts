@@ -1,6 +1,13 @@
 import type { DigifiScanCellMeta } from './digifiTypes'
 import type { LogbookColumnKey } from './logbookTypes'
 
+/**
+ * Builder-only column. Not a stored logbook field.
+ * - day: paper "Day" time. The logbook stores Night and Total, not day time.
+ * - custom: free-text paper column. A mark or time becomes a tag, not a total.
+ */
+export type BuilderColumnKind = 'day' | 'custom'
+
 /** Single column definition in the builder grid (user can map to a logbook field). */
 export interface BuilderColumn {
   id: string
@@ -11,6 +18,8 @@ export interface BuilderColumn {
   width?: number
   /** When fieldKey is 'categoryClass', specific category (ASEL, AMEL, etc.) so column title is that value. */
   categoryClassValue?: string
+  /** Set for Day time and custom paper columns. Omitted for mapped logbook fields. */
+  columnKind?: BuilderColumnKind
 }
 
 /** One row in the draft grid: cell values by column id plus optional tags. */
@@ -42,6 +51,7 @@ export interface BuilderTemplateColumn {
   order: number
   width?: number
   categoryClassValue?: string
+  columnKind?: BuilderColumnKind
 }
 
 /** Default number of rows when creating a new grid. */
@@ -169,6 +179,7 @@ export function createBuilderColumn(overrides: Partial<BuilderColumn> & { label:
     order: overrides.order,
     width: overrides.width,
     categoryClassValue: overrides.categoryClassValue,
+    columnKind: overrides.columnKind,
   }
 }
 

@@ -38,6 +38,8 @@ export const digifiTemplateColumnSchema = z.object({
   fieldKey: logbookColumnKeySchema.nullable(),
   order: z.number().int().nonnegative(),
   categoryClassValue: z.string().optional(),
+  /** Builder-only. `day` is daytime hours. `custom` is a paper column read as its own column. */
+  columnKind: z.enum(['day', 'custom']).optional(),
 })
 
 const digifiScanChunkSchema = z.object({

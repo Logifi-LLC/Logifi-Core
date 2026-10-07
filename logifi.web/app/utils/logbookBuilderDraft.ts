@@ -111,5 +111,6 @@ export function columnsToTemplateColumns(columns: BuilderColumn[]): BuilderTempl
     order: c.order,
     width: c.width,
     categoryClassValue: c.categoryClassValue,
+    columnKind: c.columnKind,
   }))
 }
