@@ -1,4 +1,4 @@
-import type { BuilderLayout } from './logbookBuilderTypes'
+import type { BuilderColumnKind, BuilderLayout } from './logbookBuilderTypes'
 import type { LogbookColumnKey } from './logbookTypes'
 
 export type DigifiPageSide = 'left' | 'right'
@@ -20,6 +20,8 @@ export interface DigifiTemplateColumn {
   fieldKey: LogbookColumnKey | null
   order: number
   categoryClassValue?: string
+  /** Day time or a custom paper column. Omitted for mapped logbook fields. */
+  columnKind?: BuilderColumnKind
 }
 
 export interface DigifiScanChunkMeta {

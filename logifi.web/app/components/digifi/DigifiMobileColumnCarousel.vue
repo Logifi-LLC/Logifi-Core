@@ -13,6 +13,7 @@ import {
   mergeDigifiMobileReviewRowHeights,
 } from '~/utils/digifiMobileReviewRows'
 import { digifiRowTimeMismatchMap } from '~/utils/digifiRowTimeMismatch'
+import { customColumnCellCountsAsTag, isCustomColumn } from '~/utils/digifiDayAndCustomColumns'
 import { mergePilotNameSuggestions } from '~/utils/pilotNameSuggest'
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
@@ -163,6 +164,12 @@ function cellTimeMismatchMessage(rowIdx: number, colId: string): string | undefi
 
 function cellFlagged(rowIdx: number, colId: string): boolean {
   return cellNeedsReview(rowIdx, colId) || cellTimeMismatchMessage(rowIdx, colId) != null
+}
+
+function autoTagLabel(column: { id: string; label: string; columnKind?: 'day' | 'custom' | null }, rowIdx: number): string {
+  if (!isCustomColumn(column)) return ''
+  const raw = grid.rows.value[rowIdx]?.cells?.[column.id] ?? ''
+  return customColumnCellCountsAsTag(raw) ? column.label.trim() : ''
 }
 
 function columnStripClass(index: number): string {
@@ -317,6 +324,13 @@ watch(
                   @focus="onCellFocus(rowIdx, column.id)"
                   @blur="onCellBlur"
                 />
+                <span
+                  v-if="autoTagLabel(column, rowIdx)"
+                  data-testid="auto-tag"
+                  class="px-2 pb-1 text-[10px] font-semibold text-blue-700 dark:text-blue-200"
+                >
+                  {{ autoTagLabel(column, rowIdx) }}
+                </span>
               </div>
             </li>
           </ol>

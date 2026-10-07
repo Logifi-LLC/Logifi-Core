@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { shouldDeferGridKeydown } from '../../app/utils/logbookBuilderGridKeys'
+import { isBuilderColumnTitleTarget, shouldDeferGridKeydown } from '../../app/utils/logbookBuilderGridKeys'
 
 describe('shouldDeferGridKeydown', () => {
   it('defers ArrowDown when native select is focused', () => {
@@ -84,6 +84,17 @@ describe('shouldDeferGridKeydown', () => {
         pilotHighlightIndex: 0,
       }),
     ).toBe(true)
+  })
+
+  it('leaves keystrokes in the custom column title to that input', () => {
+    const form = document.createElement('form')
+    form.setAttribute('data-builder-column-title', '')
+    const input = document.createElement('input')
+    form.appendChild(input)
+    document.body.appendChild(form)
+    expect(isBuilderColumnTitleTarget(input)).toBe(true)
+    expect(isBuilderColumnTitleTarget(document.body)).toBe(false)
+    form.remove()
   })
 
   it('does not defer ArrowDown for plain text cells', () => {

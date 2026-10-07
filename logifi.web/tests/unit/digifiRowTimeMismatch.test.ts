@@ -79,6 +79,46 @@ describe('findDigifiRowTimeMismatches', () => {
     expect(flags[0]?.message).toBe('PIC 1:48 is greater than Total 1:36')
   })
 
+  it('warns when Day + Night does not match Total and leaves the cells unchanged', () => {
+    const columns: DigifiRowTimeColumn[] = [
+      ...studentColumns,
+      { id: 'day', fieldKey: null, label: 'Day', columnKind: 'day' },
+    ]
+    const cells = { total: '1.5', day: '1.2', night: '0.4', pic: '1.5' }
+    const flags = findDigifiRowTimeMismatches(cells, columns)
+    expect(flags.map((flag) => flag.columnId)).toEqual(['total', 'day', 'night'])
+    expect(flags[0]?.message).toBe("Day 1.2 + Night 0.4 doesn't match Total 1.5")
+    expect(cells).toEqual({ total: '1.5', day: '1.2', night: '0.4', pic: '1.5' })
+  })
+
+  it('does not warn when Day + Night matches Total, or when Night is blank and Day fits', () => {
+    const columns: DigifiRowTimeColumn[] = [
+      ...studentColumns,
+      { id: 'day', fieldKey: null, label: 'Day', columnKind: 'day' },
+    ]
+    expect(flaggedIds({ total: '1.5', day: '1.2', night: '0.3' }, columns)).toEqual([])
+    expect(flaggedIds({ total: '1.5', day: '1.2', night: '' }, columns)).toEqual([])
+    expect(flaggedIds({ total: '1:36', day: '1:36', night: '0:02' }, columns)).toEqual([])
+  })
+
+  it('warns when Day is greater than Total and Night is blank', () => {
+    const columns: DigifiRowTimeColumn[] = [
+      ...studentColumns,
+      { id: 'day', fieldKey: null, label: 'Day', columnKind: 'day' },
+    ]
+    const flags = findDigifiRowTimeMismatches({ total: '1.5', day: '2.0', night: '' }, columns)
+    expect(flags.map((flag) => flag.columnId)).toEqual(['total', 'day'])
+    expect(flags[0]?.message).toBe('Day 2.0 is greater than Total 1.5')
+  })
+
+  it('does not treat a custom column time as a total check', () => {
+    const columns: DigifiRowTimeColumn[] = [
+      ...studentColumns,
+      { id: 'gear', fieldKey: null, label: 'Retractable Gear', columnKind: 'custom' },
+    ]
+    expect(flaggedIds({ total: '1.5', gear: '5.0', pic: '1.5' }, columns)).toEqual([])
+  })
+
   it('maps flags by row so a matching edit drops that row only', () => {
     const map = digifiRowTimeMismatchMap(
       [

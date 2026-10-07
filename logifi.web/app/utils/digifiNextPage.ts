@@ -1,4 +1,4 @@
-import type { BuilderLayout } from './logbookBuilderTypes'
+import type { BuilderColumnKind, BuilderLayout } from './logbookBuilderTypes'
 import type { LogbookColumnKey } from './logbookTypes'
 
 export interface DigifiNextPageColumn {
@@ -6,6 +6,10 @@ export interface DigifiNextPageColumn {
   label: string
   fieldKey: LogbookColumnKey | null
   order: number
+  width?: number
+  categoryClassValue?: string
+  /** Day time and custom paper columns are part of the column template. */
+  columnKind?: BuilderColumnKind
 }
 
 /** Settings that stay put when the next logbook page is scanned. */

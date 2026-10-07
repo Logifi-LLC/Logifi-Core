@@ -23,7 +23,9 @@ import {
 import type { DigifiScanCellMeta } from '~/utils/digifiTypes'
 import { isDigifiMergeSuspectNotice } from '~/utils/digifiScanRowReview'
 import { digifiRowTimeMismatchMap } from '~/utils/digifiRowTimeMismatch'
+import { tagsForCustomColumns } from '~/utils/digifiDayAndCustomColumns'
 import type { LogbookColumnConfig } from '~/utils/logbookTypes'
+import { isBuilderColumnTitleTarget } from '~/utils/logbookBuilderGridKeys'
 import LogbookBuilderCell from './LogbookBuilderCell.vue'
 import LogbookBuilderHeader from './LogbookBuilderHeader.vue'
 import LogbookBuilderRowTags from './LogbookBuilderRowTags.vue'
@@ -111,6 +113,10 @@ const editSnapshot = ref<string | null>(null)
 const editingCell = ref<ActiveCell | null>(null)
 
 function onHeaderDragStart(colId: string, e: DragEvent) {
+  if (isBuilderColumnTitleTarget(e.target) || isBuilderColumnTitleTarget(document.activeElement)) {
+    e.preventDefault()
+    return
+  }
   if (!e.dataTransfer) return
   draggedColumnId.value = colId
   e.dataTransfer.setData('text/plain', colId)
@@ -471,6 +477,7 @@ function isGridChromeMouseTarget(target: EventTarget | null): boolean {
   if (!target || !(target instanceof HTMLElement)) return false
   return (
     target.closest('thead') != null ||
+    target.closest('[data-builder-column-title]') != null ||
     target.closest('[aria-label="Drag to fill"]') != null ||
     target.closest('[aria-label="Drag to move"]') != null ||
     target.closest('.cursor-col-resize') != null
@@ -1057,6 +1064,8 @@ function shouldExitEditOnHorizontalArrow(key: string, input: HTMLInputElement): 
 }
 
 function handleKeyDown(e: KeyboardEvent) {
+  if (isBuilderColumnTitleTarget(e.target)) return
+
   const inGrid =
     isEventInGrid(e.target) ||
     document.activeElement === gridContainerRef.value
@@ -1472,6 +1481,10 @@ const timeMismatchByCell = computed(() =>
 
 function timeMismatchMessage(rowIdx: number, colId: string): string | undefined {
   return timeMismatchByCell.value.get(`${rowIdx}:${colId}`)
+}
+
+function autoTagsForRow(row: { cells?: Record<string, string> | null }): string[] {
+  return tagsForCustomColumns(visibleColumns.value, row.cells)
 }
 
 function getDigifiCellTitle(rowIdx: number, colId: string): string | undefined {
@@ -1966,10 +1979,20 @@ defineExpose({
             @focusin="setActiveRowIndex(rowIdx)"
             @focusout="setActiveRowIndex(null)"
           >
-            <LogbookBuilderRowTags
-              :model-value="row.tags ?? []"
-              @update:model-value="(tags) => setRowTags(rowIdx, tags)"
-            />
+            <div class="flex flex-wrap items-center gap-1">
+              <span
+                v-for="tag in autoTagsForRow(row)"
+                :key="tag"
+                data-testid="auto-tag"
+                class="rounded border px-2 py-0.5 text-xs font-medium border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-900/50 dark:text-blue-200"
+              >
+                {{ tag }}
+              </span>
+              <LogbookBuilderRowTags
+                :model-value="row.tags ?? []"
+                @update:model-value="(tags) => setRowTags(rowIdx, tags)"
+              />
+            </div>
           </td>
         </tr>
       </tbody>

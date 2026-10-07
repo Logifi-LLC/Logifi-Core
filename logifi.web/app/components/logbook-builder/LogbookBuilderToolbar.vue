@@ -96,6 +96,7 @@ async function confirmSaveTemplate() {
       order: c.order,
       width: c.width,
       categoryClassValue: c.categoryClassValue,
+      columnKind: c.columnKind,
     })),
   }
   const { error } = await (supabase as any).from('logbook_builder_templates').insert(payload)
