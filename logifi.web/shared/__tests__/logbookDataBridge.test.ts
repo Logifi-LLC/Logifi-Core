@@ -11,10 +11,12 @@ import {
 } from '../logbookDataBridge/formatters'
 import {
   FOREFLIGHT_FLIGHT_HEADERS,
+  GENERIC_HEADERS,
   LOGIFI_NATIVE_HEADERS,
   LOGTEN_HEADERS,
   MYFLIGHTBOOK_HEADERS,
   mapEntryToForeFlightFlightRow,
+  mapEntryToGenericRow,
   mapEntryToLogTenRow,
   mapEntryToLogifiNativeRow,
   mapEntryToMyFlightbookRow,
@@ -26,7 +28,9 @@ import {
 import {
   buildHeaderRowObject,
   exportToForeFlight,
+  exportToGenericCSV,
   exportToLogifiNative,
+  exportToLogTenPro,
   exportToMyFlightbook,
 } from '../logbookDataBridge/exportService'
 import { ingestBridgeFile } from '../logbookDataBridge/importService'
@@ -40,6 +44,8 @@ import {
   parseLogtenApproach1,
 } from '../logbookDataBridge/logtenDynamicExport'
 import { validatePart61RequiredFields } from '../../app/utils/validation'
+import { applySimulatorImport, getSimTimeSum, readSimHintsFromRawRow } from '../../app/utils/importSimulator'
+import { parseWithProvider } from '../import/ImporterFactory'
 import { applyLogtenCrewFields, inferImporterSeat } from '../../app/utils/logbookImportEnrichments'
 import type { LogEntry } from '../../app/utils/logbookTypes'
 import {
@@ -777,6 +783,198 @@ describe('logbookDataBridge export', () => {
     const result = exportToMyFlightbook([createTestEntry()])
     expect(result.bom).toBe(true)
     expect(result.content.startsWith('\uFEFF')).toBe(true)
+  })
+
+  function createMixedSimEntry(): LogEntry {
+    return createTestEntry({
+      role: 'PIC',
+      aircraftCategoryClass: 'AMEL',
+      aircraftMakeModel: 'E170',
+      registration: 'N430YX',
+      departure: 'KLGA',
+      destination: 'KDCA',
+      flightTime: {
+        total: 0.8,
+        pic: 0.8,
+        sic: null,
+        dual: 0.4,
+        solo: 0.2,
+        night: null,
+        actualInstrument: 0.5,
+        simulatedInstrument: 0.3,
+        crossCountry: null,
+        dualGiven: 0.6,
+        ftd: 1.3,
+      },
+    })
+  }
+
+  it('writes simulator and dropped time columns for each CSV', () => {
+    const entry = createMixedSimEntry()
+    expect(mapEntryToForeFlightFlightRow(entry)).toHaveLength(FOREFLIGHT_FLIGHT_HEADERS.length)
+    expect(mapEntryToMyFlightbookRow(entry)).toHaveLength(MYFLIGHTBOOK_HEADERS.length)
+    expect(mapEntryToLogTenRow(entry)).toHaveLength(LOGTEN_HEADERS.length)
+    expect(mapEntryToGenericRow(entry)).toHaveLength(GENERIC_HEADERS.length)
+    expect(mapEntryToLogifiNativeRow(entry)).toHaveLength(LOGIFI_NATIVE_HEADERS.length)
+
+    const foreflight = buildHeaderRowObject(
+      FOREFLIGHT_FLIGHT_HEADERS,
+      mapEntryToForeFlightFlightRow(entry)
+    )
+    expect(foreflight.TotalTime).toBe('0.8')
+    expect(foreflight.SimulatedFlight).toBe('1.3')
+    expect(foreflight.ActualInstrument).toBe('0.5')
+    expect(foreflight.SimulatedInstrument).toBe('0.3')
+    expect(foreflight.DualReceived).toBe('0.4')
+    expect(foreflight.DualGiven).toBe('0.6')
+    expect(foreflight.Solo).toBe('0.2')
+    expect(foreflight.AircraftID).toBe('N430YX')
+
+    const myflightbook = buildHeaderRowObject(
+      MYFLIGHTBOOK_HEADERS,
+      mapEntryToMyFlightbookRow(entry)
+    )
+    expect(myflightbook['Total Flight Time']).toBe('0.8')
+    expect(myflightbook['Ground Simulator']).toBe('1.3')
+    expect(myflightbook.IMC).toBe('0.5')
+    expect(myflightbook['Simulated Instrument']).toBe('0.3')
+    expect(myflightbook['Dual Received']).toBe('0.4')
+    expect(myflightbook.CFI).toBe('0.6')
+    expect(myflightbook['Solo Time']).toBe('0.2')
+    expect(myflightbook.Model).toBe('E170')
+
+    const logten = buildHeaderRowObject(LOGTEN_HEADERS, mapEntryToLogTenRow(entry))
+    expect(logten.flight_totalTime).toBe('0.8')
+    expect(logten.flight_simulator).toBe('1.3')
+    expect(logten.flight_actualInstrument).toBe('0.5')
+    expect(logten.flight_simulatedInstrument).toBe('0.3')
+    expect(logten.flight_dualReceived).toBe('0.4')
+    expect(logten.flight_dualGiven).toBe('0.6')
+    expect(logten.flight_solo).toBe('0.2')
+    expect(logten.aircraftType_model).toBe('E170')
+    expect(logten.aircraftType_selectedAircraftClass).toBe('AMEL')
+
+    const generic = buildHeaderRowObject(GENERIC_HEADERS, mapEntryToGenericRow(entry))
+    expect(generic['Total Time']).toBe('0.8')
+    expect(generic['Simulator Time']).toBe('1.3')
+    expect(generic['Actual Instrument']).toBe('0.5')
+    expect(generic['Simulated Instrument']).toBe('0.3')
+    expect(generic['Category/Class']).toBe('AMEL')
+    expect(generic['Aircraft Make/Model']).toBe('E170')
+
+    const logifi = buildHeaderRowObject(LOGIFI_NATIVE_HEADERS, mapEntryToLogifiNativeRow(entry))
+    expect(logifi['Total Flight Time']).toBe('0.8')
+    expect(logifi['Ground Simulator']).toBe('1.3')
+    expect(logifi.FTD).toBe('1.3')
+    expect(logifi.FFS).toBe('0.0')
+    expect(logifi.ATD).toBe('0.0')
+    expect(logifi['Actual Instrument']).toBe('0.5')
+    expect(logifi['Simulated Instrument']).toBe('0.3')
+    expect(logifi['Dual Received']).toBe('0.4')
+    expect(logifi['Dual Given']).toBe('0.6')
+    expect(logifi.Solo).toBe('0.2')
+    expect(logifi['Aircraft Category/Class']).toBe('AMEL')
+    expect(logifi['Aircraft Make/Model']).toBe('E170')
+  })
+
+  it('keeps a sim-only session out of ForeFlight and MyFlightbook total time', () => {
+    const copied = createTestEntry({
+      logbookType: 'simulator',
+      flightTime: {
+        total: 1.3,
+        pic: 1.3,
+        sic: null,
+        dual: null,
+        solo: null,
+        night: null,
+        actualInstrument: null,
+        simulatedInstrument: null,
+        crossCountry: null,
+        dualGiven: null,
+        ftd: 1.3,
+      },
+    })
+    const legacy = createTestEntry({
+      logbookType: 'simulator',
+      flightTime: {
+        total: 1.3,
+        pic: null,
+        sic: null,
+        dual: null,
+        solo: null,
+        night: null,
+        actualInstrument: null,
+        simulatedInstrument: null,
+        crossCountry: null,
+        dualGiven: null,
+      },
+    })
+
+    for (const entry of [copied, legacy]) {
+      const foreflight = buildHeaderRowObject(
+        FOREFLIGHT_FLIGHT_HEADERS,
+        mapEntryToForeFlightFlightRow(entry)
+      )
+      expect(foreflight.TotalTime).toBe('')
+      expect(foreflight.SimulatedFlight).toBe('1.3')
+
+      const myflightbook = buildHeaderRowObject(
+        MYFLIGHTBOOK_HEADERS,
+        mapEntryToMyFlightbookRow(entry)
+      )
+      expect(myflightbook['Total Flight Time']).toBe('')
+      expect(myflightbook['Ground Simulator']).toBe('1.3')
+    }
+  })
+
+  it('round-trips Logifi CSV simulator and time fields', () => {
+    const original = createMixedSimEntry()
+    const exported = exportToLogifiNative([original], { baseDate: '2024-06-13' })
+    const parsed = parseBridgeFile(exported.content, 'logifi-native')
+    expect(parsed.rows).toHaveLength(1)
+
+    const row = parsed.rows[0]!
+    const entry = mapRawRowToLogEntry(row, { source: 'logifi-native' })
+    expect(entry).not.toBeNull()
+    applySimulatorImport(entry!, readSimHintsFromRawRow(row))
+
+    expect(entry!.flightTime.total).toBe(0.8)
+    expect(entry!.flightTime.ftd).toBe(1.3)
+    expect(getSimTimeSum(entry!)).toBe(1.3)
+    expect(entry!.flightTime.actualInstrument).toBe(0.5)
+    expect(entry!.flightTime.simulatedInstrument).toBe(0.3)
+    expect(entry!.flightTime.dual).toBe(0.4)
+    expect(entry!.flightTime.dualGiven).toBe(0.6)
+    expect(entry!.flightTime.solo).toBe(0.2)
+    expect(entry!.aircraftCategoryClass).toBe('AMEL')
+    expect(entry!.aircraftMakeModel).toBe('E170')
+    expect(entry!.logbookType).toBe('flight')
+  })
+
+  it('round-trips LogTen CSV simulator and time fields', () => {
+    const original = createMixedSimEntry()
+    const exported = exportToLogTenPro([original], { baseDate: '2024-06-13' })
+    const result = parseWithProvider('logten', exported.content)
+    const entry = result.entries[0]!
+
+    expect(entry.flightTime.total).toBe(0.8)
+    expect(getSimTimeSum(entry)).toBe(1.3)
+    expect(entry.flightTime.actualInstrument).toBe(0.5)
+    expect(entry.flightTime.simulatedInstrument).toBe(0.3)
+    expect(entry.flightTime.dual).toBe(0.4)
+    expect(entry.flightTime.dualGiven).toBe(0.6)
+    expect(entry.flightTime.solo).toBe(0.2)
+    expect(entry.aircraftCategoryClass).toBe('AMEL')
+    expect(entry.aircraftMakeModel).toBe('E170')
+    expect(entry.logbookType).toBe('flight')
+  })
+
+  it('leaves generic simulator and instrument columns on the export', () => {
+    const exported = exportToGenericCSV([createMixedSimEntry()], { baseDate: '2024-06-13' })
+    expect(exported.content).toContain('Simulator Time')
+    expect(exported.content).toContain('Actual Instrument')
+    expect(exported.content).toContain('Simulated Instrument')
+    expect(exported.content).toContain('1.3')
   })
 })
 

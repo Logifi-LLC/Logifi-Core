@@ -65,6 +65,10 @@ describe('DigifiMobileLayoutWizard', () => {
     await addField.setValue('remarks')
     expect(grid.columns.value.length).toBe(before + 1)
 
+    expect(wrapper.text()).toContain('Load template')
+    expect(wrapper.text()).not.toContain('Save Template')
+    expect(wrapper.find('input[placeholder="Save as"]').exists()).toBe(false)
+
     const capture = wrapper.findAll('button').filter((button) => button.text() === 'Photograph page')
     expect(capture.length).toBe(1)
     await capture[0]!.trigger('click')

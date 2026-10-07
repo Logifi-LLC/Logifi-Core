@@ -18,6 +18,7 @@ export function buildDigifiTargetColumnsForPage(
       fieldKey: c.fieldKey,
       order: c.order,
       categoryClassValue: c.categoryClassValue,
+      columnKind: c.columnKind,
     }))
 
   if (grid.layout.value !== 'two-page') return mapped

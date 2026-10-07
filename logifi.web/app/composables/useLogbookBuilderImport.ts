@@ -42,6 +42,13 @@ import {
 import { sanitizeFlightConditions } from '~/utils/flightConditions'
 import { normalizeDigifiDateCell } from '~/utils/digifiDateNormalize'
 import {
+  customColumnTagsOnRows,
+  deriveNightFromDayAndTotal,
+  mergeEntryTags,
+  tagsForCustomColumns,
+  userTagPresetsToCreate,
+} from '~/utils/digifiDayAndCustomColumns'
+import {
   normalizeImportNumber,
   parseImportDuration,
 } from '../../shared/logbookDataBridge/formatters'
@@ -141,9 +148,12 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
     let rowRole = ''
     let trainingElements = ''
     let trainingInstructor = ''
+    let dayRaw = ''
+    let nightBlank = true
 
     for (const col of sortedCols) {
       const val = (cells[col.id] ?? '').trim()
+      if (col.columnKind === 'day' && val && !dayRaw) dayRaw = val
       const key = col.fieldKey
       if (!key) continue
       switch (key) {
@@ -224,6 +234,7 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
           flightTime.solo = parseDurationCell(val) ?? flightTime.solo
           break
         case 'night':
+          if (val) nightBlank = false
           flightTime.night = parseDurationCell(val) ?? flightTime.night
           break
         case 'nvg':
@@ -294,6 +305,11 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
       }
     }
 
+    if (nightBlank && dayRaw) {
+      const derivedNight = deriveNightFromDayAndTotal(dayRaw, flightTime.total)
+      if (derivedNight != null) flightTime.night = derivedNight
+    }
+
     if ((flightTime.night ?? 0) > 0 && !flightConditions.includes('nightVfr')) {
       flightConditions = [...flightConditions, 'nightVfr']
     }
@@ -341,7 +357,7 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
       sicName: null,
       flightConditions,
       remarks,
-      tags: row.tags?.filter(Boolean) ?? [],
+      tags: mergeEntryTags(row.tags, tagsForCustomColumns(sortedCols, cells)),
       logbookType: isSimulator ? 'simulator' : 'flight',
       flightTime,
       performance,
@@ -762,6 +778,28 @@ function runLogbookBuilderDigifiLearningSideEffects(
     })
 }
 
+/** Create user tag presets for custom-column tags, the same way + Tag saves a label. Does not block import. */
+async function ensureCustomColumnTagPresets(
+  userId: string,
+  columns: BuilderColumn[],
+  rows: BuilderRow[]
+): Promise<void> {
+  const tags = userTagPresetsToCreate(customColumnTagsOnRows(columns, rows))
+  for (const tag of tags) {
+    try {
+      const { error } = await (supabase as any).from('user_tag_presets').insert({
+        user_id: userId,
+        tag,
+      })
+      if (error && error.code !== '23505') {
+        console.warn('[logbook-builder] could not save tag', tag, error.message)
+      }
+    } catch (error) {
+      console.warn('[logbook-builder] could not save tag', tag, error)
+    }
+  }
+}
+
 export async function runValidateAndImport(
   grid: ReturnType<typeof useLogbookBuilderGrid>
 ): Promise<ValidateAndImportResult> {
@@ -839,6 +877,7 @@ export async function runValidateAndImport(
   }
 
   if (result.imported > 0) {
+    await ensureCustomColumnTagPresets(userId, grid.columns.value, grid.rows.value)
     runLogbookBuilderDigifiLearningSideEffects(grid, userId)
     runLogbookBuilderImportBatchSideEffects(userId, queuedEntryIds, result.imported)
     grid.clearGrid()

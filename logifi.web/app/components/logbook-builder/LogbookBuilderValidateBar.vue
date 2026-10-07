@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { inject, ref, computed } from 'vue'
+import { inject, ref, computed, unref } from 'vue'
+import { useRoute } from 'vue-router'
+import { formatBuilderValidationErrors } from '~/utils/builderValidationMessages'
+import { useLogbookBuilderTemplateMatch } from '~/composables/useLogbookBuilderTemplateMatch'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import type { ValidateOnlyResult, ColumnTotalRow } from '~/composables/useLogbookBuilderImport'
 import { formatColumnTotal } from '~/composables/useLogbookBuilderImport'
@@ -9,12 +12,13 @@ import { useAuth } from '~/composables/useAuth'
 import { supabase } from '~/lib/supabase'
 import { gridToEntries } from '~/composables/useLogbookBuilderImport'
 import { triggerLogTenHandoff, copyToClipboard, buildLogTenPackage } from '~/utils/logtenHandoff'
-import { unref } from 'vue'
+import { digifiImportSucceeded } from '~/utils/digifiNextPage'
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
 if (!grid) throw new Error('LogbookBuilderValidateBar must be used inside a page that provides logbookBuilderGrid')
 
 const preferredSink = inject<Ref<'logten' | 'logifi' | null>>('digifiPreferredSink', ref(null))
+const startDigifiNextPage = inject<(() => void | Promise<void>) | null>('startDigifiNextPage', null)
 
 const route = useRoute()
 const isDigifiMode = computed(() => route.query.digifi === 'open')
@@ -23,8 +27,10 @@ const { isDark } = useTheme()
 const { showToast } = useToast()
 const { isAuthenticated, user } = useAuth()
 
+const { showSaveTemplate } = useLogbookBuilderTemplateMatch()
+
 const validating = ref(false)
-const errorMessage = ref<string | null>(null)
+const errorLines = ref<string[]>([])
 const showConfirm = ref(false)
 const confirmResult = ref<{ validRowCount: number; columnTotals: ColumnTotalRow[] } | null>(null)
 const importing = ref(false)
@@ -34,20 +40,20 @@ const logTenFallbackUrl = ref<string>('')
 
 async function handleValidate() {
   validating.value = true
-  errorMessage.value = null
+  errorLines.value = []
   showConfirm.value = false
   confirmResult.value = null
   try {
     const { validateOnly } = await import('~/composables/useLogbookBuilderImport')
     const result: ValidateOnlyResult = await validateOnly(grid!)
     if (!result.valid && result.errors.length > 0) {
-      errorMessage.value = result.errors.slice(0, 5).map((e) => (e.rowIndex >= 0 ? `Row ${e.rowIndex}: ` : '') + e.message).join('; ')
+      errorLines.value = formatBuilderValidationErrors(result.errors)
     } else if (result.valid && result.validRowCount != null && result.columnTotals != null) {
       confirmResult.value = { validRowCount: result.validRowCount, columnTotals: result.columnTotals }
       showConfirm.value = true
     }
   } catch (e: any) {
-    errorMessage.value = e?.message ?? 'Validation failed'
+    errorLines.value = [e?.message ?? 'Validation failed']
   } finally {
     validating.value = false
   }
@@ -61,12 +67,12 @@ function handleBack() {
 async function handleImport() {
   if (!confirmResult.value) return
   importing.value = true
-  errorMessage.value = null
+  errorLines.value = []
   try {
     const { runValidateAndImport } = await import('~/composables/useLogbookBuilderImport')
     const result = await runValidateAndImport(grid!)
     if (result.errors.length > 0) {
-      errorMessage.value = result.errors.slice(0, 5).map((e) => (e.rowIndex >= 0 ? `Row ${e.rowIndex}: ` : '') + e.message).join('; ')
+      errorLines.value = formatBuilderValidationErrors(result.errors)
       showConfirm.value = false
       confirmResult.value = null
     } else if (result.imported > 0) {
@@ -76,7 +82,37 @@ async function handleImport() {
       await navigateTo('/dashboard')
     }
   } catch (e: any) {
-    errorMessage.value = e?.message ?? 'Import failed'
+    errorLines.value = [e?.message ?? 'Import failed']
+  } finally {
+    importing.value = false
+  }
+}
+
+async function handleImportAndScanNext() {
+  if (!confirmResult.value || importing.value) return
+  importing.value = true
+  errorLines.value = []
+  try {
+    const { runValidateAndImport } = await import('~/composables/useLogbookBuilderImport')
+    const result = await runValidateAndImport(grid!)
+    if (!digifiImportSucceeded(result)) {
+      if (result.errors.length > 0) {
+        errorLines.value = formatBuilderValidationErrors(result.errors)
+        showConfirm.value = false
+        confirmResult.value = null
+      }
+      return
+    }
+    showConfirm.value = false
+    confirmResult.value = null
+    showToast('Imported. Scan the next page.', { type: 'success' })
+    try {
+      await startDigifiNextPage?.()
+    } catch (nextError: any) {
+      errorLines.value = [nextError?.message ?? 'Could not open the next scan.']
+    }
+  } catch (e: any) {
+    errorLines.value = [e?.message ?? 'Import failed']
   } finally {
     importing.value = false
   }
@@ -85,7 +121,7 @@ async function handleImport() {
 async function handleSendToLogTen() {
   if (!confirmResult.value) return
   sendingToLogTen.value = true
-  errorMessage.value = null
+  errorLines.value = []
 
   try {
     const entries = gridToEntries({
@@ -133,7 +169,7 @@ async function handleSendToLogTen() {
 
     showToast('Opened LogTen Pro with your entries', { type: 'success' })
   } catch (e: any) {
-    errorMessage.value = e?.message ?? 'Failed to send to LogTen'
+    errorLines.value = [e?.message ?? 'Failed to send to LogTen']
   } finally {
     sendingToLogTen.value = false
   }
@@ -194,9 +230,23 @@ function downloadLogTenPackage() {
         >
           {{ validating ? 'Validating…' : 'Validate' }}
         </button>
-        <p v-if="errorMessage" class="text-sm text-red-600 dark:text-red-400">
-          {{ errorMessage }}
-        </p>
+        <button
+          v-if="showSaveTemplate"
+          type="button"
+          class="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+          @click="grid.openSaveTemplate.value?.()"
+        >
+          Save Template
+        </button>
+        <div v-if="errorLines.length" class="min-w-0 flex-1 space-y-1" role="alert">
+          <p
+            v-for="(line, index) in errorLines"
+            :key="index"
+            class="text-sm text-red-600 dark:text-red-400"
+          >
+            {{ line }}
+          </p>
+        </div>
       </div>
     </template>
     <template v-else>
@@ -297,6 +347,18 @@ function downloadLogTenPackage() {
             >
               Or send to LogTen Pro
             </button>
+            <button
+              type="button"
+              data-testid="import-and-scan-next"
+              class="rounded px-4 py-2 text-sm font-medium disabled:opacity-50 shadow-sm border"
+              :class="isDark
+                ? 'border-blue-500/40 bg-blue-600/20 text-blue-300 hover:bg-blue-600/30'
+                : 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'"
+              :disabled="importing"
+              @click="handleImportAndScanNext"
+            >
+              {{ importing ? 'Importing…' : 'Import and Scan Next Page' }}
+            </button>
           </div>
         </div>
 
@@ -319,6 +381,15 @@ function downloadLogTenPackage() {
           </button>
           <button
             type="button"
+            data-testid="import-and-scan-next"
+            class="rounded border border-green-700 bg-white px-4 py-2 text-sm font-medium text-green-800 hover:bg-green-50 disabled:opacity-50 dark:border-green-500/40 dark:bg-green-500/10 dark:text-green-200 dark:hover:bg-green-500/20"
+            :disabled="importing"
+            @click="handleImportAndScanNext"
+          >
+            {{ importing ? 'Importing…' : 'Import and Scan Next Page' }}
+          </button>
+          <button
+            type="button"
             class="rounded border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/20"
             :disabled="sendingToLogTen"
             @click="handleSendToLogTen"
@@ -326,9 +397,15 @@ function downloadLogTenPackage() {
             {{ sendingToLogTen ? 'Sending…' : 'Send to LogTen Pro' }}
           </button>
         </div>
-        <p v-if="errorMessage" class="text-sm text-red-600 dark:text-red-400">
-          {{ errorMessage }}
-        </p>
+        <div v-if="errorLines.length" class="space-y-1" role="alert">
+          <p
+            v-for="(line, index) in errorLines"
+            :key="index"
+            class="text-sm text-red-600 dark:text-red-400"
+          >
+            {{ line }}
+          </p>
+        </div>
       </div>
     </template>
 

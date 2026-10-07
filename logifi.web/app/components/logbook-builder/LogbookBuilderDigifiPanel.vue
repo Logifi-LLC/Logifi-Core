@@ -6,6 +6,7 @@ import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { useAuth } from '~/composables/useAuth'
 import { useTheme } from '~/composables/useTheme'
 import type { DigifiCapturePhoto, DigifiPageSide } from '~/utils/digifiTypes'
+import { planDigifiNextCapture } from '~/utils/digifiNextPage'
 
 const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
@@ -18,6 +19,8 @@ interface ScanQueueItem {
 const {
   scanning,
   error,
+  failedPageSide,
+  clearScanPageError,
   lastFilledCount,
   lastScanSummary,
   scanRowWarning,
@@ -55,6 +58,7 @@ let drainChain: Promise<void> = Promise.resolve()
 const {
   creatingSession,
   sessionError,
+  sessionId,
   qrDataUrl,
   mobileUrl,
   photos,
@@ -94,10 +98,20 @@ function inputRefFor(pageSide: DigifiPageSide) {
   return pageSide === 'left' ? leftInputRef : rightInputRef
 }
 
+function pageReadFailed(pageSide: DigifiPageSide): boolean {
+  return failedPageSide.value === pageSide
+}
+
 function canUseDropZone(pageSide: DigifiPageSide): boolean {
+  if (pageReadFailed(pageSide) && !scanning.value) return true
   if (!canScan.value || scanning.value) return false
   if (pageSide === 'right') return canScanRight.value
   return true
+}
+
+function retakePage(pageSide: DigifiPageSide) {
+  clearScanPageError(pageSide)
+  inputRefFor(pageSide).value?.click()
 }
 
 function setZonePreview(pageSide: DigifiPageSide, url: string | null, isObjectUrl = false) {
@@ -127,7 +141,9 @@ function updateQueueStatus() {
     layout.value === 'two-page' && !leftPageScanned.value && hasQueuedRight && !hasQueuedLeft
 
   if (rightBlocked) {
-    queueStatus.value = 'Queued right page — waiting for left to finish'
+    queueStatus.value = pageReadFailed('left')
+      ? 'Left page couldn’t be read — retake it before the right page scans'
+      : 'Queued right page — waiting for left to finish'
     return
   }
 
@@ -347,6 +363,44 @@ async function onDrop(pageSide: DigifiPageSide, e: DragEvent) {
   await processFile(file, pageSide)
 }
 
+async function prepareForNextPage() {
+  successMessage.value = null
+  scanningSide.value = null
+  queueStatus.value = null
+  scanQueue.value = []
+  dragOverSide.value = null
+  clearScanPageError()
+  scanRowWarning.value = null
+  for (const side of ['left', 'right'] as DigifiPageSide[]) {
+    setZonePreview(side, null)
+  }
+  for (const photo of photos.value) {
+    knownPhotoIds.value.add(photo.id)
+    processedPhotoIds.value.add(photo.id)
+  }
+
+  let qrSessionActive = false
+  if (sessionId.value) {
+    await refreshSessionStatus()
+    qrSessionActive = isSessionActive.value
+  }
+  const plan = planDigifiNextCapture({
+    method: sessionId.value ? 'qr' : 'file',
+    qrSessionActive,
+  })
+  if (plan.reuseQrSession) {
+    sessionError.value = null
+    companionMessage.value = 'Phone still connected.'
+    return
+  }
+  if (plan.qrExpired) {
+    companionMessage.value = null
+    sessionError.value = 'Phone link expired.'
+    return
+  }
+  companionMessage.value = null
+}
+
 async function createPhoneSession() {
   companionMessage.value = null
   knownPhotoIds.value = new Set()
@@ -401,6 +455,7 @@ async function useSelectedCapture(pageSide: DigifiPageSide) {
 }
 
 function dropZoneClasses(pageSide: DigifiPageSide): string[] {
+  const failed = pageReadFailed(pageSide)
   const enabled = canUseDropZone(pageSide)
   const active = dragOverSide.value === pageSide
   const done = pageSide === 'left' && leftPageScanned.value
@@ -410,6 +465,15 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
     'relative flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-4 py-8 text-center transition-all min-h-[180px] overflow-hidden',
     enabled ? 'cursor-pointer' : 'cursor-not-allowed opacity-50',
   ]
+
+  if (failed) {
+    base.push(
+      isDark.value
+        ? 'border-red-500 bg-red-950/40 ring-2 ring-red-500'
+        : 'border-red-500 bg-red-50 ring-2 ring-red-400'
+    )
+    return base
+  }
 
   if (active && enabled) {
     base.push(
@@ -437,16 +501,20 @@ function dropZoneClasses(pageSide: DigifiPageSide): string[] {
 }
 
 function dropZoneHelperText(pageSide: DigifiPageSide): string {
+  if (pageReadFailed(pageSide)) return "Couldn't read this page"
   if (scanningSide.value === pageSide) return 'Scanning…'
   if (zonePreviewUrl.value[pageSide] && pageSide === 'left' && leftPageScanned.value) return 'Done — review the grid'
   if (zonePreviewUrl.value[pageSide]) return 'Photo received'
   if (!isAuthenticated.value) return 'Sign in to upload'
   if (!canScan.value) return 'Configure columns first'
   if (pageSide === 'right' && layout.value === 'two-page' && !leftPageScanned.value) {
+    if (pageReadFailed('left')) return 'Left page needs a retake'
     return 'Scan the left page first'
   }
   return 'Drag & drop a photo here, or click to browse'
 }
+
+defineExpose({ prepareForNextPage })
 
 onUnmounted(() => {
   for (const side of ['left', 'right'] as DigifiPageSide[]) {
@@ -566,10 +634,18 @@ onUnmounted(() => {
           </p>
           <p
             class="text-xs max-w-[220px] drop-shadow-sm"
-            :class="zonePreviewUrl.left ? (isDark ? 'text-gray-200' : 'text-gray-700') : (isDark ? 'text-gray-400' : 'text-gray-600')"
+            :class="pageReadFailed('left') ? 'text-red-700 dark:text-red-200' : zonePreviewUrl.left ? (isDark ? 'text-gray-200' : 'text-gray-700') : (isDark ? 'text-gray-400' : 'text-gray-600')"
           >
             {{ dropZoneHelperText('left') }}
           </p>
+          <button
+            v-if="pageReadFailed('left')"
+            type="button"
+            class="mt-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700"
+            @click.stop="retakePage('left')"
+          >
+            Retake
+          </button>
         </div>
       </div>
 
@@ -621,10 +697,18 @@ onUnmounted(() => {
           </p>
           <p
             class="text-xs max-w-[220px] drop-shadow-sm"
-            :class="zonePreviewUrl.right ? (isDark ? 'text-gray-200' : 'text-gray-700') : (isDark ? 'text-gray-400' : 'text-gray-600')"
+            :class="pageReadFailed('right') ? 'text-red-700 dark:text-red-200' : zonePreviewUrl.right ? (isDark ? 'text-gray-200' : 'text-gray-700') : (isDark ? 'text-gray-400' : 'text-gray-600')"
           >
             {{ dropZoneHelperText('right') }}
           </p>
+          <button
+            v-if="pageReadFailed('right')"
+            type="button"
+            class="mt-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700"
+            @click.stop="retakePage('right')"
+          >
+            Retake
+          </button>
         </div>
       </div>
     </div>
@@ -661,7 +745,7 @@ onUnmounted(() => {
       </div>
 
       <p v-if="sessionError" class="mt-2 text-xs text-red-500 dark:text-red-400">{{ sessionError }}</p>
-      <p v-else-if="companionMessage" class="mt-2 text-xs text-green-600 dark:text-green-400">{{ companionMessage }}</p>
+      <p v-else-if="companionMessage" data-testid="digifi-companion-message" class="mt-2 text-xs text-green-600 dark:text-green-400">{{ companionMessage }}</p>
 
       <div v-if="qrDataUrl" class="mt-4 grid gap-4 sm:grid-cols-[220px_1fr]">
         <div class="rounded-xl p-2 border inline-flex items-center justify-center" :class="isDark ? 'border-white/10 bg-white/5' : 'border-gray-200 bg-white'">

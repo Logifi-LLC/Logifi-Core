@@ -1,4 +1,5 @@
 import { parseImportDuration } from '../../shared/logbookDataBridge/formatters'
+import type { BuilderColumnKind } from './logbookBuilderTypes'
 import type { LogbookColumnKey } from './logbookTypes'
 
 /** Ignore tenth-hour rounding. A gap at or under this is not a mismatch. */
@@ -11,6 +12,7 @@ export interface DigifiRowTimeColumn {
   fieldKey: LogbookColumnKey | null
   label?: string
   categoryClassValue?: string | null
+  columnKind?: BuilderColumnKind | null
 }
 
 export interface DigifiRowTimeMismatch {
@@ -101,15 +103,62 @@ export function findDigifiRowTimeMismatches(
     }
   }
 
-  if (greater.length === 0 && differs.length === 0) return []
+  const dayCheck = dayNightSumMismatch(cells, columns, total, totalRaw)
+  if (greater.length === 0 && differs.length === 0 && !dayCheck) return []
 
-  const message = formatMismatchMessage(greater, differs, totalRaw)
+  const message = [formatMismatchMessage(greater, differs, totalRaw), dayCheck?.message]
+    .filter(Boolean)
+    .join('. ')
   const columnIds = [
-    totalColumn.id,
+    ...(greater.length > 0 || differs.length > 0 || dayCheck ? [totalColumn.id] : []),
     ...greater.map((item) => item.columnId),
     ...differs.map((item) => item.columnId),
+    ...(dayCheck?.columnIds ?? []),
   ]
-  return columnIds.map((columnId) => ({ columnId, message }))
+  const uniqueIds = [...new Set(columnIds)]
+  return uniqueIds.map((columnId) => ({ columnId, message }))
+}
+
+/**
+ * Advisory only. Day + Night should equal Total when both are filled.
+ * A blank Night is not a mismatch — import derives Night = Total − Day.
+ * Day greater than Total (Night still blank) is flagged because that night would be negative.
+ */
+function dayNightSumMismatch(
+  cells: Record<string, string>,
+  columns: readonly DigifiRowTimeColumn[],
+  total: number,
+  totalRaw: string
+): { message: string; columnIds: string[] } | null {
+  const dayColumn = columns.find((column) => column.columnKind === 'day')
+  if (!dayColumn) return null
+  const dayRaw = (cells[dayColumn.id] ?? '').trim()
+  if (!dayRaw) return null
+  const day = parseImportDuration(dayRaw)
+  if (day == null) return null
+
+  const nightColumn = columns.find((column) => column.fieldKey === 'night')
+  const nightRaw = nightColumn ? (cells[nightColumn.id] ?? '').trim() : ''
+  const dayLabel = dayColumn.label?.trim() || 'Day'
+  const nightLabel = nightColumn?.label?.trim() || 'Night'
+
+  if (!nightRaw) {
+    if (day > total + DIGIFI_ROW_TIME_MISMATCH_TOLERANCE) {
+      return {
+        message: `${dayLabel} ${dayRaw} is greater than Total ${totalRaw}`,
+        columnIds: [dayColumn.id],
+      }
+    }
+    return null
+  }
+
+  const night = parseImportDuration(nightRaw)
+  if (night == null) return null
+  if (Math.abs(day + night - total) <= DIGIFI_ROW_TIME_MISMATCH_TOLERANCE) return null
+  return {
+    message: `${dayLabel} ${dayRaw} + ${nightLabel} ${nightRaw} doesn't match Total ${totalRaw}`,
+    columnIds: [dayColumn.id, ...(nightColumn ? [nightColumn.id] : [])],
+  }
 }
 
 export function digifiRowTimeMismatchMap(

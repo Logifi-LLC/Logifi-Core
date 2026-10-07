@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import type { Ref } from 'vue'
-import type { BuilderColumn, BuilderRow, BuilderLayout, BuilderTemplateColumn } from '~/utils/logbookBuilderTypes'
+import type { BuilderColumn, BuilderColumnKind, BuilderRow, BuilderLayout, BuilderTemplateColumn } from '~/utils/logbookBuilderTypes'
 import { supabase } from '~/lib/supabase'
 import {
   DEFAULT_BUILDER_ROW_COUNT,
@@ -13,6 +13,7 @@ import {
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
 import type { DigifiPageSide, DigifiScanCellMeta, DigifiScanRow, DigifiScanStrategy } from '~/utils/digifiTypes'
 import { createBuilderSpreadId } from '~/utils/logbookBuilderDraft'
+import { nextDigifiPageSettings } from '~/utils/digifiNextPage'
 
 const FIELD_LABELS: Record<LogbookColumnKey, string> = {
   date: 'Date',
@@ -128,6 +129,23 @@ export function useLogbookBuilderGrid() {
 
   /** Index of the row that currently has focus in the grid (for highlighting). */
   const activeRowIndex: Ref<number | null> = ref(null)
+
+  /** Template currently applied to this grid. Signature is the column layout at apply time. */
+  const activeTemplateId: Ref<string | null> = ref(null)
+  const activeTemplateSignature: Ref<string | null> = ref(null)
+  /** Bumped when templates are saved or deleted so match checks refetch. */
+  const templateCatalogVersion: Ref<number> = ref(0)
+  /** Registered by the toolbar so the Validate bar can open the same save dialog. */
+  const openSaveTemplate: Ref<(() => void) | null> = ref(null)
+
+  function noteTemplateApplied(id: string, signature: string) {
+    activeTemplateId.value = id
+    activeTemplateSignature.value = signature
+  }
+
+  function bumpTemplateCatalog() {
+    templateCatalogVersion.value += 1
+  }
 
   /** After a left-page scan in single layout, right page rows start at this index. */
   const singleLayoutRightStartRow: Ref<number> = ref(0)
@@ -250,13 +268,20 @@ export function useLogbookBuilderGrid() {
     setRowCount(rows.value.length + count)
   }
 
-  function addColumn(fieldKey: LogbookColumnKey | null = null) {
-    const label = fieldKey ? FIELD_LABELS[fieldKey] : 'Notes'
+  function addColumn(
+    fieldKey: LogbookColumnKey | null = null,
+    extras?: { columnKind?: 'day' | 'custom'; label?: string }
+  ) {
+    const columnKind = extras?.columnKind
+    const label =
+      extras?.label?.trim() ||
+      (columnKind === 'day' ? 'Day' : fieldKey ? FIELD_LABELS[fieldKey] : 'Notes')
     const newCol = createBuilderColumn({
-      fieldKey,
+      fieldKey: columnKind ? null : fieldKey,
       label,
       order: columns.value.length,
       width: DEFAULT_COLUMN_WIDTH,
+      columnKind,
     })
     columns.value.push(newCol)
     for (const row of rows.value) {
@@ -271,14 +296,20 @@ export function useLogbookBuilderGrid() {
     }
   }
 
-  function updateColumn(colId: string, updates: Partial<Pick<BuilderColumn, 'fieldKey' | 'label' | 'order' | 'width' | 'categoryClassValue'>>) {
+  function updateColumn(
+    colId: string,
+    updates: Partial<Pick<BuilderColumn, 'fieldKey' | 'label' | 'order' | 'width' | 'categoryClassValue'>> & {
+      columnKind?: BuilderColumnKind | null
+    }
+  ) {
     const col = columns.value.find((c) => c.id === colId)
     if (!col) return
     if (updates.fieldKey !== undefined) col.fieldKey = updates.fieldKey
     if (updates.label !== undefined) col.label = updates.label
     if (updates.order !== undefined) col.order = updates.order
     if (updates.width !== undefined) col.width = updates.width
-    if (updates.categoryClassValue !== undefined) col.categoryClassValue = updates.categoryClassValue
+    if ('categoryClassValue' in updates) col.categoryClassValue = updates.categoryClassValue
+    if ('columnKind' in updates) col.columnKind = updates.columnKind ?? undefined
   }
 
   function setColumnWidth(colId: string, widthPx: number) {
@@ -299,7 +330,12 @@ export function useLogbookBuilderGrid() {
   function loadTemplate(template: { columns: BuilderTemplateColumn[]; layout: BuilderLayout; default_row_count?: number; tags_column_width?: number; default_import_role?: string; two_page_split_index?: number }) {
     const cols = template.columns
       .sort((a, b) => a.order - b.order)
-      .map((c) => createBuilderColumn({ ...c, width: c.width ?? DEFAULT_COLUMN_WIDTH, categoryClassValue: c.categoryClassValue }))
+      .map((c) => createBuilderColumn({
+        ...c,
+        width: c.width ?? DEFAULT_COLUMN_WIDTH,
+        categoryClassValue: c.categoryClassValue,
+        columnKind: c.columnKind,
+      }))
     columns.value = cols
     layout.value = template.layout
     const n = template.default_row_count ?? DEFAULT_BUILDER_ROW_COUNT
@@ -335,6 +371,36 @@ export function useLogbookBuilderGrid() {
     digifiMobilePhase.value = null
     regenerateSpreadId()
     clearUndoHistory()
+  }
+
+  /**
+   * Empty the grid for another Digifi page. Column template, locked year,
+   * and single/two-page layout stay. A resolved date on the imported page
+   * does not change defaultYear.
+   */
+  function beginNextDigifiPage() {
+    const next = nextDigifiPageSettings({
+      columns: columns.value.map((column) => ({
+        id: column.id,
+        label: column.label,
+        fieldKey: column.fieldKey,
+        order: column.order,
+        width: column.width,
+        categoryClassValue: column.categoryClassValue,
+        columnKind: column.columnKind,
+      })),
+      layout: layout.value,
+      defaultYear: defaultYear.value,
+      twoPageSplitIndex: twoPageSplitIndex.value,
+      rowCount: rowCount.value,
+    })
+    clearGrid()
+    columns.value = next.columns.map((column) => ({ ...column }))
+    layout.value = next.layout
+    defaultYear.value = next.defaultYear
+    twoPageSplitIndex.value = next.twoPageSplitIndex
+    if (rowCount.value !== next.rowCount) setRowCount(next.rowCount)
+    return next
   }
 
   function columnIdsForPageSide(pageSide: DigifiPageSide): string[] {
@@ -510,7 +576,14 @@ export function useLogbookBuilderGrid() {
     updateColumn,
     reorderColumns,
     loadTemplate,
+    activeTemplateId,
+    activeTemplateSignature,
+    templateCatalogVersion,
+    openSaveTemplate,
+    noteTemplateApplied,
+    bumpTemplateCatalog,
     clearGrid,
+    beginNextDigifiPage,
     deleteTemplate,
     setActiveRowIndex,
     applyScanResults,

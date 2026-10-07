@@ -3,7 +3,11 @@ import { computed, inject, onMounted, ref, watch } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { useAuth } from '~/composables/useAuth'
 import { supabase } from '~/lib/supabase'
-import { persistLastTemplateId } from '~/composables/useLogbookBuilderLastTemplate'
+import {
+  noteGridTemplateApplied,
+  persistLastTemplateId,
+} from '~/composables/useLogbookBuilderLastTemplate'
+import { useLogbookBuilderTemplateMatch } from '~/composables/useLogbookBuilderTemplateMatch'
 import { readLastTemplateId } from '~/utils/logbookBuilderDraft'
 import {
   DIGIFI_SCAN_FIELD_CHECKLIST,
@@ -82,6 +86,11 @@ const props = defineProps<{
   templatePreloaded?: boolean
 }>()
 
+const { loadTemplateProminent } = useLogbookBuilderTemplateMatch()
+
+const leftChipError = computed(() => props.leftChipLabel === 'Retake')
+const rightChipError = computed(() => props.rightChipLabel === 'Retake')
+
 const leftChipActive = computed(() => {
   const label = props.leftChipLabel ?? ''
   return label === 'Scanning…' || label === 'Ready' || label === 'Tap to photo'
@@ -97,12 +106,12 @@ const rightZoneBusy = computed(() => props.rightChipLabel === 'Scanning…')
 
 const leftZoneTappable = computed(() => {
   const label = props.leftChipLabel ?? ''
-  return label === 'Tap to photo' || label === 'Ready'
+  return label === 'Tap to photo' || label === 'Ready' || label === 'Retake'
 })
 
 const rightZoneTappable = computed(() => {
   const label = props.rightChipLabel ?? ''
-  return label === 'Tap to photo' || label === 'Ready'
+  return label === 'Tap to photo' || label === 'Ready' || label === 'Retake'
 })
 
 const captureButtonDisabled = computed(() => {
@@ -126,13 +135,12 @@ const emit = defineEmits<{
 
 const templates = ref<{ id: string; name: string; layout: string; default_row_count: number; columns: BuilderTemplateColumn[]; tags_column_width?: number; default_import_role?: string; two_page_split_index?: number }[]>([])
 const selectedTemplateId = ref('')
-const templateName = ref('')
 const templateError = ref<string | null>(null)
-const saving = ref(false)
 const columnsEditorExpanded = ref(true)
 /** Avoid re-collapsing after the pilot expands the column editor (e.g. when templates fetch completes). */
 let didAutoCollapseColumnsForTemplate = false
-const addFieldKey = ref<LogbookColumnKey | ''>('')
+const addFieldKey = ref<string>('')
+const customColumnTitle = ref('')
 
 const selectedFieldKeys = computed(() => {
   return new Set(
@@ -172,9 +180,29 @@ function addField(fieldKey: LogbookColumnKey) {
   columnsEditorExpanded.value = true
 }
 
+function addDayColumn() {
+  grid.addColumn(null, { columnKind: 'day', label: 'Day' })
+  addFieldKey.value = ''
+  columnsEditorExpanded.value = true
+}
+
+function addCustomColumn() {
+  const title = customColumnTitle.value.trim()
+  if (!title) return
+  grid.addColumn(null, { columnKind: 'custom', label: title })
+  customColumnTitle.value = ''
+  addFieldKey.value = ''
+  columnsEditorExpanded.value = true
+}
+
 function onAddFieldChange() {
-  if (!addFieldKey.value) return
-  addField(addFieldKey.value)
+  const value = addFieldKey.value
+  if (!value) return
+  if (value === '__day') {
+    addDayColumn()
+    return
+  }
+  addField(value as LogbookColumnKey)
 }
 
 function removeField(columnId: string) {
@@ -224,7 +252,8 @@ function applyTemplate(template: (typeof templates.value)[0]) {
     default_import_role: template.default_import_role,
     two_page_split_index: template.two_page_split_index,
   })
-  persistLastTemplateId(template.id)
+  persistLastTemplateId(template.id, user.value?.id)
+  noteGridTemplateApplied(grid, template.id)
   selectedTemplateId.value = template.id
   columnsEditorExpanded.value = false
 }
@@ -237,7 +266,7 @@ function onTemplateSelectChange(e: Event) {
 }
 
 function syncSelectedTemplateFromStorage() {
-  const id = readLastTemplateId()
+  const id = readLastTemplateId(user.value?.id)
   if (id && templates.value.some((t) => t.id === id)) {
     selectedTemplateId.value = id
   }
@@ -245,42 +274,10 @@ function syncSelectedTemplateFromStorage() {
 
 function collapseColumnsIfTemplateApplied() {
   if (didAutoCollapseColumnsForTemplate) return
-  if (readLastTemplateId() || props.templatePreloaded) {
+  if (readLastTemplateId(user.value?.id) || props.templatePreloaded) {
     columnsEditorExpanded.value = false
     didAutoCollapseColumnsForTemplate = true
   }
-}
-
-async function saveTemplate() {
-  const name = templateName.value.trim()
-  if (!name || !user.value) return
-  saving.value = true
-  templateError.value = null
-  const payload = {
-    user_id: user.value.id,
-    name,
-    layout: grid.layout.value,
-    default_row_count: grid.rowCount.value,
-    tags_column_width: grid.tagsColumnWidth.value,
-    default_import_role: grid.defaultImportRole.value || null,
-    two_page_split_index: grid.layout.value === 'two-page' ? grid.effectiveSplitIndex.value : null,
-    columns: grid.visibleColumns.value.map((column) => ({
-      id: column.id,
-      fieldKey: column.fieldKey,
-      label: column.label,
-      order: column.order,
-      width: column.width,
-      categoryClassValue: column.categoryClassValue,
-    })),
-  }
-  const { error } = await (supabase as any).from('logbook_builder_templates').insert(payload)
-  saving.value = false
-  if (error) {
-    templateError.value = error.message
-    return
-  }
-  templateName.value = ''
-  await loadTemplates()
 }
 
 onMounted(() => {
@@ -312,19 +309,32 @@ watch(
 <template>
   <div class="space-y-5">
     <section class="space-y-2">
-      <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Template</p>
+      <p
+        :class="[
+          'text-xs font-semibold uppercase tracking-wide',
+          loadTemplateProminent
+            ? (isDarkMode ? 'text-blue-300' : 'text-blue-700')
+            : (isDarkMode ? 'text-gray-400' : 'text-gray-500'),
+        ]"
+      >
+        {{ loadTemplateProminent ? 'Load template' : 'Template' }}
+      </p>
       <div v-if="templates.length">
-        <label class="sr-only" for="digifi-template-select">Saved layout</label>
+        <label class="sr-only" for="digifi-template-select">Load template</label>
         <select
           id="digifi-template-select"
           v-model="selectedTemplateId"
           class="w-full rounded-2xl border px-4 py-3 text-sm font-semibold"
           :class="
-            isDarkMode
-              ? 'border-white/10 bg-white/5 text-gray-100'
-              : 'border-gray-200 bg-white text-gray-900 shadow-sm'
+            loadTemplateProminent
+              ? (isDarkMode
+                ? 'border-blue-400 bg-blue-600 text-white shadow-sm ring-2 ring-blue-300'
+                : 'border-blue-600 bg-blue-600 text-white shadow-sm ring-2 ring-blue-300')
+              : (isDarkMode
+                ? 'border-white/10 bg-white/5 text-gray-100'
+                : 'border-gray-200 bg-white text-gray-900 shadow-sm')
           "
-          aria-label="Saved layout"
+          aria-label="Load template"
           @change="onTemplateSelectChange"
         >
           <option value="">Choose saved layout…</option>
@@ -334,33 +344,6 @@ watch(
         </select>
       </div>
       <p v-else :class="['text-xs', isDarkMode ? 'text-gray-500' : 'text-gray-500']">No saved layouts.</p>
-      <div class="flex gap-2">
-        <input
-          v-model="templateName"
-          type="text"
-          maxlength="40"
-          placeholder="Save as"
-          class="min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm"
-          :class="
-            isDarkMode
-              ? 'border-white/10 bg-white/5 text-gray-100 placeholder:text-gray-500'
-              : 'border-gray-200 bg-white text-gray-900 placeholder:text-gray-400'
-          "
-        >
-        <button
-          type="button"
-          class="rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-40"
-          :class="
-            isDarkMode
-              ? 'border-white/15 text-gray-200'
-              : 'border-gray-300 text-gray-800 hover:bg-gray-50'
-          "
-          :disabled="saving || !templateName.trim()"
-          @click="saveTemplate"
-        >
-          Save
-        </button>
-      </div>
       <p v-if="templateError" :class="['text-xs', isDarkMode ? 'text-rose-300' : 'text-rose-600']">{{ templateError }}</p>
     </section>
 
@@ -566,7 +549,7 @@ watch(
           </li>
         </ol>
 
-        <div v-if="availableFieldsToAdd.length" class="pt-1">
+        <div class="pt-1">
           <label class="sr-only" for="digifi-add-column-field">Add column field</label>
           <select
             id="digifi-add-column-field"
@@ -581,10 +564,36 @@ watch(
             @change="onAddFieldChange"
           >
             <option value="">Add field…</option>
+            <option value="__day">Day</option>
             <option v-for="item in availableFieldsToAdd" :key="item.fieldKey" :value="item.fieldKey">
               {{ item.label }}
             </option>
           </select>
+          <form class="mt-2 flex gap-2" @submit.prevent="addCustomColumn">
+            <input
+              v-model="customColumnTitle"
+              type="text"
+              placeholder="Custom column"
+              aria-label="Custom column title"
+              class="min-w-0 flex-1 rounded-2xl border px-4 py-3 text-sm"
+              :class="
+                isDarkMode
+                  ? 'border-white/10 bg-white/5 text-gray-100'
+                  : 'border-gray-200 bg-white text-gray-900 shadow-sm'
+              "
+            />
+            <button
+              type="submit"
+              class="rounded-2xl border px-3 py-3 text-sm font-semibold"
+              :class="
+                isDarkMode
+                  ? 'border-white/15 text-gray-100'
+                  : 'border-gray-300 text-gray-900 hover:bg-gray-50'
+              "
+            >
+              Add
+            </button>
+          </form>
         </div>
       </template>
     </section>
@@ -604,20 +613,28 @@ watch(
             type="button"
             class="flex min-h-[44px] w-full flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold disabled:cursor-default"
             :class="
-              leftChipActive || twoPageStep === 1
-                ? digifiMobileAccentSelected(isDarkMode)
-                : digifiMobileAccentIdle(isDarkMode)
+              leftChipError
+                ? (isDarkMode
+                  ? 'border-red-400 bg-red-950/50 text-red-100 ring-2 ring-red-500'
+                  : 'border-red-500 bg-red-50 text-red-800 ring-2 ring-red-400')
+                : leftChipActive || twoPageStep === 1
+                  ? digifiMobileAccentSelected(isDarkMode)
+                  : digifiMobileAccentIdle(isDarkMode)
             "
             :disabled="leftZoneBusy || !leftZoneTappable"
             :aria-label="
-              leftZoneBusy
-                ? 'Left page scanning'
-                : leftChipLabel === 'Ready'
-                  ? 'Retake left page photo'
-                  : 'Photograph left page'
+              leftChipError
+                ? 'Retake left page'
+                : leftZoneBusy
+                  ? 'Left page scanning'
+                  : leftChipLabel === 'Ready'
+                    ? 'Retake left page photo'
+                    : 'Photograph left page'
             "
             @click="
-              leftChipLabel === 'Ready' ? emit('retake', 'left') : leftZoneTappable && emit('capture', 'left')
+              leftChipError || leftChipLabel === 'Ready'
+                ? emit('retake', 'left')
+                : leftZoneTappable && emit('capture', 'left')
             "
           >
             <span class="text-[10px] uppercase tracking-wide opacity-80">1 · Left</span>
@@ -629,20 +646,28 @@ watch(
             type="button"
             class="flex min-h-[44px] w-full flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold disabled:cursor-default"
             :class="
-              twoPageStep === 2 || rightChipActive
-                ? digifiMobileAccentSelected(isDarkMode)
-                : digifiMobileAccentIdle(isDarkMode)
+              rightChipError
+                ? (isDarkMode
+                  ? 'border-red-400 bg-red-950/50 text-red-100 ring-2 ring-red-500'
+                  : 'border-red-500 bg-red-50 text-red-800 ring-2 ring-red-400')
+                : twoPageStep === 2 || rightChipActive
+                  ? digifiMobileAccentSelected(isDarkMode)
+                  : digifiMobileAccentIdle(isDarkMode)
             "
             :disabled="rightZoneBusy || !rightZoneTappable"
             :aria-label="
-              rightZoneBusy
-                ? 'Right page scanning'
-                : rightChipLabel === 'Ready'
-                  ? 'Retake right page photo'
-                  : 'Photograph right page'
+              rightChipError
+                ? 'Retake right page'
+                : rightZoneBusy
+                  ? 'Right page scanning'
+                  : rightChipLabel === 'Ready'
+                    ? 'Retake right page photo'
+                    : 'Photograph right page'
             "
             @click="
-              rightChipLabel === 'Ready' ? emit('retake', 'right') : rightZoneTappable && emit('capture', 'right')
+              rightChipError || rightChipLabel === 'Ready'
+                ? emit('retake', 'right')
+                : rightZoneTappable && emit('capture', 'right')
             "
           >
             <span class="text-[10px] uppercase tracking-wide opacity-80">2 · Right</span>

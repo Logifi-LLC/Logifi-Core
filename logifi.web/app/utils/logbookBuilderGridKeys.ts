@@ -8,6 +8,16 @@ export type DeferGridKeydownOptions = {
   pilotHighlightIndex: number
 }
 
+/** Tags editor lives inside the grid; keyboard nav must leave it alone. */
+export function isBuilderTagEditorTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('[data-builder-row-tags]') != null
+}
+
+/** Custom column title lives in the header menu; keyboard nav must leave it alone. */
+export function isBuilderColumnTitleTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('[data-builder-column-title]') != null
+}
+
 /** When true, the grid should not intercept the key — let the cell control handle it. */
 export function shouldDeferGridKeydown(options: DeferGridKeydownOptions): boolean {
   const { fieldKey, key, isSelectFocused, pilotMenuOpen, pilotHighlightIndex } = options
