@@ -3125,15 +3125,13 @@
               </span>
             </div>
             <NuxtLink
-              v-if="!isIos"
-              to="/logbook-builder"
+              :to="startScanningRoute"
               :class="[
-                'flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-quicksand font-medium transition-colors',
-                isDarkMode ? 'border border-gray-600 hover:bg-gray-700 text-gray-200' : 'border border-gray-300 hover:bg-gray-200 text-gray-800'
+                'flex-shrink-0 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3.5 py-2.5 text-sm font-quicksand font-semibold text-white shadow-sm transition-colors hover:bg-blue-700'
               ]"
             >
-              <Icon name="ri:table-line" size="14" />
-              Add Pages
+              <Icon name="ri:scan-line" size="18" />
+              Start Scanning
             </NuxtLink>
             <button
               type="button"
@@ -10264,6 +10262,10 @@ const csvFileInput = ref<HTMLInputElement | null>(null)
 const showForm8710Modal = ref(false)
 const showCurrencyDashboard = ref(false)
 const showDashboardImportModal = ref(false)
+
+const startScanningRoute = computed(() =>
+  isIos.value ? resolveDigifiAppRoute({ isIos: true }) : '/logbook-builder'
+)
 
 function openDigifiFromEmptyState(): void {
   showDashboardImportModal.value = false

@@ -149,7 +149,7 @@
         <section class="mb-10">
           <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">Digifi (paper logbook scanning)</h2>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
-            If you use <strong :class="isFromLanding ? 'text-gray-100' : ''">Digifi</strong> on Add Pages
+            If you use <strong :class="isFromLanding ? 'text-gray-100' : ''">Digifi</strong> on Start Scanning
             (<NuxtLink to="/logbook-builder" class="text-blue-600 hover:underline dark:text-blue-400">/logbook-builder</NuxtLink>),
             you upload photos of your paper logbook. Our server sends those images and extracted text to
             <strong :class="isFromLanding ? 'text-gray-100' : ''">Google Gemini</strong> to transcribe entries into the builder grid.

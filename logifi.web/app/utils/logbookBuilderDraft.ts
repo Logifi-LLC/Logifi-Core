@@ -4,10 +4,16 @@ import type {
   BuilderRow,
   BuilderTemplateColumn,
 } from './logbookBuilderTypes'
-import { ACCOUNT_SCOPED_STORAGE_KEYS, getScopedItem, removeScopedItem, setScopedItem } from './userScopedStorage'
+import {
+  ACCOUNT_SCOPED_STORAGE_KEYS,
+  getScopedItem,
+  migrateGlobalToScoped,
+  removeScopedItem,
+  setScopedItem,
+} from './userScopedStorage'
 
 export const BUILDER_DRAFT_STORAGE_KEY = ACCOUNT_SCOPED_STORAGE_KEYS.BUILDER_DRAFT
-export const BUILDER_LAST_TEMPLATE_STORAGE_KEY = 'logifi-logbook-builder-last-template-id'
+export const BUILDER_LAST_TEMPLATE_STORAGE_KEY = ACCOUNT_SCOPED_STORAGE_KEYS.BUILDER_LAST_TEMPLATE
 
 export function createBuilderSpreadId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -83,23 +89,55 @@ export function clearDraftStorage(userId?: string): void {
   } catch (_) {}
 }
 
-export function readLastTemplateId(): string | null {
+/**
+ * Last-used Digifi template, per user on this device.
+ * Web and the Capacitor app both persist this in localStorage (WKWebView on iOS).
+ * Older builds stored one global id; the first read for a user copies it into their key.
+ */
+export function readLastTemplateId(userId?: string | null): string | null {
   try {
+    if (userId) {
+      migrateGlobalToScoped(BUILDER_LAST_TEMPLATE_STORAGE_KEY, userId, false)
+      return getScopedItem(BUILDER_LAST_TEMPLATE_STORAGE_KEY, userId)
+    }
     return localStorage.getItem(BUILDER_LAST_TEMPLATE_STORAGE_KEY)
   } catch {
     return null
   }
 }
 
-export function writeLastTemplateId(id: string): void {
+export function writeLastTemplateId(id: string, userId?: string | null): void {
   try {
+    if (userId) {
+      setScopedItem(BUILDER_LAST_TEMPLATE_STORAGE_KEY, userId, id)
+      if (localStorage.getItem(BUILDER_LAST_TEMPLATE_STORAGE_KEY) === id) {
+        localStorage.removeItem(BUILDER_LAST_TEMPLATE_STORAGE_KEY)
+      }
+      return
+    }
     localStorage.setItem(BUILDER_LAST_TEMPLATE_STORAGE_KEY, id)
   } catch (_) {}
 }
 
-export function clearLastTemplateId(): void {
+/**
+ * Forget a template id that is gone for this user.
+ * A network/auth error must not call this — that was wiping the last-used id.
+ * The legacy global key is removed only when it is the same id.
+ */
+export function clearLastTemplateId(userId?: string | null, id?: string): void {
   try {
-    localStorage.removeItem(BUILDER_LAST_TEMPLATE_STORAGE_KEY)
+    if (userId) {
+      const scoped = getScopedItem(BUILDER_LAST_TEMPLATE_STORAGE_KEY, userId)
+      if (!id || scoped === id) {
+        removeScopedItem(BUILDER_LAST_TEMPLATE_STORAGE_KEY, userId)
+      }
+    } else if (!id) {
+      localStorage.removeItem(BUILDER_LAST_TEMPLATE_STORAGE_KEY)
+      return
+    }
+    if (id && localStorage.getItem(BUILDER_LAST_TEMPLATE_STORAGE_KEY) === id) {
+      localStorage.removeItem(BUILDER_LAST_TEMPLATE_STORAGE_KEY)
+    }
   } catch (_) {}
 }
 

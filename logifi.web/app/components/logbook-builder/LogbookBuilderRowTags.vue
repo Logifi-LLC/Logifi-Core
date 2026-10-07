@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { useTheme } from '~/composables/useTheme'
 
 const props = defineProps<{ modelValue: string[] }>()
@@ -10,6 +10,8 @@ const { isDark } = useTheme()
 const presetTags = ['Checkride', 'Flight Review', 'IPC'] as const
 const showCustomInput = ref(false)
 const customTagInput = ref('')
+const customInputRef = ref<HTMLInputElement | null>(null)
+const ignoreBlur = ref(false)
 
 function toggleTag(tag: string) {
   const current = props.modelValue ?? []
@@ -23,15 +25,49 @@ function addCustomTag() {
   const t = customTagInput.value.trim()
   if (!t) return
   const current = props.modelValue ?? []
-  if (current.includes(t)) return
-  emit('update:modelValue', [...current, t])
+  if (!current.includes(t)) {
+    emit('update:modelValue', [...current, t])
+  }
   customTagInput.value = ''
   showCustomInput.value = false
+}
+
+function cancelCustomTag() {
+  ignoreBlur.value = true
+  customTagInput.value = ''
+  showCustomInput.value = false
+}
+
+async function openCustomInput() {
+  showCustomInput.value = true
+  await nextTick()
+  customInputRef.value?.focus()
+}
+
+function onCustomKeydown(event: KeyboardEvent) {
+  event.stopPropagation()
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    addCustomTag()
+    return
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    cancelCustomTag()
+  }
+}
+
+function onCustomBlur() {
+  if (ignoreBlur.value) {
+    ignoreBlur.value = false
+    return
+  }
+  addCustomTag()
 }
 </script>
 
 <template>
-  <div class="flex flex-wrap items-center gap-1">
+  <div class="flex flex-wrap items-center gap-1" data-builder-row-tags>
     <button
       v-for="tag in presetTags"
       :key="tag"
@@ -48,15 +84,17 @@ function addCustomTag() {
     </button>
     <template v-if="showCustomInput">
       <input
+        ref="customInputRef"
         v-model="customTagInput"
         type="text"
         placeholder="Custom"
+        data-builder-tag-input
         :class="[
           'w-20 rounded border px-1.5 py-0.5 text-xs shadow-sm transition-colors',
           isDark ? 'border-white/10 bg-black/20 text-white shadow-inner' : 'border-gray-300 bg-white text-gray-900'
         ]"
-        @keydown.enter.prevent="addCustomTag()"
-        @blur="addCustomTag(); showCustomInput = false"
+        @keydown="onCustomKeydown"
+        @blur="onCustomBlur"
       />
     </template>
     <button
@@ -69,7 +107,8 @@ function addCustomTag() {
           : 'border-gray-300 bg-white text-gray-500 hover:border-gray-400 hover:bg-gray-50 hover:text-gray-700'
       ]"
       aria-label="Add tag"
-      @click="showCustomInput = true"
+      @mousedown.stop
+      @click="openCustomInput"
     >
       + Tag
     </button>

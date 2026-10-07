@@ -27,6 +27,7 @@ import type { LogbookColumnConfig } from '~/utils/logbookTypes'
 import LogbookBuilderCell from './LogbookBuilderCell.vue'
 import LogbookBuilderHeader from './LogbookBuilderHeader.vue'
 import LogbookBuilderRowTags from './LogbookBuilderRowTags.vue'
+import { isBuilderTagEditorTarget } from '~/utils/logbookBuilderGridKeys'
 import { useTheme } from '~/composables/useTheme'
 
 const grid = inject<ReturnType<typeof useLogbookBuilderGrid>>('logbookBuilderGrid')
@@ -473,7 +474,8 @@ function isGridChromeMouseTarget(target: EventTarget | null): boolean {
     target.closest('thead') != null ||
     target.closest('[aria-label="Drag to fill"]') != null ||
     target.closest('[aria-label="Drag to move"]') != null ||
-    target.closest('.cursor-col-resize') != null
+    target.closest('.cursor-col-resize') != null ||
+    target.closest('[data-builder-row-tags]') != null
   )
 }
 
@@ -1057,6 +1059,8 @@ function shouldExitEditOnHorizontalArrow(key: string, input: HTMLInputElement): 
 }
 
 function handleKeyDown(e: KeyboardEvent) {
+  if (isBuilderTagEditorTarget(e.target)) return
+
   const inGrid =
     isEventInGrid(e.target) ||
     document.activeElement === gridContainerRef.value

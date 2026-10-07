@@ -15,6 +15,7 @@ export const ACCOUNT_SCOPED_STORAGE_KEYS = {
   SHOW_CURRENCY_CHIPS: 'logifi-show-currency-chips',
   BUILDER_DRAFT: 'logifi-logbook-builder-draft',
   BUILDER_DEFAULT_ROLE: 'logifi-logbook-builder-default-role',
+  BUILDER_LAST_TEMPLATE: 'logifi-logbook-builder-last-template-id',
   AIRCRAFT_TAIL_CONSOLIDATION: 'logifi://aircraft-tail-consolidation-v3',
 } as const
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, ref, computed, onMounted } from 'vue'
+import { inject, ref, computed, onMounted, onUnmounted } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { useAuth } from '~/composables/useAuth'
 import { supabase } from '~/lib/supabase'
@@ -7,7 +7,12 @@ import type { BuilderTemplateColumn } from '~/utils/logbookBuilderTypes'
 import { ROLE_OPTIONS } from '~/utils/logbookBuilderTypes'
 import { useTheme } from '~/composables/useTheme'
 import { useToast } from '~/composables/useToast'
-import { persistLastTemplateId } from '~/composables/useLogbookBuilderLastTemplate'
+import {
+  noteGridTemplateApplied,
+  persistLastTemplateId,
+  saveLogbookBuilderTemplate,
+} from '~/composables/useLogbookBuilderLastTemplate'
+import { useLogbookBuilderTemplateMatch } from '~/composables/useLogbookBuilderTemplateMatch'
 
 import { ACCOUNT_SCOPED_STORAGE_KEYS, getScopedItem, setScopedItem } from '~/utils/userScopedStorage'
 
@@ -21,6 +26,17 @@ const { rowCount, setRowCount, addColumn, layout, columns, removeColumn, loadTem
 
 const { isDark } = useTheme()
 const { showToast } = useToast()
+const { loadTemplateProminent } = useLogbookBuilderTemplateMatch()
+
+onMounted(() => {
+  grid.openSaveTemplate.value = handleSaveTemplate
+})
+
+onUnmounted(() => {
+  if (grid.openSaveTemplate.value === handleSaveTemplate) {
+    grid.openSaveTemplate.value = null
+  }
+})
 
 const layoutOptions = [
   { value: 'single' as const, label: 'Single page' },
@@ -81,26 +97,9 @@ async function handleSaveTemplate() {
 async function confirmSaveTemplate() {
   const name = templateName.value.trim()
   if (!name || !user.value) return
-  const payload = {
-    user_id: user.value.id,
-    name,
-    layout: layout.value,
-    default_row_count: rowCount.value,
-    tags_column_width: tagsColumnWidth.value,
-    default_import_role: defaultImportRole.value || null,
-    two_page_split_index: layout.value === 'two-page' ? grid!.effectiveSplitIndex.value : null,
-    columns: grid!.visibleColumns.value.map((c) => ({
-      id: c.id,
-      fieldKey: c.fieldKey,
-      label: c.label,
-      order: c.order,
-      width: c.width,
-      categoryClassValue: c.categoryClassValue,
-    })),
-  }
-  const { error } = await (supabase as any).from('logbook_builder_templates').insert(payload)
-  if (error) {
-    loadError.value = error.message
+  const result = await saveLogbookBuilderTemplate(grid!, user.value.id, name)
+  if ('error' in result) {
+    loadError.value = result.error
     return
   }
   showSaveModal.value = false
@@ -136,7 +135,8 @@ function selectTemplate(t: (typeof savedTemplates.value)[0]) {
     default_import_role: t.default_import_role,
     two_page_split_index: t.two_page_split_index,
   })
-  persistLastTemplateId(t.id)
+  persistLastTemplateId(t.id, user.value?.id)
+  noteGridTemplateApplied(grid!, t.id)
   showLoadModal.value = false
 }
 
@@ -160,6 +160,11 @@ async function confirmDeleteTemplate() {
   deletingTemplateId.value = null
   if (result.ok) {
     savedTemplates.value = savedTemplates.value.filter((t) => t.id !== id)
+    if (grid!.activeTemplateId.value === id) {
+      grid!.activeTemplateId.value = null
+      grid!.activeTemplateSignature.value = null
+    }
+    grid!.bumpTemplateCatalog()
     templateToDelete.value = null
   } else {
     deleteError.value = result.error ?? 'Failed to delete template'
@@ -298,10 +303,12 @@ function onRowCountInput(e: Event) {
       <button
         type="button"
         :class="[
-          'rounded border px-3 py-1.5 text-sm transition-colors whitespace-nowrap',
-          isDark 
-            ? 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 shadow-sm shadow-black/20' 
-            : 'border-gray-300 bg-gray-200 text-black hover:bg-gray-300 shadow-sm'
+          'rounded px-3 py-1.5 text-sm transition-colors whitespace-nowrap',
+          loadTemplateProminent
+            ? 'bg-blue-600 px-4 py-2 font-semibold text-white shadow-sm ring-2 ring-blue-300 hover:bg-blue-700'
+            : isDark
+              ? 'border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 shadow-sm shadow-black/20'
+              : 'border border-gray-300 bg-gray-200 text-black hover:bg-gray-300 shadow-sm'
         ]"
         @click="handleLoadTemplate"
       >

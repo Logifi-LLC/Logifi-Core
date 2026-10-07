@@ -3,7 +3,12 @@ import { computed, inject, onMounted, ref, watch } from 'vue'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { useAuth } from '~/composables/useAuth'
 import { supabase } from '~/lib/supabase'
-import { persistLastTemplateId } from '~/composables/useLogbookBuilderLastTemplate'
+import {
+  noteGridTemplateApplied,
+  persistLastTemplateId,
+  saveLogbookBuilderTemplate,
+} from '~/composables/useLogbookBuilderLastTemplate'
+import { useLogbookBuilderTemplateMatch } from '~/composables/useLogbookBuilderTemplateMatch'
 import { readLastTemplateId } from '~/utils/logbookBuilderDraft'
 import {
   DIGIFI_SCAN_FIELD_CHECKLIST,
@@ -82,6 +87,11 @@ const props = defineProps<{
   templatePreloaded?: boolean
 }>()
 
+const { loadTemplateProminent } = useLogbookBuilderTemplateMatch()
+
+const leftChipError = computed(() => props.leftChipLabel === 'Retake')
+const rightChipError = computed(() => props.rightChipLabel === 'Retake')
+
 const leftChipActive = computed(() => {
   const label = props.leftChipLabel ?? ''
   return label === 'Scanning…' || label === 'Ready' || label === 'Tap to photo'
@@ -97,12 +107,12 @@ const rightZoneBusy = computed(() => props.rightChipLabel === 'Scanning…')
 
 const leftZoneTappable = computed(() => {
   const label = props.leftChipLabel ?? ''
-  return label === 'Tap to photo' || label === 'Ready'
+  return label === 'Tap to photo' || label === 'Ready' || label === 'Retake'
 })
 
 const rightZoneTappable = computed(() => {
   const label = props.rightChipLabel ?? ''
-  return label === 'Tap to photo' || label === 'Ready'
+  return label === 'Tap to photo' || label === 'Ready' || label === 'Retake'
 })
 
 const captureButtonDisabled = computed(() => {
@@ -224,7 +234,8 @@ function applyTemplate(template: (typeof templates.value)[0]) {
     default_import_role: template.default_import_role,
     two_page_split_index: template.two_page_split_index,
   })
-  persistLastTemplateId(template.id)
+  persistLastTemplateId(template.id, user.value?.id)
+  noteGridTemplateApplied(grid, template.id)
   selectedTemplateId.value = template.id
   columnsEditorExpanded.value = false
 }
@@ -237,7 +248,7 @@ function onTemplateSelectChange(e: Event) {
 }
 
 function syncSelectedTemplateFromStorage() {
-  const id = readLastTemplateId()
+  const id = readLastTemplateId(user.value?.id)
   if (id && templates.value.some((t) => t.id === id)) {
     selectedTemplateId.value = id
   }
@@ -245,7 +256,7 @@ function syncSelectedTemplateFromStorage() {
 
 function collapseColumnsIfTemplateApplied() {
   if (didAutoCollapseColumnsForTemplate) return
-  if (readLastTemplateId() || props.templatePreloaded) {
+  if (readLastTemplateId(user.value?.id) || props.templatePreloaded) {
     columnsEditorExpanded.value = false
     didAutoCollapseColumnsForTemplate = true
   }
@@ -256,30 +267,14 @@ async function saveTemplate() {
   if (!name || !user.value) return
   saving.value = true
   templateError.value = null
-  const payload = {
-    user_id: user.value.id,
-    name,
-    layout: grid.layout.value,
-    default_row_count: grid.rowCount.value,
-    tags_column_width: grid.tagsColumnWidth.value,
-    default_import_role: grid.defaultImportRole.value || null,
-    two_page_split_index: grid.layout.value === 'two-page' ? grid.effectiveSplitIndex.value : null,
-    columns: grid.visibleColumns.value.map((column) => ({
-      id: column.id,
-      fieldKey: column.fieldKey,
-      label: column.label,
-      order: column.order,
-      width: column.width,
-      categoryClassValue: column.categoryClassValue,
-    })),
-  }
-  const { error } = await (supabase as any).from('logbook_builder_templates').insert(payload)
+  const result = await saveLogbookBuilderTemplate(grid, user.value.id, name)
   saving.value = false
-  if (error) {
-    templateError.value = error.message
+  if ('error' in result) {
+    templateError.value = result.error
     return
   }
   templateName.value = ''
+  selectedTemplateId.value = result.id
   await loadTemplates()
 }
 
@@ -312,19 +307,32 @@ watch(
 <template>
   <div class="space-y-5">
     <section class="space-y-2">
-      <p :class="['text-xs font-semibold uppercase tracking-wide', isDarkMode ? 'text-gray-400' : 'text-gray-500']">Template</p>
+      <p
+        :class="[
+          'text-xs font-semibold uppercase tracking-wide',
+          loadTemplateProminent
+            ? (isDarkMode ? 'text-blue-300' : 'text-blue-700')
+            : (isDarkMode ? 'text-gray-400' : 'text-gray-500'),
+        ]"
+      >
+        {{ loadTemplateProminent ? 'Load template' : 'Template' }}
+      </p>
       <div v-if="templates.length">
-        <label class="sr-only" for="digifi-template-select">Saved layout</label>
+        <label class="sr-only" for="digifi-template-select">Load template</label>
         <select
           id="digifi-template-select"
           v-model="selectedTemplateId"
           class="w-full rounded-2xl border px-4 py-3 text-sm font-semibold"
           :class="
-            isDarkMode
-              ? 'border-white/10 bg-white/5 text-gray-100'
-              : 'border-gray-200 bg-white text-gray-900 shadow-sm'
+            loadTemplateProminent
+              ? (isDarkMode
+                ? 'border-blue-400 bg-blue-600 text-white shadow-sm ring-2 ring-blue-300'
+                : 'border-blue-600 bg-blue-600 text-white shadow-sm ring-2 ring-blue-300')
+              : (isDarkMode
+                ? 'border-white/10 bg-white/5 text-gray-100'
+                : 'border-gray-200 bg-white text-gray-900 shadow-sm')
           "
-          aria-label="Saved layout"
+          aria-label="Load template"
           @change="onTemplateSelectChange"
         >
           <option value="">Choose saved layout…</option>
@@ -347,19 +355,19 @@ watch(
               : 'border-gray-200 bg-white text-gray-900 placeholder:text-gray-400'
           "
         >
-        <button
-          type="button"
-          class="rounded-lg border px-3 py-2 text-xs font-semibold disabled:opacity-40"
-          :class="
-            isDarkMode
-              ? 'border-white/15 text-gray-200'
-              : 'border-gray-300 text-gray-800 hover:bg-gray-50'
-          "
-          :disabled="saving || !templateName.trim()"
-          @click="saveTemplate"
-        >
-          Save
-        </button>
+          <button
+            type="button"
+            class="rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-40"
+            :class="
+              isDarkMode
+                ? 'bg-blue-600 text-white'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+            "
+            :disabled="saving || !templateName.trim()"
+            @click="saveTemplate"
+          >
+            Save Template
+          </button>
       </div>
       <p v-if="templateError" :class="['text-xs', isDarkMode ? 'text-rose-300' : 'text-rose-600']">{{ templateError }}</p>
     </section>
@@ -604,20 +612,28 @@ watch(
             type="button"
             class="flex min-h-[44px] w-full flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold disabled:cursor-default"
             :class="
-              leftChipActive || twoPageStep === 1
-                ? digifiMobileAccentSelected(isDarkMode)
-                : digifiMobileAccentIdle(isDarkMode)
+              leftChipError
+                ? (isDarkMode
+                  ? 'border-red-400 bg-red-950/50 text-red-100 ring-2 ring-red-500'
+                  : 'border-red-500 bg-red-50 text-red-800 ring-2 ring-red-400')
+                : leftChipActive || twoPageStep === 1
+                  ? digifiMobileAccentSelected(isDarkMode)
+                  : digifiMobileAccentIdle(isDarkMode)
             "
             :disabled="leftZoneBusy || !leftZoneTappable"
             :aria-label="
-              leftZoneBusy
-                ? 'Left page scanning'
-                : leftChipLabel === 'Ready'
-                  ? 'Retake left page photo'
-                  : 'Photograph left page'
+              leftChipError
+                ? 'Retake left page'
+                : leftZoneBusy
+                  ? 'Left page scanning'
+                  : leftChipLabel === 'Ready'
+                    ? 'Retake left page photo'
+                    : 'Photograph left page'
             "
             @click="
-              leftChipLabel === 'Ready' ? emit('retake', 'left') : leftZoneTappable && emit('capture', 'left')
+              leftChipError || leftChipLabel === 'Ready'
+                ? emit('retake', 'left')
+                : leftZoneTappable && emit('capture', 'left')
             "
           >
             <span class="text-[10px] uppercase tracking-wide opacity-80">1 · Left</span>
@@ -629,20 +645,28 @@ watch(
             type="button"
             class="flex min-h-[44px] w-full flex-col items-center justify-center rounded-xl border px-2 py-2 text-center text-xs font-semibold disabled:cursor-default"
             :class="
-              twoPageStep === 2 || rightChipActive
-                ? digifiMobileAccentSelected(isDarkMode)
-                : digifiMobileAccentIdle(isDarkMode)
+              rightChipError
+                ? (isDarkMode
+                  ? 'border-red-400 bg-red-950/50 text-red-100 ring-2 ring-red-500'
+                  : 'border-red-500 bg-red-50 text-red-800 ring-2 ring-red-400')
+                : twoPageStep === 2 || rightChipActive
+                  ? digifiMobileAccentSelected(isDarkMode)
+                  : digifiMobileAccentIdle(isDarkMode)
             "
             :disabled="rightZoneBusy || !rightZoneTappable"
             :aria-label="
-              rightZoneBusy
-                ? 'Right page scanning'
-                : rightChipLabel === 'Ready'
-                  ? 'Retake right page photo'
-                  : 'Photograph right page'
+              rightChipError
+                ? 'Retake right page'
+                : rightZoneBusy
+                  ? 'Right page scanning'
+                  : rightChipLabel === 'Ready'
+                    ? 'Retake right page photo'
+                    : 'Photograph right page'
             "
             @click="
-              rightChipLabel === 'Ready' ? emit('retake', 'right') : rightZoneTappable && emit('capture', 'right')
+              rightChipError || rightChipLabel === 'Ready'
+                ? emit('retake', 'right')
+                : rightZoneTappable && emit('capture', 'right')
             "
           >
             <span class="text-[10px] uppercase tracking-wide opacity-80">2 · Right</span>

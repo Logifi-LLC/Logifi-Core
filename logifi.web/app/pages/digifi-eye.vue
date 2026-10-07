@@ -250,7 +250,7 @@ onUnmounted(() => {
         <div :class="eyeCardClass">
           <p :class="eyeSectionLabelClass">Step 1</p>
           <p :class="eyeCardTitleClass">On your computer</p>
-          <p :class="eyeMutedBodyClass">Open Add Pages and tap Connect phone.</p>
+          <p :class="eyeMutedBodyClass">Open Start Scanning and tap Connect phone.</p>
         </div>
 
         <div :class="eyeCardSpacedClass">
@@ -386,7 +386,7 @@ onUnmounted(() => {
         <div :class="eyeCardClass">
           <p :class="eyeSectionLabelClass">Step 1</p>
           <p :class="eyeCardTitleClass">On your computer</p>
-          <p :class="eyeMutedBodyClass">Open Add Pages and tap Connect phone.</p>
+          <p :class="eyeMutedBodyClass">Open Start Scanning and tap Connect phone.</p>
         </div>
 
         <div :class="eyeCardSpacedClass">
