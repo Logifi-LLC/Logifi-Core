@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import { useTheme } from '~/composables/useTheme'
 
 const props = defineProps<{ modelValue: string[] }>()
@@ -8,6 +8,10 @@ const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
 const { isDark } = useTheme()
 
 const presetTags = ['Checkride', 'Flight Review', 'IPC'] as const
+const customTags = computed(() => {
+  const presets = new Set<string>(presetTags)
+  return (props.modelValue ?? []).filter((tag) => !presets.has(tag))
+})
 const showCustomInput = ref(false)
 const customTagInput = ref('')
 const customInputRef = ref<HTMLInputElement | null>(null)
@@ -78,6 +82,19 @@ function onCustomBlur() {
           ? (isDark ? 'border-blue-800 bg-blue-900/50 text-blue-200' : 'border-blue-200 bg-blue-50 text-blue-700')
           : (isDark ? 'border-white/10 bg-transparent text-gray-300 hover:bg-white/10 hover:shadow-sm hover:shadow-black/20' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50')
       ]"
+      @click="toggleTag(tag)"
+    >
+      {{ tag }}
+    </button>
+    <button
+      v-for="tag in customTags"
+      :key="tag"
+      type="button"
+      :class="[
+        'rounded border px-2 py-0.5 text-xs font-medium transition-colors',
+        isDark ? 'border-blue-800 bg-blue-900/50 text-blue-200' : 'border-blue-200 bg-blue-50 text-blue-700'
+      ]"
+      @mousedown.stop
       @click="toggleTag(tag)"
     >
       {{ tag }}

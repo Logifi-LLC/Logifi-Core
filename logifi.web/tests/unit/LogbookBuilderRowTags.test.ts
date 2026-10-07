@@ -33,6 +33,7 @@ describe('LogbookBuilder row tags', () => {
 
     expect(grid.rows.value[0]?.tags).toEqual(['Night'])
     expect(grid.rows.value[0]?.cells[dateId] ?? '').toBe('')
+    expect(wrapper.text()).toContain('Night')
     wrapper.unmount()
   })
 
