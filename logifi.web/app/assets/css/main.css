@@ -40,16 +40,23 @@
   font-family: 'Quicksand', sans-serif;
 }
 
+/* Double-tap zoom is a browser gesture. manipulation keeps pinch-zoom. */
+html,
+body {
+  touch-action: manipulation;
+}
+
 .app-modal-overlay {
   position: fixed;
   inset: 0;
   z-index: 90;
 }
 
-/* Prevent iOS WKWebView focus-zoom on form controls (<16px triggers auto-zoom). */
-html.capacitor-ios input:not([type='checkbox']):not([type='radio']):not([type='range']),
-html.capacitor-ios select,
-html.capacitor-ios textarea {
+/* Prevent iOS WKWebView focus-zoom on form controls (<16px triggers auto-zoom).
+   Builder grid cells stay at column size; native maximum-scale=1 covers those. */
+html.capacitor-ios input:not([type='checkbox']):not([type='radio']):not([type='range']):not(.logbook-builder-grid input),
+html.capacitor-ios select:not(.logbook-builder-grid select),
+html.capacitor-ios textarea:not(.logbook-builder-grid textarea) {
   font-size: 16px !important;
 }
 

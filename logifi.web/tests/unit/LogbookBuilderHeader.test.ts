@@ -31,6 +31,13 @@ function installMatchMedia(matches: boolean) {
   })) as unknown as typeof window.matchMedia
 }
 
+function setMaxTouchPoints(count: number) {
+  Object.defineProperty(navigator, 'maxTouchPoints', {
+    configurable: true,
+    get: () => count,
+  })
+}
+
 async function openMenu(wrapper: VueWrapper) {
   await wrapper.get('button').trigger('click')
 }
@@ -42,6 +49,7 @@ describe('LogbookBuilderHeader category/class menu', () => {
     for (const wrapper of wrappers) wrapper.unmount()
     wrappers.length = 0
     document.body.innerHTML = ''
+    setMaxTouchPoints(0)
   })
 
   function mountHeader() {
@@ -101,6 +109,76 @@ describe('LogbookBuilderHeader category/class menu', () => {
     expect(wrapper.find('[data-testid="category-inline"]').exists()).toBe(false)
   })
 
+  it('opens the inline list when WebKit reports the tap as a mouse after touchstart', async () => {
+    installMatchMedia(false)
+    setMaxTouchPoints(0)
+    const wrapper = mountHeader()
+    await openMenu(wrapper)
+
+    const trigger = wrapper.get('[data-testid="category-class-trigger"]')
+    const row = trigger.get('[data-testid="category-class-row"]')
+    await trigger.trigger('pointerenter', { pointerType: 'mouse' })
+    await trigger.trigger('pointerdown', { pointerType: 'mouse' })
+    await trigger.trigger('touchstart')
+    await trigger.trigger('mouseenter')
+    await row.trigger('click')
+
+    expect(wrapper.find('[data-testid="category-inline"]').exists()).toBe(true)
+    expect(document.body.querySelector('[data-testid="category-flyout"]')).toBeNull()
+    expect(row.get('span[aria-hidden="true"]').classes()).toContain('lb-cat-chevron-open')
+
+    const asel = wrapper
+      .get('[data-testid="category-inline"]')
+      .findAll('button')
+      .find((b) => b.text() === 'ASEL')
+    await asel!.trigger('click')
+    expect(wrapper.emitted('update')?.[0]?.[1]).toEqual({
+      fieldKey: 'categoryClass',
+      label: 'ASEL',
+      categoryClassValue: 'ASEL',
+      columnKind: null,
+    })
+  })
+
+  it('opens the inline list when WebKit sends an empty pointerType for a touch', async () => {
+    installMatchMedia(false)
+    setMaxTouchPoints(0)
+    const wrapper = mountHeader()
+    await openMenu(wrapper)
+
+    const trigger = wrapper.get('[data-testid="category-class-trigger"]')
+    const row = trigger.get('[data-testid="category-class-row"]')
+    await trigger.trigger('pointerenter', { pointerType: '' })
+    await trigger.trigger('pointerdown', { pointerType: '' })
+    await trigger.trigger('touchstart')
+    await trigger.trigger('mouseenter')
+    await row.trigger('click')
+
+    expect(wrapper.find('[data-testid="category-inline"]').exists()).toBe(true)
+    expect(document.body.querySelector('[data-testid="category-flyout"]')).toBeNull()
+  })
+
+  it('uses the inline list when the device has touch points even if media queries say it can hover', async () => {
+    installMatchMedia(false)
+    setMaxTouchPoints(5)
+    const wrapper = mountHeader()
+    await openMenu(wrapper)
+
+    const trigger = wrapper.get('[data-testid="category-class-trigger"]')
+    const row = trigger.get('[data-testid="category-class-row"]')
+    await trigger.trigger('pointerenter', { pointerType: 'mouse' })
+    await trigger.trigger('mouseenter')
+    expect(document.body.querySelector('[data-testid="category-flyout"]')).toBeNull()
+
+    await row.trigger('click')
+    expect(wrapper.find('[data-testid="category-inline"]').exists()).toBe(true)
+    expect(document.body.querySelector('[data-testid="category-flyout"]')).toBeNull()
+
+    await row.trigger('click')
+    expect(wrapper.find('[data-testid="category-inline"]').exists()).toBe(false)
+    expect(wrapper.emitted('update')).toBeUndefined()
+  })
+
   it('uses the inline list for a touch pointer even when the primary pointer is fine', async () => {
     installMatchMedia(false)
     const wrapper = mountHeader()
@@ -119,6 +197,7 @@ describe('LogbookBuilderHeader category/class menu', () => {
 
   it('keeps the desktop hover flyout and does not open the inline list for a mouse', async () => {
     installMatchMedia(false)
+    setMaxTouchPoints(0)
     const wrapper = mountHeader()
     await openMenu(wrapper)
 

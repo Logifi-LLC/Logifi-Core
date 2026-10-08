@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import DigifiAiConsentSheet from '~/components/digifi/DigifiAiConsentSheet.vue'
+import { useDigifiAiConsent } from '~/composables/useDigifiAiConsent'
 import { useTheme } from '~/composables/useTheme'
 import type { DigifiPageSide } from '~/utils/digifiTypes'
 
@@ -14,6 +16,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   selectFile: [pageSide: DigifiPageSide, file: File]
 }>()
+
+const { ensureDigifiAiConsent } = useDigifiAiConsent()
 
 const leftInputRef = ref<HTMLInputElement | null>(null)
 const rightInputRef = ref<HTMLInputElement | null>(null)
@@ -36,22 +40,27 @@ function zoneClasses(pageSide: DigifiPageSide): string[] {
   return base
 }
 
-function openCapture(pageSide: DigifiPageSide) {
+async function openCapture(pageSide: DigifiPageSide) {
   if (props.disabled || props.uploadingSide) return
+  const allowed = await ensureDigifiAiConsent()
+  if (!allowed) return
   const input = pageSide === 'left' ? leftInputRef.value : rightInputRef.value
   input?.click()
 }
 
-function onFileSelected(pageSide: DigifiPageSide, event: Event) {
+async function onFileSelected(pageSide: DigifiPageSide, event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
   if (!file) return
+  const allowed = await ensureDigifiAiConsent()
+  if (!allowed) return
   emit('selectFile', pageSide, file)
 }
 </script>
 
 <template>
+  <DigifiAiConsentSheet />
   <div class="space-y-4">
     <input
       ref="leftInputRef"

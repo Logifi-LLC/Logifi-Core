@@ -64,6 +64,7 @@ describe('spa document status', () => {
     expect(isPassthroughDocumentPath('/_nuxt/entry.js')).toBe(true)
     expect(isPassthroughDocumentPath('/images/logifi-logo.png')).toBe(true)
     expect(isPassthroughDocumentPath('/robots.txt')).toBe(true)
+    expect(isPassthroughDocumentPath('/sitemap.xml')).toBe(true)
     expect(isPassthroughDocumentPath('/does-not-exist')).toBe(false)
     expect(isPassthroughDocumentPath('/digifi')).toBe(false)
   })

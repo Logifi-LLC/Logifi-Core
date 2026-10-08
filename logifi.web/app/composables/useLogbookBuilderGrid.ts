@@ -270,18 +270,23 @@ export function useLogbookBuilderGrid() {
 
   function addColumn(
     fieldKey: LogbookColumnKey | null = null,
-    extras?: { columnKind?: 'day' | 'custom'; label?: string }
+    extras?: { columnKind?: 'day' | 'custom'; label?: string; categoryClassValue?: string }
   ) {
     const columnKind = extras?.columnKind
     const label =
       extras?.label?.trim() ||
       (columnKind === 'day' ? 'Day' : fieldKey ? FIELD_LABELS[fieldKey] : 'Notes')
+    const categoryClassValue =
+      !columnKind && fieldKey === 'categoryClass'
+        ? extras?.categoryClassValue?.trim() || undefined
+        : undefined
     const newCol = createBuilderColumn({
       fieldKey: columnKind ? null : fieldKey,
       label,
       order: columns.value.length,
       width: DEFAULT_COLUMN_WIDTH,
       columnKind,
+      categoryClassValue,
     })
     columns.value.push(newCol)
     for (const row of rows.value) {

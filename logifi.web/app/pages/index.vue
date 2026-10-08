@@ -29,19 +29,22 @@
             Built for 121 CA and FO flying — pairings, legs, and hours that match the job. Not a student kitchen sink.
           </p>
           
-          <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button 
-              @click="openAuth('signup')"
-              class="btn-cta-primary w-full sm:w-auto px-8 py-4 bg-blue-600 text-white text-lg font-bold rounded-lg hover:bg-blue-700 transition-all border border-blue-500/50 active:scale-[0.98]"
-            >
-              <span class="relative z-10">Open Logifi</span>
-            </button>
-            <button 
-              @click="scrollToAutofi"
-              class="w-full sm:w-auto px-8 py-4 bg-gray-800 text-gray-100 text-lg font-bold rounded-lg border border-gray-700 hover:bg-gray-700 hover:border-gray-600 transition-all active:scale-[0.98]"
-            >
-              See Autofi
-            </button>
+          <div class="flex w-full flex-col items-center gap-4">
+            <div class="flex w-full flex-col items-center justify-center gap-4 sm:w-auto sm:flex-row">
+              <button 
+                @click="openAuth('signup')"
+                class="btn-cta-primary w-full sm:w-auto px-8 py-4 bg-blue-600 text-white text-lg font-bold rounded-lg hover:bg-blue-700 transition-all border border-blue-500/50 active:scale-[0.98]"
+              >
+                <span class="relative z-10">Open Logifi</span>
+              </button>
+              <button 
+                @click="scrollToAutofi"
+                class="w-full sm:w-auto px-8 py-4 bg-gray-800 text-gray-100 text-lg font-bold rounded-lg border border-gray-700 hover:bg-gray-700 hover:border-gray-600 transition-all active:scale-[0.98]"
+              >
+                See Autofi
+              </button>
+            </div>
+            <AppStoreLink variant="hero" />
           </div>
         </div>
       </section>

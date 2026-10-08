@@ -108,6 +108,8 @@ export default defineNuxtConfig({
     /** AES-256 key for sealing FLICA passwords (base64 or hex). */
     flicaCredentialsKey: process.env.FLICA_CREDENTIALS_KEY || '',
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    /** Vercel Cron sends this as `Authorization: Bearer <value>` to /api/cron/purge-digifi-scans. */
+    cronSecret: process.env.CRON_SECRET || '',
     // Digifi paper logbook scan (server-only)
     geminiApiKey: process.env.GEMINI_API_KEY || '',
     anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
