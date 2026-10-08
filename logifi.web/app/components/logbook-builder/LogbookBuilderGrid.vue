@@ -1572,7 +1572,7 @@ defineExpose({
   <div
     ref="gridContainerRef"
     tabindex="0"
-    class="overflow-auto border pb-4 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500/50"
+    class="logbook-builder-grid overflow-auto border pb-4 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500/50"
     :class="isDark
       ? 'border-white/10 bg-gray-900 shadow-md shadow-black/40'
       : 'border-gray-200 bg-white shadow-sm'"
