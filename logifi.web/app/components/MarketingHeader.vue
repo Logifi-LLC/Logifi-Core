@@ -15,7 +15,7 @@
         />
       </div>
 
-      <nav class="hidden md:flex items-center space-x-8">
+      <nav class="hidden md:flex items-center gap-x-2 lg:gap-x-4 xl:gap-x-8">
         <a
           v-if="activePage === 'home'"
           href="#features"
@@ -35,12 +35,13 @@
         <NuxtLink to="/developers?from=landing" :class="navLinkClass('developers')">Developers</NuxtLink>
         <NuxtLink to="/feedback?from=landing" :class="navLinkClass('feedback')">Feedback</NuxtLink>
         <div class="h-4 w-px bg-gray-700" />
+        <AppStoreLink variant="header" />
         <button type="button" :class="navLinkClass()" @click="emit('open-auth', 'signin')">
           Sign In
         </button>
         <button
           type="button"
-          class="btn-cta-primary px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-all border border-blue-500/50 active:scale-[0.98]"
+          class="btn-cta-primary shrink-0 whitespace-nowrap px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-all border border-blue-500/50 active:scale-[0.98]"
           @click="emit('open-auth', 'signup')"
         >
           <span class="relative z-10">Get Started</span>
@@ -134,6 +135,7 @@
               </NuxtLink>
             </div>
             <div class="px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] space-y-3 border-t border-gray-800/50 pt-4">
+              <AppStoreLink variant="menu" />
               <button
                 type="button"
                 class="w-full py-3 text-sm font-medium text-gray-200 rounded-lg border border-gray-700/50 bg-gray-800/50 hover:bg-gray-800/70 transition-colors"
@@ -187,7 +189,7 @@ const emit = defineEmits<{
 const mobileOpen = ref(false)
 
 const navBase =
-  'text-sm font-medium transition-colors'
+  'text-sm font-medium transition-colors whitespace-nowrap'
 const navActive = 'text-blue-400'
 const navInactive = 'text-gray-300 hover:text-blue-400'
 

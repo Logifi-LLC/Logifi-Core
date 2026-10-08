@@ -18,6 +18,8 @@
         <NuxtLink to="/privacy?from=landing" :class="linkClass('privacy')">Privacy Policy</NuxtLink>
         <span class="mx-2 text-[#9ca3af]">·</span>
         <NuxtLink to="/developers?from=landing" :class="linkClass('developers')">Developers</NuxtLink>
+        <span class="mx-2 text-[#9ca3af]">·</span>
+        <AppStoreLink variant="footer" />
       </p>
       <p class="mt-4 text-xs text-[#9ca3af] text-center">
         © {{ year }} Logifi. All rights reserved.
