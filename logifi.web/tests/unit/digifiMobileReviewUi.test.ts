@@ -6,7 +6,7 @@ import LogbookBuilderGrid from '../../app/components/logbook-builder/LogbookBuil
 import DigifiMobileCameraCapture from '../../app/components/digifi/DigifiMobileCameraCapture.vue'
 import DigifiMobileLayoutWizard from '../../app/components/digifi/DigifiMobileLayoutWizard.vue'
 import { useLogbookBuilderGrid } from '../../app/composables/useLogbookBuilderGrid'
-import { createBuilderColumn } from '../../app/utils/logbookBuilderTypes'
+import { CATEGORY_CLASS_OPTIONS, createBuilderColumn } from '../../app/utils/logbookBuilderTypes'
 import { readLastTemplateId } from '~/utils/logbookBuilderDraft'
 
 vi.mock('~/composables/useAuth', () => ({
@@ -191,6 +191,89 @@ describe('DigifiMobileLayoutWizard', () => {
     expect(wrapper.text()).toContain('1 · Left')
     expect(wrapper.text()).toContain('2 · Right')
     expect(wrapper.text()).toContain('Photograph left page')
+  })
+
+  it('waits for a class before adding a Category/Class column', async () => {
+    const { wrapper, grid } = mountWithGrid(DigifiMobileLayoutWizard, {
+      scanning: false,
+      captureLabel: 'Photograph page',
+    })
+    const before = grid.columns.value.length
+    const addField = wrapper.get('[aria-label="Add column field"]')
+
+    await addField.setValue('categoryClass')
+    await nextTick()
+
+    expect(grid.columns.value.length).toBe(before)
+    expect((addField.element as HTMLSelectElement).value).toBe('categoryClass')
+    const classSelect = wrapper.get('select[aria-label="Pick a class"]')
+    expect(classSelect.findAll('option').map((option) => option.text())).toEqual([
+      'Pick a class…',
+      ...CATEGORY_CLASS_OPTIONS,
+    ])
+
+    await classSelect.setValue('')
+    expect(grid.columns.value.length).toBe(before)
+
+    await classSelect.setValue('ASEL')
+    await nextTick()
+
+    expect(grid.columns.value.length).toBe(before + 1)
+    const added = grid.columns.value.at(-1)
+    expect(added).toMatchObject({
+      fieldKey: 'categoryClass',
+      categoryClassValue: 'ASEL',
+      label: 'ASEL',
+    })
+    expect(wrapper.text()).toContain('ASEL')
+    expect(wrapper.find('select[aria-label="Pick a class"]').exists()).toBe(false)
+    expect((wrapper.get('[aria-label="Add column field"]').element as HTMLSelectElement).value).toBe('')
+  })
+
+  it('hides the class picker when another field is chosen', async () => {
+    const { wrapper, grid } = mountWithGrid(DigifiMobileLayoutWizard, {
+      scanning: false,
+      captureLabel: 'Photograph page',
+    })
+    const addField = wrapper.get('[aria-label="Add column field"]')
+    await addField.setValue('categoryClass')
+    await nextTick()
+    expect(wrapper.find('select[aria-label="Pick a class"]').exists()).toBe(true)
+
+    const before = grid.columns.value.length
+    await addField.setValue('remarks')
+    await nextTick()
+
+    expect(wrapper.find('select[aria-label="Pick a class"]').exists()).toBe(false)
+    expect(grid.columns.value.length).toBe(before + 1)
+    expect(grid.columns.value.at(-1)?.fieldKey).toBe('remarks')
+    expect(grid.columns.value.at(-1)?.categoryClassValue).toBeUndefined()
+  })
+
+  it('adds a second category class and labels each column with its class', async () => {
+    const { wrapper, grid } = mountWithGrid(DigifiMobileLayoutWizard, {
+      scanning: false,
+      captureLabel: 'Photograph page',
+    })
+    const addField = wrapper.get('[aria-label="Add column field"]')
+
+    await addField.setValue('categoryClass')
+    await nextTick()
+    await wrapper.get('select[aria-label="Pick a class"]').setValue('ASEL')
+    await nextTick()
+
+    await addField.setValue('categoryClass')
+    await nextTick()
+    const classSelect = wrapper.get('select[aria-label="Pick a class"]')
+    expect(classSelect.findAll('option').map((option) => option.text())).not.toContain('ASEL')
+    await classSelect.setValue('AMEL')
+    await nextTick()
+
+    const categoryColumns = grid.columns.value.filter((column) => column.fieldKey === 'categoryClass')
+    expect(categoryColumns.map((column) => column.label)).toEqual(['ASEL', 'AMEL'])
+    expect(categoryColumns.map((column) => column.categoryClassValue)).toEqual(['ASEL', 'AMEL'])
+    expect(wrapper.text()).toContain('ASEL')
+    expect(wrapper.text()).toContain('AMEL')
   })
 })
 

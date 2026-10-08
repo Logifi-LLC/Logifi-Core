@@ -19,5 +19,11 @@
         }
       ]
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/purge-digifi-scans",
+      "schedule": "17 8 * * *"
+    }
   ]
 }

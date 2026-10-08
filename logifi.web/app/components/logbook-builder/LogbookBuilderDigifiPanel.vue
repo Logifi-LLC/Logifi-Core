@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted, inject } from 'vue'
+import DigifiAiConsentSheet from '~/components/digifi/DigifiAiConsentSheet.vue'
+import { useDigifiAiConsent } from '~/composables/useDigifiAiConsent'
 import { useLogbookBuilderDigifi } from '~/composables/useLogbookBuilderDigifi'
 import { useDigifiCompanionCapture } from '~/composables/useDigifiCompanionCapture'
 import { useDigifiCredits } from '~/composables/useDigifiCredits'
@@ -35,6 +37,7 @@ const {
 const { isAuthenticated } = useAuth()
 const { fetchBalance } = useDigifiCredits()
 const { isDark } = useTheme()
+const { ensureDigifiAiConsent } = useDigifiAiConsent()
 const showAddCreditsModal = ref(false)
 
 const leftInputRef = ref<HTMLInputElement | null>(null)
@@ -109,7 +112,9 @@ function canUseDropZone(pageSide: DigifiPageSide): boolean {
   return true
 }
 
-function retakePage(pageSide: DigifiPageSide) {
+async function retakePage(pageSide: DigifiPageSide) {
+  const allowed = await ensureDigifiAiConsent()
+  if (!allowed) return
   clearScanPageError(pageSide)
   inputRefFor(pageSide).value?.click()
 }
@@ -244,6 +249,12 @@ async function drainScanQueue() {
   scanQueue.value = scanQueue.value.filter((item) => item.photoId !== next.photoId)
 
   try {
+    const allowed = await ensureDigifiAiConsent()
+    if (!allowed) {
+      scanQueue.value = []
+      return
+    }
+
     const file = await getPhotoFile(photo)
     if (file) {
       await processFile(file, next.pageSide, { fromQueue: true })
@@ -293,6 +304,9 @@ async function processFile(
   }
   if (!options?.fromQueue && !canUseDropZone(pageSide)) return
 
+  const allowed = await ensureDigifiAiConsent()
+  if (!allowed) return
+
   if (!options?.fromQueue) {
     cancelQueuedScansForPage(pageSide)
   }
@@ -330,8 +344,10 @@ async function onFileSelected(pageSide: DigifiPageSide, event: Event) {
   await processFile(file, pageSide)
 }
 
-function openFilePicker(pageSide: DigifiPageSide) {
+async function openFilePicker(pageSide: DigifiPageSide) {
   if (!canUseDropZone(pageSide)) return
+  const allowed = await ensureDigifiAiConsent()
+  if (!allowed) return
   inputRefFor(pageSide).value?.click()
 }
 
@@ -360,6 +376,9 @@ async function onDrop(pageSide: DigifiPageSide, e: DragEvent) {
   e.preventDefault()
   dragOverSide.value = null
   const file = e.dataTransfer?.files?.[0]
+  if (!file) return
+  const allowed = await ensureDigifiAiConsent()
+  if (!allowed) return
   await processFile(file, pageSide)
 }
 
@@ -444,6 +463,8 @@ async function useSelectedCapture(pageSide: DigifiPageSide) {
       companionMessage.value = 'Select a captured photo first.'
       return
     }
+    const allowed = await ensureDigifiAiConsent()
+    if (!allowed) return
     setZonePreview(pageSide, selectedPhoto.value.signedUrl, false)
     await processFile(file, pageSide)
     if (!error.value) companionMessage.value = `Applied captured photo to ${pageSide} page.`
@@ -525,6 +546,7 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <DigifiAiConsentSheet />
   <section
     class="rounded-3xl p-4 sm:p-6 font-quicksand border shadow-[0_20px_50px_rgba(0,0,0,0.08)]"
     :class="isDark ? 'border-white/10 bg-gray-900' : 'border-gray-200 bg-white'"

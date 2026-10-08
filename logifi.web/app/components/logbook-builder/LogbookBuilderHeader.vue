@@ -72,9 +72,17 @@ const mainDropdownRef = ref<HTMLElement | null>(null)
 const submenuRef = ref<HTMLElement | null>(null)
 const submenuPosition = ref({ top: 0, left: 0 })
 let closeTimeout: ReturnType<typeof setTimeout> | null = null
-let coarseMedia: MediaQueryList | null = null
-/** Last pointer that interacted with the row. Touch taps must not open the hover flyout. */
+let hoverMedia: MediaQueryList | null = null
+let pointerMedia: MediaQueryList | null = null
+/**
+ * Last pointer that interacted with the row.
+ * WKWebView can report a finger as pointerType "" or "mouse", then fire
+ * mouseenter before click. touchstart still arrives before that mouseenter.
+ */
 const activePointerType = ref('mouse')
+/** Ignore emulated mouse events that follow a touch (iOS compatibility events). */
+let lastTouchAt = 0
+const TOUCH_MOUSE_GUARD_MS = 1000
 
 function categoryTriggerElement(): HTMLElement | null {
   const refVal = categoryTriggerRef.value
@@ -82,12 +90,30 @@ function categoryTriggerElement(): HTMLElement | null {
   return el ?? null
 }
 
+function recentTouch(): boolean {
+  return lastTouchAt > 0 && Date.now() - lastTouchAt < TOUCH_MOUSE_GUARD_MS
+}
+
 function wantsInlineMenu(): boolean {
-  return coarsePointer.value || activePointerType.value === 'touch' || activePointerType.value === 'pen'
+  return coarsePointer.value
+    || activePointerType.value === 'touch'
+    || activePointerType.value === 'pen'
+    || recentTouch()
 }
 
 function syncCoarsePointer() {
-  coarsePointer.value = coarseMedia?.matches ?? false
+  const hoverNone = hoverMedia?.matches ?? false
+  const coarse = pointerMedia?.matches ?? false
+  const touchPoints = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0
+  coarsePointer.value = hoverNone || coarse || touchPoints
+}
+
+/** A finger or pen, or the touchstart that still fires when pointerType lies. */
+function noteTouch() {
+  lastTouchAt = Date.now()
+  activePointerType.value = 'touch'
+  categorySubmenuOpen.value = false
+  cancelClose()
 }
 
 function updateSubmenuPositionFromTrigger() {
@@ -101,21 +127,38 @@ function updateSubmenuPositionFromTrigger() {
 }
 
 function onCategoryPointerEnter(e: PointerEvent) {
+  if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+    noteTouch()
+    return
+  }
+  // Empty or "mouse" is what WKWebView emits for a tap. Do not open the flyout
+  // when this device is touch-capable or a touch already started.
+  if (!e.pointerType || e.pointerType === 'mouse') {
+    if (wantsInlineMenu()) {
+      categorySubmenuOpen.value = false
+      cancelClose()
+      return
+    }
+  }
   if (e.pointerType) activePointerType.value = e.pointerType
+  onCategoryMouseEnter()
+}
+
+function onCategoryPointerDown(e: PointerEvent) {
+  if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+    noteTouch()
+    return
+  }
   if (wantsInlineMenu()) {
     categorySubmenuOpen.value = false
     cancelClose()
     return
   }
-  onCategoryMouseEnter()
+  if (e.pointerType) activePointerType.value = e.pointerType
 }
 
-function onCategoryPointerDown(e: PointerEvent) {
-  if (e.pointerType) activePointerType.value = e.pointerType
-  if (wantsInlineMenu()) {
-    categorySubmenuOpen.value = false
-    cancelClose()
-  }
+function onCategoryTouchStart() {
+  noteTouch()
 }
 
 function onCategoryMouseEnter() {
@@ -267,14 +310,19 @@ const dropdownId = computed(() => `logbook-builder-header-${props.column.id}`)
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-    coarseMedia = window.matchMedia('(hover: none), (pointer: coarse)')
+    hoverMedia = window.matchMedia('(hover: none)')
+    pointerMedia = window.matchMedia('(pointer: coarse)')
     syncCoarsePointer()
-    coarseMedia.addEventListener('change', syncCoarsePointer)
+    hoverMedia.addEventListener('change', syncCoarsePointer)
+    pointerMedia.addEventListener('change', syncCoarsePointer)
+  } else {
+    syncCoarsePointer()
   }
 })
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
-  coarseMedia?.removeEventListener('change', syncCoarsePointer)
+  hoverMedia?.removeEventListener('change', syncCoarsePointer)
+  pointerMedia?.removeEventListener('change', syncCoarsePointer)
   if (closeTimeout) clearTimeout(closeTimeout)
 })
 
@@ -303,7 +351,7 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
 </script>
 
 <template>
-  <div :id="dropdownId" class="relative flex min-w-0 flex-col gap-0.5">
+  <div :id="dropdownId" class="relative flex min-w-0 flex-col gap-0.5" :class="{ 'lb-touch': coarsePointer }">
     <button
       type="button"
       :class="[
@@ -340,6 +388,7 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
           class="relative"
           @pointerenter="onCategoryPointerEnter"
           @pointerdown="onCategoryPointerDown"
+          @touchstart="onCategoryTouchStart"
           @mouseenter="onCategoryMouseEnter"
           @mouseleave="onCategoryMouseLeave"
         >
@@ -438,6 +487,12 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
 }
 .lb-cat-chevron-open {
   transform: rotate(90deg);
+}
+.lb-touch .lb-cat-row,
+.lb-touch .lb-cat-option {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
 }
 @media (pointer: coarse), (hover: none) {
   .lb-cat-row,

@@ -40,7 +40,7 @@
             : '',
         ]"
       >
-        <p :class="['text-sm mb-8', isFromLanding ? 'text-gray-600 dark:text-gray-600' : 'text-gray-500 dark:text-gray-400']">Effective: April 16, 2026 · Last updated: April 16, 2026</p>
+        <p :class="['text-sm mb-8', isFromLanding ? 'text-gray-600 dark:text-gray-600' : 'text-gray-500 dark:text-gray-400']">Effective: April 16, 2026 · Last updated: October 8, 2026</p>
 
         <h1 :class="['text-3xl font-bold font-quicksand mb-2', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">Privacy Policy</h1>
         <p :class="['mb-10', isFromLanding ? 'text-gray-300' : 'text-gray-600 dark:text-gray-400']">This policy describes how Logifi collects, uses, and protects your information.</p>
@@ -111,7 +111,7 @@
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             If you use Digifi on Start Scanning, you upload photos of your paper logbook. Our servers send those images to
             <strong :class="isFromLanding ? 'text-gray-100' : ''">Google Gemini</strong> to transcribe entries into the builder grid.
-            You review and edit before importing. Scan images are retained for up to 24 hours in private storage, then deleted.
+            You review and edit before importing. Scan images are retained in private storage, then deleted within 48 hours.
             Airline portal credentials are not sent to AI providers.
           </p>
         </section>

@@ -3,13 +3,8 @@
     <SettingsListGroup title="About Digifi" :is-dark-mode="isDarkMode">
       <div class="px-4 py-3">
         <p class="text-sm" :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">
-          <template v-if="isIos">
-            Scan and review pages on this phone. Digifi Eye still captures for desktop Start Scanning.
-          </template>
-          <template v-else>
-            Digifi uses AI to pre-fill rows from photos of your paper logbook pages on Start Scanning.
-            You are responsible for verifying every entry before importing into your logbook.
-          </template>
+          Digifi uses AI to pre-fill rows from photos of your paper logbook pages on Start Scanning.
+          You are responsible for verifying every entry before importing into your logbook.
         </p>
       </div>
     </SettingsListGroup>
