@@ -4,7 +4,9 @@ import { navigateTo, useRoute } from '#app'
 import DigifiCreditsIndicator from '~/components/digifi/DigifiCreditsIndicator.vue'
 import DigifiMobileColumnCarousel from '~/components/digifi/DigifiMobileColumnCarousel.vue'
 import DigifiMobileLayoutWizard from '~/components/digifi/DigifiMobileLayoutWizard.vue'
+import DigifiAiConsentSheet from '~/components/digifi/DigifiAiConsentSheet.vue'
 import DigifiMobileCameraCapture from '~/components/digifi/DigifiMobileCameraCapture.vue'
+import { useDigifiAiConsent } from '~/composables/useDigifiAiConsent'
 import DigifiMobileValidateBar from '~/components/digifi/DigifiMobileValidateBar.vue'
 import IosAppPageShell from '~/components/ios/IosAppPageShell.vue'
 import { useAuth } from '~/composables/useAuth'
@@ -57,6 +59,7 @@ import { useTheme } from '~/composables/useTheme'
 const route = useRoute()
 const { initAuth, isAuthenticated, user, getAccessToken } = useAuth()
 const { isDark: isDarkMode } = useTheme()
+const { ensureDigifiAiConsent } = useDigifiAiConsent()
 const { fetchBalance } = useDigifiCredits()
 const { preferredSink, loadPreferredSink } = useDigifiDestination()
 
@@ -268,7 +271,7 @@ function openReviewIfReady() {
   phase.value = 'review'
 }
 
-function openCapture(pageSide?: DigifiPageSide) {
+async function openCapture(pageSide?: DigifiPageSide) {
   if (!canScan.value) return
   if (nextCaptureSide.value === null) {
     openReviewIfReady()
@@ -287,6 +290,9 @@ function openCapture(pageSide?: DigifiPageSide) {
     return
   }
 
+  const allowed = await ensureDigifiAiConsent()
+  if (!allowed) return
+
   captureSideOverride.value = side
   showCamera.value = true
 }
@@ -300,7 +306,10 @@ function startDigifiNextPage() {
 }
 provide('startDigifiNextPage', startDigifiNextPage)
 
-function retakeCaptureSide(pageSide: DigifiPageSide) {
+async function retakeCaptureSide(pageSide: DigifiPageSide) {
+  const allowed = await ensureDigifiAiConsent()
+  if (!allowed) return
+
   clearScanPageError(pageSide)
   if (pageSide === 'left') {
     leftPagePhotoCaptured.value = false
@@ -317,6 +326,9 @@ function retakeCaptureSide(pageSide: DigifiPageSide) {
 }
 
 async function onCaptureFile(file: File) {
+  const allowed = await ensureDigifiAiConsent()
+  if (!allowed) return
+
   autoReviewAfterCapture.value = true
   const pageSide = captureSide.value
   captureSideOverride.value = null
@@ -351,6 +363,8 @@ async function onFile(event: Event) {
   const file = input.files?.[0]
   input.value = ''
   if (!file) return
+  const allowed = await ensureDigifiAiConsent()
+  if (!allowed) return
   await onCaptureFile(file)
 }
 
@@ -457,6 +471,7 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <DigifiAiConsentSheet />
   <IosAppPageShell :title="title">
     <template #trailing>
       <div class="flex flex-col items-end gap-0.5 leading-tight">

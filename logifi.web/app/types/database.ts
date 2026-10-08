@@ -623,6 +623,7 @@ export type Database = {
           digifi_preferred_sink: 'logten' | 'logifi' | null
           digifi_pilot_notes: string | null
           digifi_pilot_notes_priors: Record<string, unknown> | null
+          digifi_ai_consent_at: string | null
           created_at: string
           updated_at: string
         }
@@ -646,6 +647,7 @@ export type Database = {
           digifi_preferred_sink?: 'logten' | 'logifi' | null
           digifi_pilot_notes?: string | null
           digifi_pilot_notes_priors?: Record<string, unknown> | null
+          digifi_ai_consent_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -668,6 +670,7 @@ export type Database = {
           digifi_preferred_sink?: 'logten' | 'logifi' | null
           digifi_pilot_notes?: string | null
           digifi_pilot_notes_priors?: Record<string, unknown> | null
+          digifi_ai_consent_at?: string | null
           signing_pin_hash?: string | null
           created_at?: string
           updated_at?: string
