@@ -40,7 +40,7 @@
             : '',
         ]"
       >
-        <p :class="['text-sm mb-8', isFromLanding ? 'text-gray-600 dark:text-gray-600' : 'text-gray-500 dark:text-gray-400']">Effective: February 21, 2025 · Last updated: February 21, 2025</p>
+        <p :class="['text-sm mb-8', isFromLanding ? 'text-gray-600 dark:text-gray-600' : 'text-gray-500 dark:text-gray-400']">Effective: February 21, 2025 · Last updated: 2026-10-08</p>
 
         <h1 :class="['text-3xl font-bold font-quicksand mb-2', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">Terms of Service</h1>
         <p :class="['mb-10', isFromLanding ? 'text-gray-300' : 'text-gray-600 dark:text-gray-400']">Please read these terms carefully before using Logifi.</p>
@@ -88,12 +88,38 @@
         <section class="mb-10">
           <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">6. Fees and Payment</h2>
           <p :class="['leading-relaxed', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
-            Currently the Service is free during beta. Any future fees will be described at the point of purchase. By subscribing or purchasing, you agree to the pricing and payment terms presented at that time.
+            The logbook is free. Digifi scanning is a paid feature, bought as credits. Prices are on the
+            <NuxtLink to="/pricing" class="text-blue-600 hover:underline dark:text-blue-400">Pricing</NuxtLink>
+            page. By purchasing, you agree to the price and payment terms shown at checkout.
           </p>
         </section>
 
         <section class="mb-10">
-          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">7. Termination</h2>
+          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">7. Digifi credits</h2>
+          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
+            Digifi credits are a one-time purchase. They are not a subscription and do not auto-renew.
+          </p>
+          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
+            One credit covers one two-page spread: the left page and the right page. That credit is charged once, after the right-page scan is saved. The left page alone is not charged. A single-page scan uses one credit when that scan is saved. Scanning a spread that was already charged does not use another credit. If a scan fails, or the result is not saved, no credit is charged.
+          </p>
+          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
+            Credits have no cash value and are not transferable.
+          </p>
+          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
+            Digifi uses AI to read your pages. You must review the results before you import them.
+          </p>
+          <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
+            Each account is granted 10 Digifi credits once, at no charge.
+          </p>
+          <p :class="['leading-relaxed', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
+            <strong :class="isFromLanding ? 'text-gray-100' : ''">DRAFT:</strong>
+            Apple purchases are refunded through Apple. For card or Lightning purchases, contact
+            <a href="mailto:info@logifi.io" class="text-blue-600 hover:underline dark:text-blue-400">info@logifi.io</a>.
+          </p>
+        </section>
+
+        <section class="mb-10">
+          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">8. Termination</h2>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             You may stop using the Service at any time. We may suspend or terminate your access if you breach these Terms or for other operational or legal reasons.
           </p>
@@ -103,28 +129,28 @@
         </section>
 
         <section class="mb-10">
-          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">8. Disclaimers</h2>
+          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">9. Disclaimers</h2>
           <p :class="['leading-relaxed', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED. WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR FREE OF HARMFUL COMPONENTS. YOU USE THE SERVICE AT YOUR OWN RISK.
           </p>
         </section>
 
         <section class="mb-10">
-          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">9. Limitation of Liability</h2>
+          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">10. Limitation of Liability</h2>
           <p :class="['leading-relaxed', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             TO THE MAXIMUM EXTENT PERMITTED BY LAW, LOGIFI (AND ITS AFFILIATES, OFFICERS, EMPLOYEES, AND AGENTS) SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, DATA, OR GOODWILL, ARISING FROM YOUR USE OF THE SERVICE. OUR TOTAL LIABILITY SHALL NOT EXCEED THE AMOUNT YOU PAID US IN THE TWELVE (12) MONTHS BEFORE THE CLAIM AROSE, OR ONE HUNDRED DOLLARS ($100), WHICHEVER IS GREATER.
           </p>
         </section>
 
         <section class="mb-10">
-          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">10. Governing Law and Disputes</h2>
+          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">11. Governing Law and Disputes</h2>
           <p :class="['leading-relaxed', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             These Terms are governed by the laws of the United States and the State of Delaware, without regard to conflict of law principles. Any dispute arising from these Terms or the Service shall be resolved in the courts located in Delaware.
           </p>
         </section>
 
         <section class="mb-10">
-          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">11. Changes</h2>
+          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">12. Changes</h2>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             We may update these Terms from time to time. We will post the updated Terms on this page and update the "Last updated" date. Your continued use of the Service after changes constitutes acceptance of the revised Terms.
           </p>
@@ -134,7 +160,7 @@
         </section>
 
         <section class="mb-10">
-          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">12. Third-party logbook import (airline schedule)</h2>
+          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">13. Third-party logbook import (airline schedule)</h2>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             Logifi may offer an optional connection to your airline schedule portal (FLICA) so you can
             preview and import flights into your logbook. This connection is currently in public beta
@@ -149,7 +175,7 @@
         </section>
 
         <section class="mb-10">
-          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">13. Contact</h2>
+          <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">14. Contact</h2>
           <p :class="['leading-relaxed', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             Questions about these Terms? Contact us at
             <a href="mailto:info@logifi.io" class="text-blue-600 hover:underline dark:text-blue-400">info@logifi.io</a>.

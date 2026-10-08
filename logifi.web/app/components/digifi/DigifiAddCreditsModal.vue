@@ -471,35 +471,55 @@ async function proceedToIapPurchase(productId: string) {
             {{ checkoutError }}
           </p>
 
-          <button
-            v-if="isIapAvailable && !showWebPayments"
-            type="button"
-            class="w-full py-3 rounded-xl font-bold font-quicksand text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            :class="[
-              isDarkMode
-                ? 'bg-blue-600 text-white hover:bg-blue-500'
-                : 'bg-blue-600 text-white hover:bg-blue-700',
-            ]"
-            :disabled="!selectedIapProductId || iapLoading"
-            @click="selectedIapProductId && proceedToIapPurchase(selectedIapProductId)"
-          >
-            Purchase with Apple
-          </button>
+          <div class="space-y-2">
+            <button
+              v-if="isIapAvailable && !showWebPayments"
+              type="button"
+              class="w-full py-3 rounded-xl font-bold font-quicksand text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              :class="[
+                isDarkMode
+                  ? 'bg-blue-600 text-white hover:bg-blue-500'
+                  : 'bg-blue-600 text-white hover:bg-blue-700',
+              ]"
+              :disabled="!selectedIapProductId || iapLoading"
+              @click="selectedIapProductId && proceedToIapPurchase(selectedIapProductId)"
+            >
+              Purchase with Apple
+            </button>
 
-          <button
-            v-else
-            type="button"
-            class="w-full py-3 rounded-xl font-bold font-quicksand text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            :class="[
-              isDarkMode
-                ? 'bg-blue-600 text-white hover:bg-blue-500'
-                : 'bg-blue-600 text-white hover:bg-blue-700',
-            ]"
-            :disabled="!canCheckout"
-            @click="proceedToPayment"
-          >
-            Proceed to Payment
-          </button>
+            <button
+              v-else
+              type="button"
+              class="w-full py-3 rounded-xl font-bold font-quicksand text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              :class="[
+                isDarkMode
+                  ? 'bg-blue-600 text-white hover:bg-blue-500'
+                  : 'bg-blue-600 text-white hover:bg-blue-700',
+              ]"
+              :disabled="!canCheckout"
+              @click="proceedToPayment"
+            >
+              Proceed to Payment
+            </button>
+
+            <p
+              class="text-xs text-center font-quicksand"
+              :class="isDarkMode ? 'text-gray-500' : 'text-gray-500'"
+            >
+              By purchasing, you agree to the
+              <NuxtLink
+                to="/terms"
+                class="underline"
+                :class="isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'"
+              >Terms</NuxtLink>
+              and
+              <NuxtLink
+                to="/privacy"
+                class="underline"
+                :class="isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'"
+              >Privacy Policy</NuxtLink>.
+            </p>
+          </div>
         </div>
       </div>
     </div>
