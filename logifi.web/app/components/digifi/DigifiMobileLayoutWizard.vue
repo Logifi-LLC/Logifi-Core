@@ -10,6 +10,7 @@ import {
 import { useLogbookBuilderTemplateMatch } from '~/composables/useLogbookBuilderTemplateMatch'
 import { readLastTemplateId } from '~/utils/logbookBuilderDraft'
 import {
+  CATEGORY_CLASS_OPTIONS,
   DIGIFI_SCAN_FIELD_CHECKLIST,
   ROLE_OPTIONS,
   type BuilderLayout,
@@ -140,6 +141,7 @@ const columnsEditorExpanded = ref(true)
 /** Avoid re-collapsing after the pilot expands the column editor (e.g. when templates fetch completes). */
 let didAutoCollapseColumnsForTemplate = false
 const addFieldKey = ref<string>('')
+const addCategoryClassValue = ref('')
 const customColumnTitle = ref('')
 
 const selectedFieldKeys = computed(() => {
@@ -170,19 +172,42 @@ function bumpRows(delta: number) {
 
 const orderedColumns = computed(() => grid.visibleColumns.value)
 
-const availableFieldsToAdd = computed(() =>
-  DIGIFI_SCAN_FIELD_CHECKLIST.filter((item) => !selectedFieldKeys.value.has(item.fieldKey))
+const takenCategoryClasses = computed(() => {
+  const taken = new Set<string>()
+  for (const column of grid.visibleColumns.value) {
+    const categoryClassValue = column.categoryClassValue?.trim()
+    if (column.fieldKey === 'categoryClass' && categoryClassValue) {
+      taken.add(categoryClassValue)
+    }
+  }
+  return taken
+})
+
+const availableCategoryClasses = computed(() =>
+  CATEGORY_CLASS_OPTIONS.filter((cc) => !takenCategoryClasses.value.has(cc))
 )
+
+const availableFieldsToAdd = computed(() =>
+  DIGIFI_SCAN_FIELD_CHECKLIST.filter((item) => {
+    if (item.fieldKey === 'categoryClass') return availableCategoryClasses.value.length > 0
+    return !selectedFieldKeys.value.has(item.fieldKey)
+  })
+)
+
+function resetAddFieldSelects() {
+  addFieldKey.value = ''
+  addCategoryClassValue.value = ''
+}
 
 function addField(fieldKey: LogbookColumnKey) {
   grid.addColumn(fieldKey)
-  addFieldKey.value = ''
+  resetAddFieldSelects()
   columnsEditorExpanded.value = true
 }
 
 function addDayColumn() {
   grid.addColumn(null, { columnKind: 'day', label: 'Day' })
-  addFieldKey.value = ''
+  resetAddFieldSelects()
   columnsEditorExpanded.value = true
 }
 
@@ -191,18 +216,37 @@ function addCustomColumn() {
   if (!title) return
   grid.addColumn(null, { columnKind: 'custom', label: title })
   customColumnTitle.value = ''
-  addFieldKey.value = ''
+  resetAddFieldSelects()
+  columnsEditorExpanded.value = true
+}
+
+function addCategoryClassColumn(categoryClassValue: string) {
+  grid.addColumn('categoryClass', { categoryClassValue, label: categoryClassValue })
+  resetAddFieldSelects()
   columnsEditorExpanded.value = true
 }
 
 function onAddFieldChange() {
   const value = addFieldKey.value
+  if (value === 'categoryClass') {
+    addCategoryClassValue.value = ''
+    return
+  }
+  addCategoryClassValue.value = ''
   if (!value) return
   if (value === '__day') {
     addDayColumn()
     return
   }
   addField(value as LogbookColumnKey)
+}
+
+function onCategoryClassChange(event: Event) {
+  const categoryClassValue = (event.target as HTMLSelectElement).value
+  if (!categoryClassValue) return
+  if (!(CATEGORY_CLASS_OPTIONS as readonly string[]).includes(categoryClassValue)) return
+  if (takenCategoryClasses.value.has(categoryClassValue)) return
+  addCategoryClassColumn(categoryClassValue)
 }
 
 function removeField(columnId: string) {
@@ -569,6 +613,26 @@ watch(
               {{ item.label }}
             </option>
           </select>
+          <template v-if="addFieldKey === 'categoryClass'">
+            <label class="sr-only" for="digifi-add-category-class">Pick a class</label>
+            <select
+              id="digifi-add-category-class"
+              v-model="addCategoryClassValue"
+              class="mt-2 w-full rounded-2xl border px-4 py-3 text-sm font-semibold"
+              :class="
+                isDarkMode
+                  ? 'border-white/10 bg-white/5 text-gray-100'
+                  : 'border-gray-200 bg-white text-gray-900 shadow-sm'
+              "
+              aria-label="Pick a class"
+              @change="onCategoryClassChange"
+            >
+              <option value="">Pick a class…</option>
+              <option v-for="cc in availableCategoryClasses" :key="cc" :value="cc">
+                {{ cc }}
+              </option>
+            </select>
+          </template>
           <form class="mt-2 flex gap-2" @submit.prevent="addCustomColumn">
             <input
               v-model="customColumnTitle"
