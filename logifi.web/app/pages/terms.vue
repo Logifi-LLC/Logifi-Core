@@ -112,7 +112,7 @@
             Each account is granted 10 Digifi credits once, at no charge.
           </p>
           <p :class="['leading-relaxed', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
-            <strong :class="isFromLanding ? 'text-gray-100' : ''">DRAFT:</strong>
+            <strong :class="isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white'">DRAFT:</strong>
             Apple purchases are refunded through Apple. For card or Lightning purchases, contact
             <a href="mailto:info@logifi.io" class="text-blue-600 hover:underline dark:text-blue-400">info@logifi.io</a>.
           </p>
