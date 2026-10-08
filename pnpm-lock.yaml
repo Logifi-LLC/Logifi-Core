@@ -13,31 +13,31 @@ importers:
         version: 3.1.0
       '@capacitor/app':
         specifier: ^8.0.0
-        version: 8.1.1(@capacitor/core@8.5.1)
+        version: 8.1.1(@capacitor/core@8.5.3)
       '@capacitor/barcode-scanner':
         specifier: ^3.0.2
-        version: 3.1.2(@capacitor/core@8.5.1)
+        version: 3.1.2(@capacitor/core@8.5.3)
       '@capacitor/browser':
         specifier: ^8.0.3
-        version: 8.0.4(@capacitor/core@8.5.1)
+        version: 8.0.4(@capacitor/core@8.5.3)
       '@capacitor/cli':
-        specifier: ^8.4.0
-        version: 8.5.1
+        specifier: ^8.5.3
+        version: 8.5.3
       '@capacitor/core':
-        specifier: ^8.4.0
-        version: 8.5.1
+        specifier: ^8.5.3
+        version: 8.5.3
       '@capacitor/ios':
-        specifier: ^8.4.0
-        version: 8.5.1(@capacitor/core@8.5.1)
+        specifier: ^8.5.3
+        version: 8.5.3(@capacitor/core@8.5.3)
       '@capacitor/splash-screen':
         specifier: ^8.0.1
-        version: 8.0.2(@capacitor/core@8.5.1)
+        version: 8.0.2(@capacitor/core@8.5.3)
       '@capgo/capacitor-social-login':
         specifier: ^8.3.40
-        version: 8.5.7(@capacitor/core@8.5.1)
+        version: 8.5.7(@capacitor/core@8.5.3)
       '@capgo/native-purchases':
         specifier: ^8.7.0
-        version: 8.7.0(@capacitor/core@8.5.1)
+        version: 8.7.0(@capacitor/core@8.5.3)
 
 packages:
 
@@ -59,16 +59,16 @@ packages:
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
-  '@capacitor/cli@8.5.1':
-    resolution: {integrity: sha512-LKQFSyLg1QbTN6CGDoFqeRtAlj8C3c9OymP8OuhwlmkbSQwh9i1HQjwUCaNyVem2XkY9rv0v2UOfVlgoxH5pAw==}
+  '@capacitor/cli@8.5.3':
+    resolution: {integrity: sha512-/G6xwna+p4GS3lthSdWN3OThCH2F85O0Ukdy8rv3oAXvgEMeyFgPEIA3PMAS++IkHwUuBYBAKOQJnZfcrh1n0w==}
     engines: {node: '>=22.0.0'}
     hasBin: true
 
-  '@capacitor/core@8.5.1':
-    resolution: {integrity: sha512-IOQ7ynG1qgrJ/RLuCO3WgyRGmkmmG/cdStRR4ftU2dWEN1FdtLrnI/XpZmZuUsOEHEnzBRJY/PmRH8eTLiXfhA==}
+  '@capacitor/core@8.5.3':
+    resolution: {integrity: sha512-oBE1oGuYE4ZzYYrulC75OuHdSsD6zLUy7d5o1tFwDLG4govGoubY15cxpiI5l0+q87Lm5p0bhbehMdzJg4aFag==}
 
-  '@capacitor/ios@8.5.1':
-    resolution: {integrity: sha512-0EVqwCYf3RUp2JAjUGZ04xmG6dSpIsPmPacI9zKxn6mu9RSiHhmFF230ghe00HrkyB6ig6SfNdoADvVODxYhlQ==}
+  '@capacitor/ios@8.5.3':
+    resolution: {integrity: sha512-HnnV92Jl8+3x0JUloXUMjFcUsQI8wHFVsKwkLn72DfRZXYGZW11tQbmNOWOnRTljaU18FdI1b9ipT09SzzPDNw==}
     peerDependencies:
       '@capacitor/core': ^8.5.0
 
@@ -196,8 +196,8 @@ packages:
     resolution: {integrity: sha512-apC2+fspHGI3mMKj+dGevkGo/tCqVB8jMb6i+OX+E29p0Iposz07fABkRIfVUPNd5A5VbuOz1bZbnmkKLYF+wQ==}
     engines: {node: '>= 5.10.0'}
 
-  brace-expansion@5.0.9:
-    resolution: {integrity: sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg==}
+  brace-expansion@5.0.12:
+    resolution: {integrity: sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==}
     engines: {node: 20 || >=22}
 
   buffer-crc32@0.2.13:
@@ -632,20 +632,20 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@capacitor/app@8.1.1(@capacitor/core@8.5.1)':
+  '@capacitor/app@8.1.1(@capacitor/core@8.5.3)':
     dependencies:
-      '@capacitor/core': 8.5.1
+      '@capacitor/core': 8.5.3
 
-  '@capacitor/barcode-scanner@3.1.2(@capacitor/core@8.5.1)':
+  '@capacitor/barcode-scanner@3.1.2(@capacitor/core@8.5.3)':
     dependencies:
-      '@capacitor/core': 8.5.1
+      '@capacitor/core': 8.5.3
       html5-qrcode: 2.3.8
 
-  '@capacitor/browser@8.0.4(@capacitor/core@8.5.1)':
+  '@capacitor/browser@8.0.4(@capacitor/core@8.5.3)':
     dependencies:
-      '@capacitor/core': 8.5.1
+      '@capacitor/core': 8.5.3
 
-  '@capacitor/cli@8.5.1':
+  '@capacitor/cli@8.5.3':
     dependencies:
       '@ionic/cli-framework-output': 2.2.8
       '@ionic/utils-subprocess': 3.0.1
@@ -668,26 +668,26 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@capacitor/core@8.5.1':
+  '@capacitor/core@8.5.3':
     dependencies:
       tslib: 2.8.1
 
-  '@capacitor/ios@8.5.1(@capacitor/core@8.5.1)':
+  '@capacitor/ios@8.5.3(@capacitor/core@8.5.3)':
     dependencies:
-      '@capacitor/core': 8.5.1
+      '@capacitor/core': 8.5.3
 
-  '@capacitor/splash-screen@8.0.2(@capacitor/core@8.5.1)':
+  '@capacitor/splash-screen@8.0.2(@capacitor/core@8.5.3)':
     dependencies:
-      '@capacitor/core': 8.5.1
+      '@capacitor/core': 8.5.3
 
-  '@capgo/capacitor-social-login@8.5.7(@capacitor/core@8.5.1)':
+  '@capgo/capacitor-social-login@8.5.7(@capacitor/core@8.5.3)':
     dependencies:
-      '@capacitor/core': 8.5.1
+      '@capacitor/core': 8.5.3
       tslib: 2.8.1
 
-  '@capgo/native-purchases@8.7.0(@capacitor/core@8.5.1)':
+  '@capgo/native-purchases@8.7.0(@capacitor/core@8.5.3)':
     dependencies:
-      '@capacitor/core': 8.5.1
+      '@capacitor/core': 8.5.3
 
   '@ionic/cli-framework-output@2.2.8':
     dependencies:
@@ -831,7 +831,7 @@ snapshots:
     dependencies:
       big-integer: 1.6.52
 
-  brace-expansion@5.0.9:
+  brace-expansion@5.0.12:
     dependencies:
       balanced-match: 4.0.4
 
@@ -1048,7 +1048,7 @@ snapshots:
 
   minimatch@10.2.6:
     dependencies:
-      brace-expansion: 5.0.9
+      brace-expansion: 5.0.12
 
   minipass@7.1.3: {}
 
