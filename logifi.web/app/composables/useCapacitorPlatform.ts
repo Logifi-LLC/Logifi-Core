@@ -4,7 +4,7 @@ import { computed } from 'vue'
 export type CapacitorPlatform = 'ios' | 'android' | 'web'
 
 const NATIVE_VIEWPORT_BASE =
-  'width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no'
+  'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover'
 
 export function getCapacitorPlatform(): CapacitorPlatform {
   if (typeof window === 'undefined') return 'web'
