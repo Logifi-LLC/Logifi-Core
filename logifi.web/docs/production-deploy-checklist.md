@@ -32,6 +32,7 @@ Project → Settings → Environment Variables → **Production** (redeploy afte
 | `SUPABASE_SERVICE_ROLE_KEY` | Production service role key |
 | `GEMINI_API_KEY` | Production Gemini key |
 | `NUXT_PUBLIC_COMPANION_CAPTURE_ORIGIN` | `https://YOUR_PRODUCTION_DOMAIN` |
+| `CRON_SECRET` | Random string (`openssl rand -base64 32`). Vercel Cron sends it as `Authorization: Bearer`. Until this is set, `GET /api/cron/purge-digifi-scans` returns 503 and deletes nothing. |
 
 ### Required — live payments
 
@@ -84,3 +85,4 @@ Push `main` — Vercel auto-deploys. Or: `cd logifi.web && npx vercel --prod`.
 - [ ] Mock credits disabled (`/api/credits/add-mock` returns 403)
 - [ ] Dashboard import / simulator logbook still works
 - [ ] Vercel function logs: no Stripe/OpenNode webhook errors
+- [ ] After `CRON_SECRET` is set, Vercel Cron `GET /api/cron/purge-digifi-scans` returns 200 (503 until the secret exists)

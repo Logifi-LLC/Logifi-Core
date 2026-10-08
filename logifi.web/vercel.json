@@ -2,5 +2,11 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nuxtjs",
   "buildCommand": "pnpm run build",
-  "installCommand": "pnpm install --frozen-lockfile"
+  "installCommand": "pnpm install --frozen-lockfile",
+  "crons": [
+    {
+      "path": "/api/cron/purge-digifi-scans",
+      "schedule": "0 * * * *"
+    }
+  ]
 }
