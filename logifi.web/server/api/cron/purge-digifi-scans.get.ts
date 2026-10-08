@@ -7,7 +7,7 @@ import {
 import { getSupabaseServiceClient } from '../../utils/supabaseService'
 
 /**
- * Hourly Vercel Cron. Deletes digifi-scans objects past digifi_scan_sessions.expires_at,
+ * Daily Vercel Cron (08:17 UTC). Deletes digifi-scans objects past digifi_scan_sessions.expires_at,
  * then the session rows. Requires Authorization: Bearer $CRON_SECRET.
  */
 export default defineEventHandler(async (event) => {

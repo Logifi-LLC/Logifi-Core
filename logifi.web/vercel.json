@@ -6,7 +6,7 @@
   "crons": [
     {
       "path": "/api/cron/purge-digifi-scans",
-      "schedule": "0 * * * *"
+      "schedule": "17 8 * * *"
     }
   ]
 }

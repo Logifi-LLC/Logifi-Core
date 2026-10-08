@@ -32,7 +32,7 @@ Project → Settings → Environment Variables → **Production** (redeploy afte
 | `SUPABASE_SERVICE_ROLE_KEY` | Production service role key |
 | `GEMINI_API_KEY` | Production Gemini key |
 | `NUXT_PUBLIC_COMPANION_CAPTURE_ORIGIN` | `https://YOUR_PRODUCTION_DOMAIN` |
-| `CRON_SECRET` | Random string (`openssl rand -base64 32`). Vercel Cron sends it as `Authorization: Bearer`. Until this is set, `GET /api/cron/purge-digifi-scans` returns 503 and deletes nothing. |
+| `CRON_SECRET` | Random string (`openssl rand -base64 32`). Vercel Cron sends it as `Authorization: Bearer`. Daily at 08:17 UTC (`17 8 * * *`). Until this is set, `GET /api/cron/purge-digifi-scans` returns 503 and deletes nothing. |
 
 ### Required — live payments
 

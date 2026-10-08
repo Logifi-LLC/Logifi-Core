@@ -7,7 +7,7 @@ export const DIGIFI_SCANS_BUCKET = 'digifi-scans'
 /** Storage remove accepts batches; keep each request small and retryable. */
 export const DIGIFI_SCAN_PURGE_BATCH_SIZE = 100
 
-/** Cap one invocation so an hourly cron finishes and the next hour continues. */
+/** Cap one invocation so a daily cron finishes and the next day continues. */
 export const DIGIFI_SCAN_PURGE_MAX_BATCHES = 20
 
 /**
