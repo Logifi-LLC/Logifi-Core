@@ -42,6 +42,7 @@
             >
               See Autofi
             </button>
+            <AppStoreLink variant="hero" />
           </div>
         </div>
       </section>
