@@ -82,6 +82,14 @@ const {
 } = useLogbookBuilderDigifi(grid)
 
 const phase = ref<'setup' | 'review'>('setup')
+
+function syncDigifiScanDocumentLock() {
+  if (typeof document === 'undefined') return
+  document.documentElement.classList.toggle('digifi-scan-lock', phase.value === 'setup')
+}
+
+watch(phase, syncDigifiScanDocumentLock, { immediate: true })
+
 const showCamera = ref(false)
 const leftPagePhotoCaptured = ref(false)
 const rightPagePhotoCaptured = ref(false)
@@ -464,6 +472,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  if (typeof document !== 'undefined') {
+    document.documentElement.classList.remove('digifi-scan-lock')
+  }
   stopAutosave?.()
   stopDraftFlush?.()
   saveDraftNow(grid, user.value?.id)
@@ -472,7 +483,7 @@ onUnmounted(() => {
 
 <template>
   <DigifiAiConsentSheet />
-  <IosAppPageShell :title="title">
+  <IosAppPageShell :title="title" :scroll-contained="phase === 'setup'">
     <template #trailing>
       <div class="flex flex-col items-end gap-0.5 leading-tight">
         <button
