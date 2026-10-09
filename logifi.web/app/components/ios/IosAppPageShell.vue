@@ -10,10 +10,16 @@ const props = withDefaults(
     isDark?: boolean
     showBack?: boolean
     backFallback?: string
+    /**
+     * Fit the shell to the viewport and scroll only the main slot.
+     * Document scroll stays put, so iOS cannot rubber-band past the page.
+     */
+    scrollContained?: boolean
   }>(),
   {
     showBack: true,
     backFallback: '/dashboard',
+    scrollContained: false,
   }
 )
 
@@ -33,12 +39,20 @@ function onBack() {
 
 <template>
   <div
-    class="min-h-[100dvh] font-quicksand"
-    :class="isDark ? 'bg-slate-950 text-slate-100' : 'bg-gray-50 text-gray-900'"
+    class="font-quicksand"
+    :class="[
+      isDark ? 'bg-slate-950 text-slate-100' : 'bg-gray-50 text-gray-900',
+      scrollContained
+        ? 'flex h-[100dvh] max-h-[100dvh] min-h-0 flex-col overflow-hidden overscroll-none'
+        : 'min-h-[100dvh]',
+    ]"
   >
     <header
-      class="fixed inset-x-0 top-0 z-50 border-b pt-[env(safe-area-inset-top)] backdrop-blur-sm"
-      :class="isDark ? 'border-white/10 bg-slate-950/95' : 'border-gray-200 bg-gray-50/95'"
+      class="z-50 border-b pt-[env(safe-area-inset-top)] backdrop-blur-sm"
+      :class="[
+        isDark ? 'border-white/10 bg-slate-950/95' : 'border-gray-200 bg-gray-50/95',
+        scrollContained ? 'relative shrink-0' : 'fixed inset-x-0 top-0',
+      ]"
     >
       <div class="flex items-center justify-between px-4 py-2">
         <div class="w-20 shrink-0">
@@ -65,11 +79,16 @@ function onBack() {
     </header>
 
     <main
-      class="px-4 pt-[calc(3rem+env(safe-area-inset-top))]"
+      class="px-4"
       :class="[
-        $slots.footer
-          ? 'pb-[calc(5.5rem+env(safe-area-inset-bottom))]'
-          : 'pb-[calc(1rem+env(safe-area-inset-bottom))]',
+        scrollContained
+          ? 'min-h-0 flex-1 overflow-y-auto overscroll-none'
+          : 'pt-[calc(3rem+env(safe-area-inset-top))]',
+        scrollContained && $slots.footer
+          ? 'pb-4'
+          : $slots.footer
+            ? 'pb-[calc(5.5rem+env(safe-area-inset-bottom))]'
+            : 'pb-[calc(1rem+env(safe-area-inset-bottom))]',
       ]"
     >
       <div class="mx-auto max-w-md">
@@ -79,8 +98,11 @@ function onBack() {
 
     <footer
       v-if="$slots.footer"
-      class="fixed inset-x-0 bottom-0 z-50 border-t px-4 pt-3 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm"
-      :class="isDark ? 'border-white/10 bg-slate-950/95' : 'border-gray-200 bg-gray-50/95'"
+      class="z-50 border-t px-4 pt-3 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm"
+      :class="[
+        isDark ? 'border-white/10 bg-slate-950/95' : 'border-gray-200 bg-gray-50/95',
+        scrollContained ? 'shrink-0' : 'fixed inset-x-0 bottom-0',
+      ]"
     >
       <div class="mx-auto max-w-md">
         <slot name="footer" />
