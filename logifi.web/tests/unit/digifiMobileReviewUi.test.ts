@@ -191,6 +191,9 @@ describe('DigifiMobileLayoutWizard', () => {
     expect(wrapper.text()).toContain('1 · Left')
     expect(wrapper.text()).toContain('2 · Right')
     expect(wrapper.text()).toContain('Photograph left page')
+    const cta = wrapper.get('button.w-full.min-h-\\[52px\\]')
+    expect(cta.text()).toBe('Photograph left page')
+    expect(wrapper.text()).not.toMatch(/false\]|API calls|Scan completed/)
   })
 
   it('waits for a class before adding a Category/Class column', async () => {
