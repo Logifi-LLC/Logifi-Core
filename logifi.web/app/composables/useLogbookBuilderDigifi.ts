@@ -395,11 +395,7 @@ export function useLogbookBuilderDigifi(
       const scanReviewNotes = visibleDigifiReviewMessages(result.reviewMessages)
       const reviewWarning =
         scanReviewNotes.length > 0 ? scanReviewNotes.join(' ') : null
-      const fallbackWarning =
-        result.fallbackUsed && (result.modelsAttempted?.length ?? 0) > 1
-          ? `Used fallback model path (${result.modelsAttempted?.join(' -> ')}).`
-          : null
-      scanRowWarning.value = [rowWarning, reviewWarning, fallbackWarning].filter(Boolean).join(' ')
+      scanRowWarning.value = [rowWarning, reviewWarning].filter(Boolean).join(' ')
       recordDigifiScanStatus({
         pageSide,
         expectedRowCount: rowCount.value,
@@ -430,23 +426,8 @@ export function useLogbookBuilderDigifi(
       }
       lastThumbnailUrl.value = URL.createObjectURL(prepared.previewBlob)
       scanPhase.value = 'Applying results'
-      const creditNote =
-        result.creditCharged === false
-          ? 'No additional credit used for this scan.'
-          : null
-      scanDetail.value = [
-        result.scanTimings != null
-          ? `Scan completed in ${Math.round(result.scanTimings.totalRequestMs)}ms (AI ${Math.round(result.scanTimings.geminiMs)}ms).`
-          : null,
-        result.apiCallCount != null
-          ? `AI API calls for this page: ${result.apiCallCount}.`
-          : result.geminiApiCallCount != null
-            ? `AI API calls for this page: ${result.geminiApiCallCount}.`
-            : null,
-        creditNote,
-      ]
-        .filter(Boolean)
-        .join(' ')
+      scanDetail.value =
+        result.creditCharged === false ? 'No additional credit used for this scan.' : null
     } catch (e: unknown) {
       let msg = digifiPageReadError(pageSide, layout.value)
       let pageUnreadable = true

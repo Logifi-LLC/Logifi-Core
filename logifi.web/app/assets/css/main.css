@@ -46,6 +46,40 @@ body {
   touch-action: manipulation;
 }
 
+/*
+  `nuxt generate` (Capacitor's webDir) appends the SPA payload after #__nuxt:
+  <script type="application/json" id="__NUXT_DATA__">…serverRendered…,prerenderedAt,false]
+  WKWebView paints that JSON on the default white body, below the app shell.
+*/
+script,
+#__NUXT_DATA__,
+[type='application/json'] {
+  display: none !important;
+}
+
+html.capacitor-ios,
+html.capacitor-ios body {
+  overscroll-behavior: none;
+}
+
+/* Digifi setup: one viewport, no document scroll into the payload strip. */
+html.digifi-scan-lock,
+html.digifi-scan-lock body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.light.digifi-scan-lock,
+html.light.digifi-scan-lock body {
+  background-color: #f9fafb;
+}
+
+html.dark.digifi-scan-lock,
+html.dark.digifi-scan-lock body {
+  background-color: #020617;
+}
+
 .app-modal-overlay {
   position: fixed;
   inset: 0;
