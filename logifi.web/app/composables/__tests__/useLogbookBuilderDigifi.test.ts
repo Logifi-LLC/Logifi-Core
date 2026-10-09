@@ -49,6 +49,11 @@ describe('useLogbookBuilderDigifi draft save', () => {
         chunkCount: 0,
         rescueAttempted: false,
         rescueRecoveredCount: 0,
+        fallbackUsed: true,
+        modelsAttempted: ['model-a', 'model-b'],
+        apiCallCount: 2,
+        geminiApiCallCount: 2,
+        scanTimings: { totalRequestMs: 1791543914194, geminiMs: 1200 },
         rowsReturned: 1,
         distinctRowIndices: [0],
         missingRowIndices: [],
@@ -123,5 +128,7 @@ describe('useLogbookBuilderDigifi draft save', () => {
     await wrapper.vm.digifi.scanPage(file, 'left')
 
     expect(saveDraftNow).toHaveBeenCalledWith(grid, 'user-1')
+    expect(wrapper.vm.digifi.scanDetail.value ?? '').not.toMatch(/Scan completed|API calls/)
+    expect(wrapper.vm.digifi.scanRowWarning.value ?? '').not.toMatch(/fallback model/)
   })
 })
