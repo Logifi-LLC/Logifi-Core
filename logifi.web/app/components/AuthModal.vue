@@ -75,7 +75,7 @@
       </div>
 
       <!-- Main Form Content -->
-      <div class="p-8 space-y-6">
+      <div class="max-h-[min(70vh,40rem)] space-y-6 overflow-y-auto p-8">
         <!-- Social Login -->
         <div class="space-y-3">
           <button
@@ -235,6 +235,32 @@
               @keyup.enter="handleSubmit"
             />
           </div>
+          <div v-if="activeTab === 'signup'" class="space-y-2 pt-2">
+            <label
+              class="text-xs font-bold font-quicksand uppercase tracking-wider"
+              :class="[isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+              for="referral-code"
+            >
+              Referral code
+            </label>
+            <input
+              id="referral-code"
+              v-model="referralCode"
+              type="text"
+              autocapitalize="characters"
+              autocomplete="off"
+              spellcheck="false"
+              :disabled="isLoading"
+              :class="[
+                'w-full px-4 py-3 rounded-xl border text-base font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
+                isDarkMode
+                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
+                  : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400',
+                isLoading ? 'opacity-50 cursor-not-allowed' : ''
+              ]"
+              placeholder="Optional"
+            />
+          </div>
           <p 
             v-if="activeTab === 'signup'"
             class="text-[10px] font-medium font-quicksand leading-tight mt-2"
@@ -277,10 +303,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useAuth } from '~/composables/useAuth'
 import { isCapacitorIos, resetIosInputZoom } from '~/composables/useCapacitorPlatform'
 import { WELCOME_CREDITS } from '../../shared/creditsWelcome'
+import { normalizeReferralCode } from '../../shared/referrals'
+import { clearStoredReferralCode, readStoredReferralCode, storeReferralCode } from '~/utils/referralCapture'
 
 const welcomeCredits = WELCOME_CREDITS
 
@@ -317,6 +345,11 @@ const {
 const activeTab = ref<'signin' | 'signup'>('signin')
 const email = ref('')
 const password = ref('')
+const referralCode = ref('')
+
+onMounted(() => {
+  referralCode.value = readStoredReferralCode() ?? ''
+})
 const authError = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 const isLoading = computed(() => authLoading.value)
@@ -338,6 +371,22 @@ const isFormValid = computed(() => {
   return emailValid && passwordValid
 })
 
+function persistTypedReferralCode(): boolean {
+  const raw = referralCode.value.trim()
+  if (!raw) {
+    if (activeTab.value === 'signup') clearStoredReferralCode()
+    return true
+  }
+  const code = normalizeReferralCode(raw)
+  if (!code) {
+    authError.value = 'Enter a valid code'
+    successMessage.value = null
+    return false
+  }
+  storeReferralCode(code)
+  return true
+}
+
 function completeAuthSuccess(delayMs: number) {
   setTimeout(() => {
     resetIosInputZoom()
@@ -355,6 +404,7 @@ const handleSubmit = async () => {
 
   try {
     if (activeTab.value === 'signup') {
+      if (!persistTypedReferralCode()) return
       const result = await signUp(email.value, password.value)
       if (result.success) {
         if (result.requiresEmailConfirmation) {
@@ -410,6 +460,7 @@ const handleForgotPassword = async () => {
 // Handle Apple sign in
 const handleAppleSignIn = async () => {
   if (isLoading.value) return
+  if (!persistTypedReferralCode()) return
 
   authError.value = null
   successMessage.value = null
@@ -432,6 +483,7 @@ const handleAppleSignIn = async () => {
 // Handle Google sign in
 const handleGoogleSignIn = async () => {
   if (isLoading.value) return
+  if (!persistTypedReferralCode()) return
 
   authError.value = null
   successMessage.value = null

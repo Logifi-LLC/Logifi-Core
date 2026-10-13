@@ -226,6 +226,10 @@ async function drainPendingScans() {
 
   pendingScans.value = pendingScans.value.filter((item) => item.pageSide !== next.pageSide)
   await scanPage(next.file, next.pageSide)
+  if (!error.value) {
+    const { noteDigifiScanSucceeded } = await import('~/utils/referralPrompt')
+    noteDigifiScanSucceeded()
+  }
   scheduleScanDrain()
 }
 

@@ -19,12 +19,14 @@
         </button>
       </div>
     </Teleport>
+    <ReferralInviteSheet />
     <NuxtPage />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import ReferralInviteSheet from '~/components/referrals/ReferralInviteSheet.vue'
 import { useToast } from '~/composables/useToast'
 
 // Keep `html.dark` / `html.light` in sync with stored app theme for `dark:` utilities site-wide.

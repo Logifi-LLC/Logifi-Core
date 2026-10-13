@@ -5,6 +5,7 @@ import * as supabaseUtils from '../../../utils/supabase'
 import * as supabaseServiceUtils from '../../../utils/supabaseService'
 import * as creditsPaymentUtils from '../../../utils/creditsPayment'
 import * as appleIapUtils from '../../../utils/appleIapVerification'
+import * as referralUtils from '../../../utils/referrals'
 
 // Mock readBody function that tests can configure (must use vi.hoisted for vi.mock factory)
 const { mockReadBody } = vi.hoisted(() => ({
@@ -15,6 +16,9 @@ vi.mock('../../../utils/supabase')
 vi.mock('../../../utils/supabaseService')
 vi.mock('../../../utils/creditsPayment')
 vi.mock('../../../utils/appleIapVerification')
+vi.mock('../../../utils/referrals', () => ({
+  rewardReferrerForPaidPurchase: vi.fn(async () => ({ granted: false })),
+}))
 
 vi.mock('h3', async () => {
   const actual = await vi.importActual<typeof import('h3')>('h3')
@@ -104,6 +108,11 @@ describe('POST /api/credits/iap/verify', () => {
       granted: true,
       outcome: 'credited',
     })
+    expect(referralUtils.rewardReferrerForPaidPurchase).toHaveBeenCalledWith(
+      expect.anything(),
+      mockUserId,
+      'apple_iap'
+    )
   })
 
   it('should reject if user is not authenticated', async () => {
@@ -239,5 +248,6 @@ describe('POST /api/credits/iap/verify', () => {
       granted: false,
       outcome: 'already_granted',
     })
+    expect(referralUtils.rewardReferrerForPaidPurchase).not.toHaveBeenCalled()
   })
 })

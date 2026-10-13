@@ -8,6 +8,13 @@
         :is-dark-mode="isDarkMode"
         @click="$emit('navigate', 'account')"
       />
+      <SettingsListRow
+        label="Invite a friend"
+        subtitle="Share your code"
+        icon="ri:user-add-line"
+        :is-dark-mode="isDarkMode"
+        @click="$emit('navigate', 'invite')"
+      />
     </SettingsListGroup>
 
     <SettingsListGroup
@@ -63,7 +70,7 @@ defineProps<{
 }>()
 
 defineEmits<{
-  navigate: [tab: 'account' | 'digifi']
+  navigate: [tab: 'account' | 'digifi' | 'invite']
   close: []
   'show-directions': []
   'show-common-errors': []

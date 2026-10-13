@@ -3,6 +3,7 @@ import { getStripeClient } from '../../../utils/stripeClient'
 import { getStripeEnv } from '../../../utils/stripeEnv'
 import { getSupabaseServiceClient } from '../../../utils/supabaseService'
 import { grantCreditsIdempotent } from '../../../utils/creditsPayment'
+import { rewardReferrerForPaidPurchase } from '../../../utils/referrals'
 
 export default defineEventHandler(async (event) => {
   const stripe = getStripeClient()
@@ -41,11 +42,18 @@ export default defineEventHandler(async (event) => {
     const purpose = session.metadata?.purpose
 
     if (purpose === 'digifi_credits' && userId && Number.isInteger(numberOfCredits) && numberOfCredits > 0) {
-      await grantCreditsIdempotent(service, userId, numberOfCredits, {
+      const result = await grantCreditsIdempotent(service, userId, numberOfCredits, {
         referenceId: `stripe:${session.id}`,
         paymentMethod: 'stripe',
         description: `Purchased ${numberOfCredits} credits (Stripe)`,
       })
+      if (result.granted) {
+        try {
+          await rewardReferrerForPaidPurchase(service, userId, 'stripe')
+        } catch (err) {
+          console.error('[referrals] referrer reward failed:', err)
+        }
+      }
     }
   }
 

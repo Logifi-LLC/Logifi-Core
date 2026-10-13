@@ -41,6 +41,8 @@
       @account-deleted="$emit('account-deleted')"
     />
 
+    <SettingsInviteTab v-else-if="currentFrame === 'invite'" :is-dark-mode="isDarkMode" />
+
     <SettingsRosterTab
       v-else-if="currentFrame === 'roster'"
       :is-dark-mode="isDarkMode"
@@ -157,6 +159,7 @@ import SettingsChangeEmailView from './SettingsChangeEmailView.vue'
 import SettingsChangePasswordView from './SettingsChangePasswordView.vue'
 import SettingsProfileTab, { type PilotProfileForm } from './tabs/SettingsProfileTab.vue'
 import SettingsAccountTab from './tabs/SettingsAccountTab.vue'
+import SettingsInviteTab from './tabs/SettingsInviteTab.vue'
 import SettingsRosterTab from './tabs/SettingsRosterTab.vue'
 import SettingsEndorsementsTab from './tabs/SettingsEndorsementsTab.vue'
 import SettingsDigifiTab from './tabs/SettingsDigifiTab.vue'

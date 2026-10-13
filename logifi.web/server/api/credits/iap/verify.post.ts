@@ -2,6 +2,7 @@ import { createError, defineEventHandler, readBody } from 'h3'
 import { getUserIdFromEvent } from '../../../utils/supabase'
 import { getSupabaseServiceClient } from '../../../utils/supabaseService'
 import { grantCreditsIdempotent } from '../../../utils/creditsPayment'
+import { rewardReferrerForPaidPurchase } from '../../../utils/referrals'
 import { verifyTransaction, isAppleIapConfigured } from '../../../utils/appleIapVerification'
 import { getIapProduct } from '../../../../app/utils/iapProducts'
 
@@ -81,6 +82,14 @@ export default defineEventHandler(async (event) => {
     paymentMethod: 'apple_iap',
     description: `Purchased ${product.credits} credits (Apple IAP)`,
   })
+
+  if (result.granted) {
+    try {
+      await rewardReferrerForPaidPurchase(service, userId, 'apple_iap')
+    } catch (err) {
+      console.error('[referrals] referrer reward failed:', err)
+    }
+  }
 
   const outcome = result.granted ? 'credited' : 'already_granted'
 
