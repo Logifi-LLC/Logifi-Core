@@ -14,12 +14,13 @@
       >
         {{ shareLabel }}
       </button>
+      <p v-if="shareUrl" class="break-all font-mono text-xs" :class="muted">{{ shareUrl }}</p>
       <p class="text-sm" :class="muted">{{ status.rewardedCount }} / {{ status.rewardCap }} rewards</p>
       <p class="text-xs" :class="muted">5 credits for them. 10 for you when they buy credits.</p>
 
       <form v-if="showCodeEntry && status.canEnterCode" class="space-y-2" @submit.prevent="onApply">
-        <label class="block text-xs font-semibold uppercase tracking-wide" :class="muted" for="settings-referral-code">
-          Have a code?
+        <label class="block text-sm font-semibold" :class="isDarkMode ? 'text-white' : 'text-gray-900'" for="settings-referral-code">
+          Have a referral code?
         </label>
         <input
           id="settings-referral-code"
@@ -54,7 +55,7 @@ const props = defineProps<{
   showCodeEntry?: boolean
 }>()
 
-const { status, loading, error, load, claim, share } = useReferral()
+const { status, loading, error, load, claim, share, shareUrl } = useReferral()
 const shareLabel = ref('Share link')
 const enteredCode = ref('')
 const claimMessage = ref<string | null>(null)

@@ -1,4 +1,4 @@
-import { normalizeReferralCode, REFERRAL_STORAGE_KEY } from '../../shared/referrals'
+import { normalizeReferralCode, referralShareUrl, REFERRAL_STORAGE_KEY } from '../../shared/referrals'
 
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365 * 10
 
@@ -39,6 +39,11 @@ export function clearStoredReferralCode(): void {
     // Ignore.
   }
   document.cookie = 'logifi_ref=; Path=/; Max-Age=0; SameSite=Lax'
+}
+
+/** Web shares the current origin. The native app shares www, not the WebView host. */
+export function shareUrlForClient(code: string, native: boolean, origin: string): string {
+  return referralShareUrl(code, native ? null : origin)
 }
 
 export async function shareReferralLink(url: string): Promise<'shared' | 'copied'> {

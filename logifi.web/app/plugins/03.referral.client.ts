@@ -3,6 +3,12 @@ import type { AttributionBlock } from '../../shared/referrals'
 import { normalizeReferralCode } from '../../shared/referrals'
 import { apiFetch } from '~/utils/apiFetch'
 import {
+  nextClaimAttempt,
+  shouldClaimReferral,
+  isAuthEmailVerified,
+  type ClaimAttempt,
+} from '~/utils/referralClaimAttempt'
+import {
   captureReferralFromSearch,
   clearStoredReferralCode,
   readStoredReferralCode,
@@ -14,6 +20,7 @@ import { useAuth } from '~/composables/useAuth'
 interface ReferralClaimResult {
   ok: boolean
   attributed: boolean
+  friendCreditsGranted?: boolean
   reason?: AttributionBlock
 }
 
@@ -34,6 +41,14 @@ export default defineNuxtPlugin(() => {
   const captured = captureReferralFromSearch(window.location.search)
   if (captured) storeReferralCode(captured)
 
+  const router = useRouter()
+  router.afterEach((to) => {
+    const raw = to.query.ref
+    const value = Array.isArray(raw) ? raw[0] : raw
+    const code = normalizeReferralCode(typeof value === 'string' ? value : null)
+    if (code) storeReferralCode(code)
+  })
+
   if (isCapacitorNative()) {
     void (async () => {
       try {
@@ -50,28 +65,55 @@ export default defineNuxtPlugin(() => {
   }
 
   const { user, session } = useAuth()
-  const attempted = new Set<string>()
+  const attempts = new Map<string, ClaimAttempt>()
+  const inflight = new Set<string>()
+
+  async function claimStoredCode() {
+    const id = user.value?.id
+    const token = session.value?.access_token
+    if (!id || !token || inflight.has(id)) return
+    const emailVerified = isAuthEmailVerified(user.value)
+    const previous = attempts.get(id) ?? 'idle'
+    if (!shouldClaimReferral(previous, emailVerified)) return
+    inflight.add(id)
+    const code = readStoredReferralCode()
+    try {
+      const result = await apiFetch<ReferralClaimResult>('/api/referrals/claim', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: code ? { code } : {},
+      })
+      if (code && (result.attributed || result.reason)) {
+        clearStoredReferralCode()
+      }
+      attempts.set(
+        id,
+        nextClaimAttempt({
+          emailVerified,
+          attributed: result.attributed,
+          friendCreditsGranted: Boolean(result.friendCreditsGranted),
+        })
+      )
+    } catch {
+      attempts.set(id, previous)
+    } finally {
+      inflight.delete(id)
+    }
+    if (user.value?.id === id && shouldClaimReferral(attempts.get(id) ?? 'idle', isAuthEmailVerified(user.value))) {
+      await claimStoredCode()
+    }
+  }
 
   watch(
-    [user, session],
-    async () => {
-      const id = user.value?.id
-      const token = session.value?.access_token
-      if (!id || !token || attempted.has(id)) return
-      attempted.add(id)
-      const code = readStoredReferralCode()
-      try {
-        const result = await apiFetch<ReferralClaimResult>('/api/referrals/claim', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: code ? { code } : {},
-        })
-        if (code && (result.attributed || result.reason)) {
-          clearStoredReferralCode()
-        }
-      } catch {
-        attempted.delete(id)
-      }
+    () =>
+      [
+        user.value?.id ?? '',
+        session.value?.access_token ?? '',
+        user.value?.email_confirmed_at ?? '',
+        user.value?.confirmed_at ?? '',
+      ] as const,
+    () => {
+      void claimStoredCode()
     },
     { immediate: true }
   )

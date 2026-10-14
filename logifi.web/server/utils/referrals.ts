@@ -264,14 +264,25 @@ export async function applyReferrerReward(
   return { granted }
 }
 
-export async function getReferralStatus(store: ReferralStore, userId: string): Promise<ReferralStatus> {
+export function authEmailVerified(user: {
+  email_confirmed_at?: string | null
+  confirmed_at?: string | null
+}): boolean {
+  return Boolean(user.email_confirmed_at || user.confirmed_at)
+}
+
+export async function getReferralStatus(
+  store: ReferralStore,
+  userId: string,
+  shareOrigin?: string | null
+): Promise<ReferralStatus> {
   const code = await ensureReferralCode(store, userId)
   const referredBy = await store.getReferredBy(userId)
   const hasPaidPurchase = await store.hasPaidPurchase(userId)
   const rewardedCount = await store.referrerRewardCount(userId)
   return {
     code,
-    shareUrl: referralShareUrl(code),
+    shareUrl: referralShareUrl(code, shareOrigin),
     rewardedCount,
     rewardCap: REFERRER_REWARD_CAP,
     referred: Boolean(referredBy),
@@ -291,9 +302,10 @@ export async function claimReferralForUser(
 
 export async function getReferralStatusForUser(
   service: ServiceClient,
-  userId: string
+  userId: string,
+  shareOrigin?: string | null
 ): Promise<ReferralStatus> {
-  return getReferralStatus(createSupabaseReferralStore(service), userId)
+  return getReferralStatus(createSupabaseReferralStore(service), userId, shareOrigin)
 }
 
 export async function rewardReferrerForPaidPurchase(

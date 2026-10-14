@@ -237,11 +237,11 @@
           </div>
           <div v-if="activeTab === 'signup'" class="space-y-2 pt-2">
             <label
-              class="text-xs font-bold font-quicksand uppercase tracking-wider"
-              :class="[isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+              class="text-sm font-bold font-quicksand"
+              :class="[isDarkMode ? 'text-gray-200' : 'text-gray-800']"
               for="referral-code"
             >
-              Referral code
+              Have a referral code?
             </label>
             <input
               id="referral-code"
@@ -250,6 +250,7 @@
               autocapitalize="characters"
               autocomplete="off"
               spellcheck="false"
+              @input="referralTouched = true"
               :disabled="isLoading"
               :class="[
                 'w-full px-4 py-3 rounded-xl border text-base font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
@@ -317,8 +318,10 @@ const props = withDefaults(
     isDarkMode?: boolean
     /** When false, hide close control and ignore backdrop dismiss (e.g. iOS login gate). */
     dismissible?: boolean
+    /** Marketing pages pass this. Without it the modal always opens on Sign In. */
+    initialTab?: 'signin' | 'signup'
   }>(),
-  { dismissible: true }
+  { dismissible: true, initialTab: 'signin' }
 )
 
 const emit = defineEmits<{
@@ -342,13 +345,22 @@ const {
   error: authErrorState,
 } = useAuth()
 
-const activeTab = ref<'signin' | 'signup'>('signin')
+const activeTab = ref<'signin' | 'signup'>(props.initialTab)
+
+watch(
+  () => props.initialTab,
+  (tab) => {
+    activeTab.value = tab
+  }
+)
 const email = ref('')
 const password = ref('')
 const referralCode = ref('')
+const referralTouched = ref(false)
 
 onMounted(() => {
-  referralCode.value = readStoredReferralCode() ?? ''
+  const stored = readStoredReferralCode()
+  if (stored) referralCode.value = stored
 })
 const authError = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
@@ -374,7 +386,8 @@ const isFormValid = computed(() => {
 function persistTypedReferralCode(): boolean {
   const raw = referralCode.value.trim()
   if (!raw) {
-    if (activeTab.value === 'signup') clearStoredReferralCode()
+    // An untouched empty field must not wipe a code captured from ?ref.
+    if (activeTab.value === 'signup' && referralTouched.value) clearStoredReferralCode()
     return true
   }
   const code = normalizeReferralCode(raw)

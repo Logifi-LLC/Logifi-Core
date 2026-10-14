@@ -13,6 +13,7 @@
     v-if="showAuthModal"
     :is-dark-mode="isDarkMode"
     :dismissible="!isIos"
+    :initial-tab="authInitialTab"
     @close="showAuthModal = false"
     @success="showAuthModal = false"
   />
@@ -6949,6 +6950,7 @@ import { usePullToRefresh } from '../composables/usePullToRefresh'
 import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
 import { useDashboardShortcuts } from '../composables/useDashboardShortcuts'
 import AuthModal from '../components/AuthModal.vue'
+import { readStoredReferralCode } from '../utils/referralCapture'
 import AuditTrail from '../components/AuditTrail.vue'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
 import ComplianceChecklist from '../components/ComplianceChecklist.vue'
@@ -7305,6 +7307,7 @@ const syncStatusTitle = computed(() => {
 })
 
 const showAuthModal = ref(false)
+const authInitialTab = ref<'signin' | 'signup'>('signin')
 const {
   latestUpdate,
   showLatestBanner,
@@ -7589,6 +7592,7 @@ watch(authLoading, (loading) => {
 // Initialize IndexedDB and scroll handlers on mount
 onMounted(async () => {
   if (!isBrowser) return
+  if (readStoredReferralCode()) authInitialTab.value = 'signup'
 
   loadSimDeviceCatalogFromStorage()
   

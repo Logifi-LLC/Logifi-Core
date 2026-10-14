@@ -1,7 +1,8 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { AttributionBlock } from '../../shared/referrals'
 import { apiFetch } from '~/utils/apiFetch'
-import { shareReferralLink } from '~/utils/referralCapture'
+import { shareReferralLink, shareUrlForClient } from '~/utils/referralCapture'
+import { isCapacitorNative } from '~/composables/useCapacitorPlatform'
 import { useAuth } from '~/composables/useAuth'
 
 export interface ReferralStatus {
@@ -69,10 +70,16 @@ export function useReferral() {
     return null
   }
 
+  const shareUrl = computed(() => {
+    const code = status.value?.code
+    if (!code || typeof window === 'undefined') return status.value?.shareUrl ?? ''
+    return shareUrlForClient(code, isCapacitorNative(), window.location.origin)
+  })
+
   async function share(): Promise<'shared' | 'copied'> {
     if (!status.value) throw new Error('Invite is still loading')
-    return shareReferralLink(status.value.shareUrl)
+    return shareReferralLink(shareUrl.value || status.value.shareUrl)
   }
 
-  return { status, loading, error, load, claim, share }
+  return { status, loading, error, load, claim, share, shareUrl }
 }

@@ -1,7 +1,7 @@
 import { createError, defineEventHandler, readBody } from 'h3'
 import { getSupabaseServiceClient } from '../../utils/supabaseService'
 import { referralSchemaMissing } from '../../utils/referralStore'
-import { claimReferralForUser, readAuthUser } from '../../utils/referrals'
+import { authEmailVerified, claimReferralForUser, readAuthUser } from '../../utils/referrals'
 
 export default defineEventHandler(async (event) => {
   const user = await readAuthUser(event)
@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
       service,
       user.id,
       typeof rawCode === 'string' ? rawCode : null,
-      Boolean(user.email_confirmed_at)
+      authEmailVerified(user)
     )
   } catch (error) {
     if (referralSchemaMissing(error)) {

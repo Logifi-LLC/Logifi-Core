@@ -35,8 +35,25 @@ export function normalizeReferralCode(raw: string | null | undefined): string | 
   return CODE_PATTERN.test(code) ? code : null
 }
 
-export function referralShareUrl(code: string): string {
-  return `${REFERRAL_SHARE_ORIGIN}/?ref=${encodeURIComponent(code)}`
+/**
+ * Public share link. Pass the page origin for web (preview, localhost, or www).
+ * Omit it for the production site, which is also what the native app shares
+ * (the WebView origin is not a public URL).
+ */
+export function referralShareUrl(code: string, origin?: string | null): string {
+  const base = httpOrigin(origin) ?? REFERRAL_SHARE_ORIGIN
+  return `${base}/?ref=${encodeURIComponent(code)}`
+}
+
+function httpOrigin(origin: string | null | undefined): string | null {
+  if (!origin) return null
+  try {
+    const url = new URL(origin)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+    return url.origin
+  } catch {
+    return null
+  }
 }
 
 export function friendRewardReferenceId(userId: string): string {

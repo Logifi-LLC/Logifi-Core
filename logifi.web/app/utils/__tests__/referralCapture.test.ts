@@ -4,8 +4,10 @@ import {
   captureReferralFromSearch,
   clearStoredReferralCode,
   readStoredReferralCode,
+  shareUrlForClient,
   storeReferralCode,
 } from '../referralCapture'
+import { nextClaimAttempt, shouldClaimReferral } from '../referralClaimAttempt'
 
 describe('referral capture', () => {
   afterEach(() => {
@@ -29,5 +31,27 @@ describe('referral capture', () => {
 
     clearStoredReferralCode()
     expect(readStoredReferralCode()).toBeNull()
+  })
+
+  it('shares the current web origin and www from the native app', () => {
+    expect(shareUrlForClient('ABCD234H', false, 'https://preview.example')).toBe(
+      'https://preview.example/?ref=ABCD234H'
+    )
+    expect(shareUrlForClient('ABCD234H', true, 'https://localhost')).toBe(
+      'https://www.logifi.io/?ref=ABCD234H'
+    )
+  })
+
+  it('claims again after email verification in a later session', () => {
+    expect(shouldClaimReferral('idle', false)).toBe(true)
+    expect(shouldClaimReferral('awaiting-verify', false)).toBe(false)
+    expect(shouldClaimReferral('awaiting-verify', true)).toBe(true)
+    expect(shouldClaimReferral('done', true)).toBe(false)
+    expect(
+      nextClaimAttempt({ emailVerified: false, attributed: true, friendCreditsGranted: false })
+    ).toBe('awaiting-verify')
+    expect(
+      nextClaimAttempt({ emailVerified: true, attributed: true, friendCreditsGranted: true })
+    ).toBe('done')
   })
 })

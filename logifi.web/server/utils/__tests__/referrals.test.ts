@@ -110,8 +110,14 @@ describe('referral code rules', () => {
     expect(normalizeReferralCode('ABC')).toBeNull()
   })
 
-  it('builds a permanent share link', () => {
+  it('builds a permanent share link on the current origin', () => {
     expect(referralShareUrl('ABCD234H')).toBe('https://www.logifi.io/?ref=ABCD234H')
+    expect(referralShareUrl('ABCD234H', 'https://logifi-git-preview.vercel.app/dashboard')).toBe(
+      'https://logifi-git-preview.vercel.app/?ref=ABCD234H'
+    )
+    expect(referralShareUrl('ABCD234H', 'http://127.0.0.1:3000')).toBe(
+      'http://127.0.0.1:3000/?ref=ABCD234H'
+    )
   })
 
   it('blocks self-referral, a second referrer, and a code after a paid purchase', () => {
