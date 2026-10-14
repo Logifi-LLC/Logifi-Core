@@ -20,12 +20,7 @@ export const REFERRAL_PROMPT_DISMISSED_KEY = 'logifi.invitePromptDismissed'
 
 const CODE_PATTERN = new RegExp(`^[${REFERRAL_CODE_ALPHABET}]{${REFERRAL_CODE_LENGTH}}$`)
 
-export type AttributionBlock =
-  | 'invalid_code'
-  | 'unknown_code'
-  | 'self'
-  | 'already_referred'
-  | 'paid_purchase'
+export type AttributionBlock = 'invalid_code' | 'unknown_code' | 'self' | 'already_referred'
 
 export type ReferralRewardKind = 'friend_bonus' | 'referrer_bonus'
 
@@ -89,7 +84,6 @@ export function decideAttribution(input: {
   codeOwnerId: string | null
   userId: string
   referredBy: string | null
-  hasPaidPurchase: boolean
 }):
   | { ok: true; already: boolean; referrerId: string }
   | { ok: false; reason: AttributionBlock } {
@@ -102,7 +96,6 @@ export function decideAttribution(input: {
     }
     return { ok: false, reason: 'already_referred' }
   }
-  if (input.hasPaidPurchase) return { ok: false, reason: 'paid_purchase' }
   return { ok: true, already: false, referrerId: input.codeOwnerId }
 }
 
@@ -117,7 +110,9 @@ export function decideFriendGrant(input: {
 
 /**
  * Referrer bonus is the friend's first paid credit purchase, and only when that
- * purchase is Stripe or Apple IAP. Refunds are not a payment method here.
+ * purchase is Stripe or Apple IAP and happens after attribution.
+ * A purchase that already exists when the code is entered is not paid retroactively.
+ * Refunds are not a payment method here.
  */
 export function decideReferrerGrant(input: {
   referredBy: string | null

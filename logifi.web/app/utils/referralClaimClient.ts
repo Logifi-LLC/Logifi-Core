@@ -22,7 +22,6 @@ const CLAIM_MESSAGES: Record<AttributionBlock, string> = {
   unknown_code: 'Code not found',
   self: "That's your code",
   already_referred: 'Referral already applied',
-  paid_purchase: 'Codes can be entered before your first credit purchase',
 }
 
 const attempts = new Map<string, ClaimAttempt>()

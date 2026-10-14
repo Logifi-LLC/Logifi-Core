@@ -10,7 +10,6 @@ export interface ReferralStore {
   findUserIdByCode(code: string): Promise<string | null>
   getReferredBy(userId: string): Promise<string | null>
   setReferredBy(userId: string, referrerId: string): Promise<'ok' | 'conflict'>
-  hasPaidPurchase(userId: string): Promise<boolean>
   paidPurchaseCount(userId: string): Promise<number>
   referrerRewardCount(referrerId: string): Promise<number>
   hasReward(referredUserId: string, kind: ReferralRewardKind): Promise<boolean>
@@ -93,10 +92,6 @@ export function createSupabaseReferralStore(service: ServiceClient): ReferralSto
       if (!error) return 'ok'
       if (error.code === '23505') return 'conflict'
       throw error
-    },
-
-    async hasPaidPurchase(userId) {
-      return (await this.paidPurchaseCount(userId)) > 0
     },
 
     async paidPurchaseCount(userId) {

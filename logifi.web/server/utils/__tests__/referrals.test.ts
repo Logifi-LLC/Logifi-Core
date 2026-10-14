@@ -17,6 +17,7 @@ import {
   attributeReferral,
   claimReferral,
   creditsGranter,
+  getReferralStatus,
   referralClaimFailureMessage,
 } from '../referrals'
 import type { ReferralStore } from '../referralStore'
@@ -58,9 +59,6 @@ function memoryStore() {
       if (referredBy.has(userId)) return 'conflict'
       referredBy.set(userId, referrerId)
       return 'ok'
-    },
-    async hasPaidPurchase(userId) {
-      return (purchases.get(userId) ?? 0) > 0
     },
     async paidPurchaseCount(userId) {
       return purchases.get(userId) ?? 0
@@ -122,14 +120,13 @@ describe('referral code rules', () => {
     )
   })
 
-  it('blocks self-referral, a second referrer, and a code after a paid purchase', () => {
+  it('blocks self-referral and a second referrer, and still accepts a code after a purchase', () => {
     expect(
       decideAttribution({
         normalizedCode: 'ABCD234H',
         codeOwnerId: 'me',
         userId: 'me',
         referredBy: null,
-        hasPaidPurchase: false,
       })
     ).toEqual({ ok: false, reason: 'self' })
 
@@ -139,7 +136,6 @@ describe('referral code rules', () => {
         codeOwnerId: 'other',
         userId: 'me',
         referredBy: 'first',
-        hasPaidPurchase: false,
       })
     ).toEqual({ ok: false, reason: 'already_referred' })
 
@@ -149,9 +145,8 @@ describe('referral code rules', () => {
         codeOwnerId: 'other',
         userId: 'me',
         referredBy: null,
-        hasPaidPurchase: true,
       })
-    ).toEqual({ ok: false, reason: 'paid_purchase' })
+    ).toEqual({ ok: true, already: false, referrerId: 'other' })
   })
 
   it('grants the friend bonus only once the email is verified', () => {
@@ -233,7 +228,7 @@ describe('referral attribution and grants', () => {
     )
   })
 
-  it('rejects self-referral, a second referrer, and a code after a paid purchase', async () => {
+  it('rejects self-referral and a second referrer', async () => {
     const state = memoryStore()
     await seedReferrer(state)
     await state.store.saveCode('friend', 'SELF234H')
@@ -247,12 +242,38 @@ describe('referral attribution and grants', () => {
     const second = await attributeReferral(state.store, credits.creditGranter, 'friend', 'ZZZZ234H', true)
     expect(second.reason).toBe('already_referred')
     expect(state.referredBy.get('friend')).toBe('referrer')
+  })
 
+  it('accepts a code after a paid purchase without paying the referrer for that purchase', async () => {
+    const state = memoryStore()
+    await seedReferrer(state)
+    const credits = granter()
     state.purchases.set('buyer', 1)
+
     const late = await attributeReferral(state.store, credits.creditGranter, 'buyer', 'ABCD234H', true)
-    expect(late.reason).toBe('paid_purchase')
-    expect(state.referredBy.has('buyer')).toBe(false)
-    expect(credits.grants.every((row) => row.userId !== 'buyer')).toBe(true)
+    expect(late).toMatchObject({ ok: true, attributed: true, friendCreditsGranted: true })
+    expect(state.referredBy.get('buyer')).toBe('referrer')
+    expect(credits.grants).toEqual([
+      expect.objectContaining({
+        userId: 'buyer',
+        amount: FRIEND_REFERRAL_CREDITS,
+        referenceId: 'referral:friend:buyer',
+      }),
+    ])
+
+    state.purchases.set('buyer', 2)
+    const later = await applyReferrerReward(state.store, credits.creditGranter, 'buyer', 'stripe')
+    expect(later.granted).toBe(false)
+    expect(credits.grants).toHaveLength(1)
+
+    const status = await getReferralStatus(state.store, 'buyer')
+    expect(status.canEnterCode).toBe(false)
+    expect(status.referred).toBe(true)
+
+    state.purchases.set('referrer', 3)
+    const open = await getReferralStatus(state.store, 'referrer')
+    expect(open.canEnterCode).toBe(true)
+    expect(open.referred).toBe(false)
   })
 
   it('pays the referrer 10 credits on the first Stripe or Apple purchase, once', async () => {

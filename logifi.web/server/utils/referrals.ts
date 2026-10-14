@@ -161,13 +161,11 @@ export async function attributeReferral(
   const normalizedCode = normalizeReferralCode(rawCode)
   const codeOwnerId = normalizedCode ? await store.findUserIdByCode(normalizedCode) : null
   const referredBy = await store.getReferredBy(userId)
-  const hasPaidPurchase = referredBy ? false : await store.hasPaidPurchase(userId)
   const decision = decideAttribution({
     normalizedCode,
     codeOwnerId,
     userId,
     referredBy,
-    hasPaidPurchase,
   })
 
   if (!decision.ok) {
@@ -228,6 +226,8 @@ export async function claimReferral(
 
 /**
  * Call after a new paid credit grant. Stripe and Apple IAP only.
+ * Pays only when this grant is the account's first paid purchase, so a code
+ * entered after an earlier purchase does not pay the referrer for that purchase.
  * A later refund does not remove the referrer credits.
  */
 export async function applyReferrerReward(
@@ -289,7 +289,6 @@ export async function getReferralStatus(
 ): Promise<ReferralStatus> {
   const code = await ensureReferralCode(store, userId)
   const referredBy = await store.getReferredBy(userId)
-  const hasPaidPurchase = await store.hasPaidPurchase(userId)
   const rewardedCount = await store.referrerRewardCount(userId)
   return {
     code,
@@ -297,7 +296,7 @@ export async function getReferralStatus(
     rewardedCount,
     rewardCap: REFERRER_REWARD_CAP,
     referred: Boolean(referredBy),
-    canEnterCode: !referredBy && !hasPaidPurchase,
+    canEnterCode: !referredBy,
   }
 }
 
