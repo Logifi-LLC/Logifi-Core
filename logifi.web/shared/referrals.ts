@@ -29,6 +29,26 @@ export type AttributionBlock =
 
 export type ReferralRewardKind = 'friend_bonus' | 'referrer_bonus'
 
+/**
+ * Pull `code` out of a claim body. Some hosts deliver the JSON as a string,
+ * and treating that as "no code" skips attribution without an error.
+ */
+export function referralCodeFromBody(body: unknown): string | null {
+  let value: unknown = body
+  if (typeof body === 'string') {
+    const trimmed = body.trim()
+    if (!trimmed) return null
+    try {
+      value = JSON.parse(trimmed) as unknown
+    } catch {
+      return null
+    }
+  }
+  if (!value || typeof value !== 'object') return null
+  const code = (value as { code?: unknown }).code
+  return typeof code === 'string' ? code : null
+}
+
 export function normalizeReferralCode(raw: string | null | undefined): string | null {
   if (typeof raw !== 'string') return null
   const code = raw.trim().toUpperCase().replace(/[\s-]/g, '')

@@ -45,6 +45,9 @@
               </button>
             </div>
             <AppStoreLink variant="hero" />
+            <p v-if="landingReferralCode" class="text-sm font-semibold text-[#93c5fd]">
+              Referral code applied: {{ landingReferralCode }}
+            </p>
           </div>
         </div>
       </section>
@@ -141,6 +144,7 @@ import MarketingHeader from '~/components/MarketingHeader.vue'
 import MarketingPaperPlanes from '~/components/MarketingPaperPlanes.vue'
 import ProductSwitcher from '~/components/ProductSwitcher.vue'
 import { AUTOFI_BETA_LINE } from '~/utils/autofiBeta'
+import { captureReferralFromSearch, storeReferralCode } from '~/utils/referralCapture'
 
 const { theme, isDark, applyDocumentTheme } = useTheme()
 
@@ -157,6 +161,7 @@ if (import.meta.client) {
 
 /** Email links that still use Site URL (/) land here with tokens in the URL; forward to /auth/callback. */
 onMounted(() => {
+  rememberLandingReferral()
   if (typeof window === 'undefined') return
   const searchParams = new URLSearchParams(window.location.search)
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
@@ -172,6 +177,15 @@ onMounted(() => {
 
 const showAuth = ref(false)
 const authTab = ref<'signin' | 'signup'>('signin')
+const landingReferralCode = ref<string | null>(null)
+
+function rememberLandingReferral() {
+  if (typeof window === 'undefined') return
+  const code = captureReferralFromSearch(window.location.search)
+  if (!code) return
+  storeReferralCode(code)
+  landingReferralCode.value = code
+}
 
 const openAuth = (tab: 'signin' | 'signup') => {
   authTab.value = tab

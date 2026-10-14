@@ -309,7 +309,12 @@ import { useAuth } from '~/composables/useAuth'
 import { isCapacitorIos, resetIosInputZoom } from '~/composables/useCapacitorPlatform'
 import { WELCOME_CREDITS } from '../../shared/creditsWelcome'
 import { normalizeReferralCode } from '../../shared/referrals'
-import { clearStoredReferralCode, readStoredReferralCode, storeReferralCode } from '~/utils/referralCapture'
+import {
+  captureReferralFromSearch,
+  clearStoredReferralCode,
+  readStoredReferralCode,
+  storeReferralCode,
+} from '~/utils/referralCapture'
 
 const welcomeCredits = WELCOME_CREDITS
 
@@ -359,6 +364,8 @@ const referralCode = ref('')
 const referralTouched = ref(false)
 
 onMounted(() => {
+  const fromUrl = captureReferralFromSearch(window.location.search)
+  if (fromUrl) storeReferralCode(fromUrl)
   const stored = readStoredReferralCode()
   if (stored) referralCode.value = stored
 })

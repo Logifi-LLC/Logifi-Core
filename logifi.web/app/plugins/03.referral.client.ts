@@ -1,28 +1,10 @@
 import { watch } from 'vue'
-import type { AttributionBlock } from '../../shared/referrals'
 import { normalizeReferralCode } from '../../shared/referrals'
-import { apiFetch } from '~/utils/apiFetch'
-import {
-  nextClaimAttempt,
-  shouldClaimReferral,
-  isAuthEmailVerified,
-  type ClaimAttempt,
-} from '~/utils/referralClaimAttempt'
-import {
-  captureReferralFromSearch,
-  clearStoredReferralCode,
-  readStoredReferralCode,
-  storeReferralCode,
-} from '~/utils/referralCapture'
+import { isAuthEmailVerified } from '~/utils/referralClaimAttempt'
+import { claimStoredReferral } from '~/utils/referralClaimClient'
+import { captureReferralFromSearch, storeReferralCode } from '~/utils/referralCapture'
 import { isCapacitorNative } from '~/composables/useCapacitorPlatform'
 import { useAuth } from '~/composables/useAuth'
-
-interface ReferralClaimResult {
-  ok: boolean
-  attributed: boolean
-  friendCreditsGranted?: boolean
-  reason?: AttributionBlock
-}
 
 function rememberCodeFromUrl(url: string) {
   try {
@@ -65,43 +47,16 @@ export default defineNuxtPlugin(() => {
   }
 
   const { user, session } = useAuth()
-  const attempts = new Map<string, ClaimAttempt>()
-  const inflight = new Set<string>()
 
-  async function claimStoredCode() {
+  function claimForCurrentUser() {
     const id = user.value?.id
     const token = session.value?.access_token
-    if (!id || !token || inflight.has(id)) return
-    const emailVerified = isAuthEmailVerified(user.value)
-    const previous = attempts.get(id) ?? 'idle'
-    if (!shouldClaimReferral(previous, emailVerified)) return
-    inflight.add(id)
-    const code = readStoredReferralCode()
-    try {
-      const result = await apiFetch<ReferralClaimResult>('/api/referrals/claim', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: code ? { code } : {},
-      })
-      if (code && (result.attributed || result.reason)) {
-        clearStoredReferralCode()
-      }
-      attempts.set(
-        id,
-        nextClaimAttempt({
-          emailVerified,
-          attributed: result.attributed,
-          friendCreditsGranted: Boolean(result.friendCreditsGranted),
-        })
-      )
-    } catch {
-      attempts.set(id, previous)
-    } finally {
-      inflight.delete(id)
-    }
-    if (user.value?.id === id && shouldClaimReferral(attempts.get(id) ?? 'idle', isAuthEmailVerified(user.value))) {
-      await claimStoredCode()
-    }
+    if (!id || !token) return
+    void claimStoredReferral({
+      userId: id,
+      token,
+      emailVerified: isAuthEmailVerified(user.value),
+    })
   }
 
   watch(
@@ -113,7 +68,7 @@ export default defineNuxtPlugin(() => {
         user.value?.confirmed_at ?? '',
       ] as const,
     () => {
-      void claimStoredCode()
+      claimForCurrentUser()
     },
     { immediate: true }
   )

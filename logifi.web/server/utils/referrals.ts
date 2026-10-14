@@ -264,6 +264,17 @@ export async function applyReferrerReward(
   return { granted }
 }
 
+export function referralClaimFailureMessage(error: unknown): string {
+  const record = error && typeof error === 'object' ? (error as { code?: unknown; message?: unknown }) : {}
+  const code = typeof record.code === 'string' ? record.code : ''
+  const message = typeof record.message === 'string' ? record.message : ''
+  if (code === '42501' || /permission denied/i.test(message)) {
+    return 'Referral save was denied. The server key cannot write referral rows.'
+  }
+  if (code === '23503') return 'Referral save failed because the account profile is missing.'
+  return 'Could not apply referral code'
+}
+
 export function authEmailVerified(user: {
   email_confirmed_at?: string | null
   confirmed_at?: string | null

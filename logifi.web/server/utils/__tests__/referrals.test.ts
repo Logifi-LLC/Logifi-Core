@@ -7,6 +7,7 @@ import {
   decideFriendGrant,
   decideReferrerGrant,
   normalizeReferralCode,
+  referralCodeFromBody,
   referralShareUrl,
   type ReferralRewardKind,
 } from '../../../shared/referrals'
@@ -16,6 +17,7 @@ import {
   attributeReferral,
   claimReferral,
   creditsGranter,
+  referralClaimFailureMessage,
 } from '../referrals'
 import type { ReferralStore } from '../referralStore'
 import { addCredits } from '../creditsBalance'
@@ -211,6 +213,24 @@ describe('referral attribution and grants', () => {
     const again = await claimReferral(state.store, credits.creditGranter, 'friend', 'ABCD234H', true)
     expect(again.friendCreditsGranted).toBe(false)
     expect(credits.grants).toHaveLength(1)
+  })
+
+  it('still attributes when the claim body arrives as a JSON string', async () => {
+    const state = memoryStore()
+    await seedReferrer(state)
+    const credits = granter()
+    const code = referralCodeFromBody('{"code":"ABCD234H"}')
+
+    const result = await claimReferral(state.store, credits.creditGranter, 'friend', code, true)
+
+    expect(result).toMatchObject({ ok: true, attributed: true, friendCreditsGranted: true })
+    expect(state.referredBy.get('friend')).toBe('referrer')
+    expect(credits.grants).toEqual([
+      expect.objectContaining({ userId: 'friend', amount: FRIEND_REFERRAL_CREDITS }),
+    ])
+    expect(referralClaimFailureMessage({ code: '42501', message: 'permission denied for table referrals' })).toBe(
+      'Referral save was denied. The server key cannot write referral rows.'
+    )
   })
 
   it('rejects self-referral, a second referrer, and a code after a paid purchase', async () => {

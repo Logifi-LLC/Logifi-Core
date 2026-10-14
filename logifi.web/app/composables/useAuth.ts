@@ -15,6 +15,8 @@ import {
 } from '~/utils/authRedirectOrigin'
 import { isCapacitorIos, isCapacitorNative } from './useCapacitorPlatform'
 import { useOffline } from './useOffline'
+import { claimStoredReferral } from '~/utils/referralClaimClient'
+import { isAuthEmailVerified } from '~/utils/referralClaimAttempt'
 
 function isAppleSignInCancellation(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false
@@ -60,6 +62,17 @@ function shouldRetainSessionOffline(): boolean {
   } catch {
     return browserReportsOffline()
   }
+}
+
+function claimSessionReferral(next: Session | null) {
+  const token = next?.access_token
+  const id = next?.user?.id
+  if (!token || !id) return
+  void claimStoredReferral({
+    userId: id,
+    token,
+    emailVerified: isAuthEmailVerified(next.user),
+  })
 }
 
 function applySession(next: Session | null) {
@@ -290,6 +303,7 @@ export const useAuth = () => {
 
       if (data.user && data.session) {
         applySession(data.session)
+        claimSessionReferral(data.session)
       } else if (data.user) {
         user.value = data.user
         session.value = data.session
@@ -330,6 +344,7 @@ export const useAuth = () => {
 
       if (data.user && data.session) {
         applySession(data.session)
+        claimSessionReferral(data.session)
       }
 
       return { success: true, user: data.user, session: data.session }

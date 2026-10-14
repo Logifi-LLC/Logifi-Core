@@ -2,6 +2,8 @@ import { computed, ref } from 'vue'
 import type { AttributionBlock } from '../../shared/referrals'
 import { apiFetch } from '~/utils/apiFetch'
 import { shareReferralLink, shareUrlForClient } from '~/utils/referralCapture'
+import { messageFromClaimError } from '~/utils/referralClaimAttempt'
+import { claimResultMessage } from '~/utils/referralClaimClient'
 import { isCapacitorNative } from '~/composables/useCapacitorPlatform'
 import { useAuth } from '~/composables/useAuth'
 
@@ -19,14 +21,6 @@ interface ReferralClaimResult {
   attributed: boolean
   friendCreditsGranted: boolean
   reason?: AttributionBlock
-}
-
-const CLAIM_MESSAGES: Record<AttributionBlock, string> = {
-  invalid_code: 'Enter a valid code',
-  unknown_code: 'Code not found',
-  self: "That's your code",
-  already_referred: 'Referral already applied',
-  paid_purchase: 'Codes can be entered before your first credit purchase',
 }
 
 export function useReferral() {
@@ -58,16 +52,18 @@ export function useReferral() {
   async function claim(code: string): Promise<string | null> {
     const headers = authHeaders()
     if (!headers) return 'Sign in to apply a code'
-    const result = await apiFetch<ReferralClaimResult>('/api/referrals/claim', {
-      method: 'POST',
-      headers,
-      body: { code },
-    })
+    let result: ReferralClaimResult
+    try {
+      result = await apiFetch<ReferralClaimResult>('/api/referrals/claim', {
+        method: 'POST',
+        headers,
+        body: { code },
+      })
+    } catch (error) {
+      return messageFromClaimError(error)
+    }
     await load()
-    if (!result.ok && result.reason) return CLAIM_MESSAGES[result.reason]
-    if (result.friendCreditsGranted) return '5 credits added'
-    if (result.attributed) return 'Referral applied'
-    return null
+    return claimResultMessage(result)
   }
 
   const shareUrl = computed(() => {

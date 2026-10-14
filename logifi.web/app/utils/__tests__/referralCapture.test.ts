@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { REFERRAL_STORAGE_KEY } from '../../../shared/referrals'
+import { REFERRAL_STORAGE_KEY, referralCodeFromBody } from '../../../shared/referrals'
 import {
   captureReferralFromSearch,
   clearStoredReferralCode,
@@ -7,7 +7,12 @@ import {
   shareUrlForClient,
   storeReferralCode,
 } from '../referralCapture'
-import { nextClaimAttempt, shouldClaimReferral } from '../referralClaimAttempt'
+import {
+  messageFromClaimError,
+  nextClaimAttempt,
+  shouldClaimReferral,
+  shouldClearStoredReferral,
+} from '../referralClaimAttempt'
 
 describe('referral capture', () => {
   afterEach(() => {
@@ -40,6 +45,23 @@ describe('referral capture', () => {
     expect(shareUrlForClient('ABCD234H', true, 'https://localhost')).toBe(
       'https://www.logifi.io/?ref=ABCD234H'
     )
+  })
+
+  it('keeps a stored code when the signed-in referrer opens their own link', () => {
+    expect(shouldClearStoredReferral({ attributed: false, reason: 'self' })).toBe(false)
+    expect(shouldClearStoredReferral({ attributed: true })).toBe(true)
+    expect(shouldClearStoredReferral({ attributed: false, reason: 'unknown_code' })).toBe(true)
+  })
+
+  it('reads a referral code from a JSON string body and surfaces server errors', () => {
+    expect(referralCodeFromBody({ code: 'ABCD234H' })).toBe('ABCD234H')
+    expect(referralCodeFromBody('{"code":"ABCD234H"}')).toBe('ABCD234H')
+    expect(referralCodeFromBody('not-json')).toBeNull()
+    expect(
+      messageFromClaimError({
+        data: { statusMessage: 'Referral save was denied. The server key cannot write referral rows.' },
+      })
+    ).toBe('Referral save was denied. The server key cannot write referral rows.')
   })
 
   it('claims again after email verification in a later session', () => {
