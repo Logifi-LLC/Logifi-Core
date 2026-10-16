@@ -15,6 +15,8 @@
       @show-common-errors="$emit('show-common-errors')"
     />
 
+    <SettingsInviteTab v-else-if="currentFrame === 'invite'" :is-dark-mode="isDarkMode" />
+
     <SettingsAccountTab
       v-else-if="currentFrame === 'account'"
       :is-dark-mode="isDarkMode"
@@ -60,11 +62,12 @@ import { computed } from 'vue'
 import SettingsStackShell from './SettingsStackShell.vue'
 import SettingsDigifiRootView from './SettingsDigifiRootView.vue'
 import SettingsAccountTab from './tabs/SettingsAccountTab.vue'
+import SettingsInviteTab from './tabs/SettingsInviteTab.vue'
 import SettingsDigifiTab from './tabs/SettingsDigifiTab.vue'
 import SettingsChangeEmailView from './SettingsChangeEmailView.vue'
 import SettingsChangePasswordView from './SettingsChangePasswordView.vue'
 
-type DigifiSettingsStackFrame = 'root' | 'account' | 'digifi' | 'account-email' | 'account-password'
+type DigifiSettingsStackFrame = 'root' | 'account' | 'digifi' | 'invite' | 'account-email' | 'account-password'
 
 const props = defineProps<{
   open: boolean

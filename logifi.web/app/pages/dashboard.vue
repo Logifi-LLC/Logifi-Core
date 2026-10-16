@@ -13,6 +13,8 @@
     v-if="showAuthModal"
     :is-dark-mode="isDarkMode"
     :dismissible="!isIos"
+    :initial-tab="authInitialTab"
+    :referral-open-count="referralOpenCount"
     @close="showAuthModal = false"
     @success="showAuthModal = false"
   />
@@ -6949,6 +6951,7 @@ import { usePullToRefresh } from '../composables/usePullToRefresh'
 import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
 import { useDashboardShortcuts } from '../composables/useDashboardShortcuts'
 import AuthModal from '../components/AuthModal.vue'
+import { readStoredReferralCode } from '../utils/referralCapture'
 import AuditTrail from '../components/AuditTrail.vue'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
 import ComplianceChecklist from '../components/ComplianceChecklist.vue'
@@ -7305,6 +7308,9 @@ const syncStatusTitle = computed(() => {
 })
 
 const showAuthModal = ref(false)
+const authInitialTab = ref<'signin' | 'signup'>('signin')
+const referralOpenCount = ref(0)
+const route = useRoute()
 const {
   latestUpdate,
   showLatestBanner,
@@ -7587,8 +7593,21 @@ watch(authLoading, (loading) => {
 }, { immediate: true })
 
 // Initialize IndexedDB and scroll handlers on mount
+function openSignupForStoredReferral() {
+  if (isAuthenticated.value) return
+  if (!readStoredReferralCode()) return
+  authInitialTab.value = 'signup'
+  showAuthModal.value = true
+  referralOpenCount.value += 1
+}
+
+watch(() => route.query.ref, () => {
+  openSignupForStoredReferral()
+})
+
 onMounted(async () => {
   if (!isBrowser) return
+  openSignupForStoredReferral()
 
   loadSimDeviceCatalogFromStorage()
   

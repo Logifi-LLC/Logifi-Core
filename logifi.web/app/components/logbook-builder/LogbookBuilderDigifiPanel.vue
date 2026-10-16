@@ -323,6 +323,11 @@ async function processFile(
     updateQueueStatus()
   }
 
+  if (!error.value) {
+    const { noteDigifiScanSucceeded } = await import('~/utils/referralPrompt')
+    noteDigifiScanSucceeded()
+  }
+
   if (!error.value && lastFilledCount.value > 0) {
     const rowsMatched = lastScanSummary.value?.rowsReturned ?? 0
     const expectedRows = lastScanSummary.value?.expectedRowCount ?? 0
