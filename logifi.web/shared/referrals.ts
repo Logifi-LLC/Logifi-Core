@@ -14,6 +14,12 @@ export const REFERRAL_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
 export const REFERRAL_SHARE_ORIGIN = 'https://www.logifi.io'
 
+/** Bundle ID from the Capacitor iOS target. */
+export const IOS_APP_BUNDLE_ID = 'io.logifi.app'
+
+/** Apple Team ID from the Xcode target DEVELOPMENT_TEAM. */
+export const IOS_APPLE_TEAM_ID = '6VTFG8AC7Y'
+
 export const REFERRAL_STORAGE_KEY = 'logifi_ref'
 
 export const REFERRAL_PROMPT_DISMISSED_KEY = 'logifi.invitePromptDismissed'
@@ -57,7 +63,46 @@ export function normalizeReferralCode(raw: string | null | undefined): string | 
  */
 export function referralShareUrl(code: string, origin?: string | null): string {
   const base = httpOrigin(origin) ?? REFERRAL_SHARE_ORIGIN
-  return `${base}/?ref=${encodeURIComponent(code)}`
+  return `${base}/r/${encodeURIComponent(code)}`
+}
+
+/** Code from a share link: `/r/CODE` or a legacy `?ref=CODE`. */
+export function referralCodeFromUrl(urlString: string): string | null {
+  try {
+    const url = new URL(urlString)
+    const fromQuery = normalizeReferralCode(url.searchParams.get('ref'))
+    if (fromQuery) return fromQuery
+    const match = url.pathname.match(/\/r\/([^/]+)/)
+    return normalizeReferralCode(match?.[1] ? decodeURIComponent(match[1]) : null)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Universal Links file for www.logifi.io and logifi.io.
+ * Only `/r/*` and `/?ref=` open the app. The rest of the site stays in the browser.
+ */
+export function appleAppSiteAssociation() {
+  const appId = `${IOS_APPLE_TEAM_ID}.${IOS_APP_BUNDLE_ID}`
+  return {
+    applinks: {
+      apps: [] as string[],
+      details: [
+        {
+          appID: appId,
+          paths: ['/r/*'],
+        },
+        {
+          appIDs: [appId],
+          components: [
+            { '/': '/r/*', comment: 'Referral share links' },
+            { '/': '/', '?': { ref: '?*' }, comment: 'Legacy ?ref= links' },
+          ],
+        },
+      ],
+    },
+  }
 }
 
 function httpOrigin(origin: string | null | undefined): string | null {

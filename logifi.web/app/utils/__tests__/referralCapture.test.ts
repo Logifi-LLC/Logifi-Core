@@ -40,10 +40,10 @@ describe('referral capture', () => {
 
   it('shares the current web origin and www from the native app', () => {
     expect(shareUrlForClient('ABCD234H', false, 'https://preview.example')).toBe(
-      'https://preview.example/?ref=ABCD234H'
+      'https://preview.example/r/ABCD234H'
     )
     expect(shareUrlForClient('ABCD234H', true, 'https://localhost')).toBe(
-      'https://www.logifi.io/?ref=ABCD234H'
+      'https://www.logifi.io/r/ABCD234H'
     )
   })
 

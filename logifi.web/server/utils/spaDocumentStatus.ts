@@ -31,6 +31,7 @@ const EXACT_APP_PATHS = new Set([
 const DYNAMIC_APP_PATHS = [
   /^\/digifi-capture\/[^/]+$/,
   /^\/guest-sign\/[^/]+$/,
+  /^\/r\/[^/]+$/,
 ]
 
 export function normalizeDocumentPath(pathname: string): string {

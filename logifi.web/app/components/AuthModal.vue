@@ -261,6 +261,7 @@
               ]"
               placeholder="Optional"
             />
+            <p v-if="referralApplied" class="text-sm font-semibold text-blue-600">Referral code applied</p>
           </div>
           <p 
             v-if="activeTab === 'signup'"
@@ -325,8 +326,10 @@ const props = withDefaults(
     dismissible?: boolean
     /** Marketing pages pass this. Without it the modal always opens on Sign In. */
     initialTab?: 'signin' | 'signup'
+    /** Bumps when a referral link opens signup on an already-visible modal. */
+    referralOpenCount?: number
   }>(),
-  { dismissible: true, initialTab: 'signin' }
+  { dismissible: true, initialTab: 'signin', referralOpenCount: 0 }
 )
 
 const emit = defineEmits<{
@@ -351,23 +354,38 @@ const {
 } = useAuth()
 
 const activeTab = ref<'signin' | 'signup'>(props.initialTab)
+const email = ref('')
+const password = ref('')
+const referralCode = ref('')
+const referralTouched = ref(false)
+const referralApplied = ref(false)
+
+function fillReferralFromStore() {
+  const fromUrl = captureReferralFromSearch(window.location.search)
+  if (fromUrl) storeReferralCode(fromUrl)
+  const stored = readStoredReferralCode()
+  if (!stored) return
+  referralCode.value = stored
+  referralApplied.value = true
+}
 
 watch(
   () => props.initialTab,
   (tab) => {
     activeTab.value = tab
+    if (tab === 'signup') fillReferralFromStore()
   }
 )
-const email = ref('')
-const password = ref('')
-const referralCode = ref('')
-const referralTouched = ref(false)
+
+watch(
+  () => props.referralOpenCount,
+  (count) => {
+    if (count > 0) fillReferralFromStore()
+  }
+)
 
 onMounted(() => {
-  const fromUrl = captureReferralFromSearch(window.location.search)
-  if (fromUrl) storeReferralCode(fromUrl)
-  const stored = readStoredReferralCode()
-  if (stored) referralCode.value = stored
+  fillReferralFromStore()
 })
 const authError = ref<string | null>(null)
 const successMessage = ref<string | null>(null)

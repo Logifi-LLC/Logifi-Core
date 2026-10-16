@@ -14,6 +14,7 @@
     :is-dark-mode="isDarkMode"
     :dismissible="!isIos"
     :initial-tab="authInitialTab"
+    :referral-open-count="referralOpenCount"
     @close="showAuthModal = false"
     @success="showAuthModal = false"
   />
@@ -7308,6 +7309,8 @@ const syncStatusTitle = computed(() => {
 
 const showAuthModal = ref(false)
 const authInitialTab = ref<'signin' | 'signup'>('signin')
+const referralOpenCount = ref(0)
+const route = useRoute()
 const {
   latestUpdate,
   showLatestBanner,
@@ -7590,9 +7593,21 @@ watch(authLoading, (loading) => {
 }, { immediate: true })
 
 // Initialize IndexedDB and scroll handlers on mount
+function openSignupForStoredReferral() {
+  if (isAuthenticated.value) return
+  if (!readStoredReferralCode()) return
+  authInitialTab.value = 'signup'
+  showAuthModal.value = true
+  referralOpenCount.value += 1
+}
+
+watch(() => route.query.ref, () => {
+  openSignupForStoredReferral()
+})
+
 onMounted(async () => {
   if (!isBrowser) return
-  if (readStoredReferralCode()) authInitialTab.value = 'signup'
+  openSignupForStoredReferral()
 
   loadSimDeviceCatalogFromStorage()
   

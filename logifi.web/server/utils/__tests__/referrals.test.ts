@@ -3,11 +3,15 @@ import {
   FRIEND_REFERRAL_CREDITS,
   REFERRER_REWARD_CAP,
   REFERRER_REWARD_CREDITS,
+  appleAppSiteAssociation,
   decideAttribution,
   decideFriendGrant,
   decideReferrerGrant,
+  IOS_APPLE_TEAM_ID,
+  IOS_APP_BUNDLE_ID,
   normalizeReferralCode,
   referralCodeFromBody,
+  referralCodeFromUrl,
   referralShareUrl,
   type ReferralRewardKind,
 } from '../../../shared/referrals'
@@ -111,13 +115,30 @@ describe('referral code rules', () => {
   })
 
   it('builds a permanent share link on the current origin', () => {
-    expect(referralShareUrl('ABCD234H')).toBe('https://www.logifi.io/?ref=ABCD234H')
+    expect(referralShareUrl('ABCD234H')).toBe('https://www.logifi.io/r/ABCD234H')
     expect(referralShareUrl('ABCD234H', 'https://logifi-git-preview.vercel.app/dashboard')).toBe(
-      'https://logifi-git-preview.vercel.app/?ref=ABCD234H'
+      'https://logifi-git-preview.vercel.app/r/ABCD234H'
     )
     expect(referralShareUrl('ABCD234H', 'http://127.0.0.1:3000')).toBe(
-      'http://127.0.0.1:3000/?ref=ABCD234H'
+      'http://127.0.0.1:3000/r/ABCD234H'
     )
+  })
+
+  it('reads a code from /r/CODE and from a legacy ref query', () => {
+    expect(referralCodeFromUrl('https://www.logifi.io/r/abcd234h')).toBe('ABCD234H')
+    expect(referralCodeFromUrl('https://www.logifi.io/?ref=ABCD234H')).toBe('ABCD234H')
+    expect(referralCodeFromUrl('https://www.logifi.io/r/not-a-code')).toBeNull()
+  })
+
+  it('associates only referral paths with the iOS app', () => {
+    const file = appleAppSiteAssociation()
+    const appId = `${IOS_APPLE_TEAM_ID}.${IOS_APP_BUNDLE_ID}`
+    expect(file.applinks.details[0]).toMatchObject({ appID: appId, paths: ['/r/*'] })
+    expect(file.applinks.details[1]?.appIDs).toEqual([appId])
+    expect(JSON.stringify(file)).toContain('/r/*')
+    expect(JSON.stringify(file)).toContain('"ref":"?*"')
+    expect(file.applinks.details[0]?.paths).not.toContain('/')
+    expect(file.applinks.details[0]?.paths).not.toContain('*')
   })
 
   it('blocks self-referral and a second referrer, and still accepts a code after a purchase', () => {
