@@ -231,7 +231,7 @@ const showDigifiCommonMistakes = ref(false)
 const showDigifiLearningOptIn = ref(false)
 const showDigifiDestinationModal = ref(false)
 const showDigifiSettings = ref(false)
-const digifiSettingsStack = ref<Array<'root' | 'account' | 'digifi' | 'account-email' | 'account-password'>>(['root'])
+const digifiSettingsStack = ref<Array<'root' | 'account' | 'digifi' | 'invite' | 'account-email' | 'account-password'>>(['root'])
 
 const isDigifiMode = computed(() => route.query.digifi === 'open')
 
@@ -293,7 +293,7 @@ function openDigifiSettings(tab?: 'account' | 'digifi') {
   showDigifiSettings.value = true
 }
 
-function pushDigifiSettingsFrame(frame: 'root' | 'account' | 'digifi' | 'account-email' | 'account-password') {
+function pushDigifiSettingsFrame(frame: 'root' | 'account' | 'digifi' | 'invite' | 'account-email' | 'account-password') {
   digifiSettingsStack.value = [...digifiSettingsStack.value, frame]
 }
 

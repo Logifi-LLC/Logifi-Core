@@ -1,4 +1,4 @@
-export type SettingsTabId = 'profile' | 'account' | 'roster' | 'endorsements' | 'preferences' | 'digifi' | 'updates' | 'data' | 'compliance'
+export type SettingsTabId = 'profile' | 'account' | 'invite' | 'roster' | 'endorsements' | 'preferences' | 'digifi' | 'updates' | 'data' | 'compliance'
 
 export type SettingsStackFrame = 'root' | SettingsTabId | 'account-email' | 'account-password'
 
@@ -24,6 +24,13 @@ export const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     icon: 'ri:shield-user-line',
     group: 'You',
     subtitle: 'Email, password, delete account',
+  },
+  {
+    id: 'invite',
+    label: 'Invite a friend',
+    icon: 'ri:user-add-line',
+    group: 'You',
+    subtitle: 'Share your code',
   },
   {
     id: 'roster',

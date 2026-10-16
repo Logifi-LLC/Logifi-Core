@@ -957,6 +957,66 @@ export type Database = {
           updated_at?: string
         }
       }
+      referral_codes: {
+        Row: {
+          user_id: string
+          code: string
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          code: string
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          code?: string
+          created_at?: string
+        }
+      }
+      referrals: {
+        Row: {
+          user_id: string
+          referred_by: string
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          referred_by: string
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          referred_by?: string
+          created_at?: string
+        }
+      }
+      referral_rewards: {
+        Row: {
+          id: string
+          referrer_user_id: string
+          referred_user_id: string
+          kind: 'friend_bonus' | 'referrer_bonus'
+          credits: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          referrer_user_id: string
+          referred_user_id: string
+          kind: 'friend_bonus' | 'referrer_bonus'
+          credits: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          referrer_user_id?: string
+          referred_user_id?: string
+          kind?: 'friend_bonus' | 'referrer_bonus'
+          credits?: number
+          created_at?: string
+        }
+      }
     }
     Views: {
       // Views will be added here

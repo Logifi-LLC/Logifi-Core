@@ -1,4 +1,5 @@
 import { isCapacitorIos } from '~/composables/useCapacitorPlatform'
+import { captureReferralFromSearch, storeReferralCode } from '~/utils/referralCapture'
 
 // Global auth middleware
 // Ensures authentication state is initialized on every route
@@ -26,9 +27,19 @@ function routeHasAuthCallback(to: {
   )
 }
 
+function rememberReferralQuery(query: Record<string, unknown>) {
+  const raw = query.ref
+  const value = Array.isArray(raw) ? raw[0] : raw
+  if (typeof value !== 'string' || !value) return
+  const code = captureReferralFromSearch(`?ref=${encodeURIComponent(value)}`)
+  if (code) storeReferralCode(code)
+}
+
 export default defineNuxtRouteMiddleware((to) => {
   // Only run on client side (since ssr: false)
   if (process.server) return
+
+  rememberReferralQuery(to.query)
 
   const { initAuth, isPasswordRecoverySession } = useAuth()
 
@@ -51,5 +62,13 @@ export default defineNuxtRouteMiddleware((to) => {
     })
   }
 
-  return navigateTo('/dashboard', { replace: true })
+  const ref = to.query.ref
+  const refValue = Array.isArray(ref) ? ref[0] : ref
+  return navigateTo(
+    {
+      path: '/dashboard',
+      query: typeof refValue === 'string' && refValue ? { ref: refValue } : undefined,
+    },
+    { replace: true }
+  )
 })

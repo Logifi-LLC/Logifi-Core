@@ -51,10 +51,13 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useAuth } from '~/composables/useAuth'
 import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
+import { claimStoredReferral } from '~/utils/referralClaimClient'
+import { isAuthEmailVerified } from '~/utils/referralClaimAttempt'
+import { captureReferralFromSearch, storeReferralCode } from '~/utils/referralCapture'
 
 type CallbackKind = 'signup' | 'recovery' | 'signin'
 
-const { initAuth, isAuthenticated, user, isPasswordRecoverySession } = useAuth()
+const { initAuth, isAuthenticated, user, session, isPasswordRecoverySession } = useAuth()
 const { isIos } = useCapacitorPlatform()
 
 const errorHomePath = computed(() => (isIos.value ? '/dashboard' : '/'))
@@ -146,6 +149,16 @@ const processCallback = async () => {
     await new Promise((resolve) => setTimeout(resolve, 500))
 
     if (isAuthenticated.value && user.value) {
+      const fromUrl = captureReferralFromSearch(window.location.search)
+      if (fromUrl) storeReferralCode(fromUrl)
+      const token = session.value?.access_token
+      if (token) {
+        await claimStoredReferral({
+          userId: user.value.id,
+          token,
+          emailVerified: isAuthEmailVerified(user.value),
+        })
+      }
       isProcessing.value = false
       isSuccess.value = true
 
