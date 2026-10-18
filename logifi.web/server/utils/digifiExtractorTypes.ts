@@ -57,6 +57,13 @@ export interface ScanLogbookImageOptions {
     imageBase64: string
     mimeType: string
   }>
+  /** When set, each Gemini generateContent call is logged to digifi_scan_events. */
+  scanEventContext?: {
+    userId: string
+    scanSessionId: string
+    spreadId: string
+    pageSide: 'left' | 'right'
+  }
 }
 
 export interface DigifiScanTimings {

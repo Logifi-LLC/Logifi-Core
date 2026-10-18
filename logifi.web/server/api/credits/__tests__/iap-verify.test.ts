@@ -179,7 +179,7 @@ describe('POST /api/credits/iap/verify', () => {
       jwsRepresentation: mockJwsRepresentation,
     })
 
-    await expect(handler(mockEvent as H3Event)).rejects.toThrow('Invalid signature')
+    await expect(handler(mockEvent as H3Event)).rejects.toThrow('Transaction verification failed')
   })
 
   it('should reject if product ID mismatch', async () => {
@@ -198,7 +198,7 @@ describe('POST /api/credits/iap/verify', () => {
       jwsRepresentation: mockJwsRepresentation,
     })
 
-    await expect(handler(mockEvent as H3Event)).rejects.toThrow('Product ID mismatch')
+    await expect(handler(mockEvent as H3Event)).rejects.toThrow('Transaction verification failed')
   })
 
   it('should reject if transaction ID mismatch', async () => {
@@ -217,7 +217,30 @@ describe('POST /api/credits/iap/verify', () => {
       jwsRepresentation: mockJwsRepresentation,
     })
 
-    await expect(handler(mockEvent as H3Event)).rejects.toThrow('Transaction ID mismatch')
+    await expect(handler(mockEvent as H3Event)).rejects.toThrow('Transaction verification failed')
+  })
+
+  it('rejects when appAccountToken does not match the signed-in user', async () => {
+    const mockVerifiedPayload = {
+      transactionId: mockTransactionId,
+      productId: mockProductId,
+      bundleId: 'io.logifi.app',
+      originalTransactionId: mockTransactionId,
+      appAccountToken: '00000000-0000-4000-8000-000000000099',
+    }
+
+    vi.mocked(appleIapUtils.verifyTransaction).mockResolvedValue(mockVerifiedPayload as any)
+
+    mockReadBody.mockResolvedValue({
+      productId: mockProductId,
+      transactionId: mockTransactionId,
+      jwsRepresentation: mockJwsRepresentation,
+    })
+
+    await expect(handler(mockEvent as H3Event)).rejects.toThrow(
+      'Purchase is not linked to this account'
+    )
+    expect(creditsPaymentUtils.grantCreditsIdempotent).not.toHaveBeenCalled()
   })
 
   it('should handle idempotent credits grant', async () => {

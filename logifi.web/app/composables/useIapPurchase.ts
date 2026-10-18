@@ -100,7 +100,7 @@ const error = ref<string | null>(null)
  * Composable for iOS In-App Purchases of Digifi credits via StoreKit
  */
 export function useIapPurchase() {
-  const { isAuthenticated, getAccessToken } = useAuth()
+  const { isAuthenticated, getAccessToken, session } = useAuth()
 
   const isAvailable = computed(() => isIosApp())
 
@@ -188,10 +188,19 @@ export function useIapPurchase() {
       // Initiate purchase with Apple
       // Credits are consumable (user can buy multiple times)
       // Note: purchaseProduct() returns Transaction directly, not { transaction: Transaction }
+      const token = getAccessToken()
+      if (!token) {
+        throw new Error('Authentication token not available')
+      }
+
+      const appAccountToken =
+        typeof session.value?.user?.id === 'string' ? session.value.user.id : undefined
+
       const transaction: PurchaseResult = await NativePurchases.purchaseProduct({
         productIdentifier: productId,
         productType: PURCHASE_TYPE.INAPP,
         isConsumable: true,
+        ...(appAccountToken ? { appAccountToken } : {}),
       })
 
       if (!transaction) {
@@ -207,12 +216,6 @@ export function useIapPurchase() {
           console.warn('[iap] Xcode StoreKit Testing detected — cannot credit server')
           throw new Error("Xcode StoreKit Testing cannot credit the server — use App Store sandbox or TestFlight")
         }
-      }
-
-      // Verify receipt on server and credit account
-      const token = getAccessToken()
-      if (!token) {
-        throw new Error('Authentication token not available')
       }
 
       // Map Capgo Transaction fields to server API:

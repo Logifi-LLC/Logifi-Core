@@ -5,6 +5,7 @@ import {
   WELCOME_CREDITS_DESCRIPTION,
   welcomeCreditsReferenceId,
 } from '../../shared/creditsWelcome'
+import { CreditReferenceDuplicateError, isPostgresUniqueViolation } from './creditsReference'
 
 type ServiceClient = SupabaseClient<Database>
 
@@ -82,7 +83,29 @@ async function insertCreditTransaction(
   })
   if (error) {
     console.error('[credits] failed to insert transaction:', error.message)
+    throw error
   }
+}
+
+async function incrementCreditsBalance(
+  service: ServiceClient,
+  userId: string,
+  delta: number
+): Promise<number> {
+  const { data, error } = await service.rpc('service_increment_user_credits', {
+    p_user_id: userId,
+    p_delta: delta,
+  })
+
+  if (error) {
+    throw new Error(`Failed to adjust credits: ${error.message}`)
+  }
+
+  if (typeof data !== 'number') {
+    throw new Error('Failed to adjust credits: unexpected RPC response')
+  }
+
+  return data
 }
 
 export async function getCreditsBalance(
@@ -176,31 +199,37 @@ export async function addCredits(
   }
 
   await ensureUserProfile(service, userId)
-  const current = await getCreditsBalance(service, userId)
-  const next = current + amount
 
-  const { data, error } = await service
-    .from('user_profiles')
-    .update({ credits: next, updated_at: new Date().toISOString() })
-    .eq('id', userId)
-    .select('credits')
-    .single()
-
-  if (error) {
-    throw new Error(`Failed to add credits: ${error.message}`)
+  let newBalance: number
+  try {
+    newBalance = await incrementCreditsBalance(service, userId, amount)
+  } catch (err) {
+    throw err instanceof Error ? err : new Error('Failed to add credits')
   }
 
-  await insertCreditTransaction(service, {
-    userId,
-    amount,
-    balanceAfter: data.credits,
-    type: options.type ?? 'purchase',
-    description: options.description ?? `Added ${amount} credits`,
-    paymentMethod: options.paymentMethod,
-    referenceId: options.referenceId,
-  })
+  try {
+    await insertCreditTransaction(service, {
+      userId,
+      amount,
+      balanceAfter: newBalance,
+      type: options.type ?? 'purchase',
+      description: options.description ?? `Added ${amount} credits`,
+      paymentMethod: options.paymentMethod,
+      referenceId: options.referenceId,
+    })
+  } catch (err) {
+    if (options.referenceId && isPostgresUniqueViolation(err)) {
+      try {
+        await incrementCreditsBalance(service, userId, -amount)
+      } catch (rollbackErr) {
+        console.error('[credits] failed to roll back duplicate reference grant:', rollbackErr)
+      }
+      throw new CreditReferenceDuplicateError()
+    }
+    throw err instanceof Error ? err : new Error('Failed to record credit transaction')
+  }
 
-  return data.credits
+  return newBalance
 }
 
 export async function hasWelcomeCreditsGrant(
