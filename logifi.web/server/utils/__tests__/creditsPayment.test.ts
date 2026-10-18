@@ -8,6 +8,7 @@ vi.mock('../creditsBalance', () => ({
 }))
 
 import { addCredits, getCreditsBalance } from '../creditsBalance'
+import { CreditReferenceDuplicateError } from '../creditsReference'
 
 describe('isMockCreditsEnabled', () => {
   const original = { ...process.env }
@@ -81,6 +82,22 @@ describe('grantCreditsIdempotent', () => {
       10,
       expect.objectContaining({ referenceId: 'stripe:cs_new', paymentMethod: 'stripe' })
     )
+  })
+
+  it('treats duplicate reference insert as already granted', async () => {
+    const service = mockServiceWithReference(null)
+    vi.mocked(addCredits).mockRejectedValueOnce(new CreditReferenceDuplicateError())
+
+    const result = await grantCreditsIdempotent(
+      service as never,
+      'user-1',
+      10,
+      { referenceId: 'stripe:cs_race', paymentMethod: 'stripe' }
+    )
+
+    expect(result.granted).toBe(false)
+    expect(result.credits).toBe(35)
+    expect(getCreditsBalance).toHaveBeenCalled()
   })
 })
 

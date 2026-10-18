@@ -39,6 +39,14 @@ export interface ReferralClaimResult {
   reason?: AttributionBlock
 }
 
+/** Hide unknown vs invalid codes from API clients (enumeration). */
+export function sanitizeReferralClaimResult(result: ReferralClaimResult): ReferralClaimResult {
+  if (!result.ok && result.reason === 'unknown_code') {
+    return { ...result, reason: 'invalid_code' }
+  }
+  return result
+}
+
 export interface ReferralStatus {
   code: string
   shareUrl: string
@@ -269,7 +277,7 @@ export function referralClaimFailureMessage(error: unknown): string {
   const code = typeof record.code === 'string' ? record.code : ''
   const message = typeof record.message === 'string' ? record.message : ''
   if (code === '42501' || /permission denied/i.test(message)) {
-    return 'Referral save was denied. The server key cannot write referral rows.'
+    return 'Could not apply referral code'
   }
   if (code === '23503') return 'Referral save failed because the account profile is missing.'
   return 'Could not apply referral code'

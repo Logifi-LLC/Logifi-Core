@@ -21,6 +21,10 @@ function createMockService(initial: { credits?: number; welcomeGrantExists?: boo
   }
 
   const service = {
+    rpc: vi.fn(async (_fn: string, args: { p_delta: number }) => {
+      state.credits += args.p_delta
+      return { data: state.credits, error: null }
+    }),
     get credits() {
       return state.credits
     },

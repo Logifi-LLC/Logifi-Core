@@ -1075,6 +1075,13 @@ export type Database = {
       // Views will be added here
     }
     Functions: {
+      service_increment_user_credits: {
+        Args: {
+          p_user_id: string
+          p_delta: number
+        }
+        Returns: number
+      }
       purge_user_data_for_account_deletion: {
         Args: {
           p_user_id: string
