@@ -1,6 +1,6 @@
 import { createError, defineEventHandler, readBody } from 'h3'
 import { getUserIdFromEvent } from '../../../utils/supabase'
-import { isValidSpreadId } from '../../../utils/digifiSpreadRecovery'
+import { isValidSpreadId } from '../../../utils/digifiScanPayload'
 import { logDigifiImportCorrectionsEventSafe } from '../../../utils/digifiScanEvents'
 import { sanitizeDigifiColumnCorrectionCounts } from '../../../../shared/digifiColumnCorrectionCounts'
 
