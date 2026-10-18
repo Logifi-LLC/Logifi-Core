@@ -23,6 +23,7 @@ import {
   creditsGranter,
   getReferralStatus,
   referralClaimFailureMessage,
+  sanitizeReferralClaimResult,
 } from '../referrals'
 import type { ReferralStore } from '../referralStore'
 import { addCredits } from '../creditsBalance'
@@ -245,8 +246,19 @@ describe('referral attribution and grants', () => {
       expect.objectContaining({ userId: 'friend', amount: FRIEND_REFERRAL_CREDITS }),
     ])
     expect(referralClaimFailureMessage({ code: '42501', message: 'permission denied for table referrals' })).toBe(
-      'Referral save was denied. The server key cannot write referral rows.'
+      'Could not apply referral code'
     )
+  })
+
+  it('sanitizeReferralClaimResult maps unknown_code to invalid_code', () => {
+    expect(
+      sanitizeReferralClaimResult({
+        ok: false,
+        attributed: false,
+        friendCreditsGranted: false,
+        reason: 'unknown_code',
+      }).reason
+    ).toBe('invalid_code')
   })
 
   it('rejects self-referral and a second referrer', async () => {

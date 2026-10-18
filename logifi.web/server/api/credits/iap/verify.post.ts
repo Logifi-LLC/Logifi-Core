@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
   // Verify the product exists in our catalog
   const product = getIapProduct(productId)
   if (!product) {
-    throw createError({ statusCode: 400, statusMessage: `Unknown product: ${productId}` })
+    throw createError({ statusCode: 400, statusMessage: 'Unknown product' })
   }
 
   // Verify the transaction with Apple
@@ -56,23 +56,48 @@ export default defineEventHandler(async (event) => {
     console.error('[iap] Apple transaction verification failed:', err)
     throw createError({
       statusCode: 400,
-      statusMessage: err instanceof Error ? err.message : 'Apple receipt verification failed',
+      statusMessage: 'Transaction verification failed',
+    })
+  }
+
+  const payloadAppAccountToken =
+    typeof verifiedPayload.appAccountToken === 'string'
+      ? verifiedPayload.appAccountToken.toLowerCase()
+      : null
+  if (payloadAppAccountToken && payloadAppAccountToken !== userId.toLowerCase()) {
+    console.error('[iap] appAccountToken does not match signed-in user', {
+      userId,
+      appAccountToken: verifiedPayload.appAccountToken,
+      transactionId: verifiedPayload.transactionId,
+    })
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Purchase is not linked to this account',
     })
   }
 
   // Ensure the verified product matches what the client claimed
   if (verifiedPayload.productId !== productId) {
+    console.error('[iap] product ID mismatch', {
+      claimed: productId,
+      verified: verifiedPayload.productId,
+      transactionId: verifiedPayload.transactionId,
+    })
     throw createError({
       statusCode: 400,
-      statusMessage: `Product ID mismatch: expected ${productId}, got ${verifiedPayload.productId}`,
+      statusMessage: 'Transaction verification failed',
     })
   }
 
   // Ensure the verified transaction ID matches
   if (verifiedPayload.transactionId !== transactionId) {
+    console.error('[iap] transaction ID mismatch', {
+      claimed: transactionId,
+      verified: verifiedPayload.transactionId,
+    })
     throw createError({
       statusCode: 400,
-      statusMessage: `Transaction ID mismatch: expected ${transactionId}, got ${verifiedPayload.transactionId}`,
+      statusMessage: 'Transaction verification failed',
     })
   }
 

@@ -7,7 +7,9 @@ import {
   claimReferralForUser,
   readAuthUser,
   referralClaimFailureMessage,
+  sanitizeReferralClaimResult,
 } from '../../utils/referrals'
+import { referralClaimRateLimitExceeded } from '../../utils/referralClaimRateLimit'
 
 export default defineEventHandler(async (event) => {
   const user = await readAuthUser(event)
@@ -20,11 +22,21 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 503, statusMessage: 'Referral service is not configured' })
   }
 
+  if (referralClaimRateLimitExceeded(user.id)) {
+    return sanitizeReferralClaimResult({
+      ok: false,
+      attributed: false,
+      friendCreditsGranted: false,
+      reason: 'invalid_code',
+    })
+  }
+
   const body = await readBody(event).catch(() => ({}))
   const rawCode = referralCodeFromBody(body)
 
   try {
-    return await claimReferralForUser(service, user.id, rawCode, authEmailVerified(user))
+    const result = await claimReferralForUser(service, user.id, rawCode, authEmailVerified(user))
+    return sanitizeReferralClaimResult(result)
   } catch (error) {
     if (referralSchemaMissing(error)) {
       throw createError({ statusCode: 503, statusMessage: 'Referral program is not available yet' })

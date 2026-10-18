@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '../../app/types/database'
-import { addCredits } from './creditsBalance'
+import { addCredits, getCreditsBalance } from './creditsBalance'
+import { CreditReferenceDuplicateError } from './creditsReference'
 
 type ServiceClient = SupabaseClient<Database>
 
@@ -34,16 +35,22 @@ export async function grantCreditsIdempotent(
   }
 ): Promise<{ credits: number; granted: boolean }> {
   if (await hasPurchaseForReference(service, options.referenceId)) {
-    const { getCreditsBalance } = await import('./creditsBalance')
     const credits = await getCreditsBalance(service, userId)
     return { credits, granted: false }
   }
 
-  const credits = await addCredits(service, userId, numberOfCredits, {
-    description: options.description ?? `Purchased ${numberOfCredits} credits`,
-    paymentMethod: options.paymentMethod,
-    referenceId: options.referenceId,
-  })
-
-  return { credits, granted: true }
+  try {
+    const credits = await addCredits(service, userId, numberOfCredits, {
+      description: options.description ?? `Purchased ${numberOfCredits} credits`,
+      paymentMethod: options.paymentMethod,
+      referenceId: options.referenceId,
+    })
+    return { credits, granted: true }
+  } catch (err) {
+    if (err instanceof CreditReferenceDuplicateError) {
+      const credits = await getCreditsBalance(service, userId)
+      return { credits, granted: false }
+    }
+    throw err
+  }
 }
