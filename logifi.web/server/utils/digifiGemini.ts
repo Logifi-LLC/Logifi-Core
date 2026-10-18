@@ -22,6 +22,11 @@ import { parseExtractResponse } from './digifiResponseParser'
 import { runDigifiScanOrchestration } from './digifiScanOrchestrator'
 import { isScanResponseIncomplete } from './digifiScanValidation'
 import type { DigifiScanRow } from '../../app/utils/digifiTypes'
+import {
+  logDigifiGeminiCallEventSafe,
+  type DigifiScanEventContext,
+} from './digifiScanEvents'
+import type { DigifiExtractorErrorCode } from './digifiExtractorTypes'
 
 interface DigifiGeminiGenerationOptions {
   maxOutputTokens: number
@@ -56,6 +61,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function httpStatusToErrorCode(status: number): DigifiExtractorErrorCode {
+  if (status === 404) return 'CONFIG'
+  if (status === 429 || status === 503 || status === 504) return 'CAPACITY'
+  return 'UNKNOWN'
+}
+
 async function callGeminiRowsOnModel(
   model: string,
   prompt: string,
@@ -66,7 +77,8 @@ async function callGeminiRowsOnModel(
   focusRows: Set<number> | undefined,
   modelsAttempted: string[],
   generation: DigifiGeminiGenerationOptions,
-  callStats?: DigifiCallStats
+  callStats?: DigifiCallStats,
+  scanEventContext?: DigifiScanEventContext
 ): Promise<DigifiScanRow[]> {
   const env = getDigifiEnv()
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(env.geminiApiKey)}`
@@ -110,6 +122,7 @@ async function callGeminiRowsOnModel(
 
   let lastError: DigifiExtractorError | null = null
   for (let attempt = 0; attempt < GEMINI_MAX_ATTEMPTS; attempt++) {
+    const attemptStartedAt = Date.now()
     let res: Response
     try {
       if (callStats) callStats.apiRequests += 1
@@ -128,6 +141,18 @@ async function callGeminiRowsOnModel(
         'CAPACITY',
         [...modelsAttempted, model]
       )
+      if (scanEventContext) {
+        logDigifiGeminiCallEventSafe({
+          context: scanEventContext,
+          model,
+          promptTokens: null,
+          outputTokens: null,
+          totalTokens: null,
+          latencyMs: Date.now() - attemptStartedAt,
+          status: 'error',
+          errorCode: 'CAPACITY',
+        })
+      }
       if (attempt < GEMINI_MAX_ATTEMPTS - 1) {
         await sleep(GEMINI_RETRY_DELAY_MS)
         continue
@@ -136,17 +161,24 @@ async function callGeminiRowsOnModel(
     }
     if (!res.ok) {
       const errText = await res.text().catch(() => '')
-      const code =
-        res.status === 404
-          ? 'CONFIG'
-          : isCapacityHttpStatus(res.status)
-            ? 'CAPACITY'
-            : 'UNKNOWN'
+      const code = httpStatusToErrorCode(res.status)
       lastError = new DigifiExtractorError(
         `Gemini API ${res.status}: ${errText.slice(0, 200)}`,
         code,
         [...modelsAttempted, model]
       )
+      if (scanEventContext) {
+        logDigifiGeminiCallEventSafe({
+          context: scanEventContext,
+          model,
+          promptTokens: null,
+          outputTokens: null,
+          totalTokens: null,
+          latencyMs: Date.now() - attemptStartedAt,
+          status: 'error',
+          errorCode: code,
+        })
+      }
       if (isRetryableHttpStatus(res.status) && attempt < GEMINI_MAX_ATTEMPTS - 1) {
         await sleep(GEMINI_RETRY_DELAY_MS)
         continue
@@ -168,7 +200,28 @@ async function callGeminiRowsOnModel(
     }
     const candidate = data.candidates?.[0]
     const text = collectGeminiResponseText(candidate?.content?.parts)
+    const usage = data.usageMetadata
+    const promptTokens = usage?.promptTokenCount ?? null
+    const outputTokens =
+      usage?.candidatesTokenCount != null
+        ? usage.candidatesTokenCount + (usage.thoughtsTokenCount ?? 0)
+        : null
+    const totalTokens = usage?.totalTokenCount ?? null
+    const latencyMs = Date.now() - attemptStartedAt
+
     if (!text) {
+      if (scanEventContext) {
+        logDigifiGeminiCallEventSafe({
+          context: scanEventContext,
+          model,
+          promptTokens,
+          outputTokens,
+          totalTokens,
+          latencyMs,
+          status: 'error',
+          errorCode: 'INVALID_RESPONSE',
+        })
+      }
       throw new DigifiExtractorError(
         'Gemini returned empty response',
         'INVALID_RESPONSE',
@@ -176,7 +229,6 @@ async function callGeminiRowsOnModel(
       )
     }
 
-    const usage = data.usageMetadata
     if (usage?.totalTokenCount != null) {
       console.info('[digifi] scan tokens:', {
         total: usage.totalTokenCount,
@@ -195,6 +247,18 @@ async function callGeminiRowsOnModel(
       console.warn(
         `[digifi] model ${model} hit output token limit (${text.length} chars, thinking=${usage?.thoughtsTokenCount ?? '?'}); response truncated`
       )
+      if (scanEventContext) {
+        logDigifiGeminiCallEventSafe({
+          context: scanEventContext,
+          model,
+          promptTokens,
+          outputTokens,
+          totalTokens,
+          latencyMs,
+          status: 'error',
+          errorCode: 'INVALID_RESPONSE',
+        })
+      }
       throw new DigifiExtractorError(
         'Gemini response was truncated',
         'INVALID_RESPONSE',
@@ -211,6 +275,17 @@ async function callGeminiRowsOnModel(
       if (!focusRows && isScanResponseIncomplete(rows, maxRowCount)) {
         throw new Error('too few rows parsed')
       }
+      if (scanEventContext) {
+        logDigifiGeminiCallEventSafe({
+          context: scanEventContext,
+          model,
+          promptTokens,
+          outputTokens,
+          totalTokens,
+          latencyMs,
+          status: 'ok',
+        })
+      }
       return rows
     } catch (error) {
       if (error instanceof DigifiExtractorError) throw error
@@ -218,6 +293,18 @@ async function callGeminiRowsOnModel(
       console.warn(
         `[digifi] invalid TSV from ${model}: ${text.length} chars, finishReason=${finishReason ?? 'unknown'}, tail=${JSON.stringify(text.slice(-120))}`
       )
+      if (scanEventContext) {
+        logDigifiGeminiCallEventSafe({
+          context: scanEventContext,
+          model,
+          promptTokens,
+          outputTokens,
+          totalTokens,
+          latencyMs,
+          status: 'error',
+          errorCode: 'INVALID_RESPONSE',
+        })
+      }
       throw new DigifiExtractorError(
         finishReason === 'MAX_TOKENS'
           ? 'Gemini response was truncated'
@@ -240,7 +327,11 @@ async function callGeminiRows(
   maxRowCount: number,
   focusRows: Set<number> | undefined,
   generation: DigifiGeminiGenerationOptions,
-  options?: { allowFallbackOnInvalidResponse?: boolean; callStats?: DigifiCallStats }
+  options?: {
+    allowFallbackOnInvalidResponse?: boolean
+    callStats?: DigifiCallStats
+    scanEventContext?: DigifiScanEventContext
+  }
 ): Promise<{ rows: DigifiScanRow[]; modelUsed: string }> {
   const attempted: string[] = []
   let lastCapacityError: DigifiExtractorError | null = null
@@ -258,7 +349,8 @@ async function callGeminiRows(
         focusRows,
         attempted.slice(0, -1),
         generation,
-        options?.callStats
+        options?.callStats,
+        options?.scanEventContext
       )
       if (attempted.length > 1) {
         console.info(
@@ -366,7 +458,10 @@ export async function scanLogbookImageWithGemini(
         maxRowCount,
         focusRows,
         generation,
-        opts
+        {
+          ...opts,
+          scanEventContext: options.scanEventContext,
+        }
       ),
   })
 }

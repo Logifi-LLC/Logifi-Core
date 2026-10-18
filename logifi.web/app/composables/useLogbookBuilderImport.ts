@@ -52,6 +52,8 @@ import {
   normalizeImportNumber,
   parseImportDuration,
 } from '../../shared/logbookDataBridge/formatters'
+import { buildDigifiColumnCorrectionCounts } from '../../shared/digifiColumnCorrectionCounts'
+import { apiFetch } from '~/utils/apiFetch'
 
 function generateEntryId(): string {
   return crypto.randomUUID?.() ?? `entry-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
@@ -776,6 +778,22 @@ function runLogbookBuilderDigifiLearningSideEffects(
     .catch((error) => {
       console.warn('[digifi] failed to persist vocabulary', error)
     })
+
+  const columnCorrections = buildDigifiColumnCorrectionCounts(
+    grid.rows.value,
+    grid.columns.value
+  )
+  if (Object.keys(columnCorrections).length > 0) {
+    void apiFetch('/api/digifi/scan-events/import-corrections', {
+      method: 'POST',
+      body: {
+        spreadId: grid.spreadId.value,
+        columnCorrections,
+      },
+    }).catch((error) => {
+      console.warn('[digifi] failed to log import correction counts', error)
+    })
+  }
 }
 
 /** Create user tag presets for custom-column tags, the same way + Tag saves a label. Does not block import. */

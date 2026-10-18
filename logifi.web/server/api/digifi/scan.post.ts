@@ -217,6 +217,12 @@ export default defineEventHandler(async (event) => {
       chunkImages,
       fewShotExamples,
       sessionPriorPages,
+      scanEventContext: {
+        userId,
+        scanSessionId: scanId,
+        spreadId: meta.spreadId,
+        pageSide: meta.pageSide,
+      },
     })
     mark('afterExtract')
   } catch (e) {

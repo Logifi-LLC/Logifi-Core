@@ -991,6 +991,59 @@ export type Database = {
           created_at?: string
         }
       }
+      digifi_scan_events: {
+        Row: {
+          id: string
+          user_id: string
+          scan_session_id: string | null
+          spread_id: string | null
+          page_side: string | null
+          created_at: string
+          model: string | null
+          prompt_tokens: number | null
+          output_tokens: number | null
+          total_tokens: number | null
+          estimated_cost_usd: string | null
+          latency_ms: number | null
+          status: 'ok' | 'error' | 'import'
+          error_code: string | null
+          column_corrections: Json | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          scan_session_id?: string | null
+          spread_id?: string | null
+          page_side?: string | null
+          created_at?: string
+          model?: string | null
+          prompt_tokens?: number | null
+          output_tokens?: number | null
+          total_tokens?: number | null
+          estimated_cost_usd?: string | null
+          latency_ms?: number | null
+          status: 'ok' | 'error' | 'import'
+          error_code?: string | null
+          column_corrections?: Json | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          scan_session_id?: string | null
+          spread_id?: string | null
+          page_side?: string | null
+          created_at?: string
+          model?: string | null
+          prompt_tokens?: number | null
+          output_tokens?: number | null
+          total_tokens?: number | null
+          estimated_cost_usd?: string | null
+          latency_ms?: number | null
+          status?: 'ok' | 'error' | 'import'
+          error_code?: string | null
+          column_corrections?: Json | null
+        }
+      }
       referral_rewards: {
         Row: {
           id: string
