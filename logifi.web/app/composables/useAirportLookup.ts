@@ -1,4 +1,4 @@
-import { lookupAirportLocal, type AirportInfo } from '../../shared/airportLookup'
+import { lookupAirportLocalAsync, type AirportInfo } from '../../shared/airportLookup'
 import { isCapacitorNative } from '~/composables/useCapacitorPlatform'
 
 export type { AirportInfo }
@@ -78,7 +78,12 @@ export const useAirportLookup = () => {
       return cached
     }
 
-    const local = lookupAirportLocal(normalizedCode)
+    let local: AirportInfo | null = null
+    try {
+      local = await lookupAirportLocalAsync(normalizedCode)
+    } catch (err) {
+      console.warn('Airport catalog failed to load:', err)
+    }
     if (local) {
       setCachedAirport(normalizedCode, local)
       return local

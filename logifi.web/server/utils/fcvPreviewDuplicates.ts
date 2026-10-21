@@ -1,5 +1,5 @@
 import type { FcvMappedEntry } from './fcvMap'
-import { canonicalizeAirportCodeForMatch } from '../../shared/airportCodeCanonical'
+import { canonicalizeAirportCodeForMatchServer } from './airportCanonical'
 import {
   entriesDuplicateMatch,
   type DuplicateEntryMatchShape,
@@ -113,7 +113,7 @@ export function logEntryRowToExistingForDedup(row: {
 function airportFieldForMatch(value: string | undefined): string {
   const raw = (value || 'UNKNOWN').trim().toUpperCase()
   if (raw === '' || raw === 'UNKNOWN') return raw
-  return canonicalizeAirportCodeForMatch(raw)
+  return canonicalizeAirportCodeForMatchServer(raw)
 }
 
 function normalizeFlightNumberForMatch(value: string | null | undefined): string {

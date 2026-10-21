@@ -6853,6 +6853,7 @@ import {
 import { useLocationLookup } from '../composables/useLocationLookup'
 import { calculateNightTime } from '../utils/nightTimeCalculator'
 import { DateTime } from 'luxon'
+import { ensureAirportClientDbLoaded } from '../../shared/airportClientDb'
 import { getAirportIanaTimezone, normalizeTimezoneToIANA } from '../../shared/airportTimezone'
 import { sortEntriesByDateAndOOOI } from '../../shared/oooiSort'
 import { listCatalogPersonDisplayNames, tagsExcludingPersonNameMarker, isPersonCatalogNameMarker } from '../../shared/catalogPersonNames'
@@ -14876,6 +14877,12 @@ async function getAirportTimezone(airportCode: string | null | undefined): Promi
     const cached = airportTimezoneCache.get(normalizedCode)
     console.log(`[Timezone] Cache hit for ${normalizedCode}:`, cached)
     return cached || null
+  }
+
+  try {
+    await ensureAirportClientDbLoaded()
+  } catch {
+    // Fall through to API lookup below.
   }
 
   const staticTz = getAirportIanaTimezone(normalizedCode)

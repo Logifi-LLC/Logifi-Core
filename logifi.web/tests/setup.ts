@@ -1,5 +1,7 @@
-import { vi } from 'vitest'
+import { beforeAll, vi } from 'vitest'
 import { config } from '@vue/test-utils'
+import { __setAirportClientDbForTests } from '../shared/airportClientDb'
+import { loadAirportClientDbFixture } from '../shared/__tests__/airportTestDb'
 
 // Mock Supabase client globally
 vi.mock('~/lib/supabase', () => {
@@ -30,6 +32,10 @@ vi.mock('~/lib/supabase', () => {
       rpc: vi.fn()
     }
   }
+})
+
+beforeAll(() => {
+  __setAirportClientDbForTests(loadAirportClientDbFixture())
 })
 
 // Global test utilities
