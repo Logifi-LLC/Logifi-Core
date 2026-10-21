@@ -21,6 +21,7 @@
 
   <!-- Audit Trail Modal -->
   <AuditTrail
+    v-if="showAuditTrail"
     :is-open="showAuditTrail"
     :entry-id="auditTrailEntryId"
     :is-dark-mode="isDarkMode"
@@ -106,6 +107,7 @@
 
   <!-- Currency Dashboard Modal -->
   <CurrencyDashboard
+    v-if="showCurrencyDashboard"
     :is-open="showCurrencyDashboard"
     :is-dark-mode="isDarkMode"
     :passenger-currency="passengerCurrency"
@@ -4433,6 +4435,7 @@
     />
 
     <LogbookImportModal
+      v-if="showDashboardImportModal"
       :is-open="showDashboardImportModal"
       :is-dark-mode="isDarkMode"
       @close="showDashboardImportModal = false"
@@ -6802,7 +6805,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, shallowRef, watch, watchEffect } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, reactive, ref, shallowRef, watch, watchEffect } from 'vue'
 import {
   LOGBOOK_STORAGE_KEY,
   createEmptyFlightTime,
@@ -6856,7 +6859,6 @@ import { DateTime } from 'luxon'
 import { getAirportIanaTimezone, normalizeTimezoneToIANA } from '../../shared/airportTimezone'
 import { sortEntriesByDateAndOOOI } from '../../shared/oooiSort'
 import { listCatalogPersonDisplayNames, tagsExcludingPersonNameMarker, isPersonCatalogNameMarker } from '../../shared/catalogPersonNames'
-import { calculateSectionII, calculateSectionIII } from '../utils/form8710Calculator'
 import type { Form8710Data, AircraftCategory8710, ComplianceMetadata } from '../utils/form8710Types'
 import { mapCategoryTo8710, isTrainingDevice } from '../utils/form8710Types'
 import {
@@ -6952,15 +6954,17 @@ import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
 import { useDashboardShortcuts } from '../composables/useDashboardShortcuts'
 import AuthModal from '../components/AuthModal.vue'
 import { readStoredReferralCode } from '../utils/referralCapture'
-import AuditTrail from '../components/AuditTrail.vue'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
-import ComplianceChecklist from '../components/ComplianceChecklist.vue'
-import CurrencyDashboard from '../components/CurrencyDashboard.vue'
-import DashboardSettingsModal from '../components/settings/DashboardSettingsModal.vue'
 import CurrencyStatusChips from '../components/logbook/CurrencyStatusChips.vue'
 import LogbookEmptyState from '../components/logbook/LogbookEmptyState.vue'
 import LogEntryList from '../components/logbook/LogEntryList.vue'
-import LogbookImportModal from '../components/import/LogbookImportModal.vue'
+
+const AuditTrail = defineAsyncComponent(() => import('../components/AuditTrail.vue'))
+const CurrencyDashboard = defineAsyncComponent(() => import('../components/CurrencyDashboard.vue'))
+const DashboardSettingsModal = defineAsyncComponent(
+  () => import('../components/settings/DashboardSettingsModal.vue')
+)
+const LogbookImportModal = defineAsyncComponent(() => import('../components/import/LogbookImportModal.vue'))
 import ProductUpdateHeadline from '../components/ProductUpdateHeadline.vue'
 import { useProductUpdates } from '../composables/useProductUpdates'
 import type { SettingsStackFrame, SettingsTabId } from '../components/settings/settingsNav'
@@ -7513,10 +7517,12 @@ async function onUserSessionReady(userId: string): Promise<void> {
 
 async function loadDeferredUserData(): Promise<void> {
   try {
-    await fetchEntityTags()
-    await fetchUserTagPresets()
-    await loadPilotProfileFromSupabase()
-    await loadCrewProfiles()
+    await Promise.allSettled([
+      fetchEntityTags(),
+      fetchUserTagPresets(),
+      loadPilotProfileFromSupabase(),
+      loadCrewProfiles(),
+    ])
   } catch (error) {
     console.error('[loadDeferredUserData]', error)
   }
@@ -11046,8 +11052,9 @@ async function exportToJSON(entries?: LogEntry[]): Promise<void> {
 }
 
 // Form 8710 generation functions
-function prepareForm8710Data(): Form8710Data | null {
+async function prepareForm8710Data(): Promise<Form8710Data | null> {
   try {
+    const { calculateSectionII, calculateSectionIII } = await import('../utils/form8710Calculator')
     // Calculate sections
     const sectionII = calculateSectionII(logEntries.value)
     const sectionIII = calculateSectionIII(logEntries.value)
@@ -11232,8 +11239,9 @@ function getCategoryDisplayName(category: AircraftCategory8710): string {
 // Watch for modal open to calculate preview data
 watch(showForm8710Modal, (isOpen) => {
   if (isOpen) {
-    const formData = prepareForm8710Data()
-    form8710PreviewData.value = formData
+    void prepareForm8710Data().then((formData) => {
+      form8710PreviewData.value = formData
+    })
   }
 })
 
@@ -17067,10 +17075,12 @@ async function refreshDashboardData(options?: { forceFull?: boolean }): Promise<
     await reconcileSyncQueue(user.value.id)
     await processQueue()
     await refreshQueueLength()
-    await fetchEntityTags()
-    await fetchUserTagPresets()
-    await loadPilotProfileFromSupabase()
-    await loadCrewProfiles()
+    await Promise.allSettled([
+      fetchEntityTags(),
+      fetchUserTagPresets(),
+      loadPilotProfileFromSupabase(),
+      loadCrewProfiles(),
+    ])
 
     if (logEntries.value.length > 0) {
       calculateAllCurrency(logEntries.value)
