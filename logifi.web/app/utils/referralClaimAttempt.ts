@@ -1,5 +1,36 @@
 export type ClaimAttempt = 'idle' | 'awaiting-verify' | 'done'
 
+const CLAIM_ATTEMPT_STORAGE_PREFIX = 'logifi_ref_claim:'
+
+export function persistedClaimAttemptKey(userId: string): string {
+  return `${CLAIM_ATTEMPT_STORAGE_PREFIX}${userId}`
+}
+
+export function readPersistedClaimAttempt(userId: string): ClaimAttempt {
+  if (typeof window === 'undefined' || !userId) return 'idle'
+  try {
+    const raw = window.localStorage.getItem(persistedClaimAttemptKey(userId))
+    if (raw === 'awaiting-verify' || raw === 'done') return raw
+  } catch {
+    // Private mode can throw on localStorage.
+  }
+  return 'idle'
+}
+
+export function writePersistedClaimAttempt(userId: string, attempt: ClaimAttempt): void {
+  if (typeof window === 'undefined' || !userId) return
+  try {
+    const key = persistedClaimAttemptKey(userId)
+    if (attempt === 'idle') {
+      window.localStorage.removeItem(key)
+      return
+    }
+    window.localStorage.setItem(key, attempt)
+  } catch {
+    // Ignore.
+  }
+}
+
 export function isAuthEmailVerified(user: {
   email_confirmed_at?: string | null
   confirmed_at?: string | null
