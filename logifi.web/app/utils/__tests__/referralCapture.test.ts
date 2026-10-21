@@ -10,8 +10,10 @@ import {
 import {
   messageFromClaimError,
   nextClaimAttempt,
+  readPersistedClaimAttempt,
   shouldClaimReferral,
   shouldClearStoredReferral,
+  writePersistedClaimAttempt,
 } from '../referralClaimAttempt'
 
 describe('referral capture', () => {
@@ -69,6 +71,10 @@ describe('referral capture', () => {
     expect(shouldClaimReferral('awaiting-verify', false)).toBe(false)
     expect(shouldClaimReferral('awaiting-verify', true)).toBe(true)
     expect(shouldClaimReferral('done', true)).toBe(false)
+    expect(readPersistedClaimAttempt('acct')).toBe('idle')
+    writePersistedClaimAttempt('acct', 'awaiting-verify')
+    expect(readPersistedClaimAttempt('acct')).toBe('awaiting-verify')
+    expect(shouldClaimReferral(readPersistedClaimAttempt('acct'), true)).toBe(true)
     expect(
       nextClaimAttempt({ emailVerified: false, attributed: true, friendCreditsGranted: false })
     ).toBe('awaiting-verify')
