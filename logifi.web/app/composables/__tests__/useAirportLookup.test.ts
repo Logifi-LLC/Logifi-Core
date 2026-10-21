@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { lookupAirportLocal } from '../../../shared/airportLookup'
+import { __setAirportClientDbForTests } from '../../../shared/airportClientDb'
+import { loadAirportClientDbFixture } from '../../../shared/__tests__/airportTestDb'
 
 const platform = vi.hoisted(() => ({ native: false }))
 const fetchMock = vi.hoisted(() => vi.fn())
@@ -14,6 +15,7 @@ describe('useAirportLookup', () => {
   beforeEach(async () => {
     platform.native = false
     fetchMock.mockReset()
+    __setAirportClientDbForTests(loadAirportClientDbFixture())
     if (typeof window !== 'undefined') {
       window.localStorage.clear()
     }
@@ -22,9 +24,6 @@ describe('useAirportLookup', () => {
   })
 
   it('uses local airport DB before calling the API', async () => {
-    const local = lookupAirportLocal('KJFK')
-    expect(local).not.toBeNull()
-
     const { useAirportLookup } = await import('../useAirportLookup')
     const { lookupAirport } = useAirportLookup()
     const info = await lookupAirport('KJFK')

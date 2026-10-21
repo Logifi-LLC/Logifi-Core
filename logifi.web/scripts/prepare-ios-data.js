@@ -24,6 +24,16 @@ if (!existsSync(serverDb)) {
 }
 
 mkdirSync(publicDir, { recursive: true })
+
+const airportsBuild = spawnSync('node', ['scripts/build-airports-client-db.mjs'], {
+  cwd: root,
+  stdio: 'inherit',
+})
+if (airportsBuild.status !== 0) {
+  console.error('Failed to build airports-client.json')
+  process.exit(1)
+}
+
 copyFileSync(serverDb, publicDb)
 console.log(`Copied aircraft database to ${publicDb}`)
 if (existsSync(serverMeta)) {

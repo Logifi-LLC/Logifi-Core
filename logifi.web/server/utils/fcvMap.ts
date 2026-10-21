@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon'
-import { getAirportIanaTimezone } from '../../shared/airportTimezone'
+import { getAirportIanaTimezoneServer } from './airportIana'
 import {
   parseAirlineOwnSeat,
   pickOppositeCrew,
@@ -194,8 +194,8 @@ export function gateDurationHoursFromFcvLocalPair(flight: FcvFlight): number | n
 
   const dep = String(flight.dep_airport_icao ?? flight.dep_airport ?? '').trim()
   const arr = String(flight.arr_airport_icao ?? flight.arr_airport ?? '').trim()
-  const depTz = getAirportIanaTimezone(dep)
-  const arrTz = getAirportIanaTimezone(arr)
+  const depTz = getAirportIanaTimezoneServer(dep)
+  const arrTz = getAirportIanaTimezoneServer(arr)
 
   let diffMin: number | null = null
   if (depTz && arrTz && depTz !== arrTz) {

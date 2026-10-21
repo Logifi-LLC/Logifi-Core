@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon'
-import { getAirportIanaTimezone } from '../../shared/airportTimezone'
+import { getAirportIanaTimezoneServer } from './airportIana'
 import { normalizeCalendarYmd } from '../../shared/localCalendarDate'
 import {
   FLICA_IMPORT_SOURCE,
@@ -388,7 +388,7 @@ function resolveNowMs(
 export function flicaScheduledOutMs(leg: Pick<AirlineLeg, 'scheduled_out_local' | 'dep_airport'>): number | null {
   const raw = leg.scheduled_out_local
   if (!raw) return null
-  const tz = getAirportIanaTimezone(leg.dep_airport) ?? FLICA_DEFAULT_NOW_ZONE
+  const tz = getAirportIanaTimezoneServer(leg.dep_airport) ?? FLICA_DEFAULT_NOW_ZONE
   const dt = parseLocalDatetimeInZone(raw, tz)
   return dt ? dt.toUTC().toMillis() : null
 }
