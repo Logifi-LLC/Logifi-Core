@@ -5,7 +5,6 @@ import { claimStoredReferral } from '~/utils/referralClaimClient'
 import { captureReferralFromSearch, storeReferralCode } from '~/utils/referralCapture'
 import { isCapacitorNative } from '~/composables/useCapacitorPlatform'
 import { useAuth } from '~/composables/useAuth'
-import { useToast } from '~/composables/useToast'
 
 export default defineNuxtPlugin(() => {
   if (typeof window === 'undefined') return
@@ -15,7 +14,6 @@ export default defineNuxtPlugin(() => {
 
   const router = useRouter()
   const { user, session } = useAuth()
-  const { showToast } = useToast()
   let lastOpenedUrl = ''
 
   async function openReferralFromUrl(url: string) {
@@ -23,7 +21,6 @@ export default defineNuxtPlugin(() => {
     if (!code || lastOpenedUrl === url) return
     lastOpenedUrl = url
     storeReferralCode(code)
-    showToast('Referral code applied', { type: 'success' })
     if (user.value) {
       await router.replace('/dashboard')
       return

@@ -2,7 +2,7 @@ import { computed, ref } from 'vue'
 import type { AttributionBlock } from '../../shared/referrals'
 import { apiFetch } from '~/utils/apiFetch'
 import { shareReferralLink, shareUrlForClient } from '~/utils/referralCapture'
-import { messageFromClaimError } from '~/utils/referralClaimAttempt'
+import { isAuthEmailVerified, messageFromClaimError } from '~/utils/referralClaimAttempt'
 import { claimResultMessage } from '~/utils/referralClaimClient'
 import { isCapacitorNative } from '~/composables/useCapacitorPlatform'
 import { useAuth } from '~/composables/useAuth'
@@ -27,7 +27,7 @@ export function useReferral() {
   const status = ref<ReferralStatus | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
-  const { getAccessToken } = useAuth()
+  const { getAccessToken, user } = useAuth()
 
   function authHeaders(): Record<string, string> | null {
     const token = getAccessToken()
@@ -63,7 +63,11 @@ export function useReferral() {
       return messageFromClaimError(error)
     }
     await load()
-    return claimResultMessage(result)
+    return claimResultMessage(result, {
+      interactive: true,
+      emailVerified: isAuthEmailVerified(user.value),
+      hadStoredCode: true,
+    })
   }
 
   const shareUrl = computed(() => {
