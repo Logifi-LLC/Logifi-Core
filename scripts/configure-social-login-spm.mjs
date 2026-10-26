@@ -7,6 +7,8 @@
  *
  * When SocialLogin.providers disables facebook/google in capacitor.config.json, copy the
  * Apple-only Package.swift template into the installed plugin before Xcode resolves SPM.
+ * Run after `npx cap sync ios` (e.g. via npm run cap:sync): Capacitor sync rewrites CapApp-SPM
+ * and may touch plugin Package.swift; Capgo's sync hook does not trim SPM deps from Package.swift.
  */
 import fs from 'node:fs'
 import path from 'node:path'
