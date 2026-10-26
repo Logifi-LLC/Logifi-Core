@@ -1,4 +1,4 @@
-import { toCatalogAirportCode } from '../../shared/airportCodeCanonical'
+import { toCatalogAirportCodeServer } from './airportCanonical'
 import {
   parseAirlineOwnSeat,
   pickOppositeCrew,
@@ -283,8 +283,8 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
   const registration = normalizeRegistrationDisplay(leg.fcv_tail_number)
   const aircraftType = normalizeFcvAircraftType(leg.fcv_aircraft_type)
   const sourceCategory = String(leg.aircraft_category_class ?? 'AIRPLANE').trim()
-  const dep = toCatalogAirportCode(leg.dep_airport)
-  const arr = toCatalogAirportCode(leg.arr_airport)
+  const dep = toCatalogAirportCodeServer(leg.dep_airport)
+  const arr = toCatalogAirportCodeServer(leg.arr_airport)
   const fn = leg.flight_number.trim() || null
 
   let originalEntryDate: string | null = null

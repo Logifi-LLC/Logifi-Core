@@ -14,7 +14,8 @@ import {
   type AirportCoordinates,
   type CrossCountryAirportCoords
 } from '~/utils/validation'
-import { lookupAirportLocal } from '../../shared/airportLookup'
+import { lookupAirportLocalAsync } from '../../shared/airportLookup'
+import { ensureAirportClientDbLoaded } from '../../shared/airportClientDb'
 import { isCapacitorNative } from '~/composables/useCapacitorPlatform'
 import { useAirportLookup } from '~/composables/useAirportLookup'
 import { useLocationLookup } from '~/composables/useLocationLookup'
@@ -26,12 +27,17 @@ export const useValidation = () => {
   const { lookupAirport } = useAirportLookup()
   const { lookupLocationCoords } = useLocationLookup()
 
-  const resolveAirportCoordinatesLocal = (
+  const resolveAirportCoordinatesLocal = async (
     code: string
-  ): { latitude?: number; longitude?: number } | null => {
+  ): Promise<{ latitude?: number; longitude?: number } | null> => {
     const normalizedCode = code.trim().toUpperCase().replace(/\s+/g, '')
     if (!normalizedCode) return null
-    const info = lookupAirportLocal(normalizedCode)
+    try {
+      await ensureAirportClientDbLoaded()
+    } catch {
+      return null
+    }
+    const info = await lookupAirportLocalAsync(normalizedCode)
     if (info?.latitude !== undefined && info?.longitude !== undefined) {
       return { latitude: info.latitude, longitude: info.longitude }
     }
@@ -46,7 +52,7 @@ export const useValidation = () => {
     if (!normalizedCode) return null
 
     if (options?.localOnly || isCapacitorNative()) {
-      return resolveAirportCoordinatesLocal(normalizedCode)
+      return await resolveAirportCoordinatesLocal(normalizedCode)
     }
 
     const info = await lookupAirport(normalizedCode)

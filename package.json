@@ -6,11 +6,13 @@
   "private": true,
   "scripts": {
     "build:web": "npm run generate --prefix logifi.web",
-    "cap:sync": "npm run generate:ios-branding && npm run prepare-ios-data --prefix logifi.web && npm run build:web && npx cap sync ios",
+    "postinstall": "node scripts/configure-social-login-spm.mjs",
+    "cap:sync": "npm run generate:ios-branding && npm run prepare-ios-data --prefix logifi.web && npm run build:web && node scripts/configure-social-login-spm.mjs && npx cap sync ios",
     "cap:open:ios": "npx cap open ios",
     "cap:run:ios": "npm run cap:sync && npx cap run ios",
     "generate:ios-branding": "node scripts/generate-ios-branding.mjs",
-    "verify:ios-branding": "node scripts/verify-ios-branding.mjs"
+    "verify:ios-branding": "node scripts/verify-ios-branding.mjs",
+    "verify:social-login-spm": "node scripts/configure-social-login-spm.mjs && node scripts/verify-social-login-spm.mjs"
   },
   "main": "./logifi.web/app/index.ts",
   "types": "./logifi.web/app/index.ts",

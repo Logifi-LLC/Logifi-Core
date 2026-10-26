@@ -8,6 +8,14 @@
       "launchAutoHide": true,
       "backgroundColor": "#030712",
       "showSpinner": false
+    },
+    "SocialLogin": {
+      "providers": {
+        "apple": true,
+        "google": false,
+        "facebook": false,
+        "twitter": false
+      }
     }
   }
 }

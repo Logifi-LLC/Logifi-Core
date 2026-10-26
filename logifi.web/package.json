@@ -14,6 +14,7 @@
     "update-aircraft-db": "node scripts/download-faa-aircraft.js",
     "prepare-ios-data": "node scripts/prepare-ios-data.js",
     "build-airport-supplement": "node scripts/build-us-airport-supplement.mjs",
+    "build-airports-client-db": "node scripts/build-airports-client-db.mjs",
     "build-navaid-index": "node scripts/build-navaid-index.mjs",
     "test": "vitest run",
     "test:watch": "vitest",

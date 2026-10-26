@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon'
-import { getAirportIanaTimezone } from '../../shared/airportTimezone'
+import { getAirportIanaTimezoneServer } from './airportIana'
 import { getFlightAwareEnv } from './flightAwareEnv'
 import { flightAwareSearchIdentTiers } from './flightEnrichCandidates'
 import {
@@ -128,7 +128,7 @@ export function flightAwareDateQueryWindow(
   dateYYYYMMDD: string,
   depAirport?: string
 ): { start: string; end: string } {
-  const zone = depAirport ? getAirportIanaTimezone(depAirport) : null
+  const zone = depAirport ? getAirportIanaTimezoneServer(depAirport) : null
   if (zone) {
     const start = DateTime.fromISO(dateYYYYMMDD, { zone })
     if (start.isValid) {
@@ -242,7 +242,7 @@ export function parseIsoToAirportLocal(
   const parsed = DateTime.fromISO(trimmed, { zone: 'utc' })
   if (!parsed.isValid) return null
 
-  const iana = airportCode ? getAirportIanaTimezone(airportCode) : null
+  const iana = airportCode ? getAirportIanaTimezoneServer(airportCode) : null
   const local = iana ? parsed.setZone(iana) : parsed
   return local.toFormat('yyyy-MM-dd HH:mm:ss')
 }
@@ -299,7 +299,7 @@ function flightDepartureLocalDate(
   const parsed = DateTime.fromISO(iso, { zone: 'utc' })
   if (!parsed.isValid) return null
   const origin = airportCodeFromFa(flight.origin) || depIcao
-  const zone = origin ? getAirportIanaTimezone(origin) : null
+  const zone = origin ? getAirportIanaTimezoneServer(origin) : null
   if (!zone) return null
   return parsed.setZone(zone).toFormat('yyyy-MM-dd')
 }

@@ -1,14 +1,6 @@
-/** Import JSON directly — package entry uses `require()`, which breaks client bundles if pulled in transitively. */
-import airportsJson from '@nwpr/airport-codes/dist/airports.json' with { type: 'json' }
 import { DateTime } from 'luxon'
-
-interface AirportRow {
-  icao?: string
-  iata?: string
-  timezone?: string | number
-}
-
-const airports = airportsJson as readonly AirportRow[]
+import { findAirportClientRow, normalizeAirportCodeInput } from './airportDbCore'
+import { getAirportClientDbIfLoaded } from './airportClientDb'
 
 /**
  * Convert airport timezone string to IANA timezone format.
@@ -87,30 +79,21 @@ export function normalizeTimezoneToIANA(timezone: string | undefined | null): st
   }
 }
 
-function findAirportRow(normalizedCode: string): AirportRow | undefined {
-  if (normalizedCode.length === 4) {
-    const byIcao = airports.find((a) => a.icao === normalizedCode)
-    if (byIcao) return byIcao
-  }
-  if (normalizedCode.length === 3) {
-    const byIata = airports.find((a) => a.iata === normalizedCode)
-    if (byIata) return byIata
-  }
-  // Exact ICAO / IATA only — do not treat last 3 of a 4-letter miss as IATA.
-  return undefined
-}
-
 /**
- * Resolve ICAO/IATA/FAA-style airport code to an IANA timezone (sync, static DB).
+ * Resolve ICAO/IATA airport code to an IANA timezone (sync).
+ * Returns null until the client airport catalog has finished loading — never guesses.
  */
 export function getAirportIanaTimezone(code: string | null | undefined): string | null {
   if (!code) return null
-  const normalizedCode = code.trim().toUpperCase().replace(/\s+/g, '')
+  const normalizedCode = normalizeAirportCodeInput(code)
   if (normalizedCode.length < 3 || normalizedCode.length > 4) return null
 
-  const airport = findAirportRow(normalizedCode)
-  if (!airport?.timezone) return null
+  const db = getAirportClientDbIfLoaded()
+  if (!db) return null
+
+  const airport = findAirportClientRow(db, normalizedCode)
+  if (!airport?.row.timezone) return null
   return normalizeTimezoneToIANA(
-    typeof airport.timezone === 'string' ? airport.timezone : String(airport.timezone)
+    typeof airport.row.timezone === 'string' ? airport.row.timezone : String(airport.row.timezone)
   )
 }

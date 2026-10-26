@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { canonicalizeAirportCodeForMatch, toCatalogAirportCode } from '../airportCodeCanonical'
+import { withAirportClientDbFixture } from './airportTestDb'
 
 describe('canonicalizeAirportCodeForMatch', () => {
+  withAirportClientDbFixture()
   it('maps IATA BUF to ICAO KBUF when present in dataset', () => {
     expect(canonicalizeAirportCodeForMatch('BUF')).toBe('KBUF')
   })
@@ -30,6 +32,7 @@ describe('canonicalizeAirportCodeForMatch', () => {
 })
 
 describe('toCatalogAirportCode', () => {
+  withAirportClientDbFixture()
   it('maps IATA RIC and LGA to catalog ICAO', () => {
     expect(toCatalogAirportCode('RIC')).toBe('KRIC')
     expect(toCatalogAirportCode('LGA')).toBe('KLGA')
