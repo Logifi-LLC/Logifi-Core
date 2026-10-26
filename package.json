@@ -7,7 +7,7 @@
   "scripts": {
     "build:web": "npm run generate --prefix logifi.web",
     "postinstall": "node scripts/configure-social-login-spm.mjs",
-    "cap:sync": "npm run generate:ios-branding && npm run prepare-ios-data --prefix logifi.web && npm run build:web && node scripts/configure-social-login-spm.mjs && npx cap sync ios",
+    "cap:sync": "npm run generate:ios-branding && npm run prepare-ios-data --prefix logifi.web && npm run build:web && npx cap sync ios && node scripts/configure-social-login-spm.mjs",
     "cap:open:ios": "npx cap open ios",
     "cap:run:ios": "npm run cap:sync && npx cap run ios",
     "generate:ios-branding": "node scripts/generate-ios-branding.mjs",
