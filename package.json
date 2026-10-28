@@ -12,7 +12,8 @@
     "cap:run:ios": "npm run cap:sync && npx cap run ios",
     "generate:ios-branding": "node scripts/generate-ios-branding.mjs",
     "verify:ios-branding": "node scripts/verify-ios-branding.mjs",
-    "verify:social-login-spm": "node scripts/configure-social-login-spm.mjs && node scripts/verify-social-login-spm.mjs"
+    "verify:social-login-spm": "node scripts/configure-social-login-spm.mjs && node scripts/verify-social-login-spm.mjs",
+    "cap:pre-archive": "npm run verify:social-login-spm"
   },
   "main": "./logifi.web/app/index.ts",
   "types": "./logifi.web/app/index.ts",
