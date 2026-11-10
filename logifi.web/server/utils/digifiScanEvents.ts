@@ -66,7 +66,15 @@ export async function insertDigifiScanEvent(row: {
 
   const { error } = await (service.from('digifi_scan_events') as any).insert(row)
   if (error) {
-    console.warn('[digifi-scan-events] insert failed:', error.message)
+    const pgError = error as { message?: string; code?: string; details?: string; hint?: string }
+    console.warn('[digifi-scan-events] insert failed:', {
+      message: pgError.message,
+      code: pgError.code,
+      details: pgError.details,
+      hint: pgError.hint,
+      status: row.status,
+      scan_session_id: row.scan_session_id ?? null,
+    })
   }
 }
 
