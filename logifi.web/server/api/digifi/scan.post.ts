@@ -188,6 +188,28 @@ export default defineEventHandler(async (event) => {
 
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
 
+  const { error: stubSessionInsertError } = await supabase.from('digifi_scan_sessions').insert({
+    id: scanId,
+    user_id: userId,
+    storage_path: storagePath,
+    page_side: meta.pageSide,
+    spread_id: meta.spreadId,
+    template_name: meta.templateName ?? null,
+    layout: meta.layout,
+    row_count: meta.rowCount,
+    expires_at: expiresAt,
+    scan_payload: null,
+  })
+
+  let scanSessionStubCreated = !stubSessionInsertError
+  if (stubSessionInsertError) {
+    console.error(
+      '[digifi] scan session stub insert failed (scan events may not link):',
+      stubSessionInsertError.message,
+      stubSessionInsertError.code ?? ''
+    )
+  }
+
   let fewShotExamples: Awaited<ReturnType<typeof loadDigifiFewShotExamples>> = []
   try {
     fewShotExamples = await loadDigifiFewShotExamples(supabase, userId)
@@ -226,6 +248,18 @@ export default defineEventHandler(async (event) => {
     })
     mark('afterExtract')
   } catch (e) {
+    if (scanSessionStubCreated && service) {
+      const { error: rollbackError } = await service
+        .from('digifi_scan_sessions')
+        .delete()
+        .eq('id', scanId)
+      if (rollbackError) {
+        console.warn('[digifi] failed to roll back scan session after extraction error:', rollbackError.message)
+      } else {
+        scanSessionStubCreated = false
+      }
+    }
+
     const msg = e instanceof Error ? e.message : 'Scan failed'
     if (msg === 'DIGIFI_NOT_CONFIGURED') {
       throw createError({ statusCode: 503, statusMessage: 'Digifi scanning is not configured' })
@@ -349,32 +383,47 @@ export default defineEventHandler(async (event) => {
     rescueRecoveredCount: scanResult.rescueRecoveredCount,
   })
 
-  const { error: insertError } = await supabase.from('digifi_scan_sessions').insert({
-    id: scanId,
-    user_id: userId,
-    storage_path: storagePath,
-    page_side: meta.pageSide,
-    spread_id: meta.spreadId,
-    template_name: meta.templateName ?? null,
-    layout: meta.layout,
-    row_count: meta.rowCount,
-    model_used: scanResult.modelUsed,
-    expires_at: expiresAt,
-    scan_payload: scanPayload,
-  })
+  let sessionPersistError: { message: string } | null = null
+  if (scanSessionStubCreated) {
+    const { error: updateError } = await service
+      .from('digifi_scan_sessions')
+      .update({
+        model_used: scanResult.modelUsed,
+        scan_payload: scanPayload,
+      })
+      .eq('id', scanId)
+    if (updateError) {
+      sessionPersistError = updateError
+      console.error('[digifi] scan session update failed:', updateError.message, updateError.code ?? '')
+    }
+  } else {
+    const { error: insertError } = await supabase.from('digifi_scan_sessions').insert({
+      id: scanId,
+      user_id: userId,
+      storage_path: storagePath,
+      page_side: meta.pageSide,
+      spread_id: meta.spreadId,
+      template_name: meta.templateName ?? null,
+      layout: meta.layout,
+      row_count: meta.rowCount,
+      model_used: scanResult.modelUsed,
+      expires_at: expiresAt,
+      scan_payload: scanPayload,
+    })
+    if (insertError) {
+      sessionPersistError = insertError
+      console.error('[digifi] session insert failed:', insertError.message)
+    }
+  }
 
   let creditResult = await finalizeDigifiScanBilling(service, userId, {
     spreadId: meta.spreadId,
     layout: meta.layout,
     pageSide: meta.pageSide,
     scanId,
-    insertError,
+    insertError: sessionPersistError,
     fallbackBalance: scanEligibility.balance,
   })
-
-  if (insertError) {
-    console.error('[digifi] session insert failed:', insertError.message)
-  }
 
   const totalMs = Date.now() - requestStartedAt
   const extractMs = t.afterExtract && t.extractStart ? t.afterExtract - t.extractStart : undefined
