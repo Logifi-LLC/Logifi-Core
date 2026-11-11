@@ -2,7 +2,7 @@
   <button
     type="button"
     :class="[
-      'w-full text-left rounded-xl border transition-all duration-200 border-l-4 px-4 py-3 sm:px-5 sm:py-4',
+      'w-full min-h-[44px] text-left rounded-xl border transition-all duration-200 border-l-4 px-4 py-3 sm:px-5 sm:py-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
       isSigned
         ? isDarkMode
           ? 'bg-gray-900 border-l-green-500 border-gray-700 hover:bg-white/10'

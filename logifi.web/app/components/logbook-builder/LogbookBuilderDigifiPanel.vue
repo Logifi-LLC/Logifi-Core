@@ -668,7 +668,7 @@ onUnmounted(() => {
           <button
             v-if="pageReadFailed('left')"
             type="button"
-            class="mt-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700"
+            class="mt-1 min-h-[44px] rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
             @click.stop="retakePage('left')"
           >
             Retake
@@ -731,7 +731,7 @@ onUnmounted(() => {
           <button
             v-if="pageReadFailed('right')"
             type="button"
-            class="mt-1 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700"
+            class="mt-1 min-h-[44px] rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
             @click.stop="retakePage('right')"
           >
             Retake
@@ -762,7 +762,7 @@ onUnmounted(() => {
         </div>
         <button
           type="button"
-          class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
+          class="min-h-[44px] px-3 py-2 text-xs rounded-lg border font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
           :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
           :disabled="creatingSession || !isAuthenticated"
           @click="createPhoneSession"
@@ -788,7 +788,7 @@ onUnmounted(() => {
           <div class="flex flex-wrap gap-2">
             <button
               type="button"
-              class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
+              class="min-h-[44px] px-3 py-2 text-xs rounded-lg border font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
               :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
               @click="copyMobileLink"
             >
@@ -796,7 +796,7 @@ onUnmounted(() => {
             </button>
             <button
               type="button"
-              class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
+              class="min-h-[44px] px-3 py-2 text-xs rounded-lg border font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
               :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
               @click="refreshSessionStatus"
             >
@@ -804,7 +804,7 @@ onUnmounted(() => {
             </button>
             <button
               type="button"
-              class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
+              class="min-h-[44px] px-3 py-2 text-xs rounded-lg border font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
               :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
               @click="refreshPhotosFromServer"
             >
@@ -844,7 +844,7 @@ onUnmounted(() => {
           <div class="flex flex-wrap gap-2">
             <button
               type="button"
-              class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
+              class="min-h-[44px] px-3 py-2 text-xs rounded-lg border font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
               :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
               :disabled="applyingCapturedPhoto || scanning || loadingPhotos"
               @click="useSelectedCapture('left')"
@@ -853,7 +853,7 @@ onUnmounted(() => {
             </button>
             <button
               type="button"
-              class="px-3 py-2 text-xs rounded-lg border font-semibold transition-colors"
+              class="min-h-[44px] px-3 py-2 text-xs rounded-lg border font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
               :class="isDark ? 'border-white/20 text-white hover:bg-white/10' : 'border-gray-300 text-gray-900 hover:bg-gray-100'"
               :disabled="applyingCapturedPhoto || scanning || loadingPhotos || !canScanRight"
               @click="useSelectedCapture('right')"

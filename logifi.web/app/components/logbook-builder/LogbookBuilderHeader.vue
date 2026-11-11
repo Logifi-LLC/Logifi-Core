@@ -351,14 +351,17 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
 </script>
 
 <template>
-  <div :id="dropdownId" class="relative flex min-w-0 flex-col gap-0.5" :class="{ 'lb-touch': coarsePointer }">
+  <div :id="dropdownId" class="relative flex min-h-[44px] w-full min-w-0 flex-col gap-0.5" :class="{ 'lb-touch': coarsePointer }">
     <button
       type="button"
       :class="[
-        'w-full min-w-0 truncate rounded border-0 bg-transparent py-0.5 text-center text-xs font-semibold uppercase tracking-wider focus:ring-1 focus:ring-blue-500 transition-colors',
+        'flex min-h-[44px] w-full min-w-0 items-center justify-center truncate rounded border-0 bg-transparent py-0.5 text-center text-xs font-semibold uppercase tracking-wider focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-blue-500 transition-colors',
         isDark ? 'text-gray-400 hover:bg-white/10 hover:text-gray-300' : 'text-black hover:bg-gray-50'
       ]"
       :title="columnHeaderTitle"
+      :aria-label="`Map column: ${displayLabel}`"
+      :aria-expanded="open"
+      aria-haspopup="listbox"
       @click="open = !open; if (open && column.columnKind === 'custom') customTitle = column.label"
     >
       {{ displayLabel }}
@@ -371,7 +374,7 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
       <template v-for="opt in FIELD_OPTIONS" :key="opt.optionKey">
         <div
           v-if="opt.value !== 'categoryClass'"
-          class="cursor-pointer px-2 py-1.5 text-xs text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/10"
+          class="flex min-h-[44px] cursor-pointer items-center px-2 py-1.5 text-xs text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/10"
           :class="opt.columnKind === 'day'
             ? (column.columnKind === 'day' ? 'bg-blue-50 dark:bg-blue-900/30' : '')
             : (opt.value !== '' && column.fieldKey === opt.value && !column.categoryClassValue && !column.columnKind ? 'bg-blue-50 dark:bg-blue-900/30' : '')"
@@ -395,7 +398,7 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
           <div class="flex cursor-pointer">
             <div
               data-testid="category-class-row"
-              class="lb-cat-row flex-1 px-2 py-1.5 text-xs text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/10"
+              class="lb-cat-row flex min-h-[44px] flex-1 items-center px-2 py-1.5 text-xs text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/10"
               :class="column.fieldKey === 'categoryClass' && !column.categoryClassValue ? 'bg-blue-50 dark:bg-blue-900/30' : ''"
               @click.stop="onCategoryRowClick"
             >
@@ -417,7 +420,7 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
               v-for="cc in categoryClassOptions"
               :key="cc"
               type="button"
-              class="lb-cat-option w-full cursor-pointer py-1.5 pl-6 pr-2 text-left text-xs text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/10"
+              class="lb-cat-option flex min-h-[44px] w-full cursor-pointer items-center py-1.5 pl-6 pr-2 text-left text-xs text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/10"
               :class="column.categoryClassValue === cc ? 'bg-blue-50 dark:bg-blue-900/30' : ''"
               @click="onSelectCategoryClass(cc)"
             >
@@ -442,14 +445,14 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
           draggable="false"
           placeholder="Custom column"
           aria-label="Custom column title"
-          class="min-w-0 flex-1 rounded border px-1.5 py-1 text-xs text-gray-900 dark:border-white/10 dark:bg-black/20 dark:text-white"
+          class="min-h-[44px] min-w-0 flex-1 rounded border px-1.5 py-1 text-xs text-gray-900 dark:border-white/10 dark:bg-black/20 dark:text-white"
           @pointerdown.stop="focusCustomTitle"
           @mousedown.stop="focusCustomTitle"
           @keydown="onCustomTitleKeydown"
         />
         <button
           type="submit"
-          class="rounded px-1.5 py-1 text-xs font-medium text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/10"
+          class="min-h-[44px] min-w-[44px] rounded px-1.5 py-1 text-xs font-medium text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/10"
         >
           Add
         </button>
@@ -470,7 +473,7 @@ const categoryClassOptions = CATEGORY_CLASS_OPTIONS
           v-for="cc in categoryClassOptions"
           :key="cc"
           type="button"
-          class="w-full px-1.5 py-px text-left text-[10px] leading-tight text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/10"
+          class="flex min-h-[44px] w-full items-center px-1.5 py-1 text-left text-xs leading-tight text-gray-900 hover:bg-gray-50 dark:text-gray-200 dark:hover:bg-white/10"
           :class="column.categoryClassValue === cc ? 'bg-blue-50 dark:bg-blue-900/30' : ''"
           @click="onSelectCategoryClass(cc)"
         >

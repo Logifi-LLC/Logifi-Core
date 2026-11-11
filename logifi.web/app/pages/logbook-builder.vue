@@ -408,10 +408,10 @@ watchEffect(async (onCleanup) => {
 
 <template>
   <div
-    class="min-h-screen font-quicksand transition-colors duration-300 p-4 sm:p-6 lg:p-8"
+    class="min-h-screen min-w-0 overflow-x-hidden font-quicksand transition-colors duration-300 p-4 sm:p-6 lg:p-8"
     :class="isDark ? 'bg-gray-950' : 'bg-gray-50'"
   >
-    <div class="mx-auto max-w-7xl space-y-4">
+    <div class="mx-auto max-w-7xl min-w-0 space-y-4">
       <!-- Digifi mode header with Feedback + avatar -->
       <div
         v-if="isDigifiMode"
@@ -428,7 +428,7 @@ watchEffect(async (onCleanup) => {
           <button
             type="button"
             @click="showInstructions = !showInstructions"
-            class="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium font-quicksand transition-colors border"
+            class="hidden sm:inline-flex min-h-[44px] items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium font-quicksand transition-colors border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
             :class="[
               isDark
                 ? 'bg-white/5 hover:bg-white/10 border-white/10 text-gray-300'
@@ -442,7 +442,7 @@ watchEffect(async (onCleanup) => {
           <button
             type="button"
             @click="showDigifiCommonMistakes = !showDigifiCommonMistakes"
-            class="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium font-quicksand transition-colors border"
+            class="hidden sm:inline-flex min-h-[44px] items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium font-quicksand transition-colors border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
             :class="[
               isDark
                 ? 'bg-orange-600/10 hover:bg-orange-600/20 border-orange-500/30 text-orange-300'
@@ -455,7 +455,7 @@ watchEffect(async (onCleanup) => {
           </button>
           <NuxtLink
             to="/feedback?from=digifi"
-            class="hidden md:inline-block text-xs font-medium font-quicksand transition-colors"
+            class="hidden md:inline-flex min-h-[44px] items-center text-xs font-medium font-quicksand transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
             :class="[
               isDark
                 ? 'text-gray-300 hover:text-orange-400'
@@ -481,7 +481,7 @@ watchEffect(async (onCleanup) => {
             type="button"
             @click="openDigifiSettings()"
             :class="[
-              'h-10 w-10 sm:h-11 sm:w-11 rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all duration-200 shadow-sm border overflow-hidden',
+              'h-11 w-11 min-h-[44px] min-w-[44px] rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all duration-200 shadow-sm border overflow-hidden focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
               isDark 
                 ? 'bg-orange-600/20 text-orange-400 border-orange-500/30 hover:bg-orange-600/40' 
                 : 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100'
@@ -515,7 +515,7 @@ watchEffect(async (onCleanup) => {
         <NuxtLink
           to="/dashboard"
           :class="[
-            'inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-quicksand font-bold transition-colors border',
+            'inline-flex min-h-[44px] items-center gap-2 px-4 py-2 rounded-xl text-sm font-quicksand font-bold transition-colors border focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
             isDark
               ? 'bg-white/5 hover:bg-white/10 border-white/10 text-white shadow-sm shadow-black/20'
               : 'bg-gray-200 hover:bg-gray-300 text-gray-900 border-gray-300'
@@ -528,10 +528,10 @@ watchEffect(async (onCleanup) => {
       <!-- Digifi mode help panels (Directions and Common Errors) -->
       <section v-if="isDigifiMode">
         <Transition
-          enter-active-class="transition-all duration-200 ease-out"
+          enter-active-class="transition-all duration-200 ease-out motion-reduce:transition-none"
           enter-from-class="opacity-0 max-h-0"
           enter-to-class="opacity-100 max-h-[1200px]"
-          leave-active-class="transition-all duration-150 ease-in"
+          leave-active-class="transition-all duration-150 ease-in motion-reduce:transition-none"
           leave-from-class="opacity-100 max-h-[1200px]"
           leave-to-class="opacity-0 max-h-0"
         >
@@ -547,8 +547,9 @@ watchEffect(async (onCleanup) => {
                 <button
                   type="button"
                   @click="showInstructions = false"
-                  class="text-xs font-medium transition-colors"
+                  class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                   :class="isDark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700'"
+                  aria-label="Close directions"
                 >
                   Close
                 </button>
@@ -579,10 +580,10 @@ watchEffect(async (onCleanup) => {
         </Transition>
 
         <Transition
-          enter-active-class="transition-all duration-200 ease-out"
+          enter-active-class="transition-all duration-200 ease-out motion-reduce:transition-none"
           enter-from-class="opacity-0 max-h-0"
           enter-to-class="opacity-100 max-h-[1200px]"
-          leave-active-class="transition-all duration-150 ease-in"
+          leave-active-class="transition-all duration-150 ease-in motion-reduce:transition-none"
           leave-from-class="opacity-100 max-h-[1200px]"
           leave-to-class="opacity-0 max-h-0"
         >
@@ -598,8 +599,9 @@ watchEffect(async (onCleanup) => {
                 <button
                   type="button"
                   @click="showDigifiCommonMistakes = false"
-                  class="text-xs font-medium transition-colors"
+                  class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                   :class="isDark ? 'text-orange-300/70 hover:text-orange-200' : 'text-orange-700/70 hover:text-orange-900'"
+                  aria-label="Close common errors"
                 >
                   Close
                 </button>
@@ -620,7 +622,7 @@ watchEffect(async (onCleanup) => {
           <button
             type="button"
             :class="[
-              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold font-quicksand transition-colors',
+              'inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold font-quicksand transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
               isDark
                 ? 'border-white/15 text-gray-200 hover:bg-white/10'
                 : 'border-gray-300 text-gray-800 hover:bg-gray-100',
@@ -633,7 +635,7 @@ watchEffect(async (onCleanup) => {
           <button
             type="button"
             :class="[
-              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold font-quicksand transition-colors',
+              'inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold font-quicksand transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
               isDark
                 ? 'border-blue-400/30 text-blue-300 hover:bg-blue-500/10'
                 : 'border-blue-300 text-blue-700 hover:bg-blue-50',
@@ -646,7 +648,7 @@ watchEffect(async (onCleanup) => {
           <button
             type="button"
             :class="[
-              'inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold font-quicksand transition-colors',
+              'inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold font-quicksand transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
               isDark
                 ? 'border-orange-400/30 text-orange-300 hover:bg-orange-500/10'
                 : 'border-orange-300 text-orange-800 hover:bg-orange-50',
@@ -659,10 +661,10 @@ watchEffect(async (onCleanup) => {
         </div>
 
         <Transition
-          enter-active-class="transition-all duration-200 ease-out"
+          enter-active-class="transition-all duration-200 ease-out motion-reduce:transition-none"
           enter-from-class="opacity-0 max-h-0"
           enter-to-class="opacity-100 max-h-[1200px]"
-          leave-active-class="transition-all duration-150 ease-in"
+          leave-active-class="transition-all duration-150 ease-in motion-reduce:transition-none"
           leave-from-class="opacity-100 max-h-[1200px]"
           leave-to-class="opacity-0 max-h-0"
         >
@@ -689,10 +691,10 @@ watchEffect(async (onCleanup) => {
         </Transition>
 
         <Transition
-          enter-active-class="transition-all duration-200 ease-out"
+          enter-active-class="transition-all duration-200 ease-out motion-reduce:transition-none"
           enter-from-class="opacity-0 max-h-0"
           enter-to-class="opacity-100 max-h-[1200px]"
-          leave-active-class="transition-all duration-150 ease-in"
+          leave-active-class="transition-all duration-150 ease-in motion-reduce:transition-none"
           leave-from-class="opacity-100 max-h-[1200px]"
           leave-to-class="opacity-0 max-h-0"
         >
@@ -720,10 +722,10 @@ watchEffect(async (onCleanup) => {
         </Transition>
 
         <Transition
-          enter-active-class="transition-all duration-200 ease-out"
+          enter-active-class="transition-all duration-200 ease-out motion-reduce:transition-none"
           enter-from-class="opacity-0 max-h-0"
           enter-to-class="opacity-100 max-h-[1200px]"
-          leave-active-class="transition-all duration-150 ease-in"
+          leave-active-class="transition-all duration-150 ease-in motion-reduce:transition-none"
           leave-from-class="opacity-100 max-h-[1200px]"
           leave-to-class="opacity-0 max-h-0"
         >
@@ -755,7 +757,7 @@ watchEffect(async (onCleanup) => {
           <button
             type="button"
             :class="[
-              'inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold font-quicksand transition-colors',
+              'inline-flex min-h-[44px] items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold font-quicksand transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
               isDark
                 ? 'border-blue-400/40 text-blue-300 hover:bg-blue-500/10'
                 : 'border-blue-300 text-blue-700 hover:bg-blue-50',
@@ -768,10 +770,10 @@ watchEffect(async (onCleanup) => {
         </div>
 
         <Transition
-          enter-active-class="transition-all duration-200 ease-out"
+          enter-active-class="transition-all duration-200 ease-out motion-reduce:transition-none"
           enter-from-class="opacity-0 max-h-0"
           enter-to-class="opacity-100 max-h-[2200px]"
-          leave-active-class="transition-all duration-150 ease-in"
+          leave-active-class="transition-all duration-150 ease-in motion-reduce:transition-none"
           leave-from-class="opacity-100 max-h-[2200px]"
           leave-to-class="opacity-0 max-h-0"
         >
