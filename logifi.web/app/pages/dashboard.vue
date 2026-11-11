@@ -273,10 +273,9 @@
         <div class="absolute inset-x-0 flex justify-center pointer-events-none">
           <span
             :class="[
-              'px-3 py-1 rounded-md text-xl font-quicksand font-semibold select-none',
-              isDarkMode ? 'text-gray-200' : 'text-gray-800'
+              'px-3 py-1 rounded-md text-sm sm:text-base font-quicksand font-medium tabular-nums select-none',
+              isDarkMode ? 'text-gray-400' : 'text-gray-600'
             ]"
-            aria-live="polite"
           >
             {{ displayClock }}
           </span>
@@ -10877,7 +10876,6 @@ const displayClock = computed(() => {
   const options: Intl.DateTimeFormatOptions = {
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit',
     hour12: use12Hour,
     timeZone: clockZone.value === 'UTC' ? 'UTC' : undefined
   }

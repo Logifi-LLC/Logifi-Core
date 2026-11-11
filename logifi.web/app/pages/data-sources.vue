@@ -66,7 +66,8 @@
     >
       <div
         :class="[
-          'max-w-4xl mx-auto prose prose-invert',
+          'max-w-4xl mx-auto prose',
+          isFromLanding ? 'prose-invert' : 'dark:prose-invert',
           isIos && !isFromLanding ? 'break-words overflow-x-hidden max-w-full' : '',
           isFromLanding
             ? 'relative overflow-hidden rounded-xl border border-gray-800/50 bg-gray-900/40 backdrop-blur-sm shadow-lg p-6 sm:p-8 lg:px-10 lg:pt-10 lg:pb-8'
@@ -94,7 +95,7 @@
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             If you choose to connect FLICA, you provide your airline portal credentials in Logifi.
             Our
-            <strong :class="isFromLanding ? 'text-gray-100' : ''">server</strong> stores an encrypted copy associated with your Logifi user account and uses it only to
+            <strong :class="isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white'">server</strong> stores an encrypted copy associated with your Logifi user account and uses it only to
             fetch your schedule for logbook import. Credentials are not exposed to the browser after connect.
           </p>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
@@ -149,14 +150,14 @@
         <section class="mb-10">
           <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">Digifi (paper logbook scanning)</h2>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
-            If you use <strong :class="isFromLanding ? 'text-gray-100' : ''">Digifi</strong> on Start Scanning
+            If you use <strong :class="isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white'">Digifi</strong> on Start Scanning
             (<NuxtLink to="/logbook-builder" class="text-blue-600 hover:underline dark:text-blue-400">/logbook-builder</NuxtLink>),
             you upload photos of your paper logbook. Our server sends those images and extracted text to
-            <strong :class="isFromLanding ? 'text-gray-100' : ''">Google Gemini</strong> to transcribe entries into the builder grid.
+            <strong :class="isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white'">Google Gemini</strong> to transcribe entries into the builder grid.
             You review and edit before importing into your digital logbook.
           </p>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
-            Scan images are stored in our private storage bucket for up to <strong :class="isFromLanding ? 'text-gray-100' : ''">24 hours</strong>
+            Scan images are stored in our private storage bucket for up to <strong :class="isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white'">24 hours</strong>
             (for support), then deleted. We do not send airline portal credentials to Gemini or any other AI provider.
           </p>
         </section>

@@ -4,6 +4,11 @@
     @click.self="handleBackdropClick"
   >
     <div
+      ref="dialogRef"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="auth-modal-title"
+      tabindex="-1"
       :class="[
         'relative w-full max-w-md rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] transition-all duration-500 overflow-hidden',
         isDarkMode 
@@ -15,7 +20,10 @@
       <!-- Top Branding Section -->
       <div class="pt-10 pb-6 flex flex-col items-center border-b" :class="[isDarkMode ? 'border-gray-800 bg-gray-900/50' : 'border-gray-50 bg-gray-50/50']">
         <LogifiAppLogo class="mb-4" />
-        <h3 :class="['text-2xl font-bold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
+        <h3
+          id="auth-modal-title"
+          :class="['text-2xl font-bold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']"
+        >
           {{ activeTab === 'signin' ? 'Sign in' : 'Sign up' }}
         </h3>
         <p
@@ -178,21 +186,35 @@
             </span>
             <input
               id="email"
+              ref="emailInputRef"
               v-model="email"
               type="email"
               autocomplete="email"
               :disabled="isLoading"
+              :aria-invalid="emailAriaInvalid"
+              :aria-describedby="emailAriaDescribedBy"
               :class="[
                 'w-full pl-11 pr-4 py-3 rounded-xl border text-base font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
                 isDarkMode 
                   ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' 
                   : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400',
+                emailAriaInvalid ? 'border-red-500' : '',
                 isLoading ? 'opacity-50 cursor-not-allowed' : ''
               ]"
               placeholder="pilot@logifi.io"
+              @blur="emailTouched = true"
               @keyup.enter="handleSubmit"
             />
           </div>
+          <p
+            v-if="visibleEmailError"
+            id="auth-email-error"
+            class="text-sm font-medium font-quicksand"
+            :class="isDarkMode ? 'text-red-300' : 'text-red-700'"
+            role="alert"
+          >
+            {{ visibleEmailError }}
+          </p>
         </div>
 
         <!-- Password Field -->
@@ -220,21 +242,35 @@
             </span>
             <input
               id="password"
+              ref="passwordInputRef"
               v-model="password"
               type="password"
-              autocomplete="current-password"
+              :autocomplete="activeTab === 'signup' ? 'new-password' : 'current-password'"
               :disabled="isLoading"
+              :aria-invalid="passwordAriaInvalid"
+              :aria-describedby="passwordAriaDescribedBy"
               :class="[
                 'w-full pl-11 pr-4 py-3 rounded-xl border text-base font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
                 isDarkMode 
                   ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' 
                   : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400',
+                passwordAriaInvalid ? 'border-red-500' : '',
                 isLoading ? 'opacity-50 cursor-not-allowed' : ''
               ]"
               placeholder="••••••••"
+              @blur="passwordTouched = true"
               @keyup.enter="handleSubmit"
             />
           </div>
+          <p
+            v-if="visiblePasswordError"
+            id="auth-password-error"
+            class="text-sm font-medium font-quicksand"
+            :class="isDarkMode ? 'text-red-300' : 'text-red-700'"
+            role="alert"
+          >
+            {{ visiblePasswordError }}
+          </p>
           <div v-if="activeTab === 'signup'" class="space-y-2 pt-2">
             <label
               class="text-sm font-bold font-quicksand"
@@ -277,11 +313,12 @@
 
         <!-- Submit Button -->
         <button
+          type="button"
           @click="handleSubmit"
-          :disabled="!isFormValid || isLoading"
+          :disabled="isLoading"
           :class="[
             'w-full py-4 rounded-xl font-bold font-quicksand text-sm transition-all shadow-lg shadow-blue-500/10 hover:shadow-blue-500/20 active:scale-[0.98]',
-            (!isFormValid || isLoading)
+            isLoading
               ? (isDarkMode ? 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200')
               : 'bg-blue-600 text-white hover:bg-blue-700'
           ]"
@@ -305,7 +342,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useAuth } from '~/composables/useAuth'
 import { isCapacitorIos, resetIosInputZoom } from '~/composables/useCapacitorPlatform'
 import { WELCOME_CREDITS } from '../../shared/creditsWelcome'
@@ -359,6 +396,57 @@ const password = ref('')
 const referralCode = ref('')
 const referralTouched = ref(false)
 const referralApplied = ref(false)
+const emailTouched = ref(false)
+const passwordTouched = ref(false)
+const submitAttempted = ref(false)
+const dialogRef = ref<HTMLElement | null>(null)
+const emailInputRef = ref<HTMLInputElement | null>(null)
+const passwordInputRef = ref<HTMLInputElement | null>(null)
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+let previousFocus: HTMLElement | null = null
+
+function getFocusable(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (el) => el.getClientRects().length > 0
+  )
+}
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.stopPropagation()
+    if (props.dismissible) emit('close')
+    return
+  }
+  if (event.key !== 'Tab' || !dialogRef.value) return
+  const nodes = getFocusable(dialogRef.value)
+  if (nodes.length === 0) {
+    event.preventDefault()
+    dialogRef.value.focus()
+    return
+  }
+  const first = nodes[0]
+  const last = nodes[nodes.length - 1]
+  if (!first || !last) return
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+function onFocusIn(event: FocusEvent) {
+  if (!dialogRef.value) return
+  const target = event.target
+  if (!(target instanceof Node) || dialogRef.value.contains(target)) return
+  const nodes = getFocusable(dialogRef.value)
+  ;(nodes[0] ?? dialogRef.value).focus()
+}
 
 function fillReferralFromStore() {
   const fromUrl = captureReferralFromSearch(window.location.search)
@@ -386,7 +474,22 @@ watch(
 
 onMounted(() => {
   fillReferralFromStore()
+  previousFocus =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null
+  document.addEventListener('keydown', onKeydown, true)
+  document.addEventListener('focusin', onFocusIn)
+  void nextTick(() => {
+    const nodes = dialogRef.value ? getFocusable(dialogRef.value) : []
+    ;(nodes[0] ?? dialogRef.value)?.focus()
+  })
 })
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', onKeydown, true)
+  document.removeEventListener('focusin', onFocusIn)
+  previousFocus?.focus?.()
+})
+
 const authError = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 const isLoading = computed(() => authLoading.value)
@@ -401,12 +504,41 @@ watch(authErrorState, (newError) => {
   }
 })
 
-// Form validation
+function emailErrorMessage(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) return 'Enter your email address'
+  if (!EMAIL_PATTERN.test(trimmed)) return 'Enter a valid email address'
+  return null
+}
+
+function passwordErrorMessage(value: string): string | null {
+  if (!value) return 'Enter your password'
+  if (value.length < 6) return 'Password must be at least 6 characters'
+  return null
+}
+
 const isFormValid = computed(() => {
-  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value)
-  const passwordValid = password.value.length >= 6
-  return emailValid && passwordValid
+  return emailErrorMessage(email.value) === null && passwordErrorMessage(password.value) === null
 })
+
+const visibleEmailError = computed(() => {
+  if (!emailTouched.value && !submitAttempted.value) return null
+  return emailErrorMessage(email.value)
+})
+
+const visiblePasswordError = computed(() => {
+  if (!passwordTouched.value && !submitAttempted.value) return null
+  return passwordErrorMessage(password.value)
+})
+
+const emailAriaInvalid = computed(() => visibleEmailError.value !== null)
+const passwordAriaInvalid = computed(() => visiblePasswordError.value !== null)
+const emailAriaDescribedBy = computed(() =>
+  visibleEmailError.value ? 'auth-email-error' : undefined
+)
+const passwordAriaDescribedBy = computed(() =>
+  visiblePasswordError.value ? 'auth-password-error' : undefined
+)
 
 function persistTypedReferralCode(): boolean {
   const raw = referralCode.value.trim()
@@ -435,7 +567,21 @@ function completeAuthSuccess(delayMs: number) {
 
 // Handle form submission
 const handleSubmit = async () => {
-  if (!isFormValid.value || isLoading.value) return
+  if (isLoading.value) return
+
+  submitAttempted.value = true
+  emailTouched.value = true
+  passwordTouched.value = true
+
+  if (!isFormValid.value) {
+    await nextTick()
+    if (emailErrorMessage(email.value)) {
+      emailInputRef.value?.focus()
+    } else {
+      passwordInputRef.value?.focus()
+    }
+    return
+  }
 
   authError.value = null
   successMessage.value = null
@@ -476,7 +622,7 @@ const handleForgotPassword = async () => {
   if (isLoading.value) return
 
   const emailValue = email.value.trim()
-  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailValue)
+  const emailValid = EMAIL_PATTERN.test(emailValue)
 
   if (!emailValid) {
     authError.value = 'Please enter a valid email address to reset your password.'
@@ -537,6 +683,9 @@ watch(activeTab, () => {
   authError.value = null
   successMessage.value = null
   password.value = ''
+  emailTouched.value = false
+  passwordTouched.value = false
+  submitAttempted.value = false
 })
 </script>
 
