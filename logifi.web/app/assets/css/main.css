@@ -40,6 +40,15 @@
   font-family: 'Quicksand', sans-serif;
 }
 
+/*
+  Tailwind gray-400 is #99a1af (~2.6:1 on white / ~2.4:1 on gray-100).
+  Darken it in light mode so muted labels meet WCAG 2.2 AA (4.5:1).
+  Leave the default token on html.dark so gray-400 on gray-900/950 stays ~6.8:1+.
+*/
+html:not(.dark) {
+  --color-gray-400: #5c6570;
+}
+
 /* Double-tap zoom is a browser gesture. manipulation keeps pinch-zoom. */
 html,
 body {
