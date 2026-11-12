@@ -81,6 +81,15 @@ function blockMinutesToHours(minutes: number | null): number | null {
   return Math.round((minutes / 60) * 10) / 10
 }
 
+function legHasActualGateTimes(leg: AirlineLeg): boolean {
+  return (
+    typeof leg.actual_out_local === 'string' &&
+    leg.actual_out_local.trim().length >= 10 &&
+    typeof leg.actual_in_local === 'string' &&
+    leg.actual_in_local.trim().length >= 10
+  )
+}
+
 function hhmmToLocalDatetime(dateYmd: string, hhmm: string | null): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd) || !hhmm || !/^\d{4}$/.test(hhmm)) return null
   const h = hhmm.slice(0, 2)
@@ -284,7 +293,9 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
   const fromGate = resolveFcvBlockHours(fcvShape)
   const blockHours =
     leg.import_source === FLICA_IMPORT_SOURCE
-      ? fromFlicaBlock ?? fromGate
+      ? legHasActualGateTimes(leg)
+        ? (fromGate ?? fromFlicaBlock)
+        : (fromFlicaBlock ?? fromGate)
       : fromGate ?? fromFlicaBlock
 
   const registration = normalizeRegistrationDisplay(leg.fcv_tail_number)
