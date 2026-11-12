@@ -176,6 +176,8 @@ describe('parseImportDuration', () => {
   it('parses H:MM, H+MM, and decimals, and rejects minutes over 59', () => {
     expect(parseImportDuration('0:48')).toBe(0.8)
     expect(parseImportDuration('1:17')).toBe(1.3)
+    expect(parseImportDuration('1:18')).toBe(1.3)
+    expect(parseImportDuration('1.25')).toBe(1.3)
     expect(parseImportDuration('12:05')).toBe(12.1)
     expect(parseImportDuration('1+30')).toBe(1.5)
     expect(parseImportDuration('0.8')).toBe(0.8)
