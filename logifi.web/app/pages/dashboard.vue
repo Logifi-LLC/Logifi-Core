@@ -6731,6 +6731,11 @@ import { useAirportLookup } from '../composables/useAirportLookup'
 import type { AirportInfo } from '../composables/useAirportLookup'
 import { getPilotInitialsFromName } from '../utils/pilotProfile'
 import { getDisplayedPilotInitials, shouldShowCurrencyChips } from '../utils/dashboardHydration'
+import {
+  entryMatchesTotalsDateRange,
+  normalizeSavedTotalsMetricKeys,
+  type TotalsDateRange,
+} from '../utils/totalsLandingCounts'
 import { markAppReady } from '../utils/appReady'
 import {
   formatEntryAirportCode,
@@ -8065,6 +8070,9 @@ type TotalsMetricKey =
   | 'sic'
   | 'dualReceived'
   | 'mostUsedAircraft'
+  | 'totalLandings'
+  | 'dayLandings'
+  | 'nightLandings'
   | 'ffs'
   | 'ftd'
   | 'atd'
@@ -8082,6 +8090,9 @@ const baseTotalsMetrics: readonly TotalsMetric[] = [
   { key: 'sic', label: 'SIC (hrs)' },
   { key: 'dualReceived', label: 'Dual Received (hrs)' },
   { key: 'mostUsedAircraft', label: 'Most Used Aircraft' },
+  { key: 'totalLandings', label: 'Total Landings' },
+  { key: 'dayLandings', label: 'Day Landings' },
+  { key: 'nightLandings', label: 'Night Landings' },
   { key: 'ffs', label: 'FFS (hrs)' },
   { key: 'ftd', label: 'FTD (hrs)' },
   { key: 'atd', label: 'ATD (hrs)' }
@@ -8127,12 +8138,11 @@ function loadSelectedTotalsMetrics(): void {
   const saved = readUserScopedLocal(ACCOUNT_SCOPED_STORAGE_KEYS.TOTALS_METRICS, true)
   if (saved) {
     try {
-      const parsed = JSON.parse(saved) as TotalsMetricKey[]
-      // Validate that all keys are valid
-      if (Array.isArray(parsed) && parsed.every(k => availableTotalsMetrics.value.some(m => m.key === k))) {
-        // Ensure totalTime is always first
-        const withoutTotal = parsed.filter(k => k !== 'totalTime')
-        selectedTotalsMetrics.value = ['totalTime', ...withoutTotal]
+      const parsed: unknown = JSON.parse(saved)
+      const validKeySet = new Set(availableTotalsMetrics.value.map((m) => m.key))
+      const normalized = normalizeSavedTotalsMetricKeys(parsed, validKeySet)
+      if (normalized) {
+        selectedTotalsMetrics.value = normalized as TotalsMetricKey[]
       }
     } catch {
       selectedTotalsMetrics.value = defaultSelectedMetrics
@@ -10754,8 +10764,6 @@ const totalsTimeMode = ref<TotalsTimeMode>('all')
 const totalsCustomStart = ref<string>('')
 const totalsCustomEnd = ref<string>('')
 
-type TotalsDateRange = { start: Date | null; end: Date | null }
-
 /** Date window from Totals Overview controls; null means no date filter (all time). */
 function getTotalsDateRange(): TotalsDateRange | null {
   const mode = totalsTimeMode.value
@@ -10786,14 +10794,6 @@ function getTotalsDateRange(): TotalsDateRange | null {
     return { start, end }
   }
   return null
-}
-
-function entryMatchesTotalsDateRange(entry: LogEntry, range: TotalsDateRange): boolean {
-  const d = new Date(entry.date)
-  if (Number.isNaN(d.getTime())) return false
-  if (range.start && d < range.start) return false
-  if (range.end && d > range.end) return false
-  return true
 }
 
 const dateRangeFilterSummary = computed(() => {
@@ -18832,6 +18832,17 @@ function formatTotalValue(key: TotalsMetricKey): string {
   }
   if (key === 'mostUsedAircraft') {
     return mostUsedAircraft.value || '—'
+  }
+  if (key === 'totalLandings') {
+    const day = safeNumber(totals.value.performance.dayLandings)
+    const night = safeNumber(totals.value.performance.nightLandings)
+    return String(Math.round(day + night))
+  }
+  if (key === 'dayLandings') {
+    return String(Math.round(safeNumber(totals.value.performance.dayLandings)))
+  }
+  if (key === 'nightLandings') {
+    return String(Math.round(safeNumber(totals.value.performance.nightLandings)))
   }
   if (key === 'ffs') {
     return safeNumber(totals.value.time.ffs).toFixed(1)
