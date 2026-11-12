@@ -229,7 +229,89 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       in: '1430',
       isZulu: false,
     })
-    expect((entry.flight_time as Record<string, unknown>).total).toBe(2.1)
+    expect((entry.flight_time as Record<string, unknown>).total).toBe(2.7)
+    expect((entry.flight_time as Record<string, unknown>).pic).toBe(2.7)
+    expect((entry.flight_time as Record<string, unknown>).crossCountry).toBe(2.7)
+    expect(entry.category_class_time).toBe(2.7)
+  })
+
+  it('prefers FlightAware actual gate block over FLICA scheduled block (4506 LGA-CAE)', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20261112_4506_LGA',
+      import_source: 'flica_aerodatabox',
+      flight_number: '4506',
+      trip_number: 'L8012',
+      role: 'PIC',
+      dep_airport: 'LGA',
+      arr_airport: 'CAE',
+      scheduled_out_local: '2026-11-12 11:59:00',
+      scheduled_in_local: '2026-11-12 15:17:00',
+      actual_out_local: '2026-11-12 12:21:00',
+      actual_in_local: '2026-11-12 15:03:00',
+      actual_off_local: null,
+      actual_on_local: null,
+      fcv_tail_number: 'N123YX',
+      fcv_aircraft_type: 'E75',
+      crew: [],
+      is_deadhead: false,
+      block_minutes: 198,
+    })
+    expect(entry.oooi?.out).toBe('1221')
+    expect(entry.oooi?.in).toBe('1503')
+    expect((entry.flight_time as Record<string, unknown>).total).toBe(2.7)
+    expect(entry.category_class_time).toBe(2.7)
+  })
+
+  it('uses FLICA scheduled block when gate actuals are missing', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20260804_5770_LGA',
+      import_source: 'flica_aerodatabox',
+      flight_number: '5770',
+      trip_number: 'L7513',
+      role: 'PIC',
+      dep_airport: 'LGA',
+      arr_airport: 'DCA',
+      scheduled_out_local: '2026-08-04 06:05:00',
+      scheduled_in_local: '2026-08-04 07:12:00',
+      actual_out_local: null,
+      actual_in_local: null,
+      actual_off_local: null,
+      actual_on_local: null,
+      fcv_tail_number: 'N12345',
+      fcv_aircraft_type: 'E75',
+      crew: [],
+      is_deadhead: false,
+      block_minutes: 67,
+    })
+    expect((entry.flight_time as Record<string, unknown>).total).toBe(1.1)
+    expect((entry.flight_time as Record<string, unknown>).pic).toBe(1.1)
+    expect((entry.flight_time as Record<string, unknown>).crossCountry).toBe(1.1)
+  })
+
+  it('uses actual gate block across midnight (overnight)', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20260804_1200_LAX',
+      import_source: 'flica_aerodatabox',
+      flight_number: '1200',
+      trip_number: null,
+      role: 'SIC',
+      dep_airport: 'LAX',
+      arr_airport: 'SFO',
+      scheduled_out_local: '2026-08-04 23:50:00',
+      scheduled_in_local: '2026-08-05 01:10:00',
+      actual_out_local: '2026-08-04 23:55:00',
+      actual_in_local: '2026-08-05 01:05:00',
+      actual_off_local: null,
+      actual_on_local: null,
+      fcv_tail_number: '',
+      fcv_aircraft_type: 'E75',
+      crew: [],
+      is_deadhead: false,
+      block_minutes: 90,
+    })
+    expect((entry.flight_time as Record<string, unknown>).total).toBe(1.2)
+    expect((entry.flight_time as Record<string, unknown>).sic).toBe(1.2)
+    expect((entry.flight_time as Record<string, unknown>).crossCountry).toBe(1.2)
   })
 
   it('uses FLICA scheduled Out/In when enrich has only runway times (RIC turn)', () => {
@@ -295,8 +377,8 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       in: '0825',
       isZulu: false,
     })
-    expect((entry.flight_time as Record<string, unknown>).total).toBe(2.1)
-    expect(entry.category_class_time).toBe(2.1)
+    expect((entry.flight_time as Record<string, unknown>).total).toBe(2.3)
+    expect(entry.category_class_time).toBe(2.3)
   })
 
   it('uses all four enrich OOOI in airport-local wall time without mixing scheduled gate times', () => {
