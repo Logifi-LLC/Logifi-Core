@@ -34,6 +34,9 @@ import {
 import { applyCatalogFamilyToFcvPreview } from '../../../shared/aircraftTailIndex'
 import { OOOI_FIELD_ORDER } from '~/utils/logbookTypes'
 import { localCalendarYmd, normalizeCalendarYmd } from '../../../shared/localCalendarDate'
+import { computeAirlineNight } from '../../../shared/airlineNight'
+import { lookupAirportLocal } from '../../../shared/airportLookup'
+import { getAirportIanaTimezone } from '../../../shared/airportTimezone'
 
 /** Must match dashboard theme; avoid `dark:` here so OS dark mode does not fight white settings cards. */
 const props = withDefaults(
@@ -257,9 +260,71 @@ function addApproach(index: number) {
   e.approaches.push({ type: 'ILS', count: 1 })
 }
 
-function hasNightTime(f: FcvMappedEntry): boolean {
-  const ft = (f.flight_time ?? {}) as { night?: unknown }
-  return typeof ft.night === 'number' && Number.isFinite(ft.night) && ft.night > 0
+function clientAirlineNightLookups() {
+  return {
+    lookupCoords: (code: string) => {
+      const airport = lookupAirportLocal(code)
+      if (airport?.latitude == null || airport?.longitude == null) return null
+      return { latitude: airport.latitude, longitude: airport.longitude }
+    },
+    lookupTz: getAirportIanaTimezone,
+  }
+}
+
+function rawAirlineDatetimes(f: FcvMappedEntry): {
+  outLocal: string | null
+  inLocal: string | null
+  onLocal: string | null
+} {
+  const meta = (f.import_metadata ?? {}) as Record<string, unknown>
+  const src =
+    (meta.airline_leg_raw as Record<string, unknown> | undefined) ||
+    (meta.fcv_raw as Record<string, unknown> | undefined) ||
+    {}
+  const asDt = (v: unknown): string | null =>
+    typeof v === 'string' && v.trim().length >= 10 ? v.trim() : null
+  return {
+    outLocal: asDt(src.actual_out_local) ?? asDt(src.scheduled_out_local),
+    inLocal: asDt(src.actual_in_local) ?? asDt(src.scheduled_in_local),
+    onLocal: asDt(src.actual_on_local),
+  }
+}
+
+function applyAutofiLandings(
+  f: FcvMappedEntry,
+  nextPerformance: Record<string, unknown>
+): void {
+  const existingNight = (f.performance as { nightLandings?: unknown } | undefined)?.nightLandings
+  const existingDay = (f.performance as { dayLandings?: unknown } | undefined)?.dayLandings
+  if (typeof existingNight === 'number' && Number.isFinite(existingNight) && existingNight > 0) {
+    nextPerformance.nightLandings = existingNight
+    return
+  }
+  if (typeof existingDay === 'number' && Number.isFinite(existingDay) && existingDay > 0) {
+    nextPerformance.dayLandings = existingDay
+    return
+  }
+
+  const raw = rawAirlineDatetimes(f)
+  const result = computeAirlineNight(
+    {
+      depCode: String(f.departure ?? ''),
+      arrCode: String(f.destination ?? ''),
+      date: f.date || null,
+      outLocalDatetime: raw.outLocal,
+      inLocalDatetime: raw.inLocal,
+      onLocalDatetime: raw.onLocal,
+      oooi: f.oooi as {
+        out?: string | null
+        in?: string | null
+        on?: string | null
+        isZulu?: boolean
+      } | null,
+    },
+    clientAirlineNightLookups()
+  )
+  if (result.isNightLanding === true) nextPerformance.nightLandings = 1
+  else if (result.isNightLanding === false) nextPerformance.dayLandings = 1
 }
 
 function buildApproachesForPayload(
@@ -290,8 +355,7 @@ function buildFlightForImport(f: FcvMappedEntry, idx: number): FcvMappedEntry {
   if (approaches.length > 0) nextPerformance.approaches = approaches
 
   if (enrichment.userFlewLeg) {
-    if (hasNightTime(f)) nextPerformance.nightLandings = 1
-    else nextPerformance.dayLandings = 1
+    applyAutofiLandings(f, nextPerformance)
   }
 
   return {

@@ -360,6 +360,58 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
     expect((entry.flight_time as Record<string, unknown>).total).toBe(1.3)
   })
 
+  it('computes 0 night for a LAX afternoon Autofi leg (airport-local OOOI)', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20261112_1_LAX',
+      import_source: 'flica_aerodatabox',
+      flight_number: '1',
+      trip_number: null,
+      role: 'PIC',
+      dep_airport: 'LAX',
+      arr_airport: 'LAX',
+      scheduled_out_local: '2026-11-12 16:00:00',
+      scheduled_in_local: '2026-11-12 16:45:00',
+      actual_out_local: '2026-11-12 16:00:00',
+      actual_in_local: '2026-11-12 16:45:00',
+      actual_off_local: '2026-11-12 16:08:00',
+      actual_on_local: '2026-11-12 16:40:00',
+      fcv_tail_number: 'N12345',
+      fcv_aircraft_type: 'E75',
+      crew: [],
+      is_deadhead: false,
+      block_minutes: 45,
+    })
+    expect((entry.flight_time as Record<string, unknown>).night).toBe(0)
+    expect((entry.performance as Record<string, unknown>).dayLandings).toBe(1)
+    expect((entry.performance as Record<string, unknown>).nightLandings).toBeUndefined()
+  })
+
+  it('does not attach landings on deadhead even when the arrival is at night', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20261112_2_LAS',
+      import_source: 'flica_aerodatabox',
+      flight_number: '2',
+      trip_number: null,
+      role: 'PIC',
+      dep_airport: 'LAS',
+      arr_airport: 'LAX',
+      scheduled_out_local: '2026-11-12 16:30:00',
+      scheduled_in_local: '2026-11-12 18:15:00',
+      actual_out_local: '2026-11-12 16:30:00',
+      actual_in_local: '2026-11-12 18:15:00',
+      actual_off_local: null,
+      actual_on_local: '2026-11-12 18:05:00',
+      fcv_tail_number: '',
+      fcv_aircraft_type: '',
+      crew: [],
+      is_deadhead: true,
+      block_minutes: 105,
+    })
+    expect(entry.tags).toEqual(['Deadhead'])
+    expect((entry.performance as Record<string, unknown>).nightLandings).toBeUndefined()
+    expect((entry.performance as Record<string, unknown>).dayLandings).toBeUndefined()
+  })
+
   it('tags deadhead legs', () => {
     const entry = mapAirlineLegToFcvMappedEntry({
       external_flight_id: 'FLICA_20260804_5770_LGA',
