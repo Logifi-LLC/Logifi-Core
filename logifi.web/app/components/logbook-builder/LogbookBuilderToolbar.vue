@@ -77,6 +77,7 @@ const defaultYearValue = computed({
   },
 })
 
+const showToolbarMore = ref(false)
 const showSaveModal = ref(false)
 const showLoadModal = ref(false)
 const templateName = ref('')
@@ -190,23 +191,26 @@ function onRowCountInput(e: Event) {
 
 <template>
   <div
-    class="flex flex-nowrap items-center gap-3 rounded-lg border p-3 overflow-x-auto"
+    data-testid="logbook-builder-toolbar"
+    class="flex flex-wrap items-center gap-3 rounded-lg border p-3 min-w-0"
     :class="isDark ? 'border-white/10 bg-gray-900 shadow-md shadow-black/40' : 'border-gray-200 bg-white'"
   >
-    <div class="flex items-center gap-2">
-      <span
-        class="text-sm font-medium transition-colors"
+    <div class="flex min-h-[44px] min-w-0 max-w-full items-center gap-2">
+      <label
+        for="builder-row-count"
+        class="text-sm font-medium transition-colors shrink-0"
         :class="isDark ? 'text-gray-300' : 'text-gray-900'"
         title="Count only flight entry lines on the page, not the bottom totals or carry-forward row. Wrong counts cause Digifi to merge or overwrite lines."
-      >Rows:</span>
+      >Rows:</label>
       <input
+        id="builder-row-count"
         type="number"
         :value="rowCount"
         min="1"
         max="100"
         title="Flight entry lines only — exclude the paper totals row at the bottom"
         :class="[
-          'w-16 rounded border px-2 py-1 text-sm shadow-sm transition-colors',
+          'h-11 w-16 min-h-[44px] rounded border px-2 text-sm shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
           isDark
             ? 'border-white/10 bg-black/20 text-white shadow-inner'
             : 'border-gray-300 bg-white text-gray-900'
@@ -214,12 +218,16 @@ function onRowCountInput(e: Event) {
         @input="onRowCountInput($event)"
       />
     </div>
-    <div class="flex items-center gap-2">
-      <span class="text-sm font-medium transition-colors" :class="isDark ? 'text-gray-300' : 'text-gray-900'">Layout:</span>
+    <div
+      :class="showToolbarMore ? 'flex' : 'hidden md:flex'"
+      class="min-h-[44px] min-w-0 max-md:w-full max-w-full items-center gap-2"
+    >
+      <label for="builder-layout" class="text-sm font-medium transition-colors shrink-0" :class="isDark ? 'text-gray-300' : 'text-gray-900'">Layout:</label>
       <select
+        id="builder-layout"
         :value="layout"
         :class="[
-          'rounded border px-2 py-1 text-sm shadow-sm transition-colors',
+          'h-11 min-h-[44px] min-w-0 max-w-full flex-1 rounded border px-2 text-sm shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
           isDark
             ? 'border-white/10 bg-black/20 text-white shadow-inner'
             : 'border-gray-300 bg-white text-gray-900'
@@ -229,27 +237,35 @@ function onRowCountInput(e: Event) {
         <option v-for="opt in layoutOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
     </div>
-    <div class="flex items-center gap-2">
-      <span class="text-sm font-medium transition-colors" :class="isDark ? 'text-gray-300' : 'text-gray-900'">Year:</span>
+    <div
+      :class="showToolbarMore ? 'flex' : 'hidden md:flex'"
+      class="min-h-[44px] min-w-0 max-md:w-full max-w-full items-center gap-2"
+    >
+      <label for="builder-year" class="text-sm font-medium transition-colors shrink-0" :class="isDark ? 'text-gray-300' : 'text-gray-900'">Year:</label>
       <input
+        id="builder-year"
         v-model.number="defaultYearValue"
         type="number"
         min="1900"
         max="2100"
         :class="[
-          'w-20 rounded border px-2 py-1 text-sm shadow-sm transition-colors',
+          'h-11 w-20 min-h-[44px] rounded border px-2 text-sm shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
           isDark
             ? 'border-white/10 bg-black/20 text-white shadow-inner'
             : 'border-gray-300 bg-white text-gray-900'
         ]"
       />
     </div>
-    <div class="flex items-center gap-2">
-      <span class="text-sm font-medium transition-colors" :class="isDark ? 'text-gray-300' : 'text-gray-900'">Default role:</span>
+    <div
+      :class="showToolbarMore ? 'flex' : 'hidden md:flex'"
+      class="min-h-[44px] min-w-0 max-md:w-full max-w-full items-center gap-2"
+    >
+      <label for="builder-default-role" class="text-sm font-medium transition-colors shrink-0" :class="isDark ? 'text-gray-300' : 'text-gray-900'">Default role:</label>
       <select
+        id="builder-default-role"
         :value="defaultImportRole"
         :class="[
-          'rounded border px-2 py-1 text-sm shadow-sm transition-colors',
+          'h-11 min-h-[44px] min-w-0 max-w-full flex-1 rounded border px-2 text-sm shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
           isDark
             ? 'border-white/10 bg-black/20 text-white shadow-inner'
             : 'border-gray-300 bg-white text-gray-900'
@@ -259,15 +275,20 @@ function onRowCountInput(e: Event) {
         <option v-for="opt in ROLE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
       </select>
     </div>
-    <div v-if="layout === 'two-page'" class="flex items-center gap-2">
-      <span class="text-sm font-medium transition-colors" :class="isDark ? 'text-gray-300' : 'text-gray-900'">Columns on left:</span>
+    <div
+      v-if="layout === 'two-page'"
+      :class="showToolbarMore ? 'flex' : 'hidden md:flex'"
+      class="min-h-[44px] min-w-0 max-md:w-full max-w-full items-center gap-2"
+    >
+      <label for="builder-split-index" class="text-sm font-medium transition-colors shrink-0" :class="isDark ? 'text-gray-300' : 'text-gray-900'">Columns on left:</label>
       <input
+        id="builder-split-index"
         type="number"
         :value="effectiveSplitIndex"
         :min="1"
         :max="Math.max(1, visibleColumns.length - 1)"
         :class="[
-          'w-14 rounded border px-2 py-1 text-sm shadow-sm transition-colors',
+          'h-11 w-14 min-h-[44px] rounded border px-2 text-sm shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
           isDark
             ? 'border-white/10 bg-black/20 text-white shadow-inner'
             : 'border-gray-300 bg-white text-gray-900'
@@ -278,7 +299,7 @@ function onRowCountInput(e: Event) {
     <button
       type="button"
       :class="[
-        'rounded px-3 py-1.5 text-sm font-medium transition-colors border whitespace-nowrap flex-shrink-0',
+        'inline-flex min-h-[44px] items-center rounded px-3 text-sm font-medium transition-colors border whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
         isDark
           ? 'bg-blue-600 hover:bg-blue-500 text-white border-blue-600'
           : 'bg-gray-200 hover:bg-gray-300 text-black border-gray-300 shadow-sm'
@@ -291,7 +312,8 @@ function onRowCountInput(e: Event) {
       v-if="columns.length > 1"
       type="button"
       :class="[
-        'rounded border px-3 py-1.5 text-sm transition-colors whitespace-nowrap flex-shrink-0',
+        showToolbarMore ? 'inline-flex' : 'hidden md:inline-flex',
+        'min-h-[44px] items-center rounded border px-3 text-sm transition-colors whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
         isDark 
           ? 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 shadow-sm shadow-black/20' 
           : 'border-gray-300 bg-gray-200 text-black hover:bg-gray-300 shadow-sm'
@@ -300,13 +322,25 @@ function onRowCountInput(e: Event) {
     >
       Remove column
     </button>
-    <div class="ml-auto flex gap-2 flex-shrink-0">
+    <button
+      type="button"
+      class="inline-flex md:hidden min-h-[44px] min-w-[44px] items-center justify-center rounded border px-3 text-sm font-medium transition-colors whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+      :class="isDark
+        ? 'border-white/10 bg-white/5 text-gray-300 hover:bg-white/10'
+        : 'border-gray-300 bg-gray-200 text-black hover:bg-gray-300'"
+      :aria-expanded="showToolbarMore"
+      aria-controls="builder-toolbar-more"
+      @click="showToolbarMore = !showToolbarMore"
+    >
+      {{ showToolbarMore ? 'Less' : 'More' }}
+    </button>
+    <div id="builder-toolbar-more" class="flex w-full min-w-0 md:ml-auto md:w-auto">
       <button
         type="button"
         :class="[
-          'rounded px-3 py-1.5 text-sm transition-colors whitespace-nowrap',
+          'inline-flex min-h-[44px] w-full md:w-auto items-center justify-center rounded px-3 text-sm transition-colors whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
           loadTemplateProminent
-            ? 'bg-blue-600 px-4 py-2 font-semibold text-white shadow-sm ring-2 ring-blue-300 hover:bg-blue-700'
+            ? 'bg-blue-600 px-4 font-semibold text-white shadow-sm ring-2 ring-blue-300 hover:bg-blue-700'
             : isDark
               ? 'border border-white/10 bg-white/5 text-gray-300 hover:bg-white/10 shadow-sm shadow-black/20'
               : 'border border-gray-300 bg-gray-200 text-black hover:bg-gray-300 shadow-sm'
@@ -335,7 +369,7 @@ function onRowCountInput(e: Event) {
           </h3>
           <button
             type="button"
-            class="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-white/10 transition-colors"
+            class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
             aria-label="Close"
             @click="showSaveModal = false"
           >
@@ -392,7 +426,7 @@ function onRowCountInput(e: Event) {
           </h3>
           <button
             type="button"
-            class="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-white/10 transition-colors"
+            class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
             aria-label="Close"
             @click="showLoadModal = false"
           >
@@ -423,7 +457,7 @@ function onRowCountInput(e: Event) {
               </button>
               <button
                 type="button"
-                class="flex-shrink-0 rounded p-1.5 text-gray-500 hover:bg-red-100 hover:text-red-700 dark:text-gray-400 dark:hover:bg-red-900/30 dark:hover:text-red-300 transition-colors"
+                class="inline-flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center rounded p-1.5 text-gray-500 hover:bg-red-100 hover:text-red-700 dark:text-gray-400 dark:hover:bg-red-900/30 dark:hover:text-red-300 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
                 :disabled="deletingTemplateId !== null"
                 aria-label="Delete template"
                 @click.stop="requestDeleteTemplate(t)"
@@ -467,7 +501,7 @@ function onRowCountInput(e: Event) {
           </h3>
           <button
             type="button"
-            class="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-white/10 transition-colors"
+            class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-300 dark:hover:bg-white/10 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
             aria-label="Cancel"
             :disabled="deletingTemplateId !== null"
             @click="clearDeleteConfirm"

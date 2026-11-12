@@ -149,6 +149,9 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
+      htmlAttrs: {
+        lang: 'en',
+      },
       title: 'Logifi — Digital Pilot Logbooks',
       meta: [
         {
