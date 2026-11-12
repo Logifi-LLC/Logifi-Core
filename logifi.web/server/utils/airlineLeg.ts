@@ -11,6 +11,7 @@ import {
   parseFcvLocalDatetimeToHHMM,
   resolveFcvBlockHours,
 } from './fcvMap'
+import { applyAirlineNightToMappedEntry } from './airlineNight'
 import {
   mapAircraftCategoryClass,
   normalizeCrewNameForMatching,
@@ -91,6 +92,12 @@ function firstHHMM(actual: string | null, scheduled: string | null): string | nu
   return (
     parseFcvLocalDatetimeToHHMM(actual) ?? parseFcvLocalDatetimeToHHMM(scheduled)
   )
+}
+
+function firstDatetime(actual: string | null, scheduled: string | null): string | null {
+  if (typeof actual === 'string' && actual.trim().length >= 10) return actual.trim()
+  if (typeof scheduled === 'string' && scheduled.trim().length >= 10) return scheduled.trim()
+  return null
 }
 
 function buildOooiFromLeg(leg: AirlineLeg): FcvMappedOooi | null {
@@ -310,7 +317,7 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
 
   const importSource = leg.import_source
 
-  return {
+  const mapped: FcvMappedEntry = {
     fcv_flight_id: fcvId,
     date: date || '',
     role: ownRole ?? '',
@@ -352,6 +359,14 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
       airline_leg_raw: { ...leg },
     },
   }
+
+  applyAirlineNightToMappedEntry(mapped, {
+    outLocal: firstDatetime(leg.actual_out_local, leg.scheduled_out_local),
+    inLocal: firstDatetime(leg.actual_in_local, leg.scheduled_in_local),
+    onLocal: leg.actual_on_local,
+    isDeadhead: leg.is_deadhead,
+  })
+  return mapped
 }
 
 export { hhmmToLocalDatetime }
