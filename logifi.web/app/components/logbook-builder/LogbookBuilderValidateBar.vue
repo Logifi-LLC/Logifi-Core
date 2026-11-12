@@ -224,7 +224,7 @@ function downloadLogTenPackage() {
       <div class="flex flex-wrap items-center gap-4">
         <button
           type="button"
-          class="rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+          class="min-h-[44px] rounded bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
           :disabled="validating"
           @click="handleValidate"
         >
@@ -233,7 +233,7 @@ function downloadLogTenPackage() {
         <button
           v-if="showSaveTemplate"
           type="button"
-          class="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+          class="min-h-[44px] rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
           @click="grid.openSaveTemplate.value?.()"
         >
           Save Template
@@ -321,7 +321,7 @@ function downloadLogTenPackage() {
             <button
               v-if="preferredSink === 'logten'"
               type="button"
-              class="rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+              class="min-h-[44px] rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
               :class="[
                 isDark
                   ? 'border-blue-500/30 bg-blue-600/10 text-blue-300 hover:bg-blue-600/20'
@@ -336,7 +336,7 @@ function downloadLogTenPackage() {
             <button
               v-if="preferredSink === 'logifi'"
               type="button"
-              class="rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+              class="min-h-[44px] rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
               :class="[
                 isDark
                   ? 'border-orange-500/30 bg-orange-600/10 text-orange-300 hover:bg-orange-600/20'
@@ -478,3 +478,13 @@ function downloadLogTenPackage() {
     </Teleport>
   </div>
 </template>
+
+<style scoped>
+button {
+  min-height: 44px;
+}
+button:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+</style>

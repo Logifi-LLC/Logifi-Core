@@ -1572,7 +1572,7 @@ defineExpose({
   <div
     ref="gridContainerRef"
     tabindex="0"
-    class="logbook-builder-grid overflow-auto border pb-4 outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500/50"
+    class="logbook-builder-grid min-w-0 max-w-full overflow-auto border pb-4 outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-blue-500"
     :class="isDark
       ? 'border-white/10 bg-gray-900 shadow-md shadow-black/40'
       : 'border-gray-200 bg-white shadow-sm'"
@@ -1601,11 +1601,12 @@ defineExpose({
               @dragover.prevent
               @drop.prevent="handleHeaderDrop(col.id)"
             >
-              <div class="flex min-w-0 items-center justify-center">
+              <div class="flex w-full min-w-0 items-center justify-center">
                 <LogbookBuilderHeader :column="col" @update="(_, updates) => updateColumn(col.id, updates)" />
               </div>
               <span
                 class="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-blue-400/50 dark:hover:bg-blue-500/50"
+                aria-label="Resize column"
                 title="Drag to resize column"
                 @mousedown.prevent="startResize(col.id, $event.clientX, col.width ?? DEFAULT_COLUMN_WIDTH)"
               />
@@ -1640,11 +1641,12 @@ defineExpose({
               @dragover.prevent
               @drop.prevent="handleHeaderDrop(col.id)"
             >
-              <div class="flex min-w-0 items-center justify-center">
+              <div class="flex w-full min-w-0 items-center justify-center">
                 <LogbookBuilderHeader :column="col" @update="(_, updates) => updateColumn(col.id, updates)" />
               </div>
               <span
                 class="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-blue-400/50 dark:hover:bg-blue-500/50"
+                aria-label="Resize column"
                 title="Drag to resize column"
                 @mousedown.prevent="startResize(col.id, $event.clientX, col.width ?? DEFAULT_COLUMN_WIDTH)"
               />
@@ -1668,11 +1670,12 @@ defineExpose({
               @dragover.prevent
               @drop.prevent="handleHeaderDrop(col.id)"
             >
-              <div class="flex min-w-0 items-center justify-center">
+              <div class="flex w-full min-w-0 items-center justify-center">
                 <LogbookBuilderHeader :column="col" @update="(_, updates) => updateColumn(col.id, updates)" />
               </div>
               <span
                 class="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-blue-400/50 dark:hover:bg-blue-500/50"
+                aria-label="Resize column"
                 title="Drag to resize column"
                 @mousedown.prevent="startResize(col.id, $event.clientX, col.width ?? DEFAULT_COLUMN_WIDTH)"
               />
@@ -1688,6 +1691,7 @@ defineExpose({
             Tags
             <span
               class="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-blue-400/50 dark:hover:bg-blue-500/50"
+              aria-label="Resize tags column"
               title="Drag to resize column"
               @mousedown.prevent="startResize(null, $event.clientX, tagsColumnWidth)"
             />

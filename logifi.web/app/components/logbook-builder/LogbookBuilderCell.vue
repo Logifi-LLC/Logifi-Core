@@ -203,20 +203,20 @@ export default defineComponent({
         ? 'text-gray-100 placeholder-gray-500'
         : 'text-gray-900 placeholder-gray-400'
       const align = isRemarks.value ? 'text-left whitespace-pre-wrap resize-none' : 'text-center'
-      const minH = isRemarks.value ? 'min-h-[2.75rem]' : 'min-h-[1.75rem]'
+      const minH = 'min-h-[44px]'
       const rowLockClass =
         props.rowLock && isRemarks.value
           ? 'max-h-[4.5rem] overflow-y-auto resize-none'
           : props.rowLock
             ? 'overflow-hidden text-ellipsis'
             : ''
-      const base = `block h-full w-full min-w-0 border-0 bg-transparent px-1.5 py-0.5 text-sm font-quicksand outline-none ${minH} ${align} ${colors} ${rowLockClass}`
+      const base = `block h-full w-full min-w-0 border-0 bg-transparent px-1.5 py-0.5 text-sm font-quicksand outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-blue-500 ${minH} ${align} ${colors} ${rowLockClass}`
       const mono = (isNumeric.value || isCategoryClassTimeColumn.value) ? 'font-mono' : ''
       return `${base} ${mono}`
     })
     const selectClass = computed(() => {
       const colors = isDark.value ? 'text-gray-100' : 'text-gray-900'
-      return `block h-full w-full min-w-0 border-0 bg-transparent px-1.5 py-0.5 text-center text-sm font-quicksand outline-none min-h-[1.75rem] ${colors}`
+      return `block h-full w-full min-w-0 border-0 bg-transparent px-1.5 py-0.5 text-center text-sm font-quicksand outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-blue-500 min-h-[44px] ${colors}`
     })
 
     const listId = computed(() => {
@@ -528,7 +528,7 @@ export default defineComponent({
           :key="item + '-' + index"
           type="button"
           :data-index="index"
-          class="w-full px-3 py-2 text-left text-sm transition-colors"
+          class="w-full min-h-[44px] px-3 py-2 text-left text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-1px] focus-visible:outline-blue-500"
           :class="
             highlightedTypeaheadIndex === index
               ? (isDark ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')

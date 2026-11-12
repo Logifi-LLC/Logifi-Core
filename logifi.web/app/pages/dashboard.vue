@@ -1215,7 +1215,7 @@
                     placeholder="Search entries"
                     aria-keyshortcuts="/"
                     :class="[
-                      'w-full rounded-lg border px-5 py-2 focus:outline-none focus:ring-2 font-quicksand transition-colors duration-300',
+                      'w-full min-h-[44px] rounded-lg border px-5 py-2 focus:outline-none focus:ring-2 font-quicksand transition-colors duration-300',
                       isDarkMode 
                         ? 'border-gray-600 bg-gray-700 text-white placeholder-gray-400 focus:ring-blue-500' 
                         : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400 focus:ring-blue-500'
@@ -1270,7 +1270,7 @@
                 type="button"
                 @click.stop="showColumnSettings = !showColumnSettings"
                 :class="[
-                  'p-1.5 rounded transition-colors',
+                  'inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded p-1.5 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
                   isDarkMode
                     ? 'hover:bg-white/10 text-gray-400 hover:text-gray-300 bg-white/5 border border-white/10 shadow-sm shadow-black/20'
                     : 'hover:bg-gray-200 text-gray-500 hover:text-gray-700 bg-gray-100'
@@ -1423,7 +1423,7 @@
           </div>
 
             <LogEntryList
-              v-else-if="isIos"
+              v-else-if="useStackedEntryCards"
               :entries="displayedEntries"
               :is-dark-mode="isDarkMode"
               :visible-detail-fields="visibleDetailFields"
@@ -6864,6 +6864,7 @@ import CurrencyStatusChips from '../components/logbook/CurrencyStatusChips.vue'
 import EntryFieldError from '../components/logbook/EntryFieldError.vue'
 import LogbookEmptyState from '../components/logbook/LogbookEmptyState.vue'
 import LogEntryList from '../components/logbook/LogEntryList.vue'
+import { STACKED_LOGBOOK_CARDS_MQ, shouldUseStackedLogbookCards } from '../utils/logbookListLayout'
 
 const AuditTrail = defineAsyncComponent(() => import('../components/AuditTrail.vue'))
 const CurrencyDashboard = defineAsyncComponent(() => import('../components/CurrencyDashboard.vue'))
@@ -7339,6 +7340,17 @@ async function refreshDashboardFcvStatus(): Promise<void> {
 
 const { isIos } = useCapacitorPlatform()
 
+const isNarrowViewport = ref(
+  typeof window !== 'undefined' && window.matchMedia(STACKED_LOGBOOK_CARDS_MQ).matches,
+)
+const useStackedEntryCards = computed(() =>
+  shouldUseStackedLogbookCards(isIos.value, isNarrowViewport.value),
+)
+let narrowViewportMql: MediaQueryList | null = null
+function onNarrowViewportChange(event: MediaQueryListEvent) {
+  isNarrowViewport.value = event.matches
+}
+
 const handleLogout = async () => {
   stopBackgroundSync()
   setActiveUserId(null)
@@ -7519,6 +7531,9 @@ watch(() => route.query.ref, () => {
 
 onMounted(async () => {
   if (!isBrowser) return
+  narrowViewportMql = window.matchMedia(STACKED_LOGBOOK_CARDS_MQ)
+  isNarrowViewport.value = narrowViewportMql.matches
+  narrowViewportMql.addEventListener('change', onNarrowViewportChange)
   openSignupForStoredReferral()
 
   loadSimDeviceCatalogFromStorage()
@@ -7558,6 +7573,10 @@ onUnmounted(() => {
     searchDebounceTimer = null
   }
   if (isBrowser) {
+    if (narrowViewportMql) {
+      narrowViewportMql.removeEventListener('change', onNarrowViewportChange)
+      narrowViewportMql = null
+    }
     const scrollTarget = isIos.value ? rootScrollContainerRef.value : window
     if (scrollTarget) {
       scrollTarget.removeEventListener('scroll', handleScroll)
