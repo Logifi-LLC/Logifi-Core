@@ -6731,6 +6731,11 @@ import { useAirportLookup } from '../composables/useAirportLookup'
 import type { AirportInfo } from '../composables/useAirportLookup'
 import { getPilotInitialsFromName } from '../utils/pilotProfile'
 import { getDisplayedPilotInitials, shouldShowCurrencyChips } from '../utils/dashboardHydration'
+import {
+  entryMatchesTotalsDateRange,
+  normalizeSavedTotalsMetricKeys,
+  type TotalsDateRange,
+} from '../utils/totalsLandingCounts'
 import { markAppReady } from '../utils/appReady'
 import {
   formatEntryAirportCode,
@@ -6752,6 +6757,7 @@ import {
 } from '../utils/validation'
 import { useLocationLookup } from '../composables/useLocationLookup'
 import { calculateNightTime } from '../utils/nightTimeCalculator'
+import { nightAutoCalcInputKey, shouldApplyAutoNightTime } from '../../shared/nightAutoCalcPolicy'
 import { DateTime } from 'luxon'
 import { ensureAirportClientDbLoaded } from '../../shared/airportClientDb'
 import { getAirportIanaTimezone, normalizeTimezoneToIANA } from '../../shared/airportTimezone'
@@ -8064,6 +8070,9 @@ type TotalsMetricKey =
   | 'sic'
   | 'dualReceived'
   | 'mostUsedAircraft'
+  | 'totalLandings'
+  | 'dayLandings'
+  | 'nightLandings'
   | 'ffs'
   | 'ftd'
   | 'atd'
@@ -8081,6 +8090,9 @@ const baseTotalsMetrics: readonly TotalsMetric[] = [
   { key: 'sic', label: 'SIC (hrs)' },
   { key: 'dualReceived', label: 'Dual Received (hrs)' },
   { key: 'mostUsedAircraft', label: 'Most Used Aircraft' },
+  { key: 'totalLandings', label: 'Total Landings' },
+  { key: 'dayLandings', label: 'Day Landings' },
+  { key: 'nightLandings', label: 'Night Landings' },
   { key: 'ffs', label: 'FFS (hrs)' },
   { key: 'ftd', label: 'FTD (hrs)' },
   { key: 'atd', label: 'ATD (hrs)' }
@@ -8126,12 +8138,11 @@ function loadSelectedTotalsMetrics(): void {
   const saved = readUserScopedLocal(ACCOUNT_SCOPED_STORAGE_KEYS.TOTALS_METRICS, true)
   if (saved) {
     try {
-      const parsed = JSON.parse(saved) as TotalsMetricKey[]
-      // Validate that all keys are valid
-      if (Array.isArray(parsed) && parsed.every(k => availableTotalsMetrics.value.some(m => m.key === k))) {
-        // Ensure totalTime is always first
-        const withoutTotal = parsed.filter(k => k !== 'totalTime')
-        selectedTotalsMetrics.value = ['totalTime', ...withoutTotal]
+      const parsed: unknown = JSON.parse(saved)
+      const validKeySet = new Set(availableTotalsMetrics.value.map((m) => m.key))
+      const normalized = normalizeSavedTotalsMetricKeys(parsed, validKeySet)
+      if (normalized) {
+        selectedTotalsMetrics.value = normalized as TotalsMetricKey[]
       }
     } catch {
       selectedTotalsMetrics.value = defaultSelectedMetrics
@@ -8390,6 +8401,8 @@ const xcTimeManuallySet = ref<boolean>(false)
 const setXcTimeManuallySet = (value: boolean) => {
   xcTimeManuallySet.value = value
 }
+/** Snapshot of OOOI/date/airports when inline edit opens — auto-night must not overwrite on open. */
+const inlineNightAutoCalcBaseline = ref<string | null>(null)
 const searchTerm = ref('')
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const debouncedSearchTerm = ref('')
@@ -8742,6 +8755,7 @@ function closeInlineEditDrawer(): void {
   expandedEntryId.value = null
   inlineEditEntry.value = null
   isInlineCommercialMode.value = false
+  inlineNightAutoCalcBaseline.value = null
   showInlineCustomTagInput.value = false
   customTagInputInline.value = ''
 }
@@ -8896,6 +8910,7 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
       copy.performance.approaches = getApproachesFromPerformance(copy.performance)
     }
     if (!Array.isArray(copy.tags)) copy.tags = []
+    clearEntryFormFieldUi()
     inlineEditEntry.value = copy
     // Auto-enable commercial mode only when existing OOOI time fields are present
     const hasOOOITimes =
@@ -8907,6 +8922,14 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
         (copy.oooi.in && copy.oooi.in.trim())
       )
     isInlineCommercialMode.value = hasOOOITimes
+    inlineNightAutoCalcBaseline.value = nightAutoCalcInputKey({
+      date: copy.date,
+      departure: copy.departure,
+      destination: copy.destination,
+      out: copy.oooi?.out,
+      in: copy.oooi?.in,
+      isZulu: copy.oooi?.isZulu,
+    })
     if (!isEntrySigned(entry.id) && requiresInstructorSignature(entry)) {
       ensureDefaultSignInstructor()
     }
@@ -10072,6 +10095,14 @@ function prepareInlineEditFromEntry(savedEntry: LogEntry): void {
       (copy.oooi.in && copy.oooi.in.trim())
     )
   isInlineCommercialMode.value = hasOOOITimes
+  inlineNightAutoCalcBaseline.value = nightAutoCalcInputKey({
+    date: copy.date,
+    departure: copy.departure,
+    destination: copy.destination,
+    out: copy.oooi?.out,
+    in: copy.oooi?.in,
+    isZulu: copy.oooi?.isZulu,
+  })
 }
 
 function cancelInlineEdit(): void {
@@ -10733,8 +10764,6 @@ const totalsTimeMode = ref<TotalsTimeMode>('all')
 const totalsCustomStart = ref<string>('')
 const totalsCustomEnd = ref<string>('')
 
-type TotalsDateRange = { start: Date | null; end: Date | null }
-
 /** Date window from Totals Overview controls; null means no date filter (all time). */
 function getTotalsDateRange(): TotalsDateRange | null {
   const mode = totalsTimeMode.value
@@ -10765,14 +10794,6 @@ function getTotalsDateRange(): TotalsDateRange | null {
     return { start, end }
   }
   return null
-}
-
-function entryMatchesTotalsDateRange(entry: LogEntry, range: TotalsDateRange): boolean {
-  const d = new Date(entry.date)
-  if (Number.isNaN(d.getTime())) return false
-  if (range.start && d < range.start) return false
-  if (range.end && d > range.end) return false
-  return true
 }
 
 const dateRangeFilterSummary = computed(() => {
@@ -13124,8 +13145,10 @@ function fillFieldWithTotalTime(fieldKey: FlightTimeKey, totalTime: number | nul
   
   if (isInline && inlineEditEntry.value) {
     inlineEditEntry.value.flightTime[fieldKey] = totalTime
+    if (fieldKey === 'night') editFormTouched.night = true
   } else {
     newEntry.flightTime[fieldKey] = totalTime
+    if (fieldKey === 'night') addFormTouched.night = true
   }
 }
 
@@ -13224,6 +13247,7 @@ function onEditFieldBlur(field: string): void {
 }
 
 function onAddDurationInput(field: string, e: Event, assign: (value: number | null) => void): void {
+  if (field === 'night') addFormTouched.night = true
   const input = e.target as HTMLInputElement
   const err = applyEntryFormDurationInput(input.value, assign)
   if (err) addFormTimeFormatErrors[field] = err
@@ -13231,6 +13255,7 @@ function onAddDurationInput(field: string, e: Event, assign: (value: number | nu
 }
 
 function onEditDurationInput(field: string, e: Event, assign: (value: number | null) => void): void {
+  if (field === 'night') editFormTouched.night = true
   const input = e.target as HTMLInputElement
   const err = applyEntryFormDurationInput(input.value, assign)
   if (err) editFormTimeFormatErrors[field] = err
@@ -14689,6 +14714,7 @@ async function beginEditing(entry: LogEntry): Promise<void> {
   Object.assign(newEntry.performance, entry.performance)
   // Reset manual XC time tracking when editing (assume existing values are intentional)
   xcTimeManuallySet.value = entry.flightTime.crossCountry ? true : false
+  if (entry.flightTime.night != null) addFormTouched.night = true
   lastKnownXcTime.value = entry.flightTime.crossCountry ?? null
   if (entry.oooi) {
     newEntry.oooi = { ...entry.oooi }
@@ -15645,7 +15671,21 @@ function syncCrossCountryWithCommercialOooiTotal(entry: LogEntry, blockHours: nu
   }
 }
 
-// Auto-calculate night time based on OOOI and airport location
+async function resolveAirportCoords(
+  code: string
+): Promise<{ lat: number; lon: number } | null> {
+  const cached = getAirportCoordsFromCache(code)
+  if (cached) return cached
+  const info = await lookupAirport(code)
+  if (info?.latitude != null && info?.longitude != null) {
+    return { lat: info.latitude, lon: info.longitude }
+  }
+  return null
+}
+
+// Auto-calculate night time based on OOOI and airport location.
+// Uses Out→In (block), same pair as total time. Local OOOI is parsed in the
+// departure / arrival airport timezones, not the device timezone.
 async function autoCalculateNightTime(
   date: string,
   departure: string,
@@ -15654,101 +15694,65 @@ async function autoCalculateNightTime(
   inTime: string | null,
   isZulu: boolean = true
 ): Promise<number | null> {
-  console.log('[NightTime] Starting calculation:', { date, departure, destination, outTime, inTime, isZulu })
-  
-  if (!date || !departure || !outTime || !inTime) {
-    console.warn('[NightTime] Missing required parameters:', { date, departure, outTime, inTime })
-    return null
-  }
-  
-  // Get departure airport coordinates from cache, or try to look them up
-  let depCoords = getAirportCoordsFromCache(departure)
-  console.log('[NightTime] Departure coords from cache:', depCoords)
-  
-  if (!depCoords) {
-    console.log('[NightTime] Looking up departure airport:', departure)
-    // Try to look up the airport
-    const depInfo = await lookupAirport(departure)
-    console.log('[NightTime] Departure airport lookup result:', depInfo)
-    if (depInfo?.latitude && depInfo?.longitude) {
-      depCoords = { lat: depInfo.latitude, lon: depInfo.longitude }
-      console.log('[NightTime] Using departure coords from lookup:', depCoords)
-    }
-  }
-  
-  if (!depCoords) {
-    console.error('[NightTime] Failed to get departure airport coordinates for:', departure)
-    return null
-  }
+  if (!date || !departure || !outTime || !inTime) return null
 
-  // Night time uses departure only (single location) to match common logbook behavior
-  // Normalize date to YYYY-MM-DD format
-  // Date inputs use YYYY-MM-DD, but we might also receive MM/DD/YYYY
+  const depCoords = await resolveAirportCoords(departure)
+  if (!depCoords) return null
+
+  let destCoords: { lat: number; lon: number } | null = null
+  if (destination) destCoords = await resolveAirportCoords(destination)
+
   let normalizedDate = date
   if (date.includes('/')) {
-    // Handle MM/DD/YYYY format
     const parts = date.split('/')
     if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
-      const mm = parts[0]
-      const dd = parts[1]
-      const yyyy = parts[2]
-      normalizedDate = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`
-      console.log('[NightTime] Converted date from MM/DD/YYYY:', date, 'to:', normalizedDate)
+      normalizedDate = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`
     }
-  } else if (date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-    // Already in YYYY-MM-DD format (from date input)
-    normalizedDate = date
-    console.log('[NightTime] Date already in YYYY-MM-DD format:', normalizedDate)
-  } else {
-    console.warn('[NightTime] Unexpected date format:', date)
   }
-  
-  // Convert OOOI times from "HHMM" to "HH:MM" format
+
   const outTimeFormatted = convertOOOITimeToHHMM(outTime)
   const inTimeFormatted = convertOOOITimeToHHMM(inTime)
-  console.log('[NightTime] Time conversion:', { 
-    outTime, 
-    outTimeFormatted, 
-    inTime, 
-    inTimeFormatted 
-  })
-  
-  if (!outTimeFormatted || !inTimeFormatted) {
-    console.error('[NightTime] Failed to convert time formats:', { outTime, inTime })
-    return null
-  }
-  
+  if (!outTimeFormatted || !inTimeFormatted) return null
+
   const depLat = typeof depCoords.lat === 'number' ? depCoords.lat : parseFloat(String(depCoords.lat))
   const depLon = typeof depCoords.lon === 'number' ? depCoords.lon : parseFloat(String(depCoords.lon))
 
-  // Use departure-only (single location) for night time so results align with common logbooks
-  console.log('[NightTime] Calling calculateNightTime (departure only):', {
-    date: normalizedDate,
-    depLatitude: depLat,
-    depLongitude: depLon,
-    outTime: outTimeFormatted,
-    inTime: inTimeFormatted,
-    isZulu
-  })
+  let outTimezone: string | null = null
+  let inTimezone: string | null = null
+  if (!isZulu) {
+    outTimezone = await getAirportTimezone(departure)
+    inTimezone = destination ? await getAirportTimezone(destination) : outTimezone
+    if (!outTimezone) return null
+    if (!inTimezone) inTimezone = outTimezone
+  }
+
+  const destLat =
+    destCoords != null
+      ? typeof destCoords.lat === 'number'
+        ? destCoords.lat
+        : parseFloat(String(destCoords.lat))
+      : undefined
+  const destLon =
+    destCoords != null
+      ? typeof destCoords.lon === 'number'
+        ? destCoords.lon
+        : parseFloat(String(destCoords.lon))
+      : undefined
 
   const result = calculateNightTime({
     date: normalizedDate,
     depLatitude: depLat,
     depLongitude: depLon,
+    destLatitude: destLat,
+    destLongitude: destLon,
     outTime: outTimeFormatted,
     inTime: inTimeFormatted,
-    isZulu
+    isZulu,
+    outTimezone,
+    inTimezone,
   })
-  
-  console.log('[NightTime] Calculation result:', result)
-  
-  // Return night time if calculation succeeded (including 0 to clear incorrect values)
-  if (result.success) {
-    console.log('[NightTime] Success! Night time:', result.nightHours, 'hours')
-    return result.nightHours
-  }
-  
-  console.error('[NightTime] Calculation failed:', result.error)
+
+  if (result.success) return result.nightHours
   return null
 }
 
@@ -15781,6 +15785,15 @@ watch(
     
     if (!newEntry.date || !newEntry.departure || !newEntry.oooi.out || !newEntry.oooi.in) {
       console.log('[NightTime Watcher] Skipping - missing required fields')
+      return
+    }
+
+    if (
+      !shouldApplyAutoNightTime({
+        nightFieldTouched: !!addFormTouched.night,
+        inputsUnchangedFromOpen: false,
+      })
+    ) {
       return
     }
     
@@ -15835,6 +15848,25 @@ watch(
     if (!inlineEditEntry.value.date || !inlineEditEntry.value.departure || 
         !inlineEditEntry.value.oooi.out || !inlineEditEntry.value.oooi.in) {
       console.log('[NightTime Inline Watcher] Skipping - missing required fields')
+      return
+    }
+
+    const currentKey = nightAutoCalcInputKey({
+      date: inlineEditEntry.value.date,
+      departure: inlineEditEntry.value.departure,
+      destination: inlineEditEntry.value.destination,
+      out: inlineEditEntry.value.oooi.out,
+      in: inlineEditEntry.value.oooi.in,
+      isZulu: inlineEditEntry.value.oooi.isZulu,
+    })
+    if (
+      !shouldApplyAutoNightTime({
+        nightFieldTouched: !!editFormTouched.night,
+        inputsUnchangedFromOpen:
+          inlineNightAutoCalcBaseline.value != null &&
+          currentKey === inlineNightAutoCalcBaseline.value,
+      })
+    ) {
       return
     }
     
@@ -18800,6 +18832,17 @@ function formatTotalValue(key: TotalsMetricKey): string {
   }
   if (key === 'mostUsedAircraft') {
     return mostUsedAircraft.value || '—'
+  }
+  if (key === 'totalLandings') {
+    const day = safeNumber(totals.value.performance.dayLandings)
+    const night = safeNumber(totals.value.performance.nightLandings)
+    return String(Math.round(day + night))
+  }
+  if (key === 'dayLandings') {
+    return String(Math.round(safeNumber(totals.value.performance.dayLandings)))
+  }
+  if (key === 'nightLandings') {
+    return String(Math.round(safeNumber(totals.value.performance.nightLandings)))
   }
   if (key === 'ffs') {
     return safeNumber(totals.value.time.ffs).toFixed(1)

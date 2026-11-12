@@ -13,6 +13,7 @@ import {
   normalizeRegistrationDisplay,
   normalizeRegistrationKey,
 } from './fcvAlignment'
+import { applyAirlineNightToMappedEntry } from './airlineNight'
 
 /**
  * FC View GET /flights/ response shape (Flight Crew View Logbook API).
@@ -501,7 +502,7 @@ export function mapFcvFlightToEntry(flight: FcvFlight): FcvMappedEntry {
     typeof xcRaw === 'number' && Number.isFinite(xcRaw) && xcRaw > 0 ? xcRaw : null
   const flight_conditions = buildFcvFlightConditions(xcHours)
 
-  return {
+  const mapped: FcvMappedEntry = {
     fcv_flight_id: fcvId,
     date: date || '',
     role: ownRole ?? '',
@@ -543,4 +544,12 @@ export function mapFcvFlightToEntry(flight: FcvFlight): FcvMappedEntry {
       fcv_raw: cloneFlightForMetadata(flight),
     },
   }
+
+  applyAirlineNightToMappedEntry(mapped, {
+    outLocal: pickOutLocalDatetimeForGateDuration(flight) ?? null,
+    inLocal: pickInLocalDatetimeForGateDuration(flight) ?? null,
+    onLocal: typeof flight.actual_on_local === 'string' ? flight.actual_on_local : null,
+    isDeadhead: flight.is_deadhead === 1 || flight.is_deadhead === true,
+  })
+  return mapped
 }
