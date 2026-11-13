@@ -11,7 +11,7 @@ import {
   type ValidationResult,
 } from './validation'
 
-export const ENTRY_TIME_FORMAT_ERROR = 'Enter time as 1.5 or 1:30'
+export const ENTRY_TIME_FORMAT_ERROR = 'Enter time as 1.3 or 1:18'
 
 export type DurationParseResult =
   | { status: 'empty'; value: null }
@@ -72,6 +72,39 @@ export function applyEntryFormDurationInput(
   return null
 }
 
+/** Tenth-hour display for an unfocused duration field. Never use this as :value while typing. */
+export function formatEntryTimeDisplay(value: number | null | undefined): string {
+  if (value === null || value === undefined) return ''
+  return Number(value).toFixed(1)
+}
+
+/**
+ * Visible text for a duration input. While the field is focused, `draft` is the raw
+ * typed string so Vue cannot rewrite "1" to "1.0" mid-keystroke.
+ */
+export function durationFieldDisplay(
+  draft: string | undefined,
+  value: number | null | undefined
+): string {
+  return draft !== undefined ? draft : formatEntryTimeDisplay(value)
+}
+
+/** Keystroke: keep the raw draft, update the model when the text is a complete duration. */
+export function onEntryDurationKeystroke(
+  raw: string,
+  assign: (value: number | null) => void
+): { draft: string; formatError: string | null } {
+  const result = parseEntryFormDuration(raw)
+  if (result.status === 'incomplete') return { draft: raw, formatError: null }
+  if (result.status === 'empty') {
+    assign(null)
+    return { draft: raw, formatError: null }
+  }
+  if (result.status === 'invalid') return { draft: raw, formatError: result.error }
+  assign(result.value)
+  return { draft: raw, formatError: null }
+}
+
 /** Blur path: empty, a parsed duration, or the format error. */
 export function finalizeEntryFormDuration(raw: string): DurationParseResult {
   const trimmed = raw.trim()
@@ -79,6 +112,45 @@ export function finalizeEntryFormDuration(raw: string): DurationParseResult {
   const parsed = parseImportDuration(trimmed)
   if (parsed === null) return { status: 'invalid', error: ENTRY_TIME_FORMAT_ERROR }
   return { status: 'ok', value: parsed }
+}
+
+/** Blur: normalize/format the model. Invalid input keeps the last good value. */
+export function onEntryDurationBlur(
+  raw: string,
+  getValue: () => number | null | undefined,
+  assign: (value: number | null) => void
+): { display: string; formatError: string | null } {
+  const finalized = finalizeEntryFormDuration(raw)
+  if (finalized.status === 'ok') {
+    assign(finalized.value)
+    return { display: formatEntryTimeDisplay(finalized.value), formatError: null }
+  }
+  if (finalized.status === 'empty') {
+    assign(null)
+    return { display: '', formatError: null }
+  }
+  return { display: formatEntryTimeDisplay(getValue()), formatError: ENTRY_TIME_FORMAT_ERROR }
+}
+
+/**
+ * Commit leftover focused drafts before save so Enter-to-submit cannot skip blur.
+ * Returns field → format error for any genuinely invalid leftover text.
+ */
+export function commitDurationDrafts(
+  drafts: Record<string, string>,
+  getValue: (field: string) => number | null | undefined,
+  assign: (field: string, value: number | null) => void
+): { ok: boolean; errors: Record<string, string> } {
+  const errors: Record<string, string> = {}
+  const fields = Object.keys(drafts)
+  for (const field of fields) {
+    const raw = drafts[field]
+    if (raw === undefined) continue
+    const result = onEntryDurationBlur(raw, () => getValue(field), (value) => assign(field, value))
+    delete drafts[field]
+    if (result.formatError) errors[field] = result.formatError
+  }
+  return { ok: Object.keys(errors).length === 0, errors }
 }
 
 const EXCEEDS_TOTAL_LABEL: Record<string, string> = {

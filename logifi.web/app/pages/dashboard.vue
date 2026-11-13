@@ -1995,7 +1995,7 @@
                   <div>
                     <label for="edit-sim-time" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
                     <input id="edit-sim-time" :aria-invalid="editFieldAriaInvalid('sim-time')" :aria-describedby="editFieldDescribedBy('sim-time')"
-                      :value="getSimTimeDisplayValue(inlineEditEntry)"
+                      :value="editDurationDisplay('sim-time', simTimeHours(inlineEditEntry))"
                       type="text"
                       inputmode="decimal"
                       placeholder="0.0"
@@ -2021,7 +2021,7 @@
                   <div>
                     <label for="edit-simulatedInstrument" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Simulated instrument (hrs)</label>
                     <input id="edit-simulatedInstrument" :aria-invalid="editFieldAriaInvalid('simulatedInstrument')" :aria-describedby="editFieldDescribedBy('simulatedInstrument')"
-                      :value="formatEntryTimeDisplay(inlineEditEntry?.flightTime.simulatedInstrument)"
+                      :value="editDurationDisplay('simulatedInstrument', inlineEditEntry?.flightTime.simulatedInstrument)"
                       type="text"
                       inputmode="decimal"
                       placeholder="0.0"
@@ -2040,7 +2040,7 @@
                   <div>
                     <label for="edit-dual" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Dual Rcvd (hrs)</label>
                     <input id="edit-dual" :aria-invalid="editFieldAriaInvalid('dual')" :aria-describedby="editFieldDescribedBy('dual')"
-                      :value="formatEntryTimeDisplay(inlineEditEntry?.flightTime.dual)"
+                      :value="editDurationDisplay('dual', inlineEditEntry?.flightTime.dual)"
                       type="text"
                       inputmode="decimal"
                       placeholder="0.0"
@@ -2059,7 +2059,7 @@
                   <div v-if="pilotProfile.enableMilitaryFields">
                     <label for="edit-night" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night (hrs)</label>
                     <input id="edit-night" :aria-invalid="editFieldAriaInvalid('night')" :aria-describedby="editFieldDescribedBy('night')"
-                      :value="formatEntryTimeDisplay(inlineEditEntry?.flightTime.night)"
+                      :value="editDurationDisplay('night', inlineEditEntry?.flightTime.night)"
                       type="text"
                       inputmode="decimal"
                       placeholder="0.0"
@@ -2078,7 +2078,7 @@
                   <div v-if="pilotProfile.enableMilitaryFields">
                     <label for="edit-nvg" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">NVG (hrs)</label>
                     <input id="edit-nvg" :aria-invalid="editFieldAriaInvalid('nvg')" :aria-describedby="editFieldDescribedBy('nvg')"
-                      :value="formatEntryTimeDisplay(inlineEditEntry?.flightTime.nvg)"
+                      :value="editDurationDisplay('nvg', inlineEditEntry?.flightTime.nvg)"
                       type="text"
                       inputmode="decimal"
                       placeholder="0.0"
@@ -2451,7 +2451,7 @@
               <div class="entry-grid-time-col">
                 <label for="edit-categoryClassTime" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
                 <input id="edit-categoryClassTime" :aria-invalid="editFieldAriaInvalid('categoryClassTime')" :aria-describedby="editFieldDescribedBy('categoryClassTime')"
-                  :value="formatEntryTimeDisplay(inlineEditEntry.categoryClassTime)"
+                  :value="editDurationDisplay('categoryClassTime', inlineEditEntry.categoryClassTime)"
                   type="text"
                   inputmode="decimal"
                   placeholder="0.0"
@@ -2480,7 +2480,7 @@
                     {{ mainTimeShortLabels[field.key] ?? field.label }}
                   </label>
                   <input :id="'edit-time-' + field.key" :aria-invalid="editFieldAriaInvalid(field.key)" :aria-describedby="editFieldDescribedBy(field.key)"
-                    :value="formatEntryTimeDisplay(inlineEditEntry.flightTime[field.key])"
+                    :value="editDurationDisplay(field.key, inlineEditEntry.flightTime[field.key])"
                     type="text"
                     inputmode="decimal"
                     placeholder="0.0"
@@ -3160,7 +3160,7 @@
                       <div>
                         <label for="entry-sim-time" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
                         <input id="entry-sim-time" :aria-invalid="addFieldAriaInvalid('sim-time')" :aria-describedby="addFieldDescribedBy('sim-time')"
-                          :value="getSimTimeDisplayValue(newEntry)"
+                          :value="addDurationDisplay('sim-time', simTimeHours(newEntry))"
                           type="text"
                           inputmode="decimal"
                           placeholder="0.0"
@@ -3186,7 +3186,7 @@
                       <div>
                         <label for="entry-simulatedInstrument" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Simulated instrument (hrs)</label>
                         <input id="entry-simulatedInstrument" :aria-invalid="addFieldAriaInvalid('simulatedInstrument')" :aria-describedby="addFieldDescribedBy('simulatedInstrument')"
-                          :value="formatEntryTimeDisplay(newEntry.flightTime.simulatedInstrument)"
+                          :value="addDurationDisplay('simulatedInstrument', newEntry.flightTime.simulatedInstrument)"
                           type="text"
                           inputmode="decimal"
                           placeholder="0.0"
@@ -3203,7 +3203,7 @@
                       <div>
                         <label for="entry-dual" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Dual Rcvd (hrs)</label>
                         <input id="entry-dual" :aria-invalid="addFieldAriaInvalid('dual')" :aria-describedby="addFieldDescribedBy('dual')"
-                          :value="formatEntryTimeDisplay(newEntry.flightTime.dual)"
+                          :value="addDurationDisplay('dual', newEntry.flightTime.dual)"
                           type="text"
                           inputmode="decimal"
                           placeholder="0.0"
@@ -3220,7 +3220,7 @@
                       <div v-if="pilotProfile.enableMilitaryFields">
                         <label for="entry-night" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night (hrs)</label>
                         <input id="entry-night" :aria-invalid="addFieldAriaInvalid('night')" :aria-describedby="addFieldDescribedBy('night')"
-                          :value="formatEntryTimeDisplay(newEntry.flightTime.night)"
+                          :value="addDurationDisplay('night', newEntry.flightTime.night)"
                           type="text"
                           inputmode="decimal"
                           placeholder="0.0"
@@ -3237,7 +3237,7 @@
                       <div v-if="pilotProfile.enableMilitaryFields">
                         <label for="entry-nvg" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">NVG (hrs)</label>
                         <input id="entry-nvg" :aria-invalid="addFieldAriaInvalid('nvg')" :aria-describedby="addFieldDescribedBy('nvg')"
-                          :value="formatEntryTimeDisplay(newEntry.flightTime.nvg)"
+                          :value="addDurationDisplay('nvg', newEntry.flightTime.nvg)"
                           type="text"
                           inputmode="decimal"
                           placeholder="0.0"
@@ -3665,7 +3665,7 @@
                 <div class="entry-grid-time-col">
                   <label for="entry-categoryClassTime" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
                   <input id="entry-categoryClassTime" :aria-invalid="addFieldAriaInvalid('categoryClassTime')" :aria-describedby="addFieldDescribedBy('categoryClassTime')"
-                    :value="formatEntryTimeDisplay(newEntry.categoryClassTime)"
+                    :value="addDurationDisplay('categoryClassTime', newEntry.categoryClassTime)"
                     type="text"
                     inputmode="decimal"
                     placeholder="0.0"
@@ -3694,7 +3694,7 @@
                       {{ mainTimeShortLabels[field.key] ?? field.label }}
                     </label>
                     <input :id="'entry-time-' + field.key" :aria-invalid="addFieldAriaInvalid(field.key)" :aria-describedby="addFieldDescribedBy(field.key)"
-                      :value="formatEntryTimeDisplay(newEntry.flightTime[field.key])"
+                      :value="addDurationDisplay(field.key, newEntry.flightTime[field.key])"
                       type="text"
                       inputmode="decimal"
                       :placeholder="'0.0'"
@@ -6792,11 +6792,11 @@ import { useAuth } from '../composables/useAuth'
 import { useDataIntegrity } from '../composables/useDataIntegrity'
 import { useValidation } from '../composables/useValidation'
 import {
-  applyEntryFormDurationInput,
-  ENTRY_TIME_FORMAT_ERROR,
+  commitDurationDrafts,
+  durationFieldDisplay,
   fieldErrorMessage,
-  finalizeEntryFormDuration,
-  parseEntryFormDuration,
+  onEntryDurationBlur,
+  onEntryDurationKeystroke,
 } from '../utils/entryFormFieldValidation'
 import { useOffline } from '../composables/useOffline'
 import { useToast } from '../composables/useToast'
@@ -9153,6 +9153,19 @@ async function saveInlineEdit(): Promise<boolean> {
   }
 
   applyTailResolutionToEntry(inlineEditEntry.value)
+
+  const editDurationCommit = commitDurationDrafts(
+    editFormDurationDrafts,
+    editDurationValue,
+    assignEditDurationField
+  )
+  if (!editDurationCommit.ok) {
+    for (const [field, err] of Object.entries(editDurationCommit.errors)) {
+      editFormTouched[field] = true
+      editFormTimeFormatErrors[field] = err
+    }
+    return false
+  }
 
   // Debug logging for night time
   console.log('[SaveInlineEdit] Saving entry with night time:', {
@@ -13145,9 +13158,11 @@ function fillFieldWithTotalTime(fieldKey: FlightTimeKey, totalTime: number | nul
   
   if (isInline && inlineEditEntry.value) {
     inlineEditEntry.value.flightTime[fieldKey] = totalTime
+    delete editFormDurationDrafts[fieldKey]
     if (fieldKey === 'night') editFormTouched.night = true
   } else {
     newEntry.flightTime[fieldKey] = totalTime
+    delete addFormDurationDrafts[fieldKey]
     if (fieldKey === 'night') addFormTouched.night = true
   }
 }
@@ -13188,21 +13203,92 @@ function setSimType(entry: { flightTime: { ffs?: number | null; ftd?: number | n
   }
 }
 
-function formatEntryTimeDisplay(value: number | null | undefined): string {
-  if (value === null || value === undefined) return ''
-  return Number(value).toFixed(1)
-}
-
 const addFormTouched = reactive<Record<string, boolean>>({})
 const editFormTouched = reactive<Record<string, boolean>>({})
 const addFormTimeFormatErrors = reactive<Record<string, string | null>>({})
 const editFormTimeFormatErrors = reactive<Record<string, string | null>>({})
+const addFormDurationDrafts = reactive<Record<string, string>>({})
+const editFormDurationDrafts = reactive<Record<string, string>>({})
+
+function clearDurationDrafts(drafts: Record<string, string>): void {
+  for (const key of Object.keys(drafts)) delete drafts[key]
+}
 
 function clearEntryFormFieldUi(): void {
   for (const key of Object.keys(addFormTouched)) delete addFormTouched[key]
   for (const key of Object.keys(editFormTouched)) delete editFormTouched[key]
   for (const key of Object.keys(addFormTimeFormatErrors)) delete addFormTimeFormatErrors[key]
   for (const key of Object.keys(editFormTimeFormatErrors)) delete editFormTimeFormatErrors[key]
+  clearDurationDrafts(addFormDurationDrafts)
+  clearDurationDrafts(editFormDurationDrafts)
+}
+
+function addDurationDisplay(field: string, value: number | null | undefined): string {
+  return durationFieldDisplay(addFormDurationDrafts[field], value)
+}
+
+function editDurationDisplay(field: string, value: number | null | undefined): string {
+  return durationFieldDisplay(editFormDurationDrafts[field], value)
+}
+
+function simTimeHours(entry: { flightTime: { ffs?: number | null; ftd?: number | null; atd?: number | null } } | null): number | null {
+  if (!entry) return null
+  const sel = getSelectedSimType(entry)
+  if (!sel) return null
+  return entry.flightTime[sel.toLowerCase() as 'ffs' | 'ftd' | 'atd'] ?? null
+}
+
+function assignAddDurationField(field: string, value: number | null): void {
+  if (field === 'categoryClassTime') {
+    newEntry.categoryClassTime = value
+    return
+  }
+  if (field === 'sim-time') {
+    const sel = getSelectedSimType(newEntry)
+    if (!sel) return
+    const key = sel.toLowerCase() as 'ffs' | 'ftd' | 'atd'
+    newEntry.flightTime[key] = value
+    newEntry.flightTime.total = value
+    syncSimRoleTime(newEntry)
+    return
+  }
+  if (field === 'crossCountry') {
+    newEntry.flightTime.crossCountry = value
+    if (value === null) setXcTimeManuallySet(false)
+    return
+  }
+  ;(newEntry.flightTime as Record<string, number | null>)[field] = value
+}
+
+function addDurationValue(field: string): number | null | undefined {
+  if (field === 'categoryClassTime') return newEntry.categoryClassTime
+  if (field === 'sim-time') return simTimeHours(newEntry)
+  return newEntry.flightTime[field as FlightTimeKey]
+}
+
+function assignEditDurationField(field: string, value: number | null): void {
+  if (!inlineEditEntry.value) return
+  if (field === 'categoryClassTime') {
+    inlineEditEntry.value.categoryClassTime = value
+    return
+  }
+  if (field === 'sim-time') {
+    const sel = getSelectedSimType(inlineEditEntry.value)
+    if (!sel) return
+    const key = sel.toLowerCase() as 'ffs' | 'ftd' | 'atd'
+    inlineEditEntry.value.flightTime[key] = value
+    inlineEditEntry.value.flightTime.total = value
+    syncSimRoleTime(inlineEditEntry.value)
+    return
+  }
+  ;(inlineEditEntry.value.flightTime as Record<string, number | null>)[field] = value
+}
+
+function editDurationValue(field: string): number | null | undefined {
+  if (!inlineEditEntry.value) return null
+  if (field === 'categoryClassTime') return inlineEditEntry.value.categoryClassTime
+  if (field === 'sim-time') return simTimeHours(inlineEditEntry.value)
+  return inlineEditEntry.value.flightTime[field as FlightTimeKey]
 }
 
 function asValidatableEntry(source: EditableLogEntry, id: string): LogEntry {
@@ -13249,17 +13335,17 @@ function onEditFieldBlur(field: string): void {
 function onAddDurationInput(field: string, e: Event, assign: (value: number | null) => void): void {
   if (field === 'night') addFormTouched.night = true
   const input = e.target as HTMLInputElement
-  const err = applyEntryFormDurationInput(input.value, assign)
-  if (err) addFormTimeFormatErrors[field] = err
-  else if (parseEntryFormDuration(input.value).status !== 'incomplete') addFormTimeFormatErrors[field] = null
+  const { draft, formatError } = onEntryDurationKeystroke(input.value, assign)
+  addFormDurationDrafts[field] = draft
+  addFormTimeFormatErrors[field] = formatError
 }
 
 function onEditDurationInput(field: string, e: Event, assign: (value: number | null) => void): void {
   if (field === 'night') editFormTouched.night = true
   const input = e.target as HTMLInputElement
-  const err = applyEntryFormDurationInput(input.value, assign)
-  if (err) editFormTimeFormatErrors[field] = err
-  else if (parseEntryFormDuration(input.value).status !== 'incomplete') editFormTimeFormatErrors[field] = null
+  const { draft, formatError } = onEntryDurationKeystroke(input.value, assign)
+  editFormDurationDrafts[field] = draft
+  editFormTimeFormatErrors[field] = formatError
 }
 
 function onAddDurationBlur(
@@ -13270,19 +13356,10 @@ function onAddDurationBlur(
 ): void {
   addFormTouched[field] = true
   const input = e.target as HTMLInputElement
-  const finalized = finalizeEntryFormDuration(input.value)
-  if (finalized.status === 'ok') {
-    addFormTimeFormatErrors[field] = null
-    assign(finalized.value)
-    input.value = formatEntryTimeDisplay(finalized.value)
-  } else if (finalized.status === 'empty') {
-    addFormTimeFormatErrors[field] = null
-    assign(null)
-    input.value = ''
-  } else {
-    addFormTimeFormatErrors[field] = ENTRY_TIME_FORMAT_ERROR
-    input.value = formatEntryTimeDisplay(getValue())
-  }
+  const { display, formatError } = onEntryDurationBlur(input.value, getValue, assign)
+  delete addFormDurationDrafts[field]
+  addFormTimeFormatErrors[field] = formatError
+  input.value = display
 }
 
 function onEditDurationBlur(
@@ -13293,19 +13370,10 @@ function onEditDurationBlur(
 ): void {
   editFormTouched[field] = true
   const input = e.target as HTMLInputElement
-  const finalized = finalizeEntryFormDuration(input.value)
-  if (finalized.status === 'ok') {
-    editFormTimeFormatErrors[field] = null
-    assign(finalized.value)
-    input.value = formatEntryTimeDisplay(finalized.value)
-  } else if (finalized.status === 'empty') {
-    editFormTimeFormatErrors[field] = null
-    assign(null)
-    input.value = ''
-  } else {
-    editFormTimeFormatErrors[field] = ENTRY_TIME_FORMAT_ERROR
-    input.value = formatEntryTimeDisplay(getValue())
-  }
+  const { display, formatError } = onEntryDurationBlur(input.value, getValue, assign)
+  delete editFormDurationDrafts[field]
+  editFormTimeFormatErrors[field] = formatError
+  input.value = display
 }
 
 function onSimTimeInput(isInline: boolean, e: Event): void {
@@ -13368,13 +13436,6 @@ function applyImportSimTypeOverrides(): void {
 function persistSimDeviceCatalog(): void {
   savePilotProfilePrefs()
   savePilotProfileToSupabase()
-}
-
-function getSimTimeDisplayValue(entry: { flightTime: { ffs?: number | null; ftd?: number | null; atd?: number | null } }): string {
-  const sel = getSelectedSimType(entry)
-  if (!sel) return ''
-  const v = entry.flightTime[sel.toLowerCase() as 'ffs' | 'ftd' | 'atd']
-  return formatEntryTimeDisplay(v)
 }
 
 /** Distribute sim session time into pic/sic/dual/solo based on role. */
@@ -15989,6 +16050,19 @@ async function submitEntry(): Promise<void> {
   applyTailResolutionToEntry(newEntry)
   // Don't reset validationWarning or saveAnywayValidation here - they need to persist
   // so that "Save Anyway" can work. They'll be cleared after successful save.
+
+  const addDurationCommit = commitDurationDrafts(
+    addFormDurationDrafts,
+    addDurationValue,
+    assignAddDurationField
+  )
+  if (!addDurationCommit.ok) {
+    for (const [field, err] of Object.entries(addDurationCommit.errors)) {
+      addFormTouched[field] = true
+      addFormTimeFormatErrors[field] = err
+    }
+    return
+  }
   
   const baseEntry: Omit<LogEntry, 'id'> = {
     date: newEntry.date,
