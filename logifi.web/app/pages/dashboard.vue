@@ -15,7 +15,8 @@
     :dismissible="!isIos"
     :initial-tab="authInitialTab"
     :referral-open-count="referralOpenCount"
-    @close="showAuthModal = false"
+    :notice="authNotice"
+    @close="onAuthModalClose"
     @success="showAuthModal = false"
   />
 
@@ -7225,6 +7226,7 @@ const syncStatusTitle = computed(() => {
 })
 
 const showAuthModal = ref(false)
+const authNotice = ref<string | null>(null)
 const authInitialTab = ref<'signin' | 'signup'>('signin')
 const referralOpenCount = ref(0)
 const route = useRoute()
@@ -7374,6 +7376,11 @@ const handleLogout = async () => {
   }
 }
 
+function onAuthModalClose() {
+  showAuthModal.value = false
+  authNotice.value = null
+}
+
 /** After server-side account deletion — local auth already cleared. */
 const handleAccountDeleted = () => {
   stopBackgroundSync()
@@ -7382,12 +7389,14 @@ const handleAccountDeleted = () => {
   closeSettings()
   dashboardFcvConnected.value = false
   showFcvFetchPanel.value = false
+  authNotice.value = 'Your account has been deleted.'
+  authInitialTab.value = 'signin'
   if (isIos.value) {
     showAuthModal.value = true
-    router.push('/dashboard')
+    void router.replace('/dashboard')
   } else {
     showAuthModal.value = false
-    router.push('/?from=app')
+    void router.replace('/login?account_deleted=1')
   }
 }
 

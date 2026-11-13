@@ -28,11 +28,13 @@ function routeHasAuthCallback(to: {
 }
 
 function rememberReferralQuery(query: Record<string, unknown>) {
-  const raw = query.ref
-  const value = Array.isArray(raw) ? raw[0] : raw
-  if (typeof value !== 'string' || !value) return
-  const code = captureReferralFromSearch(`?ref=${encodeURIComponent(value)}`)
-  if (code) storeReferralCode(code)
+  for (const key of ['ref', 'referral'] as const) {
+    const raw = query[key]
+    const value = Array.isArray(raw) ? raw[0] : raw
+    if (typeof value !== 'string' || !value) continue
+    const code = captureReferralFromSearch(`?${key}=${encodeURIComponent(value)}`)
+    if (code) storeReferralCode(code)
+  }
 }
 
 export default defineNuxtRouteMiddleware((to) => {
