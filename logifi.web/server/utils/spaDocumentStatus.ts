@@ -28,6 +28,7 @@ const EXACT_APP_PATHS = new Set([
   '/privacy',
   '/reset-password',
   '/terms',
+  '/totals-report',
 ])
 
 const DYNAMIC_APP_PATHS = [
