@@ -187,6 +187,14 @@
         :is-dark-mode="isDarkMode"
         @click="entryCount > 0 && $emit('generate-8710')"
       />
+      <SettingsListRow
+        label="Totals report"
+        subtitle="Airline application flight-time totals"
+        icon="ri:table-line"
+        :is-dark-mode="isDarkMode"
+        to="/totals-report"
+        @click="$emit('close')"
+      />
     </SettingsListGroup>
   </div>
 </template>
