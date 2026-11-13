@@ -17,6 +17,13 @@
           <p class="text-sm font-bold uppercase tracking-wide text-blue-400">Logifi</p>
           <p class="mt-2 text-5xl font-bold text-gray-100">$0</p>
           <p class="text-gray-300 mt-2 text-lg">No charge for the core logbook.</p>
+          <button
+            type="button"
+            class="btn-cta-primary mt-6 min-h-11 w-full sm:w-auto px-6 py-3 bg-blue-600 text-white text-base font-bold rounded-lg hover:bg-blue-700 transition-all border border-blue-500/50 active:scale-[0.98]"
+            @click="openAuth('signup')"
+          >
+            <span class="relative z-10">Start free</span>
+          </button>
         </div>
 
         <div class="border-t border-gray-800/50 pt-8">
@@ -40,11 +47,6 @@
           </ul>
         </div>
 
-        <p class="text-lg text-gray-300 leading-relaxed border-t border-gray-800/50 pt-8">
-          If we add paid plans later, we'll show price, billing, renewals, trials, how to cancel, and
-          refunds before you pay—same idea as in our
-          <NuxtLink to="/terms?from=landing" class="text-blue-400 font-bold hover:text-blue-300 transition-colors">Terms</NuxtLink>.
-        </p>
       </div>
     </main>
 

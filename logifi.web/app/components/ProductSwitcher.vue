@@ -1,5 +1,10 @@
 <template>
-  <div class="inline-flex rounded-xl border shadow-sm overflow-hidden font-quicksand" :class="borderClass">
+  <div
+    class="inline-flex rounded-xl border shadow-sm overflow-hidden font-quicksand"
+    :class="borderClass"
+    role="group"
+    :aria-labelledby="labelledBy || undefined"
+  >
     <NuxtLink
       to="/"
       :class="[
@@ -37,6 +42,8 @@ import { resolveDigifiAppRoute } from '~/utils/digifiMobileReview'
 const props = defineProps<{
   activeProduct: 'logifi' | 'digifi'
   isDark?: boolean
+  /** Id of visible label describing this control (marketing landing). */
+  labelledBy?: string
 }>()
 
 const { isIos } = useCapacitorPlatform()
