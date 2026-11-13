@@ -5,6 +5,7 @@ import {
   calculatePassengerCurrency,
   calculateNightCurrency,
   calculateInstrumentCurrency,
+  calculateFlightReview,
   calculateAnnualRequirements
 } from '~/utils/currencyCalculator'
 
@@ -12,6 +13,7 @@ export const useCurrency = () => {
   const passengerCurrency: Ref<CurrencyStatus | null> = ref(null)
   const nightCurrency: Ref<CurrencyStatus | null> = ref(null)
   const instrumentCurrency: Ref<CurrencyStatus | null> = ref(null)
+  const flightReviewCurrency: Ref<CurrencyStatus | null> = ref(null)
   const annualRequirements: Ref<AnnualCurrencyStatus | null> = ref(null)
   const isLoading = ref(false)
   const error = ref<string | null>(null)
@@ -29,16 +31,17 @@ export const useCurrency = () => {
       passengerCurrency.value = calculatePassengerCurrency(entries, referenceDate)
       nightCurrency.value = calculateNightCurrency(entries, referenceDate)
       instrumentCurrency.value = calculateInstrumentCurrency(entries, referenceDate)
+      flightReviewCurrency.value = calculateFlightReview(entries, referenceDate)
       annualRequirements.value = calculateAnnualRequirements(entries, referenceDate)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to calculate currency'
       error.value = errorMessage
       console.error('Error calculating currency:', err)
-      
-      // Reset all currency values on error
+
       passengerCurrency.value = null
       nightCurrency.value = null
       instrumentCurrency.value = null
+      flightReviewCurrency.value = null
       annualRequirements.value = null
     } finally {
       isLoading.value = false
@@ -52,6 +55,7 @@ export const useCurrency = () => {
     passengerCurrency.value = null
     nightCurrency.value = null
     instrumentCurrency.value = null
+    flightReviewCurrency.value = null
     annualRequirements.value = null
     error.value = null
   }
@@ -62,16 +66,17 @@ export const useCurrency = () => {
     if (passengerCurrency.value?.isCurrent) count++
     if (nightCurrency.value?.isCurrent) count++
     if (instrumentCurrency.value?.isCurrent) count++
-    if (annualRequirements.value?.isCurrent) count++
+    if (flightReviewCurrency.value?.isCurrent) count++
     return count
   })
 
-  const totalCurrencyTypes = computed(() => 4) // passenger, night, instrument, annual
+  const totalCurrencyTypes = computed(() => 4) // passenger, night, instrument, flight review
 
   const hasAnyCurrency = computed(() => {
     return passengerCurrency.value !== null ||
            nightCurrency.value !== null ||
            instrumentCurrency.value !== null ||
+           flightReviewCurrency.value !== null ||
            annualRequirements.value !== null
   })
 
@@ -79,6 +84,7 @@ export const useCurrency = () => {
     passengerCurrency,
     nightCurrency,
     instrumentCurrency,
+    flightReviewCurrency,
     annualRequirements,
     isLoading,
     error,

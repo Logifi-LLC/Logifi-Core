@@ -114,6 +114,7 @@
     :passenger-currency="passengerCurrency"
     :night-currency="nightCurrency"
     :instrument-currency="instrumentCurrency"
+    :flight-review-currency="flightReviewCurrency"
     :annual-requirements="annualRequirements"
     :is-loading="isLoadingCurrency"
     :error="currencyError"
@@ -1127,6 +1128,7 @@
                 :passenger-currency="passengerCurrency"
                 :night-currency="nightCurrency"
                 :instrument-currency="instrumentCurrency"
+                :flight-review-currency="flightReviewCurrency"
                 :insufficient-history="currencyHistoryInsufficient"
                 :is-dark-mode="isDarkMode"
                 @open="showCurrencyDashboard = true"
@@ -7264,6 +7266,7 @@ const {
   passengerCurrency,
   nightCurrency,
   instrumentCurrency,
+  flightReviewCurrency,
   annualRequirements,
   isLoading: isLoadingCurrency,
   error: currencyError,

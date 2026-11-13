@@ -3,6 +3,7 @@ import {
   calculatePassengerCurrency,
   calculateNightCurrency,
   calculateInstrumentCurrency,
+  calculateFlightReview,
   calculateAnnualRequirements,
   formatCurrencyChip,
   formatCurrencyChipDate,
@@ -172,6 +173,57 @@ describe('currencyCalculator', () => {
       expect(result.isCurrent).toBe(true)
       expect(result.status).toBe('expiring_soon')
     })
+
+    // 14 CFR 61.57(a): night full-stop landings count toward the 3 takeoffs/landings.
+    it('counts night landings toward 61.57(a) passenger currency', () => {
+      const today = new Date(2024, 2, 15)
+      const entries = [
+        createTestEntry({
+          date: '2024-03-01',
+          performance: {
+            dayTakeoffs: 0,
+            dayLandings: 0,
+            nightTakeoffs: 3,
+            nightLandings: 3,
+            approachCount: null,
+            holdingProcedures: null,
+          },
+        }),
+      ]
+      const result = calculatePassengerCurrency(entries, today)
+      expect(result.isCurrent).toBe(true)
+      expect(result.landings).toBe(3)
+      expect(result.takeoffs).toBeGreaterThanOrEqual(3)
+    })
+
+    it('includes a landing on the 90th preceding day and excludes the 91st (leap-year window)', () => {
+      // 2024-03-01 minus 90 days = 2023-12-02 (Feb 2024 has 29 days).
+      const today = new Date(2024, 2, 1)
+      const onBoundary = createTestEntry({
+        date: '2023-12-02',
+        performance: {
+          dayTakeoffs: 3,
+          dayLandings: 3,
+          nightTakeoffs: null,
+          nightLandings: null,
+          approachCount: null,
+          holdingProcedures: null,
+        },
+      })
+      const tooOld = createTestEntry({
+        date: '2023-12-01',
+        performance: {
+          dayTakeoffs: 10,
+          dayLandings: 10,
+          nightTakeoffs: null,
+          nightLandings: null,
+          approachCount: null,
+          holdingProcedures: null,
+        },
+      })
+      expect(calculatePassengerCurrency([onBoundary], today).isCurrent).toBe(true)
+      expect(calculatePassengerCurrency([tooOld], today).isCurrent).toBe(false)
+    })
   })
 
   describe('calculateNightCurrency', () => {
@@ -235,6 +287,76 @@ describe('currencyCalculator', () => {
       
       expect(result.isCurrent).toBe(true)
       expect(result.qualifyingEntries.length).toBe(1)
+    })
+
+    // 14 CFR 61.57(b): day landings do not satisfy night passenger-carrying currency.
+    it('does not count day landings toward night currency', () => {
+      const today = new Date(2024, 2, 15)
+      const entries = [
+        createTestEntry({
+          date: '2024-03-01',
+          performance: {
+            dayTakeoffs: 5,
+            dayLandings: 5,
+            nightTakeoffs: 0,
+            nightLandings: 0,
+            approachCount: null,
+            holdingProcedures: null,
+          },
+        }),
+      ]
+      const result = calculateNightCurrency(entries, today)
+      expect(result.isCurrent).toBe(false)
+      expect(result.landings).toBe(0)
+    })
+
+    it('treats three logged night landings as full-stop 61.57(b) landings', () => {
+      const today = new Date(2024, 2, 15)
+      const entries = [
+        createTestEntry({
+          date: '2024-03-01',
+          flightTime: {
+            total: 1.0,
+            pic: 1.0,
+            sic: null,
+            dual: null,
+            solo: null,
+            night: 1.0,
+            actualInstrument: null,
+            simulatedInstrument: null,
+            crossCountry: null,
+          },
+          performance: {
+            dayTakeoffs: 0,
+            dayLandings: 0,
+            nightTakeoffs: 0,
+            nightLandings: 3,
+            approachCount: null,
+            holdingProcedures: null,
+          },
+        }),
+      ]
+      const result = calculateNightCurrency(entries, today)
+      expect(result.isCurrent).toBe(true)
+      expect(result.landings).toBe(3)
+    })
+
+    it('uses a 90-day window that includes Feb 29 of a leap year', () => {
+      const today = new Date(2024, 4, 29) // 2024-05-29
+      const leapNight = createTestEntry({
+        date: '2024-02-29',
+        performance: {
+          dayTakeoffs: 0,
+          dayLandings: 0,
+          nightTakeoffs: 3,
+          nightLandings: 3,
+          approachCount: null,
+          holdingProcedures: null,
+        },
+      })
+      expect(calculateNightCurrency([leapNight], today).isCurrent).toBe(true)
+      const afterWindow = new Date(2024, 4, 30) // 90 days after Feb 29 is May 29
+      expect(calculateNightCurrency([leapNight], afterWindow).isCurrent).toBe(false)
     })
   })
 
@@ -310,37 +432,207 @@ describe('currencyCalculator', () => {
       expect(result.approaches).toBeGreaterThanOrEqual(6)
       expect(result.holdingProcedures).toBeGreaterThan(0)
     })
+
+    function instrumentPack(date: string, extra: Partial<LogEntry> = {}): LogEntry {
+      return createTestEntry({
+        date,
+        flightConditions: ['IFR'],
+        performance: {
+          dayTakeoffs: 0,
+          dayLandings: 0,
+          nightTakeoffs: null,
+          nightLandings: null,
+          approachCount: 6,
+          holdingProcedures: 1,
+        },
+        ...extra,
+      })
+    }
+
+    function expectYmd(date: Date, ymd: string) {
+      expect(localYmd(date)).toBe(ymd)
+    }
+
+    // 14 CFR 61.57(c): 6 calendar months, through the end of the 6th calendar month.
+    it('stays current through the last day of the 6th calendar month, not a rolling 6-month date', () => {
+      const pack = [instrumentPack('2024-01-31')]
+      const lastDay = calculateInstrumentCurrency(pack, new Date(2024, 6, 31))
+      expect(lastDay.isCurrent).toBe(true)
+      expect(lastDay.status).not.toBe('grace_period')
+      expectYmd(lastDay.expirationDate, '2024-07-31')
+
+      const nextDay = calculateInstrumentCurrency(pack, new Date(2024, 7, 1))
+      expect(nextDay.isCurrent).toBe(false)
+      expect(nextDay.status).toBe('grace_period')
+      expectYmd(nextDay.expirationDate, '2025-01-31')
+    })
+
+    it('uses the 6-calendar-month grace period then requires an IPC (61.57(d))', () => {
+      const pack = [instrumentPack('2024-01-15')]
+      const lastGraceDay = calculateInstrumentCurrency(pack, new Date(2025, 0, 31))
+      expect(lastGraceDay.isCurrent).toBe(false)
+      expect(lastGraceDay.status).toBe('grace_period')
+      expect(lastGraceDay.needsIpc).toBe(false)
+      expectYmd(lastGraceDay.expirationDate, '2025-01-31')
+
+      const needsIpc = calculateInstrumentCurrency(pack, new Date(2025, 1, 1))
+      expect(needsIpc.isCurrent).toBe(false)
+      expect(needsIpc.status).toBe('expired')
+      expect(needsIpc.needsIpc).toBe(true)
+    })
+
+    it('counts a structured IPC tag as restoring currency (61.57(d))', () => {
+      const entries = [
+        createTestEntry({
+          date: '2024-03-10',
+          tags: ['IPC'],
+        }),
+      ]
+      const stillCurrent = calculateInstrumentCurrency(entries, new Date(2024, 8, 30))
+      expect(stillCurrent.isCurrent).toBe(true)
+      expect(stillCurrent.restoredByIpc).toBe(true)
+      expectYmd(stillCurrent.expirationDate, '2024-09-30')
+
+      const grace = calculateInstrumentCurrency(entries, new Date(2024, 9, 1))
+      expect(grace.status).toBe('grace_period')
+      expectYmd(grace.expirationDate, '2025-03-31')
+
+      const expired = calculateInstrumentCurrency(entries, new Date(2025, 3, 1))
+      expect(expired.needsIpc).toBe(true)
+    })
+
+    it('does not treat IPC in remarks as an IPC', () => {
+      const entries = [
+        createTestEntry({
+          date: '2024-03-10',
+          remarks: 'Completed IPC with examiner',
+        }),
+      ]
+      const result = calculateInstrumentCurrency(entries, new Date(2024, 3, 1))
+      expect(result.isCurrent).toBe(false)
+      expect(result.restoredByIpc).toBeFalsy()
+      expect(result.needsIpc).toBe(true)
+    })
+
+    it('handles leap-year end of the 6th calendar month (Aug 31 → Feb 29)', () => {
+      const pack = [instrumentPack('2023-08-31')]
+      const leapDay = calculateInstrumentCurrency(pack, new Date(2024, 1, 29))
+      expect(leapDay.isCurrent).toBe(true)
+      expectYmd(leapDay.expirationDate, '2024-02-29')
+
+      const march1 = calculateInstrumentCurrency(pack, new Date(2024, 2, 1))
+      expect(march1.isCurrent).toBe(false)
+      expect(march1.status).toBe('grace_period')
+    })
+
+    it('handles Feb 29 activity through August 31 of a leap year', () => {
+      const pack = [instrumentPack('2024-02-29')]
+      const aug31 = calculateInstrumentCurrency(pack, new Date(2024, 7, 31))
+      expect(aug31.isCurrent).toBe(true)
+      expectYmd(aug31.expirationDate, '2024-08-31')
+
+      const sep1 = calculateInstrumentCurrency(pack, new Date(2024, 8, 1))
+      expect(sep1.status).toBe('grace_period')
+    })
+  })
+
+  describe('calculateFlightReview (14 CFR 61.56)', () => {
+    it('asks to add a flight review when no structured tag exists', () => {
+      const today = new Date(2024, 5, 15)
+      const entries = [
+        createTestEntry({
+          date: '2024-01-01',
+          remarks: 'Completed flight review with CFI',
+          tags: ['Checkride'],
+        }),
+      ]
+      const result = calculateFlightReview(entries, today)
+      expect(result.status).toBe('missing')
+      expect(result.isCurrent).toBe(false)
+    })
+
+    it('is current through the last day of the 24th calendar month after the review month', () => {
+      const entries = [
+        createTestEntry({
+          date: '2024-01-15',
+          tags: ['Flight Review'],
+        }),
+      ]
+      const lastDay = calculateFlightReview(entries, new Date(2026, 0, 31))
+      expect(lastDay.isCurrent).toBe(true)
+      expect(localYmd(lastDay.expirationDate)).toBe('2026-01-31')
+
+      const nextDay = calculateFlightReview(entries, new Date(2026, 1, 1))
+      expect(nextDay.isCurrent).toBe(false)
+      expect(nextDay.status).toBe('expired')
+    })
+
+    it('uses the most recent Flight Review tag', () => {
+      const entries = [
+        createTestEntry({ date: '2022-01-01', tags: ['Flight Review'], id: 'old' }),
+        createTestEntry({ date: '2024-06-01', tags: ['Flight Review'], id: 'new' }),
+      ]
+      const result = calculateFlightReview(entries, new Date(2025, 0, 1))
+      expect(result.isCurrent).toBe(true)
+      expect(result.qualifyingEntries[0]?.id).toBe('new')
+      expect(localYmd(result.expirationDate)).toBe('2026-06-30')
+    })
+
+    it('handles a Feb 29 review through Feb 28 of the 24th calendar month', () => {
+      const entries = [
+        createTestEntry({
+          date: '2024-02-29',
+          tags: ['Flight Review'],
+        }),
+      ]
+      const lastDay = calculateFlightReview(entries, new Date(2026, 1, 28))
+      expect(lastDay.isCurrent).toBe(true)
+      expect(localYmd(lastDay.expirationDate)).toBe('2026-02-28')
+
+      const march1 = calculateFlightReview(entries, new Date(2026, 2, 1))
+      expect(march1.isCurrent).toBe(false)
+    })
+
+    it('matches Flight Review tags case-insensitively and ignores remarks', () => {
+      const tagged = calculateFlightReview(
+        [createTestEntry({ date: '2024-03-01', tags: ['flight review'] })],
+        new Date(2024, 5, 1)
+      )
+      expect(tagged.isCurrent).toBe(true)
+
+      const remarksOnly = calculateFlightReview(
+        [createTestEntry({ date: '2024-03-01', remarks: 'flight review done' })],
+        new Date(2024, 5, 1)
+      )
+      expect(remarksOnly.status).toBe('missing')
+    })
   })
 
   describe('calculateAnnualRequirements', () => {
-    it('should return current status by default', () => {
+    it('is missing when no Flight Review tag exists', () => {
       const result = calculateAnnualRequirements([])
-      
-      expect(result.isCurrent).toBe(true)
-      expect(result.status).toBe('current')
+
+      expect(result.isCurrent).toBe(false)
+      expect(result.status).toBe('missing')
+      expect(result.requirements).toEqual([])
     })
 
-    it('should filter entries within the last year', () => {
-      const entries: LogEntry[] = []
+    it('uses the tagged flight review, not untagged entries in the last year', () => {
       const today = new Date(2024, 2, 15)
-      
-      // Entry within last year
-      const recentDate = new Date(today)
-      recentDate.setMonth(recentDate.getMonth() - 6)
-      entries.push(createTestEntry({
-        date: localYmd(recentDate)
-      }))
-      
-      // Entry older than a year
-      const oldDate = new Date(today)
-      oldDate.setFullYear(oldDate.getFullYear() - 2)
-      entries.push(createTestEntry({
-        date: localYmd(oldDate)
-      }))
-      
+      const entries: LogEntry[] = [
+        createTestEntry({ date: '2023-09-01' }),
+        createTestEntry({
+          date: '2023-03-01',
+          tags: ['Flight Review'],
+        }),
+      ]
+
       const result = calculateAnnualRequirements(entries, today)
-      
-      expect(result.qualifyingEntries.length).toBe(1)
+
+      expect(result.isCurrent).toBe(true)
+      expect(result.status).toBe('current')
+      expect(result.qualifyingEntries).toHaveLength(1)
+      expect(result.qualifyingEntries[0]?.date).toBe('2023-03-01')
     })
   })
 
@@ -406,6 +698,37 @@ describe('currencyCalculator', () => {
           ref
         )
       ).toBe('90-day expired')
+    })
+
+    it('formats IFR grace and IPC-required expired', () => {
+      expect(
+        formatCurrencyChip(
+          'instrument',
+          status({
+            status: 'grace_period',
+            isCurrent: false,
+            expirationDate: new Date(2026, 0, 31, 12),
+          }),
+          ref
+        )
+      ).toBe('IFR grace until Jan 31')
+      expect(
+        formatCurrencyChip(
+          'instrument',
+          status({ status: 'expired', isCurrent: false, needsIpc: true, daysRemaining: 0 }),
+          ref
+        )
+      ).toBe('IFR expired, needs IPC')
+    })
+
+    it('formats missing flight review', () => {
+      expect(
+        formatCurrencyChip(
+          'flight_review',
+          status({ status: 'missing', isCurrent: false, daysRemaining: 0 }),
+          ref
+        )
+      ).toBe('Add your last flight review')
     })
 
     it('formats null currency as em dash', () => {
