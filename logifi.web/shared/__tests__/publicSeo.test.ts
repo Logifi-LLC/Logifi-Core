@@ -31,7 +31,7 @@ describe('public marketing pages', () => {
       `${CANONICAL_ORIGIN}/privacy`,
       `${CANONICAL_ORIGIN}/digifi`,
     ])
-    for (const appPath of ['/dashboard', '/logbook-builder', '/login', '/reset-password', '/auth/callback', '/digifi-eye', '/digifi-scan', '/totals-report']) {
+    for (const appPath of ['/dashboard', '/logbook-builder', '/logbook-check', '/login', '/reset-password', '/auth/callback', '/digifi-eye', '/digifi-scan', '/totals-report']) {
       expect(canonicalHrefForPath(appPath)).toBeNull()
     }
   })
@@ -50,6 +50,7 @@ describe('sitemap and robots', () => {
     for (const loc of publicCanonicalUrls()) expect(xml).toContain(`<loc>${loc}</loc>`)
     expect(xml).not.toContain('/dashboard')
     expect(xml).not.toContain('/logbook-builder')
+    expect(xml).not.toContain('/logbook-check')
     expect(xml).not.toContain('/login')
   })
 

@@ -6926,6 +6926,7 @@ import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGesture
 import { usePullToRefresh } from '../composables/usePullToRefresh'
 import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
 import { useDashboardShortcuts } from '../composables/useDashboardShortcuts'
+import { useDashboardEntryDeepLink } from '../composables/useDashboardEntryDeepLink'
 import AuthModal from '../components/AuthModal.vue'
 import { readStoredReferralCode } from '../utils/referralCapture'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
@@ -9109,6 +9110,12 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
     }
   }
 }
+
+useDashboardEntryDeepLink({
+  logEntries,
+  setActiveLogbook,
+  openEntry: (entry) => beginInlineEditing(entry),
+})
 
 function beginAmendSignedEntry(): void {
   const original = inlineEditEntry.value

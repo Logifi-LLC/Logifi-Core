@@ -23,6 +23,7 @@ const EXACT_APP_PATHS = new Set([
   '/integrations',
   '/login',
   '/logbook-builder',
+  '/logbook-check',
   '/signup',
   '/pricing',
   '/privacy',
