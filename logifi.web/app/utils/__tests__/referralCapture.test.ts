@@ -24,6 +24,7 @@ describe('referral capture', () => {
 
   it('reads ref from the landing URL and ignores a bad code', () => {
     expect(captureReferralFromSearch('?ref=abcd234h&utm=1')).toBe('ABCD234H')
+    expect(captureReferralFromSearch('?referral=abcd234h')).toBe('ABCD234H')
     expect(captureReferralFromSearch('?ref=nope')).toBeNull()
   })
 

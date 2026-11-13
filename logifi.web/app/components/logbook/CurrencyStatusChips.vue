@@ -1,20 +1,32 @@
 <template>
   <div
-    v-if="chips.length > 0"
+    v-if="showChips"
     class="mt-4 flex flex-wrap gap-2"
     data-testid="currency-status-chips"
   >
     <button
-      v-for="chip in chips"
-      :key="chip.kind"
+      v-if="insufficientHistory"
       type="button"
       class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full px-2.5 py-1 text-xs font-medium font-quicksand transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
-      :class="chipClass(chip.status)"
-      :aria-label="`${chip.label}. Open currency details`"
+      :class="neutralChipClass"
+      :aria-label="`${neutralLabel}. Open currency details`"
       @click="$emit('open')"
     >
-      {{ chip.label }}
+      {{ neutralLabel }}
     </button>
+    <template v-else>
+      <button
+        v-for="chip in chips"
+        :key="chip.kind"
+        type="button"
+        class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full px-2.5 py-1 text-xs font-medium font-quicksand transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
+        :class="chipClass(chip.status)"
+        :aria-label="`${chip.label}. Open currency details`"
+        @click="$emit('open')"
+      >
+        {{ chip.label }}
+      </button>
+    </template>
   </div>
 </template>
 
@@ -22,6 +34,7 @@
 import { computed } from 'vue'
 import type { CurrencyStatus, CurrencyStatusType } from '~/utils/logbookTypes'
 import { formatCurrencyChip, type CurrencyChipKind } from '~/utils/currencyCalculator'
+import { CURRENCY_TRACKING_NEUTRAL_LABEL } from '~/utils/currencyHistoryPolicy'
 
 const props = defineProps<{
   passengerCurrency: CurrencyStatus | null
@@ -29,11 +42,23 @@ const props = defineProps<{
   instrumentCurrency: CurrencyStatus | null
   flightReviewCurrency?: CurrencyStatus | null
   isDarkMode: boolean
+  /** When true, show neutral tracking copy instead of expired/current chips. */
+  insufficientHistory?: boolean
 }>()
 
 defineEmits<{
   open: []
 }>()
+
+const neutralLabel = CURRENCY_TRACKING_NEUTRAL_LABEL
+
+const showChips = computed(() => props.insufficientHistory || chips.value.length > 0)
+
+const neutralChipClass = computed(() =>
+  props.isDarkMode
+    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+)
 
 const chips = computed(() => {
   const items: { kind: CurrencyChipKind; label: string; status: CurrencyStatusType }[] = []

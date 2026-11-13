@@ -55,6 +55,17 @@
         </div>
 
         <div v-else class="space-y-6">
+          <p
+            v-if="insufficientHistory"
+            :class="[
+              'rounded-lg border px-4 py-3 text-sm font-quicksand',
+              isDarkMode
+                ? 'border-gray-600 bg-gray-800 text-gray-300'
+                : 'border-gray-200 bg-gray-50 text-gray-700',
+            ]"
+          >
+            Add more flights to track currency. You need at least three flights and about 90 days of logbook history before expiration status is meaningful.
+          </p>
           <!-- 90-Day Passenger Currency -->
           <div
             :class="[
@@ -473,12 +484,14 @@ interface Props {
   annualRequirements?: AnnualCurrencyStatus | null
   isLoading?: boolean
   error?: string | null
+  insufficientHistory?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   isDarkMode: false,
   isLoading: false,
-  error: null
+  error: null,
+  insufficientHistory: false,
 })
 
 const emit = defineEmits<{

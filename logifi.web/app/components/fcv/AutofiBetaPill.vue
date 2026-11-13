@@ -1,17 +1,23 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { AUTOFI_BETA_PILL } from '~/utils/autofiBeta'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     isDarkMode?: boolean
     /** `marketing` stays light on landing/integrations even if `html.dark` is set. */
     tone?: 'app' | 'marketing'
+    /** Override pill text (e.g. marketing copy without airline codes). */
+    label?: string
   }>(),
   {
     isDarkMode: false,
     tone: 'app',
-  }
+    label: undefined,
+  },
 )
+
+const pillText = computed(() => props.label ?? AUTOFI_BETA_PILL)
 </script>
 
 <template>
@@ -25,6 +31,6 @@ withDefaults(
           : 'bg-amber-50 border-amber-200 text-amber-800'
     "
   >
-    {{ AUTOFI_BETA_PILL }}
+    {{ pillText }}
   </span>
 </template>

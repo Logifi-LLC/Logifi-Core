@@ -93,6 +93,7 @@
       :theme="theme"
       :clock-format="clockFormat"
       :clock-zone="clockZone"
+      :entry-form-mode="entryFormMode"
       :available-metrics="availableMetrics"
       :selected-metrics="selectedMetrics"
       :show-currency-chips="showCurrencyChips"
@@ -103,6 +104,7 @@
       @set-theme="$emit('set-theme', $event)"
       @set-clock-format="$emit('set-clock-format', $event)"
       @set-clock-zone="$emit('set-clock-zone', $event)"
+      @set-entry-form-mode="$emit('set-entry-form-mode', $event)"
       @toggle-metric="$emit('toggle-metric', $event)"
       @toggle-currency-chips="$emit('toggle-currency-chips')"
       @apply-logbook-layout-preset="$emit('apply-logbook-layout-preset', $event)"
@@ -172,6 +174,7 @@ import type { Theme } from '~/composables/useTheme'
 import type { LogbookColumnConfig, LogbookColumnKey } from '~/utils/logbookTypes'
 import type { ImportProviderKey } from '../../../shared/import'
 import type { EntryCardPreset, EntryCardPresetId } from '~/utils/entryCardPresets'
+import type { EntryFormMode } from '~/utils/entryFormMode'
 
 defineOptions({ inheritAttrs: false })
 
@@ -197,6 +200,7 @@ const props = defineProps<{
   theme: Theme
   clockFormat: '12' | '24'
   clockZone: 'UTC' | 'Local'
+  entryFormMode: EntryFormMode
   availableMetrics: { key: string; label: string }[]
   selectedMetrics: string[]
   showCurrencyChips: boolean
@@ -236,6 +240,7 @@ defineEmits<{
   'set-theme': [theme: Theme]
   'set-clock-format': [format: '12' | '24']
   'set-clock-zone': [zone: 'UTC' | 'Local']
+  'set-entry-form-mode': [mode: EntryFormMode]
   'toggle-metric': [key: string]
   'toggle-currency-chips': []
   'apply-logbook-layout-preset': [id: EntryCardPresetId]

@@ -1,7 +1,7 @@
 import { defineEventHandler, createError } from 'h3'
 import { getUserIdFromEvent } from '../../utils/supabase'
 import { getSupabaseServiceClient } from '../../utils/supabaseService'
-import { reconcileCreditsBalanceFromLedger } from '../../utils/creditsBalance'
+import { grantWelcomeCredits, reconcileCreditsBalanceFromLedger } from '../../utils/creditsBalance'
 
 /**
  * Returns the authenticated user's Digifi page credit balance.
@@ -20,6 +20,10 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const credits = await reconcileCreditsBalanceFromLedger(service, userId)
+  let credits = await reconcileCreditsBalanceFromLedger(service, userId)
+  if (credits <= 0) {
+    const welcome = await grantWelcomeCredits(service, userId)
+    credits = welcome.credits
+  }
   return { credits }
 })

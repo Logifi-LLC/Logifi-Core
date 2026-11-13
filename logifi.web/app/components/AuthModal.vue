@@ -24,10 +24,10 @@
           id="auth-modal-title"
           :class="['text-2xl font-bold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']"
         >
-          {{ activeTab === 'signin' ? 'Sign in' : 'Sign up' }}
+          {{ modalTitle }}
         </h3>
         <p
-          v-if="activeTab === 'signup'"
+          v-if="authPanel === 'form' && activeTab === 'signup'"
           :class="['text-sm font-quicksand mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
         >
           Includes {{ welcomeCredits }} free Digifi spreads
@@ -49,7 +49,11 @@
       </div>
 
       <!-- Tabs Navigation -->
-      <div class="flex p-1 mx-6 mt-6 rounded-xl bg-gray-100/50" :class="[isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100/50']">
+      <div
+        v-if="authPanel === 'form'"
+        class="flex p-1 mx-6 mt-6 rounded-xl bg-gray-100/50"
+        :class="[isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100/50']"
+      >
         <button
           @click="activeTab = 'signin'"
           :class="[
@@ -84,6 +88,76 @@
 
       <!-- Main Form Content -->
       <div class="max-h-[min(70vh,40rem)] space-y-6 overflow-y-auto p-8">
+        <div
+          v-if="authPanel === 'check-inbox'"
+          class="space-y-6"
+          data-testid="auth-check-inbox"
+        >
+          <p
+            :class="['text-sm font-quicksand leading-relaxed', isDarkMode ? 'text-gray-300' : 'text-gray-600']"
+          >
+            We sent a verification link to
+            <span class="font-semibold break-all">{{ pendingSignupEmail }}</span>.
+            Open it to activate your account, then sign in.
+          </p>
+          <div v-if="resendInboxFeedback" class="animate-fade-in">
+            <div
+              :class="[
+                'rounded-xl border p-4 flex items-start gap-3',
+                resendInboxFeedback.type === 'error'
+                  ? isDarkMode
+                    ? 'bg-red-900/20 border-red-800 text-red-300'
+                    : 'bg-red-50 border-red-100 text-red-700'
+                  : isDarkMode
+                    ? 'bg-green-900/20 border-green-800 text-green-300'
+                    : 'bg-green-50 border-green-100 text-green-700',
+              ]"
+            >
+              <Icon
+                :name="resendInboxFeedback.type === 'error' ? 'ri:error-warning-fill' : 'ri:checkbox-circle-fill'"
+                size="20"
+                class="flex-shrink-0"
+              />
+              <p class="text-sm font-medium font-quicksand">{{ resendInboxFeedback.message }}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="w-full min-h-11 py-3 rounded-xl font-bold font-quicksand text-sm transition-all border"
+            :class="[
+              inboxResend.canResend
+                ? 'bg-blue-600 text-white hover:bg-blue-700 border-blue-600'
+                : isDarkMode
+                  ? 'bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed'
+                  : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed',
+            ]"
+            :disabled="!inboxResend.canResend || isResendingInbox"
+            @click="handleResendAfterSignup"
+          >
+            <span v-if="isResendingInbox" class="inline-flex items-center justify-center gap-2">
+              <Icon name="ri:loader-4-line" size="18" class="animate-spin" />
+              Sending…
+            </span>
+            <span v-else-if="inboxResend.secondsRemaining > 0">
+              Resend in {{ inboxResend.secondsRemaining }}s
+            </span>
+            <span v-else>Resend confirmation email</span>
+          </button>
+          <button
+            type="button"
+            class="w-full min-h-11 py-3 rounded-xl font-bold font-quicksand text-sm border transition-all"
+            :class="[
+              isDarkMode
+                ? 'border-gray-700 text-gray-200 hover:bg-gray-800'
+                : 'border-gray-200 text-gray-700 hover:bg-gray-50',
+            ]"
+            @click="goToSignInAfterInbox"
+          >
+            Back to sign in
+          </button>
+        </div>
+
+        <template v-else>
         <!-- Social Login -->
         <div class="space-y-3">
           <button
@@ -154,7 +228,28 @@
             ]"
           >
             <Icon name="ri:error-warning-fill" size="20" class="flex-shrink-0" />
-            <p class="text-sm font-medium font-quicksand">{{ authError }}</p>
+            <div class="space-y-3 min-w-0">
+              <p class="text-sm font-medium font-quicksand">{{ authError }}</p>
+              <button
+                v-if="showUnconfirmedResend"
+                type="button"
+                class="text-sm font-bold text-blue-600 hover:text-blue-700 underline-offset-2 hover:underline min-h-11"
+                :disabled="!signInResend.canResend || isResendingSignIn"
+                @click="handleResendFromSignIn"
+              >
+                <span v-if="isResendingSignIn">Sending…</span>
+                <span v-else-if="signInResend.secondsRemaining > 0">
+                  Resend confirmation ({{ signInResend.secondsRemaining }}s)
+                </span>
+                <span v-else>Resend confirmation email</span>
+              </button>
+              <p
+                v-if="resendSignInFeedback?.type === 'error'"
+                class="text-sm font-medium font-quicksand"
+              >
+                {{ resendSignInFeedback.message }}
+              </p>
+            </div>
           </div>
 
           <div
@@ -196,12 +291,12 @@
               :class="[
                 'w-full pl-11 pr-4 py-3 rounded-xl border text-base font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
                 isDarkMode 
-                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' 
-                  : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400',
+                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-600' 
+                  : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-300',
                 emailAriaInvalid ? 'border-red-500' : '',
                 isLoading ? 'opacity-50 cursor-not-allowed' : ''
               ]"
-              placeholder="pilot@logifi.io"
+              placeholder="you@example.com"
               @blur="emailTouched = true"
               @keyup.enter="handleSubmit"
             />
@@ -252,12 +347,12 @@
               :class="[
                 'w-full pl-11 pr-4 py-3 rounded-xl border text-base font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
                 isDarkMode 
-                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' 
-                  : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400',
+                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-600' 
+                  : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-300',
                 passwordAriaInvalid ? 'border-red-500' : '',
                 isLoading ? 'opacity-50 cursor-not-allowed' : ''
               ]"
-              placeholder="••••••••"
+              placeholder=""
               @blur="passwordTouched = true"
               @keyup.enter="handleSubmit"
             />
@@ -272,37 +367,47 @@
             {{ visiblePasswordError }}
           </p>
           <div v-if="activeTab === 'signup'" class="space-y-2 pt-2">
-            <label
-              class="text-sm font-bold font-quicksand"
-              :class="[isDarkMode ? 'text-gray-200' : 'text-gray-800']"
-              for="referral-code"
+            <button
+              v-if="!showReferralField"
+              type="button"
+              class="text-sm font-bold text-blue-600 hover:text-blue-700 min-h-11 text-left"
+              @click="showReferralField = true"
             >
-              Have a referral code?
-            </label>
-            <input
-              id="referral-code"
-              v-model="referralCode"
-              type="text"
-              autocapitalize="characters"
-              autocomplete="off"
-              spellcheck="false"
-              @input="referralTouched = true"
-              :disabled="isLoading"
-              :class="[
-                'w-full px-4 py-3 rounded-xl border text-base font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
-                isDarkMode
-                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
-                  : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400',
-                isLoading ? 'opacity-50 cursor-not-allowed' : ''
-              ]"
-              placeholder="Optional"
-            />
-            <p v-if="referralApplied" class="text-sm font-semibold text-blue-600">Referral code applied</p>
+              Have a code?
+            </button>
+            <div v-else class="space-y-2">
+              <label
+                class="text-sm font-bold font-quicksand"
+                :class="[isDarkMode ? 'text-gray-200' : 'text-gray-800']"
+                for="referral-code"
+              >
+                Referral code
+              </label>
+              <input
+                id="referral-code"
+                v-model="referralCode"
+                type="text"
+                autocapitalize="characters"
+                autocomplete="off"
+                spellcheck="false"
+                @input="referralTouched = true"
+                :disabled="isLoading"
+                :class="[
+                  'w-full px-4 py-3 rounded-xl border text-base font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
+                  isDarkMode
+                    ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-600'
+                    : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-300',
+                  isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                ]"
+                placeholder="Optional"
+              />
+              <p v-if="referralApplied" class="text-sm font-semibold text-blue-600">Referral code applied</p>
+            </div>
           </div>
           <p 
             v-if="activeTab === 'signup'"
-            class="text-[10px] font-medium font-quicksand leading-tight mt-2"
-            :class="[isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+            class="text-xs font-medium font-quicksand leading-snug mt-2"
+            :class="[isDarkMode ? 'text-gray-400' : 'text-gray-600']"
           >
             By signing up, you agree to our
             <NuxtLink to="/terms" class="text-blue-500 hover:text-blue-600 hover:underline">Terms of Service</NuxtLink>
@@ -336,6 +441,7 @@
         <p class="text-center text-xs font-medium font-quicksand text-gray-400 mt-6">
           Need help? <a href="mailto:info@logifi.io" class="text-blue-600 hover:underline">Contact Support</a>
         </p>
+        </template>
       </div>
     </div>
   </div>
@@ -353,6 +459,8 @@ import {
   readStoredReferralCode,
   storeReferralCode,
 } from '~/utils/referralCapture'
+import { isEmailNotConfirmedError, signInErrorUserMessage } from '~/utils/authErrors'
+import { useResendCooldown } from '~/composables/useResendCooldown'
 
 const welcomeCredits = WELCOME_CREDITS
 
@@ -365,8 +473,10 @@ const props = withDefaults(
     initialTab?: 'signin' | 'signup'
     /** Bumps when a referral link opens signup on an already-visible modal. */
     referralOpenCount?: number
+    /** One-line banner (e.g. after account deletion). */
+    notice?: string | null
   }>(),
-  { dismissible: true, initialTab: 'signin', referralOpenCount: 0 }
+  { dismissible: true, initialTab: 'signin', referralOpenCount: 0, notice: null }
 )
 
 const emit = defineEmits<{
@@ -386,11 +496,28 @@ const {
   signInWithGoogle,
   signInWithApple,
   resetPassword,
+  resendSignupConfirmation,
   isLoading: authLoading,
   error: authErrorState,
 } = useAuth()
 
+const inboxResend = useResendCooldown()
+const signInResend = useResendCooldown()
+
 const activeTab = ref<'signin' | 'signup'>(props.initialTab)
+const authPanel = ref<'form' | 'check-inbox'>('form')
+const pendingSignupEmail = ref('')
+const showReferralField = ref(false)
+const showUnconfirmedResend = ref(false)
+const isResendingInbox = ref(false)
+const isResendingSignIn = ref(false)
+const resendInboxFeedback = ref<{ type: 'success' | 'error'; message: string } | null>(null)
+const resendSignInFeedback = ref<{ type: 'success' | 'error'; message: string } | null>(null)
+
+const modalTitle = computed(() => {
+  if (authPanel.value === 'check-inbox') return 'Check your inbox'
+  return activeTab.value === 'signin' ? 'Sign in' : 'Sign up'
+})
 const email = ref('')
 const password = ref('')
 const referralCode = ref('')
@@ -448,13 +575,29 @@ function onFocusIn(event: FocusEvent) {
   ;(nodes[0] ?? dialogRef.value).focus()
 }
 
+function referralParamInUrl(): boolean {
+  if (typeof window === 'undefined') return false
+  const params = new URLSearchParams(window.location.search)
+  return Boolean(params.get('ref') || params.get('referral'))
+}
+
+function syncReferralFieldVisibility() {
+  if (activeTab.value !== 'signup') return
+  showReferralField.value =
+  Boolean(referralCode.value.trim()) || referralApplied.value || referralParamInUrl()
+}
+
 function fillReferralFromStore() {
   const fromUrl = captureReferralFromSearch(window.location.search)
   if (fromUrl) storeReferralCode(fromUrl)
   const stored = readStoredReferralCode()
-  if (!stored) return
+  if (!stored) {
+    syncReferralFieldVisibility()
+    return
+  }
   referralCode.value = stored
   referralApplied.value = true
+  showReferralField.value = true
 }
 
 watch(
@@ -472,8 +615,23 @@ watch(
   }
 )
 
+function applyNoticeBanner() {
+  if (!props.notice) return
+  authPanel.value = 'form'
+  activeTab.value = 'signin'
+  successMessage.value = props.notice
+  authError.value = null
+}
+
+watch(
+  () => props.notice,
+  () => applyNoticeBanner(),
+  { immediate: true }
+)
+
 onMounted(() => {
   fillReferralFromStore()
+  applyNoticeBanner()
   previousFocus =
     document.activeElement instanceof HTMLElement ? document.activeElement : null
   document.addEventListener('keydown', onKeydown, true)
@@ -592,9 +750,11 @@ const handleSubmit = async () => {
       const result = await signUp(email.value, password.value)
       if (result.success) {
         if (result.requiresEmailConfirmation) {
-          successMessage.value = `Account created. Please check ${email.value.trim()} and click the verification link to activate your account.`
-          // Keep the modal open so users can read guidance and switch to sign in later.
-          activeTab.value = 'signin'
+          pendingSignupEmail.value = email.value.trim()
+          authPanel.value = 'check-inbox'
+          authError.value = null
+          successMessage.value = null
+          resendInboxFeedback.value = null
           password.value = ''
         } else {
           successMessage.value = 'Account created successfully! You are now signed in.'
@@ -607,9 +767,13 @@ const handleSubmit = async () => {
       const result = await signIn(email.value, password.value)
       if (result.success) {
         successMessage.value = 'Signed in successfully!'
+        showUnconfirmedResend.value = false
+        resendSignInFeedback.value = null
         completeAuthSuccess(1000)
       } else if (result.error) {
-        authError.value = result.error
+        showUnconfirmedResend.value = isEmailNotConfirmedError(result.error)
+        resendSignInFeedback.value = null
+        authError.value = signInErrorUserMessage(result.error)
       }
     }
   } catch (error) {
@@ -678,14 +842,60 @@ const handleGoogleSignIn = async () => {
   }
 }
 
-// Reset form when switching tabs
-watch(activeTab, () => {
+async function handleResendAfterSignup() {
+  if (!inboxResend.canResend.value || isResendingInbox.value || !pendingSignupEmail.value) return
+  isResendingInbox.value = true
+  resendInboxFeedback.value = null
+  const result = await resendSignupConfirmation(pendingSignupEmail.value)
+  isResendingInbox.value = false
+  if (result.success) {
+    resendInboxFeedback.value = { type: 'success', message: result.message }
+    inboxResend.startCooldown()
+  } else if (result.error) {
+    resendInboxFeedback.value = { type: 'error', message: result.error }
+  }
+}
+
+async function handleResendFromSignIn() {
+  const emailValue = email.value.trim()
+  if (!signInResend.canResend.value || isResendingSignIn.value || !emailValue) return
+  isResendingSignIn.value = true
+  resendSignInFeedback.value = null
+  const result = await resendSignupConfirmation(emailValue)
+  isResendingSignIn.value = false
+  if (result.success) {
+    resendSignInFeedback.value = { type: 'success', message: result.message }
+    authError.value = null
+    showUnconfirmedResend.value = false
+    successMessage.value = result.message
+    signInResend.startCooldown()
+  } else if (result.error) {
+    resendSignInFeedback.value = { type: 'error', message: result.error }
+  }
+}
+
+function goToSignInAfterInbox() {
+  authPanel.value = 'form'
+  activeTab.value = 'signin'
+  password.value = ''
   authError.value = null
   successMessage.value = null
+}
+
+// Reset form when switching tabs
+watch(activeTab, () => {
+  if (authPanel.value !== 'form') return
+  authError.value = null
+  if (!props.notice) {
+    successMessage.value = null
+  }
+  showUnconfirmedResend.value = false
+  resendSignInFeedback.value = null
   password.value = ''
   emailTouched.value = false
   passwordTouched.value = false
   submitAttempted.value = false
+  syncReferralFieldVisibility()
 })
 </script>
 
