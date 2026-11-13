@@ -9,7 +9,7 @@
       v-for="(opt, index) in options"
       :key="opt.value"
       type="button"
-      class="px-4 py-1.5 rounded-md transition-colors"
+      class="min-h-[44px] min-w-[44px] px-4 py-1.5 rounded-md transition-colors"
       :class="[
         modelValue === opt.value
           ? 'bg-blue-600 text-white shadow-sm'

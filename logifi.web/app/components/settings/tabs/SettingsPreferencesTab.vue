@@ -44,6 +44,24 @@
             />
           </SettingsRow>
         </div>
+        <div class="px-4 py-3">
+          <SettingsRow
+            label="Entry form"
+            description="Quick keeps date, aircraft, ident, from/to, total, role, and landings up front."
+            :is-dark-mode="isDarkMode"
+          >
+            <SegmentedControl
+              :model-value="entryFormMode"
+              :options="[
+                { value: 'full', label: 'Full' },
+                { value: 'quick', label: 'Quick' },
+              ]"
+              :is-dark-mode="isDarkMode"
+              aria-label="Entry form"
+              @update:model-value="$emit('set-entry-form-mode', $event as EntryFormMode)"
+            />
+          </SettingsRow>
+        </div>
       </div>
     </SettingsListGroup>
 
@@ -115,6 +133,7 @@ import SettingsLogbookLayoutSection from '../SettingsLogbookLayoutSection.vue'
 import type { Theme } from '~/composables/useTheme'
 import type { LogbookColumnConfig, LogbookColumnKey } from '~/utils/logbookTypes'
 import type { EntryCardPreset, EntryCardPresetId } from '~/utils/entryCardPresets'
+import type { EntryFormMode } from '~/utils/entryFormMode'
 
 defineProps<{
   isDarkMode: boolean
@@ -122,6 +141,7 @@ defineProps<{
   theme: Theme
   clockFormat: '12' | '24'
   clockZone: 'UTC' | 'Local'
+  entryFormMode: EntryFormMode
   availableMetrics: { key: string; label: string }[]
   selectedMetrics: string[]
   showCurrencyChips: boolean
@@ -135,6 +155,7 @@ defineEmits<{
   'set-theme': [theme: Theme]
   'set-clock-format': [format: '12' | '24']
   'set-clock-zone': [zone: 'UTC' | 'Local']
+  'set-entry-form-mode': [mode: EntryFormMode]
   'toggle-metric': [key: string]
   'toggle-currency-chips': []
   'apply-logbook-layout-preset': [id: EntryCardPresetId]
