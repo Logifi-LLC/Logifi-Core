@@ -16,6 +16,7 @@ defineEmits<{
 const {
   displayCredits,
   loading,
+  error,
   showWelcomeCreditsHint,
   fetchBalance,
   fetchTransactions,
@@ -62,6 +63,15 @@ const labelClass = computed(() =>
         Available Credits:
         <span :class="['font-semibold', isDarkMode ? 'text-white' : 'text-gray-900']">{{ loading ? '…' : displayCredits }}</span>
         <span class="font-normal opacity-80">(1 per spread)</span>
+        <button
+          v-if="error && !loading"
+          type="button"
+          class="ml-2 text-xs font-semibold underline underline-offset-2"
+          :class="isDarkMode ? 'text-blue-300 hover:text-blue-200' : 'text-blue-600 hover:text-blue-700'"
+          @click="fetchBalance()"
+        >
+          Retry
+        </button>
       </span>
       <button
         type="button"

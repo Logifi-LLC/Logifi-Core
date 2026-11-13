@@ -117,6 +117,7 @@
     :annual-requirements="annualRequirements"
     :is-loading="isLoadingCurrency"
     :error="currencyError"
+    :insufficient-history="currencyHistoryInsufficient"
     @close="showCurrencyDashboard = false"
   />
 
@@ -224,12 +225,8 @@
             ? 'sticky inset-x-0 top-0 border-b backdrop-blur-sm pt-[env(safe-area-inset-top)]'
             : 'fixed top-0',
           isDarkMode
-            ? isIos
-              ? 'border-gray-700/50 bg-gray-950/95'
-              : 'border-gray-700/50'
-            : isIos
-              ? 'border-gray-200 bg-gray-50/95'
-              : 'border-gray-400/50'
+            ? 'border-gray-700/50 bg-gray-950'
+            : 'border-gray-200 bg-gray-50'
         ]"
       >
         <div
@@ -534,6 +531,13 @@
               Building filters…
             </div>
             <template v-if="!isIos || !iosCatalogBuilding">
+            <p
+              v-if="!hasAnyEntriesForActiveLogbook"
+              :class="['text-sm font-quicksand px-1', isDarkMode ? 'text-gray-400' : 'text-gray-600']"
+            >
+              Catalog builds from your flights and imports. Add or import entries to populate these lists.
+            </p>
+            <template v-else>
             <div
               v-for="section in catalogSections"
               :key="section.key"
@@ -814,6 +818,7 @@
               </div>
             </div>
           </div>
+            </template>
 
           <!-- Filters active section -->
           <div v-show="!isSidebarCollapsed || isIos" class="relative settings-container pt-6">
@@ -940,7 +945,16 @@
                       Autofi
                     </button>
                   </div>
-                  <div class="flex flex-wrap items-center gap-2">
+                  <LogbookEmptyState
+                    v-if="!hasAnyEntriesForActiveLogbook"
+                    class="mt-2"
+                    :is-dark-mode="isDarkMode"
+                    :is-simulator="activeLogbook === 'simulator'"
+                    @add-entry="toggleEntryForm()"
+                    @import-csv="showDashboardImportModal = true"
+                    @scan-digifi="openDigifiFromEmptyState"
+                  />
+                  <div v-else class="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       :class="[
@@ -1012,7 +1026,7 @@
                 </div>
                 <!-- Flight totals (airplane time) -->
                 <div
-                  v-if="totalsViewMode === 'flight'"
+                  v-if="hasAnyEntriesForActiveLogbook && totalsViewMode === 'flight'"
                   :class="[
                     'grid gap-4',
                     isIos ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
@@ -1061,7 +1075,7 @@
                 </div>
                 <!-- Sim totals -->
                 <div
-                  v-else
+                  v-else-if="hasAnyEntriesForActiveLogbook"
                   :class="[
                     'grid gap-4',
                     isIos ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2',
@@ -1113,6 +1127,7 @@
                 :passenger-currency="passengerCurrency"
                 :night-currency="nightCurrency"
                 :instrument-currency="instrumentCurrency"
+                :insufficient-history="currencyHistoryInsufficient"
                 :is-dark-mode="isDarkMode"
                 @open="showCurrencyDashboard = true"
               />
@@ -1410,13 +1425,9 @@
                 No entries in {{ dateRangeFilterSummary }}. Adjust the date range in Totals Overview above, or choose <strong>All time</strong> to see every entry.
               </template>
               <template v-else-if="!hasAnyEntriesForActiveLogbook">
-                <LogbookEmptyState
-                  :is-dark-mode="isDarkMode"
-                  :is-simulator="activeLogbook === 'simulator'"
-                  @add-entry="toggleEntryForm()"
-                  @import-csv="showDashboardImportModal = true"
-                  @scan-digifi="openDigifiFromEmptyState"
-                />
+                <p :class="['text-sm font-quicksand text-center', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                  Saved entries appear in this list after you add, import, or scan your first flights.
+                </p>
               </template>
               <template v-else>
                 No entries match your current filters. Clear sidebar filters or search to see more entries.
@@ -1437,7 +1448,7 @@
               v-else
               ref="tableContainerRef"
               :class="[
-                'mt-6 rounded-2xl border transition-colors duration-300 relative overflow-x-auto',
+                'mt-6 rounded-2xl border transition-colors duration-300 relative overflow-x-hidden max-w-full',
                 isDarkMode
                   ? 'border-gray-700'
                   : 'border-gray-300 shadow-sm'
@@ -1451,7 +1462,7 @@
                     ? 'divide-white/10 bg-gray-900 border-white/10 shadow-md shadow-black/40'
                     : 'divide-gray-200 bg-gray-100'
                 ]"
-                style="table-layout: fixed; width: 100%;"
+                style="table-layout: fixed; width: 100%; max-width: 100%;"
               >
                 <thead
                   ref="tableHeaderRef"
@@ -3097,7 +3108,8 @@
             </NuxtLink>
             <button
               type="button"
-              @click="toggleEntryForm"
+              @mousedown.prevent
+              @click="closeAddEntryPanel"
               :class="[
                 'p-2 rounded-lg transition-colors',
                 isDarkMode 
@@ -4024,11 +4036,11 @@
 
               <div
                 :class="[
-                  'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4',
+                  'flex flex-col gap-4 min-w-0',
                   isIos ? 'entry-panel-actions-ios' : ''
                 ]"
               >
-                <div class="flex flex-col gap-2">
+                <div class="flex flex-col gap-2 min-w-0 max-w-full">
                   <div v-if="validationError" :class="['font-quicksand text-sm', isDarkMode ? 'text-red-400' : 'text-red-600']">
                     {{ validationError }}
                   </div>
@@ -4057,7 +4069,7 @@
                     </div>
                   </div>
                   <div v-if="validationWarning && (hasErrors || hasWarnings)" 
-                       :class="['rounded-lg border p-3', hasErrors ? (isDarkMode ? 'border-red-700 bg-red-900/20' : 'border-red-300 bg-red-50') : (isDarkMode ? 'border-yellow-700 bg-yellow-900/20' : 'border-yellow-300 bg-yellow-50')]">
+                       :class="['rounded-lg border p-3 max-w-full', hasErrors ? (isDarkMode ? 'border-red-700 bg-red-900/20' : 'border-red-300 bg-red-50') : (isDarkMode ? 'border-yellow-700 bg-yellow-900/20' : 'border-yellow-300 bg-yellow-50')]">
                     <div class="flex items-start gap-2">
                       <Icon 
                         :name="hasErrors ? 'ri:error-warning-line' : 'ri:alert-line'" 
@@ -4114,7 +4126,7 @@
                 </div>
                 <div
                   :class="[
-                    'flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end',
+                    'flex flex-col sm:flex-row flex-wrap gap-3 sm:items-center sm:justify-end shrink-0',
                     isIos ? 'entry-panel-actions-ios w-full' : ''
                   ]"
                 >
@@ -6872,6 +6884,13 @@ import EntryFieldError from '../components/logbook/EntryFieldError.vue'
 import LogbookEmptyState from '../components/logbook/LogbookEmptyState.vue'
 import LogEntryList from '../components/logbook/LogEntryList.vue'
 import { STACKED_LOGBOOK_CARDS_MQ, shouldUseStackedLogbookCards } from '../utils/logbookListLayout'
+import { hasInsufficientCurrencyHistory } from '../utils/currencyHistoryPolicy'
+import {
+  applyLogbookTableDensity,
+  LOGBOOK_TABLE_CONDENSED_MQ,
+  LOGBOOK_TABLE_TIGHT_MQ,
+  resolveLogbookTableDensity,
+} from '../utils/logbookTableLayout'
 
 const AuditTrail = defineAsyncComponent(() => import('../components/AuditTrail.vue'))
 const CurrencyDashboard = defineAsyncComponent(() => import('../components/CurrencyDashboard.vue'))
@@ -7359,6 +7378,14 @@ function onNarrowViewportChange(event: MediaQueryListEvent) {
   isNarrowViewport.value = event.matches
 }
 
+function onCondensedTableViewportChange(event: MediaQueryListEvent) {
+  isCondensedTableViewport.value = event.matches
+}
+
+function onTightTableViewportChange(event: MediaQueryListEvent) {
+  isTightTableViewport.value = event.matches
+}
+
 const handleLogout = async () => {
   stopBackgroundSync()
   setActiveUserId(null)
@@ -7441,7 +7468,6 @@ async function onUserSessionReady(userId: string): Promise<void> {
     void markAppReady()
   }
 
-  maybeAutoOpenEntryFormForEmptyLogbook()
   startBackgroundSync()
 
   void loadEntries({ mode: 'auto' })
@@ -7549,6 +7575,12 @@ onMounted(async () => {
   narrowViewportMql = window.matchMedia(STACKED_LOGBOOK_CARDS_MQ)
   isNarrowViewport.value = narrowViewportMql.matches
   narrowViewportMql.addEventListener('change', onNarrowViewportChange)
+  condensedTableMql = window.matchMedia(LOGBOOK_TABLE_CONDENSED_MQ)
+  isCondensedTableViewport.value = condensedTableMql.matches
+  condensedTableMql.addEventListener('change', onCondensedTableViewportChange)
+  tightTableMql = window.matchMedia(LOGBOOK_TABLE_TIGHT_MQ)
+  isTightTableViewport.value = tightTableMql.matches
+  tightTableMql.addEventListener('change', onTightTableViewportChange)
   openSignupForStoredReferral()
 
   loadSimDeviceCatalogFromStorage()
@@ -7591,6 +7623,14 @@ onUnmounted(() => {
     if (narrowViewportMql) {
       narrowViewportMql.removeEventListener('change', onNarrowViewportChange)
       narrowViewportMql = null
+    }
+    if (condensedTableMql) {
+      condensedTableMql.removeEventListener('change', onCondensedTableViewportChange)
+      condensedTableMql = null
+    }
+    if (tightTableMql) {
+      tightTableMql.removeEventListener('change', onTightTableViewportChange)
+      tightTableMql = null
     }
     const scrollTarget = isIos.value ? rootScrollContainerRef.value : window
     if (scrollTarget) {
@@ -8213,8 +8253,28 @@ const {
   resizingColumn,
 } = useLogbookColumnConfig()
 
-const visibleColumns = computed(() =>
-  baseVisibleColumns.value.filter(col => col.key !== 'nvg' || pilotProfile.enableMilitaryFields),
+const isCondensedTableViewport = ref(
+  typeof window !== 'undefined' && window.matchMedia(LOGBOOK_TABLE_CONDENSED_MQ).matches,
+)
+const isTightTableViewport = ref(
+  typeof window !== 'undefined' && window.matchMedia(LOGBOOK_TABLE_TIGHT_MQ).matches,
+)
+let condensedTableMql: MediaQueryList | null = null
+let tightTableMql: MediaQueryList | null = null
+
+const logbookTableDensity = computed(() =>
+  resolveLogbookTableDensity(isCondensedTableViewport.value, isTightTableViewport.value),
+)
+
+const visibleColumns = computed(() => {
+  const filtered = baseVisibleColumns.value.filter(
+    (col) => col.key !== 'nvg' || pilotProfile.enableMilitaryFields,
+  )
+  return applyLogbookTableDensity(filtered, logbookTableDensity.value)
+})
+
+const currencyHistoryInsufficient = computed(() =>
+  hasInsufficientCurrencyHistory(logEntries.value),
 )
 
 const displayColumnConfig = computed(() =>
@@ -13562,16 +13622,6 @@ function resetForm(): void {
   lastKnownXcTime.value = null
 }
 
-function maybeAutoOpenEntryFormForEmptyLogbook(): void {
-  if (isIos.value) return
-  if (logEntries.value.length === 0 && isAuthenticated.value) {
-    expandedEntryId.value = null
-    inlineEditEntry.value = null
-    isInlineCommercialMode.value = false
-    isEntryFormOpen.value = true
-  }
-}
-
 function ensureDefaultSignInstructor(): void {
   void fetchInstructors().then(() => {
     if (signInstructorId.value) return
@@ -13602,13 +13652,23 @@ function openNewEntryForm(draft?: EditableLogEntry): void {
   ensureDefaultSignInstructor()
 }
 
+function closeAddEntryPanel(): void {
+  clearEntryFormFieldUi()
+  validationError.value = null
+  duplicateWarning.value = null
+  validationWarning.value = false
+  saveAnywayValidation.value = false
+  clearValidation()
+  isEntryFormOpen.value = false
+  closeAuditTrailSidebar()
+  if (!editingEntryId.value) {
+    resetForm()
+  }
+}
+
 function toggleEntryForm(): void {
   if (isEntryFormOpen.value) {
-    isEntryFormOpen.value = false
-    closeAuditTrailSidebar()
-    if (!editingEntryId.value) {
-      resetForm()
-    }
+    closeAddEntryPanel()
     return
   }
   openNewEntryForm()
@@ -17816,22 +17876,6 @@ watch(
       // Use nextTick to ensure DOM is updated
       setTimeout(() => {
         const firstInput = document.querySelector('[data-edit-panel] input[type="date"], [data-edit-panel] input[type="text"]') as HTMLInputElement
-        if (firstInput) {
-          firstInput.focus()
-        }
-      }, 100)
-    }
-  }
-)
-
-// Auto-focus first input when add entry panel opens
-watch(
-  isEntryFormOpen,
-  (isOpen) => {
-    if (isOpen && !isIos.value) {
-      // Use nextTick to ensure DOM is updated
-      setTimeout(() => {
-        const firstInput = document.querySelector('[data-add-entry-panel] input[type="date"], [data-add-entry-panel] input[type="text"]') as HTMLInputElement
         if (firstInput) {
           firstInput.focus()
         }
