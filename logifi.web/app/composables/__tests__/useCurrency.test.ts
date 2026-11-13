@@ -43,11 +43,12 @@ describe('useCurrency', () => {
   })
 
   it('should initialize with null currency values', () => {
-    const { passengerCurrency, nightCurrency, instrumentCurrency, annualRequirements } = useCurrency()
+    const { passengerCurrency, nightCurrency, instrumentCurrency, flightReviewCurrency, annualRequirements } = useCurrency()
     
     expect(passengerCurrency.value).toBeNull()
     expect(nightCurrency.value).toBeNull()
     expect(instrumentCurrency.value).toBeNull()
+    expect(flightReviewCurrency.value).toBeNull()
     expect(annualRequirements.value).toBeNull()
   })
 
@@ -79,6 +80,37 @@ describe('useCurrency', () => {
     expect(isLoading.value).toBe(false)
     expect(passengerCurrency.value).not.toBeNull()
     expect(passengerCurrency.value?.isCurrent).toBe(true)
+  })
+
+  it('computes flight review from a Flight Review tag', () => {
+    const { calculateAllCurrency, flightReviewCurrency, annualRequirements } = useCurrency()
+    const today = new Date(2025, 0, 15)
+    calculateAllCurrency(
+      [
+        createTestEntry({
+          date: '2024-01-10',
+          tags: ['Flight Review'],
+        }),
+      ],
+      today
+    )
+    expect(flightReviewCurrency.value?.isCurrent).toBe(true)
+    expect(flightReviewCurrency.value?.status).toBe('current')
+    expect(annualRequirements.value?.isCurrent).toBe(true)
+  })
+
+  it('does not treat remarks as a flight review', () => {
+    const { calculateAllCurrency, flightReviewCurrency } = useCurrency()
+    calculateAllCurrency(
+      [
+        createTestEntry({
+          date: '2024-01-10',
+          remarks: 'Flight review complete',
+        }),
+      ],
+      new Date(2025, 0, 15)
+    )
+    expect(flightReviewCurrency.value?.status).toBe('missing')
   })
 
   it('should handle errors gracefully', () => {
@@ -136,7 +168,7 @@ describe('useCurrency', () => {
       })
     ]
     
-    calculateAllCurrency(entries)
+    calculateAllCurrency(entries, new Date(2024, 2, 15))
     
     expect(currentCurrencyCount.value).toBeGreaterThanOrEqual(0)
     expect(currentCurrencyCount.value).toBeLessThanOrEqual(4)
