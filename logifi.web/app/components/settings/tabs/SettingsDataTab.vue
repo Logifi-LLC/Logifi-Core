@@ -195,6 +195,14 @@
         to="/totals-report"
         @click="$emit('close')"
       />
+      <SettingsListRow
+        label="Logbook check"
+        subtitle="Finds entries worth a second look"
+        icon="ri:search-eye-line"
+        :is-dark-mode="isDarkMode"
+        to="/logbook-check"
+        @click="$emit('close')"
+      />
     </SettingsListGroup>
   </div>
 </template>
