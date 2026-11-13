@@ -264,7 +264,6 @@
                 ? 'bg-gray-800 border-gray-700 text-white'
                 : 'bg-white border-gray-200 text-gray-900',
             ]"
-            placeholder="DELETE"
             @keyup.enter="confirmDelete"
           />
         </div>
@@ -316,6 +315,7 @@ import { useDigifiPilotNotes } from '~/composables/useDigifiPilotNotes'
 import { useToast } from '~/composables/useToast'
 import { formatPriorsForDisplay } from '~/utils/digifiPilotNotesExtraction'
 import { onMounted } from 'vue'
+import { markAccountDeletedNotice } from '~/utils/accountDeletedNotice'
 
 defineProps<{
   isDarkMode: boolean
@@ -369,6 +369,7 @@ async function confirmDelete() {
   const result = await deleteAccount()
   if (result.success) {
     showDeleteConfirm.value = false
+    markAccountDeletedNotice()
     emit('account-deleted')
     return
   }

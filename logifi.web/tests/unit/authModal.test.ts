@@ -30,6 +30,14 @@ vi.mock('~/utils/referralCapture', () => ({
   storeReferralCode: vi.fn(),
 }))
 
+vi.mock('~/utils/authEmailConfirmation', () => ({
+  resendSignupConfirmationEmail: vi.fn(),
+}))
+
+vi.mock('~/utils/accountDeletedNotice', () => ({
+  consumeAccountDeletedNotice: () => false,
+}))
+
 function mountModal(
   props?: Record<string, unknown>,
   options?: { attachTo?: HTMLElement }
@@ -143,6 +151,21 @@ describe('AuthModal signup validation and focus', () => {
     await flushPromises()
 
     expect(signUp).toHaveBeenCalledWith('pilot@logifi.io', 'secret1')
+    wrapper.unmount()
+  })
+
+  it('shows check your inbox after signup when email confirmation is required', async () => {
+    signUp.mockResolvedValue({ success: true, requiresEmailConfirmation: true })
+    const wrapper = mountModal()
+    await wrapper.get('#email').setValue('new.pilot@example.com')
+    await wrapper.get('#password').setValue('secret1')
+    await wrapper.get('button.w-full.py-4').trigger('click')
+    await flushPromises()
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Check your inbox')
+    expect(wrapper.text()).toContain('new.pilot@example.com')
+    expect(wrapper.text()).toContain('Resend confirmation email')
     wrapper.unmount()
   })
 })

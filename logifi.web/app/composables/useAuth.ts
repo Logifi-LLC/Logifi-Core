@@ -17,6 +17,10 @@ import { isCapacitorIos, isCapacitorNative } from './useCapacitorPlatform'
 import { useOffline } from './useOffline'
 import { claimStoredReferral } from '~/utils/referralClaimClient'
 import { isAuthEmailVerified } from '~/utils/referralClaimAttempt'
+import {
+  friendlySignInError,
+  isEmailNotConfirmedMessage,
+} from '~/utils/authEmailConfirmation'
 
 function isAppleSignInCancellation(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false
@@ -349,10 +353,15 @@ export const useAuth = () => {
 
       return { success: true, user: data.user, session: data.session }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to sign in'
+      const rawMessage = err instanceof Error ? err.message : ''
+      const errorMessage = friendlySignInError(err)
       error.value = errorMessage
       console.error('Sign in error:', err)
-      return { success: false, error: errorMessage }
+      return {
+        success: false,
+        error: errorMessage,
+        emailNotConfirmed: isEmailNotConfirmedMessage(rawMessage),
+      }
     } finally {
       isLoading.value = false
     }

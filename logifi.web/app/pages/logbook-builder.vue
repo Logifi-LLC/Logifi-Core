@@ -357,8 +357,7 @@ async function updateAccountPassword() {
 
 function handleAccountDeleted() {
   closeDigifiSettings()
-  showToast('Account deleted', { type: 'success' })
-  void router.push('/')
+  void router.push('/login')
 }
 
 function handleShowDirections() {

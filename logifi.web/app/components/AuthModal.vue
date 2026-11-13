@@ -24,10 +24,10 @@
           id="auth-modal-title"
           :class="['text-2xl font-bold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']"
         >
-          {{ activeTab === 'signin' ? 'Sign in' : 'Sign up' }}
+          {{ checkInboxMode ? 'Check your inbox' : activeTab === 'signin' ? 'Sign in' : 'Sign up' }}
         </h3>
         <p
-          v-if="activeTab === 'signup'"
+          v-if="!checkInboxMode && activeTab === 'signup'"
           :class="['text-sm font-quicksand mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
         >
           Includes {{ welcomeCredits }} free Digifi spreads
@@ -49,7 +49,11 @@
       </div>
 
       <!-- Tabs Navigation -->
-      <div class="flex p-1 mx-6 mt-6 rounded-xl bg-gray-100/50" :class="[isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100/50']">
+      <div
+        v-if="!checkInboxMode"
+        class="flex p-1 mx-6 mt-6 rounded-xl bg-gray-100/50"
+        :class="[isDarkMode ? 'bg-gray-800/50' : 'bg-gray-100/50']"
+      >
         <button
           @click="activeTab = 'signin'"
           :class="[
@@ -82,8 +86,81 @@
         </button>
       </div>
 
+      <div
+        v-if="checkInboxMode"
+        class="space-y-6 overflow-y-auto p-8"
+      >
+        <div
+          v-if="accountDeletedBanner"
+          :class="[
+            'rounded-xl border p-4 text-sm font-medium font-quicksand',
+            isDarkMode
+              ? 'bg-green-900/20 border-green-800 text-green-300'
+              : 'bg-green-50 border-green-100 text-green-800',
+          ]"
+        >
+          {{ accountDeletedBanner }}
+        </div>
+        <div class="text-center space-y-3">
+          <Icon
+            name="ri:mail-send-line"
+            size="40"
+            :class="isDarkMode ? 'text-blue-400 mx-auto' : 'text-blue-600 mx-auto'"
+          />
+          <p :class="['text-sm font-quicksand leading-relaxed', isDarkMode ? 'text-gray-300' : 'text-gray-600']">
+            We sent a confirmation link to
+            <span class="font-semibold" :class="isDarkMode ? 'text-white' : 'text-gray-900'">
+              {{ pendingConfirmationEmail }}
+            </span>.
+            Open it to activate your account.
+          </p>
+        </div>
+        <p
+          v-if="resendError"
+          class="text-sm font-quicksand text-red-500 text-center"
+          role="alert"
+        >
+          {{ resendError }}
+        </p>
+        <p
+          v-if="resendSuccess"
+          class="text-sm font-quicksand text-center"
+          :class="isDarkMode ? 'text-green-300' : 'text-green-700'"
+        >
+          Confirmation email sent again.
+        </p>
+        <button
+          type="button"
+          class="w-full min-h-[44px] py-3 rounded-xl font-bold font-quicksand text-sm border transition-colors"
+          :class="[
+            isDarkMode
+              ? 'border-gray-700 text-gray-200 hover:bg-gray-800'
+              : 'border-gray-200 text-gray-800 hover:bg-gray-50',
+            resendLoading ? 'opacity-50 cursor-not-allowed' : '',
+          ]"
+          :disabled="resendLoading"
+          @click="handleResendConfirmation"
+        >
+          <span v-if="resendLoading" class="inline-flex items-center justify-center gap-2">
+            <Icon name="ri:loader-4-line" size="18" class="animate-spin" />
+            Sending…
+          </span>
+          <span v-else>Resend confirmation email</span>
+        </button>
+        <button
+          type="button"
+          class="w-full min-h-[44px] text-sm font-bold font-quicksand text-blue-600 hover:text-blue-700"
+          @click="leaveCheckInbox('signin')"
+        >
+          Back to sign in
+        </button>
+      </div>
+
       <!-- Main Form Content -->
-      <div class="max-h-[min(70vh,40rem)] space-y-6 overflow-y-auto p-8">
+      <div
+        v-else
+        class="max-h-[min(70vh,40rem)] space-y-6 overflow-y-auto p-8"
+      >
         <!-- Social Login -->
         <div class="space-y-3">
           <button
@@ -142,19 +219,60 @@
           <span class="absolute px-4 text-xs font-bold text-gray-400 bg-white" :class="[isDarkMode ? 'bg-gray-900' : 'bg-white']">OR</span>
         </div>
 
+        <div
+          v-if="accountDeletedBanner"
+          :class="[
+            'rounded-xl border p-4 text-sm font-medium font-quicksand',
+            isDarkMode
+              ? 'bg-green-900/20 border-green-800 text-green-300'
+              : 'bg-green-50 border-green-100 text-green-800',
+          ]"
+        >
+          {{ accountDeletedBanner }}
+        </div>
+
         <!-- Feedback Messages -->
-        <div v-if="authError || successMessage" class="animate-fade-in">
+        <div v-if="authError || successMessage || showUnconfirmedResend" class="animate-fade-in">
           <div
             v-if="authError"
             :class="[
-              'rounded-xl border p-4 flex items-start gap-3',
+              'rounded-xl border p-4 flex flex-col items-start gap-3',
               isDarkMode 
                 ? 'bg-red-900/20 border-red-800 text-red-300' 
                 : 'bg-red-50 border-red-100 text-red-700'
             ]"
           >
-            <Icon name="ri:error-warning-fill" size="20" class="flex-shrink-0" />
-            <p class="text-sm font-medium font-quicksand">{{ authError }}</p>
+            <div class="flex items-start gap-3">
+              <Icon name="ri:error-warning-fill" size="20" class="flex-shrink-0" />
+              <p class="text-sm font-medium font-quicksand">{{ authError }}</p>
+            </div>
+            <button
+              v-if="showUnconfirmedResend"
+              type="button"
+              class="text-sm font-bold font-quicksand text-blue-600 hover:text-blue-700 min-h-[44px] px-1"
+              :disabled="resendLoading"
+              @click="handleResendConfirmation"
+            >
+              <span v-if="resendLoading" class="inline-flex items-center gap-2">
+                <Icon name="ri:loader-4-line" size="16" class="animate-spin" />
+                Sending…
+              </span>
+              <span v-else>Resend confirmation email</span>
+            </button>
+            <p
+              v-if="resendError && showUnconfirmedResend"
+              class="text-sm font-quicksand text-red-500"
+              role="alert"
+            >
+              {{ resendError }}
+            </p>
+            <p
+              v-if="resendSuccess && showUnconfirmedResend"
+              class="text-sm font-quicksand"
+              :class="isDarkMode ? 'text-green-300' : 'text-green-700'"
+            >
+              Confirmation email sent again.
+            </p>
           </div>
 
           <div
@@ -174,11 +292,11 @@
         <!-- Email Field -->
         <div class="space-y-2">
           <label 
-            class="text-xs font-bold font-quicksand uppercase tracking-wider" 
-            :class="[isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+            class="text-sm font-semibold font-quicksand" 
+            :class="[isDarkMode ? 'text-gray-300' : 'text-gray-700']"
             for="email"
           >
-            Email Address
+            Email
           </label>
           <div class="relative">
             <span class="absolute inset-y-0 left-0 flex items-center pl-4 text-gray-400">
@@ -196,12 +314,12 @@
               :class="[
                 'w-full pl-11 pr-4 py-3 rounded-xl border text-base font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
                 isDarkMode 
-                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' 
-                  : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400',
+                  ? 'bg-gray-800 border-gray-700 text-white placeholder:text-gray-500/70' 
+                  : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-400/80',
                 emailAriaInvalid ? 'border-red-500' : '',
                 isLoading ? 'opacity-50 cursor-not-allowed' : ''
               ]"
-              placeholder="pilot@logifi.io"
+              placeholder="you@example.com"
               @blur="emailTouched = true"
               @keyup.enter="handleSubmit"
             />
@@ -221,8 +339,8 @@
         <div class="space-y-2">
           <div class="flex items-center justify-between">
             <label 
-              class="text-xs font-bold font-quicksand uppercase tracking-wider" 
-              :class="[isDarkMode ? 'text-gray-500' : 'text-gray-400']"
+              class="text-sm font-semibold font-quicksand" 
+              :class="[isDarkMode ? 'text-gray-300' : 'text-gray-700']"
               for="password"
             >
               Password
@@ -252,12 +370,12 @@
               :class="[
                 'w-full pl-11 pr-4 py-3 rounded-xl border text-base font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
                 isDarkMode 
-                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500' 
-                  : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400',
+                  ? 'bg-gray-800 border-gray-700 text-white placeholder:text-gray-500/70' 
+                  : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-400/80',
                 passwordAriaInvalid ? 'border-red-500' : '',
                 isLoading ? 'opacity-50 cursor-not-allowed' : ''
               ]"
-              placeholder="••••••••"
+              :placeholder="activeTab === 'signup' ? 'Create a password' : ''"
               @blur="passwordTouched = true"
               @keyup.enter="handleSubmit"
             />
@@ -272,32 +390,42 @@
             {{ visiblePasswordError }}
           </p>
           <div v-if="activeTab === 'signup'" class="space-y-2 pt-2">
-            <label
-              class="text-sm font-bold font-quicksand"
-              :class="[isDarkMode ? 'text-gray-200' : 'text-gray-800']"
-              for="referral-code"
+            <button
+              v-if="!showReferralField"
+              type="button"
+              class="text-sm font-bold font-quicksand text-blue-600 hover:text-blue-700 min-h-[44px] px-1 -ml-1"
+              @click="showReferralField = true"
             >
-              Have a referral code?
-            </label>
-            <input
-              id="referral-code"
-              v-model="referralCode"
-              type="text"
-              autocapitalize="characters"
-              autocomplete="off"
-              spellcheck="false"
-              @input="referralTouched = true"
-              :disabled="isLoading"
-              :class="[
-                'w-full px-4 py-3 rounded-xl border text-base font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
-                isDarkMode
-                  ? 'bg-gray-800 border-gray-700 text-white placeholder-gray-500'
-                  : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400',
-                isLoading ? 'opacity-50 cursor-not-allowed' : ''
-              ]"
-              placeholder="Optional"
-            />
-            <p v-if="referralApplied" class="text-sm font-semibold text-blue-600">Referral code applied</p>
+              Have a code?
+            </button>
+            <template v-else>
+              <label
+                class="text-sm font-semibold font-quicksand"
+                :class="[isDarkMode ? 'text-gray-300' : 'text-gray-700']"
+                for="referral-code"
+              >
+                Referral code
+              </label>
+              <input
+                id="referral-code"
+                v-model="referralCode"
+                type="text"
+                autocapitalize="characters"
+                autocomplete="off"
+                spellcheck="false"
+                @input="referralTouched = true"
+                :disabled="isLoading"
+                :class="[
+                  'w-full px-4 py-3 rounded-xl border text-base font-quicksand transition-all focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none',
+                  isDarkMode
+                    ? 'bg-gray-800 border-gray-700 text-white placeholder:text-gray-500/70'
+                    : 'bg-white border-gray-200 text-gray-900 placeholder:text-gray-400/80',
+                  isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                ]"
+                placeholder="Optional"
+              />
+              <p v-if="referralApplied" class="text-sm font-semibold text-blue-600">Referral code applied</p>
+            </template>
           </div>
           <p 
             v-if="activeTab === 'signup'"
@@ -353,6 +481,8 @@ import {
   readStoredReferralCode,
   storeReferralCode,
 } from '~/utils/referralCapture'
+import { resendSignupConfirmationEmail } from '~/utils/authEmailConfirmation'
+import { consumeAccountDeletedNotice } from '~/utils/accountDeletedNotice'
 
 const welcomeCredits = WELCOME_CREDITS
 
@@ -396,6 +526,14 @@ const password = ref('')
 const referralCode = ref('')
 const referralTouched = ref(false)
 const referralApplied = ref(false)
+const showReferralField = ref(false)
+const checkInboxMode = ref(false)
+const pendingConfirmationEmail = ref('')
+const showUnconfirmedResend = ref(false)
+const resendLoading = ref(false)
+const resendError = ref<string | null>(null)
+const resendSuccess = ref(false)
+const accountDeletedBanner = ref<string | null>(null)
 const emailTouched = ref(false)
 const passwordTouched = ref(false)
 const submitAttempted = ref(false)
@@ -455,6 +593,7 @@ function fillReferralFromStore() {
   if (!stored) return
   referralCode.value = stored
   referralApplied.value = true
+  showReferralField.value = true
 }
 
 watch(
@@ -472,8 +611,44 @@ watch(
   }
 )
 
+function leaveCheckInbox(tab: 'signin' | 'signup') {
+  checkInboxMode.value = false
+  activeTab.value = tab
+  password.value = ''
+  resendError.value = null
+  resendSuccess.value = false
+}
+
+async function handleResendConfirmation() {
+  const targetEmail = (
+    checkInboxMode.value ? pendingConfirmationEmail.value : email.value
+  ).trim()
+  if (!targetEmail) {
+    resendError.value = 'Enter your email address'
+    return
+  }
+
+  resendLoading.value = true
+  resendError.value = null
+  resendSuccess.value = false
+
+  const result = await resendSignupConfirmationEmail(targetEmail)
+  resendLoading.value = false
+
+  if (result.success) {
+    resendSuccess.value = true
+    return
+  }
+
+  resendError.value = result.error
+}
+
 onMounted(() => {
   fillReferralFromStore()
+  if (consumeAccountDeletedNotice()) {
+    accountDeletedBanner.value = 'Your account has been deleted.'
+    activeTab.value = 'signin'
+  }
   previousFocus =
     document.activeElement instanceof HTMLElement ? document.activeElement : null
   document.addEventListener('keydown', onKeydown, true)
@@ -592,10 +767,13 @@ const handleSubmit = async () => {
       const result = await signUp(email.value, password.value)
       if (result.success) {
         if (result.requiresEmailConfirmation) {
-          successMessage.value = `Account created. Please check ${email.value.trim()} and click the verification link to activate your account.`
-          // Keep the modal open so users can read guidance and switch to sign in later.
-          activeTab.value = 'signin'
+          pendingConfirmationEmail.value = email.value.trim()
+          checkInboxMode.value = true
           password.value = ''
+          resendError.value = null
+          resendSuccess.value = false
+          authError.value = null
+          successMessage.value = null
         } else {
           successMessage.value = 'Account created successfully! You are now signed in.'
           completeAuthSuccess(1500)
@@ -610,6 +788,11 @@ const handleSubmit = async () => {
         completeAuthSuccess(1000)
       } else if (result.error) {
         authError.value = result.error
+        showUnconfirmedResend.value = !!(
+          result as { emailNotConfirmed?: boolean }
+        ).emailNotConfirmed
+        resendError.value = null
+        resendSuccess.value = false
       }
     }
   } catch (error) {
@@ -686,6 +869,9 @@ watch(activeTab, () => {
   emailTouched.value = false
   passwordTouched.value = false
   submitAttempted.value = false
+  showUnconfirmedResend.value = false
+  resendError.value = null
+  resendSuccess.value = false
 })
 </script>
 

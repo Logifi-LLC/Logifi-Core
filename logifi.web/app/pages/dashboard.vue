@@ -7387,7 +7387,7 @@ const handleAccountDeleted = () => {
     router.push('/dashboard')
   } else {
     showAuthModal.value = false
-    router.push('/?from=app')
+    router.push('/login')
   }
 }
 
