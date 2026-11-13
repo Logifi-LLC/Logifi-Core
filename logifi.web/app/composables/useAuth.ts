@@ -403,7 +403,6 @@ export const useAuth = () => {
     }
 
     try {
-      isLoading.value = true
       error.value = null
 
       const { apiFetch } = await import('~/utils/apiFetch')
@@ -438,7 +437,39 @@ export const useAuth = () => {
       return { success: false as const, error: errorMessage }
     } finally {
       explicitSignOutInProgress = false
-      isLoading.value = false
+    }
+  }
+
+  const resendSignupConfirmation = async (email: string) => {
+    const trimmed = email.trim()
+    if (!trimmed) {
+      return { success: false as const, error: 'Enter your email address' }
+    }
+
+    try {
+      error.value = null
+
+      const emailRedirectTo = buildAuthCallbackUrl()
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: trimmed,
+        ...(emailRedirectTo ? { options: { emailRedirectTo } } : {}),
+      })
+
+      if (resendError) {
+        throw resendError
+      }
+
+      return {
+        success: true as const,
+        message: 'If this address can receive mail, we sent another confirmation link.',
+      }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Could not resend confirmation email'
+      error.value = errorMessage
+      console.error('Resend signup confirmation error:', err)
+      return { success: false as const, error: errorMessage }
     }
   }
 
@@ -640,6 +671,7 @@ export const useAuth = () => {
     signInWithGoogle,
     signInWithApple,
     resetPassword,
+    resendSignupConfirmation,
     completePasswordReset,
     refreshSession,
     restoreSessionAfterReconnect,
