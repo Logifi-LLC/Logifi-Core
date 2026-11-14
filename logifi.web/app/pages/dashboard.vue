@@ -2292,9 +2292,11 @@
                 <span :class="['text-xs font-medium', isDarkMode ? 'text-gray-400' : 'text-gray-600']">Time Format:</span>
                 <button 
                   type="button"
-                  @click="inlineEditEntry.oooi.isZulu = !inlineEditEntry.oooi.isZulu"
+                  @click="toggleInlineOooiClock"
+                  :aria-pressed="inlineEditEntry.oooi.isZulu ? 'true' : 'false'"
+                  :aria-label="inlineEditEntry.oooi.isZulu ? 'Zulu (UTC). Switch to local.' : 'Local. Switch to Zulu (UTC).'"
                   :class="[
-                    'px-3 py-1 text-xs font-medium rounded transition-colors',
+                    'px-3 py-1 text-xs font-medium rounded transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
                     inlineEditEntry.oooi.isZulu
                       ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
                       : (isDarkMode ? 'bg-gray-700 text-gray-300 border border-gray-600' : 'bg-gray-200 text-gray-700 border border-gray-300')
@@ -2312,9 +2314,17 @@
                     type="text" 
                     maxlength="4" 
                     placeholder="1430"
+                    :readonly="isExpandedEntrySigned"
+                    :title="oooiOppositeClockTitle(inlineEditEntry, field)"
+                    :aria-describedby="oooiOppositeClockHintId('edit', field, inlineEditEntry)"
                     @input="(e) => { if (inlineEditEntry?.oooi && field !== 'isZulu') (inlineEditEntry.oooi as unknown as Record<string, string | null>)[field] = formatOOOIInput((e.target as HTMLInputElement).value) }"
-                    :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" 
+                    :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono pointer-events-auto focus:outline-none focus:ring-2 focus:ring-blue-500', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" 
                   />
+                  <span
+                    v-if="oooiOppositeClockTitle(inlineEditEntry, field)"
+                    :id="'edit-oooi-' + field + '-clock'"
+                    class="sr-only"
+                  >{{ oooiOppositeClockTitle(inlineEditEntry, field) }}</span>
                 </div>
                </div>
             </div>
@@ -3517,9 +3527,11 @@
                   <span :class="['text-xs font-medium', isDarkMode ? 'text-gray-400' : 'text-gray-600']">Time Format:</span>
                   <button 
                     type="button"
-                    @click="newEntry.oooi && (newEntry.oooi.isZulu = !newEntry.oooi.isZulu)"
+                    @click="toggleNewEntryOooiClock"
+                    :aria-pressed="newEntry.oooi?.isZulu ? 'true' : 'false'"
+                    :aria-label="newEntry.oooi?.isZulu ? 'Zulu (UTC). Switch to local.' : 'Local. Switch to Zulu (UTC).'"
                     :class="[
-                      'px-3 py-1 text-xs font-medium rounded transition-colors',
+                      'px-3 py-1 text-xs font-medium rounded transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
                       newEntry.oooi?.isZulu
                         ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white')
                         : (isDarkMode ? 'bg-gray-700 text-gray-300 border border-gray-600' : 'bg-gray-200 text-gray-700 border border-gray-300')
@@ -3537,9 +3549,16 @@
                       type="text" 
                       maxlength="4" 
                       placeholder="1430" 
+                      :title="oooiOppositeClockTitle(newEntry, field)"
+                      :aria-describedby="oooiOppositeClockHintId('entry', field, newEntry)"
                       @input="(e) => { if (newEntry.oooi && field !== 'isZulu') (newEntry.oooi as unknown as Record<string, string | null>)[field] = formatOOOIInput((e.target as HTMLInputElement).value) }"
-                      :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" 
+                      :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-blue-500', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" 
                     />
+                    <span
+                      v-if="oooiOppositeClockTitle(newEntry, field)"
+                      :id="'entry-oooi-' + field + '-clock'"
+                      class="sr-only"
+                    >{{ oooiOppositeClockTitle(newEntry, field) }}</span>
                   </div>
                  </div>
               </div>
@@ -6823,7 +6842,12 @@ import { calculateNightTime } from '../utils/nightTimeCalculator'
 import { nightAutoCalcInputKey, shouldApplyAutoNightTime } from '../../shared/nightAutoCalcPolicy'
 import { ensureAirportClientDbLoaded } from '../../shared/airportClientDb'
 import { getAirportIanaTimezone, normalizeTimezoneToIANA } from '../../shared/airportTimezone'
-import { oooiPairDurationHours } from '../../shared/oooiClock'
+import {
+  formatOooiOppositeClockTooltip,
+  oooiPairDurationHours,
+  toggleOooiClockView,
+  type OooiEventKey,
+} from '../../shared/oooiClock'
 import { sortEntriesByDateAndOOOI } from '../../shared/oooiSort'
 import { listCatalogPersonDisplayNames, tagsExcludingPersonNameMarker, isPersonCatalogNameMarker } from '../../shared/catalogPersonNames'
 import type { Form8710Data, AircraftCategory8710, ComplianceMetadata } from '../utils/form8710Types'
@@ -13906,6 +13930,70 @@ const filteredAircraftItemsByFamily = computed(() => {
 function formatOOOIInput(value: string): string {
   // Remove non-digits and limit to 4 characters
   return value.replace(/\D/g, '').slice(0, 4)
+}
+
+type OooiClockFormEntry = {
+  date?: string
+  departure?: string
+  destination?: string
+  oooi?: OOOITimes
+}
+
+function oooiOppositeClockTitle(
+  entry: OooiClockFormEntry | null | undefined,
+  field: keyof OOOITimes
+): string | undefined {
+  if (!entry?.oooi || field === 'isZulu') return undefined
+  const text = formatOooiOppositeClockTooltip({
+    dateYmd: entry.date ?? '',
+    hhmm: String(entry.oooi[field] ?? ''),
+    isZulu: entry.oooi.isZulu === true,
+    event: field as OooiEventKey,
+    departure: entry.departure,
+    destination: entry.destination,
+  })
+  return text ?? undefined
+}
+
+function oooiOppositeClockHintId(
+  prefix: string,
+  field: keyof OOOITimes,
+  entry: OooiClockFormEntry | null | undefined
+): string | undefined {
+  return oooiOppositeClockTitle(entry, field) ? `${prefix}-oooi-${field}-clock` : undefined
+}
+
+function applyOooiClockToggle(entry: OooiClockFormEntry | null | undefined): void {
+  if (!entry?.oooi) return
+  const next = toggleOooiClockView({
+    dateYmd: entry.date ?? '',
+    oooi: entry.oooi,
+    departure: entry.departure,
+    destination: entry.destination,
+  })
+  entry.oooi.out = next.out ?? null
+  entry.oooi.off = next.off ?? null
+  entry.oooi.on = next.on ?? null
+  entry.oooi.in = next.in ?? null
+  entry.oooi.isZulu = next.isZulu === true
+}
+
+function toggleInlineOooiClock(): void {
+  const entry = inlineEditEntry.value
+  applyOooiClockToggle(entry)
+  if (!entry?.oooi) return
+  inlineNightAutoCalcBaseline.value = nightAutoCalcInputKey({
+    date: entry.date,
+    departure: entry.departure,
+    destination: entry.destination,
+    out: entry.oooi.out,
+    in: entry.oooi.in,
+    isZulu: entry.oooi.isZulu,
+  })
+}
+
+function toggleNewEntryOooiClock(): void {
+  applyOooiClockToggle(newEntry)
 }
 
 /**

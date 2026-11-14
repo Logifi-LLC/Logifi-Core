@@ -225,3 +225,145 @@ export function oooiPairDurationHours(opts: {
   if (diffMin <= 0 || diffMin > 24 * 60) return null
   return Math.round((diffMin / 60) * 10) / 10
 }
+
+/** Four-digit HHMM only — incomplete typed clocks must not tooltip or convert. */
+function completeOooiHhmm(hhmm: string | null | undefined): string | null {
+  if (!hhmm) return null
+  const digits = String(hhmm).replace(/\D/g, '')
+  if (digits.length !== 4) return null
+  return parseOOOITime(digits) === null ? null : digits
+}
+
+/**
+ * Airport zone for Out/Off (departure) or On/In (arrival).
+ * No fallback to the other airport — unknown TZ must not be guessed.
+ */
+function zoneForDisplayEvent(
+  event: OooiEventKey,
+  departure: string | null | undefined,
+  destination: string | null | undefined,
+  lookupTz: (code: string) => string | null
+): { zone: string; airport: string } | null {
+  const code = (event === 'out' || event === 'off' ? departure : destination) || ''
+  const airport = code.trim().toUpperCase()
+  if (!airport) return null
+  const zone = lookupTz(airport)
+  if (!zone) return null
+  return { zone, airport }
+}
+
+/** Convert one OOOI HHMM between Zulu and airport-local. Null if TZ unknown or clock incomplete. */
+export function convertOooiHhmmBetweenClocks(opts: {
+  dateYmd: string
+  hhmm: string
+  fromZulu: boolean
+  toZulu: boolean
+  zone: string | null
+}): string | null {
+  const digits = completeOooiHhmm(opts.hhmm)
+  if (!digits) return null
+  if (opts.fromZulu === opts.toZulu) return digits
+  if (!opts.zone) return null
+  const utc = oooiClockToUtc(opts.dateYmd, digits, opts.fromZulu, opts.zone)
+  if (!utc) return null
+  if (opts.toZulu) return utcDateTimeToHhmm(utc)
+  const local = utc.setZone(opts.zone)
+  return local.isValid ? local.toFormat('HHmm') : null
+}
+
+/**
+ * Opposite-clock native tooltip. Stored Zulu `1432` → `0932 local (KJFK)`;
+ * stored local → `1432Z`. Null when the airport TZ is unknown.
+ */
+export function formatOooiOppositeClockTooltip(opts: {
+  dateYmd: string
+  hhmm: string
+  isZulu: boolean
+  event: OooiEventKey
+  departure?: string | null
+  destination?: string | null
+  lookupTz?: (code: string) => string | null
+}): string | null {
+  const resolved = zoneForDisplayEvent(
+    opts.event,
+    opts.departure,
+    opts.destination,
+    opts.lookupTz ?? getAirportIanaTimezone
+  )
+  if (!resolved) return null
+  const other = convertOooiHhmmBetweenClocks({
+    dateYmd: opts.dateYmd,
+    hhmm: opts.hhmm,
+    fromZulu: opts.isZulu === true,
+    toZulu: opts.isZulu !== true,
+    zone: resolved.zone,
+  })
+  if (!other) return null
+  if (opts.isZulu) return `${other} local (${resolved.airport})`
+  return `${other}Z`
+}
+
+/**
+ * Convert present OOOI HHMMs to `toZulu`. Returns null when any present clock
+ * cannot be converted (unknown TZ or incomplete) so callers do not mix clocks.
+ */
+export function convertOooiFieldsToClock(opts: {
+  dateYmd: string
+  oooi: OooiClockFields
+  toZulu: boolean
+  departure?: string | null
+  destination?: string | null
+  lookupTz?: (code: string) => string | null
+}): OooiClockFields | null {
+  const lookupTz = opts.lookupTz ?? getAirportIanaTimezone
+  const fromZulu = opts.oooi.isZulu === true
+  const next: OooiClockFields = {
+    out: opts.oooi.out ?? null,
+    off: opts.oooi.off ?? null,
+    on: opts.oooi.on ?? null,
+    in: opts.oooi.in ?? null,
+    isZulu: opts.toZulu,
+    ...(opts.oooi.tzUnresolved ? { tzUnresolved: true } : {}),
+  }
+  if (fromZulu === opts.toZulu) return next
+
+  for (const key of ['out', 'off', 'on', 'in'] as const) {
+    const raw = opts.oooi[key]
+    if (!raw || !String(raw).trim()) {
+      next[key] = raw ?? null
+      continue
+    }
+    const resolved = zoneForDisplayEvent(key, opts.departure, opts.destination, lookupTz)
+    const converted = convertOooiHhmmBetweenClocks({
+      dateYmd: opts.dateYmd,
+      hhmm: String(raw),
+      fromZulu,
+      toZulu: opts.toZulu,
+      zone: resolved?.zone ?? null,
+    })
+    if (!converted) return null
+    next[key] = converted
+  }
+  return next
+}
+
+/**
+ * Local/Zulu view swap for the entry form. Converts HHMMs when every present
+ * clock has a known airport TZ; otherwise flips `isZulu` only (save-labeling).
+ * Does not persist — caller writes the returned fields onto the form copy.
+ */
+export function toggleOooiClockView(opts: {
+  dateYmd: string
+  oooi: OooiClockFields
+  departure?: string | null
+  destination?: string | null
+  lookupTz?: (code: string) => string | null
+}): OooiClockFields {
+  const toZulu = opts.oooi.isZulu !== true
+  return (
+    convertOooiFieldsToClock({ ...opts, toZulu }) ?? {
+      ...opts.oooi,
+      isZulu: toZulu,
+    }
+  )
+}
