@@ -1073,6 +1073,12 @@
                       {{ formatTotalValue(summaryField.key) }}
                     </p>
                   </div>
+                  <Far117LookbackPanel
+                    v-if="shouldShowFar117Lookbacks"
+                    :lookbacks="far117FlightTimeLookbacks"
+                    :is-dark-mode="isDarkMode"
+                    :is-ios="isIos"
+                  />
                 </div>
                 <!-- Sim totals -->
                 <div
@@ -1132,11 +1138,6 @@
                 :insufficient-history="currencyHistoryInsufficient"
                 :is-dark-mode="isDarkMode"
                 @open="showCurrencyDashboard = true"
-              />
-              <Far117LookbackPanel
-                v-if="shouldShowFar117Lookbacks && activeLogbook === 'flight' && hasAnyEntriesForActiveLogbook"
-                :lookbacks="far117FlightTimeLookbacks"
-                :is-dark-mode="isDarkMode"
               />
 <Transition
                 enter-active-class="transition ease-out duration-300"
