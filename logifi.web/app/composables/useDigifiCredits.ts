@@ -74,6 +74,7 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 
 function normalizeCredits(value: unknown): number | null {
+  if (value === null || value === undefined) return 0
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
@@ -108,8 +109,9 @@ export function useDigifiCredits() {
         headers: authHeaders(),
       })
       const balance = normalizeCredits(result?.credits)
-      credits.value = balance
-      return balance
+      const resolved = balance ?? 0
+      credits.value = resolved
+      return resolved
     } catch (err: unknown) {
       const message =
         (err as { data?: { statusMessage?: string } })?.data?.statusMessage ??
@@ -257,11 +259,14 @@ export function useDigifiCredits() {
     { immediate: true }
   )
 
-  const displayCredits = computed(() =>
-    typeof credits.value === 'number' && Number.isFinite(credits.value)
-      ? String(credits.value)
-      : '—'
-  )
+  const displayCredits = computed(() => {
+    if (!isAuthenticated.value) return '—'
+    if (typeof credits.value === 'number' && Number.isFinite(credits.value)) {
+      return String(credits.value)
+    }
+    if (!loading.value) return '0'
+    return '—'
+  })
 
   const hasPurchasedCredits = computed(() =>
     transactions.value.some((tx) => tx.type === 'purchase')

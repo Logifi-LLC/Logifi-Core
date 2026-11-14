@@ -264,7 +264,6 @@
                 ? 'bg-gray-800 border-gray-700 text-white'
                 : 'bg-white border-gray-200 text-gray-900',
             ]"
-            placeholder="DELETE"
             @keyup.enter="confirmDelete"
           />
         </div>

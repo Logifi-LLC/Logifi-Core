@@ -187,6 +187,22 @@
         :is-dark-mode="isDarkMode"
         @click="entryCount > 0 && $emit('generate-8710')"
       />
+      <SettingsListRow
+        label="Totals report"
+        subtitle="Airline application flight-time totals"
+        icon="ri:table-line"
+        :is-dark-mode="isDarkMode"
+        to="/totals-report"
+        @click="$emit('close')"
+      />
+      <SettingsListRow
+        label="Logbook check"
+        subtitle="Finds entries worth a second look"
+        icon="ri:search-eye-line"
+        :is-dark-mode="isDarkMode"
+        to="/logbook-check"
+        @click="$emit('close')"
+      />
     </SettingsListGroup>
   </div>
 </template>
