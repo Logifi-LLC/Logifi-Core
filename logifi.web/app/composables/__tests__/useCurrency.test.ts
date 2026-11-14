@@ -152,7 +152,7 @@ describe('useCurrency', () => {
     expect(error.value).toBeNull()
   })
 
-  it('summarizes mixed ASEL/AMEL passenger currency as expired when one class is short', () => {
+  it('summarizes mixed ASEL/AMEL passenger currency as current when one class is current', () => {
     const { calculateAllCurrency, passengerCurrency, passengerCurrencyGroups } = useCurrency()
     const today = new Date(2024, 2, 15)
     calculateAllCurrency(
@@ -189,7 +189,8 @@ describe('useCurrency', () => {
       today
     )
     expect(passengerCurrencyGroups.value.map((g) => g.key).sort()).toEqual(['AMEL', 'ASEL'])
-    expect(passengerCurrency.value?.isCurrent).toBe(false)
+    expect(passengerCurrency.value?.isCurrent).toBe(true)
+    expect(passengerCurrency.value?.status).toBe('current')
     expect(passengerCurrencyGroups.value.find((g) => g.key === 'ASEL')?.passenger.isCurrent).toBe(true)
     expect(passengerCurrencyGroups.value.find((g) => g.key === 'AMEL')?.passenger.isCurrent).toBe(false)
   })

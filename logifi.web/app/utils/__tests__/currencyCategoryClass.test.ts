@@ -134,9 +134,9 @@ describe('61.57(a)/(b) category/class/type passenger currency', () => {
         calculatePassengerCurrency(entries, today),
         'passenger'
       )
-      expect(summary.isCurrent).toBe(false)
-      expect(summary.status).toBe('expired')
-      expect(summary.landings).toBe(1)
+      expect(summary.isCurrent).toBe(true)
+      expect(summary.status).toBe('current')
+      expect(summary.landings).toBe(3)
     })
 
     it('maps Airplane SEL and ASEL into one class group', () => {
@@ -284,7 +284,89 @@ describe('61.57(a)/(b) category/class/type passenger currency', () => {
         calculateNightCurrency(entries, today),
         'night'
       )
+      expect(summary.isCurrent).toBe(true)
+    })
+  })
+
+  describe('compact chip summary (best class)', () => {
+    const today = new Date(2024, 2, 15)
+
+    it('is current when one category/class is current and another is expired', () => {
+      const entries = [
+        entry({
+          id: 'asel',
+          date: '2024-03-01',
+          aircraftCategoryClass: 'ASEL',
+          performance: performance({ dayTakeoffs: 3, dayLandings: 3 }),
+        }),
+        entry({
+          id: 'amel',
+          date: '2024-03-02',
+          aircraftCategoryClass: 'AMEL',
+          performance: performance({ dayTakeoffs: 1, dayLandings: 1 }),
+        }),
+      ]
+      const groups = calculatePassengerCurrencyGroups(entries, today)
+      const summary = summarizePassengerCurrencyFromGroups(
+        groups,
+        calculatePassengerCurrency(entries, today),
+        'passenger'
+      )
+      expect(summary.isCurrent).toBe(true)
+      expect(summary.status).toBe('current')
+    })
+
+    it('uses the least-severe status when every category/class is expired', () => {
+      const entries = [
+        entry({
+          id: 'asel-old',
+          date: '2023-06-01',
+          aircraftCategoryClass: 'ASEL',
+          performance: performance({ dayTakeoffs: 3, dayLandings: 3 }),
+        }),
+        entry({
+          id: 'amel-old',
+          date: '2023-05-01',
+          aircraftCategoryClass: 'AMEL',
+          performance: performance({ dayTakeoffs: 3, dayLandings: 3 }),
+        }),
+      ]
+      const groups = calculatePassengerCurrencyGroups(entries, today)
+      const summary = summarizePassengerCurrencyFromGroups(
+        groups,
+        calculatePassengerCurrency(entries, today),
+        'passenger'
+      )
       expect(summary.isCurrent).toBe(false)
+      expect(summary.status).toBe('expired')
+    })
+
+    it('uses the latest expiry among current category/class groups', () => {
+      const entries = [
+        entry({
+          id: 'asel',
+          date: '2024-03-10',
+          aircraftCategoryClass: 'ASEL',
+          performance: performance({ dayTakeoffs: 3, dayLandings: 3 }),
+        }),
+        entry({
+          id: 'amel',
+          date: '2024-03-01',
+          aircraftCategoryClass: 'AMEL',
+          performance: performance({ dayTakeoffs: 3, dayLandings: 3 }),
+        }),
+      ]
+      const groups = calculatePassengerCurrencyGroups(entries, today)
+      const aselExp = group(groups, 'category_class', 'ASEL')!.passenger.expirationDate
+      const amelExp = group(groups, 'category_class', 'AMEL')!.passenger.expirationDate
+      expect(aselExp.getTime()).toBeGreaterThan(amelExp.getTime())
+      const summary = summarizePassengerCurrencyFromGroups(
+        groups,
+        calculatePassengerCurrency(entries, today),
+        'passenger'
+      )
+      expect(summary.isCurrent).toBe(true)
+      expect(summary.expirationDate.getTime()).toBe(aselExp.getTime())
     })
   })
 

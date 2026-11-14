@@ -427,15 +427,16 @@ const STATUS_SEVERITY: Record<CurrencyStatusType, number> = {
   current: 0,
 }
 
-function worseCurrencyStatus(a: CurrencyStatusType, b: CurrencyStatusType): CurrencyStatusType {
-  return STATUS_SEVERITY[a] >= STATUS_SEVERITY[b] ? a : b
+function betterCurrencyStatus(a: CurrencyStatusType, b: CurrencyStatusType): CurrencyStatusType {
+  return STATUS_SEVERITY[a] <= STATUS_SEVERITY[b] ? a : b
 }
 
 /**
- * Compact-chip summary of 61.57(a) or (b): worst status among category/class
- * groups. Type rows stay in the dashboard breakdown only — we cannot know
- * whether a type rating is required, and treating every C172/PA28 designator
- * as required would expire a GA mixed-type ASEL book incorrectly.
+ * Compact-chip summary of 61.57(a) or (b): best status among category/class
+ * groups (current if any class is current). Type rows stay in the dashboard
+ * breakdown only — we cannot know whether a type rating is required, and
+ * treating every C172/PA28 designator as required would expire a GA mixed-type
+ * ASEL book incorrectly.
  *
  * Falls back to the pooled result when no category/class group exists.
  */
@@ -449,23 +450,24 @@ export function summarizePassengerCurrencyFromGroups(
     .map((group) => group[side])
   if (classStatuses.length === 0) return pooled
 
-  const allCurrent = classStatuses.every((status) => status.isCurrent)
-  const worstStatus = classStatuses.reduce(
-    (acc, status) => worseCurrencyStatus(acc, status.status),
+  const anyCurrent = classStatuses.some((status) => status.isCurrent)
+  const bestStatus = classStatuses.reduce(
+    (acc, status) => betterCurrencyStatus(acc, status.status),
     classStatuses[0]!.status
   )
 
-  const representative = allCurrent
-    ? classStatuses.reduce((soonest, status) =>
-        status.expirationDate.getTime() < soonest.expirationDate.getTime() ? status : soonest
+  const currentStatuses = classStatuses.filter((status) => status.isCurrent)
+  const representative = anyCurrent
+    ? currentStatuses.reduce((latest, status) =>
+        status.expirationDate.getTime() > latest.expirationDate.getTime() ? status : latest
       )
-    : classStatuses.find((status) => status.status === worstStatus) ?? classStatuses[0]!
+    : classStatuses.find((status) => status.status === bestStatus) ?? classStatuses[0]!
 
   return {
     ...representative,
-    isCurrent: allCurrent,
-    status: allCurrent ? representative.status : worstStatus,
-    daysRemaining: allCurrent ? representative.daysRemaining : 0,
+    isCurrent: anyCurrent,
+    status: anyCurrent ? representative.status : bestStatus,
+    daysRemaining: anyCurrent ? representative.daysRemaining : 0,
   }
 }
 

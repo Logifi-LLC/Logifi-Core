@@ -43,4 +43,53 @@ describe('CurrencyStatusChips', () => {
     expect(buttons[0]?.text()).toBe('Add more flights to track currency')
     thinBook.unmount()
   })
+
+  it('shows a green 90-day chip when at least one category/class is current', () => {
+    const wrapper = mount(CurrencyStatusChips, {
+      props: {
+        passengerCurrency: status({ isCurrent: true, status: 'current' }),
+        nightCurrency: status({ isCurrent: false, status: 'expired' }),
+        instrumentCurrency: status(),
+        flightReviewCurrency: status(),
+        isDarkMode: false,
+      },
+    })
+    const passengerButton = wrapper.findAll('button')[0]
+    expect(passengerButton?.classes().join(' ')).toContain('bg-green-100')
+    wrapper.unmount()
+  })
+
+  it('shows a red 90-day chip when every category/class group is expired', () => {
+    const wrapper = mount(CurrencyStatusChips, {
+      props: {
+        passengerCurrency: status({ isCurrent: false, status: 'expired' }),
+        nightCurrency: status(),
+        instrumentCurrency: status(),
+        flightReviewCurrency: status(),
+        isDarkMode: false,
+      },
+    })
+    const passengerButton = wrapper.findAll('button')[0]
+    expect(passengerButton?.text()).toBe('90-day expired')
+    expect(passengerButton?.classes().join(' ')).toContain('bg-red-100')
+    wrapper.unmount()
+  })
+
+  it('shows the latest-expiry until date when all category/class groups are current', () => {
+    const wrapper = mount(CurrencyStatusChips, {
+      props: {
+        passengerCurrency: status({
+          isCurrent: true,
+          status: 'current',
+          expirationDate: new Date(2026, 5, 30, 12),
+        }),
+        nightCurrency: status(),
+        instrumentCurrency: status(),
+        flightReviewCurrency: status(),
+        isDarkMode: false,
+      },
+    })
+    expect(wrapper.findAll('button')[0]?.text()).toBe('90-day ✓ until Jun 30')
+    wrapper.unmount()
+  })
 })
