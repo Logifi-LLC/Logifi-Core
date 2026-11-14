@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   auditLogbook,
   checkCrossCountrySameAirport,
+  crossCountryRouteOnlySameEndpoints,
   checkDuplicateLegs,
   entriesAreDuplicateLegs,
   checkFutureDate,
@@ -368,6 +369,30 @@ describe('logbookAudit', () => {
       })
     )
     expect(withRoute).toHaveLength(0)
+  })
+
+  it('does not flag A→A cross-country when route has a fix or other token', () => {
+    const entry = fixtureEntry({
+      departure: 'A',
+      destination: 'A',
+      route: 'A FIX B A',
+      flightTime: { ...createEmptyFlightTime(), total: 2.0, pic: 2.0, crossCountry: 2.0 },
+    })
+    expect(crossCountryRouteOnlySameEndpoints(entry)).toBe(false)
+    expect(checkCrossCountrySameAirport(entry)).toHaveLength(0)
+  })
+
+  it('flags A→A cross-country when route is empty', () => {
+    const entry = fixtureEntry({
+      departure: 'A',
+      destination: 'A',
+      route: '',
+      flightTime: { ...createEmptyFlightTime(), total: 2.0, pic: 2.0, crossCountry: 2.0 },
+    })
+    expect(crossCountryRouteOnlySameEndpoints(entry)).toBe(true)
+    const findings = checkCrossCountrySameAirport(entry)
+    expect(findings).toHaveLength(1)
+    expect(findings[0].ruleId).toBe('xc_same_airport')
   })
 
   it('auditLogbook groups findings and stays linear on 5000 entries', () => {

@@ -8,7 +8,7 @@ import {
   type LogEntry,
   type PerformanceMetrics,
 } from './logbookTypes'
-import { parseRouteAirportCodes, validateCrossCountry, validateDate } from './validation'
+import { validateCrossCountry, validateDate } from './validation'
 
 const TIME_TOLERANCE = 0.01
 /** Longest plausible single OOOI gap (including long-haul airborne). Larger reverse gaps are out of order, not midnight wrap. */
@@ -393,12 +393,38 @@ export function checkOooiOrder(entry: LogEntry): AuditFinding[] {
   return []
 }
 
-/** XC time with the same from/to and no route. Reuses validateCrossCountry. */
+function routeTokenMatchesEndpoint(token: string, endpoint: string | null | undefined): boolean {
+  const ep = normalizeAirportKey(endpoint)
+  if (!ep || ep === 'UNKNOWN' || ep === '—') return false
+  const raw = token.trim().toUpperCase()
+  if (!raw) return false
+  const canon = canonicalizeAirportCodeForMatch(raw)
+  if (canon && canon === ep) return true
+  return raw === ep
+}
+
+/** Route text from `LogEntry.route` (same field as Supabase `route` / dashboard form). */
+function getAuditRouteTokens(entry: LogEntry): string[] {
+  return (entry.route || '').trim().split(/\s+/).filter(Boolean)
+}
+
+/** True when route is empty or every token is only the departure and/or destination. */
+export function crossCountryRouteOnlySameEndpoints(entry: LogEntry): boolean {
+  const tokens = getAuditRouteTokens(entry)
+  if (tokens.length === 0) return true
+  return tokens.every(
+    (token) =>
+      routeTokenMatchesEndpoint(token, entry.departure) ||
+      routeTokenMatchesEndpoint(token, entry.destination)
+  )
+}
+
+/** XC time with the same from/to and no intermediate route tokens. Reuses validateCrossCountry. */
 export function checkCrossCountrySameAirport(entry: LogEntry): AuditFinding[] {
   if (isSimulatorEntry(entry)) return []
   const crossCountry = numericValue(entry.flightTime?.crossCountry)
   if (crossCountry <= 0) return []
-  if (parseRouteAirportCodes(entry.route || '').length > 0) return []
+  if (!crossCountryRouteOnlySameEndpoints(entry)) return []
 
   return validateCrossCountry(entry)
     .filter((result) => result.field === 'crossCountry' && /same/i.test(result.message))
