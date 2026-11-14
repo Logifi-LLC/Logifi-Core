@@ -133,6 +133,10 @@
       :is-drag-over="isDragOverImport"
       :entry-count="entryCount"
       :fcv-connected="fcvConnected"
+      :json-backup-busy="jsonBackupBusy"
+      :full-backup-busy="fullBackupBusy"
+      :full-backup-progress="fullBackupProgress"
+      :full-backup-error="fullBackupError"
       @retry-sync="$emit('retry-sync')"
       @sync-now="$emit('sync-now')"
       @force-full-sync="$emit('force-full-sync')"
@@ -143,6 +147,8 @@
       @import-file="$emit('import-file', $event)"
       @import-provider-file="$emit('import-provider-file', $event)"
       @export-logbook="$emit('export-logbook')"
+      @download-json-backup="$emit('download-json-backup')"
+      @download-full-backup="$emit('download-full-backup')"
       @generate-8710="$emit('generate-8710')"
       @import-fcv="$emit('import-fcv')"
       @flica-connection-changed="$emit('flica-connection-changed', $event)"
@@ -219,6 +225,10 @@ const props = defineProps<{
   entryCount: number
   updatesBadge?: string
   fcvConnected?: boolean
+  jsonBackupBusy?: boolean
+  fullBackupBusy?: boolean
+  fullBackupProgress?: string | null
+  fullBackupError?: string | null
 }>()
 
 const profileSubTabModel = defineModel<'profile' | 'stats'>('profileSubTab', { required: true })
@@ -260,6 +270,8 @@ defineEmits<{
   'import-file': [file: File]
   'import-provider-file': [payload: { file: File; provider: ImportProviderKey }]
   'export-logbook': []
+  'download-json-backup': []
+  'download-full-backup': []
   'generate-8710': []
   'import-fcv': []
   'flica-connection-changed': [{ connected: boolean }]

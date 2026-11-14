@@ -4346,6 +4346,10 @@
       :is-drag-over-import="isDragOverImport"
       :entry-count="logEntries.length"
       :fcv-connected="dashboardFcvConnected"
+      :json-backup-busy="jsonBackupBusy"
+      :full-backup-busy="fullBackupBusy"
+      :full-backup-progress="fullBackupProgress"
+      :full-backup-error="fullBackupError"
       @close="closeSettings"
       @logout="handleLogout"
       @account-deleted="handleAccountDeleted"
@@ -4382,6 +4386,8 @@
       @import-file="handleSettingsImportFile"
       @import-provider-file="handleSettingsProviderImportFile"
       @export-logbook="openExportDialog"
+      @download-json-backup="handleDownloadJsonBackupFromSettings"
+      @download-full-backup="handleDownloadFullBackupFromSettings"
       @generate-8710="showForm8710Modal = true"
       @import-fcv="handleOpenFcvImportFromSettings"
       @flica-connection-changed="handleFlicaConnectionChanged"
@@ -4406,7 +4412,7 @@
     <input
       ref="jsonFileInput"
       type="file"
-      accept=".json,application/json"
+      accept=".json,application/json,.zip,application/zip"
       class="hidden"
       @change="handleJSONImport"
     />
@@ -6877,8 +6883,16 @@ import { withTimeout } from '../utils/promiseTimeout'
 import { apiFetch } from '../utils/apiFetch'
 import { useSyncQueue } from '../composables/useSyncQueue'
 import { useExport } from '../composables/useExport'
+import { useLogbookFullBackup } from '../composables/useLogbookFullBackup'
 import { logbookDataBridgeService } from '../../shared/logbookDataBridge'
 import { downloadExport } from '../utils/logbookDownload'
+import {
+  buildLogbookJsonBackupFilename,
+  buildLogbookJsonBackupString,
+  entriesArrayFromJsonBackup,
+} from '../utils/logbookJsonBackup'
+import { saveBackupDownload } from '../utils/saveBackupDownload'
+import { FullBackupZipImportError, extractLogbookJsonFromZipFile } from '../utils/fullBackupImport'
 import type { BridgeSource, ExportDestination } from '../../shared/logbookDataBridge/types'
 import {
   EXPORT_DESTINATION_HINTS,
@@ -10340,6 +10354,11 @@ const entryFormDrawerRef = ref<HTMLElement | null>(null)
 const editEntryDrawerRef = ref<HTMLElement | null>(null)
 const showSettingsModal = ref(false)
 const settingsStack = ref<SettingsStackFrame[]>(['root'])
+const jsonBackupBusy = ref(false)
+const fullBackupBusy = ref(false)
+const fullBackupProgress = ref<string | null>(null)
+const fullBackupError = ref<string | null>(null)
+const { downloadJsonBackup, downloadFullBackupZip } = useLogbookFullBackup()
 /** Sub-panes inside Settings → Pilot Profile (full-width each). */
 const pilotProfileSubTab = ref<'profile' | 'stats'>('profile')
 const show8710Fields = ref(false)
@@ -10588,7 +10607,7 @@ interface ImportStatistics {
 
 interface ImportMetadata {
   fileName: string
-  fileType: 'CSV' | 'TSV' | 'JSON'
+  fileType: 'CSV' | 'TSV' | 'JSON' | 'ZIP'
   importedAt: string
   detectedSource?: string
   selectedProvider?: string | null
@@ -10907,6 +10926,54 @@ function toggleExportPreviewEntry(id: string) {
   expandedExportPreviewEntries.value = set
 }
 
+function backupPilotProfileSnapshot(): Record<string, unknown> | null {
+  return pilotProfileLoaded.value ? { ...pilotProfile } : null
+}
+
+async function handleDownloadJsonBackupFromSettings(): Promise<void> {
+  if (logEntries.value.length === 0) return
+  jsonBackupBusy.value = true
+  fullBackupError.value = null
+  try {
+    await downloadJsonBackup({
+      entries: logEntries.value,
+      pilotProfile: backupPilotProfileSnapshot(),
+    })
+    showToast('JSON backup saved', { type: 'success' })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'JSON backup failed'
+    fullBackupError.value = message
+    showToast(message, { type: 'error' })
+  } finally {
+    jsonBackupBusy.value = false
+  }
+}
+
+async function handleDownloadFullBackupFromSettings(): Promise<void> {
+  if (!user.value?.id || logEntries.value.length === 0) return
+  fullBackupBusy.value = true
+  fullBackupError.value = null
+  fullBackupProgress.value = 'Starting…'
+  try {
+    await downloadFullBackupZip({
+      userId: user.value.id,
+      entries: logEntries.value,
+      pilotProfile: backupPilotProfileSnapshot(),
+      onProgress: (progress) => {
+        fullBackupProgress.value = progress.message
+      },
+    })
+    showToast('Full backup saved', { type: 'success' })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Full backup failed'
+    fullBackupError.value = message
+    showToast(message, { type: 'error' })
+  } finally {
+    fullBackupBusy.value = false
+    fullBackupProgress.value = null
+  }
+}
+
 function openExportDialog() {
   exportScope.value = 'all'
   const n = new Date()
@@ -11110,107 +11177,28 @@ async function exportToJSON(entries?: LogEntry[]): Promise<void> {
   const list = entries ?? logEntries.value
   if (list.length === 0) return
 
-  const baseDate = new Date().toISOString().split('T')[0]
+  const baseDate = new Date().toISOString().split('T')[0] ?? ''
   const segment = entries != null ? getExportFilenameSegment() : ''
-  const filename = `logifi-logbook-${baseDate}${segment}.json`
-
-  // Use the export composable to prepare entries with audit trail
-  const { prepareEntriesForExport } = useExport()
+  const filename = buildLogbookJsonBackupFilename(baseDate, segment)
+  const profile = backupPilotProfileSnapshot()
+  const { prepareEntriesForExport, prepareEntryForExport } = useExport()
 
   try {
-    // Prepare entries with audit trail
-    const preparedEntries = await prepareEntriesForExport(
-      list,
-      true // include audit trail
-    )
-    
-    const exportData = {
-      exportedAt: new Date().toISOString(),
-      version: '1.1',
-      pilotProfile: pilotProfileLoaded.value ? { ...pilotProfile } : null,
-      entries: preparedEntries
-    }
-    
-    const jsonContent = JSON.stringify(exportData, null, 2)
+    const preparedEntries = await prepareEntriesForExport(list, true)
+    const jsonContent = buildLogbookJsonBackupString({
+      preparedEntries,
+      pilotProfile: profile,
+    })
     const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute('download', filename)
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    await saveBackupDownload(blob, filename)
   } catch (error) {
     console.error('Error exporting JSON:', error)
-    // Fallback: export without audit trail if there's an error
-    const exportData = {
-      exportedAt: new Date().toISOString(),
-      version: '1.1',
-      pilotProfile: pilotProfileLoaded.value ? { ...pilotProfile } : null,
-      entries: list.map((entry) => {
-        const baseEntry: any = {
-          id: entry.id,
-          date: entry.date,
-          role: entry.role,
-          aircraftCategoryClass: entry.aircraftCategoryClass,
-          aircraftMakeModel: entry.aircraftMakeModel,
-          registration: entry.registration,
-          departure: entry.departure,
-          destination: entry.destination,
-          route: entry.route,
-          trainingElements: entry.trainingElements,
-          trainingInstructor: entry.trainingInstructor,
-          instructorCertificate: entry.instructorCertificate,
-          picName: entry.picName ?? null,
-          sicName: entry.sicName ?? null,
-          flightConditions: entry.flightConditions,
-          remarks: entry.remarks,
-          flightTime: entry.flightTime,
-          performance: entry.performance,
-          oooi: entry.oooi,
-          flagged: entry.flagged
-        }
-        
-        // Add metadata if available
-        if (entry.isImported !== undefined || entry.importSource || entry.importBatchId || entry.originalEntryDate || entry.importMetadata) {
-          baseEntry.metadata = {
-            isImported: entry.isImported || false,
-            importSource: entry.importSource || null,
-            importBatchId: entry.importBatchId || null,
-            originalEntryDate: entry.originalEntryDate || null,
-            importMetadata: entry.importMetadata || null
-          }
-        }
-        
-        // Add integrity fields if available
-        if (entry.version !== undefined || entry.dataHash || entry.createdAt || entry.updatedAt) {
-          baseEntry.integrity = {
-            version: entry.version || null,
-            dataHash: entry.dataHash || null,
-            createdAt: entry.createdAt || null,
-            updatedAt: entry.updatedAt || null
-          }
-        }
-        
-        baseEntry.auditTrail = []
-        
-        return baseEntry
-      })
-    }
-    
-    const jsonContent = JSON.stringify(exportData, null, 2)
+    const jsonContent = buildLogbookJsonBackupString({
+      preparedEntries: list.map((entry) => prepareEntryForExport(entry, [])),
+      pilotProfile: profile,
+    })
     const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute('download', filename)
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    await saveBackupDownload(blob, filename)
   }
 }
 
@@ -12439,71 +12427,76 @@ async function handleJSONImport(event: Event): Promise<void> {
   }
 }
 
+async function processJSONImportText(text: string, fileName: string, fileType: 'JSON' | 'ZIP'): Promise<void> {
+  const data = JSON.parse(text)
+  const entries = entriesArrayFromJsonBackup(data)
+
+  if (!entries) {
+    showToast(
+      'JSON file format not recognized. Expected an array of entries or an object with an "entries" property.',
+      { type: 'error' }
+    )
+    return
+  }
+
+  if (entries.length === 0) {
+    showToast('No entries found in JSON file.', { type: 'error' })
+    return
+  }
+
+  const normalizedEntries: LogEntry[] = []
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i] as Record<string, unknown>
+    const normalized = await normalizeImportedEntry(entry)
+    if (normalized) {
+      normalizedEntries.push(normalized)
+    }
+    if ((i + 1) % IMPORT_UI_YIELD_EVERY === 0) {
+      setImportBusy(`Reading ${i + 1} / ${entries.length}`)
+      await yieldToImportUi()
+    }
+  }
+
+  if (normalizedEntries.length === 0) {
+    showToast('No valid entries found in JSON file.', { type: 'error' })
+    return
+  }
+
+  setImportBusy(`Checking 0 / ${normalizedEntries.length}`)
+  const { statistics, validEntries, errors } = await calculateImportStatistics(normalizedEntries)
+  importPreviewAllEntries.value = normalizedEntries
+  importPreviewEntries.value = [...validEntries, ...errors.map((e) => e.entry)]
+  importPreviewStatistics.value = statistics
+  const durationFormat = detectImportDurationFormat(entries)
+  const truncationWarning = clockDurationTruncationWarning(entries, parsedEntryDurations(normalizedEntries))
+  importPreviewMetadata.value = {
+    fileName,
+    fileType,
+    importedAt: new Date().toISOString(),
+    detectedSource: 'json',
+    durationFormat,
+    bridgeWarnings: truncationWarning ? [truncationWarning] : [],
+  }
+  importDuplicatesFlagged.value = false
+  showImportPreview.value = true
+  initImportSimTypeOverrides()
+}
+
 async function processJSONFile(file: File): Promise<void> {
   setImportBusy('Reading file…')
   try {
-    const text = await file.text()
-    const data = JSON.parse(text)
-    
-    // Handle both direct array and wrapped format
-    let entries: any[] = []
-    if (Array.isArray(data)) {
-      entries = data
-    } else if (data.entries && Array.isArray(data.entries)) {
-      entries = data.entries
-    } else {
-      showToast('JSON file format not recognized. Expected an array of entries or an object with an "entries" property.', { type: 'error' })
-      return
-    }
-    
-    if (entries.length === 0) {
-      showToast('No entries found in JSON file.', { type: 'error' })
-      return
-    }
-    
-    // Normalize entries
-    const normalizedEntries: LogEntry[] = []
-    for (let i = 0; i < entries.length; i++) {
-      const entry = entries[i]
-      const normalized = await normalizeImportedEntry(entry)
-      if (normalized) {
-        normalizedEntries.push(normalized)
-      }
-      if ((i + 1) % IMPORT_UI_YIELD_EVERY === 0) {
-        setImportBusy(`Reading ${i + 1} / ${entries.length}`)
-        await yieldToImportUi()
-      }
-    }
-    
-    if (normalizedEntries.length === 0) {
-      showToast('No valid entries found in JSON file.', { type: 'error' })
-      return
-    }
-    
-    // Calculate statistics and show preview
-    setImportBusy(`Checking 0 / ${normalizedEntries.length}`)
-    const { statistics, validEntries, errors } = await calculateImportStatistics(normalizedEntries)
-    importPreviewAllEntries.value = normalizedEntries
-    importPreviewEntries.value = [...validEntries, ...errors.map(e => e.entry)]
-    importPreviewStatistics.value = statistics
-    const durationFormat = detectImportDurationFormat(entries)
-    const truncationWarning = clockDurationTruncationWarning(
-      entries,
-      parsedEntryDurations(normalizedEntries)
-    )
-    importPreviewMetadata.value = {
-      fileName: file.name,
-      fileType: 'JSON',
-      importedAt: new Date().toISOString(),
-      detectedSource: 'json',
-      durationFormat,
-      bridgeWarnings: truncationWarning ? [truncationWarning] : [],
-    }
-    importDuplicatesFlagged.value = false
-    showImportPreview.value = true
-    initImportSimTypeOverrides()
+    const lower = file.name.toLowerCase()
+  const isZip = lower.endsWith('.zip') || file.type === 'application/zip'
+    const text = isZip
+      ? (await extractLogbookJsonFromZipFile(file)).text
+      : await file.text()
+    await processJSONImportText(text, file.name, isZip ? 'ZIP' : 'JSON')
   } catch (error) {
     console.error('Error importing JSON:', error)
+    if (error instanceof FullBackupZipImportError) {
+      showToast(error.message, { type: 'error' })
+      return
+    }
     showToast(`Error importing JSON file: ${error instanceof Error ? error.message : 'Unknown error'}`, { type: 'error' })
   } finally {
     clearImportBusy()
@@ -12576,11 +12569,16 @@ async function handleImportDrop(event: DragEvent): Promise<void> {
   if (fileName.endsWith('.csv') || fileName.endsWith('.txt') || fileName.endsWith('.tsv') || file.type === 'text/csv' || file.type === 'text/plain') {
     console.log('Processing as CSV/Tab-delimited')
     await processCSVFile(file)
-  } else if (fileName.endsWith('.json') || file.type === 'application/json') {
-    console.log('Processing as JSON')
+  } else if (
+    fileName.endsWith('.json') ||
+    file.type === 'application/json' ||
+    fileName.endsWith('.zip') ||
+    file.type === 'application/zip'
+  ) {
+    console.log('Processing as JSON or backup ZIP')
     await processJSONFile(file)
   } else {
-    showToast(`Please drop a CSV, TSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`, { type: 'error' })
+    showToast(`Please drop a CSV, TSV, TXT, JSON, or ZIP backup. Received: ${file.type || 'unknown type'}`, { type: 'error' })
   }
 }
 
@@ -12589,10 +12587,15 @@ async function handleSettingsImportFile(file: File): Promise<void> {
 
   if (fileName.endsWith('.csv') || fileName.endsWith('.txt') || fileName.endsWith('.tsv') || file.type === 'text/csv' || file.type === 'text/plain') {
     await processCSVFile(file)
-  } else if (fileName.endsWith('.json') || file.type === 'application/json') {
+  } else if (
+    fileName.endsWith('.json') ||
+    file.type === 'application/json' ||
+    fileName.endsWith('.zip') ||
+    file.type === 'application/zip'
+  ) {
     await processJSONFile(file)
   } else {
-    showToast(`Please choose a CSV, TSV, TXT, or JSON file. Received: ${file.type || 'unknown type'}`, { type: 'error' })
+    showToast(`Please choose a CSV, TSV, TXT, JSON, or ZIP backup. Received: ${file.type || 'unknown type'}`, { type: 'error' })
   }
 }
 
