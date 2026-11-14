@@ -50,6 +50,26 @@ export type AircraftCategory8710 =
   | 'ftd'             // Flight Training Device
   | 'atd'             // Aviation Training Device
 
+export const AIRCRAFT_CATEGORY_8710_LABELS: Record<AircraftCategory8710, string> = {
+  'airplane-sel': 'Airplane SEL',
+  'airplane-mel': 'Airplane MEL',
+  'airplane-ses': 'Airplane SES',
+  'airplane-mes': 'Airplane MES',
+  'rotorcraft-heli': 'Rotorcraft Helicopter',
+  'rotorcraft-gyro': 'Rotorcraft Gyroplane',
+  glider: 'Glider',
+  'lta-balloon': 'LTA Balloon',
+  'lta-airship': 'LTA Airship',
+  'powered-lift': 'Powered Lift',
+  ffs: 'Full Flight Simulator',
+  ftd: 'Flight Training Device',
+  atd: 'Aviation Training Device',
+}
+
+export function get8710CategoryLabel(category: AircraftCategory8710): string {
+  return AIRCRAFT_CATEGORY_8710_LABELS[category] ?? category
+}
+
 // Flight time breakdown for each category/class
 export interface CategoryFlightTimes {
   category: AircraftCategory8710

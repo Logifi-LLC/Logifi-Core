@@ -188,6 +188,13 @@
         @click="entryCount > 0 && $emit('generate-8710')"
       />
       <SettingsListRow
+        label="Download paper logbook"
+        subtitle="PDF with page totals and signature line"
+        icon="ri:book-2-line"
+        :is-dark-mode="isDarkMode"
+        @click="entryCount > 0 && $emit('download-logbook-pdf')"
+      />
+      <SettingsListRow
         label="Totals report"
         subtitle="Airline application flight-time totals"
         icon="ri:table-line"
@@ -243,6 +250,7 @@ const emit = defineEmits<{
   'import-provider-file': [payload: { file: File; provider: ImportProviderKey }]
   'export-logbook': []
   'generate-8710': []
+  'download-logbook-pdf': []
   'import-fcv': []
   'flica-connection-changed': [{ connected: boolean }]
   close: []

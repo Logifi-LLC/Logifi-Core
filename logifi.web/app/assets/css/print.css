@@ -1,0 +1,173 @@
+/*
+  Browser Print for the logbook and Form 8710 view.
+  Hide chrome, force black on white, keep rows intact, repeat table headers.
+*/
+
+@media print {
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Dashboard sitting under a teleported 8710 view would otherwise print too. */
+  body:has(#form8710-content) #__nuxt {
+    display: none !important;
+  }
+
+  .print-hide,
+  header,
+  nav,
+  aside,
+  .app-modal-overlay:not(:has(#form8710-content)):not(:has(#logbook-pdf-export-dialog)) {
+    display: none !important;
+  }
+
+  button.print-hide,
+  .print-hide {
+    display: none !important;
+  }
+
+  body:has(#form8710-content) .app-modal-overlay {
+    position: static !important;
+    background: #fff !important;
+    overflow: visible !important;
+    inset: auto !important;
+  }
+
+  #form8710-content {
+    position: static !important;
+    background: #fff !important;
+    color: #000 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  #form8710-content,
+  #form8710-content * {
+    color: #000 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  #form8710-content table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  #form8710-content thead {
+    display: table-header-group;
+  }
+
+  #form8710-content tr,
+  #form8710-content h1,
+  #form8710-content h2,
+  #form8710-content h3 {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  #form8710-content th,
+  #form8710-content td {
+    border: 1px solid #000 !important;
+  }
+
+  .logbook-print-root {
+    display: block !important;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    border-color: #000 !important;
+    overflow: visible !important;
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .logbook-print-table {
+    width: 100% !important;
+    max-width: none !important;
+    table-layout: auto !important;
+    border-collapse: collapse !important;
+    background: #fff !important;
+    color: #000 !important;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+
+  .logbook-print-table thead {
+    display: table-header-group;
+  }
+
+  .logbook-print-table tfoot {
+    display: table-footer-group;
+  }
+
+  .logbook-print-table th,
+  .logbook-print-table td {
+    color: #000 !important;
+    background: #fff !important;
+    border-color: #000 !important;
+    box-shadow: none !important;
+  }
+
+  .logbook-print-table tbody tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Paper-style page breaks every 13 rows; skip a trailing blank page. */
+  .logbook-print-table tbody tr:nth-child(13n):not(:last-child) {
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .logbook-print-table .cursor-col-resize {
+    display: none !important;
+  }
+
+  .logbook-print-cards {
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    border-color: #000 !important;
+    overflow: visible !important;
+  }
+
+  .logbook-print-cards > * {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    border-color: #000 !important;
+  }
+
+  .logbook-print-cards > *:nth-child(13n):not(:last-child) {
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .logbook-paper-page {
+    break-after: page;
+    page-break-after: always;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .logbook-paper-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}

@@ -144,6 +144,7 @@
       @import-provider-file="$emit('import-provider-file', $event)"
       @export-logbook="$emit('export-logbook')"
       @generate-8710="$emit('generate-8710')"
+      @download-logbook-pdf="$emit('download-logbook-pdf')"
       @import-fcv="$emit('import-fcv')"
       @flica-connection-changed="$emit('flica-connection-changed', $event)"
       @close="$emit('close')"
@@ -261,6 +262,7 @@ defineEmits<{
   'import-provider-file': [payload: { file: File; provider: ImportProviderKey }]
   'export-logbook': []
   'generate-8710': []
+  'download-logbook-pdf': []
   'import-fcv': []
   'flica-connection-changed': [{ connected: boolean }]
 }>()
