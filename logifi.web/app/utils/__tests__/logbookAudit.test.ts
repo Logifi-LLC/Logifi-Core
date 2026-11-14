@@ -20,6 +20,7 @@ import {
   createEmptyPerformance,
   type LogEntry,
 } from '../logbookTypes'
+import { withAirportClientDbFixture } from '../../../shared/__tests__/airportTestDb'
 
 function fixtureEntry(overrides: Partial<LogEntry> = {}): LogEntry {
   return {
@@ -345,6 +346,35 @@ describe('logbookAudit', () => {
       })
     )
     expect(overnight).toHaveLength(0)
+  })
+
+  describe('zoned local OOOI order', () => {
+    withAirportClientDbFixture()
+
+    it('does not flag legacy local IND→ORD clocks once each event is zoned', () => {
+      const findings = checkOooiOrder(
+        fixtureEntry({
+          date: '2026-11-13',
+          departure: 'KIND',
+          destination: 'KORD',
+          oooi: { out: '1200', off: '1210', on: '1140', in: '1200', isZulu: false },
+        })
+      )
+      expect(findings).toHaveLength(0)
+    })
+  })
+
+  it('still flags a true reverse on a Zulu IND→ORD import', () => {
+    const findings = checkOooiOrder(
+      fixtureEntry({
+        date: '2026-11-13',
+        departure: 'KIND',
+        destination: 'KORD',
+        oooi: { out: '1700', off: '1710', on: '1650', in: '1800', isZulu: true },
+      })
+    )
+    expect(findings).toHaveLength(1)
+    expect(findings[0].ruleId).toBe('oooi_order')
   })
 
   it('flags cross-country with the same from/to and no route', () => {

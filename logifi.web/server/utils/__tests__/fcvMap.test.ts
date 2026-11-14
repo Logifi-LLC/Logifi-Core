@@ -45,11 +45,11 @@ describe('mapFcvFlightToEntry', () => {
       fcv_aircraft_type: 'B737',
     })
     expect(e.oooi).toEqual({
-      out: '0800',
-      off: '0812',
-      on: '1030',
-      in: '1045',
-      isZulu: false,
+      out: '1500',
+      off: '1512',
+      on: '1730',
+      in: '1745',
+      isZulu: true,
     })
     // Gate OUT→IN (08:00–10:45) wins over `block` HHMM so Total/XC match OOOI
     const total = 2.8
@@ -151,11 +151,11 @@ describe('mapFcvFlightToEntry', () => {
       arr_airport: 'PDX',
     })
     expect(e.oooi).toEqual({
-      out: '0615',
+      out: '1315',
       off: null,
       on: null,
-      in: '0920',
-      isZulu: false,
+      in: '1620',
+      isZulu: true,
     })
   })
 
@@ -272,6 +272,79 @@ describe('mapFcvFlightToEntry', () => {
       pic: 1.8,
       crossCountry: 1.8,
     })
+    expect(e.oooi).toEqual({
+      out: '0046',
+      off: null,
+      on: null,
+      in: '0234',
+      isZulu: true,
+    })
+  })
+
+  it('converts FC View local IND→ORD clocks to Zulu without UTC fields', () => {
+    const e = mapFcvFlightToEntry({
+      fcv_flight_id: 'ind-ord-local',
+      actual_out_local: '2026-11-13 12:00:00',
+      actual_off_local: '2026-11-13 12:10:00',
+      actual_on_local: '2026-11-13 11:40:00',
+      actual_in_local: '2026-11-13 12:00:00',
+      dep_airport_icao: 'KIND',
+      arr_airport_icao: 'KORD',
+      role: 'PIC',
+    })
+    expect(e.oooi).toEqual({
+      out: '1700',
+      off: '1710',
+      on: '1740',
+      in: '1800',
+      isZulu: true,
+    })
+    expect(e.flight_time).toMatchObject({ total: 1.0 })
+  })
+
+  it('stores FC View UTC fields as Zulu even when local clocks disagree across zones', () => {
+    const e = mapFcvFlightToEntry({
+      fcv_flight_id: 'ind-ord-utc',
+      actual_out_local: '2026-11-13 12:00:00',
+      actual_off_local: '2026-11-13 12:10:00',
+      actual_on_local: '2026-11-13 11:40:00',
+      actual_in_local: '2026-11-13 12:00:00',
+      actual_out_utc: '2026-11-13T17:00:00Z',
+      actual_off_utc: '2026-11-13T17:10:00Z',
+      actual_on_utc: '2026-11-13T17:40:00Z',
+      actual_in_utc: '2026-11-13T18:00:00Z',
+      dep_airport_icao: 'KIND',
+      arr_airport_icao: 'KORD',
+      role: 'PIC',
+    })
+    expect(e.oooi).toEqual({
+      out: '1700',
+      off: '1710',
+      on: '1740',
+      in: '1800',
+      isZulu: true,
+    })
+    expect(e.flight_time).toMatchObject({ total: 1.0 })
+    expect(e.import_metadata?.oooi_tz_unresolved).toBeUndefined()
+  })
+
+  it('marks unresolved local OOOI when airport TZ is unknown', () => {
+    const e = mapFcvFlightToEntry({
+      fcv_flight_id: 'unknown-tz',
+      actual_out_local: '2026-11-13 12:00:00',
+      actual_in_local: '2026-11-13 13:00:00',
+      dep_airport: 'ZZZZ',
+      arr_airport: 'YYYY',
+    })
+    expect(e.oooi).toEqual({
+      out: '1200',
+      off: null,
+      on: null,
+      in: '1300',
+      isZulu: false,
+      tzUnresolved: true,
+    })
+    expect(e.import_metadata?.oooi_tz_unresolved).toBe(true)
   })
 
   it('same-timezone gate duration unchanged when airports share zone', () => {

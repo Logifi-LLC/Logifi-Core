@@ -6821,9 +6821,9 @@ import {
 import { useLocationLookup } from '../composables/useLocationLookup'
 import { calculateNightTime } from '../utils/nightTimeCalculator'
 import { nightAutoCalcInputKey, shouldApplyAutoNightTime } from '../../shared/nightAutoCalcPolicy'
-import { DateTime } from 'luxon'
 import { ensureAirportClientDbLoaded } from '../../shared/airportClientDb'
 import { getAirportIanaTimezone, normalizeTimezoneToIANA } from '../../shared/airportTimezone'
+import { oooiPairDurationHours } from '../../shared/oooiClock'
 import { sortEntriesByDateAndOOOI } from '../../shared/oooiSort'
 import { listCatalogPersonDisplayNames, tagsExcludingPersonNameMarker, isPersonCatalogNameMarker } from '../../shared/catalogPersonNames'
 import type { Form8710Data, AircraftCategory8710, ComplianceMetadata } from '../utils/form8710Types'
@@ -15220,24 +15220,6 @@ function parsedEntryDurations(entries: LogEntry[]): number[] {
   return values
 }
 
-/**
- * Helper to parse time string (HH:mm or HHmm) to minutes since midnight
- */
-function parseTimeToMinutes(time: string | null): number | null {
-  if (!time) return null
-  
-  const t = time.replace(':', '').trim()
-  if (t.length < 3) return null
-  const normalized = t.length === 3 ? '0' + t : t
-  if (normalized.length !== 4) return null
-  
-  const h = parseInt(normalized.substring(0, 2))
-  const m = parseInt(normalized.substring(2, 4))
-  if (isNaN(h) || isNaN(m)) return null
-  
-  return h * 60 + m
-}
-
 // Cache for airport timezone lookups
 const airportTimezoneCache = new Map<string, string | null>()
 
@@ -15306,218 +15288,14 @@ async function calculateDuration(
   endTimezone?: string | null,
   isZulu?: boolean
 ): Promise<number | null> {
-  if (!start || !end) return null
-  
-  // If times are in UTC or no timezone info, use simple calculation
-  if (isZulu || (!startTimezone && !endTimezone)) {
-    console.log('[CalculateDuration] Using simple calculation:', { isZulu, startTimezone, endTimezone })
-    const s = parseTimeToMinutes(start)
-    const e = parseTimeToMinutes(end)
-    
-    if (s === null || e === null) return null
-    
-    let diff = e - s
-    if (diff < 0) diff += 24 * 60 // wrap around midnight
-    
-    const result = Math.round((diff / 60) * 10) / 10
-    console.log('[CalculateDuration] Simple calculation result:', result)
-    return result
-  }
-  
-  // If both timezones are the same, use simple calculation
-  if (startTimezone && endTimezone && startTimezone === endTimezone) {
-    console.log('[CalculateDuration] Same timezone, using simple calculation:', startTimezone)
-    const s = parseTimeToMinutes(start)
-    const e = parseTimeToMinutes(end)
-    
-    if (s === null || e === null) return null
-    
-    let diff = e - s
-    if (diff < 0) diff += 24 * 60 // wrap around midnight
-    
-    const result = Math.round((diff / 60) * 10) / 10
-    console.log('[CalculateDuration] Same timezone calculation result:', result)
-    return result
-  }
-  
-  // Need date for timezone conversion (for DST handling)
-  const flightDate = date || new Date().toISOString().split('T')[0]
-  
-  console.log('[CalculateDuration] Using timezone-aware calculation:', {
+  return oooiPairDurationHours({
     start,
     end,
-    date: flightDate,
+    date,
+    isZulu,
     startTimezone,
-    endTimezone
+    endTimezone,
   })
-  
-  // Validate flightDate format
-  if (!flightDate || !/^\d{4}-\d{2}-\d{2}$/.test(flightDate)) {
-    // Fallback to simple calculation if date is invalid
-    const s = parseTimeToMinutes(start)
-    const e = parseTimeToMinutes(end)
-    if (s === null || e === null) return null
-    let diff = e - s
-    if (diff < 0) diff += 24 * 60
-    return Math.round((diff / 60) * 10) / 10
-  }
-  
-  try {
-    // Parse time strings
-    const startTimeStr = start.replace(':', '').trim()
-    const endTimeStr = end.replace(':', '').trim()
-    
-    const startNormalized = startTimeStr.length === 3 ? '0' + startTimeStr : startTimeStr
-    const endNormalized = endTimeStr.length === 3 ? '0' + endTimeStr : endTimeStr
-    
-    if (startNormalized.length !== 4 || endNormalized.length !== 4) {
-      // Fallback to simple calculation
-      const s = parseTimeToMinutes(start)
-      const e = parseTimeToMinutes(end)
-      if (s === null || e === null) return null
-      let diff = e - s
-      if (diff < 0) diff += 24 * 60
-      return Math.round((diff / 60) * 10) / 10
-    }
-    
-    // Parse date components
-    const dateParts = flightDate.split('-')
-    if (dateParts.length !== 3) {
-      // Fallback to simple calculation
-      const s = parseTimeToMinutes(start)
-      const e = parseTimeToMinutes(end)
-      if (s === null || e === null) return null
-      let diff = e - s
-      if (diff < 0) diff += 24 * 60
-      return Math.round((diff / 60) * 10) / 10
-    }
-    
-    const yearStr = dateParts[0]
-    const monthStr = dateParts[1]
-    const dayStr = dateParts[2]
-    
-    if (!yearStr || !monthStr || !dayStr) {
-      // Fallback to simple calculation
-      const s = parseTimeToMinutes(start)
-      const e = parseTimeToMinutes(end)
-      if (s === null || e === null) return null
-      let diff = e - s
-      if (diff < 0) diff += 24 * 60
-      return Math.round((diff / 60) * 10) / 10
-    }
-    
-    const year = parseInt(yearStr)
-    const month = parseInt(monthStr)
-    const day = parseInt(dayStr)
-    
-    if (isNaN(year) || isNaN(month) || isNaN(day)) {
-      // Fallback to simple calculation
-      const s = parseTimeToMinutes(start)
-      const e = parseTimeToMinutes(end)
-      if (s === null || e === null) return null
-      let diff = e - s
-      if (diff < 0) diff += 24 * 60
-      return Math.round((diff / 60) * 10) / 10
-    }
-    
-    // Create DateTime objects with timezone context
-    const startHour = parseInt(startNormalized.substring(0, 2))
-    const startMin = parseInt(startNormalized.substring(2, 4))
-    const endHour = parseInt(endNormalized.substring(0, 2))
-    const endMin = parseInt(endNormalized.substring(2, 4))
-    
-    // Create DateTime in respective timezones
-    const startDT = startTimezone
-      ? DateTime.fromObject(
-          {
-            year,
-            month,
-            day,
-            hour: startHour,
-            minute: startMin
-          },
-          { zone: startTimezone }
-        )
-      : DateTime.fromObject(
-          {
-            year,
-            month,
-            day,
-            hour: startHour,
-            minute: startMin
-          }
-        )
-    
-    const endDT = endTimezone
-      ? DateTime.fromObject(
-          {
-            year,
-            month,
-            day,
-            hour: endHour,
-            minute: endMin
-          },
-          { zone: endTimezone }
-        )
-      : DateTime.fromObject(
-          {
-            year,
-            month,
-            day,
-            hour: endHour,
-            minute: endMin
-          }
-        )
-    
-    if (!startDT.isValid || !endDT.isValid) {
-      // Fallback to simple calculation
-      const s = parseTimeToMinutes(start)
-      const e = parseTimeToMinutes(end)
-      if (s === null || e === null) return null
-      let diff = e - s
-      if (diff < 0) diff += 24 * 60
-      return Math.round((diff / 60) * 10) / 10
-    }
-    
-    // Convert both to UTC for accurate comparison
-    const startUTC = startDT.toUTC()
-    const endUTC = endDT.toUTC()
-    
-    // Calculate difference in minutes
-    const diffMs = endUTC.toMillis() - startUTC.toMillis()
-    const diffMinutes = diffMs / (1000 * 60)
-    
-    // Handle negative differences (crossing midnight)
-    let finalDiff = diffMinutes
-    if (finalDiff < 0) {
-      // If negative and less than -12 hours, assume next day
-      if (finalDiff < -12 * 60) {
-        finalDiff += 24 * 60
-      } else {
-        // Otherwise, might be same day but timezone difference makes it appear negative
-        // Try adding 24 hours
-        finalDiff += 24 * 60
-      }
-    }
-    
-    // Convert to hours and round to 1 decimal
-    const result = Math.round((finalDiff / 60) * 10) / 10
-    console.log('[CalculateDuration] Timezone-aware calculation result:', result, {
-      startUTC: startUTC.toISO(),
-      endUTC: endUTC.toISO(),
-      diffMinutes: finalDiff
-    })
-    return result
-  } catch (error) {
-    console.warn('[CalculateDuration] Error calculating timezone-aware duration, falling back to simple calculation:', error)
-    // Fallback to simple calculation
-    const s = parseTimeToMinutes(start)
-    const e = parseTimeToMinutes(end)
-    if (s === null || e === null) return null
-    let diff = e - s
-    if (diff < 0) diff += 24 * 60
-    return Math.round((diff / 60) * 10) / 10
-  }
 }
 
 // Watcher to auto-calculate total time and flight time

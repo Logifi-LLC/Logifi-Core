@@ -17,6 +17,8 @@ import { getSunTimes } from '../solarCalculator'
 
 const KLAX = { lat: 33.9425, lon: -118.4081, tz: 'America/Los_Angeles' }
 const KJFK = { lat: 40.6398, lon: -73.7789, tz: 'America/New_York' }
+const KIND = { lat: 39.7173, lon: -86.2944, tz: 'America/New_York' }
+const KORD = { lat: 41.9742, lon: -87.9073, tz: 'America/Chicago' }
 const PANC = { lat: 61.1743, lon: -149.9963, tz: 'America/Anchorage' }
 const PHNL = { lat: 21.3187, lon: -157.9224, tz: 'Pacific/Honolulu' }
 
@@ -198,6 +200,19 @@ describe('calculateNightTime known answers', () => {
     expect(result.success).toBe(true)
     expect(result.totalHours).toBe(1.5)
     expect(result.nightHours).toBe(0.5)
+  })
+
+  it('legacy local IND→ORD 12:00-12:00 is 1.0 total and 0 night', () => {
+    const result = localNight({
+      date: '2026-11-13',
+      out: '12:00',
+      inn: '12:00',
+      airport: KIND,
+      dest: KORD,
+    })
+    expect(result.success).toBe(true)
+    expect(result.totalHours).toBe(1.0)
+    expect(result.nightHours).toBe(0)
   })
 
   it('rejects invalid clock strings', () => {
