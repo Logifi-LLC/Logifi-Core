@@ -6,9 +6,9 @@ import {
   type ListedCrewMember,
   type OwnRoleUnmatchedReason,
 } from '../../shared/airlineOwnRole'
-import type { FcvFlight, FcvMappedEntry, FcvMappedOooi } from './fcvMap'
+import type { FcvFlight, FcvMappedEntry } from './fcvMap'
 import {
-  parseFcvLocalDatetimeToHHMM,
+  buildMappedOooiFromAirlineSource,
   resolveFcvBlockHours,
 } from './fcvMap'
 import { applyAirlineNightToMappedEntry } from './airlineNight'
@@ -97,32 +97,10 @@ function hhmmToLocalDatetime(dateYmd: string, hhmm: string | null): string | nul
   return `${dateYmd} ${h}:${m}:00`
 }
 
-function firstHHMM(actual: string | null, scheduled: string | null): string | null {
-  return (
-    parseFcvLocalDatetimeToHHMM(actual) ?? parseFcvLocalDatetimeToHHMM(scheduled)
-  )
-}
-
 function firstDatetime(actual: string | null, scheduled: string | null): string | null {
   if (typeof actual === 'string' && actual.trim().length >= 10) return actual.trim()
   if (typeof scheduled === 'string' && scheduled.trim().length >= 10) return scheduled.trim()
   return null
-}
-
-function buildOooiFromLeg(leg: AirlineLeg): FcvMappedOooi | null {
-  // FlightAware (or AeroDataBox) actuals on the leg win; FLICA scheduled fills gaps.
-  const out = firstHHMM(leg.actual_out_local, leg.scheduled_out_local)
-  const inn = firstHHMM(leg.actual_in_local, leg.scheduled_in_local)
-  const off = parseFcvLocalDatetimeToHHMM(leg.actual_off_local)
-  const on = parseFcvLocalDatetimeToHHMM(leg.actual_on_local)
-  if (out == null && off == null && on == null && inn == null) return null
-  return {
-    out: out ?? null,
-    off: off ?? null,
-    on: on ?? null,
-    in: inn ?? null,
-    isZulu: false,
-  }
 }
 
 function airportsQualifyForXc(dep: string, arr: string): boolean {
@@ -312,7 +290,11 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
     originalEntryDate = Number.isNaN(d.getTime()) ? null : d.toISOString()
   }
 
-  const oooi = buildOooiFromLeg(leg)
+  const oooi = buildMappedOooiFromAirlineSource(
+    { ...(leg as unknown as Record<string, unknown>) },
+    dep,
+    arr
+  )
   const tags = leg.is_deadhead ? ['Deadhead'] : []
   const ownRole = parseAirlineOwnSeat(leg.role)
   const unmatchedReason = unmatchedReasonForLeg(leg, ownRole)
@@ -368,6 +350,7 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
         crew_name_normalized: normalizeCrewNameForMatching(otherPilotName ?? ''),
       },
       airline_leg_raw: { ...leg },
+      ...(oooi?.tzUnresolved ? { oooi_tz_unresolved: true } : {}),
     },
   }
 

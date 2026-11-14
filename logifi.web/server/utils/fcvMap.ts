@@ -1,4 +1,8 @@
 import { DateTime } from 'luxon'
+import {
+  localDatetimeToZuluHhmm,
+  utcDatetimeToZuluHhmm,
+} from '../../shared/oooiClock'
 import { getAirportIanaTimezoneServer } from './airportIana'
 import {
   parseAirlineOwnSeat,
@@ -52,6 +56,12 @@ export interface FcvFlight {
   actual_off_local?: string
   actual_on_local?: string
   actual_in_local?: string
+  actual_out_utc?: string
+  actual_off_utc?: string
+  actual_on_utc?: string
+  actual_in_utc?: string
+  scheduled_out_utc?: string
+  scheduled_in_utc?: string
   crew?: unknown
   crew_members?: unknown
   crew_list?: unknown
@@ -65,6 +75,8 @@ export interface FcvMappedOooi {
   on: string | null
   in: string | null
   isZulu: boolean
+  /** True when clocks were left airport-local because a TZ conversion was not possible. */
+  tzUnresolved?: boolean
 }
 
 /**
@@ -241,19 +253,131 @@ function firstHHMM(actual: unknown, scheduled: unknown): string | null {
   return parseFcvLocalDatetimeToHHMM(actual) ?? parseFcvLocalDatetimeToHHMM(scheduled)
 }
 
-function buildOooiFromFlight(f: FcvFlight): FcvMappedOooi | null {
-  const out = firstHHMM(f.actual_out_local, f.scheduled_out_local)
-  const off = parseFcvLocalDatetimeToHHMM(f.actual_off_local)
-  const on = parseFcvLocalDatetimeToHHMM(f.actual_on_local)
-  const inn = firstHHMM(f.actual_in_local, f.scheduled_in_local)
-  if (out == null && off == null && on == null && inn == null) return null
+function asDatetimeString(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length >= 10 ? trimmed : null
+}
+
+function pickDatetime(
+  raw: Record<string, unknown>,
+  names: readonly string[]
+): string | null {
+  const lowerToKey = new Map<string, string>()
+  for (const key of Object.keys(raw)) lowerToKey.set(key.toLowerCase(), key)
+  for (const name of names) {
+    const direct = asDatetimeString(raw[name])
+    if (direct) return direct
+    const mapped = lowerToKey.get(name.toLowerCase())
+    if (!mapped) continue
+    const value = asDatetimeString(raw[mapped])
+    if (value) return value
+  }
+  return null
+}
+
+function localWallToZuluHhmm(dt: string, airport: string): string | null {
+  const zone = getAirportIanaTimezoneServer(airport)
+  if (!zone) return null
+  return localDatetimeToZuluHhmm(dt, zone)
+}
+
+/**
+ * Store OOOI as Zulu HHMM when the source has UTC timestamps or both airport
+ * zones are known. Otherwise keep airport-local HHMM and mark tzUnresolved.
+ */
+export function buildMappedOooiFromAirlineSource(
+  raw: Record<string, unknown>,
+  depAirport: string,
+  arrAirport: string
+): FcvMappedOooi | null {
+  const outLocal = pickDatetime(raw, ['actual_out_local', 'scheduled_out_local'])
+  const offLocal = pickDatetime(raw, ['actual_off_local'])
+  const onLocal = pickDatetime(raw, ['actual_on_local'])
+  const inLocal = pickDatetime(raw, ['actual_in_local', 'scheduled_in_local'])
+  const outUtc = pickDatetime(raw, [
+    'actual_out_utc',
+    'actual_out_zulu',
+    'scheduled_out_utc',
+    'scheduled_out_zulu',
+  ])
+  const offUtc = pickDatetime(raw, ['actual_off_utc', 'actual_off_zulu'])
+  const onUtc = pickDatetime(raw, ['actual_on_utc', 'actual_on_zulu'])
+  const inUtc = pickDatetime(raw, [
+    'actual_in_utc',
+    'actual_in_zulu',
+    'scheduled_in_utc',
+    'scheduled_in_zulu',
+  ])
+
+  const events: Array<{
+    key: 'out' | 'off' | 'on' | 'in'
+    local: string | null
+    utc: string | null
+    airport: string
+  }> = [
+    { key: 'out', local: outLocal, utc: outUtc, airport: depAirport },
+    { key: 'off', local: offLocal, utc: offUtc, airport: depAirport },
+    { key: 'on', local: onLocal, utc: onUtc, airport: arrAirport },
+    { key: 'in', local: inLocal, utc: inUtc, airport: arrAirport },
+  ]
+
+  if (!events.some((event) => event.local || event.utc)) return null
+
+  const zulu: Record<'out' | 'off' | 'on' | 'in', string | null> = {
+    out: null,
+    off: null,
+    on: null,
+    in: null,
+  }
+  let canStoreZulu = true
+  for (const event of events) {
+    if (!event.utc && !event.local) continue
+    if (event.utc) {
+      const hhmm = utcDatetimeToZuluHhmm(event.utc)
+      if (!hhmm) {
+        canStoreZulu = false
+        break
+      }
+      zulu[event.key] = hhmm
+      continue
+    }
+    const hhmm = localWallToZuluHhmm(event.local!, event.airport)
+    if (!hhmm) {
+      canStoreZulu = false
+      break
+    }
+    zulu[event.key] = hhmm
+  }
+
+  if (canStoreZulu) {
+    return {
+      out: zulu.out,
+      off: zulu.off,
+      on: zulu.on,
+      in: zulu.in,
+      isZulu: true,
+    }
+  }
+
+  const out = firstHHMM(outLocal, null)
+  const off = parseFcvLocalDatetimeToHHMM(offLocal)
+  const on = parseFcvLocalDatetimeToHHMM(onLocal)
+  const inn = firstHHMM(inLocal, null)
   return {
     out: out ?? null,
     off: off ?? null,
     on: on ?? null,
     in: inn ?? null,
     isZulu: false,
+    tzUnresolved: true,
   }
+}
+
+function buildOooiFromFlight(f: FcvFlight): FcvMappedOooi | null {
+  const dep = String(f.dep_airport_icao ?? f.dep_airport ?? '').trim()
+  const arr = String(f.arr_airport_icao ?? f.arr_airport ?? '').trim()
+  return buildMappedOooiFromAirlineSource({ ...(f as Record<string, unknown>) }, dep, arr)
 }
 
 function cloneFlightForMetadata(flight: FcvFlight): Record<string, unknown> {
@@ -542,6 +666,7 @@ export function mapFcvFlightToEntry(flight: FcvFlight): FcvMappedEntry {
         crew_name_normalized: normalizeCrewNameForMatching(otherCrew?.name ?? ''),
       },
       fcv_raw: cloneFlightForMetadata(flight),
+      ...(oooi?.tzUnresolved ? { oooi_tz_unresolved: true } : {}),
     },
   }
 

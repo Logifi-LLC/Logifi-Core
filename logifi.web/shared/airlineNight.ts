@@ -1,17 +1,22 @@
 /**
  * Night TIME (FAR 1.1 civil twilight) and night LANDINGS (FAR 61.57(b)) for
- * Autofi / airline legs. OOOI times are airport-local (isZulu: false).
+ * Autofi / airline legs.
+ *
+ * Full source datetimes are airport-local (or ISO-Z) regardless of stored
+ * `oooi.isZulu`. HHMM clocks on `oooi` follow that flag.
  *
  * Night hours use Out→In (block), matching Logifi total time.
  * Night landings use On at the arrival airport, then In if On is missing.
  */
 
-import { DateTime } from 'luxon'
 import { calculateNightTimeFromInstants } from './nightTimeCalculator'
 import { isFarNightLanding } from './nightLanding'
-
-const FCV_LOCAL_DATETIME_RE =
-  /^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$/
+import {
+  looksLikeUtcIso,
+  oooiClockToUtc,
+  parseAirlineLocalDatetimeInZone,
+  parseAirlineUtcDatetime,
+} from './oooiClock'
 
 export interface AirportCoords {
   latitude: number
@@ -46,29 +51,17 @@ export interface AirlineNightResult {
 }
 
 export function parseLocalDatetimeInZone(dt: string, zone: string): Date | null {
-  const m = dt.trim().match(FCV_LOCAL_DATETIME_RE)
-  if (!m) return null
-  const year = Number.parseInt(m[1], 10)
-  const month = Number.parseInt(m[2], 10)
-  const day = Number.parseInt(m[3], 10)
-  const hour = Number.parseInt(m[4], 10)
-  const minute = Number.parseInt(m[5], 10)
-  const second = m[6] ? Number.parseInt(m[6], 10) : 0
-  const dtObj = DateTime.fromObject({ year, month, day, hour, minute, second }, { zone })
-  return dtObj.isValid ? dtObj.toJSDate() : null
+  const parsed = parseAirlineLocalDatetimeInZone(dt, zone)
+  return parsed ? parsed.toJSDate() : null
 }
 
-function parseZuluDatetime(dt: string): Date | null {
-  const m = dt.trim().match(FCV_LOCAL_DATETIME_RE)
-  if (!m) return null
-  const year = Number.parseInt(m[1], 10)
-  const month = Number.parseInt(m[2], 10) - 1
-  const day = Number.parseInt(m[3], 10)
-  const hour = Number.parseInt(m[4], 10)
-  const minute = Number.parseInt(m[5], 10)
-  const second = m[6] ? Number.parseInt(m[6], 10) : 0
-  const date = new Date(Date.UTC(year, month, day, hour, minute, second))
-  return Number.isNaN(date.getTime()) ? null : date
+function parseSourceDatetime(dt: string, zone: string | null): Date | null {
+  if (looksLikeUtcIso(dt)) {
+    const parsed = parseAirlineUtcDatetime(dt)
+    return parsed ? parsed.toJSDate() : null
+  }
+  if (!zone) return null
+  return parseLocalDatetimeInZone(dt, zone)
 }
 
 function parseClockOnDate(
@@ -77,20 +70,8 @@ function parseClockOnDate(
   isZulu: boolean,
   zone: string | null
 ): Date | null {
-  const digits = hhmm.replace(/\D/g, '').padStart(4, '0')
-  if (digits.length !== 4 || !/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) return null
-  const hour = Number.parseInt(digits.slice(0, 2), 10)
-  const minute = Number.parseInt(digits.slice(2, 4), 10)
-  if (hour > 23 || minute > 59) return null
-  const [yearS, monthS, dayS] = dateYmd.split('-')
-  const year = Number.parseInt(yearS, 10)
-  const month = Number.parseInt(monthS, 10)
-  const day = Number.parseInt(dayS, 10)
-  if (isZulu || !zone) {
-    return new Date(Date.UTC(year, month - 1, day, hour, minute, 0))
-  }
-  const dt = DateTime.fromObject({ year, month, day, hour, minute, second: 0 }, { zone })
-  return dt.isValid ? dt.toJSDate() : null
+  const dt = oooiClockToUtc(dateYmd, hhmm, isZulu, zone)
+  return dt ? dt.toJSDate() : null
 }
 
 function ensureInAfterOut(out: Date, inn: Date): Date {
@@ -111,44 +92,34 @@ export function computeAirlineNight(
   }
 
   const isZulu = input.oooi?.isZulu === true
-  const depTz = isZulu ? 'UTC' : lookups.lookupTz(dep)
-  const arrTz = isZulu ? 'UTC' : lookups.lookupTz(arr) ?? depTz
+  const depTz = lookups.lookupTz(dep)
+  const arrTz = lookups.lookupTz(arr) ?? depTz
 
   let outInstant: Date | null = null
   let inInstant: Date | null = null
   let landingInstant: Date | null = null
 
   if (input.outLocalDatetime) {
-    outInstant = isZulu
-      ? parseZuluDatetime(input.outLocalDatetime)
-      : depTz
-        ? parseLocalDatetimeInZone(input.outLocalDatetime, depTz)
-        : null
+    outInstant = parseSourceDatetime(input.outLocalDatetime, depTz)
   }
   if (input.inLocalDatetime) {
-    inInstant = isZulu
-      ? parseZuluDatetime(input.inLocalDatetime)
-      : arrTz
-        ? parseLocalDatetimeInZone(input.inLocalDatetime, arrTz)
-        : null
+    inInstant = parseSourceDatetime(input.inLocalDatetime, arrTz)
   }
   if (input.onLocalDatetime) {
-    landingInstant = isZulu
-      ? parseZuluDatetime(input.onLocalDatetime)
-      : arrTz
-        ? parseLocalDatetimeInZone(input.onLocalDatetime, arrTz)
-        : null
+    landingInstant = parseSourceDatetime(input.onLocalDatetime, arrTz)
   }
 
   const dateYmd = input.date && /^\d{4}-\d{2}-\d{2}$/.test(input.date) ? input.date : null
+  const clockDepTz = isZulu ? 'UTC' : depTz
+  const clockArrTz = isZulu ? 'UTC' : arrTz
   if (!outInstant && dateYmd && input.oooi?.out) {
-    outInstant = parseClockOnDate(dateYmd, input.oooi.out, isZulu, depTz)
+    outInstant = parseClockOnDate(dateYmd, input.oooi.out, isZulu, clockDepTz)
   }
   if (!inInstant && dateYmd && input.oooi?.in) {
-    inInstant = parseClockOnDate(dateYmd, input.oooi.in, isZulu, arrTz)
+    inInstant = parseClockOnDate(dateYmd, input.oooi.in, isZulu, clockArrTz)
   }
   if (!landingInstant && dateYmd && input.oooi?.on) {
-    landingInstant = parseClockOnDate(dateYmd, input.oooi.on, isZulu, arrTz)
+    landingInstant = parseClockOnDate(dateYmd, input.oooi.on, isZulu, clockArrTz)
   }
 
   if (!outInstant || !inInstant) {

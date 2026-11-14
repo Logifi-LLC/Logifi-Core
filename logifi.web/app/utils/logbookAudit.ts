@@ -1,4 +1,9 @@
 import { canonicalizeAirportCodeForMatch } from '../../shared/airportCodeCanonical'
+import { getAirportIanaTimezone } from '../../shared/airportTimezone'
+import {
+  oooiEventsToUtcInstants,
+  oooiSequenceIsInOrder,
+} from '../../shared/oooiClock'
 import { parseOOOITime } from '../../shared/oooiSort'
 import { isTrainingDevice } from './form8710Types'
 import { getSimTimeSum, inferLogbookType, parseSimDeviceType } from './importSimulator'
@@ -355,8 +360,7 @@ export function checkFutureDate(entry: LogEntry, now?: Date): AuditFinding[] {
     .map((result) => finding(entry, 'future_date', result.message, 'date'))
 }
 
-/** OUT → OFF → ON → IN must be non-decreasing for times that exist. Midnight wrap allowed within 22h. */
-export function checkOooiOrder(entry: LogEntry): AuditFinding[] {
+function checkOooiOrderNaive(entry: LogEntry): AuditFinding[] {
   const oooi = entry.oooi
   if (!oooi) return []
 
@@ -391,6 +395,41 @@ export function checkOooiOrder(entry: LogEntry): AuditFinding[] {
   }
 
   return []
+}
+
+/** OUT → OFF → ON → IN must be non-decreasing for times that exist. Midnight wrap allowed within 22h. */
+export function checkOooiOrder(entry: LogEntry): AuditFinding[] {
+  const oooi = entry.oooi
+  if (!oooi) return []
+
+  const zoned = oooiEventsToUtcInstants({
+    date: entry.date,
+    oooi,
+    departure: entry.departure,
+    destination: entry.destination,
+    lookupTz: getAirportIanaTimezone,
+  })
+  if (zoned && zoned.length >= 2) {
+    if (oooiSequenceIsInOrder(zoned, MAX_OOOI_FORWARD_GAP_MINUTES)) return []
+    for (let index = 1; index < zoned.length; index += 1) {
+      const gapMin = (zoned[index]!.millis - zoned[index - 1]!.millis) / 60000
+      if (gapMin > MAX_OOOI_FORWARD_GAP_MINUTES) {
+        return [
+          finding(
+            entry,
+            'oooi_order',
+            `${zoned[index - 1]!.label} after ${zoned[index]!.label}`,
+            'oooi'
+          ),
+        ]
+      }
+    }
+    return []
+  }
+
+  // Local mixed-zone clocks without airport TZ: do not false-flag.
+  if (oooi.isZulu === false) return []
+  return checkOooiOrderNaive(entry)
 }
 
 function routeTokenMatchesEndpoint(token: string, endpoint: string | null | undefined): boolean {

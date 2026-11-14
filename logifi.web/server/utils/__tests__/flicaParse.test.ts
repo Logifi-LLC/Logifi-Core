@@ -887,6 +887,24 @@ describe('pickFlicaGateHhmm', () => {
       blockHhmm: '0203',
     })
   })
+
+  it('keeps the first triple on a same-zone row when no later published actuals exist', () => {
+    expect(pickFlicaGateHhmm(['1000', '1130', '0130'], null)).toEqual({
+      depHhmm: '1000',
+      arrHhmm: '1130',
+      blockHhmm: '0130',
+    })
+  })
+
+  it('prefers later published Out/In on a red-eye (local-midnight wrap) row', () => {
+    expect(
+      pickFlicaGateHhmm(['2250', '0610', '0620', '2248', '2255', '0605', '0610'], null)
+    ).toEqual({
+      depHhmm: '2255',
+      arrHhmm: '0605',
+      blockHhmm: '0610',
+    })
+  })
 })
 
 describe('parseFlicaSchedule published actuals', () => {
