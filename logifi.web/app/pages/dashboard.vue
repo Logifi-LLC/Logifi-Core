@@ -1133,6 +1133,11 @@
                 :is-dark-mode="isDarkMode"
                 @open="showCurrencyDashboard = true"
               />
+              <Far117LookbackPanel
+                v-if="shouldShowFar117Lookbacks && activeLogbook === 'flight' && hasAnyEntriesForActiveLogbook"
+                :lookbacks="far117FlightTimeLookbacks"
+                :is-dark-mode="isDarkMode"
+              />
 <Transition
                 enter-active-class="transition ease-out duration-300"
                 enter-from-class="opacity-0 -translate-y-2"
@@ -4337,6 +4342,7 @@
       :available-metrics="availableTotalsMetrics"
       :selected-metrics="selectedTotalsMetrics"
       :show-currency-chips="showCurrencyChips === true"
+      :show-far117-lookbacks="showFar117Lookbacks === true"
       :is-online="isOnline"
       :is-syncing="isSyncing"
       :sync-error="syncError"
@@ -4360,6 +4366,7 @@
       @set-entry-form-mode="onSetEntryFormMode"
       @toggle-metric="toggleTotalsMetric"
       @toggle-currency-chips="toggleShowCurrencyChips"
+      @toggle-far117-lookbacks="toggleFar117Lookbacks"
       :logbook-layout-presets="logbookLayoutPresets"
       :active-logbook-layout-preset-id="activePresetId"
       :logbook-layout-picker-fields="pickerFields"
@@ -6920,6 +6927,8 @@ import {
   resolveAircraftByTail,
 } from '../../shared/aircraftTailIndex'
 import { useCurrency } from '../composables/useCurrency'
+import { useFar117LookbackPreference } from '../composables/useFar117LookbackPreference'
+import { calculateFar117FlightTimeLookbacks } from '../utils/far117FlightTimeLookback'
 import { useCapacitorPlatform, isCapacitorNative } from '../composables/useCapacitorPlatform'
 import { resolveDigifiAppRoute } from '../utils/digifiMobileReview'
 import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGestures'
@@ -6932,6 +6941,7 @@ import AuthModal from '../components/AuthModal.vue'
 import { readStoredReferralCode } from '../utils/referralCapture'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
 import CurrencyStatusChips from '../components/logbook/CurrencyStatusChips.vue'
+import Far117LookbackPanel from '../components/logbook/Far117LookbackPanel.vue'
 import EntryFieldError from '../components/logbook/EntryFieldError.vue'
 import LogbookEmptyState from '../components/logbook/LogbookEmptyState.vue'
 import LogEntryList from '../components/logbook/LogEntryList.vue'
@@ -7512,6 +7522,7 @@ async function onUserSessionReady(userId: string): Promise<void> {
   loadPilotProfilePrefs()
   loadSelectedTotalsMetrics()
   loadShowCurrencyChips()
+  loadFar117LookbackPreference()
   loadEntryFormPreference()
   loadColumnConfig()
   loadActiveLogbook()
@@ -8233,6 +8244,20 @@ function toggleShowCurrencyChips(): void {
   showCurrencyChips.value = showCurrencyChips.value !== true
   saveShowCurrencyChips()
 }
+
+const {
+  showFar117Lookbacks,
+  loadFar117LookbackPreference,
+  toggleFar117Lookbacks,
+} = useFar117LookbackPreference()
+
+const shouldShowFar117Lookbacks = computed(
+  () => showFar117Lookbacks.value === true
+)
+
+const far117FlightTimeLookbacks = computed(() =>
+  calculateFar117FlightTimeLookbacks(logEntries.value)
+)
 
 const {
   entryFormMode,
