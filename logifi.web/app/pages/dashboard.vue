@@ -270,16 +270,11 @@
             />
           </a>
         </div>
-        <div class="absolute inset-x-0 flex justify-center pointer-events-none">
-          <span
-            :class="[
-              'px-3 py-1 rounded-md text-sm sm:text-base font-quicksand font-medium tabular-nums select-none',
-              isDarkMode ? 'text-gray-400' : 'text-gray-600'
-            ]"
-          >
-            {{ displayClock }}
-          </span>
-        </div>
+        <HeaderUtcClockBar
+          :display-clock="displayClock"
+          :is-dark-mode="isDarkMode"
+          :clock-text-class="isDarkMode ? 'text-gray-400' : 'text-gray-600'"
+        />
         <nav class="flex items-center gap-2 relative z-10">
           <NuxtLink
             to="/feedback?from=dashboard"
@@ -4338,6 +4333,7 @@
       :available-metrics="availableTotalsMetrics"
       :selected-metrics="selectedTotalsMetrics"
       :show-currency-chips="showCurrencyChips === true"
+      :show-far117-lookbacks="showFar117Lookbacks === true"
       :is-online="isOnline"
       :is-syncing="isSyncing"
       :sync-error="syncError"
@@ -4365,6 +4361,7 @@
       @set-entry-form-mode="onSetEntryFormMode"
       @toggle-metric="toggleTotalsMetric"
       @toggle-currency-chips="toggleShowCurrencyChips"
+      @toggle-far117-lookbacks="toggleFar117Lookbacks"
       :logbook-layout-presets="logbookLayoutPresets"
       :active-logbook-layout-preset-id="activePresetId"
       :logbook-layout-picker-fields="pickerFields"
@@ -6935,6 +6932,11 @@ import {
   resolveAircraftByTail,
 } from '../../shared/aircraftTailIndex'
 import { useCurrency } from '../composables/useCurrency'
+import { useFar117LookbackPreference } from '../composables/useFar117LookbackPreference'
+import {
+  clearFar117LookbackFlightEntries,
+  setFar117LookbackFlightEntries,
+} from '../utils/far117LookbackEntryCache'
 import { useCapacitorPlatform, isCapacitorNative } from '../composables/useCapacitorPlatform'
 import { resolveDigifiAppRoute } from '../utils/digifiMobileReview'
 import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGestures'
@@ -6947,6 +6949,7 @@ import AuthModal from '../components/AuthModal.vue'
 import { readStoredReferralCode } from '../utils/referralCapture'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
 import CurrencyStatusChips from '../components/logbook/CurrencyStatusChips.vue'
+import HeaderUtcClockBar from '../components/header/HeaderUtcClockBar.vue'
 import EntryFieldError from '../components/logbook/EntryFieldError.vue'
 import LogbookEmptyState from '../components/logbook/LogbookEmptyState.vue'
 import LogEntryList from '../components/logbook/LogEntryList.vue'
@@ -7528,6 +7531,7 @@ async function onUserSessionReady(userId: string): Promise<void> {
   loadPilotProfilePrefs()
   loadSelectedTotalsMetrics()
   loadShowCurrencyChips()
+  loadFar117LookbackPreference()
   loadEntryFormPreference()
   loadColumnConfig()
   loadActiveLogbook()
@@ -8249,6 +8253,24 @@ function toggleShowCurrencyChips(): void {
   showCurrencyChips.value = showCurrencyChips.value !== true
   saveShowCurrencyChips()
 }
+
+const {
+  showFar117Lookbacks,
+  loadFar117LookbackPreference,
+  toggleFar117Lookbacks,
+} = useFar117LookbackPreference()
+
+watch(
+  logEntries,
+  (entries) => {
+    setFar117LookbackFlightEntries(entries)
+  },
+  { immediate: true },
+)
+
+watch(isAuthenticated, (authed) => {
+  if (!authed) clearFar117LookbackFlightEntries()
+})
 
 const {
   entryFormMode,
