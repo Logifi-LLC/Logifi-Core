@@ -27,6 +27,7 @@ export function useDashboardEntryDeepLink(opts: {
         if (route.query.entry) {
           const query = { ...route.query }
           delete query.entry
+          // Leave allowlisted `returnTo` (e.g. logbook-check) until inline edit closes.
           await router.replace({ path: route.path, query })
         }
       } finally {

@@ -6,6 +6,9 @@ import { useAuth } from '~/composables/useAuth'
 import { useTheme } from '~/composables/useTheme'
 import { getAllEntriesFromIndexedDB } from '~/utils/indexedDB'
 import { auditLogbook, type AuditReport } from '~/utils/logbookAudit'
+import { dashboardReturnToQuery } from '~/utils/dashboardReturnTo'
+
+const LOGBOOK_CHECK_SCROLL_KEY = 'logbook-check-scroll-y'
 
 definePageMeta({ layout: 'default' })
 
@@ -58,11 +61,30 @@ async function loadAndAudit(): Promise<void> {
     hasEntries.value = false
   } finally {
     loading.value = false
+    restoreScroll()
   }
 }
 
+function restoreScroll(): void {
+  if (typeof window === 'undefined') return
+  const raw = sessionStorage.getItem(LOGBOOK_CHECK_SCROLL_KEY)
+  if (!raw) return
+  sessionStorage.removeItem(LOGBOOK_CHECK_SCROLL_KEY)
+  const y = Number(raw)
+  if (!Number.isFinite(y)) return
+  requestAnimationFrame(() => {
+    window.scrollTo({ top: y, left: 0 })
+  })
+}
+
 function openEntry(entryId: string): void {
-  void router.push({ path: '/dashboard', query: { entry: entryId } })
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem(LOGBOOK_CHECK_SCROLL_KEY, String(window.scrollY))
+  }
+  void router.push({
+    path: '/dashboard',
+    query: { entry: entryId, ...dashboardReturnToQuery('logbook-check') },
+  })
 }
 
 onMounted(() => {

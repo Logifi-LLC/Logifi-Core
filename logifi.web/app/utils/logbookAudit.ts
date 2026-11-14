@@ -90,9 +90,20 @@ const SUB_TIME_FIELDS: { key: 'pic' | 'sic' | 'night' | 'crossCountry' | 'actual
   { key: 'dualGiven', label: 'Dual given' },
 ]
 
-function numericValue(value: number | null | undefined): number {
-  if (value === null || value === undefined || Number.isNaN(value)) return 0
+function numericValue(value: number | string | null | undefined): number {
+  if (value === null || value === undefined) return 0
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return 0
+    const parsed = Number(trimmed)
+    return Number.isNaN(parsed) ? 0 : parsed
+  }
+  if (Number.isNaN(value)) return 0
   return value
+}
+
+function roundHoursToTenths(value: number): number {
+  return Math.round(value * 10) / 10
 }
 
 function isProvided(value: number | null | undefined): boolean {
@@ -100,7 +111,7 @@ function isProvided(value: number | null | undefined): boolean {
 }
 
 function exceedsTotal(part: number, total: number): boolean {
-  return part > total + TIME_TOLERANCE
+  return roundHoursToTenths(part) > roundHoursToTenths(total) + TIME_TOLERANCE
 }
 
 function approximatelyEqual(a: number, b: number): boolean {
@@ -164,8 +175,8 @@ function isSingleCrewRole(role: string | null | undefined): boolean {
   return normalized === 'PIC' || normalized === 'SIC'
 }
 
-function formatHours(value: number): string {
-  return value.toFixed(1)
+function formatHours(value: number | string | null | undefined): string {
+  return roundHoursToTenths(numericValue(value)).toFixed(1)
 }
 
 /** Any PIC, SIC, night, XC, instrument, dual, solo, dual given, or cat/class time greater than Total. */
@@ -414,55 +425,121 @@ function normalizeFlightNumberKey(flightNumber: string | null | undefined): stri
   return (flightNumber || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 }
 
-/** Hash key for duplicate legs: date + from/to + tail or flight number. */
+/** Bucketing keys for duplicate legs (flight number preferred over tail-only buckets). */
 export function duplicateLegKeys(entry: Pick<LogEntry, 'date' | 'departure' | 'destination' | 'registration' | 'flightNumber'>): string[] {
   const date = normalizeAuditDateKey(entry.date)
   const from = normalizeAirportKey(entry.departure)
   const to = normalizeAirportKey(entry.destination)
   const route = `${date}|${from}|${to}`
-  const keys: string[] = []
-  const tail = normalizeTailKey(entry.registration)
   const flightNumber = normalizeFlightNumberKey(entry.flightNumber)
-  if (tail) keys.push(`${route}|r:${tail}`)
-  if (flightNumber) keys.push(`${route}|f:${flightNumber}`)
-  return keys
+  if (flightNumber) return [`${route}|f:${flightNumber}`]
+  const tail = normalizeTailKey(entry.registration)
+  if (tail) return [`${route}|r:${tail}`]
+  return []
 }
 
-/** Same date + from/to + tail (or flight number). Voided rows excluded. O(n) via hash keys. */
-export function checkDuplicateLegs(entries: LogEntry[]): AuditFinding[] {
-  const buckets = new Map<string, LogEntry[]>()
+function duplicateRouteKey(entry: Pick<LogEntry, 'date' | 'departure' | 'destination'>): string {
+  const date = normalizeAuditDateKey(entry.date)
+  const from = normalizeAirportKey(entry.departure)
+  const to = normalizeAirportKey(entry.destination)
+  return `${date}|${from}|${to}`
+}
 
-  for (const entry of entries) {
-    if (isVoidedEntry(entry)) continue
-    for (const key of duplicateLegKeys(entry)) {
-      const bucket = buckets.get(key)
-      if (bucket) bucket.push(entry)
-      else buckets.set(key, [entry])
-    }
-  }
+function oooiOutInKey(entry: LogEntry): string | null {
+  const oooi = entry.oooi
+  if (!oooi) return null
+  const out = (oooi.out || '').trim().toUpperCase()
+  const inn = (oooi.in || '').trim().toUpperCase()
+  if (!out || !inn) return null
+  return `${out}|${inn}|${oooi.isZulu ? 'Z' : 'L'}`
+}
 
+/** Flight numbers must match; tail-only rows need matching total and OOOI when present. */
+export function entriesAreDuplicateLegs(a: LogEntry, b: LogEntry): boolean {
+  if (duplicateRouteKey(a) !== duplicateRouteKey(b)) return false
+
+  const fnA = normalizeFlightNumberKey(a.flightNumber)
+  const fnB = normalizeFlightNumberKey(b.flightNumber)
+  if (fnA && fnB) return fnA === fnB
+  if (fnA || fnB) return false
+
+  const totalA = numericValue(a.flightTime?.total)
+  const totalB = numericValue(b.flightTime?.total)
+  if (!approximatelyEqual(totalA, totalB)) return false
+
+  const oooiA = oooiOutInKey(a)
+  const oooiB = oooiOutInKey(b)
+  if (oooiA && oooiB) return oooiA === oooiB
+  if (oooiA || oooiB) return false
+
+  return true
+}
+
+function duplicateLegFinding(entry: LogEntry): AuditFinding {
+  const from = (entry.departure || '').trim() || '—'
+  const to = (entry.destination || '').trim() || '—'
+  return finding(
+    entry,
+    'duplicate_legs',
+    `${entry.date} ${from}→${to} appears more than once`,
+    'date'
+  )
+}
+
+function findDuplicateLegFindings(entries: LogEntry[]): AuditFinding[] {
+  const byFlight = new Map<string, LogEntry[]>()
+  const byTailNoFlight = new Map<string, LogEntry[]>()
   const flagged = new Set<string>()
   const findings: AuditFinding[] = []
 
-  for (const group of buckets.values()) {
+  const flagEntry = (entry: LogEntry): void => {
+    if (flagged.has(entry.id)) return
+    flagged.add(entry.id)
+    findings.push(duplicateLegFinding(entry))
+  }
+
+  for (const entry of entries) {
+    if (isVoidedEntry(entry)) continue
+    const flightNumber = normalizeFlightNumberKey(entry.flightNumber)
+    if (flightNumber) {
+      const key = duplicateLegKeys(entry)[0]
+      if (!key) continue
+      const bucket = byFlight.get(key)
+      if (bucket) bucket.push(entry)
+      else byFlight.set(key, [entry])
+      continue
+    }
+    const tail = normalizeTailKey(entry.registration)
+    if (!tail) continue
+    const key = duplicateLegKeys(entry)[0]
+    if (!key) continue
+    const bucket = byTailNoFlight.get(key)
+    if (bucket) bucket.push(entry)
+    else byTailNoFlight.set(key, [entry])
+  }
+
+  for (const group of byFlight.values()) {
     if (group.length < 2) continue
-    for (const entry of group) {
-      if (flagged.has(entry.id)) continue
-      flagged.add(entry.id)
-      const from = (entry.departure || '').trim() || '—'
-      const to = (entry.destination || '').trim() || '—'
-      findings.push(
-        finding(
-          entry,
-          'duplicate_legs',
-          `${entry.date} ${from}→${to} appears more than once`,
-          'date'
-        )
-      )
+    for (const entry of group) flagEntry(entry)
+  }
+
+  for (const group of byTailNoFlight.values()) {
+    if (group.length < 2) continue
+    for (let i = 0; i < group.length; i += 1) {
+      for (let j = i + 1; j < group.length; j += 1) {
+        if (!entriesAreDuplicateLegs(group[i], group[j])) continue
+        flagEntry(group[i])
+        flagEntry(group[j])
+      }
     }
   }
 
   return findings
+}
+
+/** Duplicate legs on date + route; flight number match or tail-only with matching total/OOOI. Voided excluded. */
+export function checkDuplicateLegs(entries: LogEntry[]): AuditFinding[] {
+  return findDuplicateLegFindings(entries)
 }
 
 function auditOneEntry(entry: LogEntry, now?: Date): AuditFinding[] {
@@ -505,39 +582,18 @@ export function groupFindingsByRule(findings: AuditFinding[]): AuditRuleGroup[] 
 export function auditLogbook(entries: LogEntry[], options?: { now?: Date }): AuditReport {
   const now = options?.now
   const findings: AuditFinding[] = []
-  const duplicateBuckets = new Map<string, LogEntry[]>()
+  const active: LogEntry[] = []
   let scanned = 0
 
   for (const entry of entries) {
     if (isVoidedEntry(entry)) continue
     scanned += 1
+    active.push(entry)
     const extra = auditOneEntry(entry, now)
     if (extra.length) findings.push(...extra)
-    for (const key of duplicateLegKeys(entry)) {
-      const bucket = duplicateBuckets.get(key)
-      if (bucket) bucket.push(entry)
-      else duplicateBuckets.set(key, [entry])
-    }
   }
 
-  const flaggedDuplicates = new Set<string>()
-  for (const group of duplicateBuckets.values()) {
-    if (group.length < 2) continue
-    for (const entry of group) {
-      if (flaggedDuplicates.has(entry.id)) continue
-      flaggedDuplicates.add(entry.id)
-      const from = (entry.departure || '').trim() || '—'
-      const to = (entry.destination || '').trim() || '—'
-      findings.push(
-        finding(
-          entry,
-          'duplicate_legs',
-          `${entry.date} ${from}→${to} appears more than once`,
-          'date'
-        )
-      )
-    }
-  }
+  findings.push(...findDuplicateLegFindings(active))
 
   return {
     findings,
