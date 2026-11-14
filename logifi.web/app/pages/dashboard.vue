@@ -222,13 +222,13 @@
       <header>
       <div
         :class="[
-          'left-0 right-0 z-50 border-b backdrop-blur-md transition-colors duration-300',
+          'left-0 right-0 z-50 border-b backdrop-blur-xl backdrop-saturate-150 transition-colors duration-300',
           isIos
             ? 'sticky inset-x-0 top-0 pt-[env(safe-area-inset-top)]'
             : 'fixed top-0',
           isDarkMode
-            ? 'border-gray-700/50 bg-gray-950/75'
-            : 'border-gray-200 bg-gray-50/75'
+            ? 'border-white/10 bg-gray-950/30'
+            : 'border-gray-200/60 bg-gray-50/30'
         ]"
       >
         <div
