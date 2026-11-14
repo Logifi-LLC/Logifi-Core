@@ -222,19 +222,19 @@
       <header>
       <div
         :class="[
-          'left-0 right-0 z-50 transition-colors duration-300',
+          'left-0 right-0 z-50 border-b backdrop-blur-md transition-colors duration-300',
           isIos
-            ? 'sticky inset-x-0 top-0 border-b backdrop-blur-sm pt-[env(safe-area-inset-top)]'
+            ? 'sticky inset-x-0 top-0 pt-[env(safe-area-inset-top)]'
             : 'fixed top-0',
           isDarkMode
-            ? 'border-gray-700/50 bg-gray-950'
-            : 'border-gray-200 bg-gray-50'
+            ? 'border-gray-700/50 bg-gray-950/75'
+            : 'border-gray-200 bg-gray-50/75'
         ]"
       >
         <div
           :class="[
             'mr-auto px-6 sm:px-8 flex items-center justify-between relative',
-            isIos ? 'py-2' : 'py-4'
+            'py-2'
           ]"
         >
         <div class="flex items-center gap-2 min-w-0">
@@ -318,7 +318,7 @@
         'min-h-screen flex flex-col px-4 sm:px-6 lg:px-8 transition-colors duration-300 overflow-x-hidden',
         isIos
           ? 'pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))]'
-          : 'pt-40 pb-20',
+          : 'pt-24 sm:pt-28 lg:pt-32 pb-20',
         isDarkMode ? '' : ''
       ]"
     >
