@@ -181,6 +181,56 @@
         @click="entryCount > 0 && $emit('export-logbook')"
       />
       <SettingsListRow
+        label="Download JSON backup"
+        subtitle="Logbook data and pilot profile"
+        icon="ri:file-code-line"
+        :is-dark-mode="isDarkMode"
+        :show-chevron="false"
+        @click="entryCount > 0 && !jsonBackupBusy && $emit('download-json-backup')"
+      />
+      <SettingsListRow
+        label="Download full backup"
+        subtitle="JSON plus your cloud images and files (ZIP)"
+        icon="ri:folder-zip-line"
+        :is-dark-mode="isDarkMode"
+        :show-chevron="false"
+        @click="entryCount > 0 && !fullBackupBusy && $emit('download-full-backup')"
+      />
+      <div
+        v-if="fullBackupBusy || fullBackupError || fullBackupProgress"
+        class="border-t px-4 py-3 space-y-2"
+        :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'"
+        role="status"
+        aria-live="polite"
+      >
+        <p
+          v-if="fullBackupBusy && fullBackupProgress"
+          class="text-xs font-medium font-quicksand"
+          :class="isDarkMode ? 'text-blue-300' : 'text-blue-700'"
+        >
+          {{ fullBackupProgress }}
+        </p>
+        <p
+          v-else-if="jsonBackupBusy"
+          class="text-xs font-medium font-quicksand"
+          :class="isDarkMode ? 'text-blue-300' : 'text-blue-700'"
+        >
+          Preparing JSON backup…
+        </p>
+        <p
+          v-if="fullBackupError"
+          class="text-xs font-medium font-quicksand"
+          :class="isDarkMode ? 'text-red-400' : 'text-red-700'"
+        >
+          {{ fullBackupError }}
+        </p>
+      </div>
+      <div class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
+        <p :class="[helper, 'text-xs']">
+          Full backup includes the same JSON export plus signatures, Digifi images, and other files stored for your account. Import the ZIP or <code class="text-[12px]">logbook.json</code> from it.
+        </p>
+      </div>
+      <SettingsListRow
         label="Generate FAA Form 8710"
         subtitle="PDF from logbook data"
         icon="ri:file-pdf-line"
@@ -229,6 +279,10 @@ const props = defineProps<{
   isDragOver: boolean
   entryCount: number
   fcvConnected?: boolean
+  jsonBackupBusy?: boolean
+  fullBackupBusy?: boolean
+  fullBackupProgress?: string | null
+  fullBackupError?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -242,6 +296,8 @@ const emit = defineEmits<{
   'import-file': [file: File]
   'import-provider-file': [payload: { file: File; provider: ImportProviderKey }]
   'export-logbook': []
+  'download-json-backup': []
+  'download-full-backup': []
   'generate-8710': []
   'import-fcv': []
   'flica-connection-changed': [{ connected: boolean }]
@@ -312,7 +368,7 @@ function onImportDrop(event: DragEvent) {
   const file = event.dataTransfer?.files?.[0]
   if (!file) return
   const name = file.name.toLowerCase()
-  if (name.endsWith('.json')) {
+  if (name.endsWith('.json') || name.endsWith('.zip')) {
     emit('import-file', file)
     return
   }
