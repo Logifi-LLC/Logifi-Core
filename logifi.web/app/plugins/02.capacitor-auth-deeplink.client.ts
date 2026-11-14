@@ -3,7 +3,11 @@ import { pathFromAuthDeepLink } from '~/utils/authRedirectOrigin'
 import { consumeAuthRedirect } from '~/utils/consumeAuthRedirect'
 
 function isAuthRoute(path: string): boolean {
-  return path.includes('/auth/callback') || path.includes('/reset-password')
+  return (
+    path.includes('/auth/callback') ||
+    path.includes('/auth/confirm') ||
+    path.includes('/reset-password')
+  )
 }
 
 /** FC View OAuth return (io.logifi.app://dashboard?fcv=connected|error). */

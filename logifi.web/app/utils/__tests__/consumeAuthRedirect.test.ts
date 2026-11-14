@@ -48,4 +48,14 @@ describe('consumeAuthRedirect', () => {
     expect(exchangeCodeForSession).not.toHaveBeenCalled()
     expect(setSession).not.toHaveBeenCalled()
   })
+
+  it('does not consume token_hash confirm links (handled by /auth/confirm)', async () => {
+    const { consumeAuthRedirect } = await import('../consumeAuthRedirect')
+    const result = await consumeAuthRedirect(
+      'https://www.logifi.io/auth/confirm?token_hash=th_test_recovery_7f3a&type=recovery&next=/reset-password'
+    )
+    expect(result).toEqual({ consumed: false })
+    expect(exchangeCodeForSession).not.toHaveBeenCalled()
+    expect(setSession).not.toHaveBeenCalled()
+  })
 })

@@ -52,5 +52,15 @@ describe('authRedirectOrigin', () => {
       '/dashboard?fcv=connected'
     )
     expect(pathFromAuthDeepLink('https://www.logifi.io/auth/callback')).toBeNull()
+    expect(
+      pathFromAuthDeepLink(
+        'https://www.logifi.io/auth/confirm?token_hash=th_test_recovery_7f3a&type=recovery'
+      )
+    ).toBeNull()
+    expect(
+      pathFromAuthDeepLink(
+        'io.logifi.app://auth/confirm?token_hash=th_test_recovery_7f3a&type=recovery'
+      )
+    ).toBe('/auth/confirm?token_hash=th_test_recovery_7f3a&type=recovery')
   })
 })

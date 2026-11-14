@@ -131,9 +131,14 @@ https://localhost/auth/callback
 https://localhost/reset-password
 io.logifi.app://auth/callback
 io.logifi.app://reset-password
+https://www.logifi.io/auth/confirm
+https://logifi.io/auth/confirm
+http://localhost:3000/auth/confirm
 ```
 
-**Site URL** can stay `https://www.logifi.io`.
+**Site URL** can stay `https://www.logifi.io` (`{{ .SiteURL }}` in the reset-password email template).
+
+Password reset emails that use `/auth/confirm?token_hash=…` open in Safari, not the iOS app. Associated domains only claim `/r/*` and `/?ref=`. Keep `io.logifi.app://reset-password` for the older `{{ .ConfirmationURL }}` hash-token flow.
 
 ### 3.3 Google OAuth (if using Continue with Google)
 

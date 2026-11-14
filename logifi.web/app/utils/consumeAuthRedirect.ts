@@ -9,6 +9,8 @@ export type ConsumeAuthRedirectResult = {
  * Establish a Supabase session from an OAuth/email redirect URL.
  * Native deeplinks arrive after the Auth client has already initialized, so
  * detectSessionInUrl will not see these params unless we consume them here.
+ *
+ * token_hash query links are not consumed here — `/auth/confirm` calls verifyOtp.
  */
 export async function consumeAuthRedirect(urlString: string): Promise<ConsumeAuthRedirectResult> {
   let url: URL
