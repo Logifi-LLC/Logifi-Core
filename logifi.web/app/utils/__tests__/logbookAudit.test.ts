@@ -217,6 +217,76 @@ describe('logbookAudit', () => {
     expect(ids).toEqual(['dup-a', 'dup-b'])
   })
 
+  it('does not flag same-length CFI lessons when route or landings differ', () => {
+    const base = {
+      flightNumber: null,
+      registration: 'N172CF',
+      date: '2024-06-10',
+      departure: 'KAPA',
+      destination: 'KAPA',
+      flightTime: { ...createEmptyFlightTime(), total: 1.2, dualGiven: 1.2, dual: 1.2 },
+    }
+    const lessonA = fixtureEntry({
+      id: 'cfi-a',
+      ...base,
+      route: 'KBJC',
+      performance: { ...createEmptyPerformance(), dayLandings: 3 },
+    })
+    const lessonB = fixtureEntry({
+      id: 'cfi-b',
+      ...base,
+      route: 'KCOS',
+      performance: { ...createEmptyPerformance(), dayLandings: 1, nightLandings: 2 },
+    })
+    expect(entriesAreDuplicateLegs(lessonA, lessonB)).toBe(false)
+    expect(checkDuplicateLegs([lessonA, lessonB])).toHaveLength(0)
+  })
+
+  it('flags an exact double-import tail-only pair', () => {
+    const shared = {
+      flightNumber: null,
+      registration: 'N172CF',
+      date: '2024-06-11',
+      departure: 'KAPA',
+      destination: 'KAPA',
+      route: '',
+      remarks: 'Pattern work',
+      flightConditions: ['VFR'],
+      flightTime: {
+        ...createEmptyFlightTime(),
+        total: 1.2,
+        dual: 1.2,
+        dualGiven: 1.2,
+        crossCountry: 0,
+        night: 0,
+      },
+      performance: { ...createEmptyPerformance(), dayLandings: 2, nightLandings: 0 },
+    }
+    const first = fixtureEntry({ id: 'import-a', ...shared })
+    const second = fixtureEntry({ id: 'import-b', ...shared })
+    expect(entriesAreDuplicateLegs(first, second)).toBe(true)
+    const ids = checkDuplicateLegs([first, second]).map((item) => item.entryId).sort()
+    expect(ids).toEqual(['import-a', 'import-b'])
+  })
+
+  it('treats OOOI times with and without colons as equal for duplicates', () => {
+    const a = fixtureEntry({
+      id: 'oooi-a',
+      flightNumber: null,
+      registration: 'N999XX',
+      oooi: { out: '1801', off: null, on: null, in: '1905', isZulu: true },
+      flightTime: { ...createEmptyFlightTime(), total: 1.0, pic: 1.0 },
+    })
+    const b = fixtureEntry({
+      id: 'oooi-b',
+      flightNumber: null,
+      registration: 'N999XX',
+      oooi: { out: '18:01', off: null, on: null, in: '19:05', isZulu: true },
+      flightTime: { ...createEmptyFlightTime(), total: 1.0, pic: 1.0 },
+    })
+    expect(entriesAreDuplicateLegs(a, b)).toBe(true)
+  })
+
   it('flags sim time logged as airplane, and airplane time on a sim-logbook entry', () => {
     const simAsAirplane = checkSimAirplaneMix(
       fixtureEntry({

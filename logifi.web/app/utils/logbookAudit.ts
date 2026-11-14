@@ -2,7 +2,12 @@ import { canonicalizeAirportCodeForMatch } from '../../shared/airportCodeCanonic
 import { parseOOOITime } from '../../shared/oooiSort'
 import { isTrainingDevice } from './form8710Types'
 import { getSimTimeSum, inferLogbookType, parseSimDeviceType } from './importSimulator'
-import type { LogEntry } from './logbookTypes'
+import {
+  getApproachesFromPerformance,
+  getTotalApproachCount,
+  type LogEntry,
+  type PerformanceMetrics,
+} from './logbookTypes'
 import { parseRouteAirportCodes, validateCrossCountry, validateDate } from './validation'
 
 const TIME_TOLERANCE = 0.01
@@ -438,39 +443,109 @@ export function duplicateLegKeys(entry: Pick<LogEntry, 'date' | 'departure' | 'd
   return []
 }
 
-function duplicateRouteKey(entry: Pick<LogEntry, 'date' | 'departure' | 'destination'>): string {
-  const date = normalizeAuditDateKey(entry.date)
-  const from = normalizeAirportKey(entry.departure)
-  const to = normalizeAirportKey(entry.destination)
-  return `${date}|${from}|${to}`
+function comparableTrimmedUpperEqual(a: string | null | undefined, b: string | null | undefined): boolean {
+  const left = (a || '').trim().toUpperCase()
+  const right = (b || '').trim().toUpperCase()
+  if (!left && !right) return true
+  if (!left || !right) return false
+  return left === right
 }
 
-function oooiOutInKey(entry: LogEntry): string | null {
-  const oooi = entry.oooi
-  if (!oooi) return null
-  const out = (oooi.out || '').trim().toUpperCase()
-  const inn = (oooi.in || '').trim().toUpperCase()
-  if (!out || !inn) return null
-  return `${out}|${inn}|${oooi.isZulu ? 'Z' : 'L'}`
+function comparableRemarksEqual(a: string | null | undefined, b: string | null | undefined): boolean {
+  return (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase()
 }
 
-/** Flight numbers must match; tail-only rows need matching total and OOOI when present. */
+function duplicateTimeFieldEqual(
+  a: number | string | null | undefined,
+  b: number | string | null | undefined
+): boolean {
+  return approximatelyEqual(numericValue(a), numericValue(b))
+}
+
+function flightConditionsKey(conditions: string[] | null | undefined): string {
+  return (conditions || [])
+    .map((item) => item.trim().toUpperCase())
+    .filter(Boolean)
+    .sort()
+    .join(',')
+}
+
+function approachesCountPresent(perf: PerformanceMetrics | null | undefined): boolean {
+  return getApproachesFromPerformance(perf).length > 0
+}
+
+function approachesCountEqual(
+  a: PerformanceMetrics | null | undefined,
+  b: PerformanceMetrics | null | undefined
+): boolean {
+  const presentA = approachesCountPresent(a)
+  const presentB = approachesCountPresent(b)
+  if (!presentA && !presentB) return true
+  if (!presentA || !presentB) return false
+  return getTotalApproachCount(a) === getTotalApproachCount(b)
+}
+
+function normalizeOooiTimeToken(value: string | null | undefined): string {
+  return (value || '').trim().toUpperCase().replace(/:/g, '')
+}
+
+function oooiComparableKey(entry: LogEntry): string | null {
+  if (!hasOooiTimes(entry)) return null
+  const oooi = entry.oooi!
+  return [
+    `out:${normalizeOooiTimeToken(oooi.out)}`,
+    `off:${normalizeOooiTimeToken(oooi.off)}`,
+    `on:${normalizeOooiTimeToken(oooi.on)}`,
+    `in:${normalizeOooiTimeToken(oooi.in)}`,
+    oooi.isZulu ? 'Z' : 'L',
+  ].join('|')
+}
+
+const DUPLICATE_LEG_TIME_KEYS = [
+  'total',
+  'pic',
+  'sic',
+  'dual',
+  'dualGiven',
+  'night',
+  'crossCountry',
+  'actualInstrument',
+  'simulatedInstrument',
+] as const
+
+/**
+ * Legs are duplicates only when every comparable field matches (and flight numbers differ → not duplicate).
+ */
 export function entriesAreDuplicateLegs(a: LogEntry, b: LogEntry): boolean {
-  if (duplicateRouteKey(a) !== duplicateRouteKey(b)) return false
+  if (normalizeAuditDateKey(a.date) !== normalizeAuditDateKey(b.date)) return false
+  if (normalizeAirportKey(a.departure) !== normalizeAirportKey(b.departure)) return false
+  if (normalizeAirportKey(a.destination) !== normalizeAirportKey(b.destination)) return false
 
   const fnA = normalizeFlightNumberKey(a.flightNumber)
   const fnB = normalizeFlightNumberKey(b.flightNumber)
-  if (fnA && fnB) return fnA === fnB
-  if (fnA || fnB) return false
+  if (fnA && fnB && fnA !== fnB) return false
+  if (fnA !== fnB) return false
 
-  const totalA = numericValue(a.flightTime?.total)
-  const totalB = numericValue(b.flightTime?.total)
-  if (!approximatelyEqual(totalA, totalB)) return false
+  if (!comparableTrimmedUpperEqual(a.route, b.route)) return false
 
-  const oooiA = oooiOutInKey(a)
-  const oooiB = oooiOutInKey(b)
-  if (oooiA && oooiB) return oooiA === oooiB
-  if (oooiA || oooiB) return false
+  for (const key of DUPLICATE_LEG_TIME_KEYS) {
+    if (!duplicateTimeFieldEqual(a.flightTime?.[key], b.flightTime?.[key])) return false
+  }
+
+  if (!duplicateTimeFieldEqual(a.performance?.dayLandings, b.performance?.dayLandings)) return false
+  if (!duplicateTimeFieldEqual(a.performance?.nightLandings, b.performance?.nightLandings)) return false
+  if (!approachesCountEqual(a.performance, b.performance)) return false
+
+  if (flightConditionsKey(a.flightConditions) !== flightConditionsKey(b.flightConditions)) return false
+  if (!comparableRemarksEqual(a.remarks, b.remarks)) return false
+
+  const oooiA = oooiComparableKey(a)
+  const oooiB = oooiComparableKey(b)
+  if (oooiA && oooiB) {
+    if (oooiA !== oooiB) return false
+  } else if (oooiA || oooiB) {
+    return false
+  }
 
   return true
 }
@@ -520,7 +595,13 @@ function findDuplicateLegFindings(entries: LogEntry[]): AuditFinding[] {
 
   for (const group of byFlight.values()) {
     if (group.length < 2) continue
-    for (const entry of group) flagEntry(entry)
+    for (let i = 0; i < group.length; i += 1) {
+      for (let j = i + 1; j < group.length; j += 1) {
+        if (!entriesAreDuplicateLegs(group[i], group[j])) continue
+        flagEntry(group[i])
+        flagEntry(group[j])
+      }
+    }
   }
 
   for (const group of byTailNoFlight.values()) {
@@ -537,7 +618,7 @@ function findDuplicateLegFindings(entries: LogEntry[]): AuditFinding[] {
   return findings
 }
 
-/** Duplicate legs on date + route; flight number match or tail-only with matching total/OOOI. Voided excluded. */
+/** Duplicate legs when bucketed legs also match on flight content fields. Voided excluded. */
 export function checkDuplicateLegs(entries: LogEntry[]): AuditFinding[] {
   return findDuplicateLegFindings(entries)
 }
