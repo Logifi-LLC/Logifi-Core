@@ -269,16 +269,11 @@
             />
           </a>
         </div>
-        <div class="absolute inset-x-0 flex justify-center pointer-events-none">
-          <span
-            :class="[
-              'px-3 py-1 rounded-md text-sm sm:text-base font-quicksand font-medium tabular-nums select-none',
-              isDarkMode ? 'text-gray-400' : 'text-gray-600'
-            ]"
-          >
-            {{ displayClock }}
-          </span>
-        </div>
+        <HeaderUtcClockBar
+          :display-clock="displayClock"
+          :is-dark-mode="isDarkMode"
+          :clock-text-class="isDarkMode ? 'text-gray-400' : 'text-gray-600'"
+        />
         <nav class="flex items-center gap-2 relative z-10">
           <NuxtLink
             to="/feedback?from=dashboard"
@@ -1061,63 +1056,15 @@
                     ]">
                       {{ summaryField.cardLabel ?? summaryField.label }}
                     </p>
-                    <div
-                      v-if="summaryField.key === 'totalTime' && shouldShowFar117Lookbacks"
-                      class="relative z-10 mt-2 flex min-w-0 flex-col gap-1 md:flex-row md:items-baseline md:justify-between md:gap-2"
-                    >
-                      <Far117LookbackPanel
-                        side="672"
-                        :lookbacks="far117FlightTimeLookbacks"
-                        :is-dark-mode="isDarkMode"
-                        align="left"
-                        extra-class="hidden md:block max-w-[38%] truncate"
-                      />
-                      <p
-                        :class="[
-                          'font-semibold font-quicksand min-w-0 text-center md:flex-1 md:px-1',
-                          isIos ? 'text-2xl tracking-tight' : 'text-3xl tracking-tight',
-                          isDarkMode ? 'text-white drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'text-gray-900',
-                        ]"
-                      >
-                        {{ formatTotalValue(summaryField.key) }}
-                      </p>
-                      <Far117LookbackPanel
-                        side="365"
-                        :lookbacks="far117FlightTimeLookbacks"
-                        :is-dark-mode="isDarkMode"
-                        align="right"
-                        extra-class="hidden md:block max-w-[38%] truncate md:text-right"
-                      />
-                      <div
-                        class="flex w-full flex-col items-center gap-1 md:hidden"
-                        data-testid="far117-lookback-mobile-stack"
-                      >
-                        <Far117LookbackPanel
-                          side="672"
-                          :lookbacks="far117FlightTimeLookbacks"
-                          :is-dark-mode="isDarkMode"
-                          align="center"
-                        />
-                        <Far117LookbackPanel
-                          side="365"
-                          :lookbacks="far117FlightTimeLookbacks"
-                          :is-dark-mode="isDarkMode"
-                          align="center"
-                        />
-                      </div>
-                    </div>
-                    <p
-                      v-else
-                      :class="[
-                        'font-semibold font-quicksand mt-2 relative z-10',
-                        summaryField.key === 'totalTime'
-                          ? (isIos ? 'text-2xl tracking-tight' : 'text-3xl tracking-tight')
-                          : (isIos ? 'text-xl' : 'text-2xl'),
-                        summaryField.key === 'totalTime'
-                          ? (isDarkMode ? 'text-white drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'text-gray-900')
-                          : (isDarkMode ? 'text-gray-200' : 'text-gray-900'),
-                      ]"
-                    >
+                    <p :class="[
+                      'font-semibold font-quicksand mt-2 relative z-10',
+                      summaryField.key === 'totalTime'
+                        ? (isIos ? 'text-2xl tracking-tight' : 'text-3xl tracking-tight')
+                        : (isIos ? 'text-xl' : 'text-2xl'),
+                      summaryField.key === 'totalTime'
+                        ? (isDarkMode ? 'text-white drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'text-gray-900')
+                        : (isDarkMode ? 'text-gray-200' : 'text-gray-900')
+                    ]">
                       {{ formatTotalValue(summaryField.key) }}
                     </p>
                   </div>
@@ -6971,7 +6918,10 @@ import {
 } from '../../shared/aircraftTailIndex'
 import { useCurrency } from '../composables/useCurrency'
 import { useFar117LookbackPreference } from '../composables/useFar117LookbackPreference'
-import { calculateFar117FlightTimeLookbacks } from '../utils/far117FlightTimeLookback'
+import {
+  clearFar117LookbackFlightEntries,
+  setFar117LookbackFlightEntries,
+} from '../utils/far117LookbackEntryCache'
 import { useCapacitorPlatform, isCapacitorNative } from '../composables/useCapacitorPlatform'
 import { resolveDigifiAppRoute } from '../utils/digifiMobileReview'
 import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGestures'
@@ -6984,7 +6934,7 @@ import AuthModal from '../components/AuthModal.vue'
 import { readStoredReferralCode } from '../utils/referralCapture'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
 import CurrencyStatusChips from '../components/logbook/CurrencyStatusChips.vue'
-import Far117LookbackPanel from '../components/logbook/Far117LookbackPanel.vue'
+import HeaderUtcClockBar from '../components/header/HeaderUtcClockBar.vue'
 import EntryFieldError from '../components/logbook/EntryFieldError.vue'
 import LogbookEmptyState from '../components/logbook/LogbookEmptyState.vue'
 import LogEntryList from '../components/logbook/LogEntryList.vue'
@@ -8294,13 +8244,17 @@ const {
   toggleFar117Lookbacks,
 } = useFar117LookbackPreference()
 
-const shouldShowFar117Lookbacks = computed(
-  () => showFar117Lookbacks.value === true
+watch(
+  logEntries,
+  (entries) => {
+    setFar117LookbackFlightEntries(entries)
+  },
+  { immediate: true },
 )
 
-const far117FlightTimeLookbacks = computed(() =>
-  calculateFar117FlightTimeLookbacks(logEntries.value)
-)
+watch(isAuthenticated, (authed) => {
+  if (!authed) clearFar117LookbackFlightEntries()
+})
 
 const {
   entryFormMode,
