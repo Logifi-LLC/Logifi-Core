@@ -218,7 +218,7 @@
   <!-- Main Content (only show when authenticated) -->
   <div v-if="isAuthenticated && !authLoading">
     <div :style="pullTransformStyle">
-      <header>
+      <header class="print:hidden">
       <div
         :class="[
           'left-0 right-0 z-50 transition-colors duration-300',
@@ -328,6 +328,7 @@
     >
       <section
         v-show="showFcvFetchPanel && !isIos"
+        class="print:hidden"
         ref="fcvFetchSectionRef"
         :class="[
           'mr-auto mb-8 w-full rounded-2xl border p-4 sm:p-6 space-y-4',
@@ -456,7 +457,7 @@
             v-if="!isIos || isCatalogDrawerOpen"
             ref="catalogDrawerRef"
             :class="[
-            'flex-shrink-0 rounded-2xl border text-left font-quicksand transition-all duration-300 flex flex-col',
+            'print:hidden flex-shrink-0 rounded-2xl border text-left font-quicksand transition-all duration-300 flex flex-col',
             isDarkMode
               ? 'bg-gray-900 border-white/10 text-gray-200 shadow-md shadow-black/40'
               : 'bg-gray-100 border-gray-200 text-gray-800 shadow-sm',
@@ -882,7 +883,7 @@
         </Teleport>
 
         <div :class="['flex-1 space-y-12 min-w-0']">
-          <section class="text-center lg:text-left">
+          <section class="text-center lg:text-left print:hidden">
 
             <div class="space-y-6">
               <div :class="[
@@ -1217,7 +1218,7 @@
             </div>
           </section>
 
-            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 print:hidden">
               <div class="max-w-xl text-left">
                 <h2 :class="['text-2xl font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
                   Logbook
@@ -1269,7 +1270,7 @@
               </div>
         </div>
 
-            <div class="flex w-full items-center justify-between gap-4">
+            <div class="flex w-full items-center justify-between gap-4 print:hidden">
             <div class="flex w-full items-center justify-between gap-4">
             <div :class="['mt-4 text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
               <span v-if="dateRangeFilterSummary">
@@ -1404,7 +1405,7 @@
               v-if="isIos && filteredEntries.length > 0"
               type="button"
               :class="[
-                'mt-4 text-xs font-quicksand underline-offset-2 hover:underline transition-colors',
+                'print:hidden mt-4 text-xs font-quicksand underline-offset-2 hover:underline transition-colors',
                 isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-700 hover:text-blue-800',
               ]"
               @click="openLogbookLayoutPreferences"
@@ -1438,6 +1439,7 @@
 
             <LogEntryList
               v-else-if="useStackedEntryCards"
+              class="logbook-print-root logbook-print-cards"
               :entries="displayedEntries"
               :is-dark-mode="isDarkMode"
               :visible-detail-fields="visibleDetailFields"
@@ -1450,7 +1452,7 @@
               v-else
               ref="tableContainerRef"
               :class="[
-                'mt-6 rounded-2xl border transition-colors duration-300 relative overflow-x-hidden max-w-full',
+                'logbook-print-root mt-6 rounded-2xl border transition-colors duration-300 relative overflow-x-hidden max-w-full',
                 isDarkMode
                   ? 'border-gray-700'
                   : 'border-gray-300 shadow-sm'
@@ -1459,7 +1461,7 @@
               <table
                 ref="tableRef"
                 :class="[
-                  'w-full divide-y text-left font-quicksand',
+                  'logbook-print-table w-full divide-y text-left font-quicksand',
                   isDarkMode
                     ? 'divide-white/10 bg-gray-900 border-white/10 shadow-md shadow-black/40'
                     : 'divide-gray-200 bg-gray-100'
@@ -1658,7 +1660,7 @@
             <div
               v-if="filteredEntries.length > visibleEntryCount"
               ref="entriesLoadMoreSentinelRef"
-              class="mt-4 flex flex-col items-center gap-1 py-3"
+              class="print:hidden mt-4 flex flex-col items-center gap-1 py-3"
               aria-live="polite"
             >
               <p
@@ -4383,6 +4385,7 @@
       @import-provider-file="handleSettingsProviderImportFile"
       @export-logbook="openExportDialog"
       @generate-8710="showForm8710Modal = true"
+      @download-logbook-pdf="openLogbookPdfDialog"
       @import-fcv="handleOpenFcvImportFromSettings"
       @flica-connection-changed="handleFlicaConnectionChanged"
     />
@@ -4613,6 +4616,19 @@
             Cancel
           </button>
           <button
+            type="button"
+            :disabled="isDownloading8710Pdf"
+            @click="downloadForm8710Pdf"
+            :class="[
+              'min-h-[44px] px-4 py-2 rounded-lg font-quicksand transition-colors flex items-center gap-2 disabled:opacity-60',
+              isIos ? 'w-full justify-center' : '',
+              isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
+            ]"
+          >
+            <Icon name="ri:file-pdf-line" size="18" />
+            {{ isDownloading8710Pdf ? 'Building…' : 'Download PDF' }}
+          </button>
+          <button
             @click="showForm8710View = true; showForm8710Modal = false"
             :class="[
               'px-4 py-2 rounded-lg font-quicksand transition-colors flex items-center gap-2',
@@ -4668,6 +4684,19 @@
               >
                 <Icon name="ri:printer-line" size="18" />
                 Print
+              </button>
+              <button
+                type="button"
+                :disabled="isDownloading8710Pdf"
+                @click="downloadForm8710Pdf"
+                :class="[
+                  'min-h-[44px] px-4 py-2 rounded-lg font-quicksand transition-colors flex items-center gap-2 disabled:opacity-60',
+                  isIos ? 'w-full justify-center' : '',
+                  isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-blue-600 hover:bg-blue-700 text-white'
+                ]"
+              >
+                <Icon name="ri:file-pdf-line" size="18" />
+                {{ isDownloading8710Pdf ? 'Building…' : 'Download PDF' }}
               </button>
               <button
                 @click="showForm8710View = false"
@@ -6700,6 +6729,17 @@
   </div>
   </Teleport>
 
+  <LogbookPdfExportDialog
+    v-if="showLogbookPdfDialog"
+    :open="true"
+    :is-dark-mode="isDarkMode"
+    :is-ios="isIos"
+    :entries="logEntries"
+    :pilot-name="pilotProfile.name"
+    :certificate-number="pilotProfile.certificateNumber"
+    @close="showLogbookPdfDialog = false"
+  />
+
   <!-- Scroll to Top Button -->
   <Transition
     enter-active-class="transition-opacity duration-300"
@@ -6713,7 +6753,7 @@
       v-if="showScrollToTop && !isEntryFormOpen"
       @click="scrollToTop"
       :class="[
-        'fixed z-40 transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 border-none p-0',
+        'print:hidden fixed z-40 transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 border-none p-0',
         isIos
           ? 'left-1/2 bottom-[calc(1.5rem+env(safe-area-inset-bottom))]'
           : 'bottom-6',
@@ -6743,7 +6783,7 @@
       type="button"
       @click="toggleEntryForm"
       :class="[
-        'fixed right-6 z-40 flex items-center justify-center w-12 h-12 rounded-full shadow-lg transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 font-quicksand font-medium',
+        'print:hidden fixed right-6 z-40 flex items-center justify-center w-12 h-12 rounded-full shadow-lg transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2 font-quicksand font-medium',
         isIos ? 'bottom-[calc(1.5rem+env(safe-area-inset-bottom))]' : 'bottom-6',
         isDarkMode ? 'bg-blue-600 hover:bg-blue-500 text-white focus:ring-blue-400' : 'bg-blue-500 hover:bg-blue-600 text-white focus:ring-blue-300'
       ]"
@@ -6950,6 +6990,9 @@ const DashboardSettingsModal = defineAsyncComponent(
   () => import('../components/settings/DashboardSettingsModal.vue')
 )
 const LogbookImportModal = defineAsyncComponent(() => import('../components/import/LogbookImportModal.vue'))
+const LogbookPdfExportDialog = defineAsyncComponent(
+  () => import('../components/logbook/LogbookPdfExportDialog.vue')
+)
 import ProductUpdateHeadline from '../components/ProductUpdateHeadline.vue'
 import { useProductUpdates } from '../composables/useProductUpdates'
 import type { SettingsStackFrame, SettingsTabId } from '../components/settings/settingsNav'
@@ -10481,6 +10524,8 @@ function onDashboardImportRequestTransfer(): void {
   openSettings('data')
 }
 const showForm8710View = ref(false)
+const showLogbookPdfDialog = ref(false)
+const isDownloading8710Pdf = ref(false)
 const form8710PreviewData = ref<Form8710Data | null>(null)
 const form8710Warnings = computed<string[]>(() => {
   const warnings: string[] = []
@@ -11378,6 +11423,32 @@ function hasMailingAddress(sectionI: Form8710Data['sectionI'] | undefined): bool
 
 function printForm8710(): void {
   window.print()
+}
+
+function openLogbookPdfDialog(): void {
+  showLogbookPdfDialog.value = true
+}
+
+async function downloadForm8710Pdf(): Promise<void> {
+  if (isDownloading8710Pdf.value) return
+  isDownloading8710Pdf.value = true
+  try {
+    const formData = form8710PreviewData.value ?? (await prepareForm8710Data())
+    if (!formData) return
+    form8710PreviewData.value = formData
+    const { generateForm8710Pdf, form8710PdfFilename } = await import('../utils/form8710Pdf')
+    const { saveClientFile } = await import('../utils/clientFileSave')
+    const bytes = await generateForm8710Pdf(formData)
+    await saveClientFile({
+      filename: form8710PdfFilename(),
+      mimeType: 'application/pdf',
+      data: bytes,
+    })
+  } catch (error) {
+    console.error('8710 PDF failed', error)
+  } finally {
+    isDownloading8710Pdf.value = false
+  }
 }
 
 function getCategoryDisplayName(category: AircraftCategory8710): string {
@@ -12897,6 +12968,7 @@ const isDashboardShortcutBlocked = computed(
     showSignatureFinishModal.value ||
     showForm8710Modal.value ||
     showForm8710View.value ||
+    showLogbookPdfDialog.value ||
     showCurrencyDashboard.value ||
     showDashboardImportModal.value ||
     showExportDialog.value ||
@@ -19518,13 +19590,13 @@ textarea.bg-black\/20:-webkit-autofill:active {
     page-break-inside: avoid;
   }
   
-  /* Tables */
-  table {
-    page-break-inside: avoid;
+  /* Tables — keep 8710 sections intact; the logbook table paginates in print.css */
+  #form8710-content table {
+    page-break-inside: auto;
     border-collapse: collapse;
   }
   
-  tr {
+  #form8710-content tr {
     page-break-inside: avoid;
   }
   
