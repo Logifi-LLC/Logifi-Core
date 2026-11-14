@@ -2,13 +2,21 @@
  * Currency Calculator
  * 14 CFR 61.56 (flight review) and 61.57 (recent flight experience).
  *
- * Category / class / type / tailwheel splits are not applied in this module
- * (future work). Rules stay inside the cited CFR text; ambiguous edges use the
- * conservative reading and are documented next to the code.
+ * 61.57(a)/(b) passenger currency is split by category/class and by ICAO type
+ * designator. Tailwheel (61.57(a)(1)(ii)) is not split: there is no tailwheel
+ * flag on LogEntry or the aircraft catalog. Rules stay inside the cited CFR
+ * text; ambiguous edges use the conservative reading and are documented next
+ * to the code.
  */
 
 import { DateTime } from 'luxon'
-import type { LogEntry, CurrencyStatus, AnnualCurrencyStatus, CurrencyStatusType } from './logbookTypes'
+import type {
+  LogEntry,
+  CurrencyStatus,
+  AnnualCurrencyStatus,
+  CurrencyStatusType,
+  PassengerCurrencyGroup,
+} from './logbookTypes'
 import { getTotalApproachCount } from './logbookTypes'
 
 /** Structured log-entry tags (not remarks). Canonical labels from the entry form. */
@@ -55,9 +63,126 @@ function sortNewestFirst(entries: LogEntry[]): LogEntry[] {
 }
 
 /**
+ * Canonical 61.57 category/class codes. Keys are uppercase exact labels from
+ * the entry form (`aircraftCategoryClass`) and the 8710 display strings our
+ * own totals already emit. Free-text make/model is never parsed.
+ */
+const CATEGORY_CLASS_BY_NORMALIZED: Record<string, string> = {
+  ASEL: 'ASEL',
+  'AIRPLANE SEL': 'ASEL',
+  'AIRPLANE-SEL': 'ASEL',
+  'AIRPLANE SINGLE ENGINE LAND': 'ASEL',
+  AMEL: 'AMEL',
+  'AIRPLANE MEL': 'AMEL',
+  'AIRPLANE-MEL': 'AMEL',
+  'AIRPLANE MULTI ENGINE LAND': 'AMEL',
+  ASES: 'ASES',
+  'AIRPLANE SES': 'ASES',
+  'AIRPLANE-SES': 'ASES',
+  'AIRPLANE SINGLE ENGINE SEA': 'ASES',
+  AMES: 'AMES',
+  'AIRPLANE MES': 'AMES',
+  'AIRPLANE-MES': 'AMES',
+  'AIRPLANE MULTI ENGINE SEA': 'AMES',
+  HELI: 'HELI',
+  HELICOPTER: 'HELI',
+  'ROTORCRAFT HELICOPTER': 'HELI',
+  GYRO: 'GYRO',
+  GYROPLANE: 'GYRO',
+  'ROTORCRAFT GYROPLANE': 'GYRO',
+  GLID: 'GLID',
+  GLIDER: 'GLID',
+  BAL: 'BAL',
+  BALLOON: 'BAL',
+  'LTA BALLOON': 'BAL',
+  AIRS: 'AIRS',
+  AIRSHIP: 'AIRS',
+  'LTA AIRSHIP': 'AIRS',
+  PL: 'PL',
+  'POWERED LIFT': 'PL',
+  'WSC-L': 'WSC-L',
+  WSCL: 'WSC-L',
+  'WSC L': 'WSC-L',
+  'WSC-S': 'WSC-S',
+  WSCS: 'WSC-S',
+  'WSC S': 'WSC-S',
+}
+
+const SIM_CATEGORY_CLASS = new Set(['FFS', 'FTD', 'ATD'])
+
+const CATEGORY_CLASS_SORT = [
+  'ASEL',
+  'AMEL',
+  'ASES',
+  'AMES',
+  'HELI',
+  'GYRO',
+  'GLID',
+  'BAL',
+  'AIRS',
+  'PL',
+  'WSC-L',
+  'WSC-S',
+  'Unspecified',
+]
+
+/**
+ * ICAO Doc 8643 type designators are 2–4 alphanumeric characters starting
+ * with a letter (E170, B737, C172, PA28). One hyphen is allowed in the stored
+ * field (PA-28 → PA28). Anything with a space, slash, or longer token is
+ * treated as a make/model string, not a type.
+ *
+ * 61.57(a)(1)(ii) / (b)(1)(ii) require type only “if a type rating is
+ * required.” Log entries have no type-rating-required flag, so a matching
+ * designator is tracked as its own type row. That is conservative for
+ * non-type-rated airplanes that happen to store C172/PA28 as the type field;
+ * class currency still aggregates every airplane in that category/class.
+ */
+const ICAO_TYPE_DESIGNATOR = /^[A-Z][A-Z0-9]{1,3}$/
+
+export function normalizeCategoryClassForCurrency(value: string | null | undefined): string | null {
+  const normalized = (value || '')
+    .toUpperCase()
+    .replace(/[_/]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!normalized) return null
+  if (SIM_CATEGORY_CLASS.has(normalized)) return null
+  if (CATEGORY_CLASS_BY_NORMALIZED[normalized]) return CATEGORY_CLASS_BY_NORMALIZED[normalized]
+  const hyphenAsSpace = normalized.replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
+  if (CATEGORY_CLASS_BY_NORMALIZED[hyphenAsSpace]) return CATEGORY_CLASS_BY_NORMALIZED[hyphenAsSpace]
+  const compact = normalized.replace(/[-\s]/g, '')
+  if (CATEGORY_CLASS_BY_NORMALIZED[compact]) return CATEGORY_CLASS_BY_NORMALIZED[compact]
+  return null
+}
+
+export function icaoTypeDesignatorFromMakeModel(makeModel: string | null | undefined): string | null {
+  const trimmed = (makeModel || '').trim().toUpperCase()
+  if (!trimmed) return null
+  if (/[^A-Z0-9-]/.test(trimmed)) return null
+  if ((trimmed.match(/-/g) || []).length > 1) return null
+  const compact = trimmed.replace(/-/g, '')
+  return ICAO_TYPE_DESIGNATOR.test(compact) ? compact : null
+}
+
+/**
+ * 61.57(a)/(b) require takeoffs and landings in an aircraft. Structured
+ * simulator rows (logbookType or FFS/FTD/ATD category) are excluded.
+ * Make/model text is not inspected.
+ */
+function isPassengerCurrencyAircraftEntry(entry: LogEntry): boolean {
+  if (entry.isVoid) return false
+  if (entry.logbookType === 'simulator') return false
+  const cat = (entry.aircraftCategoryClass || '').toUpperCase().trim()
+  if (SIM_CATEGORY_CLASS.has(cat)) return false
+  return true
+}
+
+/**
  * 14 CFR 61.57(a): 3 takeoffs and 3 landings in the preceding 90 days.
  * Night full-stop landings (and night takeoffs) count; (a) does not require
- * full-stop except for tailwheel airplanes, which are not split here.
+ * full-stop except for tailwheel airplanes. There is no tailwheel flag on
+ * the aircraft model, so tailwheel is not split.
  * Landing counts also increment takeoffs when takeoffs were not logged
  * separately (same heuristic as before: a landing implies a takeoff).
  */
@@ -99,80 +224,21 @@ function passengerStatusFromWindow(
   }
 }
 
-/**
- * Calculate 90-day passenger currency (14 CFR 61.57(a)).
- * Requires 3 takeoffs and 3 landings within the preceding 90 days to act as
- * PIC carrying passengers. Night takeoffs/landings count toward this total.
- */
-export function calculatePassengerCurrency(
-  entries: LogEntry[],
-  referenceDate?: Date
-): CurrencyStatus {
-  const refDate = refDateTime(referenceDate)
-  const ninetyDaysAgo = refDate.minus({ days: 90 })
-
-  const qualifyingEntries = entries.filter((entry) => {
-    const entryDate = parseEntryDate(entry)
-    if (!entryDate) return false
-    return inInclusiveWindow(entryDate, ninetyDaysAgo, refDate)
-  })
-
-  let takeoffs = 0
-  let landings = 0
-  qualifyingEntries.forEach((entry) => {
-    const counts = passengerTakeoffLandingCounts(entry)
-    takeoffs += counts.takeoffs
-    landings += counts.landings
-  })
-
-  const isCurrent = takeoffs >= 3 && landings >= 3
-
-  let expirationDate = ninetyDaysAgo.plus({ days: 90 })
-  if (isCurrent && qualifyingEntries.length > 0) {
-    const sortedEntries = sortNewestFirst(qualifyingEntries)
-    let accumulatedTakeoffs = 0
-    let accumulatedLandings = 0
-    let oldestContributingEntry: LogEntry | null = null
-
-    for (const entry of sortedEntries) {
-      const counts = passengerTakeoffLandingCounts(entry)
-      if (counts.takeoffs > 0 || counts.landings > 0) {
-        oldestContributingEntry = entry
-        accumulatedTakeoffs += counts.takeoffs
-        accumulatedLandings += counts.landings
-        if (accumulatedTakeoffs >= 3 && accumulatedLandings >= 3) break
-      }
-    }
-
-    if (oldestContributingEntry) {
-      const oldestDate = parseEntryDate(oldestContributingEntry)
-      if (oldestDate) expirationDate = oldestDate.plus({ days: 90 }).endOf('day')
-    }
-  }
-
-  const { status, daysRemaining } = passengerStatusFromWindow(isCurrent, expirationDate, refDate)
-
-  return {
-    isCurrent,
-    daysRemaining,
-    expirationDate: expirationDate.toJSDate(),
-    status,
-    qualifyingEntries,
-    takeoffs,
-    landings
-  }
+function isNightPassengerEntry(entry: LogEntry): boolean {
+  const hasNightConditions = entry.flightConditions?.some((c) =>
+    c.toLowerCase().includes('night')
+  ) ?? false
+  const hasNightTime = (entry.flightTime?.night ?? 0) > 0
+  const hasNightTakeoffs = (entry.performance?.nightTakeoffs ?? 0) > 0
+  const hasNightLandings = (entry.performance?.nightLandings ?? 0) > 0
+  return hasNightConditions || hasNightTime || hasNightTakeoffs || hasNightLandings
 }
 
-/**
- * Calculate 90-day night passenger currency (14 CFR 61.57(b)).
- * Requires 3 night takeoffs and 3 night landings to a full stop within the
- * preceding 90 days to carry passengers during the period beginning 1 hour
- * after sunset and ending 1 hour before sunrise. Logged nightLandings are
- * treated as full-stop; sunset/sunrise is not computed from airport data.
- */
-export function calculateNightCurrency(
+function calculateTakeoffLandingCurrency(
   entries: LogEntry[],
-  referenceDate?: Date
+  referenceDate: Date | undefined,
+  countsFor: (entry: LogEntry) => { takeoffs: number; landings: number },
+  includeEntry: (entry: LogEntry) => boolean
 ): CurrencyStatus {
   const refDate = refDateTime(referenceDate)
   const ninetyDaysAgo = refDate.minus({ days: 90 })
@@ -181,21 +247,13 @@ export function calculateNightCurrency(
     const entryDate = parseEntryDate(entry)
     if (!entryDate) return false
     if (!inInclusiveWindow(entryDate, ninetyDaysAgo, refDate)) return false
-
-    const hasNightConditions = entry.flightConditions?.some((c) =>
-      c.toLowerCase().includes('night')
-    ) ?? false
-    const hasNightTime = (entry.flightTime?.night ?? 0) > 0
-    const hasNightTakeoffs = (entry.performance?.nightTakeoffs ?? 0) > 0
-    const hasNightLandings = (entry.performance?.nightLandings ?? 0) > 0
-
-    return hasNightConditions || hasNightTime || hasNightTakeoffs || hasNightLandings
+    return includeEntry(entry)
   })
 
   let takeoffs = 0
   let landings = 0
   qualifyingEntries.forEach((entry) => {
-    const counts = nightTakeoffLandingCounts(entry)
+    const counts = countsFor(entry)
     takeoffs += counts.takeoffs
     landings += counts.landings
   })
@@ -210,7 +268,7 @@ export function calculateNightCurrency(
     let oldestContributingEntry: LogEntry | null = null
 
     for (const entry of sortedEntries) {
-      const counts = nightTakeoffLandingCounts(entry)
+      const counts = countsFor(entry)
       if (counts.takeoffs > 0 || counts.landings > 0) {
         oldestContributingEntry = entry
         accumulatedTakeoffs += counts.takeoffs
@@ -234,7 +292,180 @@ export function calculateNightCurrency(
     status,
     qualifyingEntries,
     takeoffs,
-    landings
+    landings,
+  }
+}
+
+/**
+ * Calculate 90-day passenger currency (14 CFR 61.57(a)).
+ * Requires 3 takeoffs and 3 landings within the preceding 90 days to act as
+ * PIC carrying passengers. Night takeoffs/landings count toward this total.
+ * Pooled across aircraft; use {@link calculatePassengerCurrencyGroups} for
+ * 61.57(a)(1)(ii) category/class/type splits.
+ */
+export function calculatePassengerCurrency(
+  entries: LogEntry[],
+  referenceDate?: Date
+): CurrencyStatus {
+  return calculateTakeoffLandingCurrency(
+    entries,
+    referenceDate,
+    passengerTakeoffLandingCounts,
+    () => true
+  )
+}
+
+/**
+ * Calculate 90-day night passenger currency (14 CFR 61.57(b)).
+ * Requires 3 night takeoffs and 3 night landings to a full stop within the
+ * preceding 90 days to carry passengers during the period beginning 1 hour
+ * after sunset and ending 1 hour before sunrise. Logged nightLandings are
+ * treated as full-stop; sunset/sunrise is not computed from airport data.
+ * Pooled across aircraft; use {@link calculatePassengerCurrencyGroups} for
+ * 61.57(b)(1)(ii) category/class/type splits.
+ */
+export function calculateNightCurrency(
+  entries: LogEntry[],
+  referenceDate?: Date
+): CurrencyStatus {
+  return calculateTakeoffLandingCurrency(
+    entries,
+    referenceDate,
+    nightTakeoffLandingCounts,
+    isNightPassengerEntry
+  )
+}
+
+function categoryClassGroupKey(entry: LogEntry): string {
+  return normalizeCategoryClassForCurrency(entry.aircraftCategoryClass) ?? 'Unspecified'
+}
+
+function sortPassengerCurrencyGroups(groups: PassengerCurrencyGroup[]): PassengerCurrencyGroup[] {
+  const classRank = new Map(CATEGORY_CLASS_SORT.map((key, i) => [key, i]))
+  return [...groups].sort((a, b) => {
+    if (a.kind !== b.kind) return a.kind === 'category_class' ? -1 : 1
+    if (a.kind === 'category_class') {
+      const ra = classRank.get(a.key) ?? CATEGORY_CLASS_SORT.length
+      const rb = classRank.get(b.key) ?? CATEGORY_CLASS_SORT.length
+      if (ra !== rb) return ra - rb
+    }
+    return a.key.localeCompare(b.key)
+  })
+}
+
+function entriesForPassengerGroup(
+  entries: LogEntry[],
+  kind: PassengerCurrencyGroup['kind'],
+  key: string
+): LogEntry[] {
+  return entries.filter((entry) => {
+    if (!isPassengerCurrencyAircraftEntry(entry)) return false
+    if (kind === 'category_class') return categoryClassGroupKey(entry) === key
+    return icaoTypeDesignatorFromMakeModel(entry.aircraftMakeModel) === key
+  })
+}
+
+/**
+ * 14 CFR 61.57(a)(1)(ii) / (b)(1)(ii): takeoffs and landings must be in the
+ * same category, class, and type (if a type rating is required).
+ *
+ * Groups:
+ * - One category/class row for every aircraft category/class the pilot has
+ *   logged (ASEL, AMEL, …). Unrecognized labels become Unspecified rather
+ *   than being guessed from make/model.
+ * - One type row when `aircraftMakeModel` is clearly an ICAO type designator.
+ *   Type landings also count toward that airplane's category/class.
+ *
+ * Simulator and void rows are omitted. 61.57(a)(1)(ii) tailwheel full-stop
+ * is not applied (no tailwheel flag).
+ */
+export function calculatePassengerCurrencyGroups(
+  entries: LogEntry[],
+  referenceDate?: Date
+): PassengerCurrencyGroup[] {
+  const classKeys = new Set<string>()
+  const typeKeys = new Set<string>()
+
+  for (const entry of entries) {
+    if (!isPassengerCurrencyAircraftEntry(entry)) continue
+    const entryDate = parseEntryDate(entry)
+    if (!entryDate) continue
+    classKeys.add(categoryClassGroupKey(entry))
+    const type = icaoTypeDesignatorFromMakeModel(entry.aircraftMakeModel)
+    if (type) typeKeys.add(type)
+  }
+
+  const groups: PassengerCurrencyGroup[] = []
+  for (const key of classKeys) {
+    const scoped = entriesForPassengerGroup(entries, 'category_class', key)
+    groups.push({
+      kind: 'category_class',
+      key,
+      label: key,
+      passenger: calculatePassengerCurrency(scoped, referenceDate),
+      night: calculateNightCurrency(scoped, referenceDate),
+    })
+  }
+  for (const key of typeKeys) {
+    const scoped = entriesForPassengerGroup(entries, 'type', key)
+    groups.push({
+      kind: 'type',
+      key,
+      label: key,
+      passenger: calculatePassengerCurrency(scoped, referenceDate),
+      night: calculateNightCurrency(scoped, referenceDate),
+    })
+  }
+  return sortPassengerCurrencyGroups(groups)
+}
+
+const STATUS_SEVERITY: Record<CurrencyStatusType, number> = {
+  expired: 4,
+  missing: 3,
+  grace_period: 2,
+  expiring_soon: 1,
+  current: 0,
+}
+
+function worseCurrencyStatus(a: CurrencyStatusType, b: CurrencyStatusType): CurrencyStatusType {
+  return STATUS_SEVERITY[a] >= STATUS_SEVERITY[b] ? a : b
+}
+
+/**
+ * Compact-chip summary of 61.57(a) or (b): worst status among category/class
+ * groups. Type rows stay in the dashboard breakdown only — we cannot know
+ * whether a type rating is required, and treating every C172/PA28 designator
+ * as required would expire a GA mixed-type ASEL book incorrectly.
+ *
+ * Falls back to the pooled result when no category/class group exists.
+ */
+export function summarizePassengerCurrencyFromGroups(
+  groups: PassengerCurrencyGroup[],
+  pooled: CurrencyStatus,
+  side: 'passenger' | 'night'
+): CurrencyStatus {
+  const classStatuses = groups
+    .filter((group) => group.kind === 'category_class')
+    .map((group) => group[side])
+  if (classStatuses.length === 0) return pooled
+
+  const allCurrent = classStatuses.every((status) => status.isCurrent)
+  const worstStatus = classStatuses.reduce(
+    (acc, status) => worseCurrencyStatus(acc, status.status),
+    classStatuses[0]!.status
+  )
+
+  const representative = allCurrent
+    ? classStatuses.reduce((soonest, status) =>
+        status.expirationDate.getTime() < soonest.expirationDate.getTime() ? status : soonest
+      )
+    : classStatuses.find((status) => status.status === worstStatus) ?? classStatuses[0]!
+
+  return {
+    ...representative,
+    isCurrent: allCurrent,
+    status: allCurrent ? representative.status : worstStatus,
+    daysRemaining: allCurrent ? representative.daysRemaining : 0,
   }
 }
 

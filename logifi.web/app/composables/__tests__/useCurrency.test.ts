@@ -43,10 +43,11 @@ describe('useCurrency', () => {
   })
 
   it('should initialize with null currency values', () => {
-    const { passengerCurrency, nightCurrency, instrumentCurrency, flightReviewCurrency, annualRequirements } = useCurrency()
+    const { passengerCurrency, nightCurrency, passengerCurrencyGroups, instrumentCurrency, flightReviewCurrency, annualRequirements } = useCurrency()
     
     expect(passengerCurrency.value).toBeNull()
     expect(nightCurrency.value).toBeNull()
+    expect(passengerCurrencyGroups.value).toEqual([])
     expect(instrumentCurrency.value).toBeNull()
     expect(flightReviewCurrency.value).toBeNull()
     expect(annualRequirements.value).toBeNull()
@@ -149,6 +150,48 @@ describe('useCurrency', () => {
     clearCurrency()
     expect(passengerCurrency.value).toBeNull()
     expect(error.value).toBeNull()
+  })
+
+  it('summarizes mixed ASEL/AMEL passenger currency as expired when one class is short', () => {
+    const { calculateAllCurrency, passengerCurrency, passengerCurrencyGroups } = useCurrency()
+    const today = new Date(2024, 2, 15)
+    calculateAllCurrency(
+      [
+        createTestEntry({
+          id: 'asel',
+          date: '2024-03-01',
+          aircraftCategoryClass: 'ASEL',
+          aircraftMakeModel: 'Cessna 172',
+          performance: {
+            dayTakeoffs: 3,
+            dayLandings: 3,
+            nightTakeoffs: null,
+            nightLandings: null,
+            approachCount: null,
+            holdingProcedures: null,
+          },
+        }),
+        createTestEntry({
+          id: 'amel',
+          date: '2024-03-02',
+          aircraftCategoryClass: 'AMEL',
+          aircraftMakeModel: 'Beechcraft Baron',
+          performance: {
+            dayTakeoffs: 1,
+            dayLandings: 1,
+            nightTakeoffs: null,
+            nightLandings: null,
+            approachCount: null,
+            holdingProcedures: null,
+          },
+        }),
+      ],
+      today
+    )
+    expect(passengerCurrencyGroups.value.map((g) => g.key).sort()).toEqual(['AMEL', 'ASEL'])
+    expect(passengerCurrency.value?.isCurrent).toBe(false)
+    expect(passengerCurrencyGroups.value.find((g) => g.key === 'ASEL')?.passenger.isCurrent).toBe(true)
+    expect(passengerCurrencyGroups.value.find((g) => g.key === 'AMEL')?.passenger.isCurrent).toBe(false)
   })
 
   it('should compute currentCurrencyCount correctly', () => {

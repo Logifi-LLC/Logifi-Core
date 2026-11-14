@@ -290,3 +290,18 @@ export interface AnnualCurrencyStatus {
   qualifyingEntries: LogEntry[]
 }
 
+/**
+ * 14 CFR 61.57(a)/(b) passenger currency is per category and class, and per
+ * type if a type rating is required. One row per tracked group.
+ */
+export type PassengerCurrencyGroupKind = 'category_class' | 'type'
+
+export interface PassengerCurrencyGroup {
+  kind: PassengerCurrencyGroupKind
+  /** Canonical category/class (ASEL) or ICAO type designator (E170). */
+  key: string
+  label: string
+  passenger: CurrencyStatus
+  night: CurrencyStatus
+}
+

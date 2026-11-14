@@ -85,7 +85,7 @@
                     90-Day Passenger Currency
                   </h3>
                   <p :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                    14 CFR 61.57(a) — 3 takeoffs & 3 landings in 90 days (night counts)
+                    14 CFR 61.57(a) — 3 takeoffs & 3 landings in 90 days, per category/class and type
                   </p>
                 </div>
               </div>
@@ -100,6 +100,17 @@
             </div>
 
             <div v-if="passengerCurrency" class="space-y-3">
+              <CurrencyGroupList
+                v-if="categoryClassGroups.length > 0"
+                :category-class-groups="categoryClassGroups"
+                :type-groups="typeGroups"
+                side="passenger"
+                :is-dark-mode="isDarkMode"
+                :get-status-badge-color="getStatusBadgeColor"
+                :get-status-text="getStatusText"
+                :format-date="formatDate"
+              />
+              <template v-else>
               <!-- Progress -->
               <div class="grid grid-cols-2 gap-4">
                 <div>
@@ -173,6 +184,7 @@
                   </span>
                 </div>
               </div>
+              </template>
             </div>
           </div>
 
@@ -195,7 +207,7 @@
                     90-Day Night Currency
                   </h3>
                   <p :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                    14 CFR 61.57(b) — 3 night takeoffs & 3 night landings to full stop in 90 days
+                    14 CFR 61.57(b) — 3 night takeoffs & 3 night landings to full stop, per category/class and type
                   </p>
                 </div>
               </div>
@@ -210,6 +222,17 @@
             </div>
 
             <div v-if="nightCurrency" class="space-y-3">
+              <CurrencyGroupList
+                v-if="categoryClassGroups.length > 0"
+                :category-class-groups="categoryClassGroups"
+                :type-groups="typeGroups"
+                side="night"
+                :is-dark-mode="isDarkMode"
+                :get-status-badge-color="getStatusBadgeColor"
+                :get-status-text="getStatusText"
+                :format-date="formatDate"
+              />
+              <template v-else>
               <!-- Progress -->
               <div class="grid grid-cols-2 gap-4">
                 <div>
@@ -283,6 +306,7 @@
                   </span>
                 </div>
               </div>
+              </template>
             </div>
           </div>
 
@@ -471,14 +495,17 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { CurrencyStatusType } from '~/utils/logbookTypes'
-import type { CurrencyStatus, AnnualCurrencyStatus } from '~/utils/logbookTypes'
+import type { CurrencyStatus, AnnualCurrencyStatus, PassengerCurrencyGroup } from '~/utils/logbookTypes'
+import CurrencyGroupList from './logbook/CurrencyGroupList.vue'
 
 interface Props {
   isOpen: boolean
   isDarkMode?: boolean
   passengerCurrency: CurrencyStatus | null
   nightCurrency: CurrencyStatus | null
+  passengerCurrencyGroups?: PassengerCurrencyGroup[]
   instrumentCurrency: CurrencyStatus | null
   flightReviewCurrency?: CurrencyStatus | null
   annualRequirements?: AnnualCurrencyStatus | null
@@ -492,7 +519,15 @@ const props = withDefaults(defineProps<Props>(), {
   isLoading: false,
   error: null,
   insufficientHistory: false,
+  passengerCurrencyGroups: () => [],
 })
+
+const categoryClassGroups = computed(() =>
+  (props.passengerCurrencyGroups ?? []).filter((group) => group.kind === 'category_class')
+)
+const typeGroups = computed(() =>
+  (props.passengerCurrencyGroups ?? []).filter((group) => group.kind === 'type')
+)
 
 const emit = defineEmits<{
   close: []

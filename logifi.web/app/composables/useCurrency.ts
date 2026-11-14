@@ -1,17 +1,25 @@
 import { ref, computed } from 'vue'
 import type { Ref } from 'vue'
-import type { LogEntry, CurrencyStatus, AnnualCurrencyStatus } from '~/utils/logbookTypes'
+import type {
+  LogEntry,
+  CurrencyStatus,
+  AnnualCurrencyStatus,
+  PassengerCurrencyGroup,
+} from '~/utils/logbookTypes'
 import {
   calculatePassengerCurrency,
   calculateNightCurrency,
   calculateInstrumentCurrency,
   calculateFlightReview,
-  calculateAnnualRequirements
+  calculateAnnualRequirements,
+  calculatePassengerCurrencyGroups,
+  summarizePassengerCurrencyFromGroups,
 } from '~/utils/currencyCalculator'
 
 export const useCurrency = () => {
   const passengerCurrency: Ref<CurrencyStatus | null> = ref(null)
   const nightCurrency: Ref<CurrencyStatus | null> = ref(null)
+  const passengerCurrencyGroups: Ref<PassengerCurrencyGroup[]> = ref([])
   const instrumentCurrency: Ref<CurrencyStatus | null> = ref(null)
   const flightReviewCurrency: Ref<CurrencyStatus | null> = ref(null)
   const annualRequirements: Ref<AnnualCurrencyStatus | null> = ref(null)
@@ -28,8 +36,12 @@ export const useCurrency = () => {
       isLoading.value = true
       error.value = null
 
-      passengerCurrency.value = calculatePassengerCurrency(entries, referenceDate)
-      nightCurrency.value = calculateNightCurrency(entries, referenceDate)
+      const groups = calculatePassengerCurrencyGroups(entries, referenceDate)
+      const pooledPassenger = calculatePassengerCurrency(entries, referenceDate)
+      const pooledNight = calculateNightCurrency(entries, referenceDate)
+      passengerCurrencyGroups.value = groups
+      passengerCurrency.value = summarizePassengerCurrencyFromGroups(groups, pooledPassenger, 'passenger')
+      nightCurrency.value = summarizePassengerCurrencyFromGroups(groups, pooledNight, 'night')
       instrumentCurrency.value = calculateInstrumentCurrency(entries, referenceDate)
       flightReviewCurrency.value = calculateFlightReview(entries, referenceDate)
       annualRequirements.value = calculateAnnualRequirements(entries, referenceDate)
@@ -40,6 +52,7 @@ export const useCurrency = () => {
 
       passengerCurrency.value = null
       nightCurrency.value = null
+      passengerCurrencyGroups.value = []
       instrumentCurrency.value = null
       flightReviewCurrency.value = null
       annualRequirements.value = null
@@ -54,6 +67,7 @@ export const useCurrency = () => {
   const clearCurrency = () => {
     passengerCurrency.value = null
     nightCurrency.value = null
+    passengerCurrencyGroups.value = []
     instrumentCurrency.value = null
     flightReviewCurrency.value = null
     annualRequirements.value = null
@@ -83,6 +97,7 @@ export const useCurrency = () => {
   return {
     passengerCurrency,
     nightCurrency,
+    passengerCurrencyGroups,
     instrumentCurrency,
     flightReviewCurrency,
     annualRequirements,

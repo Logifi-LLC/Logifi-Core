@@ -113,6 +113,7 @@
     :is-dark-mode="isDarkMode"
     :passenger-currency="passengerCurrency"
     :night-currency="nightCurrency"
+    :passenger-currency-groups="passengerCurrencyGroups"
     :instrument-currency="instrumentCurrency"
     :flight-review-currency="flightReviewCurrency"
     :annual-requirements="annualRequirements"
@@ -7267,6 +7268,7 @@ function writeUserScopedLocal(baseKey: string, value: string): void {
 const {
   passengerCurrency,
   nightCurrency,
+  passengerCurrencyGroups,
   instrumentCurrency,
   flightReviewCurrency,
   annualRequirements,
