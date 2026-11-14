@@ -87,6 +87,25 @@
           />
         </label>
         <label
+          class="flex cursor-pointer items-center justify-between gap-3 px-4 py-3"
+        >
+          <span class="min-w-0">
+            <span class="block text-sm font-quicksand" :class="isDarkMode ? 'text-gray-200' : 'text-gray-700'">
+              FAR 117 lookbacks
+            </span>
+            <span class="mt-0.5 block text-xs font-quicksand" :class="isDarkMode ? 'text-gray-400' : 'text-gray-500'">
+              Part 117 flight-time totals under totals
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            :checked="showFar117Lookbacks"
+            class="h-5 w-5 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            :class="isDarkMode ? 'border-gray-600 bg-gray-800' : 'bg-white'"
+            @change="$emit('toggle-far117-lookbacks')"
+          />
+        </label>
+        <label
           v-for="metric in availableMetrics"
           :key="metric.key"
           class="flex items-center justify-between gap-3 px-4 py-3"
@@ -145,6 +164,7 @@ defineProps<{
   availableMetrics: { key: string; label: string }[]
   selectedMetrics: string[]
   showCurrencyChips: boolean
+  showFar117Lookbacks: boolean
   logbookLayoutPresets: readonly EntryCardPreset[]
   activeLogbookLayoutPresetId: EntryCardPresetId
   logbookLayoutPickerFields: LogbookColumnConfig[]
@@ -158,6 +178,7 @@ defineEmits<{
   'set-entry-form-mode': [mode: EntryFormMode]
   'toggle-metric': [key: string]
   'toggle-currency-chips': []
+  'toggle-far117-lookbacks': []
   'apply-logbook-layout-preset': [id: EntryCardPresetId]
   'toggle-logbook-layout-field': [key: LogbookColumnKey]
   'logbook-layout-drag-start': [key: LogbookColumnKey]
