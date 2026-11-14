@@ -1061,24 +1061,66 @@
                     ]">
                       {{ summaryField.cardLabel ?? summaryField.label }}
                     </p>
-                    <p :class="[
-                      'font-semibold font-quicksand mt-2 relative z-10',
-                      summaryField.key === 'totalTime'
-                        ? (isIos ? 'text-2xl tracking-tight' : 'text-3xl tracking-tight')
-                        : (isIos ? 'text-xl' : 'text-2xl'),
-                      summaryField.key === 'totalTime'
-                        ? (isDarkMode ? 'text-white drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'text-gray-900')
-                        : (isDarkMode ? 'text-gray-200' : 'text-gray-900')
-                    ]">
+                    <div
+                      v-if="summaryField.key === 'totalTime' && shouldShowFar117Lookbacks"
+                      class="relative z-10 mt-2 flex min-w-0 flex-col gap-1 md:flex-row md:items-baseline md:justify-between md:gap-2"
+                    >
+                      <Far117LookbackPanel
+                        side="672"
+                        :lookbacks="far117FlightTimeLookbacks"
+                        :is-dark-mode="isDarkMode"
+                        align="left"
+                        extra-class="hidden md:block max-w-[38%] truncate"
+                      />
+                      <p
+                        :class="[
+                          'font-semibold font-quicksand min-w-0 text-center md:flex-1 md:px-1',
+                          isIos ? 'text-2xl tracking-tight' : 'text-3xl tracking-tight',
+                          isDarkMode ? 'text-white drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'text-gray-900',
+                        ]"
+                      >
+                        {{ formatTotalValue(summaryField.key) }}
+                      </p>
+                      <Far117LookbackPanel
+                        side="365"
+                        :lookbacks="far117FlightTimeLookbacks"
+                        :is-dark-mode="isDarkMode"
+                        align="right"
+                        extra-class="hidden md:block max-w-[38%] truncate md:text-right"
+                      />
+                      <div
+                        class="flex w-full flex-col items-center gap-1 md:hidden"
+                        data-testid="far117-lookback-mobile-stack"
+                      >
+                        <Far117LookbackPanel
+                          side="672"
+                          :lookbacks="far117FlightTimeLookbacks"
+                          :is-dark-mode="isDarkMode"
+                          align="center"
+                        />
+                        <Far117LookbackPanel
+                          side="365"
+                          :lookbacks="far117FlightTimeLookbacks"
+                          :is-dark-mode="isDarkMode"
+                          align="center"
+                        />
+                      </div>
+                    </div>
+                    <p
+                      v-else
+                      :class="[
+                        'font-semibold font-quicksand mt-2 relative z-10',
+                        summaryField.key === 'totalTime'
+                          ? (isIos ? 'text-2xl tracking-tight' : 'text-3xl tracking-tight')
+                          : (isIos ? 'text-xl' : 'text-2xl'),
+                        summaryField.key === 'totalTime'
+                          ? (isDarkMode ? 'text-white drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'text-gray-900')
+                          : (isDarkMode ? 'text-gray-200' : 'text-gray-900'),
+                      ]"
+                    >
                       {{ formatTotalValue(summaryField.key) }}
                     </p>
                   </div>
-                  <Far117LookbackPanel
-                    v-if="shouldShowFar117Lookbacks"
-                    :lookbacks="far117FlightTimeLookbacks"
-                    :is-dark-mode="isDarkMode"
-                    :is-ios="isIos"
-                  />
                 </div>
                 <!-- Sim totals -->
                 <div

@@ -17,6 +17,9 @@ import { inferLogbookType } from './importSimulator'
 import { filterEntriesForTotalsReport } from './totalsReport'
 import type { LogEntry } from './logbookTypes'
 
+export const FAR117_LOOKBACK_INFO_NOTE =
+  'Informational only, not a legality check. Block time is entry Total; simulator entries excluded.'
+
 /** 14 CFR 117.23(b)(1) */
 export const FAR117_LIMIT_672_HOURS = 100
 export const FAR117_WINDOW_672_HOURS = 672
