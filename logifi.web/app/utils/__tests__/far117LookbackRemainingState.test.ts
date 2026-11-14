@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   far117LookbackRemainingState,
   far117LookbackStateAriaPhrase,
+  far117LookbackWorstState,
+  shouldShowFar117StatusDot,
 } from '../far117LookbackRemainingState'
 
 describe('far117LookbackRemainingState', () => {
@@ -26,6 +28,27 @@ describe('far117LookbackRemainingState', () => {
   it('is over_limit when used exceeds the limit', () => {
     expect(far117LookbackRemainingState(0, limit100, 100.1)).toBe('over_limit')
     expect(far117LookbackRemainingState(0, limit1000, 1001)).toBe('over_limit')
+  })
+})
+
+describe('far117LookbackWorstState', () => {
+  it('picks the worse of the two lookbacks', () => {
+    expect(
+      far117LookbackWorstState('normal', 'near_limit'),
+    ).toBe('near_limit')
+    expect(
+      far117LookbackWorstState('near_limit', 'critical'),
+    ).toBe('critical')
+    expect(
+      far117LookbackWorstState('normal', 'over_limit'),
+    ).toBe('over_limit')
+  })
+})
+
+describe('shouldShowFar117StatusDot', () => {
+  it('hides the dot when both are within limit', () => {
+    expect(shouldShowFar117StatusDot('normal')).toBe(false)
+    expect(shouldShowFar117StatusDot('near_limit')).toBe(true)
   })
 })
 

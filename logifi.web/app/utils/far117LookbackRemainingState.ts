@@ -36,6 +36,42 @@ export function far117LookbackStateAriaPhrase(
   }
 }
 
+const STATE_RANK: Record<Far117LookbackRemainingState, number> = {
+  normal: 0,
+  near_limit: 1,
+  critical: 2,
+  over_limit: 3,
+}
+
+/** Returns the more severe of two (or more) lookback states. */
+export function far117LookbackWorstState(
+  ...states: Far117LookbackRemainingState[]
+): Far117LookbackRemainingState {
+  return states.reduce(
+    (worst, state) => (STATE_RANK[state] > STATE_RANK[worst] ? state : worst),
+    'normal' as Far117LookbackRemainingState,
+  )
+}
+
+export function shouldShowFar117StatusDot(
+  worst: Far117LookbackRemainingState,
+): boolean {
+  return worst !== 'normal'
+}
+
+export function far117LookbackDotBgClass(
+  state: Far117LookbackRemainingState,
+  isDarkMode: boolean,
+): string {
+  if (state === 'over_limit' || state === 'critical') {
+    return isDarkMode ? 'bg-rose-400' : 'bg-rose-600'
+  }
+  if (state === 'near_limit') {
+    return isDarkMode ? 'bg-amber-400' : 'bg-amber-600'
+  }
+  return 'bg-gray-500'
+}
+
 export function far117LookbackStateTextClass(
   state: Far117LookbackRemainingState,
   isDarkMode: boolean,

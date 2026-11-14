@@ -4,16 +4,8 @@
     data-testid="header-utc-clock-bar"
   >
     <div
-      class="flex max-w-full min-w-0 items-center justify-center gap-1.5 sm:gap-2 pointer-events-auto"
+      class="flex max-w-full min-w-0 items-center justify-center gap-0.5 pointer-events-auto"
     >
-      <Far117LookbackPanel
-        v-if="shouldShowFar117HeaderLookbacks"
-        side="672"
-        :lookbacks="lookbacks!"
-        :is-dark-mode="isDarkMode"
-        compact
-        extra-class="hidden md:block max-w-[5.5rem] sm:max-w-[7rem] truncate"
-      />
       <span
         :class="[
           'px-2 py-0 shrink-0 rounded-md font-quicksand font-medium tabular-nums select-none leading-none',
@@ -24,22 +16,24 @@
       >
         {{ displayClock }}
       </span>
-      <Far117LookbackPanel
-        v-if="shouldShowFar117HeaderLookbacks"
-        side="365"
+      <Far117HeaderStatusDot
+        v-if="showStatusDot"
         :lookbacks="lookbacks!"
         :is-dark-mode="isDarkMode"
-        compact
-        extra-class="hidden md:block max-w-[6rem] sm:max-w-[7.5rem] truncate text-right"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import Far117LookbackPanel from '~/components/logbook/Far117LookbackPanel.vue'
+import { computed, onMounted } from 'vue'
+import Far117HeaderStatusDot from '~/components/header/Far117HeaderStatusDot.vue'
 import { useFar117HeaderLookbacks } from '~/composables/useFar117HeaderLookbacks'
+import {
+  far117LookbackRemainingState,
+  far117LookbackWorstState,
+  shouldShowFar117StatusDot,
+} from '~/utils/far117LookbackRemainingState'
 
 const props = withDefaults(
   defineProps<{
@@ -59,6 +53,31 @@ const {
   shouldShowFar117HeaderLookbacks,
   loadFar117LookbackPreference,
 } = useFar117HeaderLookbacks()
+
+const worstState = computed(() => {
+  if (!lookbacks.value) return 'normal' as const
+  const h672 = lookbacks.value.consecutive672Hours
+  const d365 = lookbacks.value.consecutive365CalendarDays
+  return far117LookbackWorstState(
+    far117LookbackRemainingState(
+      h672.remainingHours,
+      h672.limitHours,
+      h672.usedHours,
+    ),
+    far117LookbackRemainingState(
+      d365.remainingHours,
+      d365.limitHours,
+      d365.usedHours,
+    ),
+  )
+})
+
+const showStatusDot = computed(
+  () =>
+    shouldShowFar117HeaderLookbacks.value &&
+    lookbacks.value !== null &&
+    shouldShowFar117StatusDot(worstState.value),
+)
 
 onMounted(() => {
   loadFar117LookbackPreference()
