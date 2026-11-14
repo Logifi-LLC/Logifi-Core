@@ -21,11 +21,15 @@ const EXACT_APP_PATHS = new Set([
   '/digifi-scan',
   '/feedback',
   '/integrations',
+  '/login',
   '/logbook-builder',
+  '/logbook-check',
+  '/signup',
   '/pricing',
   '/privacy',
   '/reset-password',
   '/terms',
+  '/totals-report',
 ])
 
 const DYNAMIC_APP_PATHS = [

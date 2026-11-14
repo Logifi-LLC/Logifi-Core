@@ -1,8 +1,23 @@
 <template>
   <div
-    class="flex flex-col gap-2 text-left"
+    class="flex flex-col gap-4 text-left"
     data-testid="logbook-empty-state"
   >
+    <div>
+      <h3
+        class="text-base font-semibold font-quicksand"
+        :class="isDarkMode ? 'text-gray-100' : 'text-gray-900'"
+      >
+        {{ heading }}
+      </h3>
+      <p
+        class="mt-1 text-sm font-quicksand"
+        :class="isDarkMode ? 'text-gray-400' : 'text-gray-600'"
+      >
+        Pick how you want to start your logbook.
+      </p>
+    </div>
+    <div class="flex flex-col gap-2">
     <button
       type="button"
       class="flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-sm font-medium font-quicksand transition-colors"
@@ -19,7 +34,7 @@
       @click="$emit('import-csv')"
     >
       <Icon name="ri:upload-cloud-2-line" size="18" class="shrink-0" />
-      <span>Import CSV</span>
+      <span>Import a logbook</span>
     </button>
     <button
       type="button"
@@ -28,8 +43,9 @@
       @click="$emit('scan-digifi')"
     >
       <Icon name="ri:scan-line" size="18" class="shrink-0" />
-      <span>Scan with Digifi</span>
+      <span>Scan paper with Digifi</span>
     </button>
+    </div>
   </div>
 </template>
 
@@ -48,7 +64,11 @@ defineEmits<{
   'scan-digifi': []
 }>()
 
-const addLabel = computed(() => (props.isSimulator ? 'Add a sim' : 'Add a flight'))
+const heading = computed(() =>
+  props.isSimulator ? 'Start your simulator log' : 'Start your logbook'
+)
+
+const addLabel = computed(() => (props.isSimulator ? 'Add a simulator entry' : 'Add a flight'))
 
 const rowClass = computed(() =>
   props.isDarkMode

@@ -4,7 +4,9 @@ const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 365 * 10
 
 export function captureReferralFromSearch(search: string): string | null {
   const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search)
-  return normalizeReferralCode(params.get('ref'))
+  return (
+    normalizeReferralCode(params.get('ref')) ?? normalizeReferralCode(params.get('referral'))
+  )
 }
 
 export function readStoredReferralCode(): string | null {

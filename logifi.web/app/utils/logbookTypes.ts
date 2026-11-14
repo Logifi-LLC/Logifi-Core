@@ -251,7 +251,14 @@ export const createEmptyOOOI = (): OOOITimes => ({
 })
 
 // Currency tracking types
-export type CurrencyStatusType = 'current' | 'expired' | 'expiring_soon'
+export type CurrencyStatusType =
+  | 'current'
+  | 'expired'
+  | 'expiring_soon'
+  /** 14 CFR 61.57(d): IFR experience lapsed, IPC not yet required. */
+  | 'grace_period'
+  /** No structured Flight Review tag on any entry (14 CFR 61.56). */
+  | 'missing'
 
 export interface CurrencyStatus {
   isCurrent: boolean
@@ -265,6 +272,15 @@ export interface CurrencyStatus {
   landings?: number
   approaches?: number
   holdingProcedures?: number
+  /**
+   * 14 CFR 61.57(d): last day of the 6-calendar-month grace period after IFR
+   * experience lapses. After this date an IPC is required.
+   */
+  gracePeriodEndsAt?: Date
+  /** True when instrument currency has lapsed beyond the 61.57(d) grace period. */
+  needsIpc?: boolean
+  /** True when an IPC tag (not remarks) is what currently restores 61.57(c)/(d). */
+  restoredByIpc?: boolean
 }
 
 export interface AnnualCurrencyStatus {

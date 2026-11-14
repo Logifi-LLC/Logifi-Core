@@ -15,7 +15,8 @@
     :dismissible="!isIos"
     :initial-tab="authInitialTab"
     :referral-open-count="referralOpenCount"
-    @close="showAuthModal = false"
+    :notice="authNotice"
+    @close="onAuthModalClose"
     @success="showAuthModal = false"
   />
 
@@ -113,9 +114,11 @@
     :passenger-currency="passengerCurrency"
     :night-currency="nightCurrency"
     :instrument-currency="instrumentCurrency"
+    :flight-review-currency="flightReviewCurrency"
     :annual-requirements="annualRequirements"
     :is-loading="isLoadingCurrency"
     :error="currencyError"
+    :insufficient-history="currencyHistoryInsufficient"
     @close="showCurrencyDashboard = false"
   />
 
@@ -223,12 +226,8 @@
             ? 'sticky inset-x-0 top-0 border-b backdrop-blur-sm pt-[env(safe-area-inset-top)]'
             : 'fixed top-0',
           isDarkMode
-            ? isIos
-              ? 'border-gray-700/50 bg-gray-950/95'
-              : 'border-gray-700/50'
-            : isIos
-              ? 'border-gray-200 bg-gray-50/95'
-              : 'border-gray-400/50'
+            ? 'border-gray-700/50 bg-gray-950'
+            : 'border-gray-200 bg-gray-50'
         ]"
       >
         <div
@@ -533,6 +532,13 @@
               Building filters…
             </div>
             <template v-if="!isIos || !iosCatalogBuilding">
+            <p
+              v-if="!hasAnyEntriesForActiveLogbook"
+              :class="['text-sm font-quicksand px-1', isDarkMode ? 'text-gray-400' : 'text-gray-600']"
+            >
+              Catalog builds from your flights and imports. Add or import entries to populate these lists.
+            </p>
+            <template v-else>
             <div
               v-for="section in catalogSections"
               :key="section.key"
@@ -813,6 +819,7 @@
               </div>
             </div>
           </div>
+            </template>
 
           <!-- Filters active section -->
           <div v-show="!isSidebarCollapsed || isIos" class="relative settings-container pt-6">
@@ -939,7 +946,16 @@
                       Autofi
                     </button>
                   </div>
-                  <div class="flex flex-wrap items-center gap-2">
+                  <LogbookEmptyState
+                    v-if="!hasAnyEntriesForActiveLogbook"
+                    class="mt-2"
+                    :is-dark-mode="isDarkMode"
+                    :is-simulator="activeLogbook === 'simulator'"
+                    @add-entry="toggleEntryForm()"
+                    @import-csv="showDashboardImportModal = true"
+                    @scan-digifi="openDigifiFromEmptyState"
+                  />
+                  <div v-else class="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       :class="[
@@ -1011,7 +1027,7 @@
                 </div>
                 <!-- Flight totals (airplane time) -->
                 <div
-                  v-if="totalsViewMode === 'flight'"
+                  v-if="hasAnyEntriesForActiveLogbook && totalsViewMode === 'flight'"
                   :class="[
                     'grid gap-4',
                     isIos ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
@@ -1060,7 +1076,7 @@
                 </div>
                 <!-- Sim totals -->
                 <div
-                  v-else
+                  v-else-if="hasAnyEntriesForActiveLogbook"
                   :class="[
                     'grid gap-4',
                     isIos ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2',
@@ -1112,6 +1128,8 @@
                 :passenger-currency="passengerCurrency"
                 :night-currency="nightCurrency"
                 :instrument-currency="instrumentCurrency"
+                :flight-review-currency="flightReviewCurrency"
+                :insufficient-history="currencyHistoryInsufficient"
                 :is-dark-mode="isDarkMode"
                 @open="showCurrencyDashboard = true"
               />
@@ -1409,13 +1427,9 @@
                 No entries in {{ dateRangeFilterSummary }}. Adjust the date range in Totals Overview above, or choose <strong>All time</strong> to see every entry.
               </template>
               <template v-else-if="!hasAnyEntriesForActiveLogbook">
-                <LogbookEmptyState
-                  :is-dark-mode="isDarkMode"
-                  :is-simulator="activeLogbook === 'simulator'"
-                  @add-entry="toggleEntryForm()"
-                  @import-csv="showDashboardImportModal = true"
-                  @scan-digifi="openDigifiFromEmptyState"
-                />
+                <p :class="['text-sm font-quicksand text-center', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
+                  Saved entries appear in this list after you add, import, or scan your first flights.
+                </p>
               </template>
               <template v-else>
                 No entries match your current filters. Clear sidebar filters or search to see more entries.
@@ -1436,7 +1450,7 @@
               v-else
               ref="tableContainerRef"
               :class="[
-                'mt-6 rounded-2xl border transition-colors duration-300 relative overflow-x-auto',
+                'mt-6 rounded-2xl border transition-colors duration-300 relative overflow-x-hidden max-w-full',
                 isDarkMode
                   ? 'border-gray-700'
                   : 'border-gray-300 shadow-sm'
@@ -1450,7 +1464,7 @@
                     ? 'divide-white/10 bg-gray-900 border-white/10 shadow-md shadow-black/40'
                     : 'divide-gray-200 bg-gray-100'
                 ]"
-                style="table-layout: fixed; width: 100%;"
+                style="table-layout: fixed; width: 100%; max-width: 100%;"
               >
                 <thead
                   ref="tableHeaderRef"
@@ -2015,10 +2029,11 @@
                   </div>
                 </div>
                 <div
+                  v-show="showEditAnyFormField(SIM_EXTRA_TIME_FIELDS)"
                   class="mt-4 pt-3 border-t grid gap-4 grid-cols-1 sm:grid-cols-2"
                   :class="isDarkMode ? 'border-gray-600' : 'border-gray-200'"
                 >
-                  <div>
+                  <div v-show="showEditFormField('simulatedInstrument')">
                     <label for="edit-simulatedInstrument" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Simulated instrument (hrs)</label>
                     <input id="edit-simulatedInstrument" :aria-invalid="editFieldAriaInvalid('simulatedInstrument')" :aria-describedby="editFieldDescribedBy('simulatedInstrument')"
                       :value="editDurationDisplay('simulatedInstrument', inlineEditEntry?.flightTime.simulatedInstrument)"
@@ -2037,7 +2052,7 @@
                     />
                     <EntryFieldError id="edit-simulatedInstrument-error" :message="visibleEditFieldError('simulatedInstrument')" :is-dark-mode="isDarkMode" />
                   </div>
-                  <div>
+                  <div v-show="showEditFormField('dual')">
                     <label for="edit-dual" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Dual Rcvd (hrs)</label>
                     <input id="edit-dual" :aria-invalid="editFieldAriaInvalid('dual')" :aria-describedby="editFieldDescribedBy('dual')"
                       :value="editDurationDisplay('dual', inlineEditEntry?.flightTime.dual)"
@@ -2056,7 +2071,7 @@
                     />
                     <EntryFieldError id="edit-dual-error" :message="visibleEditFieldError('dual')" :is-dark-mode="isDarkMode" />
                   </div>
-                  <div v-if="pilotProfile.enableMilitaryFields">
+                  <div v-if="pilotProfile.enableMilitaryFields" v-show="showEditFormField('night')">
                     <label for="edit-night" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night (hrs)</label>
                     <input id="edit-night" :aria-invalid="editFieldAriaInvalid('night')" :aria-describedby="editFieldDescribedBy('night')"
                       :value="editDurationDisplay('night', inlineEditEntry?.flightTime.night)"
@@ -2075,7 +2090,7 @@
                     />
                     <EntryFieldError id="edit-night-error" :message="visibleEditFieldError('night')" :is-dark-mode="isDarkMode" />
                   </div>
-                  <div v-if="pilotProfile.enableMilitaryFields">
+                  <div v-if="pilotProfile.enableMilitaryFields" v-show="showEditFormField('nvg')">
                     <label for="edit-nvg" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">NVG (hrs)</label>
                     <input id="edit-nvg" :aria-invalid="editFieldAriaInvalid('nvg')" :aria-describedby="editFieldDescribedBy('nvg')"
                       :value="editDurationDisplay('nvg', inlineEditEntry?.flightTime.nvg)"
@@ -2141,7 +2156,7 @@
                       <button v-for="(airport, index) in filteredAirportsForInlineTo" :key="airport" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedInlineToIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectAirportForInlineTo(airport)">{{ airport }}</button>
                     </div>
                   </div>
-                  <div class="col-span-1 sm:col-span-2">
+                  <div v-show="showEditFormField('route')" class="col-span-1 sm:col-span-2">
                     <label for="edit-route" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
                     <input id="edit-route" v-model="inlineEditEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="OPTIONAL" @blur="inlineEditEntry.route = (inlineEditEntry.route || '').trim().toUpperCase()" />
                   </div>
@@ -2159,12 +2174,12 @@
                     <label for="edit-nightLandings" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night Ldg</label>
                     <input id="edit-nightLandings" v-model.number="inlineEditEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                   </div>
-                  <div>
+                  <div v-show="showEditFormField('holdingProcedures')">
                     <label for="edit-holdingProcedures" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Holds</label>
                     <input id="edit-holdingProcedures" v-model.number="inlineEditEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                   </div>
                 </div>
-                <div class="mt-3">
+                <div v-show="showEditFormField('approaches')" class="mt-3">
                   <div :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Approaches</div>
                   <div class="space-y-1.5">
                     <div v-for="(approach, aIdx) in (inlineEditEntry.performance.approaches || [])" :key="'sim-inline-' + aIdx" class="flex gap-2 items-center">
@@ -2179,14 +2194,20 @@
                   </div>
                 </div>
               </div>
+              <EntryFormMoreFieldsToggle
+                :mode="entryFormMode"
+                :open="editMoreFieldsOpen"
+                :is-dark-mode="isDarkMode"
+                @toggle="editMoreFieldsOpen = !editMoreFieldsOpen"
+              />
               <!-- Conditions, Tags, Remarks, Pilot -->
-              <div :class="isIos ? 'grid gap-2 entry-grid-ios-2' : 'flex flex-wrap gap-3'">
+              <div v-show="showEditFormField('flightConditions')" :class="isIos ? 'grid gap-2 entry-grid-ios-2' : 'flex flex-wrap gap-3'">
                 <label v-for="condition in activeConditionOptions" :key="condition.value" :class="['rounded-lg border text-sm font-quicksand cursor-pointer transition-all', isIos ? 'entry-chip-ios' : 'inline-flex items-center gap-2 px-4 py-2', (inlineEditEntry.flightConditions || []).includes(condition.value) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')]">
                   <input v-model="inlineEditEntry.flightConditions" :value="condition.value" type="checkbox" :class="['rounded border transition-colors flex-shrink-0', isIos ? 'h-[18px] w-[18px]' : 'h-4 w-4', isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500']" />
                   <span>{{ condition.label }}</span>
                 </label>
               </div>
-              <div>
+              <div v-show="showEditFormField('tags')">
                 <div :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Tags</div>
                 <div :class="[isIos ? 'grid gap-2 entry-grid-ios-2 mb-3' : 'flex flex-wrap gap-2 mb-3 items-center']">
                   <template v-for="tag in [...allTagOptions, ...customTagsFor(inlineEditEntry)]" :key="'sim-inline-' + tag">
@@ -2206,10 +2227,12 @@
                     </div>
                   </template>
                 </div>
+              </div>
+              <div v-show="showEditFormField('remarks')">
                 <label for="edit-remarks" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Remarks / Applicable 61.51 Notes</label>
                 <textarea id="edit-remarks" v-model="inlineEditEntry.remarks" rows="3" placeholder="Document training received, endorsements pending, or other relevant notes." :class="['w-full rounded border px-2 py-2 text-sm font-quicksand transition-colors duration-300', isDarkMode ? 'border-white/10 bg-black/20 text-white placeholder-gray-400 shadow-inner' : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400']"></textarea>
               </div>
-              <div>
+              <div v-show="showEditAnyFormField(['trainingInstructor', 'trainingElements'])">
                 <div :class="['block text-xs uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Pilot</div>
                 <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2']">
                   <div>
@@ -2250,6 +2273,7 @@
                 {{ inlineEditEntry.flagged ? 'Flagged' : '+ Flag' }}
               </button>
               <button
+                v-show="showEditFormField('oooi')"
                 type="button"
                 @click="toggleInlineOOOIMode"
                 :class="['text-xs uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors',
@@ -2263,7 +2287,7 @@
             </div>
 
 
-            <div v-if="isInlineCommercialMode && inlineEditEntry?.oooi" class="mb-4">
+            <div v-if="isInlineCommercialMode && inlineEditEntry?.oooi" v-show="showEditFormField('oooi')" class="mb-4">
               <div class="flex justify-between items-center mb-2 px-2">
                 <span :class="['text-xs font-medium', isDarkMode ? 'text-gray-400' : 'text-gray-600']">Time Format:</span>
                 <button 
@@ -2350,7 +2374,7 @@
                 </div>
               </div>
             </div>
-            <div :class="['grid gap-4 mb-2 items-end', 'grid-cols-1']">
+            <div v-show="showEditFormField('flightNumber')" :class="['grid gap-4 mb-2 items-end', 'grid-cols-1']">
               <div>
                 <label for="edit-flightNumber" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Flight Number</label>
                 <input id="edit-flightNumber" 
@@ -2436,7 +2460,7 @@
                   </button>
                 </div>
               </div>
-              <div class="min-w-0">
+              <div v-show="showEditFormField('aircraftCategoryClass')" class="min-w-0">
                 <label for="edit-aircraftCategoryClass" :class="['block text-xs uppercase font-bold mb-1 truncate', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class</label>
                 <select id="edit-aircraftCategoryClass" :aria-invalid="editFieldAriaInvalid('aircraftCategoryClass')" :aria-describedby="editFieldDescribedBy('aircraftCategoryClass')" @blur="onEditFieldBlur('aircraftCategoryClass')"
                   :value="categoryClassAircraftOptions.includes(inlineEditEntry.aircraftCategoryClass as any) ? inlineEditEntry.aircraftCategoryClass : ''"
@@ -2448,14 +2472,14 @@
                 </select>
                 <EntryFieldError id="edit-aircraftCategoryClass-error" :message="visibleEditFieldError('aircraftCategoryClass')" :is-dark-mode="isDarkMode" />
               </div>
-              <div class="entry-grid-time-col">
-                <label for="edit-categoryClassTime" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
+              <div v-show="showEditFormField('categoryClassTime')" class="entry-grid-time-col">
+                <label for="edit-categoryClassTime" :class="['block text-xs uppercase font-semibold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class time</label>
                 <input id="edit-categoryClassTime" :aria-invalid="editFieldAriaInvalid('categoryClassTime')" :aria-describedby="editFieldDescribedBy('categoryClassTime')"
                   :value="editDurationDisplay('categoryClassTime', inlineEditEntry.categoryClassTime)"
                   type="text"
                   inputmode="decimal"
                   placeholder="0.0"
-                  :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
+                  :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-gray-300 shadow-inner' : 'bg-gray-50 border-gray-200 text-gray-700']"
                   @input="(e) => {
                     onEditDurationInput('categoryClassTime', e, (n) => { inlineEditEntry.categoryClassTime = n })
                   }"
@@ -2463,9 +2487,10 @@
                     onEditDurationBlur('categoryClassTime', e, () => inlineEditEntry.categoryClassTime, (n) => { inlineEditEntry.categoryClassTime = n })
                   }"
                 />
+                <p id="edit-categoryClassTime-help" class="mt-1 text-xs font-quicksand" :class="isDarkMode ? 'text-gray-500' : 'text-gray-500'">{{ CATEGORY_CLASS_TIME_HELP }}</p>
                 <EntryFieldError id="edit-categoryClassTime-error" :message="visibleEditFieldError('categoryClassTime')" :is-dark-mode="isDarkMode" />
               </div>
-              <div class="col-span-1 sm:col-span-2">
+              <div v-show="showEditFormField('route')" class="col-span-1 sm:col-span-2">
                 <label for="edit-route" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
                 <input id="edit-route" v-model="inlineEditEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @blur="inlineEditEntry.route = (inlineEditEntry.route || '').trim().toUpperCase()" />
               </div>
@@ -2475,7 +2500,7 @@
              <div>
               <div :class="['block text-xs uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</div>
               <div :class="['grid gap-3 w-full', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2']">
-                <div v-for="field in mainTimeFields" :key="field.key">
+                <div v-for="field in mainTimeFields" v-show="showEditFormField(field.key)" :key="field.key">
                   <label :for="'edit-time-' + field.key" :class="['block text-xs uppercase font-bold mb-1 text-center whitespace-normal sm:whitespace-nowrap', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
                     {{ mainTimeShortLabels[field.key] ?? field.label }}
                   </label>
@@ -2517,11 +2542,11 @@
                   <label for="edit-nightLandings" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night Ldg</label>
                   <input id="edit-nightLandings" v-model.number="inlineEditEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                </div>
-               <div>
+               <div v-show="showEditFormField('holdingProcedures')">
                   <label for="edit-holdingProcedures" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Holds</label>
                   <input id="edit-holdingProcedures" v-model.number="inlineEditEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                </div>
-               <div class="col-span-1 sm:col-span-2">
+               <div v-show="showEditFormField('approaches')" class="col-span-1 sm:col-span-2">
                   <div :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Approaches</div>
                   <div class="space-y-1.5">
                     <div
@@ -2548,7 +2573,14 @@
                </div>
              </div>
 
-            <div :class="isIos ? 'grid gap-2 entry-grid-ios-2' : 'flex flex-wrap gap-3'">
+            <EntryFormMoreFieldsToggle
+              :mode="entryFormMode"
+              :open="editMoreFieldsOpen"
+              :is-dark-mode="isDarkMode"
+              @toggle="editMoreFieldsOpen = !editMoreFieldsOpen"
+            />
+
+            <div v-show="showEditFormField('flightConditions')" :class="isIos ? 'grid gap-2 entry-grid-ios-2' : 'flex flex-wrap gap-3'">
               <label
                 v-for="condition in activeConditionOptions"
                 :key="condition.value"
@@ -2577,6 +2609,7 @@
             </div>
 
             <div>
+              <div v-show="showEditFormField('tags')">
               <div :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Tags</div>
               <div :class="[isIos ? 'grid gap-2 entry-grid-ios-2 mb-3' : 'flex flex-wrap gap-2 mb-3 items-center']">
                 <template v-for="tag in [...allTagOptions, ...customTagsFor(inlineEditEntry)]" :key="'inline-' + tag">
@@ -2604,6 +2637,8 @@
                   </div>
                 </template>
               </div>
+              </div>
+              <div v-show="showEditFormField('remarks')">
               <label for="edit-remarks" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Remarks / Applicable 61.51 Notes</label>
               <textarea id="edit-remarks"
                 v-model="inlineEditEntry.remarks"
@@ -2616,10 +2651,11 @@
                     : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400'
                 ]"
               ></textarea>
+              </div>
             </div>
 
             <!-- Pilot Section -->
-            <div>
+            <div v-show="showEditAnyFormField(['trainingInstructor', 'trainingElements'])">
               <div :class="['block text-xs uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Pilot</div>
               <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2']">
                 <div>
@@ -3096,7 +3132,8 @@
             </NuxtLink>
             <button
               type="button"
-              @click="toggleEntryForm"
+              @mousedown.prevent
+              @click="closeAddEntryPanel"
               :class="[
                 'p-2 rounded-lg transition-colors',
                 isDarkMode 
@@ -3180,10 +3217,11 @@
                       </div>
                     </div>
                     <div
+                      v-show="showAddAnyFormField(SIM_EXTRA_TIME_FIELDS)"
                       class="mt-4 pt-3 border-t grid gap-4 grid-cols-1 sm:grid-cols-2"
                       :class="isDarkMode ? 'border-gray-600' : 'border-gray-200'"
                     >
-                      <div>
+                      <div v-show="showAddFormField('simulatedInstrument')">
                         <label for="entry-simulatedInstrument" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Simulated instrument (hrs)</label>
                         <input id="entry-simulatedInstrument" :aria-invalid="addFieldAriaInvalid('simulatedInstrument')" :aria-describedby="addFieldDescribedBy('simulatedInstrument')"
                           :value="addDurationDisplay('simulatedInstrument', newEntry.flightTime.simulatedInstrument)"
@@ -3200,7 +3238,7 @@
                         />
                         <EntryFieldError id="entry-simulatedInstrument-error" :message="visibleAddFieldError('simulatedInstrument')" :is-dark-mode="isDarkMode" />
                       </div>
-                      <div>
+                      <div v-show="showAddFormField('dual')">
                         <label for="entry-dual" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Dual Rcvd (hrs)</label>
                         <input id="entry-dual" :aria-invalid="addFieldAriaInvalid('dual')" :aria-describedby="addFieldDescribedBy('dual')"
                           :value="addDurationDisplay('dual', newEntry.flightTime.dual)"
@@ -3217,7 +3255,7 @@
                         />
                         <EntryFieldError id="entry-dual-error" :message="visibleAddFieldError('dual')" :is-dark-mode="isDarkMode" />
                       </div>
-                      <div v-if="pilotProfile.enableMilitaryFields">
+                      <div v-if="pilotProfile.enableMilitaryFields" v-show="showAddFormField('night')">
                         <label for="entry-night" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night (hrs)</label>
                         <input id="entry-night" :aria-invalid="addFieldAriaInvalid('night')" :aria-describedby="addFieldDescribedBy('night')"
                           :value="addDurationDisplay('night', newEntry.flightTime.night)"
@@ -3234,7 +3272,7 @@
                         />
                         <EntryFieldError id="entry-night-error" :message="visibleAddFieldError('night')" :is-dark-mode="isDarkMode" />
                       </div>
-                      <div v-if="pilotProfile.enableMilitaryFields">
+                      <div v-if="pilotProfile.enableMilitaryFields" v-show="showAddFormField('nvg')">
                         <label for="entry-nvg" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">NVG (hrs)</label>
                         <input id="entry-nvg" :aria-invalid="addFieldAriaInvalid('nvg')" :aria-describedby="addFieldDescribedBy('nvg')"
                           :value="addDurationDisplay('nvg', newEntry.flightTime.nvg)"
@@ -3332,7 +3370,7 @@
                           <button v-for="(airport, index) in filteredAirportsForTo" :key="airport" :data-index="index" type="button" :class="['w-full px-3 py-2 text-left text-sm font-mono uppercase transition-colors', highlightedToIndex === index ? (isDarkMode ? 'bg-blue-600 text-white' : 'bg-blue-500 text-white') : (isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-200')]" @mousedown.prevent="selectAirportForTo(airport)">{{ airport }}</button>
                         </div>
                       </div>
-                      <div class="col-span-1 sm:col-span-2">
+                      <div v-show="showAddFormField('route')" class="col-span-1 sm:col-span-2">
                         <label for="entry-route" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
                         <input id="entry-route" v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" placeholder="OPTIONAL" @input="() => nextTick(() => checkAndAutoLogCrossCountry())" @blur="newEntry.route = (newEntry.route || '').trim().toUpperCase(); checkAndAutoLogCrossCountry()" />
                       </div>
@@ -3351,12 +3389,12 @@
                         <label for="entry-nightLandings" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night Ldg</label>
                         <input id="entry-nightLandings" v-model.number="newEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                       </div>
-                      <div>
+                      <div v-show="showAddFormField('holdingProcedures')">
                         <label for="entry-holdingProcedures" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Holds</label>
                         <input id="entry-holdingProcedures" v-model.number="newEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                       </div>
                     </div>
-                    <div class="mt-3">
+                    <div v-show="showAddFormField('approaches')" class="mt-3">
                       <div :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Approaches</div>
                       <div class="space-y-1.5">
                         <div v-for="(approach, aIdx) in (newEntry.performance.approaches || [])" :key="'sim-new-' + aIdx" class="flex gap-2 items-center">
@@ -3374,14 +3412,21 @@
                     </div>
                   </div>
 
+                  <EntryFormMoreFieldsToggle
+                    :mode="entryFormMode"
+                    :open="addMoreFieldsOpen"
+                    :is-dark-mode="isDarkMode"
+                    @toggle="addMoreFieldsOpen = !addMoreFieldsOpen"
+                  />
+
                   <!-- Conditions, Tags, Remarks, Pilot -->
-                  <div :class="isIos ? 'grid gap-2 entry-grid-ios-2' : 'flex flex-wrap gap-3'">
+                  <div v-show="showAddFormField('flightConditions')" :class="isIos ? 'grid gap-2 entry-grid-ios-2' : 'flex flex-wrap gap-3'">
                     <label v-for="condition in activeConditionOptions" :key="condition.value" :class="['rounded-lg border text-sm font-quicksand cursor-pointer transition-all', isIos ? 'entry-chip-ios' : 'inline-flex items-center gap-2 px-4 py-2', (newEntry.flightConditions || []).includes(condition.value) ? (isDarkMode ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-blue-500 bg-blue-50 text-blue-700') : (isDarkMode ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-300 bg-gray-100 text-gray-900 hover:bg-gray-200')]">
                       <input v-model="newEntry.flightConditions" :value="condition.value" type="checkbox" :class="['rounded border transition-colors flex-shrink-0', isIos ? 'h-[18px] w-[18px]' : 'h-4 w-4', isDarkMode ? 'border-gray-500 bg-gray-700 text-blue-500 focus:ring-blue-500' : 'border-gray-400 bg-gray-100 text-blue-600 focus:ring-blue-500']" />
                       <span>{{ condition.label }}</span>
                     </label>
                   </div>
-                  <div>
+                  <div v-show="showAddFormField('tags')">
                     <div :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Tags</div>
                     <div :class="[isIos ? 'grid gap-2 entry-grid-ios-2 mb-3' : 'flex flex-wrap gap-2 mb-3 items-center']">
                       <template v-for="tag in [...allTagOptions, ...customTagsFor(newEntry)]" :key="'sim-new-' + tag">
@@ -3410,11 +3455,11 @@
                       </template>
                     </div>
                   </div>
-                  <div>
+                  <div v-show="showAddFormField('remarks')">
                     <label for="entry-remarks" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Remarks / Applicable 61.51 Notes</label>
                     <textarea id="entry-remarks" v-model="newEntry.remarks" rows="3" placeholder="Document training received, endorsements pending, or other relevant notes." :class="['w-full rounded border px-2 py-2 text-sm font-quicksand transition-colors duration-300', isDarkMode ? 'border-white/10 bg-black/20 text-white placeholder-gray-400 shadow-inner' : 'border-gray-300 bg-gray-100 text-gray-900 placeholder-gray-400']"></textarea>
                   </div>
-                  <div>
+                  <div v-show="showAddAnyFormField(['trainingInstructor', 'trainingElements'])">
                     <div :class="['block text-xs uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Pilot</div>
                     <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2']">
                       <div>
@@ -3444,6 +3489,7 @@
               <template v-else>
               <div class="flex items-center justify-between mb-2">
                 <button
+                  v-show="showAddFormField('oooi')"
                   type="button"
                   @click="toggleCommercialMode"
                   :class="['text-xs uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors', 
@@ -3466,7 +3512,7 @@
                 </button>
               </div>
 
-              <div v-if="isCommercialMode" class="mb-4">
+              <div v-if="isCommercialMode" v-show="showAddFormField('oooi')" class="mb-4">
                 <div class="flex justify-between items-center mb-2 px-2">
                   <span :class="['text-xs font-medium', isDarkMode ? 'text-gray-400' : 'text-gray-600']">Time Format:</span>
                   <button 
@@ -3554,7 +3600,7 @@
                   </div>
                 </div>
               </div>
-              <div :class="['grid gap-4 mb-2 items-end', 'grid-cols-1']">
+              <div v-show="showAddFormField('flightNumber')" :class="['grid gap-4 mb-2 items-end', 'grid-cols-1']">
                 <div>
                   <label for="entry-flightNumber" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Flight Number</label>
                   <input id="entry-flightNumber" 
@@ -3650,7 +3696,7 @@
                     </button>
                   </div>
                 </div>
-                <div class="min-w-0">
+                <div v-show="showAddFormField('aircraftCategoryClass')" class="min-w-0">
                   <label for="entry-aircraftCategoryClass" :class="['block text-xs uppercase font-bold mb-1 truncate', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class</label>
                   <select id="entry-aircraftCategoryClass" :aria-invalid="addFieldAriaInvalid('aircraftCategoryClass')" :aria-describedby="addFieldDescribedBy('aircraftCategoryClass')" @blur="onAddFieldBlur('aircraftCategoryClass')"
                     :value="categoryClassAircraftOptions.includes(newEntry.aircraftCategoryClass as any) ? newEntry.aircraftCategoryClass : ''"
@@ -3662,14 +3708,14 @@
                   </select>
                   <EntryFieldError id="entry-aircraftCategoryClass-error" :message="visibleAddFieldError('aircraftCategoryClass')" :is-dark-mode="isDarkMode" />
                 </div>
-                <div class="entry-grid-time-col">
-                  <label for="entry-categoryClassTime" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</label>
+                <div v-show="showAddFormField('categoryClassTime')" class="entry-grid-time-col">
+                  <label for="entry-categoryClassTime" :class="['block text-xs uppercase font-semibold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Category/Class time</label>
                   <input id="entry-categoryClassTime" :aria-invalid="addFieldAriaInvalid('categoryClassTime')" :aria-describedby="addFieldDescribedBy('categoryClassTime')"
                     :value="addDurationDisplay('categoryClassTime', newEntry.categoryClassTime)"
                     type="text"
                     inputmode="decimal"
                     placeholder="0.0"
-                    :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']"
+                    :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-gray-300 shadow-inner' : 'bg-gray-50 border-gray-200 text-gray-700']"
                     @input="(e) => {
                       onAddDurationInput('categoryClassTime', e, (n) => { newEntry.categoryClassTime = n })
                     }"
@@ -3677,9 +3723,10 @@
                       onAddDurationBlur('categoryClassTime', e, () => newEntry.categoryClassTime, (n) => { newEntry.categoryClassTime = n })
                     }"
                   />
+                  <p id="entry-categoryClassTime-help" class="mt-1 text-xs font-quicksand" :class="isDarkMode ? 'text-gray-500' : 'text-gray-500'">{{ CATEGORY_CLASS_TIME_HELP }}</p>
                   <EntryFieldError id="entry-categoryClassTime-error" :message="visibleAddFieldError('categoryClassTime')" :is-dark-mode="isDarkMode" />
                 </div>
-                <div class="col-span-1 sm:col-span-2">
+                <div v-show="showAddFormField('route')" class="col-span-1 sm:col-span-2">
                   <label for="entry-route" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Route</label>
                   <input id="entry-route" v-model="newEntry.route" type="text" :class="['w-full rounded border px-2 py-1 text-sm font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" @input="() => nextTick(() => checkAndAutoLogCrossCountry())" @blur="newEntry.route = (newEntry.route || '').trim().toUpperCase(); checkAndAutoLogCrossCountry()" />
                 </div>
@@ -3689,7 +3736,7 @@
               <div>
                 <div :class="['block text-xs uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Time</div>
                 <div :class="['grid gap-3 w-full', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2']">
-                  <div v-for="field in mainTimeFields" :key="field.key">
+                  <div v-for="field in mainTimeFields" v-show="showAddFormField(field.key)" :key="field.key">
                     <label :for="'entry-time-' + field.key" :class="['block text-xs uppercase font-bold mb-1 text-center whitespace-normal sm:whitespace-nowrap', isDarkMode ? 'text-gray-500' : 'text-gray-400']">
                       {{ mainTimeShortLabels[field.key] ?? field.label }}
                     </label>
@@ -3733,11 +3780,11 @@
                     <label for="entry-nightLandings" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night Ldg</label>
                     <input id="entry-nightLandings" v-model.number="newEntry.performance.nightLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                  </div>
-                 <div>
+                 <div v-show="showAddFormField('holdingProcedures')">
                     <label for="entry-holdingProcedures" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Holds</label>
                     <input id="entry-holdingProcedures" v-model.number="newEntry.performance.holdingProcedures" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                  </div>
-                 <div class="col-span-1 sm:col-span-2">
+                 <div v-show="showAddFormField('approaches')" class="col-span-1 sm:col-span-2">
                     <div :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Approaches</div>
                     <div class="space-y-1.5">
                       <div
@@ -3764,7 +3811,14 @@
                  </div>
                </div>
 
-              <div :class="isIos ? 'grid gap-2 entry-grid-ios-2' : 'flex flex-wrap gap-3'">
+              <EntryFormMoreFieldsToggle
+                :mode="entryFormMode"
+                :open="addMoreFieldsOpen"
+                :is-dark-mode="isDarkMode"
+                @toggle="addMoreFieldsOpen = !addMoreFieldsOpen"
+              />
+
+              <div v-show="showAddFormField('flightConditions')" :class="isIos ? 'grid gap-2 entry-grid-ios-2' : 'flex flex-wrap gap-3'">
                 <label
                   v-for="condition in activeConditionOptions"
                   :key="condition.value"
@@ -3792,7 +3846,7 @@
                 </label>
               </div>
 
-              <div>
+              <div v-show="showAddFormField('tags')">
                 <div :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Tags</div>
                 <div :class="[isIos ? 'grid gap-2 entry-grid-ios-2 mb-3' : 'flex flex-wrap gap-2 mb-3 items-center']">
                   <template v-for="tag in [...allTagOptions, ...customTagsFor(newEntry)]" :key="'new-' + tag">
@@ -3822,7 +3876,7 @@
                 </div>
               </div>
 
-              <div>
+              <div v-show="showAddFormField('remarks')">
                 <label for="entry-remarks" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Remarks / Applicable 61.51 Notes</label>
                 <textarea id="entry-remarks"
                   v-model="newEntry.remarks"
@@ -3838,7 +3892,7 @@
               </div>
 
               <!-- Pilot Section -->
-              <div>
+              <div v-show="showAddAnyFormField(['trainingInstructor', 'trainingElements'])">
                 <div :class="['block text-xs uppercase font-bold mb-2', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Pilot</div>
                 <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2']">
                   <div>
@@ -4023,11 +4077,11 @@
 
               <div
                 :class="[
-                  'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4',
+                  'flex flex-col gap-4 min-w-0',
                   isIos ? 'entry-panel-actions-ios' : ''
                 ]"
               >
-                <div class="flex flex-col gap-2">
+                <div class="flex flex-col gap-2 min-w-0 max-w-full">
                   <div v-if="validationError" :class="['font-quicksand text-sm', isDarkMode ? 'text-red-400' : 'text-red-600']">
                     {{ validationError }}
                   </div>
@@ -4056,7 +4110,7 @@
                     </div>
                   </div>
                   <div v-if="validationWarning && (hasErrors || hasWarnings)" 
-                       :class="['rounded-lg border p-3', hasErrors ? (isDarkMode ? 'border-red-700 bg-red-900/20' : 'border-red-300 bg-red-50') : (isDarkMode ? 'border-yellow-700 bg-yellow-900/20' : 'border-yellow-300 bg-yellow-50')]">
+                       :class="['rounded-lg border p-3 max-w-full', hasErrors ? (isDarkMode ? 'border-red-700 bg-red-900/20' : 'border-red-300 bg-red-50') : (isDarkMode ? 'border-yellow-700 bg-yellow-900/20' : 'border-yellow-300 bg-yellow-50')]">
                     <div class="flex items-start gap-2">
                       <Icon 
                         :name="hasErrors ? 'ri:error-warning-line' : 'ri:alert-line'" 
@@ -4113,7 +4167,7 @@
                 </div>
                 <div
                   :class="[
-                    'flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end',
+                    'flex flex-col sm:flex-row flex-wrap gap-3 sm:items-center sm:justify-end shrink-0',
                     isIos ? 'entry-panel-actions-ios w-full' : ''
                   ]"
                 >
@@ -4279,6 +4333,7 @@
       :theme="theme"
       :clock-format="clockFormat"
       :clock-zone="clockZone"
+      :entry-form-mode="entryFormMode"
       :available-metrics="availableTotalsMetrics"
       :selected-metrics="selectedTotalsMetrics"
       :show-currency-chips="showCurrencyChips === true"
@@ -4302,6 +4357,7 @@
       @set-theme="setTheme"
       @set-clock-format="setClockFormat"
       @set-clock-zone="setClockZone"
+      @set-entry-form-mode="onSetEntryFormMode"
       @toggle-metric="toggleTotalsMetric"
       @toggle-currency-chips="toggleShowCurrencyChips"
       :logbook-layout-presets="logbookLayoutPresets"
@@ -6732,6 +6788,13 @@ import type { AirportInfo } from '../composables/useAirportLookup'
 import { getPilotInitialsFromName } from '../utils/pilotProfile'
 import { getDisplayedPilotInitials, shouldShowCurrencyChips } from '../utils/dashboardHydration'
 import {
+  CATEGORY_CLASS_TIME_HELP,
+  shouldShowAnyEntryFormField,
+  shouldShowEntryFormField,
+  type EntryFormFieldId,
+  type EntryFormMode,
+} from '../utils/entryFormMode'
+import {
   entryMatchesTotalsDateRange,
   normalizeSavedTotalsMetricKeys,
   type TotalsDateRange,
@@ -6863,6 +6926,8 @@ import { useCatalogDrawerGestures } from '../composables/useCatalogDrawerGesture
 import { usePullToRefresh } from '../composables/usePullToRefresh'
 import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
 import { useDashboardShortcuts } from '../composables/useDashboardShortcuts'
+import { useDashboardEntryDeepLink } from '../composables/useDashboardEntryDeepLink'
+import { parseDashboardReturnTo } from '../utils/dashboardReturnTo'
 import AuthModal from '../components/AuthModal.vue'
 import { readStoredReferralCode } from '../utils/referralCapture'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
@@ -6871,6 +6936,13 @@ import EntryFieldError from '../components/logbook/EntryFieldError.vue'
 import LogbookEmptyState from '../components/logbook/LogbookEmptyState.vue'
 import LogEntryList from '../components/logbook/LogEntryList.vue'
 import { STACKED_LOGBOOK_CARDS_MQ, shouldUseStackedLogbookCards } from '../utils/logbookListLayout'
+import { hasInsufficientCurrencyHistory } from '../utils/currencyHistoryPolicy'
+import {
+  applyLogbookTableDensity,
+  LOGBOOK_TABLE_CONDENSED_MQ,
+  LOGBOOK_TABLE_TIGHT_MQ,
+  resolveLogbookTableDensity,
+} from '../utils/logbookTableLayout'
 
 const AuditTrail = defineAsyncComponent(() => import('../components/AuditTrail.vue'))
 const CurrencyDashboard = defineAsyncComponent(() => import('../components/CurrencyDashboard.vue'))
@@ -7196,6 +7268,7 @@ const {
   passengerCurrency,
   nightCurrency,
   instrumentCurrency,
+  flightReviewCurrency,
   annualRequirements,
   isLoading: isLoadingCurrency,
   error: currencyError,
@@ -7225,6 +7298,7 @@ const syncStatusTitle = computed(() => {
 })
 
 const showAuthModal = ref(false)
+const authNotice = ref<string | null>(null)
 const authInitialTab = ref<'signin' | 'signup'>('signin')
 const referralOpenCount = ref(0)
 const route = useRoute()
@@ -7357,6 +7431,14 @@ function onNarrowViewportChange(event: MediaQueryListEvent) {
   isNarrowViewport.value = event.matches
 }
 
+function onCondensedTableViewportChange(event: MediaQueryListEvent) {
+  isCondensedTableViewport.value = event.matches
+}
+
+function onTightTableViewportChange(event: MediaQueryListEvent) {
+  isTightTableViewport.value = event.matches
+}
+
 const handleLogout = async () => {
   stopBackgroundSync()
   setActiveUserId(null)
@@ -7374,6 +7456,11 @@ const handleLogout = async () => {
   }
 }
 
+function onAuthModalClose() {
+  showAuthModal.value = false
+  authNotice.value = null
+}
+
 /** After server-side account deletion — local auth already cleared. */
 const handleAccountDeleted = () => {
   stopBackgroundSync()
@@ -7382,12 +7469,14 @@ const handleAccountDeleted = () => {
   closeSettings()
   dashboardFcvConnected.value = false
   showFcvFetchPanel.value = false
+  authNotice.value = 'Your account has been deleted.'
+  authInitialTab.value = 'signin'
   if (isIos.value) {
     showAuthModal.value = true
-    router.push('/dashboard')
+    void router.replace('/dashboard')
   } else {
     showAuthModal.value = false
-    router.push('/?from=app')
+    void router.replace('/login?account_deleted=1')
   }
 }
 
@@ -7423,6 +7512,7 @@ async function onUserSessionReady(userId: string): Promise<void> {
   loadPilotProfilePrefs()
   loadSelectedTotalsMetrics()
   loadShowCurrencyChips()
+  loadEntryFormPreference()
   loadColumnConfig()
   loadActiveLogbook()
 
@@ -7432,7 +7522,6 @@ async function onUserSessionReady(userId: string): Promise<void> {
     void markAppReady()
   }
 
-  maybeAutoOpenEntryFormForEmptyLogbook()
   startBackgroundSync()
 
   void loadEntries({ mode: 'auto' })
@@ -7540,6 +7629,12 @@ onMounted(async () => {
   narrowViewportMql = window.matchMedia(STACKED_LOGBOOK_CARDS_MQ)
   isNarrowViewport.value = narrowViewportMql.matches
   narrowViewportMql.addEventListener('change', onNarrowViewportChange)
+  condensedTableMql = window.matchMedia(LOGBOOK_TABLE_CONDENSED_MQ)
+  isCondensedTableViewport.value = condensedTableMql.matches
+  condensedTableMql.addEventListener('change', onCondensedTableViewportChange)
+  tightTableMql = window.matchMedia(LOGBOOK_TABLE_TIGHT_MQ)
+  isTightTableViewport.value = tightTableMql.matches
+  tightTableMql.addEventListener('change', onTightTableViewportChange)
   openSignupForStoredReferral()
 
   loadSimDeviceCatalogFromStorage()
@@ -7582,6 +7677,14 @@ onUnmounted(() => {
     if (narrowViewportMql) {
       narrowViewportMql.removeEventListener('change', onNarrowViewportChange)
       narrowViewportMql = null
+    }
+    if (condensedTableMql) {
+      condensedTableMql.removeEventListener('change', onCondensedTableViewportChange)
+      condensedTableMql = null
+    }
+    if (tightTableMql) {
+      tightTableMql.removeEventListener('change', onTightTableViewportChange)
+      tightTableMql = null
     }
     const scrollTarget = isIos.value ? rootScrollContainerRef.value : window
     if (scrollTarget) {
@@ -8131,6 +8234,59 @@ function toggleShowCurrencyChips(): void {
   saveShowCurrencyChips()
 }
 
+const {
+  entryFormMode,
+  setEntryFormMode,
+  loadEntryFormPreference,
+} = useEntryFormPreference()
+const addMoreFieldsOpen = ref(false)
+const editMoreFieldsOpen = ref(false)
+const SIM_EXTRA_TIME_FIELDS = ['simulatedInstrument', 'dual', 'night', 'nvg'] as const satisfies readonly EntryFormFieldId[]
+
+function onSetEntryFormMode(mode: EntryFormMode): void {
+  setEntryFormMode(mode)
+  if (mode === 'quick') {
+    addMoreFieldsOpen.value = false
+    editMoreFieldsOpen.value = false
+  }
+}
+
+function showAddFormField(field: string): boolean {
+  return shouldShowEntryFormField({
+    mode: entryFormMode.value,
+    field: field as EntryFormFieldId,
+    entry: newEntry,
+    moreFieldsOpen: addMoreFieldsOpen.value,
+  })
+}
+
+function showEditFormField(field: string): boolean {
+  return shouldShowEntryFormField({
+    mode: entryFormMode.value,
+    field: field as EntryFormFieldId,
+    entry: inlineEditEntry.value,
+    moreFieldsOpen: editMoreFieldsOpen.value,
+  })
+}
+
+function showAddAnyFormField(fields: readonly EntryFormFieldId[]): boolean {
+  return shouldShowAnyEntryFormField({
+    mode: entryFormMode.value,
+    fields,
+    entry: newEntry,
+    moreFieldsOpen: addMoreFieldsOpen.value,
+  })
+}
+
+function showEditAnyFormField(fields: readonly EntryFormFieldId[]): boolean {
+  return shouldShowAnyEntryFormField({
+    mode: entryFormMode.value,
+    fields,
+    entry: inlineEditEntry.value,
+    moreFieldsOpen: editMoreFieldsOpen.value,
+  })
+}
+
 
 // Load selected metrics from localStorage
 function loadSelectedTotalsMetrics(): void {
@@ -8204,8 +8360,28 @@ const {
   resizingColumn,
 } = useLogbookColumnConfig()
 
-const visibleColumns = computed(() =>
-  baseVisibleColumns.value.filter(col => col.key !== 'nvg' || pilotProfile.enableMilitaryFields),
+const isCondensedTableViewport = ref(
+  typeof window !== 'undefined' && window.matchMedia(LOGBOOK_TABLE_CONDENSED_MQ).matches,
+)
+const isTightTableViewport = ref(
+  typeof window !== 'undefined' && window.matchMedia(LOGBOOK_TABLE_TIGHT_MQ).matches,
+)
+let condensedTableMql: MediaQueryList | null = null
+let tightTableMql: MediaQueryList | null = null
+
+const logbookTableDensity = computed(() =>
+  resolveLogbookTableDensity(isCondensedTableViewport.value, isTightTableViewport.value),
+)
+
+const visibleColumns = computed(() => {
+  const filtered = baseVisibleColumns.value.filter(
+    (col) => col.key !== 'nvg' || pilotProfile.enableMilitaryFields,
+  )
+  return applyLogbookTableDensity(filtered, logbookTableDensity.value)
+})
+
+const currencyHistoryInsufficient = computed(() =>
+  hasInsufficientCurrencyHistory(logEntries.value),
 )
 
 const displayColumnConfig = computed(() =>
@@ -8495,6 +8671,15 @@ function handleFlicaConnectionChanged(payload: { connected: boolean }): void {
 const isInlineCommercialMode = ref(false)
 const editingEntryId = ref<string | null>(null)
 const expandedEntryId = ref<string | null>(null)
+const inlineEditReturnPath = ref<string | null>(null)
+
+watch(
+  () => route.query.returnTo,
+  (raw) => {
+    inlineEditReturnPath.value = parseDashboardReturnTo(raw)
+  },
+  { immediate: true }
+)
 const inlineEditEntry = ref<LogEntry | null>(null)
 const showSignEntryModal = ref(false)
 const showSignatureFinishModal = ref(false)
@@ -8760,6 +8945,18 @@ function closeInlineEditDrawer(): void {
   customTagInputInline.value = ''
 }
 
+function navigateAfterInlineEditIfRequested(): void {
+  const path = inlineEditReturnPath.value
+  if (!path) return
+  inlineEditReturnPath.value = null
+  void router.push(path)
+}
+
+function dismissInlineEdit(): void {
+  closeInlineEditDrawer()
+  navigateAfterInlineEditIfRequested()
+}
+
 function setLocalSignaturePending(
   entryId: string,
   pending: boolean,
@@ -8838,7 +9035,7 @@ async function submitSignEntry(): Promise<void> {
     }
     showToast('Entry signed — it can no longer be edited', { type: 'success' })
     closeSignEntryModal()
-    closeInlineEditDrawer()
+    dismissInlineEdit()
   } finally {
     isSubmittingSign.value = false
   }
@@ -8875,7 +9072,7 @@ async function sendEntryForSigning(): Promise<void> {
     }
     showToast('Sent to instructor for signature', { type: 'success' })
     showSignatureFinishModal.value = false
-    closeInlineEditDrawer()
+    dismissInlineEdit()
   } finally {
     isMarkingSignaturePending.value = false
   }
@@ -8894,7 +9091,7 @@ async function refreshFlightSignatures(): Promise<void> {
 
 async function beginInlineEditing(entry: LogEntry): Promise<void> {
   if (expandedEntryId.value === entry.id) {
-    closeInlineEditDrawer()
+    dismissInlineEdit()
   } else {
     ensureIosCatalogIndex()
     // Close Add Entry form when opening inline edit
@@ -8935,6 +9132,12 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
     }
   }
 }
+
+useDashboardEntryDeepLink({
+  logEntries,
+  setActiveLogbook,
+  openEntry: (entry) => beginInlineEditing(entry),
+})
 
 function beginAmendSignedEntry(): void {
   const original = inlineEditEntry.value
@@ -9816,7 +10019,7 @@ async function finalizeSaveWithSigningIntent(
         : source === 'edit'
           ? 'Entry updated'
           : 'Entry saved', { type: 'success', duration: 3000 })
-    if (source === 'edit') closeInlineEditDrawer()
+    if (source === 'edit') dismissInlineEdit()
     clearFormSigningFields()
     return
   }
@@ -9871,7 +10074,7 @@ async function finalizeSaveWithSigningIntent(
       }
       showToast('Entry saved and signed', { type: 'success' })
       clearFormSigningFields()
-      closeInlineEditDrawer()
+      dismissInlineEdit()
     } finally {
       isSubmittingSign.value = false
     }
@@ -9942,7 +10145,7 @@ async function finalizeSaveWithSigningIntent(
       }
       showToast('Entry signed by guest instructor', { type: 'success' })
       clearFormSigningFields()
-      closeInlineEditDrawer()
+      dismissInlineEdit()
     } finally {
       isSubmittingSign.value = false
     }
@@ -9959,7 +10162,7 @@ async function finalizeSaveWithSigningIntent(
     }
     showToast(source === 'edit' ? 'Entry updated — pending signature' : 'Entry saved — pending signature', { type: 'success', duration: 3000 })
     if (source === 'edit') {
-      closeInlineEditDrawer()
+      dismissInlineEdit()
     }
     clearFormSigningFields()
     return
@@ -10088,6 +10291,7 @@ async function saveInlineEditWithIntent(intent: 'sign' | 'later' | 'none' | 'gue
 
 function prepareInlineEditFromEntry(savedEntry: LogEntry): void {
   ensureIosCatalogIndex()
+  editMoreFieldsOpen.value = false
   closeAuditTrailSidebar()
   showSignEntryModal.value = false
   clearEntryFormFieldUi()
@@ -10120,7 +10324,7 @@ function prepareInlineEditFromEntry(savedEntry: LogEntry): void {
 
 function cancelInlineEdit(): void {
   clearFormSigningFields()
-  closeInlineEditDrawer()
+  dismissInlineEdit()
 }
 
 const catalogOpenState = reactive<Record<CatalogKey, boolean>>({
@@ -13317,11 +13521,17 @@ function editFieldAriaInvalid(field: string): 'true' | undefined {
 }
 
 function addFieldDescribedBy(field: string): string | undefined {
-  return visibleAddFieldError(field) ? `entry-${field}-error` : undefined
+  const ids: string[] = []
+  if (field === 'categoryClassTime') ids.push('entry-categoryClassTime-help')
+  if (visibleAddFieldError(field)) ids.push(`entry-${field}-error`)
+  return ids.length ? ids.join(' ') : undefined
 }
 
 function editFieldDescribedBy(field: string): string | undefined {
-  return visibleEditFieldError(field) ? `edit-${field}-error` : undefined
+  const ids: string[] = []
+  if (field === 'categoryClassTime') ids.push('edit-categoryClassTime-help')
+  if (visibleEditFieldError(field)) ids.push(`edit-${field}-error`)
+  return ids.length ? ids.join(' ') : undefined
 }
 
 function onAddFieldBlur(field: string): void {
@@ -13553,16 +13763,6 @@ function resetForm(): void {
   lastKnownXcTime.value = null
 }
 
-function maybeAutoOpenEntryFormForEmptyLogbook(): void {
-  if (isIos.value) return
-  if (logEntries.value.length === 0 && isAuthenticated.value) {
-    expandedEntryId.value = null
-    inlineEditEntry.value = null
-    isInlineCommercialMode.value = false
-    isEntryFormOpen.value = true
-  }
-}
-
 function ensureDefaultSignInstructor(): void {
   void fetchInstructors().then(() => {
     if (signInstructorId.value) return
@@ -13580,6 +13780,7 @@ function ensureDefaultSignInstructor(): void {
 
 function openNewEntryForm(draft?: EditableLogEntry): void {
   closeAuditTrailSidebar()
+  addMoreFieldsOpen.value = false
   expandedEntryId.value = null
   inlineEditEntry.value = null
   isInlineCommercialMode.value = false
@@ -13593,13 +13794,23 @@ function openNewEntryForm(draft?: EditableLogEntry): void {
   ensureDefaultSignInstructor()
 }
 
+function closeAddEntryPanel(): void {
+  clearEntryFormFieldUi()
+  validationError.value = null
+  duplicateWarning.value = null
+  validationWarning.value = false
+  saveAnywayValidation.value = false
+  clearValidation()
+  isEntryFormOpen.value = false
+  closeAuditTrailSidebar()
+  if (!editingEntryId.value) {
+    resetForm()
+  }
+}
+
 function toggleEntryForm(): void {
   if (isEntryFormOpen.value) {
-    isEntryFormOpen.value = false
-    closeAuditTrailSidebar()
-    if (!editingEntryId.value) {
-      resetForm()
-    }
+    closeAddEntryPanel()
     return
   }
   openNewEntryForm()
@@ -16507,6 +16718,7 @@ async function confirmAndDeleteEntry(id: string): Promise<void> {
   if (expandedEntryId.value === id) {
     expandedEntryId.value = null
     inlineEditEntry.value = null
+    navigateAfterInlineEditIfRequested()
   }
 }
 
@@ -17807,22 +18019,6 @@ watch(
       // Use nextTick to ensure DOM is updated
       setTimeout(() => {
         const firstInput = document.querySelector('[data-edit-panel] input[type="date"], [data-edit-panel] input[type="text"]') as HTMLInputElement
-        if (firstInput) {
-          firstInput.focus()
-        }
-      }, 100)
-    }
-  }
-)
-
-// Auto-focus first input when add entry panel opens
-watch(
-  isEntryFormOpen,
-  (isOpen) => {
-    if (isOpen && !isIos.value) {
-      // Use nextTick to ensure DOM is updated
-      setTimeout(() => {
-        const firstInput = document.querySelector('[data-add-entry-panel] input[type="date"], [data-add-entry-panel] input[type="text"]') as HTMLInputElement
         if (firstInput) {
           firstInput.focus()
         }

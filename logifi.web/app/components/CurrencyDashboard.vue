@@ -31,7 +31,7 @@
         <button
           @click="close"
           :class="[
-            'p-2 rounded-lg transition-colors',
+            'inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-2 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500',
             isDarkMode 
               ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' 
               : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
@@ -55,6 +55,17 @@
         </div>
 
         <div v-else class="space-y-6">
+          <p
+            v-if="insufficientHistory"
+            :class="[
+              'rounded-lg border px-4 py-3 text-sm font-quicksand',
+              isDarkMode
+                ? 'border-gray-600 bg-gray-800 text-gray-300'
+                : 'border-gray-200 bg-gray-50 text-gray-700',
+            ]"
+          >
+            Add more flights to track currency. You need at least three flights and about 90 days of logbook history before expiration status is meaningful.
+          </p>
           <!-- 90-Day Passenger Currency -->
           <div
             :class="[
@@ -74,7 +85,7 @@
                     90-Day Passenger Currency
                   </h3>
                   <p :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                    Part 61.57(a) - 3 takeoffs & 3 landings within 90 days
+                    14 CFR 61.57(a) — 3 takeoffs & 3 landings in 90 days (night counts)
                   </p>
                 </div>
               </div>
@@ -184,7 +195,7 @@
                     90-Day Night Currency
                   </h3>
                   <p :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                    Part 61.57(b) - 3 night takeoffs & 3 night landings to full stop within 90 days
+                    14 CFR 61.57(b) — 3 night takeoffs & 3 night landings to full stop in 90 days
                   </p>
                 </div>
               </div>
@@ -291,10 +302,10 @@
                 />
                 <div>
                   <h3 :class="['text-lg font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
-                    6-Month Instrument Currency
+                    Instrument Currency
                   </h3>
                   <p :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                    Part 61.57(c) - 6 approaches, holding procedures, and intercept/track tasks within 6 months
+                    14 CFR 61.57(c)–(d) — 6 approaches, holding, intercept/track in 6 calendar months
                   </p>
                 </div>
               </div>
@@ -345,10 +356,10 @@
               </div>
 
               <!-- Status Info -->
-              <div class="flex items-center gap-4 pt-2 border-t" :class="isDarkMode ? 'border-gray-600' : 'border-gray-300'">
+              <div class="flex flex-wrap items-center gap-4 pt-2 border-t" :class="isDarkMode ? 'border-gray-600' : 'border-gray-300'">
                 <div>
                   <span :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                    Expiration:
+                    {{ instrumentCurrency.status === 'grace_period' ? 'Grace until:' : (instrumentCurrency.needsIpc ? 'IPC required since:' : 'Expiration:') }}
                   </span>
                   <span :class="['text-sm font-semibold font-quicksand ml-1', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
                     {{ formatDate(instrumentCurrency.expirationDate) }}
@@ -371,10 +382,28 @@
                   </span>
                 </div>
               </div>
+              <p
+                v-if="instrumentCurrency.status === 'grace_period'"
+                :class="['text-sm font-quicksand pt-1', isDarkMode ? 'text-orange-300' : 'text-orange-800']"
+              >
+                Grace period — can regain with a safety pilot or sim until {{ formatDate(instrumentCurrency.expirationDate) }}
+              </p>
+              <p
+                v-else-if="instrumentCurrency.needsIpc"
+                :class="['text-sm font-quicksand pt-1', isDarkMode ? 'text-red-300' : 'text-red-800']"
+              >
+                Expired, needs IPC
+              </p>
+              <p
+                v-else-if="instrumentCurrency.restoredByIpc"
+                :class="['text-xs font-quicksand pt-1', isDarkMode ? 'text-gray-400' : 'text-gray-500']"
+              >
+                Restored by IPC
+              </p>
             </div>
           </div>
 
-          <!-- Annual Requirements (Framework) -->
+          <!-- Flight Review (14 CFR 61.56) -->
           <div
             :class="[
               'rounded-lg border p-5',
@@ -384,33 +413,54 @@
             <div class="flex items-center justify-between mb-4">
               <div class="flex items-center gap-3">
                 <Icon
-                  name="ri:information-line"
+                  :name="getStatusIcon(flightReviewCurrency?.status)"
                   :size="24"
-                  :class="isDarkMode ? 'text-blue-400' : 'text-blue-600'"
+                  :class="getStatusColor(flightReviewCurrency?.status)"
                 />
                 <div>
                   <h3 :class="['text-lg font-semibold font-quicksand', isDarkMode ? 'text-white' : 'text-gray-900']">
-                    Annual Requirements
+                    Flight Review
                   </h3>
                   <p :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                    Framework for future expansion - certificate/rating-specific requirements
+                    14 CFR 61.56 — due at the end of the 24th calendar month
                   </p>
                 </div>
               </div>
               <span
                 :class="[
                   'px-3 py-1 rounded-full text-xs font-semibold font-quicksand',
-                  isDarkMode ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'
+                  getStatusBadgeColor(flightReviewCurrency?.status)
                 ]"
               >
-                Framework
+                {{ getStatusText(flightReviewCurrency?.status) }}
               </span>
             </div>
 
-            <div v-if="annualRequirements" class="pt-2">
-              <p :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                Annual requirements vary by certificate and rating type. This section will be expanded in future updates.
+            <div v-if="flightReviewCurrency" class="pt-2 space-y-2">
+              <p
+                v-if="flightReviewCurrency.status === 'missing'"
+                :class="['text-sm font-quicksand', isDarkMode ? 'text-gray-300' : 'text-gray-700']"
+              >
+                Add your last flight review
               </p>
+              <div v-else class="flex flex-wrap items-center gap-4">
+                <div>
+                  <span :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                    Due:
+                  </span>
+                  <span :class="['text-sm font-semibold font-quicksand ml-1', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
+                    {{ formatDate(flightReviewCurrency.expirationDate) }}
+                  </span>
+                </div>
+                <div v-if="flightReviewCurrency.isCurrent && flightReviewCurrency.daysRemaining !== undefined">
+                  <span :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                    Days Remaining:
+                  </span>
+                  <span :class="['text-sm font-semibold font-quicksand ml-1', isDarkMode ? 'text-gray-200' : 'text-gray-900']">
+                    {{ flightReviewCurrency.daysRemaining }}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -421,7 +471,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { CurrencyStatusType } from '~/utils/logbookTypes'
 import type { CurrencyStatus, AnnualCurrencyStatus } from '~/utils/logbookTypes'
 
@@ -431,15 +480,18 @@ interface Props {
   passengerCurrency: CurrencyStatus | null
   nightCurrency: CurrencyStatus | null
   instrumentCurrency: CurrencyStatus | null
-  annualRequirements: AnnualCurrencyStatus | null
+  flightReviewCurrency?: CurrencyStatus | null
+  annualRequirements?: AnnualCurrencyStatus | null
   isLoading?: boolean
   error?: string | null
+  insufficientHistory?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   isDarkMode: false,
   isLoading: false,
-  error: null
+  error: null,
+  insufficientHistory: false,
 })
 
 const emit = defineEmits<{
@@ -457,8 +509,12 @@ const getStatusIcon = (status: CurrencyStatusType | undefined): string => {
       return 'ri:check-line'
     case 'expiring_soon':
       return 'ri:time-line'
+    case 'grace_period':
+      return 'ri:time-line'
     case 'expired':
       return 'ri:close-line'
+    case 'missing':
+      return 'ri:add-line'
     default:
       return 'ri:question-line'
   }
@@ -468,11 +524,15 @@ const getStatusColor = (status: CurrencyStatusType | undefined): string => {
   if (!status) return ''
   switch (status) {
     case 'current':
-      return props.isDarkMode ? 'text-green-400' : 'text-green-600'
+      return props.isDarkMode ? 'text-green-400' : 'text-green-700'
     case 'expiring_soon':
-      return props.isDarkMode ? 'text-yellow-400' : 'text-yellow-600'
+      return props.isDarkMode ? 'text-yellow-400' : 'text-yellow-700'
+    case 'grace_period':
+      return props.isDarkMode ? 'text-orange-300' : 'text-orange-800'
     case 'expired':
-      return props.isDarkMode ? 'text-red-400' : 'text-red-600'
+      return props.isDarkMode ? 'text-red-400' : 'text-red-700'
+    case 'missing':
+      return props.isDarkMode ? 'text-gray-400' : 'text-gray-600'
     default:
       return ''
   }
@@ -482,11 +542,15 @@ const getStatusBadgeColor = (status: CurrencyStatusType | undefined): string => 
   if (!status) return props.isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'
   switch (status) {
     case 'current':
-      return props.isDarkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-700'
+      return props.isDarkMode ? 'bg-green-900/30 text-green-400' : 'bg-green-100 text-green-800'
     case 'expiring_soon':
-      return props.isDarkMode ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-100 text-yellow-700'
+      return props.isDarkMode ? 'bg-yellow-900/30 text-yellow-400' : 'bg-yellow-100 text-yellow-800'
+    case 'grace_period':
+      return props.isDarkMode ? 'bg-orange-900/30 text-orange-300' : 'bg-orange-100 text-orange-800'
     case 'expired':
-      return props.isDarkMode ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-700'
+      return props.isDarkMode ? 'bg-red-900/30 text-red-400' : 'bg-red-100 text-red-800'
+    case 'missing':
+      return props.isDarkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-800'
     default:
       return props.isDarkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-600'
   }
@@ -499,8 +563,12 @@ const getStatusText = (status: CurrencyStatusType | undefined): string => {
       return 'Current'
     case 'expiring_soon':
       return 'Expiring Soon'
+    case 'grace_period':
+      return 'Grace period'
     case 'expired':
       return 'Expired'
+    case 'missing':
+      return 'Add your last flight review'
     default:
       return 'Unknown'
   }

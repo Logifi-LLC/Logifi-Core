@@ -5,6 +5,7 @@ import AuthModal from '../../app/components/AuthModal.vue'
 
 const signUp = vi.hoisted(() => vi.fn())
 const signIn = vi.hoisted(() => vi.fn())
+const resendSignupConfirmation = vi.hoisted(() => vi.fn())
 
 vi.mock('~/composables/useAuth', () => ({
   useAuth: () => ({
@@ -13,6 +14,7 @@ vi.mock('~/composables/useAuth', () => ({
     signInWithGoogle: vi.fn(),
     signInWithApple: vi.fn(),
     resetPassword: vi.fn(),
+    resendSignupConfirmation,
     isLoading: ref(false),
     error: ref<string | null>(null),
   }),
@@ -137,12 +139,28 @@ describe('AuthModal signup validation and focus', () => {
   it('calls signUp when email and password are valid', async () => {
     signUp.mockResolvedValue({ success: true, requiresEmailConfirmation: true })
     const wrapper = mountModal()
-    await wrapper.get('#email').setValue('pilot@logifi.io')
+    await wrapper.get('#email').setValue('you@example.com')
     await wrapper.get('#password').setValue('secret1')
     await wrapper.get('button.w-full.py-4').trigger('click')
     await flushPromises()
+    await nextTick()
 
-    expect(signUp).toHaveBeenCalledWith('pilot@logifi.io', 'secret1')
+    expect(signUp).toHaveBeenCalledWith('you@example.com', 'secret1')
+    expect(wrapper.find('[data-testid="auth-check-inbox"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('you@example.com')
+    wrapper.unmount()
+  })
+
+  it('shows resend guidance when sign-in reports unconfirmed email', async () => {
+    signIn.mockResolvedValue({ success: false, error: 'Email not confirmed' })
+    const wrapper = mountModal({ initialTab: 'signin' })
+    await wrapper.get('#email').setValue('you@example.com')
+    await wrapper.get('#password').setValue('secret12')
+    await wrapper.get('button.w-full.py-4').trigger('click')
+    await flushPromises()
+    await nextTick()
+
+    expect(wrapper.text()).toContain('Resend confirmation email')
     wrapper.unmount()
   })
 })
