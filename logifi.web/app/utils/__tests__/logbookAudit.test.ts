@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   auditLogbook,
   checkCrossCountrySameAirport,
+  crossCountryRouteOnlySameEndpoints,
   checkDuplicateLegs,
+  entriesAreDuplicateLegs,
   checkFutureDate,
   checkNightLandingsWithoutNight,
   checkOooiOrder,
@@ -46,6 +48,24 @@ function fixtureEntry(overrides: Partial<LogEntry> = {}): LogEntry {
 }
 
 describe('logbookAudit', () => {
+  it('does not flag sub-time vs total when both round to the same tenth', () => {
+    const rounded = checkSubTimeExceedsTotal(
+      fixtureEntry({
+        categoryClassTime: 1.43,
+        flightTime: { ...createEmptyFlightTime(), total: 1.4333, pic: 1.4 },
+      })
+    )
+    expect(rounded).toHaveLength(0)
+
+    const stillBad = checkSubTimeExceedsTotal(
+      fixtureEntry({
+        categoryClassTime: 3.2,
+        flightTime: { ...createEmptyFlightTime(), total: 2.2, pic: 2.2 },
+      })
+    )
+    expect(stillBad.some((item) => item.field === 'categoryClassTime')).toBe(true)
+  })
+
   it('flags sub-time greater than total including cat/class', () => {
     const entry = fixtureEntry({
       categoryClassTime: 3.2,
@@ -133,7 +153,7 @@ describe('logbookAudit', () => {
     expect(sim).toHaveLength(0)
   })
 
-  it('flags duplicate legs by date + from/to + tail or flight number, excluding voided', () => {
+  it('flags duplicate legs by date + from/to + flight number, excluding voided', () => {
     const a = fixtureEntry({ id: 'a', flightNumber: '4401' })
     const b = fixtureEntry({ id: 'b', flightNumber: '4401' })
     const otherTail = fixtureEntry({
@@ -147,7 +167,125 @@ describe('logbookAudit', () => {
     const ids = findings.map((item) => item.entryId).sort()
     expect(ids).toEqual(['a', 'b'])
     expect(findings.every((item) => item.severity === 'check')).toBe(true)
-    expect(duplicateLegKeys(a).some((key) => key.includes('r:N123AB'))).toBe(true)
+    expect(duplicateLegKeys(a).some((key) => key.includes('f:4401'))).toBe(true)
+  })
+
+  it('does not flag airline same city pair with different flight numbers', () => {
+    const legA = fixtureEntry({
+      id: 'leg-a',
+      flightNumber: 'DAL100',
+      flightTime: { ...createEmptyFlightTime(), total: 2.1, pic: 2.1 },
+    })
+    const legB = fixtureEntry({
+      id: 'leg-b',
+      flightNumber: 'DAL212',
+      flightTime: { ...createEmptyFlightTime(), total: 2.3, pic: 2.3 },
+    })
+    expect(entriesAreDuplicateLegs(legA, legB)).toBe(false)
+    expect(checkDuplicateLegs([legA, legB])).toHaveLength(0)
+  })
+
+  it('does not flag CFI lessons same tail without flight numbers when totals differ', () => {
+    const lessonA = fixtureEntry({
+      id: 'lesson-a',
+      flightNumber: null,
+      registration: 'N172CF',
+      flightTime: { ...createEmptyFlightTime(), total: 1.2, dualGiven: 1.2 },
+    })
+    const lessonB = fixtureEntry({
+      id: 'lesson-b',
+      flightNumber: null,
+      registration: 'N172CF',
+      flightTime: { ...createEmptyFlightTime(), total: 1.5, dualGiven: 1.5 },
+    })
+    expect(checkDuplicateLegs([lessonA, lessonB])).toHaveLength(0)
+  })
+
+  it('flags true tail-only duplicates when totals match', () => {
+    const dupA = fixtureEntry({
+      id: 'dup-a',
+      flightNumber: null,
+      registration: 'N555AA',
+      flightTime: { ...createEmptyFlightTime(), total: 1.0, pic: 1.0 },
+    })
+    const dupB = fixtureEntry({
+      id: 'dup-b',
+      flightNumber: null,
+      registration: 'N555AA',
+      flightTime: { ...createEmptyFlightTime(), total: 1.0, pic: 1.0 },
+    })
+    const ids = checkDuplicateLegs([dupA, dupB]).map((item) => item.entryId).sort()
+    expect(ids).toEqual(['dup-a', 'dup-b'])
+  })
+
+  it('does not flag same-length CFI lessons when route or landings differ', () => {
+    const base = {
+      flightNumber: null,
+      registration: 'N172CF',
+      date: '2024-06-10',
+      departure: 'KAPA',
+      destination: 'KAPA',
+      flightTime: { ...createEmptyFlightTime(), total: 1.2, dualGiven: 1.2, dual: 1.2 },
+    }
+    const lessonA = fixtureEntry({
+      id: 'cfi-a',
+      ...base,
+      route: 'KBJC',
+      performance: { ...createEmptyPerformance(), dayLandings: 3 },
+    })
+    const lessonB = fixtureEntry({
+      id: 'cfi-b',
+      ...base,
+      route: 'KCOS',
+      performance: { ...createEmptyPerformance(), dayLandings: 1, nightLandings: 2 },
+    })
+    expect(entriesAreDuplicateLegs(lessonA, lessonB)).toBe(false)
+    expect(checkDuplicateLegs([lessonA, lessonB])).toHaveLength(0)
+  })
+
+  it('flags an exact double-import tail-only pair', () => {
+    const shared = {
+      flightNumber: null,
+      registration: 'N172CF',
+      date: '2024-06-11',
+      departure: 'KAPA',
+      destination: 'KAPA',
+      route: '',
+      remarks: 'Pattern work',
+      flightConditions: ['VFR'],
+      flightTime: {
+        ...createEmptyFlightTime(),
+        total: 1.2,
+        dual: 1.2,
+        dualGiven: 1.2,
+        crossCountry: 0,
+        night: 0,
+      },
+      performance: { ...createEmptyPerformance(), dayLandings: 2, nightLandings: 0 },
+    }
+    const first = fixtureEntry({ id: 'import-a', ...shared })
+    const second = fixtureEntry({ id: 'import-b', ...shared })
+    expect(entriesAreDuplicateLegs(first, second)).toBe(true)
+    const ids = checkDuplicateLegs([first, second]).map((item) => item.entryId).sort()
+    expect(ids).toEqual(['import-a', 'import-b'])
+  })
+
+  it('treats OOOI times with and without colons as equal for duplicates', () => {
+    const a = fixtureEntry({
+      id: 'oooi-a',
+      flightNumber: null,
+      registration: 'N999XX',
+      oooi: { out: '1801', off: null, on: null, in: '1905', isZulu: true },
+      flightTime: { ...createEmptyFlightTime(), total: 1.0, pic: 1.0 },
+    })
+    const b = fixtureEntry({
+      id: 'oooi-b',
+      flightNumber: null,
+      registration: 'N999XX',
+      oooi: { out: '18:01', off: null, on: null, in: '19:05', isZulu: true },
+      flightTime: { ...createEmptyFlightTime(), total: 1.0, pic: 1.0 },
+    })
+    expect(entriesAreDuplicateLegs(a, b)).toBe(true)
   })
 
   it('flags sim time logged as airplane, and airplane time on a sim-logbook entry', () => {
@@ -231,6 +369,30 @@ describe('logbookAudit', () => {
       })
     )
     expect(withRoute).toHaveLength(0)
+  })
+
+  it('does not flag A→A cross-country when route has a fix or other token', () => {
+    const entry = fixtureEntry({
+      departure: 'A',
+      destination: 'A',
+      route: 'A FIX B A',
+      flightTime: { ...createEmptyFlightTime(), total: 2.0, pic: 2.0, crossCountry: 2.0 },
+    })
+    expect(crossCountryRouteOnlySameEndpoints(entry)).toBe(false)
+    expect(checkCrossCountrySameAirport(entry)).toHaveLength(0)
+  })
+
+  it('flags A→A cross-country when route is empty', () => {
+    const entry = fixtureEntry({
+      departure: 'A',
+      destination: 'A',
+      route: '',
+      flightTime: { ...createEmptyFlightTime(), total: 2.0, pic: 2.0, crossCountry: 2.0 },
+    })
+    expect(crossCountryRouteOnlySameEndpoints(entry)).toBe(true)
+    const findings = checkCrossCountrySameAirport(entry)
+    expect(findings).toHaveLength(1)
+    expect(findings[0].ruleId).toBe('xc_same_airport')
   })
 
   it('auditLogbook groups findings and stays linear on 5000 entries', () => {

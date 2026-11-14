@@ -6927,6 +6927,7 @@ import { usePullToRefresh } from '../composables/usePullToRefresh'
 import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
 import { useDashboardShortcuts } from '../composables/useDashboardShortcuts'
 import { useDashboardEntryDeepLink } from '../composables/useDashboardEntryDeepLink'
+import { parseDashboardReturnTo } from '../utils/dashboardReturnTo'
 import AuthModal from '../components/AuthModal.vue'
 import { readStoredReferralCode } from '../utils/referralCapture'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
@@ -8670,6 +8671,15 @@ function handleFlicaConnectionChanged(payload: { connected: boolean }): void {
 const isInlineCommercialMode = ref(false)
 const editingEntryId = ref<string | null>(null)
 const expandedEntryId = ref<string | null>(null)
+const inlineEditReturnPath = ref<string | null>(null)
+
+watch(
+  () => route.query.returnTo,
+  (raw) => {
+    inlineEditReturnPath.value = parseDashboardReturnTo(raw)
+  },
+  { immediate: true }
+)
 const inlineEditEntry = ref<LogEntry | null>(null)
 const showSignEntryModal = ref(false)
 const showSignatureFinishModal = ref(false)
@@ -8935,6 +8945,18 @@ function closeInlineEditDrawer(): void {
   customTagInputInline.value = ''
 }
 
+function navigateAfterInlineEditIfRequested(): void {
+  const path = inlineEditReturnPath.value
+  if (!path) return
+  inlineEditReturnPath.value = null
+  void router.push(path)
+}
+
+function dismissInlineEdit(): void {
+  closeInlineEditDrawer()
+  navigateAfterInlineEditIfRequested()
+}
+
 function setLocalSignaturePending(
   entryId: string,
   pending: boolean,
@@ -9013,7 +9035,7 @@ async function submitSignEntry(): Promise<void> {
     }
     showToast('Entry signed — it can no longer be edited', { type: 'success' })
     closeSignEntryModal()
-    closeInlineEditDrawer()
+    dismissInlineEdit()
   } finally {
     isSubmittingSign.value = false
   }
@@ -9050,7 +9072,7 @@ async function sendEntryForSigning(): Promise<void> {
     }
     showToast('Sent to instructor for signature', { type: 'success' })
     showSignatureFinishModal.value = false
-    closeInlineEditDrawer()
+    dismissInlineEdit()
   } finally {
     isMarkingSignaturePending.value = false
   }
@@ -9069,7 +9091,7 @@ async function refreshFlightSignatures(): Promise<void> {
 
 async function beginInlineEditing(entry: LogEntry): Promise<void> {
   if (expandedEntryId.value === entry.id) {
-    closeInlineEditDrawer()
+    dismissInlineEdit()
   } else {
     ensureIosCatalogIndex()
     // Close Add Entry form when opening inline edit
@@ -9997,7 +10019,7 @@ async function finalizeSaveWithSigningIntent(
         : source === 'edit'
           ? 'Entry updated'
           : 'Entry saved', { type: 'success', duration: 3000 })
-    if (source === 'edit') closeInlineEditDrawer()
+    if (source === 'edit') dismissInlineEdit()
     clearFormSigningFields()
     return
   }
@@ -10052,7 +10074,7 @@ async function finalizeSaveWithSigningIntent(
       }
       showToast('Entry saved and signed', { type: 'success' })
       clearFormSigningFields()
-      closeInlineEditDrawer()
+      dismissInlineEdit()
     } finally {
       isSubmittingSign.value = false
     }
@@ -10123,7 +10145,7 @@ async function finalizeSaveWithSigningIntent(
       }
       showToast('Entry signed by guest instructor', { type: 'success' })
       clearFormSigningFields()
-      closeInlineEditDrawer()
+      dismissInlineEdit()
     } finally {
       isSubmittingSign.value = false
     }
@@ -10140,7 +10162,7 @@ async function finalizeSaveWithSigningIntent(
     }
     showToast(source === 'edit' ? 'Entry updated — pending signature' : 'Entry saved — pending signature', { type: 'success', duration: 3000 })
     if (source === 'edit') {
-      closeInlineEditDrawer()
+      dismissInlineEdit()
     }
     clearFormSigningFields()
     return
@@ -10302,7 +10324,7 @@ function prepareInlineEditFromEntry(savedEntry: LogEntry): void {
 
 function cancelInlineEdit(): void {
   clearFormSigningFields()
-  closeInlineEditDrawer()
+  dismissInlineEdit()
 }
 
 const catalogOpenState = reactive<Record<CatalogKey, boolean>>({
@@ -16696,6 +16718,7 @@ async function confirmAndDeleteEntry(id: string): Promise<void> {
   if (expandedEntryId.value === id) {
     expandedEntryId.value = null
     inlineEditEntry.value = null
+    navigateAfterInlineEditIfRequested()
   }
 }
 
