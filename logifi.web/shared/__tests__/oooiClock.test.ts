@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   convertOooiFieldsToClock,
   convertOooiHhmmBetweenClocks,
+  formatOooiClockInputOnBlur,
+  formatOooiClockForStorage,
   formatOooiOppositeClockTooltip,
+  formatOooiTimesForStorage,
+  normalizeOooiClockOnBlur,
+  sanitizeOooiClockDigitsWhileTyping,
   localDatetimeToZuluHhmm,
   oooiClockToUtc,
   oooiEventsToUtcInstants,
@@ -265,5 +270,88 @@ describe('oooiClock', () => {
       lookupTz: lookupTestTz,
     })
     expect(next).toEqual({ out: '1432', in: '1600', isZulu: false })
+  })
+
+  it('sanitizes clock input while typing to digits only', () => {
+    expect(sanitizeOooiClockDigitsWhileTyping('22:48x')).toBe('2248')
+    expect(sanitizeOooiClockDigitsWhileTyping('2248123')).toBe('2248')
+  })
+
+  it('formats a new manual entry on blur (3-digit HMM)', () => {
+    const firstEntry = normalizeOooiClockOnBlur('945', true)
+    expect(firstEntry).toEqual({ kind: 'formatted', value: '09:45' })
+  })
+
+  it('leaves stored clocks unchanged on blur when the user did not edit', () => {
+    expect(normalizeOooiClockOnBlur('2248', false)).toEqual({ kind: 'skip' })
+    expect(normalizeOooiClockOnBlur('22:48', false)).toEqual({ kind: 'skip' })
+  })
+
+  it('formats a correction on blur after the user edits', () => {
+    const fixed = normalizeOooiClockOnBlur('2248', true)
+    expect(fixed).toEqual({ kind: 'formatted', value: '22:48' })
+    const already = normalizeOooiClockOnBlur('22:48', true)
+    expect(already).toEqual({ kind: 'unchanged' })
+  })
+
+  it('formats ON/IN to HH:MM on blur when Zulu sequence is out of order', () => {
+  /** Fictional Zulu leg — not from a real logbook. IN precedes ON. */
+    const date = '2026-03-15'
+    const oooi = {
+      out: '21:10',
+      off: '21:21',
+      on: '2248',
+      in: '2239',
+      isZulu: true,
+    }
+
+    const onFormatted = formatOooiClockInputOnBlur(oooi.on)
+    const inFormatted = formatOooiClockInputOnBlur(oooi.in)
+    expect(onFormatted).toBe('22:48')
+    expect(inFormatted).toBe('22:39')
+
+    const events = oooiEventsToUtcInstants({
+      date,
+      departure: 'KZZZ',
+      destination: 'KZZY',
+      oooi: {
+        out: oooi.out,
+        off: oooi.off,
+        on: onFormatted,
+        in: inFormatted,
+        isZulu: true,
+      },
+    })
+    expect(events).not.toBeNull()
+    expect(oooiSequenceIsInOrder(events!)).toBe(false)
+  })
+
+  it('formats storage clocks to HH:MM without changing the minute', () => {
+    expect(formatOooiClockForStorage('2110')).toBe('21:10')
+    expect(formatOooiClockForStorage('945')).toBe('09:45')
+    expect(formatOooiClockForStorage('21:10')).toBe('21:10')
+    expect(formatOooiClockForStorage('not-a-clock')).toBe('not-a-clock')
+    expect(formatOooiClockForStorage('2025-11-11T15:00:00Z')).toBe('2025-11-11T15:00:00Z')
+    expect(formatOooiClockForStorage(null)).toBeNull()
+  })
+
+  it('keeps Autofi/import totals the same after HH:MM storage format', () => {
+    const raw = formatOooiTimesForStorage({
+      out: '2110',
+      off: '2121',
+      on: '2248',
+      in: '2239',
+      isZulu: true,
+    })
+    expect(raw).toEqual({
+      out: '21:10',
+      off: '21:21',
+      on: '22:48',
+      in: '22:39',
+      isZulu: true,
+    })
+    expect(
+      oooiPairDurationHours({ start: '2110', end: '2239', isZulu: true })
+    ).toBe(oooiPairDurationHours({ start: raw.out, end: raw.in, isZulu: true }))
   })
 })

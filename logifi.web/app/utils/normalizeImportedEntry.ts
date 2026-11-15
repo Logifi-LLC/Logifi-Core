@@ -11,7 +11,7 @@ import {
   enrichLogtenDynamicExportRow,
   isLogtenDynamicExportHeaders,
 } from '../../shared/logbookDataBridge/logtenDynamicExport'
-import { oooiPairDurationHours } from '../../shared/oooiClock'
+import { formatOooiTimesForStorage, oooiPairDurationHours } from '../../shared/oooiClock'
 import {
   autoCheckFlightConditions,
   sanitizeFlightConditions,
@@ -228,13 +228,13 @@ export async function normalizeImportedEntry(
     }
 
     if (out || off || on || inTime) {
-      entry.oooi = {
+      entry.oooi = formatOooiTimesForStorage({
         out: out || null,
         off: off || null,
         on: on || null,
         in: inTime || null,
         isZulu,
-      }
+      })
     }
 
     const isNativeCsv = source === 'logifi-native'

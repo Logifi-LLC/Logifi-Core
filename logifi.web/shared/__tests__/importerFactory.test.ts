@@ -545,6 +545,28 @@ describe('ImporterFactory', () => {
     expect(result.entries[0]!.performance.dayLandings).toBe(2)
   })
 
+  it('stores ForeFlight TimeOut clocks as HH:MM without changing totals', () => {
+    const csv = [
+      'AircraftID,Make,Model,Category / Class',
+      'N9900F,Embraer,E170,AMEL',
+      '',
+      'Date,AircraftID,From,To,TotalTime,PIC,TimeOut,TimeOff,TimeOn,TimeIn',
+      '2025-08-15,N9900F,KAPA,KCOS,1.2,1.2,2110,2121,2248,2259',
+    ].join('\n')
+
+    const result = parseWithProvider('foreflight', csv, { generateId: FIXED_ID })
+    const entry = result.entries[0]!
+    expect(entry.oooi).toEqual({
+      out: '21:10',
+      off: '21:21',
+      on: '22:48',
+      in: '22:59',
+      isZulu: false,
+    })
+    expect(entry.flightTime.total).toBe(1.2)
+    expect(entry.flightTime.pic).toBe(1.2)
+  })
+
   it('parses generic CSV H:MM totals', () => {
     const csv = [
       'Date,Aircraft ID,Total Time,PIC,Departure,Destination',

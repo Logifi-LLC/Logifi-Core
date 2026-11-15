@@ -9,6 +9,7 @@ import {
   parseImportDuration,
 } from '../../shared/logbookDataBridge/formatters'
 import { normalizePerformanceForDisplay } from '~/utils/logEntryPerformance'
+import { formatOooiTimesForStorage } from '../../shared/oooiClock'
 
 const MAX_TEXT = 20_000
 const MAX_ID = 128
@@ -125,13 +126,13 @@ function restoreOooi(raw: unknown): OOOITimes | undefined {
   const inTime = asNullableString(raw.in, 32)
   if (!out && !off && !on && !inTime && raw.isZulu === undefined) return undefined
   const isZulu = asBoolean(raw.isZulu)
-  return {
+  return formatOooiTimesForStorage({
     out,
     off,
     on,
     in: inTime,
     isZulu: isZulu ?? true,
-  }
+  })
 }
 
 /**
