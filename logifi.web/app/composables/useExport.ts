@@ -118,10 +118,16 @@ export const useExport = () => {
       sicName: entry.sicName ?? null,
       flightConditions: entry.flightConditions,
       remarks: entry.remarks,
+      tags: entry.tags ?? [],
+      logbookType: entry.logbookType ?? 'flight',
       flightTime: entry.flightTime,
       performance: entry.performance,
       oooi: entry.oooi,
-      flagged: entry.flagged
+      flagged: entry.flagged,
+      isVoid: entry.isVoid ?? false,
+      amendsEntryId: entry.amendsEntryId ?? null,
+      signaturePending: entry.signaturePending ?? false,
+      pendingInstructorId: entry.pendingInstructorId ?? null,
     }
 
     // Add metadata if available

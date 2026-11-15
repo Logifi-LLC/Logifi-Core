@@ -9,12 +9,28 @@ import {
   formatRegistrationForExport,
   normalizeImportHoldCount,
   normalizeImportNumber,
+  parseImportBoolean,
   parseImportDate,
   parseImportDuration,
   splitAirportCodes,
 } from './formatters'
 import { parseLogtenApproach1 } from './logtenDynamicExport'
 import { looksLikePersonName } from '../looksLikePersonName'
+
+/** True when a CSV/JSON key is present, including a blank cell. */
+export function hasField(
+  rawEntry: Record<string, unknown>,
+  possibleNames: string[]
+): boolean {
+  for (const name of possibleNames) {
+    if (Object.prototype.hasOwnProperty.call(rawEntry, name)) return true
+    const lowerName = name.toLowerCase()
+    for (const key in rawEntry) {
+      if (key.toLowerCase() === lowerName) return true
+    }
+  }
+  return false
+}
 
 export function findFieldValue(
   rawEntry: Record<string, unknown>,
@@ -109,6 +125,24 @@ function findDate(rawEntry: Record<string, unknown>): string | null {
 /** ForeFlight flights with a blank AircraftID keep hours under this placeholder. */
 export const FOREFLIGHT_MISSING_TAIL = 'NO TAIL'
 
+const CANONICAL_IMPORT_CATEGORY_CLASS = new Set([
+  'ASEL',
+  'AMEL',
+  'ASES',
+  'AMES',
+  'HELI',
+  'GYRO',
+  'GLID',
+  'BAL',
+  'AIRS',
+  'PL',
+  'WSC-L',
+  'WSC-S',
+  'FFS',
+  'FTD',
+  'ATD',
+])
+
 export function normalizeCategoryClassLabel(value: string): string {
   if (!value) return ''
   const v = value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
@@ -142,8 +176,23 @@ export function normalizeCategoryClassLabel(value: string): string {
   ) {
     return 'AMES'
   }
-  if (v.includes('rotor') || v.includes('helicopter')) return 'HELI'
-  return value.trim()
+  // Gyroplane before generic "rotor" so rotorcraft_gyroplane is not HELI.
+  if (v.includes('gyro') || v.includes('autogyro') || v.includes('gyroplane')) return 'GYRO'
+  if (v.includes('helicopter') || /(^| )heli( |$)/.test(v) || v.includes('rotor')) return 'HELI'
+  if (v.includes('glider') || v.includes('sailplane')) return 'GLID'
+  if (v.includes('balloon')) return 'BAL'
+  if (v.includes('airship') || v.includes('blimp') || v.includes('dirigible')) return 'AIRS'
+  if (v.includes('powered lift') || v.includes('tiltrotor') || v.includes('tilt rotor') || v.includes('vtol')) {
+    return 'PL'
+  }
+  if (v.includes('weight shift') || v.includes('trike')) {
+    if (v.includes('sea') || v.includes('seaplane') || v.includes('amphib') || v.includes('float')) {
+      return 'WSC-S'
+    }
+    return 'WSC-L'
+  }
+  const upper = value.trim().toUpperCase()
+  return CANONICAL_IMPORT_CATEGORY_CLASS.has(upper) ? upper : ''
 }
 
 const MULTI_ENGINE_TYPE_CODES = /^(DA42|DA62|PA44|PA34|PA23|PA31|BE58|BE76|C310|C340|C402|C414|C421)/i
@@ -392,7 +441,8 @@ export function parseOtherCrewFromRemarks(
     /^([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*)+)(?:\s+\d{3,})?$/
   )
   const name = match?.[1] ? normalizeCrewName(match[1]) : null
-  if (!name) return null
+  // Remarks such as "Pattern work" / "Touch and goes" are not crew names.
+  if (!name || !looksLikePersonName(name)) return null
 
   const roleNorm = role.trim().toUpperCase()
   if (roleNorm === 'PIC') return { sicName: name }
@@ -438,11 +488,85 @@ export function resolveCrewNamesFromRawRow(
   return { picName, sicName }
 }
 
+/**
+ * Day landings = all landings minus night landings when the source has a total.
+ * Full-stop columns stay full-stop fallbacks only (no dedicated FS field).
+ */
+function resolveImportLandings(rawEntry: Record<string, unknown>): {
+  dayLandings: number | null
+  nightLandings: number | null
+} {
+  const totalAll = normalizeImportNumber(
+    findFieldValue(rawEntry, ['AllLandings', 'All Landings', 'alllandings', 'Landings', 'landings'])
+  )
+  const nightLandings = normalizeImportNumber(
+    findFieldValue(rawEntry, [
+      'Night Landings',
+      'night landings',
+      'Night Ldg',
+      'night ldg',
+      'flight_nightLandings',
+      'NightLandingsFullStop',
+      'FS Night Landings',
+      'fs night landings',
+    ])
+  )
+  const daySpecific = normalizeImportNumber(
+    findFieldValue(rawEntry, [
+      'flight_dayLandings',
+      'Day Landings',
+      'day landings',
+      'Day Ldg',
+      'day ldg',
+    ])
+  )
+  const fullStopDay = normalizeImportNumber(
+    findFieldValue(rawEntry, [
+      'DayLandingsFullStop',
+      'FS Day Landings',
+      'fs day landings',
+    ])
+  )
+
+  let dayLandings: number | null
+  if (totalAll != null) {
+    dayLandings = Math.max(0, Math.round(totalAll - (nightLandings ?? 0)))
+  } else if (daySpecific != null) {
+    dayLandings = daySpecific
+  } else {
+    dayLandings = fullStopDay
+  }
+
+  return { dayLandings, nightLandings }
+}
+
 function defaultGenerateId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID()
   }
   return `import-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+const APPROACH_TYPED_COUNT_RE = /^(.+?)\s*\((\d+(?:\.\d+)?)\)\s*$/
+
+/** Split `ILS (1); RNAV (1)` or legacy `ILS (1), RNAV (1)` into records. */
+export function parseApproachTypeList(value: string): ApproachRecord[] {
+  const trimmed = (value ?? '').trim()
+  if (!trimmed) return []
+
+  const parts = trimmed.includes(';') ? trimmed.split(';') : trimmed.split(',')
+  const records: ApproachRecord[] = []
+  for (const part of parts) {
+    const token = part.trim()
+    if (!token) continue
+    const match = token.match(APPROACH_TYPED_COUNT_RE)
+    if (!match?.[1]) continue
+    const count = Number(match[2])
+    const type = match[1].trim()
+    if (!type || !Number.isFinite(count) || count <= 0) continue
+    records.push({ type, count: Math.round(count) })
+  }
+  return records
 }
 
 function collectApproachRecords(rawEntry: Record<string, unknown>): {
@@ -467,6 +591,15 @@ function collectApproachRecords(rawEntry: Record<string, unknown>): {
     const count = normalizeImportNumber(raw)
     if (count != null && count > 0) {
       collected.push({ type: 'Unknown', count })
+    }
+  }
+
+  if (collected.length === 0) {
+    const typeList = parseApproachTypeList(
+      findFieldValue(rawEntry, ['Approach Type', 'approachType', 'ApproachType'])
+    )
+    if (typeList.length > 0) {
+      collected.push(...typeList)
     }
   }
 
@@ -499,6 +632,137 @@ function collectApproachRecords(rawEntry: Record<string, unknown>): {
     approachCount: total > 0 ? total : null,
     approachType: collected[0]?.type ?? null,
   }
+}
+
+const NATIVE_CATEGORY_CLASS_TIME_FIELDS = [
+  'Category Class Time',
+  'categoryClassTime',
+  'category_class_time',
+]
+
+const DANGEROUS_METADATA_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
+function sanitizeImportMetadata(value: unknown): Record<string, unknown> | undefined {
+  let raw: unknown = value
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return undefined
+    try {
+      raw = JSON.parse(trimmed)
+    } catch {
+      return undefined
+    }
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const out: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(raw as Record<string, unknown>)) {
+    if (DANGEROUS_METADATA_KEYS.has(key)) continue
+    const safeKey = key.trim().slice(0, 80)
+    if (!safeKey) continue
+    if (typeof item === 'string') out[safeKey] = item.replace(/\u0000/g, '').slice(0, 500)
+    else if (typeof item === 'number' && Number.isFinite(item)) out[safeKey] = item
+    else if (typeof item === 'boolean' || item === null) out[safeKey] = item
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+function parseImportTimestamp(value: string): string | undefined {
+  const trimmed = value.trim().slice(0, 40)
+  if (!trimmed) return undefined
+  const parsed = new Date(trimmed)
+  if (Number.isNaN(parsed.getTime())) return undefined
+  return parsed.toISOString()
+}
+
+function parseImportedVersion(value: string): number | undefined {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  const version = Number(trimmed)
+  if (!Number.isFinite(version) || version <= 0) return undefined
+  return Math.round(version)
+}
+
+/** SHA-256 hex from Postgres `encode(digest(..., 'sha256'), 'hex')`. */
+function parseImportedDataHash(value: string): string | undefined {
+  const trimmed = value.trim()
+  if (!/^[a-fA-F0-9]{64}$/.test(trimmed)) return undefined
+  return trimmed.toLowerCase()
+}
+
+/**
+ * Restore Logifi-native CSV columns that other import sources must not honor.
+ * `dataHash` / `version` are in-memory only: DB insert omits them and the
+ * `b_compute_entry_hash_trigger` recomputes `data_hash` from content.
+ */
+function applyLogifiNativeCsvFields(
+  entry: LogEntry,
+  rawEntry: Record<string, unknown>
+): void {
+  if (hasField(rawEntry, NATIVE_CATEGORY_CLASS_TIME_FIELDS)) {
+    entry.categoryClassTime = parseImportDuration(
+      findFieldValue(rawEntry, NATIVE_CATEGORY_CLASS_TIME_FIELDS)
+    )
+  }
+
+  const isImported = parseImportBoolean(
+    findFieldValue(rawEntry, ['Is Imported', 'isImported', 'is_imported'])
+  )
+  if (isImported != null) entry.isImported = isImported
+
+  const importSource = findFieldValue(rawEntry, [
+    'Import Source',
+    'importSource',
+    'import_source',
+  ]).slice(0, 64)
+  if (importSource) entry.importSource = importSource
+
+  const importBatchId = findFieldValue(rawEntry, [
+    'Import Batch ID',
+    'importBatchId',
+    'import_batch_id',
+  ]).slice(0, 80)
+  if (importBatchId && !/[<>\r\n]/.test(importBatchId)) {
+    entry.importBatchId = importBatchId
+  }
+
+  const originalEntryDateRaw = findFieldValue(rawEntry, [
+    'Original Entry Date',
+    'originalEntryDate',
+    'original_entry_date',
+  ])
+  if (originalEntryDateRaw) {
+    entry.originalEntryDate =
+      parseImportTimestamp(originalEntryDateRaw) ??
+      parseImportDate(originalEntryDateRaw) ??
+      undefined
+  }
+
+  const createdAt = parseImportTimestamp(
+    findFieldValue(rawEntry, ['Created At', 'createdAt', 'created_at'])
+  )
+  if (createdAt) entry.createdAt = createdAt
+
+  const updatedAt = parseImportTimestamp(
+    findFieldValue(rawEntry, ['Updated At', 'updatedAt', 'updated_at'])
+  )
+  if (updatedAt) entry.updatedAt = updatedAt
+
+  const version = parseImportedVersion(
+    findFieldValue(rawEntry, ['Version', 'version'])
+  )
+  if (version != null) entry.version = version
+
+  const dataHash = parseImportedDataHash(
+    findFieldValue(rawEntry, ['Data Hash', 'dataHash', 'data_hash'])
+  )
+  if (dataHash) entry.dataHash = dataHash
+
+  const importMetadata = sanitizeImportMetadata(
+    rawEntry['Import Metadata'] ??
+      rawEntry.importMetadata ??
+      rawEntry.import_metadata
+  )
+  if (importMetadata) entry.importMetadata = importMetadata
 }
 
 export function mapRawRowToLogEntry(
@@ -557,8 +821,18 @@ export function mapRawRowToLogEntry(
   const simulatedHours = parseImportDuration(
     findFieldValue(rawEntry, ['SimulatedFlight', 'simulatedflight'])
   )
+  const logbookTypeRaw = findFieldValue(rawEntry, [
+    'Logbook Type',
+    'logbookType',
+    'logbook_type',
+    'LogbookType',
+  ]).toLowerCase()
   const logbookType =
-    simulatedHours != null && simulatedHours > 0 ? ('simulator' as const) : undefined
+    logbookTypeRaw === 'simulator' || logbookTypeRaw === 'flight'
+      ? logbookTypeRaw
+      : simulatedHours != null && simulatedHours > 0
+        ? ('simulator' as const)
+        : undefined
 
   const { approaches, approachCount, approachType } = collectApproachRecords(rawEntry)
 
@@ -671,6 +945,9 @@ export function mapRawRowToLogEntry(
           'Night Time',
         ])
       ),
+      nvg: parseImportDuration(
+        findFieldValue(rawEntry, ['NVG', 'nvg', 'Night Vision Goggle'])
+      ),
       actualInstrument: parseImportDuration(
         findFieldValue(rawEntry, [
           'flight_actualInstrument',
@@ -702,12 +979,6 @@ export function mapRawRowToLogEntry(
     },
     performance: {
       ...createEmptyPerformance(),
-      /**
-       * WHY (MyFlightBook): Exports include both total `Landings` and
-       * `FS Day Landings` / `FS Night Landings`. Prefer FS columns so night
-       * full-stops are not stuffed into dayLandings via the generic Landings alias.
-       * HOW: Alias order — FS / provider-specific first, total Landings last.
-       */
       dayTakeoffs: normalizeImportNumber(
         findFieldValue(rawEntry, [
           'DayTakeoffs',
@@ -726,30 +997,7 @@ export function mapRawRowToLogEntry(
           'night t/o',
         ])
       ),
-      dayLandings: normalizeImportNumber(
-        findFieldValue(rawEntry, [
-          'FS Day Landings',
-          'fs day landings',
-          'flight_dayLandings',
-          'DayLandingsFullStop',
-          'Day Landings',
-          'Day Ldg',
-          'day ldg',
-          'Landings',
-          'landings',
-        ])
-      ),
-      nightLandings: normalizeImportNumber(
-        findFieldValue(rawEntry, [
-          'FS Night Landings',
-          'fs night landings',
-          'flight_nightLandings',
-          'NightLandingsFullStop',
-          'Night Landings',
-          'Night Ldg',
-          'night ldg',
-        ])
-      ),
+      ...resolveImportLandings(rawEntry),
       approachCount,
       approachType,
       approaches,
@@ -761,7 +1009,13 @@ export function mapRawRowToLogEntry(
     importSource: options?.source ?? 'csv',
   }
 
-  const crewNames = resolveCrewNamesFromRawRow(rawEntry, entry.role, entry.remarks)
+  const crewNames =
+    options?.source === 'logifi-native'
+      ? {
+          picName: normalizeCrewName(findFieldValue(rawEntry, PIC_NAME_FIELDS)),
+          sicName: normalizeCrewName(findFieldValue(rawEntry, SIC_NAME_FIELDS)),
+        }
+      : resolveCrewNamesFromRawRow(rawEntry, entry.role, entry.remarks)
   entry.picName = crewNames.picName
   entry.sicName = crewNames.sicName
 
@@ -772,13 +1026,36 @@ export function mapRawRowToLogEntry(
     entry.trainingElements = ''
   }
 
-  const otherCrew = otherCrewJobAndName(entry.role, crewNames.picName, crewNames.sicName)
-  if (otherCrew) {
-    if (!entry.trainingElements.trim()) entry.trainingElements = otherCrew.name
-    if (!entry.trainingInstructor.trim()) entry.trainingInstructor = otherCrew.job
+  if (options?.source !== 'logifi-native') {
+    const otherCrew = otherCrewJobAndName(entry.role, crewNames.picName, crewNames.sicName)
+    if (otherCrew) {
+      if (!entry.trainingElements.trim()) entry.trainingElements = otherCrew.name
+      if (!entry.trainingInstructor.trim()) entry.trainingInstructor = otherCrew.job
+    }
   }
 
   applyNestedDurationFields(entry, rawEntry)
+
+  const isVoid = parseImportBoolean(
+    findFieldValue(rawEntry, ['Is Void', 'isVoid', 'is_void'])
+  )
+  if (isVoid != null) entry.isVoid = isVoid
+
+  const amendsEntryId = findFieldValue(rawEntry, [
+    'Amends Entry ID',
+    'amendsEntryId',
+    'amends_entry_id',
+  ])
+  if (amendsEntryId) entry.amendsEntryId = amendsEntryId
+
+  const signaturePending = parseImportBoolean(
+    findFieldValue(rawEntry, ['Signature Pending', 'signaturePending'])
+  )
+  if (signaturePending != null) entry.signaturePending = signaturePending
+
+  if (options?.source === 'logifi-native') {
+    applyLogifiNativeCsvFields(entry, rawEntry)
+  }
 
   return entry
 }

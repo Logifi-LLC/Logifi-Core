@@ -311,7 +311,7 @@ describe('ImporterFactory', () => {
     expect(byReg.N572DS?.aircraftCategoryClass).toBe('ASEL')
     expect(byReg.N278DC?.aircraftCategoryClass).toBe('ASEL')
     expect(byReg.N660DC?.aircraftCategoryClass).toBe('ASEL')
-    expect(byReg['NO TAIL']?.aircraftCategoryClass).toBe('ASEL')
+    expect(byReg['NO TAIL']?.aircraftCategoryClass).toBe('')
     expect(byReg.N572DS?.aircraftMakeModel.toLowerCase()).toContain('da-40')
   })
 
@@ -369,6 +369,70 @@ describe('ImporterFactory', () => {
     const result = parseWithProvider('foreflight', csv, { generateId: FIXED_ID })
     expect(result.entries[0]!.logbookType).not.toBe('simulator')
     expect(result.entries[1]!.logbookType).toBe('simulator')
+  })
+
+  it('imports ForeFlight SimulatedFlight when TotalTime is zero', () => {
+    const csv = [
+      'AircraftID,Make,Model,Category / Class',
+      'SIM1,Redbird,TD2,ATD',
+      '',
+      'Date,AircraftID,From,To,TotalTime,PIC,SimulatedFlight',
+      '2026-04-15,SIM1,—,—,0,0,1.5',
+    ].join('\n')
+
+    const result = parseWithProvider('foreflight', csv, { generateId: FIXED_ID })
+    const entry = result.entries[0]!
+    expect(entry.logbookType).toBe('simulator')
+    expect(entry.flightTime.atd).toBe(1.5)
+    expect(entry.aircraftCategoryClass).toBe('ATD')
+  })
+
+  it('maps ForeFlight glider balloon powered-lift and gyroplane classes', () => {
+    const csv = [
+      'AircraftID,Make,Model,aircraftClass (FAA)',
+      'N1GL,Schleicher,ASK-21,glider',
+      'N2BL,Cameron,O-77,lighter_than_air_balloon',
+      'N3PL,AgustaWestland,AW609,powered_lift',
+      'N4GY,AutoGyro,Cavalon,rotorcraft_gyroplane',
+      '',
+      'Date,AircraftID,From,To,TotalTime,PIC',
+      '2026-04-11,N1GL,KOSH,KOSH,0.8,0.8',
+      '2026-04-12,N2BL,KOSH,KOSH,0.7,0.7',
+      '2026-04-13,N3PL,KOSH,KOSH,1.1,1.1',
+      '2026-04-14,N4GY,KOSH,KOSH,0.6,0.6',
+    ].join('\n')
+
+    const result = parseWithProvider('foreflight', csv, { generateId: FIXED_ID })
+    const byReg = Object.fromEntries(result.entries.map((e) => [e.registration, e]))
+    expect(byReg.N1GL?.aircraftCategoryClass).toBe('GLID')
+    expect(byReg.N2BL?.aircraftCategoryClass).toBe('BAL')
+    expect(byReg.N3PL?.aircraftCategoryClass).toBe('PL')
+    expect(byReg.N4GY?.aircraftCategoryClass).toBe('GYRO')
+  })
+
+  it('maps ForeFlight AllLandings minus night, not DayLandingsFullStop', () => {
+    const csv = [
+      'AircraftID,Make,Model,Category / Class',
+      'N172FX,Cessna,172S,ASEL',
+      '',
+      'Date,AircraftID,From,To,TotalTime,PIC,AllLandings,DayLandingsFullStop,NightLandingsFullStop',
+      '2026-04-15,N172FX,KOSH,KOSH,1.2,1.2,5,1,0',
+    ].join('\n')
+
+    const result = parseWithProvider('foreflight', csv, { generateId: FIXED_ID })
+    expect(result.entries[0]!.performance.dayLandings).toBe(5)
+    expect(result.entries[0]!.performance.nightLandings).toBe(0)
+  })
+
+  it('uses MyFlightbook total landings minus night, not FS Day', () => {
+    const csv = [
+      'Date,Tail Number,Model,Total Flight Time,Route,PIC,Landings,FS Day Landings,FS Night Landings',
+      '4/15/2026,N172MB,C-172,1.1,KOSH KOSH,1.1,4,1,0',
+    ].join('\n')
+
+    const result = parseWithProvider('myflightbook', csv, { generateId: FIXED_ID })
+    expect(result.entries[0]!.performance.dayLandings).toBe(4)
+    expect(result.entries[0]!.performance.nightLandings).toBe(0)
   })
 
   it('maps ForeFlight FAA milestone flags to tags', () => {
@@ -479,6 +543,28 @@ describe('ImporterFactory', () => {
     expect(result.entries[0]!.flightTime.total).toBe(0.8)
     expect(result.entries[0]!.flightTime.pic).toBe(0.8)
     expect(result.entries[0]!.performance.dayLandings).toBe(2)
+  })
+
+  it('stores ForeFlight TimeOut clocks as HH:MM without changing totals', () => {
+    const csv = [
+      'AircraftID,Make,Model,Category / Class',
+      'N9900F,Embraer,E170,AMEL',
+      '',
+      'Date,AircraftID,From,To,TotalTime,PIC,TimeOut,TimeOff,TimeOn,TimeIn',
+      '2025-08-15,N9900F,KAPA,KCOS,1.2,1.2,2110,2121,2248,2259',
+    ].join('\n')
+
+    const result = parseWithProvider('foreflight', csv, { generateId: FIXED_ID })
+    const entry = result.entries[0]!
+    expect(entry.oooi).toEqual({
+      out: '21:10',
+      off: '21:21',
+      on: '22:48',
+      in: '22:59',
+      isZulu: false,
+    })
+    expect(entry.flightTime.total).toBe(1.2)
+    expect(entry.flightTime.pic).toBe(1.2)
   })
 
   it('parses generic CSV H:MM totals', () => {

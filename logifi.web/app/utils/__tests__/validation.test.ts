@@ -88,6 +88,17 @@ describe('validation', () => {
       const warnings = results.filter(r => r.type === 'warning')
       expect(warnings.length).toBeGreaterThan(0)
     })
+
+    it('should error for Invalid Date and impossible calendar days', () => {
+      const invalid = validateDate(createTestEntry({ date: 'not-a-date' }))
+      expect(invalid.some((r) => r.type === 'error' && r.field === 'date')).toBe(true)
+
+      const rolled = validateDate(createTestEntry({ date: '2026-02-30' }))
+      expect(rolled.some((r) => r.type === 'error' && r.field === 'date')).toBe(true)
+
+      const swapped = validateDate(createTestEntry({ date: '2026-15-04' }))
+      expect(swapped.some((r) => r.type === 'error' && r.field === 'date')).toBe(true)
+    })
   })
 
   describe('validateFlightTime', () => {

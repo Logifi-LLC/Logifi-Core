@@ -139,6 +139,7 @@
       :full-backup-busy="fullBackupBusy"
       :full-backup-progress="fullBackupProgress"
       :full-backup-error="fullBackupError"
+      :import-busy="importBusy"
       @retry-sync="$emit('retry-sync')"
       @sync-now="$emit('sync-now')"
       @force-full-sync="$emit('force-full-sync')"
@@ -151,6 +152,7 @@
       @export-logbook="$emit('export-logbook')"
       @download-json-backup="$emit('download-json-backup')"
       @download-full-backup="$emit('download-full-backup')"
+      @restore-backup="$emit('restore-backup')"
       @generate-8710="$emit('generate-8710')"
       @download-logbook-pdf="$emit('download-logbook-pdf')"
       @import-fcv="$emit('import-fcv')"
@@ -233,6 +235,7 @@ const props = defineProps<{
   fullBackupBusy?: boolean
   fullBackupProgress?: string | null
   fullBackupError?: string | null
+  importBusy?: boolean
 }>()
 
 const profileSubTabModel = defineModel<'profile' | 'stats'>('profileSubTab', { required: true })
@@ -277,6 +280,7 @@ defineEmits<{
   'export-logbook': []
   'download-json-backup': []
   'download-full-backup': []
+  'restore-backup': []
   'generate-8710': []
   'download-logbook-pdf': []
   'import-fcv': []
