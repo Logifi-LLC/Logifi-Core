@@ -2314,12 +2314,13 @@
                     v-if="inlineEditEntry?.oooi" 
                     v-model="inlineEditEntry.oooi[field]" 
                     type="text" 
-                    maxlength="4" 
+                    maxlength="5" 
                     placeholder="1430"
                     :readonly="isExpandedEntrySigned"
                     :title="oooiOppositeClockTitle(inlineEditEntry, field)"
                     :aria-describedby="oooiOppositeClockHintId('edit', field, inlineEditEntry)"
-                    @input="(e) => { if (inlineEditEntry?.oooi && field !== 'isZulu') (inlineEditEntry.oooi as unknown as Record<string, string | null>)[field] = formatOOOIInput((e.target as HTMLInputElement).value) }"
+                    @input="(e) => onInlineOooiFieldInput(field as OooiEventKey, (e.target as HTMLInputElement).value)"
+                    @blur="onInlineOooiFieldBlur(field as OooiEventKey)"
                     :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono pointer-events-auto focus:outline-none focus:ring-2 focus:ring-blue-500', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" 
                   />
                   <span
@@ -3549,11 +3550,12 @@
                       v-if="newEntry.oooi" 
                       v-model="newEntry.oooi[field]" 
                       type="text" 
-                      maxlength="4" 
-                      placeholder="1430" 
+                      maxlength="5"
+                      placeholder="1430"
                       :title="oooiOppositeClockTitle(newEntry, field)"
                       :aria-describedby="oooiOppositeClockHintId('entry', field, newEntry)"
-                      @input="(e) => { if (newEntry.oooi && field !== 'isZulu') (newEntry.oooi as unknown as Record<string, string | null>)[field] = formatOOOIInput((e.target as HTMLInputElement).value) }"
+                      @input="(e) => onAddOooiFieldInput(field as OooiEventKey, (e.target as HTMLInputElement).value)"
+                      @blur="onAddOooiFieldBlur(field as OooiEventKey)"
                       :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-blue-500', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" 
                     />
                     <span
@@ -6904,8 +6906,12 @@ import {
 import { ensureAirportClientDbLoaded } from '../../shared/airportClientDb'
 import { getAirportIanaTimezone, normalizeTimezoneToIANA } from '../../shared/airportTimezone'
 import {
+  formatOooiClockToHhMm,
   formatOooiOppositeClockTooltip,
+  formatOooiTimesForStorage,
+  normalizeOooiClockOnBlur,
   oooiPairDurationHours,
+  sanitizeOooiClockDigitsWhileTyping,
   toggleOooiClockView,
   type OooiEventKey,
 } from '../../shared/oooiClock'
@@ -7026,7 +7032,10 @@ import { usePullToRefresh } from '../composables/usePullToRefresh'
 import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
 import { useDashboardShortcuts } from '../composables/useDashboardShortcuts'
 import { useDashboardEntryDeepLink } from '../composables/useDashboardEntryDeepLink'
-import { parseDashboardReturnTo } from '../utils/dashboardReturnTo'
+import {
+  resolveDashboardInlineEditReturnNavigation,
+  type DashboardInlineEditReturn,
+} from '../utils/dashboardInlineEditReturn'
 import AuthModal from '../components/AuthModal.vue'
 import { readStoredReferralCode } from '../utils/referralCapture'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
@@ -8706,6 +8715,8 @@ const inlineNightAutoCalcBaseline = ref<string | null>(null)
 /** Snapshot of Out/Off/On/In when a form opens — derived total/pic/sic must not overwrite on hydrate. */
 const inlineOooiDerivedTimeBaseline = ref<string | null>(null)
 const addOooiDerivedTimeBaseline = ref<string | null>(null)
+const inlineOooiFieldTouched = ref<Partial<Record<OooiEventKey, boolean>>>({})
+const addOooiFieldTouched = ref<Partial<Record<OooiEventKey, boolean>>>({})
 const searchTerm = ref('')
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const debouncedSearchTerm = ref('')
@@ -8750,6 +8761,7 @@ function toggleCommercialMode(): void {
   }
   isCommercialMode.value = next
   captureAddOooiDerivedTimeBaseline()
+  clearAddOooiFieldTouched()
 }
 
 // Sticky header refs
@@ -8803,15 +8815,7 @@ function handleFlicaConnectionChanged(payload: { connected: boolean }): void {
 const isInlineCommercialMode = ref(false)
 const editingEntryId = ref<string | null>(null)
 const expandedEntryId = ref<string | null>(null)
-const inlineEditReturnPath = ref<string | null>(null)
-
-watch(
-  () => route.query.returnTo,
-  (raw) => {
-    inlineEditReturnPath.value = parseDashboardReturnTo(raw)
-  },
-  { immediate: true }
-)
+const inlineEditReturn = ref<DashboardInlineEditReturn | null>(null)
 const inlineEditEntry = ref<LogEntry | null>(null)
 const showSignEntryModal = ref(false)
 const showSignatureFinishModal = ref(false)
@@ -9077,20 +9081,25 @@ function closeInlineEditDrawer(): void {
   isInlineCommercialMode.value = false
   inlineNightAutoCalcBaseline.value = null
   inlineOooiDerivedTimeBaseline.value = null
+  clearInlineOooiFieldTouched()
   showInlineCustomTagInput.value = false
   customTagInputInline.value = ''
 }
 
-function navigateAfterInlineEditIfRequested(): void {
-  const path = inlineEditReturnPath.value
+function navigateAfterInlineEditIfRequested(closingEntryId: string | null | undefined): void {
+  const path = resolveDashboardInlineEditReturnNavigation(
+    inlineEditReturn.value,
+    closingEntryId
+  )
   if (!path) return
-  inlineEditReturnPath.value = null
+  inlineEditReturn.value = null
   void router.push(path)
 }
 
 function dismissInlineEdit(): void {
+  const closingEntryId = expandedEntryId.value
   closeInlineEditDrawer()
-  navigateAfterInlineEditIfRequested()
+  navigateAfterInlineEditIfRequested(closingEntryId)
 }
 
 function setLocalSignaturePending(
@@ -9245,6 +9254,7 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
     if (!Array.isArray(copy.tags)) copy.tags = []
     clearEntryFormFieldUi()
     captureInlineOooiDerivedTimeBaseline(copy.oooi)
+    clearInlineOooiFieldTouched()
     inlineEditEntry.value = copy
     // Auto-enable commercial mode only when existing OOOI time fields are present
     const hasOOOITimes =
@@ -9274,6 +9284,9 @@ useDashboardEntryDeepLink({
   logEntries,
   setActiveLogbook,
   openEntry: (entry) => beginInlineEditing(entry),
+  onInlineEditReturn: (payload) => {
+    inlineEditReturn.value = payload
+  },
 })
 
 function beginAmendSignedEntry(): void {
@@ -9475,6 +9488,7 @@ function toggleInlineOOOIMode(): void {
   }
   isInlineCommercialMode.value = next
   captureInlineOooiDerivedTimeBaseline(inlineEditEntry.value.oooi)
+  clearInlineOooiFieldTouched()
 }
 
 async function saveInlineEdit(): Promise<boolean> {
@@ -11742,13 +11756,13 @@ async function normalizeImportedEntry(
     }
     
     if (out || off || on || inTime) {
-      entry.oooi = {
+      entry.oooi = formatOooiTimesForStorage({
         out: out,
         off: off,
         on: on,
         in: inTime,
         isZulu: Boolean(isZulu)
-      }
+      })
     }
     
     // Auto-detect IFR if flight number exists (only add condition, don't auto-set actualInstrument)
@@ -13862,6 +13876,7 @@ function resetForm(): void {
   xcTimeManuallySet.value = false
   lastKnownXcTime.value = null
   captureAddOooiDerivedTimeBaseline()
+  clearAddOooiFieldTouched()
 }
 
 function ensureDefaultSignInstructor(): void {
@@ -13894,10 +13909,12 @@ function openNewEntryForm(draft?: EditableLogEntry): void {
   showSimSection.value = (draft?.logbookType ?? activeLogbook.value) === 'simulator'
   isEntryFormOpen.value = true
   captureAddOooiDerivedTimeBaseline()
+  clearAddOooiFieldTouched()
   ensureDefaultSignInstructor()
 }
 
 function closeAddEntryPanel(): void {
+  clearAddOooiFieldTouched()
   clearEntryFormFieldUi()
   validationError.value = null
   duplicateWarning.value = null
@@ -14006,9 +14023,46 @@ const filteredAircraftItemsByFamily = computed(() => {
   return map
 })
 
-function formatOOOIInput(value: string): string {
-  // Remove non-digits and limit to 4 characters
-  return value.replace(/\D/g, '').slice(0, 4)
+function clearInlineOooiFieldTouched(): void {
+  inlineOooiFieldTouched.value = {}
+}
+
+function clearAddOooiFieldTouched(): void {
+  addOooiFieldTouched.value = {}
+}
+
+function applyOooiFieldBlurFormat(
+  oooi: OOOITimes | null | undefined,
+  field: OooiEventKey,
+  touched: Partial<Record<OooiEventKey, boolean>>
+): void {
+  if (!oooi) return
+  const result = normalizeOooiClockOnBlur(oooi[field], !!touched[field])
+  if (result.kind === 'formatted') {
+    oooi[field] = result.value
+  }
+}
+
+function onInlineOooiFieldBlur(field: OooiEventKey): void {
+  applyOooiFieldBlurFormat(inlineEditEntry.value?.oooi ?? null, field, inlineOooiFieldTouched.value)
+}
+
+function onAddOooiFieldBlur(field: OooiEventKey): void {
+  applyOooiFieldBlurFormat(newEntry.oooi, field, addOooiFieldTouched.value)
+}
+
+function onInlineOooiFieldInput(field: OooiEventKey, value: string): void {
+  if (!inlineEditEntry.value?.oooi) return
+  inlineOooiFieldTouched.value[field] = true
+  ;(inlineEditEntry.value.oooi as unknown as Record<string, string | null>)[field] =
+    sanitizeOooiClockDigitsWhileTyping(value)
+}
+
+function onAddOooiFieldInput(field: OooiEventKey, value: string): void {
+  if (!newEntry.oooi) return
+  addOooiFieldTouched.value[field] = true
+  ;(newEntry.oooi as unknown as Record<string, string | null>)[field] =
+    sanitizeOooiClockDigitsWhileTyping(value)
 }
 
 type OooiClockFormEntry = {
@@ -14075,39 +14129,7 @@ function toggleInlineOooiClock(): void {
 function toggleNewEntryOooiClock(): void {
   applyOooiClockToggle(newEntry)
   captureAddOooiDerivedTimeBaseline()
-}
-
-/**
- * Convert OOOI time format from "HHMM" to "HH:MM"
- * @param time Time string in HHMM format (e.g., "1430") or null
- * @returns Time string in HH:MM format (e.g., "14:30") or null if invalid
- */
-function convertOOOITimeToHHMM(time: string | null): string | null {
-  if (!time || time.length === 0) return null
-  
-  // Remove non-digits
-  let digits = time.replace(/\D/g, '')
-  
-  // Handle 3-digit times (e.g., "083" -> "0803" for 8:03 AM)
-  if (digits.length === 3) {
-    digits = '0' + digits // Prepend 0 to make it 4 digits
-  }
-  
-  // Pad to 4 characters if less than 4 (handles 1-2 digit times)
-  digits = digits.padStart(4, '0')
-  
-  if (digits.length !== 4) return null
-  
-  const hours = parseInt(digits.slice(0, 2), 10)
-  const minutes = parseInt(digits.slice(2, 4), 10)
-  
-  // Validate hours and minutes
-  if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-    return null
-  }
-  
-  // Format as HH:MM
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
+  clearAddOooiFieldTouched()
 }
 
 function autoCheckFlightConditions(
@@ -15888,8 +15910,8 @@ async function autoCalculateNightTime(
     }
   }
 
-  const outTimeFormatted = convertOOOITimeToHHMM(outTime)
-  const inTimeFormatted = convertOOOITimeToHHMM(inTime)
+  const outTimeFormatted = formatOooiClockToHhMm(outTime)
+  const inTimeFormatted = formatOooiClockToHhMm(inTime)
   if (!outTimeFormatted || !inTimeFormatted) return null
 
   const depLat = typeof depCoords.lat === 'number' ? depCoords.lat : parseFloat(String(depCoords.lat))
@@ -16621,7 +16643,7 @@ async function confirmAndDeleteEntry(id: string): Promise<void> {
   if (expandedEntryId.value === id) {
     expandedEntryId.value = null
     inlineEditEntry.value = null
-    navigateAfterInlineEditIfRequested()
+    navigateAfterInlineEditIfRequested(id)
   }
 }
 
