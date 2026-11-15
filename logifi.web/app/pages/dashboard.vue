@@ -6853,6 +6853,7 @@ import { aircraftEngineDisplay } from '../../shared/aircraftLookupLocal'
 import { useAirportLookup } from '../composables/useAirportLookup'
 import type { AirportInfo } from '../composables/useAirportLookup'
 import { getPilotInitialsFromName } from '../utils/pilotProfile'
+import { logEntryTagsFromSupabaseRow } from '../utils/logEntrySupabaseRow'
 import { getDisplayedPilotInitials, shouldShowCurrencyChips } from '../utils/dashboardHydration'
 import {
   CATEGORY_CLASS_TIME_HELP,
@@ -9826,6 +9827,7 @@ async function saveInlineEdit(): Promise<boolean> {
         sicName: dbEntryResult.sic_name || null,
         flightConditions: sanitizeFlightConditions(dbEntryResult.flight_conditions || []),
         remarks: dbEntryResult.remarks || '',
+        tags: logEntryTagsFromSupabaseRow(dbEntryResult),
         logbookType: dbEntryResult.logbook_type === 'simulator' ? 'simulator' : 'flight',
         flightTime: dbEntryResult.flight_time as FlightTimeBreakdown,
         performance: dbEntryResult.performance as PerformanceMetrics,
@@ -9882,7 +9884,7 @@ async function saveInlineEdit(): Promise<boolean> {
           'aircraft_make_model', 'registration', 'flight_number', 'departure',
           'destination', 'route', 'training_elements', 'training_instructor',
           'instructor_certificate', 'pic_name', 'sic_name', 'flight_conditions', 'remarks',
-          'flight_time', 'performance', 'oooi', 'flagged'
+          'tags', 'flight_time', 'performance', 'oooi', 'flagged'
         ]
         
         fieldsToCompare.forEach(field => {
@@ -16773,7 +16775,7 @@ function mapSupabaseRowToLogEntry(dbEntry: any): LogEntry {
     sicName: dbEntry.sic_name || null,
     flightConditions: sanitizeFlightConditions(dbEntry.flight_conditions || []),
     remarks: dbEntry.remarks || '',
-    tags: Array.isArray(dbEntry.tags) ? [...dbEntry.tags] : [],
+    tags: logEntryTagsFromSupabaseRow(dbEntry),
     logbookType: dbEntry.logbook_type === 'simulator' ? 'simulator' : 'flight',
     flightTime: dbEntry.flight_time as FlightTimeBreakdown,
     performance: dbEntry.performance as PerformanceMetrics,
