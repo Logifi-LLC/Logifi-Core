@@ -10,11 +10,14 @@ function scoreSource(headers: string[], source: BridgeSource): number {
 
   switch (source) {
     case 'foreflight':
-      if (set.has('aircraftid') || set.has('aircraft id')) score += 2
-      if (set.has('totaltime') || set.has('total time')) score += 2
-      if (set.has('from')) score += 1
-      if (set.has('date') || set.has('flightdate')) score += 2
-      if (set.has('pilotcomments')) score += 1
+      // Require ForeFlight-specific headers. Generic Date / Registration / Total Time
+      // must not look like ForeFlight (that path applies NO TAIL and ASEL defaults).
+      if (set.has('aircraftid')) score += 3
+      if (set.has('totaltime')) score += 2
+      if (set.has('pilotcomments')) score += 2
+      if (set.has('simulatedflight')) score += 2
+      if (set.has('daylandingsfullstop')) score += 2
+      if (set.has('from') && set.has('aircraftid')) score += 1
       break
     case 'logten':
       // LogTen Dynamic Export (Tab) — human-readable airline template

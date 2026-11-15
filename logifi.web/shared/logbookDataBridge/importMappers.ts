@@ -109,6 +109,24 @@ function findDate(rawEntry: Record<string, unknown>): string | null {
 /** ForeFlight flights with a blank AircraftID keep hours under this placeholder. */
 export const FOREFLIGHT_MISSING_TAIL = 'NO TAIL'
 
+const CANONICAL_IMPORT_CATEGORY_CLASS = new Set([
+  'ASEL',
+  'AMEL',
+  'ASES',
+  'AMES',
+  'HELI',
+  'GYRO',
+  'GLID',
+  'BAL',
+  'AIRS',
+  'PL',
+  'WSC-L',
+  'WSC-S',
+  'FFS',
+  'FTD',
+  'ATD',
+])
+
 export function normalizeCategoryClassLabel(value: string): string {
   if (!value) return ''
   const v = value.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
@@ -142,8 +160,23 @@ export function normalizeCategoryClassLabel(value: string): string {
   ) {
     return 'AMES'
   }
-  if (v.includes('rotor') || v.includes('helicopter')) return 'HELI'
-  return value.trim()
+  // Gyroplane before generic "rotor" so rotorcraft_gyroplane is not HELI.
+  if (v.includes('gyro') || v.includes('autogyro') || v.includes('gyroplane')) return 'GYRO'
+  if (v.includes('helicopter') || /(^| )heli( |$)/.test(v) || v.includes('rotor')) return 'HELI'
+  if (v.includes('glider') || v.includes('sailplane')) return 'GLID'
+  if (v.includes('balloon')) return 'BAL'
+  if (v.includes('airship') || v.includes('blimp') || v.includes('dirigible')) return 'AIRS'
+  if (v.includes('powered lift') || v.includes('tiltrotor') || v.includes('tilt rotor') || v.includes('vtol')) {
+    return 'PL'
+  }
+  if (v.includes('weight shift') || v.includes('trike')) {
+    if (v.includes('sea') || v.includes('seaplane') || v.includes('amphib') || v.includes('float')) {
+      return 'WSC-S'
+    }
+    return 'WSC-L'
+  }
+  const upper = value.trim().toUpperCase()
+  return CANONICAL_IMPORT_CATEGORY_CLASS.has(upper) ? upper : ''
 }
 
 const MULTI_ENGINE_TYPE_CODES = /^(DA42|DA62|PA44|PA34|PA23|PA31|BE58|BE76|C310|C340|C402|C414|C421)/i
@@ -392,7 +425,8 @@ export function parseOtherCrewFromRemarks(
     /^([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*)+)(?:\s+\d{3,})?$/
   )
   const name = match?.[1] ? normalizeCrewName(match[1]) : null
-  if (!name) return null
+  // Remarks such as "Pattern work" / "Touch and goes" are not crew names.
+  if (!name || !looksLikePersonName(name)) return null
 
   const roleNorm = role.trim().toUpperCase()
   if (roleNorm === 'PIC') return { sicName: name }
@@ -436,6 +470,58 @@ export function resolveCrewNamesFromRawRow(
   }
 
   return { picName, sicName }
+}
+
+/**
+ * Day landings = all landings minus night landings when the source has a total.
+ * Full-stop columns stay full-stop fallbacks only (no dedicated FS field).
+ */
+function resolveImportLandings(rawEntry: Record<string, unknown>): {
+  dayLandings: number | null
+  nightLandings: number | null
+} {
+  const totalAll = normalizeImportNumber(
+    findFieldValue(rawEntry, ['AllLandings', 'All Landings', 'alllandings', 'Landings', 'landings'])
+  )
+  const nightLandings = normalizeImportNumber(
+    findFieldValue(rawEntry, [
+      'Night Landings',
+      'night landings',
+      'Night Ldg',
+      'night ldg',
+      'flight_nightLandings',
+      'NightLandingsFullStop',
+      'FS Night Landings',
+      'fs night landings',
+    ])
+  )
+  const daySpecific = normalizeImportNumber(
+    findFieldValue(rawEntry, [
+      'flight_dayLandings',
+      'Day Landings',
+      'day landings',
+      'Day Ldg',
+      'day ldg',
+    ])
+  )
+  const fullStopDay = normalizeImportNumber(
+    findFieldValue(rawEntry, [
+      'DayLandingsFullStop',
+      'FS Day Landings',
+      'fs day landings',
+    ])
+  )
+
+  let dayLandings: number | null
+  if (totalAll != null) {
+    dayLandings = Math.max(0, Math.round(totalAll - (nightLandings ?? 0)))
+  } else if (daySpecific != null) {
+    dayLandings = daySpecific
+  } else {
+    dayLandings = fullStopDay
+  }
+
+  return { dayLandings, nightLandings }
 }
 
 function defaultGenerateId(): string {
@@ -702,12 +788,6 @@ export function mapRawRowToLogEntry(
     },
     performance: {
       ...createEmptyPerformance(),
-      /**
-       * WHY (MyFlightBook): Exports include both total `Landings` and
-       * `FS Day Landings` / `FS Night Landings`. Prefer FS columns so night
-       * full-stops are not stuffed into dayLandings via the generic Landings alias.
-       * HOW: Alias order — FS / provider-specific first, total Landings last.
-       */
       dayTakeoffs: normalizeImportNumber(
         findFieldValue(rawEntry, [
           'DayTakeoffs',
@@ -726,30 +806,7 @@ export function mapRawRowToLogEntry(
           'night t/o',
         ])
       ),
-      dayLandings: normalizeImportNumber(
-        findFieldValue(rawEntry, [
-          'FS Day Landings',
-          'fs day landings',
-          'flight_dayLandings',
-          'DayLandingsFullStop',
-          'Day Landings',
-          'Day Ldg',
-          'day ldg',
-          'Landings',
-          'landings',
-        ])
-      ),
-      nightLandings: normalizeImportNumber(
-        findFieldValue(rawEntry, [
-          'FS Night Landings',
-          'fs night landings',
-          'flight_nightLandings',
-          'NightLandingsFullStop',
-          'Night Landings',
-          'Night Ldg',
-          'night ldg',
-        ])
-      ),
+      ...resolveImportLandings(rawEntry),
       approachCount,
       approachType,
       approaches,

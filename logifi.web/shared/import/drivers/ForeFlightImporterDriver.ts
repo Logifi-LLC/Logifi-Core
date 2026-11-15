@@ -44,7 +44,7 @@ export function enrichForeFlightEntries(
 
   const customHourTagsUsed = new Set<string>()
   let noTailCount = 0
-  let defaultedClassCount = 0
+  let missingClassCount = 0
 
   entries.forEach((entry, index) => {
     const raw = rawRows[index]
@@ -88,8 +88,7 @@ export function enrichForeFlightEntries(
       if (inferred) {
         entry.aircraftCategoryClass = inferred
       } else {
-        entry.aircraftCategoryClass = 'ASEL'
-        defaultedClassCount++
+        missingClassCount++
       }
     }
 
@@ -140,9 +139,9 @@ export function enrichForeFlightEntries(
     )
   }
 
-  if (defaultedClassCount > 0) {
+  if (missingClassCount > 0) {
     warnings.push(
-      `${defaultedClassCount} flight(s) had no category/class; defaulted to ASEL.`
+      `${missingClassCount} flight(s) had no category/class; left unset.`
     )
   }
 

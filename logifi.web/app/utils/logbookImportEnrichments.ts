@@ -1,5 +1,6 @@
 import type { LogEntry } from './logbookTypes'
 import { findFieldValue } from '../../shared/logbookDataBridge/importMappers'
+import { parseImportDuration } from '../../shared/logbookDataBridge/formatters'
 import { namesMatchFlexible } from '../../shared/logbookDataBridge/logtenDynamicExport'
 import { looksLikePersonName } from '../../shared/looksLikePersonName'
 
@@ -15,13 +16,18 @@ type CrewCandidate = {
   priority: number
 }
 
-function toTitleCase(str: string): string {
-  if (!str || !str.trim()) return str
-  return str
-    .toLowerCase()
-    .split(/\s+/)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
+const CREW_JOB_LABELS: Record<string, string> = {
+  instructor: 'Instructor',
+  student: 'Student',
+  captain: 'Captain',
+  pic: 'Captain',
+  'first officer': 'First Officer',
+  sic: 'First Officer',
+  fo: 'First Officer',
+}
+
+function canonicalCrewJobLabel(value: string): string | null {
+  return CREW_JOB_LABELS[value.trim().toLowerCase()] ?? null
 }
 
 function isUserName(name: string, userName: string): boolean {
@@ -224,6 +230,17 @@ function buildCrewCandidates(
   }
 }
 
+/** Keep the file's XC. OOOI block time must not replace flight_crossCountry. */
+export function applyLogtenFileCrossCountry(
+  entry: LogEntry,
+  rawCrossCountry: unknown
+): void {
+  const xc = parseImportDuration(rawCrossCountry as string | number | null | undefined)
+  if (xc != null && xc > 0) {
+    entry.flightTime.crossCountry = xc
+  }
+}
+
 /** LogTen crew-field heuristics that depend on the logged-in pilot profile. */
 export function applyLogtenCrewFields(
   entry: LogEntry,
@@ -247,7 +264,7 @@ export function applyLogtenCrewFields(
 
   const selectedPilot = pickOtherCrewName(seat, crew.candidates)
   if (selectedPilot) {
-    entry.trainingElements = toTitleCase(selectedPilot)
+    entry.trainingElements = selectedPilot
   }
 
   const explicitInstructor = findFieldValue(rawEntry, [
@@ -274,16 +291,33 @@ export function applyLogtenCrewFields(
       entry.trainingInstructor = 'First Officer'
       return
     }
+    const asJob = canonicalCrewJobLabel(explicitInstructor)
+    if (asJob) {
+      entry.trainingInstructor = asJob
+      return
+    }
+    if (looksLikePersonName(explicitInstructor)) {
+      if (!entry.trainingElements.trim() || !looksLikePersonName(entry.trainingElements)) {
+        entry.trainingElements = explicitInstructor
+      }
+      if (!canonicalCrewJobLabel(entry.trainingInstructor)) {
+        entry.trainingInstructor = 'Instructor'
+      }
+      return
+    }
     entry.trainingInstructor = 'Instructor'
     return
   }
 
   if (selectedPilot) {
-    entry.trainingInstructor = jobLabelForOtherPilot(
-      selectedPilot,
-      seat,
-      crew.instructorCrew,
-      crew.studentCrew
-    )
+    const existingJob = canonicalCrewJobLabel(entry.trainingInstructor)
+    entry.trainingInstructor =
+      existingJob ||
+      jobLabelForOtherPilot(
+        selectedPilot,
+        seat,
+        crew.instructorCrew,
+        crew.studentCrew
+      )
   }
 }

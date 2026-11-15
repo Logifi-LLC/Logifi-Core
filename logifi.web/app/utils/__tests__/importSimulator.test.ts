@@ -74,6 +74,27 @@ describe('importSimulator', () => {
       expect(hints.groundSimTime).toBeNull()
     })
 
+    it('does not treat Simulator No / false / 0 / blank as a simulator row', () => {
+      for (const value of ['No', 'false', '0', '']) {
+        const hints = readSimHintsFromRawRow({
+          Simulator: value,
+          TotalTime: '1.5',
+          Date: '2026-04-15',
+        })
+        expect(hints.isSimulator).toBeFalsy()
+        expect(hints.groundSimTime).toBeNull()
+      }
+    })
+
+    it('reads ForeFlight SimulatedFlight as sim time', () => {
+      const hints = readSimHintsFromRawRow({
+        TotalTime: '0',
+        SimulatedFlight: '1.5',
+      })
+      expect(hints.groundSimTime).toBe(1.5)
+      expect(hints.isSimulator).toBe(true)
+    })
+
     it('uses flight_ground only when the row has no airplane total', () => {
       const simOnly = readSimHintsFromRawRow({ flight_ground: '0:48' })
       expect(simOnly.groundSimTime).toBe(0.8)
@@ -131,6 +152,33 @@ describe('importSimulator', () => {
       })
       applySimulatorImport(entry)
       expect(entry.logbookType).toBe('flight')
+    })
+
+    it('moves SimulatedFlight into atd when airplane total is zero', () => {
+      const entry = createTestEntry({
+        aircraftCategoryClass: '',
+        flightTime: { ...createEmptyFlightTime(), total: 0 },
+      })
+      applySimulatorImport(
+        entry,
+        readSimHintsFromRawRow({ TotalTime: '0', SimulatedFlight: '1.5' })
+      )
+      expect(entry.logbookType).toBe('simulator')
+      expect(entry.flightTime.atd).toBe(1.5)
+      expect(entry.aircraftCategoryClass).toBe('ATD')
+    })
+
+    it('does not turn an airplane row into a simulator when Simulator is No', () => {
+      const entry = createTestEntry({
+        aircraftCategoryClass: 'ASEL',
+        flightTime: { ...createEmptyFlightTime(), total: 1.5 },
+      })
+      applySimulatorImport(
+        entry,
+        readSimHintsFromRawRow({ Simulator: 'No', TotalTime: '1.5' })
+      )
+      expect(entry.logbookType).toBe('flight')
+      expect(entry.flightTime.atd ?? 0).toBe(0)
     })
 
     it('builder-style simulator flag moves total into atd by default', () => {

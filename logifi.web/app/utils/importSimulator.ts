@@ -25,6 +25,13 @@ function parseDecimal(value: unknown): number | null {
   return parseImportDuration(String(value))
 }
 
+/** Simulator column flags: only Yes/true/device names count. "No"/false/0/blank do not. */
+function isTruthySimulatorToken(value: string): boolean {
+  const v = value.trim().toLowerCase()
+  if (!v) return false
+  return !['no', 'n', 'false', '0', 'off', 'none'].includes(v)
+}
+
 function findFieldValue(rawEntry: Record<string, unknown>, possibleNames: string[]): string {
   for (const name of possibleNames) {
     const direct = rawEntry[name]
@@ -77,11 +84,17 @@ export function readSimHintsFromRawRow(raw: Record<string, unknown>): SimImportH
     'logbook_type',
     'LogbookType',
   ])
-  const explicitLogbookType = logbookTypeStr ? parseLogbookType(logbookTypeStr) : null
-
   const simulatorHours = parseDecimal(
     findFieldValue(raw, ['flight_simulator', 'Flight Simulator'])
   )
+  const simulatedFlight = parseDecimal(
+    findFieldValue(raw, ['SimulatedFlight', 'simulatedflight', 'Simulated Flight'])
+  )
+  const explicitLogbookType = logbookTypeStr
+    ? parseLogbookType(logbookTypeStr)
+    : simulatedFlight != null && simulatedFlight > 0
+      ? 'simulator'
+      : null
   const namedGroundSim = parseDecimal(
     findFieldValue(raw, [
       'Ground Simulator',
@@ -107,6 +120,7 @@ export function readSimHintsFromRawRow(raw: Record<string, unknown>): SimImportH
   const simulatorCellIsDuration =
     simulatorCellHours != null && /^\d/.test(simulatorCellRaw.trim())
   const simulatorCellValue = simulatorCellIsDuration ? '' : simulatorCellRaw
+  const simulatorCellIsTruthy = isTruthySimulatorToken(simulatorCellValue)
 
   // flight_ground is ground instruction on airplane rows and sim time on sim-only rows.
   const flightGroundHours = parseDecimal(findFieldValue(raw, ['flight_ground', 'Flight Ground']))
@@ -127,6 +141,7 @@ export function readSimHintsFromRawRow(raw: Record<string, unknown>): SimImportH
   const groundSimTime =
     (simulatorHours != null && simulatorHours > 0 ? simulatorHours : null) ??
     (namedGroundSim != null && namedGroundSim > 0 ? namedGroundSim : null) ??
+    (simulatedFlight != null && simulatedFlight > 0 ? simulatedFlight : null) ??
     (simulatorCellIsDuration && (simulatorCellHours ?? 0) > 0 ? simulatorCellHours : null) ??
     (flightGroundIsSim ? flightGroundHours : null)
 
@@ -138,7 +153,7 @@ export function readSimHintsFromRawRow(raw: Record<string, unknown>): SimImportH
 
   const isSimulator =
     explicitLogbookType === 'simulator' ||
-    !!simulatorCellValue ||
+    simulatorCellIsTruthy ||
     (groundSimTime != null && groundSimTime > 0) ||
     (ffs != null && ffs > 0) ||
     (ftd != null && ftd > 0) ||
