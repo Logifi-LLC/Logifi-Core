@@ -22,26 +22,95 @@
         z-index: 99999;
         background: #030712;
       }
+      .loading-animation__mark {
+        display: block;
+        flex-shrink: 0;
+      }
       .loading-animation__mark--md {
         width: 72px;
         height: 72px;
-        border-radius: 16px;
-        object-fit: cover;
-        animation: loading-animation-mark-pulse 2.4s ease-in-out infinite;
       }
-      @keyframes loading-animation-mark-pulse {
+      .loading-animation__stage {
+        transform-origin: 50px 50px;
+      }
+      .loading-animation__corner--bl {
+        transform-origin: 9px 97px;
+        transform-box: fill-box;
+      }
+      .loading-animation__corner--tr {
+        transform-origin: 90px 10px;
+        transform-box: fill-box;
+      }
+      .loading-animation--motion .loading-animation__corner--bl {
+        animation: loading-animation-corner-bl 2.8s ease-in-out infinite;
+      }
+      .loading-animation--motion .loading-animation__corner--tr {
+        animation: loading-animation-corner-tr 2.8s ease-in-out infinite;
+      }
+      .loading-animation--motion .loading-animation__stage {
+        animation: loading-animation-stage-spin 2.8s cubic-bezier(0.55, 0.12, 0.85, 0.38) infinite;
+      }
+      @keyframes loading-animation-corner-bl {
         0%,
         100% {
-          opacity: 0.72;
-        }
-        50% {
+          transform: translate(0, 0);
           opacity: 1;
+        }
+        33% {
+          transform: translate(41px, -47px);
+          opacity: 1;
+        }
+        46% {
+          transform: translate(41px, -47px);
+          opacity: 1;
+        }
+        83% {
+          transform: translate(41px, -47px);
+          opacity: 1;
+        }
+        92% {
+          transform: translate(10px, -12px);
+          opacity: 0.35;
+        }
+      }
+      @keyframes loading-animation-corner-tr {
+        0%,
+        100% {
+          transform: translate(0, 0);
+          opacity: 1;
+        }
+        33% {
+          transform: translate(-40px, 40px);
+          opacity: 1;
+        }
+        46% {
+          transform: translate(-40px, 40px);
+          opacity: 1;
+        }
+        83% {
+          transform: translate(-40px, 40px);
+          opacity: 1;
+        }
+        92% {
+          transform: translate(-8px, 8px);
+          opacity: 0.35;
+        }
+      }
+      @keyframes loading-animation-stage-spin {
+        0%,
+        46%,
+        100% {
+          transform: rotate(0deg);
+        }
+        83% {
+          transform: rotate(720deg);
         }
       }
       @media (prefers-reduced-motion: reduce) {
-        .loading-animation__mark--md {
+        .loading-animation--motion .loading-animation__corner--bl,
+        .loading-animation--motion .loading-animation__corner--tr,
+        .loading-animation--motion .loading-animation__stage {
           animation: none;
-          opacity: 1;
         }
       }
     </style>
@@ -49,19 +118,31 @@
   <body>
     <div
       id="app-splash"
-      class="loading-animation loading-animation--fullscreen"
+      class="loading-animation loading-animation--fullscreen loading-animation--motion"
       role="status"
       aria-busy="true"
       aria-label="Loading logbook"
     >
-      <img
-        src="/images/app-logo-mark.png"
-        alt=""
+      <svg
         class="loading-animation__mark loading-animation__mark--md"
         width="72"
         height="72"
-        decoding="async"
-      />
+        viewBox="0 0 100 100"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <g class="loading-animation__stage">
+          <g class="loading-animation__corner loading-animation__corner--bl">
+            <rect x="0" y="33" width="10" height="64" fill="#ffffff" />
+            <rect x="0" y="90" width="87" height="10" fill="#ffffff" />
+          </g>
+          <g class="loading-animation__corner loading-animation__corner--tr">
+            <rect x="14" y="0" width="86" height="10" fill="#ffffff" />
+            <rect x="90" y="0" width="10" height="67" fill="#ffffff" />
+          </g>
+        </g>
+      </svg>
     </div>
     {{ APP }}
   </body>

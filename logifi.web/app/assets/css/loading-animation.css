@@ -1,3 +1,4 @@
+/* Geometry traced from public/favicon.png (tight crop → 100×100). Inner vertices: BL (9, 97), TR (90, 10). */
 .loading-animation {
   display: flex;
   align-items: center;
@@ -17,15 +18,13 @@
 }
 
 .loading-animation__mark {
-  border-radius: 16px;
-  object-fit: cover;
-  animation: loading-animation-mark-pulse 2.4s ease-in-out infinite;
+  display: block;
+  flex-shrink: 0;
 }
 
 .loading-animation__mark--sm {
   width: 48px;
   height: 48px;
-  border-radius: 12px;
 }
 
 .loading-animation__mark--md {
@@ -36,22 +35,104 @@
 .loading-animation__mark--lg {
   width: 96px;
   height: 96px;
-  border-radius: 20px;
 }
 
-@keyframes loading-animation-mark-pulse {
+.loading-animation__stage {
+  transform-origin: 50px 50px;
+}
+
+.loading-animation__corner--bl {
+  transform-origin: 9px 97px;
+  transform-box: fill-box;
+}
+
+.loading-animation__corner--tr {
+  transform-origin: 90px 10px;
+  transform-box: fill-box;
+}
+
+/*
+ * Cycle 2.8s:
+ * 0–33% (0–0.92s)   corners slide to center (+)
+ * 33–46% (0.92–1.29s) hold merged ~370ms
+ * 46–83% (1.29–2.32s) propeller spin 720° (ease-in then steady)
+ * 83–100% (2.32–2.8s)  slide back to rest + brief fade
+ */
+.loading-animation--motion .loading-animation__corner--bl {
+  animation: loading-animation-corner-bl 2.8s ease-in-out infinite;
+}
+
+.loading-animation--motion .loading-animation__corner--tr {
+  animation: loading-animation-corner-tr 2.8s ease-in-out infinite;
+}
+
+.loading-animation--motion .loading-animation__stage {
+  animation: loading-animation-stage-spin 2.8s cubic-bezier(0.55, 0.12, 0.85, 0.38) infinite;
+}
+
+@keyframes loading-animation-corner-bl {
   0%,
   100% {
-    opacity: 0.72;
-  }
-  50% {
+    transform: translate(0, 0);
     opacity: 1;
+  }
+  33% {
+    transform: translate(41px, -47px);
+    opacity: 1;
+  }
+  46% {
+    transform: translate(41px, -47px);
+    opacity: 1;
+  }
+  83% {
+    transform: translate(41px, -47px);
+    opacity: 1;
+  }
+  92% {
+    transform: translate(10px, -12px);
+    opacity: 0.35;
+  }
+}
+
+@keyframes loading-animation-corner-tr {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+  33% {
+    transform: translate(-40px, 40px);
+    opacity: 1;
+  }
+  46% {
+    transform: translate(-40px, 40px);
+    opacity: 1;
+  }
+  83% {
+    transform: translate(-40px, 40px);
+    opacity: 1;
+  }
+  92% {
+    transform: translate(-8px, 8px);
+    opacity: 0.35;
+  }
+}
+
+@keyframes loading-animation-stage-spin {
+  0%,
+  46%,
+  100% {
+    transform: rotate(0deg);
+  }
+  83% {
+    transform: rotate(720deg);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .loading-animation__mark {
+  .loading-animation--motion .loading-animation__corner--bl,
+  .loading-animation--motion .loading-animation__corner--tr,
+  .loading-animation--motion .loading-animation__stage {
     animation: none;
-    opacity: 1;
   }
 }
