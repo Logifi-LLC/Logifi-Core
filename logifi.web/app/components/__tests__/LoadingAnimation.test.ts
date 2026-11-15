@@ -12,17 +12,17 @@ describe('LoadingAnimation', () => {
     expect(root.classes()).toContain('loading-animation--fullscreen')
     expect(root.attributes('aria-label')).toBe('Loading logbook')
     const svg = wrapper.get('svg.loading-animation__mark')
-    expect(svg.attributes('viewBox')).toBe('0 0 100 100')
+    expect(svg.attributes('viewBox')).toBe('0 0 186 210')
     expect(wrapper.findAll('.loading-animation__corner')).toHaveLength(2)
     expect(wrapper.find('.loading-animation__word').exists()).toBe(false)
   })
 
-  it('renders wordmark variant with logifi text', () => {
+  it('renders wordmark variant with marketing lockup image', () => {
     const wrapper = mount(LoadingAnimation, {
       props: { variant: 'wordmark', fullscreen: false, size: 'sm' },
     })
     expect(wrapper.get('.loading-animation').classes()).toContain('loading-animation--variant-wordmark')
-    expect(wrapper.get('svg').attributes('viewBox')).toBe('0 0 240 100')
-    expect(wrapper.get('.loading-animation__word').text()).toBe('logifi')
+    expect(wrapper.get('svg').attributes('viewBox')).toBe('0 0 400 400')
+    expect(wrapper.find('.loading-animation__wordmark-image').exists()).toBe(true)
   })
 })

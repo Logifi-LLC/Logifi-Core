@@ -1,51 +1,69 @@
 <template>
   <svg
     :class="['loading-animation__mark', 'loading-animation__mark--wordmark', markSizeClass]"
-    :width="svgWidth"
+    :width="pixelSize"
     :height="pixelSize"
-    viewBox="0 0 240 100"
+    :viewBox="`0 0 ${canvas.width} ${canvas.height}`"
     xmlns="http://www.w3.org/2000/svg"
+    xmlns:xlink="http://www.w3.org/1999/xlink"
     aria-hidden="true"
     focusable="false"
   >
-    <g class="loading-animation__wordmark">
-      <g transform="translate(4, 52)">
-        <g class="loading-animation__corner loading-animation__corner--bl-wordmark">
-          <g transform="scale(0.36)">
-            <rect x="0" y="33" width="10" height="64" fill="#ffffff" />
-            <rect x="0" y="90" width="87" height="10" fill="#ffffff" />
-          </g>
-        </g>
-      </g>
-      <text
-        class="loading-animation__word"
-        x="120"
-        y="62"
-        text-anchor="middle"
+    <image
+      class="loading-animation__wordmark-image"
+      href="/images/logifi-logo.png"
+      :width="canvas.width"
+      :height="canvas.height"
+      preserveAspectRatio="xMidYMid meet"
+    />
+    <g
+      class="loading-animation__corner loading-animation__corner--bl-wordmark"
+      :transform="`translate(${lockupBl.x} ${lockupBl.y})`"
+    >
+      <rect
+        v-for="(r, i) in blRects"
+        :key="`bl-${i}`"
+        :x="r.x"
+        :y="r.y"
+        :width="r.w"
+        :height="r.h"
         fill="#ffffff"
-      >
-        logifi
-      </text>
-      <g transform="translate(204, 4)">
-        <g class="loading-animation__corner loading-animation__corner--tr-wordmark">
-          <g transform="scale(0.36)">
-            <rect x="14" y="0" width="86" height="10" fill="#ffffff" />
-            <rect x="90" y="0" width="10" height="67" fill="#ffffff" />
-          </g>
-        </g>
-      </g>
+      />
+    </g>
+    <g
+      class="loading-animation__corner loading-animation__corner--tr-wordmark"
+      :transform="`translate(${lockupTr.x} ${lockupTr.y})`"
+    >
+      <rect
+        v-for="(r, i) in trRects"
+        :key="`tr-${i}`"
+        :x="r.x"
+        :y="r.y"
+        :width="r.w"
+        :height="r.h"
+        fill="#ffffff"
+      />
     </g>
   </svg>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-const props = defineProps<{
+import {
+  MARK_BL_RECTS_LOCAL,
+  MARK_TR_RECTS_LOCAL,
+  WORDMARK_CANVAS,
+  WORDMARK_LOCKUP_BL,
+  WORDMARK_LOCKUP_TR,
+} from './loadingAnimationMarkGeometry'
+
+defineProps<{
   pixelSize: number
   markSizeClass: string
 }>()
 
-const WORDMARK_ASPECT = 240 / 100
-
-const svgWidth = computed(() => Math.round(props.pixelSize * WORDMARK_ASPECT))
+const canvas = WORDMARK_CANVAS
+const lockupBl = WORDMARK_LOCKUP_BL
+const lockupTr = WORDMARK_LOCKUP_TR
+const blRects = MARK_BL_RECTS_LOCAL
+const trRects = MARK_TR_RECTS_LOCAL
 </script>

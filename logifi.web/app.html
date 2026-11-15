@@ -10,7 +10,7 @@
         color: #e5e7eb;
       }
 
-      /* Mirrors app/assets/css/loading-animation.css for pre-Vue boot */
+      /* Mirrors app/assets/css/loading-animation.css (propeller boot only) */
       .loading-animation {
         display: flex;
         align-items: center;
@@ -28,17 +28,14 @@
       }
       .loading-animation__mark--md {
         width: 72px;
-        height: 72px;
+        height: auto;
       }
       .loading-animation__stage {
-        transform-origin: 50px 50px;
+        transform-origin: 93px 105px;
       }
-      .loading-animation__corner--bl {
-        transform-origin: 9px 97px;
-        transform-box: fill-box;
-      }
+      .loading-animation__corner--bl,
       .loading-animation__corner--tr {
-        transform-origin: 90px 10px;
+        transform-origin: 0 0;
         transform-box: fill-box;
       }
       .loading-animation--variant-propeller.loading-animation--motion .loading-animation__corner--bl {
@@ -52,57 +49,49 @@
       }
       @keyframes loading-animation-corner-bl {
         0%,
+        6%,
+        94%,
         100% {
           transform: translate(0, 0);
-          opacity: 1;
         }
-        33% {
-          transform: translate(41px, -47px);
-          opacity: 1;
+        30% {
+          transform: translate(54px, -80px);
         }
-        46% {
-          transform: translate(41px, -47px);
-          opacity: 1;
+        40%,
+        75% {
+          transform: translate(54px, -80px);
         }
-        83% {
-          transform: translate(41px, -47px);
-          opacity: 1;
-        }
-        92% {
-          transform: translate(10px, -12px);
-          opacity: 0.35;
+        88% {
+          transform: translate(0, 0);
         }
       }
       @keyframes loading-animation-corner-tr {
         0%,
+        6%,
+        94%,
         100% {
           transform: translate(0, 0);
-          opacity: 1;
         }
-        33% {
-          transform: translate(-40px, 40px);
-          opacity: 1;
+        30% {
+          transform: translate(-68px, 81px);
         }
-        46% {
-          transform: translate(-40px, 40px);
-          opacity: 1;
+        40%,
+        75% {
+          transform: translate(-68px, 81px);
         }
-        83% {
-          transform: translate(-40px, 40px);
-          opacity: 1;
-        }
-        92% {
-          transform: translate(-8px, 8px);
-          opacity: 0.35;
+        88% {
+          transform: translate(0, 0);
         }
       }
       @keyframes loading-animation-stage-spin {
         0%,
-        46%,
-        100% {
+        40% {
           transform: rotate(0deg);
         }
-        83% {
+        75% {
+          transform: rotate(720deg);
+        }
+        100% {
           transform: rotate(720deg);
         }
       }
@@ -126,20 +115,20 @@
       <svg
         class="loading-animation__mark loading-animation__mark--md"
         width="72"
-        height="72"
-        viewBox="0 0 100 100"
+        height="81"
+        viewBox="0 0 186 210"
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden="true"
         focusable="false"
       >
         <g class="loading-animation__stage">
-          <g class="loading-animation__corner loading-animation__corner--bl">
-            <rect x="0" y="33" width="10" height="64" fill="#ffffff" />
-            <rect x="0" y="90" width="87" height="10" fill="#ffffff" />
+          <g class="loading-animation__corner loading-animation__corner--bl" transform="translate(39 185)">
+            <rect x="-39" y="-112" width="39" height="112" fill="#ffffff" />
+            <rect x="-39" y="0" width="119" height="10" fill="#ffffff" />
           </g>
-          <g class="loading-animation__corner loading-animation__corner--tr">
-            <rect x="14" y="0" width="86" height="10" fill="#ffffff" />
-            <rect x="90" y="0" width="10" height="67" fill="#ffffff" />
+          <g class="loading-animation__corner loading-animation__corner--tr" transform="translate(161 24)">
+            <rect x="-111" y="-10" width="111" height="10" fill="#ffffff" />
+            <rect x="0" y="0" width="10" height="113" fill="#ffffff" />
           </g>
         </g>
       </svg>
