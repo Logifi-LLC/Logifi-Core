@@ -8,7 +8,7 @@
     isDarkMode ? 'bg-gray-950' : 'bg-gray-50'
   ]"
 >
-  <LogifiBootLoader v-if="showLogbookBootLoader" />
+  <LoadingAnimation v-if="showLogbookBootLoader" label="Loading logbook" />
 
   <!-- Auth Modal -->
   <AuthModal
@@ -6865,7 +6865,7 @@ import {
   isLogbookHydratedForUi,
   shouldShowCurrencyChips,
 } from '../utils/dashboardHydration'
-import LogifiBootLoader from '../components/LogifiBootLoader.vue'
+import LoadingAnimation from '../components/LoadingAnimation.vue'
 import {
   CATEGORY_CLASS_TIME_HELP,
   shouldShowAnyEntryFormField,

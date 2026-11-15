@@ -1,0 +1,57 @@
+.loading-animation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-animation--fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 99990;
+  background: #030712;
+}
+
+.loading-animation--inline {
+  position: relative;
+  padding: 1rem;
+}
+
+.loading-animation__mark {
+  border-radius: 16px;
+  object-fit: cover;
+  animation: loading-animation-mark-pulse 2.4s ease-in-out infinite;
+}
+
+.loading-animation__mark--sm {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+}
+
+.loading-animation__mark--md {
+  width: 72px;
+  height: 72px;
+}
+
+.loading-animation__mark--lg {
+  width: 96px;
+  height: 96px;
+  border-radius: 20px;
+}
+
+@keyframes loading-animation-mark-pulse {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-animation__mark {
+    animation: none;
+    opacity: 1;
+  }
+}
