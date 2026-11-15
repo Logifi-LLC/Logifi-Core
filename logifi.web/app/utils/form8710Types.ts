@@ -156,24 +156,41 @@ export function mapCategoryTo8710(categoryClass: string): AircraftCategory8710 |
   return null
 }
 
+const SIMULATOR_DEVICE_TOKENS = [
+  'SIMULATOR', 'SIM', 'FFS', 'FTD', 'ATD', 'FRASCA', 'REDBIRD',
+  'GAT', 'ELITE', 'PRECISION', 'ALSIM', 'TRUFLIGHT',
+] as const
+
+const SIMULATOR_DEVICE_TOKEN_RE = new RegExp(
+  `\\b(?:${SIMULATOR_DEVICE_TOKENS.join('|')})\\b`
+)
+
+export interface TrainingDeviceMatchOptions {
+  /**
+   * Scan trainingElements for device tokens. Off by default — that field is
+   * lesson text or the other crew name (e.g. "XC navigation" contains "GAT").
+   */
+  includeTrainingElements?: boolean
+}
+
+function haystackHasSimulatorToken(text: string): boolean {
+  return SIMULATOR_DEVICE_TOKEN_RE.test((text || '').toUpperCase())
+}
+
 // Helper to check if an entry represents a training device
-export function isTrainingDevice(entry: {
-  aircraftMakeModel: string
-  trainingElements?: string
-  aircraftCategoryClass: string
-}): boolean {
-  const makeModel = entry.aircraftMakeModel.toUpperCase()
-  const training = entry.trainingElements?.toUpperCase() || ''
-  const category = entry.aircraftCategoryClass.toUpperCase()
-  
-  // Check for common simulator/device patterns
-  const simulatorPatterns = [
-    'SIMULATOR', 'SIM', 'FFS', 'FTD', 'ATD', 'FRASCA', 'REDBIRD',
-    'GAT', 'ELITE', 'PRECISION', 'ALSIM', 'TRUFLIGHT'
-  ]
-  
-  return simulatorPatterns.some(pattern => 
-    makeModel.includes(pattern) || training.includes(pattern) || category.includes(pattern)
-  )
+export function isTrainingDevice(
+  entry: {
+    aircraftMakeModel: string
+    trainingElements?: string
+    aircraftCategoryClass: string
+  },
+  options?: TrainingDeviceMatchOptions
+): boolean {
+  if (haystackHasSimulatorToken(entry.aircraftMakeModel)) return true
+  if (haystackHasSimulatorToken(entry.aircraftCategoryClass)) return true
+  if (options?.includeTrainingElements) {
+    return haystackHasSimulatorToken(entry.trainingElements || '')
+  }
+  return false
 }
 
