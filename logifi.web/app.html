@@ -12,6 +12,16 @@
 
       /* Mirrors app/assets/css/loading-animation.css (propeller boot only) */
       .loading-animation {
+        --loading-center-x: 93px;
+        --loading-center-y: 105px;
+        --loading-merge-bl-x: 54px;
+        --loading-merge-bl-y: -85px;
+        --loading-merge-tr-x: -68px;
+        --loading-merge-tr-y: 86px;
+        --loading-origin-bl-x: 39px;
+        --loading-origin-bl-y: 112px;
+        --loading-origin-tr-x: 111px;
+        --loading-origin-tr-y: 10px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -25,23 +35,28 @@
       .loading-animation__mark {
         display: block;
         flex-shrink: 0;
+        overflow: visible;
       }
       .loading-animation__mark--md {
         width: 72px;
         height: auto;
       }
       .loading-animation__stage {
-        transform-origin: 93px 105px;
+        transform-box: view-box;
+        transform-origin: var(--loading-center-x) var(--loading-center-y);
       }
-      .loading-animation__corner--bl,
-      .loading-animation__corner--tr {
-        transform-origin: 0 0;
+      .loading-animation__motion--bl {
         transform-box: fill-box;
+        transform-origin: var(--loading-origin-bl-x) var(--loading-origin-bl-y);
       }
-      .loading-animation--variant-propeller.loading-animation--motion .loading-animation__corner--bl {
+      .loading-animation__motion--tr {
+        transform-box: fill-box;
+        transform-origin: var(--loading-origin-tr-x) var(--loading-origin-tr-y);
+      }
+      .loading-animation--variant-propeller.loading-animation--motion .loading-animation__motion--bl {
         animation: loading-animation-corner-bl 2.8s ease-in-out infinite;
       }
-      .loading-animation--variant-propeller.loading-animation--motion .loading-animation__corner--tr {
+      .loading-animation--variant-propeller.loading-animation--motion .loading-animation__motion--tr {
         animation: loading-animation-corner-tr 2.8s ease-in-out infinite;
       }
       .loading-animation--variant-propeller.loading-animation--motion .loading-animation__stage {
@@ -54,12 +69,10 @@
         100% {
           transform: translate(0, 0);
         }
-        30% {
-          transform: translate(54px, -80px);
-        }
+        30%,
         40%,
         75% {
-          transform: translate(54px, -80px);
+          transform: translate(var(--loading-merge-bl-x), var(--loading-merge-bl-y));
         }
         88% {
           transform: translate(0, 0);
@@ -72,12 +85,10 @@
         100% {
           transform: translate(0, 0);
         }
-        30% {
-          transform: translate(-68px, 81px);
-        }
+        30%,
         40%,
         75% {
-          transform: translate(-68px, 81px);
+          transform: translate(var(--loading-merge-tr-x), var(--loading-merge-tr-y));
         }
         88% {
           transform: translate(0, 0);
@@ -96,8 +107,8 @@
         }
       }
       @media (prefers-reduced-motion: reduce) {
-        .loading-animation--motion .loading-animation__corner--bl,
-        .loading-animation--motion .loading-animation__corner--tr,
+        .loading-animation--motion .loading-animation__motion--bl,
+        .loading-animation--motion .loading-animation__motion--tr,
         .loading-animation--motion .loading-animation__stage {
           animation: none;
         }
@@ -117,18 +128,23 @@
         width="72"
         height="81"
         viewBox="0 0 186 210"
+        overflow="visible"
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden="true"
         focusable="false"
       >
         <g class="loading-animation__stage">
-          <g class="loading-animation__corner loading-animation__corner--bl" transform="translate(39 185)">
-            <rect x="-39" y="-112" width="39" height="112" fill="#ffffff" />
-            <rect x="-39" y="0" width="119" height="10" fill="#ffffff" />
+          <g class="loading-animation__pivot" transform="translate(39 185)">
+            <g class="loading-animation__motion loading-animation__motion--bl">
+              <rect x="-39" y="-112" width="39" height="122" fill="#ffffff" />
+              <rect x="-39" y="0" width="119" height="10" fill="#ffffff" />
+            </g>
           </g>
-          <g class="loading-animation__corner loading-animation__corner--tr" transform="translate(161 24)">
-            <rect x="-111" y="-10" width="111" height="10" fill="#ffffff" />
-            <rect x="0" y="0" width="10" height="113" fill="#ffffff" />
+          <g class="loading-animation__pivot" transform="translate(161 24)">
+            <g class="loading-animation__motion loading-animation__motion--tr">
+              <rect x="-111" y="-10" width="121" height="10" fill="#ffffff" />
+              <rect x="0" y="0" width="10" height="113" fill="#ffffff" />
+            </g>
           </g>
         </g>
       </svg>

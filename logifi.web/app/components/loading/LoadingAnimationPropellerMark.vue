@@ -4,38 +4,43 @@
     :width="pixelSize"
     :height="svgHeight"
     :viewBox="`0 0 ${vb.width} ${vb.height}`"
+    overflow="visible"
     xmlns="http://www.w3.org/2000/svg"
     aria-hidden="true"
     focusable="false"
   >
     <g class="loading-animation__stage">
       <g
-        class="loading-animation__corner loading-animation__corner--bl"
+        class="loading-animation__pivot"
         :transform="`translate(${pivotBl.x} ${pivotBl.y})`"
       >
-        <rect
-          v-for="(r, i) in blRects"
-          :key="`bl-${i}`"
-          :x="r.x"
-          :y="r.y"
-          :width="r.w"
-          :height="r.h"
-          fill="#ffffff"
-        />
+        <g class="loading-animation__motion loading-animation__motion--bl loading-animation__corner loading-animation__corner--bl">
+          <rect
+            v-for="(r, i) in blRects"
+            :key="`bl-${i}`"
+            :x="r.x"
+            :y="r.y"
+            :width="r.w"
+            :height="r.h"
+            fill="#ffffff"
+          />
+        </g>
       </g>
       <g
-        class="loading-animation__corner loading-animation__corner--tr"
+        class="loading-animation__pivot"
         :transform="`translate(${pivotTr.x} ${pivotTr.y})`"
       >
-        <rect
-          v-for="(r, i) in trRects"
-          :key="`tr-${i}`"
-          :x="r.x"
-          :y="r.y"
-          :width="r.w"
-          :height="r.h"
-          fill="#ffffff"
-        />
+        <g class="loading-animation__motion loading-animation__motion--tr loading-animation__corner loading-animation__corner--tr">
+          <rect
+            v-for="(r, i) in trRects"
+            :key="`tr-${i}`"
+            :x="r.x"
+            :y="r.y"
+            :width="r.w"
+            :height="r.h"
+            fill="#ffffff"
+          />
+        </g>
       </g>
     </g>
   </svg>
