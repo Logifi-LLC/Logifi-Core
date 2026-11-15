@@ -173,7 +173,7 @@
   <!-- iOS sync status banner -->
   <div
     v-if="isIos && iosSyncBannerVisible"
-    class="fixed left-0 right-0 z-[55] px-4 pointer-events-auto"
+    class="fixed left-0 right-0 z-30 px-4 pointer-events-auto"
     :style="{ top: 'calc(env(safe-area-inset-top, 0px) + 3.25rem)' }"
   >
     <div
@@ -222,22 +222,27 @@
       <header>
       <div
         :class="[
-          'left-0 right-0 z-50 transition-colors duration-300',
+          'left-0 right-0 z-30 overflow-visible transition-[background-color,border-color,backdrop-filter] duration-300',
           isIos
-            ? 'sticky inset-x-0 top-0 border-b backdrop-blur-sm pt-[env(safe-area-inset-top)]'
+            ? 'sticky inset-x-0 top-0 pt-[env(safe-area-inset-top)]'
             : 'fixed top-0',
-          isDarkMode
-            ? 'border-gray-700/50 bg-gray-950'
-            : 'border-gray-200 bg-gray-50'
+          dashboardHeaderScrolled
+            ? [
+                'border-b backdrop-blur-lg',
+                isDarkMode
+                  ? 'border-white/10 bg-gray-950/20'
+                  : 'border-gray-200/60 bg-gray-50/20',
+              ]
+            : 'border-b border-transparent bg-transparent',
         ]"
       >
         <div
           :class="[
-            'mr-auto px-6 sm:px-8 flex items-center justify-between relative',
-            isIos ? 'py-2' : 'py-4'
+            'mr-auto px-6 sm:px-8 flex items-center justify-between relative overflow-visible',
+            isIos ? 'py-2' : 'h-20 py-0',
           ]"
         >
-        <div class="flex items-center gap-2 min-w-0">
+        <div class="flex items-center gap-2 min-w-0 shrink-0 overflow-visible">
           <button
             v-if="isIos"
             type="button"
@@ -258,14 +263,13 @@
               {{ activeCatalogFilterCount > 9 ? '9+' : activeCatalogFilterCount }}
             </span>
           </button>
-        <a v-if="!isIos" class="left" href="/dashboard">
+        <a v-if="!isIos" class="left flex items-center shrink-0" href="/dashboard">
             <img
               src="/images/logifi-logo.png"
               alt="logifi"
               :class="[
-                'w-auto transition-all duration-300',
-                'h-20 sm:h-24 lg:h-28',
-                isDarkMode ? '' : 'brightness-[0.2]'
+                'h-32 w-auto transition-all duration-300',
+                isDarkMode ? '' : 'brightness-[0.2]',
               ]"
             />
           </a>
@@ -318,7 +322,7 @@
         'min-h-screen flex flex-col px-4 sm:px-6 lg:px-8 transition-colors duration-300 overflow-x-hidden',
         isIos
           ? 'pt-4 pb-[calc(5rem+env(safe-area-inset-bottom))]'
-          : 'pt-40 pb-20',
+          : 'pt-20 pb-20',
         isDarkMode ? '' : ''
       ]"
     >
@@ -8690,11 +8694,15 @@ function toggleCommercialMode(): void {
 const rootScrollContainerRef = ref<HTMLElement | null>(null)
 const fcvFetchSectionRef = ref<HTMLElement | null>(null)
 const showScrollToTop = ref(false)
+const DASHBOARD_HEADER_SCROLL_THRESHOLD = 8
+const dashboardHeaderScrolled = ref(false)
 const handleScroll = (): void => {
   if (!isBrowser) return
   const containerTop = rootScrollContainerRef.value?.scrollTop ?? 0
   const windowTop = window.scrollY || document.documentElement.scrollTop || 0
-  showScrollToTop.value = Math.max(containerTop, windowTop) > 300
+  const scrollTop = Math.max(containerTop, windowTop)
+  dashboardHeaderScrolled.value = scrollTop > DASHBOARD_HEADER_SCROLL_THRESHOLD
+  showScrollToTop.value = scrollTop > 300
 }
 const scrollToTop = (): void => {
   if (!isBrowser) return
