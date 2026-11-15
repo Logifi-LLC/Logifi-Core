@@ -209,7 +209,7 @@
       </div>
       <div class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
         <p :class="[helper, 'text-xs']">
-          Accepts the Logifi .zip or .json backup. Entries that match an existing date and registration are skipped.
+          Accepts your Logifi .zip or .json backup. Entries already in your logbook are skipped.
         </p>
       </div>
       <div
