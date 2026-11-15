@@ -196,6 +196,22 @@
         :show-chevron="false"
         @click="entryCount > 0 && !fullBackupBusy && $emit('download-full-backup')"
       />
+      <div :class="importBusy ? 'opacity-50 pointer-events-none' : ''">
+        <SettingsListRow
+          label="Restore from backup"
+          subtitle="Logifi .json or .zip"
+          icon="ri:history-line"
+          :is-dark-mode="isDarkMode"
+          :show-chevron="false"
+          data-testid="restore-from-backup"
+          @click="!importBusy && $emit('restore-backup')"
+        />
+      </div>
+      <div class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
+        <p :class="[helper, 'text-xs']">
+          Accepts your Logifi .zip or .json backup. Entries already in your logbook are skipped.
+        </p>
+      </div>
       <div
         v-if="fullBackupBusy || fullBackupError || fullBackupProgress"
         class="border-t px-4 py-3 space-y-2"
@@ -290,6 +306,7 @@ const props = defineProps<{
   fullBackupBusy?: boolean
   fullBackupProgress?: string | null
   fullBackupError?: string | null
+  importBusy?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -305,6 +322,7 @@ const emit = defineEmits<{
   'export-logbook': []
   'download-json-backup': []
   'download-full-backup': []
+  'restore-backup': []
   'generate-8710': []
   'download-logbook-pdf': []
   'import-fcv': []

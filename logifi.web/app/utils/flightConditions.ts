@@ -54,7 +54,7 @@ export function sanitizeFlightConditions(conditions: string[]): string[] {
   return [...new Set(canonical)]
 }
 
-function autoCheckFlightConditions(
+export function autoCheckFlightConditions(
   conditions: string[],
   nightTime: number | null,
   actualInstrumentTime: number | null,

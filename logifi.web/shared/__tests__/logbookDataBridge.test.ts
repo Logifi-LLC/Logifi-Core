@@ -7,6 +7,7 @@ import {
   formatExportDate,
   formatRegistrationForExport,
   parseImportDate,
+  parseImportBoolean,
   parseImportDuration,
 } from '../logbookDataBridge/formatters'
 import {
@@ -198,6 +199,21 @@ describe('parseImportDuration', () => {
     expect(parseImportDuration(null)).toBeNull()
     expect(parseImportDuration('1,5')).toBe(1.5)
     expect(parseImportDuration('0,8')).toBe(0.8)
+  })
+})
+
+describe('parseImportBoolean', () => {
+  it('parses Yes/No and does not treat No as true', () => {
+    expect(parseImportBoolean('Yes')).toBe(true)
+    expect(parseImportBoolean('No')).toBe(false)
+    expect(parseImportBoolean('true')).toBe(true)
+    expect(parseImportBoolean('false')).toBe(false)
+    expect(parseImportBoolean('local')).toBe(false)
+    expect(parseImportBoolean('zulu')).toBe(true)
+    expect(parseImportBoolean('')).toBeNull()
+    expect(parseImportBoolean(undefined)).toBeNull()
+    expect(parseImportBoolean(true)).toBe(true)
+    expect(parseImportBoolean(false)).toBe(false)
   })
 })
 
@@ -886,8 +902,8 @@ describe('logbookDataBridge export', () => {
     expect(logifi['Total Flight Time']).toBe('0.8')
     expect(logifi['Ground Simulator']).toBe('1.3')
     expect(logifi.FTD).toBe('1.3')
-    expect(logifi.FFS).toBe('0.0')
-    expect(logifi.ATD).toBe('0.0')
+    expect(logifi.FFS).toBe('')
+    expect(logifi.ATD).toBe('')
     expect(logifi['Actual Instrument']).toBe('0.5')
     expect(logifi['Simulated Instrument']).toBe('0.3')
     expect(logifi['Dual Received']).toBe('0.4')
@@ -1486,5 +1502,128 @@ describe('import integrity regressions', () => {
     }, 'Pat McDonald')
     expect(entry?.trainingElements).toBe('Sam DeLuca')
     expect(entry?.trainingInstructor).toBe('First Officer')
+  })
+})
+
+describe('Logifi-native CSV category class time and integrity fields', () => {
+  const nativeBaseRow = {
+    Date: '2025-03-06',
+    Role: 'PIC',
+    Registration: 'N4411F',
+    Departure: 'KSEA',
+    Destination: 'KPDX',
+    'Aircraft Make/Model': 'E170',
+    'Aircraft Category/Class': 'AMEL',
+    PIC: '2.0',
+    'Total Flight Time': '2.0',
+  }
+
+  it('appends Category Class Time without reordering existing headers', () => {
+    expect(LOGIFI_NATIVE_HEADERS[LOGIFI_NATIVE_HEADERS.length - 1]).toBe(
+      'Category Class Time'
+    )
+    expect(LOGIFI_NATIVE_HEADERS).toContain('Signature Pending')
+    expect(
+      LOGIFI_NATIVE_HEADERS.indexOf('Signature Pending')
+    ).toBeLessThan(LOGIFI_NATIVE_HEADERS.indexOf('Category Class Time'))
+    const original = createTestEntry({
+      categoryClassTime: 1.9,
+      flightTime: {
+        ...createTestEntry().flightTime,
+        total: 2.0,
+        pic: 2.0,
+      },
+    })
+    const row = mapEntryToLogifiNativeRow(original)
+    expect(row).toHaveLength(LOGIFI_NATIVE_HEADERS.length)
+    const obj = buildHeaderRowObject(LOGIFI_NATIVE_HEADERS, row)
+    expect(obj['Category Class Time']).toBe('1.9')
+    expect(obj['Total Flight Time']).toBe('2.0')
+  })
+
+  it('maps Category Class Time on native import and does not copy Total', () => {
+    const entry = mapRawRowToLogEntry(
+      { ...nativeBaseRow, 'Category Class Time': '1.9' },
+      { source: 'logifi-native' }
+    )
+    expect(entry?.categoryClassTime).toBe(1.9)
+    expect(entry?.flightTime.total).toBe(2.0)
+  })
+
+  it('keeps a blank Category Class Time blank on native import', () => {
+    const entry = mapRawRowToLogEntry(
+      { ...nativeBaseRow, 'Category Class Time': '' },
+      { source: 'logifi-native' }
+    )
+    expect(entry?.categoryClassTime).toBeNull()
+    expect(entry?.flightTime.total).toBe(2.0)
+  })
+
+  it('falls back to Total when older native CSV omits Category Class Time', () => {
+    const entry = mapRawRowToLogEntry(nativeBaseRow, { source: 'logifi-native' })
+    expect(entry?.categoryClassTime).toBe(2.0)
+    expect(entry?.flightTime.total).toBe(2.0)
+  })
+
+  it('restores native integrity and import columns and preserves Is Imported', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        ...nativeBaseRow,
+        'Category Class Time': '1.9',
+        'Is Imported': 'No',
+        'Import Source': 'logten',
+        'Import Batch ID': 'batch-fiction-001',
+        'Original Entry Date': '2025-03-06T12:00:00.000Z',
+        Version: '3',
+        'Data Hash': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        'Created At': '2025-03-06T12:00:00.000Z',
+        'Updated At': '2025-03-07T08:30:00.000Z',
+        'Import Metadata': '{"fileName":"fiction-logten.csv"}',
+      },
+      { source: 'logifi-native' }
+    )
+    expect(entry?.isImported).toBe(false)
+    expect(entry?.importSource).toBe('logten')
+    expect(entry?.importBatchId).toBe('batch-fiction-001')
+    expect(entry?.originalEntryDate).toBe('2025-03-06T12:00:00.000Z')
+    expect(entry?.version).toBe(3)
+    expect(entry?.dataHash).toBe(
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    )
+    expect(entry?.createdAt).toBe('2025-03-06T12:00:00.000Z')
+    expect(entry?.updatedAt).toBe('2025-03-07T08:30:00.000Z')
+    expect(entry?.importMetadata).toEqual({ fileName: 'fiction-logten.csv' })
+  })
+
+  it('does not restore an invalid dataHash or version', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        ...nativeBaseRow,
+        Version: 'not-a-number',
+        'Data Hash': 'not-a-sha256',
+      },
+      { source: 'logifi-native' }
+    )
+    expect(entry?.version).toBeUndefined()
+    expect(entry?.dataHash).toBeUndefined()
+  })
+
+  it('does not apply native CSV metadata when the source is not logifi-native', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        ...nativeBaseRow,
+        'Category Class Time': '1.9',
+        'Is Imported': 'No',
+        'Import Source': 'logten',
+        Version: '3',
+        'Created At': '2025-03-06T12:00:00.000Z',
+      },
+      { source: 'generic' }
+    )
+    expect(entry?.isImported).toBe(true)
+    expect(entry?.importSource).toBe('generic')
+    expect(entry?.categoryClassTime).toBe(2.0)
+    expect(entry?.version).toBeUndefined()
+    expect(entry?.createdAt).toBeUndefined()
   })
 })
