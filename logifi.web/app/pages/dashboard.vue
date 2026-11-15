@@ -6892,6 +6892,15 @@ import {
 import { useLocationLookup } from '../composables/useLocationLookup'
 import { calculateNightTime } from '../utils/nightTimeCalculator'
 import { nightAutoCalcInputKey, shouldApplyAutoNightTime } from '../../shared/nightAutoCalcPolicy'
+import {
+  applyOooiDerivedFlightTimes,
+  oooiClockInputKey,
+  shouldApplyOooiDerivedTimes,
+} from '../../shared/oooiDerivedTimePolicy'
+import {
+  copyPerformanceCounts,
+  normalizePerformanceForDisplay,
+} from '../utils/logEntryPerformance'
 import { ensureAirportClientDbLoaded } from '../../shared/airportClientDb'
 import { getAirportIanaTimezone, normalizeTimezoneToIANA } from '../../shared/airportTimezone'
 import {
@@ -8694,6 +8703,9 @@ const setXcTimeManuallySet = (value: boolean) => {
 }
 /** Snapshot of OOOI/date/airports when inline edit opens — auto-night must not overwrite on open. */
 const inlineNightAutoCalcBaseline = ref<string | null>(null)
+/** Snapshot of Out/Off/On/In when a form opens — derived total/pic/sic must not overwrite on hydrate. */
+const inlineOooiDerivedTimeBaseline = ref<string | null>(null)
+const addOooiDerivedTimeBaseline = ref<string | null>(null)
 const searchTerm = ref('')
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const debouncedSearchTerm = ref('')
@@ -8737,6 +8749,7 @@ function toggleCommercialMode(): void {
     newEntry.oooi = createEmptyOOOI()
   }
   isCommercialMode.value = next
+  captureAddOooiDerivedTimeBaseline()
 }
 
 // Sticky header refs
@@ -9008,6 +9021,53 @@ function instructorDisplayName(row: { profile: { full_name: string | null } | nu
   return row.profile?.full_name?.trim() || 'Instructor'
 }
 
+function oooiClockSnapshot(oooi: OOOITimes | null | undefined): string {
+  return oooiClockInputKey({
+    out: oooi?.out,
+    off: oooi?.off,
+    on: oooi?.on,
+    in: oooi?.in,
+  })
+}
+
+function captureInlineOooiDerivedTimeBaseline(oooi: OOOITimes | null | undefined): void {
+  inlineOooiDerivedTimeBaseline.value = oooiClockSnapshot(oooi)
+}
+
+function captureAddOooiDerivedTimeBaseline(): void {
+  addOooiDerivedTimeBaseline.value = oooiClockSnapshot(newEntry.oooi)
+}
+
+function clocksFromOooiWatchTuple(
+  tuple: readonly unknown[] | undefined
+): { out: string | null; off: string | null; on: string | null; in: string | null } | null {
+  if (!tuple) return null
+  const asClock = (value: unknown): string | null =>
+    value == null || value === '' ? null : String(value)
+  return {
+    out: asClock(tuple[0]),
+    off: asClock(tuple[1]),
+    on: asClock(tuple[2]),
+    in: asClock(tuple[3]),
+  }
+}
+
+function shouldAutofillOooiDerivedTimes(
+  baseline: string | null,
+  currentTuple: readonly unknown[],
+  previousTuple: readonly unknown[] | undefined
+): boolean {
+  const current = clocksFromOooiWatchTuple(currentTuple)
+  if (!current) return false
+  const previous = clocksFromOooiWatchTuple(previousTuple)
+  return shouldApplyOooiDerivedTimes({
+    inputsUnchangedFromOpen:
+      baseline != null && oooiClockInputKey(current) === baseline,
+    oooiClocksUnchangedFromPrevious:
+      previous != null && oooiClockInputKey(previous) === oooiClockInputKey(current),
+  })
+}
+
 function closeInlineEditDrawer(): void {
   closeAuditTrailSidebar()
   closeSignEntryModal()
@@ -9016,6 +9076,7 @@ function closeInlineEditDrawer(): void {
   inlineEditEntry.value = null
   isInlineCommercialMode.value = false
   inlineNightAutoCalcBaseline.value = null
+  inlineOooiDerivedTimeBaseline.value = null
   showInlineCustomTagInput.value = false
   customTagInputInline.value = ''
 }
@@ -9183,6 +9244,7 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
     }
     if (!Array.isArray(copy.tags)) copy.tags = []
     clearEntryFormFieldUi()
+    captureInlineOooiDerivedTimeBaseline(copy.oooi)
     inlineEditEntry.value = copy
     // Auto-enable commercial mode only when existing OOOI time fields are present
     const hasOOOITimes =
@@ -9253,6 +9315,7 @@ function beginAmendSignedEntry(): void {
 
   logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, copy])
   expandedEntryId.value = newId
+  captureInlineOooiDerivedTimeBaseline(copy.oooi)
   inlineEditEntry.value = copy
 
   const hasOOOITimes =
@@ -9364,6 +9427,7 @@ async function beginVoidSignedEntry(): Promise<void> {
   // Optimistic UI — roll back if saveInlineEdit does not persist
   logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, voidEntry])
   expandedEntryId.value = newId
+  captureInlineOooiDerivedTimeBaseline(voidEntry.oooi)
   inlineEditEntry.value = voidEntry
   isInlineCommercialMode.value = false
 
@@ -9390,6 +9454,7 @@ async function beginVoidSignedEntry(): Promise<void> {
     // ignore — may never have been written
   }
   expandedEntryId.value = originalId
+  captureInlineOooiDerivedTimeBaseline(originalSnapshot.oooi)
   inlineEditEntry.value = originalSnapshot
   isInlineCommercialMode.value = priorCommercialMode
   showToast('Could not void entry — changes were not saved', { type: 'error', duration: 6000 })
@@ -9409,6 +9474,7 @@ function toggleInlineOOOIMode(): void {
     inlineEditEntry.value.oooi = createEmptyOOOI()
   }
   isInlineCommercialMode.value = next
+  captureInlineOooiDerivedTimeBaseline(inlineEditEntry.value.oooi)
 }
 
 async function saveInlineEdit(): Promise<boolean> {
@@ -9474,9 +9540,7 @@ async function saveInlineEdit(): Promise<boolean> {
     }, {} as FlightTimeBreakdown),
     performance: (() => {
       const base = { ...createEmptyPerformance() }
-      performanceFields.forEach((field) => {
-        (base as any)[field.key] = inlineEditEntry.value!.performance[field.key] ?? null
-      })
+      copyPerformanceCounts(inlineEditEntry.value!.performance, base)
       const formApproaches = inlineEditEntry.value!.performance.approaches
       const approaches = Array.isArray(formApproaches) && formApproaches.length > 0
         ? formApproaches.map((a) => ({ type: (a.type || '').trim() || 'Unknown', count: Math.max(0, a.count || 1) }))
@@ -9637,6 +9701,7 @@ async function saveInlineEdit(): Promise<boolean> {
                 const savedEntry = mapSupabaseRowToLogEntry(existingAmend)
                 await adoptEntryIntoLocalState(savedEntry, targetId)
                 expandedEntryId.value = savedEntry.id
+                captureInlineOooiDerivedTimeBaseline(savedEntry.oooi)
                 inlineEditEntry.value = savedEntry
                 afterInlineSaveSuccess(savedEntry)
                 return true
@@ -10321,6 +10386,7 @@ function prepareInlineEditFromEntry(savedEntry: LogEntry): void {
     copy.performance.approaches = getApproachesFromPerformance(copy.performance)
   }
   if (!Array.isArray(copy.tags)) copy.tags = []
+  captureInlineOooiDerivedTimeBaseline(copy.oooi)
   inlineEditEntry.value = copy
   const hasOOOITimes =
     !!copy.oooi &&
@@ -13798,6 +13864,7 @@ function resetForm(): void {
   // Reset manual XC time tracking when form is reset
   xcTimeManuallySet.value = false
   lastKnownXcTime.value = null
+  captureAddOooiDerivedTimeBaseline()
 }
 
 function ensureDefaultSignInstructor(): void {
@@ -13821,6 +13888,7 @@ function openNewEntryForm(draft?: EditableLogEntry): void {
   expandedEntryId.value = null
   inlineEditEntry.value = null
   isInlineCommercialMode.value = false
+  inlineOooiDerivedTimeBaseline.value = null
   successMessage.value = null
   editingEntryId.value = null
   isCommercialMode.value = false
@@ -13828,6 +13896,7 @@ function openNewEntryForm(draft?: EditableLogEntry): void {
   Object.assign(newEntry, createBlankEntry(), draft ?? {})
   showSimSection.value = (draft?.logbookType ?? activeLogbook.value) === 'simulator'
   isEntryFormOpen.value = true
+  captureAddOooiDerivedTimeBaseline()
   ensureDefaultSignInstructor()
 }
 
@@ -14003,10 +14072,12 @@ function toggleInlineOooiClock(): void {
     in: entry.oooi.in,
     isZulu: entry.oooi.isZulu,
   })
+  captureInlineOooiDerivedTimeBaseline(entry.oooi)
 }
 
 function toggleNewEntryOooiClock(): void {
   applyOooiClockToggle(newEntry)
+  captureAddOooiDerivedTimeBaseline()
 }
 
 /**
@@ -15103,6 +15174,7 @@ async function beginEditing(entry: LogEntry): Promise<void> {
     newEntry.oooi = createEmptyOOOI()
     isCommercialMode.value = false
   }
+  captureAddOooiDerivedTimeBaseline()
   validationError.value = null
   successMessage.value = null
   isEntryFormOpen.value = false
@@ -15400,9 +15472,10 @@ async function calculateDuration(
 }
 
 // Watcher to auto-calculate total time and flight time
-watch(() => [newEntry.oooi?.out, newEntry.oooi?.off, newEntry.oooi?.on, newEntry.oooi?.in, newEntry.role, newEntry.departure, newEntry.destination, newEntry.date], async () => {
+watch(() => [newEntry.oooi?.out, newEntry.oooi?.off, newEntry.oooi?.on, newEntry.oooi?.in, newEntry.role, newEntry.departure, newEntry.destination, newEntry.date], async (curr, prev) => {
   if (!isCommercialMode.value || !newEntry.oooi) return
-  
+  if (!shouldAutofillOooiDerivedTimes(addOooiDerivedTimeBaseline.value, curr, prev)) return
+
   if (newEntry.oooi.out && newEntry.oooi.in) {
      // Get timezones for departure and destination airports
      const startTimezone = newEntry.oooi.off && newEntry.departure
@@ -15437,21 +15510,10 @@ watch(() => [newEntry.oooi?.out, newEntry.oooi?.off, newEntry.oooi?.on, newEntry
      
      console.log('[FlightTime] Calculated block time:', block)
      if (block !== null) {
-       newEntry.flightTime.total = block
-       
-       // Auto-distribute based on Role
-       if (newEntry.role === 'PIC') {
-         newEntry.flightTime.pic = block
-         newEntry.flightTime.sic = null
-       } else if (newEntry.role === 'SIC') {
-         newEntry.flightTime.sic = block
-         newEntry.flightTime.pic = null
-       } else if (newEntry.role === 'Dual Received') {
-          newEntry.flightTime.dual = block
-       } else if (newEntry.role === 'Solo') {
-          newEntry.flightTime.solo = block
-          newEntry.flightTime.pic = block // Solo is also PIC usually
-       }
+       if (!shouldAutofillOooiDerivedTimes(addOooiDerivedTimeBaseline.value, [
+         newEntry.oooi.out, newEntry.oooi.off, newEntry.oooi.on, newEntry.oooi.in,
+       ], prev)) return
+       applyOooiDerivedFlightTimes(newEntry.flightTime, newEntry.role, block)
      }
   } else if (newEntry.oooi.off && newEntry.oooi.on) {
      // Calculate from OFF to ON (air time)
@@ -15471,21 +15533,10 @@ watch(() => [newEntry.oooi?.out, newEntry.oooi?.off, newEntry.oooi?.on, newEntry
        newEntry.oooi.isZulu
      )
      if (block !== null) {
-       newEntry.flightTime.total = block
-       
-       // Auto-distribute based on Role
-       if (newEntry.role === 'PIC') {
-         newEntry.flightTime.pic = block
-         newEntry.flightTime.sic = null
-       } else if (newEntry.role === 'SIC') {
-         newEntry.flightTime.sic = block
-         newEntry.flightTime.pic = null
-       } else if (newEntry.role === 'Dual Received') {
-          newEntry.flightTime.dual = block
-       } else if (newEntry.role === 'Solo') {
-          newEntry.flightTime.solo = block
-          newEntry.flightTime.pic = block // Solo is also PIC usually
-       }
+       if (!shouldAutofillOooiDerivedTimes(addOooiDerivedTimeBaseline.value, [
+         newEntry.oooi.out, newEntry.oooi.off, newEntry.oooi.on, newEntry.oooi.in,
+       ], prev)) return
+       applyOooiDerivedFlightTimes(newEntry.flightTime, newEntry.role, block)
      }
   }
   
@@ -15565,9 +15616,10 @@ watch(() => [newEntry.departure, newEntry.destination, newEntry.route, newEntry.
   }, 500)
 })
 
-watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.off, inlineEditEntry.value?.oooi?.on, inlineEditEntry.value?.oooi?.in, inlineEditEntry.value?.role, inlineEditEntry.value?.departure, inlineEditEntry.value?.destination, inlineEditEntry.value?.date], async () => {
+watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.off, inlineEditEntry.value?.oooi?.on, inlineEditEntry.value?.oooi?.in, inlineEditEntry.value?.role, inlineEditEntry.value?.departure, inlineEditEntry.value?.destination, inlineEditEntry.value?.date], async (curr, prev) => {
   if (!isInlineCommercialMode.value || !inlineEditEntry.value?.oooi) return
-  
+  if (!shouldAutofillOooiDerivedTimes(inlineOooiDerivedTimeBaseline.value, curr, prev)) return
+
   if (inlineEditEntry.value.oooi.out && inlineEditEntry.value.oooi.in) {
      // Get timezones for departure and destination airports
      const startTimezone = inlineEditEntry.value.oooi.off && inlineEditEntry.value.departure
@@ -15601,23 +15653,12 @@ watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.off,
      )
      
      console.log('[FlightTime Inline] Calculated block time:', block)
-     if (block !== null) {
-       inlineEditEntry.value.flightTime.total = block
-       
-       // Auto-distribute based on Role
-       const role = inlineEditEntry.value.role
-       if (role === 'PIC') {
-         inlineEditEntry.value.flightTime.pic = block
-         inlineEditEntry.value.flightTime.sic = null
-       } else if (role === 'SIC') {
-         inlineEditEntry.value.flightTime.sic = block
-         inlineEditEntry.value.flightTime.pic = null
-       } else if (role === 'Dual Received') {
-          inlineEditEntry.value.flightTime.dual = block
-       } else if (role === 'Solo') {
-          inlineEditEntry.value.flightTime.solo = block
-          inlineEditEntry.value.flightTime.pic = block
-       }
+     if (block !== null && inlineEditEntry.value) {
+       const oooi = inlineEditEntry.value.oooi
+       if (!oooi || !shouldAutofillOooiDerivedTimes(inlineOooiDerivedTimeBaseline.value, [
+         oooi.out, oooi.off, oooi.on, oooi.in,
+       ], prev)) return
+       applyOooiDerivedFlightTimes(inlineEditEntry.value.flightTime, inlineEditEntry.value.role, block)
        syncCrossCountryWithCommercialOooiTotal(inlineEditEntry.value, block)
      }
   } else if (inlineEditEntry.value.oooi.off && inlineEditEntry.value.oooi.on) {
@@ -15637,23 +15678,12 @@ watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.off,
        endTimezone,
        inlineEditEntry.value.oooi.isZulu
      )
-     if (block !== null) {
-       inlineEditEntry.value.flightTime.total = block
-       
-       // Auto-distribute based on Role
-       const role = inlineEditEntry.value.role
-       if (role === 'PIC') {
-         inlineEditEntry.value.flightTime.pic = block
-         inlineEditEntry.value.flightTime.sic = null
-       } else if (role === 'SIC') {
-         inlineEditEntry.value.flightTime.sic = block
-         inlineEditEntry.value.flightTime.pic = null
-       } else if (role === 'Dual Received') {
-          inlineEditEntry.value.flightTime.dual = block
-       } else if (role === 'Solo') {
-          inlineEditEntry.value.flightTime.solo = block
-          inlineEditEntry.value.flightTime.pic = block
-       }
+     if (block !== null && inlineEditEntry.value) {
+       const oooi = inlineEditEntry.value.oooi
+       if (!oooi || !shouldAutofillOooiDerivedTimes(inlineOooiDerivedTimeBaseline.value, [
+         oooi.out, oooi.off, oooi.on, oooi.in,
+       ], prev)) return
+       applyOooiDerivedFlightTimes(inlineEditEntry.value.flightTime, inlineEditEntry.value.role, block)
        syncCrossCountryWithCommercialOooiTotal(inlineEditEntry.value, block)
      }
   }
@@ -16190,10 +16220,7 @@ async function submitEntry(): Promise<void> {
     }, {} as FlightTimeBreakdown),
     performance: (() => {
       const base = { ...createEmptyPerformance() }
-      performanceFields.forEach((field) => {
-        const v = newEntry.performance[field.key]
-        ;(base as any)[field.key] = v ?? null
-      })
+      copyPerformanceCounts(newEntry.performance, base)
       const approaches = (newEntry.performance.approaches && newEntry.performance.approaches.length > 0)
         ? newEntry.performance.approaches.map((a) => ({ type: (a.type || '').trim() || 'Unknown', count: Math.max(0, a.count || 1) }))
         : []
@@ -16622,6 +16649,7 @@ async function handleEntryRestored(entryId: string) {
   if (expandedEntryId.value === entryId) {
     const updatedEntry = logEntries.value.find(e => e.id === entryId)
     if (updatedEntry) {
+      captureInlineOooiDerivedTimeBaseline(updatedEntry.oooi)
       inlineEditEntry.value = { ...updatedEntry }
     }
   }
@@ -16634,22 +16662,7 @@ function normalizeLogEntryForDisplay(entry: LogEntry): LogEntry {
     normalizedFlightTime[field.key] = normalizeNumber(entry.flightTime?.[field.key])
   })
 
-  const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
-  performanceFields.forEach((field) => {
-    const rawValue = entry.performance?.[field.key]
-    const val =
-      typeof rawValue === 'string'
-        ? isNaN(parseFloat(rawValue))
-          ? null
-          : parseFloat(rawValue)
-        : normalizeNumber(rawValue)
-    ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
-  })
-  normalizedPerformance.approaches = Array.isArray(entry.performance?.approaches)
-    ? [...entry.performance.approaches]
-    : getApproachesFromPerformance(entry.performance)
-  normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
-  normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
+  const normalizedPerformance = normalizePerformanceForDisplay(entry.performance)
 
   return {
     ...entry,
@@ -17562,17 +17575,7 @@ function loadPersistedEntries(): void {
         })
         
         // Normalize performance values too
-        const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
-        performanceFields.forEach((field) => {
-          const rawValue = entry.performance?.[field.key]
-          const val = typeof rawValue === 'string'
-            ? (isNaN(parseFloat(rawValue)) ? null : parseFloat(rawValue))
-            : (rawValue ?? null)
-          ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
-        })
-        normalizedPerformance.approaches = Array.isArray(entry.performance?.approaches) ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance)
-        normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
-        normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
+        const normalizedPerformance = normalizePerformanceForDisplay(entry.performance)
         
         return {
           ...entry,
