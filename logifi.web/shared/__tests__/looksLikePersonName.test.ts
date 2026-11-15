@@ -12,6 +12,9 @@ describe('looksLikePersonName', () => {
   it('rejects lesson text', () => {
     expect(looksLikePersonName('Hood work')).toBe(false)
     expect(looksLikePersonName('XC navigation')).toBe(false)
+    expect(looksLikePersonName('Pattern work')).toBe(false)
+    expect(looksLikePersonName('Touch and goes')).toBe(false)
+    expect(looksLikePersonName('XC nav')).toBe(false)
     expect(looksLikePersonName('Steep turns, slow flight, stalls')).toBe(false)
   })
 })
