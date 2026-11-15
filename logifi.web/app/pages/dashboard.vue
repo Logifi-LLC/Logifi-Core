@@ -8,6 +8,8 @@
     isDarkMode ? 'bg-gray-950' : 'bg-gray-50'
   ]"
 >
+  <LogifiBootLoader v-if="showLogbookBootLoader" />
+
   <!-- Auth Modal -->
   <AuthModal
     v-if="showAuthModal"
@@ -534,7 +536,7 @@
             </div>
             <template v-if="!isIos || !iosCatalogBuilding">
             <p
-              v-if="!hasAnyEntriesForActiveLogbook"
+              v-if="showLogbookEmptyState"
               :class="['text-sm font-quicksand px-1', isDarkMode ? 'text-gray-400' : 'text-gray-600']"
             >
               Catalog builds from your flights and imports. Add or import entries to populate these lists.
@@ -948,7 +950,7 @@
                     </button>
                   </div>
                   <LogbookEmptyState
-                    v-if="!hasAnyEntriesForActiveLogbook"
+                    v-if="showLogbookEmptyState"
                     class="mt-2"
                     :is-dark-mode="isDarkMode"
                     :is-simulator="activeLogbook === 'simulator'"
@@ -1415,10 +1417,10 @@
           </div>
 
             <div
-              v-if="filteredEntries.length === 0"
+              v-if="filteredEntries.length === 0 && !showLogbookBootLoader"
               :class="[
                 'mt-6 rounded-2xl border border-dashed font-quicksand transition-colors duration-300',
-                !hasAnyEntriesForActiveLogbook ? 'p-6' : 'p-10 text-center',
+                showLogbookEmptyState ? 'p-6' : 'p-10 text-center',
                 isDarkMode
                   ? 'bg-gray-900 border-white/10 text-gray-400 shadow-md shadow-black/40'
                   : 'bg-gray-100 border-gray-300 text-gray-500',
@@ -1427,7 +1429,7 @@
               <template v-if="entriesHiddenOnlyByDateRange">
                 No entries in {{ dateRangeFilterSummary }}. Adjust the date range in Totals Overview above, or choose <strong>All time</strong> to see every entry.
               </template>
-              <template v-else-if="!hasAnyEntriesForActiveLogbook">
+              <template v-else-if="showLogbookEmptyState">
                 <p :class="['text-sm font-quicksand text-center', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
                   Saved entries appear in this list after you add, import, or scan your first flights.
                 </p>
@@ -6857,7 +6859,13 @@ import {
   logEntryToSupabaseRow,
   mapSupabaseRowToLogEntry as mapSupabaseRowToLogEntryFields,
 } from '../utils/logEntrySupabaseRow'
-import { getDisplayedPilotInitials, shouldShowCurrencyChips } from '../utils/dashboardHydration'
+import {
+  canShowLogbookEmptyState,
+  getDisplayedPilotInitials,
+  isLogbookHydratedForUi,
+  shouldShowCurrencyChips,
+} from '../utils/dashboardHydration'
+import LogifiBootLoader from '../components/LogifiBootLoader.vue'
 import {
   CATEGORY_CLASS_TIME_HELP,
   shouldShowAnyEntryFormField,
@@ -7434,6 +7442,8 @@ const migrationProgress = ref({ step: '', current: 0, total: 0 })
 const isDashboardRefreshing = ref(false)
 const isLoadEntriesRunning = ref(false)
 const isBulkLoadInProgress = ref(false)
+const logbookLocalCacheReadComplete = ref(false)
+const logbookInboundSyncPending = ref(false)
 let loadEntriesInFlight: Promise<number> | null = null
 
 type IosSyncStatus = 'idle' | 'loading' | 'success' | 'error' | 'offline'
@@ -7574,7 +7584,23 @@ const handleAccountDeleted = () => {
   }
 }
 
+function resetLogbookHydrationGate(): void {
+  logbookLocalCacheReadComplete.value = false
+  logbookInboundSyncPending.value = false
+}
+
+async function handoffNativeBootSplash(): Promise<void> {
+  await nextTick()
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve())
+    })
+  })
+  await markAppReady()
+}
+
 async function onUserSessionReady(userId: string): Promise<void> {
+  resetLogbookHydrationGate()
   stopBackgroundSync()
   setActiveUserId(userId)
   migrateAllGlobalKeysToScoped(userId, false)
@@ -7614,7 +7640,7 @@ async function onUserSessionReady(userId: string): Promise<void> {
   try {
     await loadEntries({ localOnly: true })
   } finally {
-    void markAppReady()
+    await handoffNativeBootSplash()
   }
 
   startBackgroundSync()
@@ -7642,6 +7668,7 @@ watch(
   async (newUserId, oldUserId) => {
     if (newUserId) {
       if (oldUserId && oldUserId !== newUserId) {
+        resetLogbookHydrationGate()
         logEntries.value = []
         crewProfiles.value = {}
       }
@@ -7702,7 +7729,9 @@ watch(dashboardFcvConnected, (c) => {
 watch(authLoading, (loading) => {
   if (!loading && !isAuthenticated.value) {
     showAuthModal.value = true
-    void markAppReady()
+    logbookLocalCacheReadComplete.value = true
+    logbookInboundSyncPending.value = false
+    void handoffNativeBootSplash()
   }
 }, { immediate: true })
 
@@ -17172,8 +17201,24 @@ async function loadEntriesInternal(options: LoadEntriesOptions = {}): Promise<nu
       console.error('[LoadEntries] Error loading from IndexedDB:', error)
     }
 
+    logbookLocalCacheReadComplete.value = true
+    const cachedEntryCount = idbEntries.length
+
     if (options.localOnly) {
+      if (isAuthenticated.value && scopedUserId && cachedEntryCount === 0) {
+        logbookInboundSyncPending.value = true
+      } else {
+        logbookInboundSyncPending.value = false
+      }
       return inboundRemovedCount
+    }
+
+    if (cachedEntryCount > 0) {
+      logbookInboundSyncPending.value = false
+    } else if (isAuthenticated.value && user.value) {
+      logbookInboundSyncPending.value = true
+    } else {
+      logbookInboundSyncPending.value = false
     }
 
     if (isAuthenticated.value && user.value) {
@@ -17230,6 +17275,9 @@ async function loadEntriesInternal(options: LoadEntriesOptions = {}): Promise<nu
     return inboundRemovedCount
   } finally {
     isLoadEntriesRunning.value = false
+    if (!options.localOnly) {
+      logbookInboundSyncPending.value = false
+    }
   }
 }
 
@@ -18036,6 +18084,20 @@ const entriesHiddenOnlyByDateRange = computed(() => {
 
 const hasAnyEntriesForActiveLogbook = computed(() =>
   logEntries.value.some((entry) => getEntryLogbookType(entry) === activeLogbook.value)
+)
+
+const logbookEmptyStateGate = computed(() => ({
+  localCacheReadComplete: logbookLocalCacheReadComplete.value,
+  inboundSyncPending: logbookInboundSyncPending.value,
+}))
+
+const showLogbookBootLoader = computed(() => {
+  if (!authLoading.value && !isAuthenticated.value) return false
+  return !isLogbookHydratedForUi(logbookEmptyStateGate.value)
+})
+
+const showLogbookEmptyState = computed(() =>
+  canShowLogbookEmptyState(logbookEmptyStateGate.value, hasAnyEntriesForActiveLogbook.value)
 )
 
 /** Superseded originals are hidden from the list; filtered entries drive totals. */

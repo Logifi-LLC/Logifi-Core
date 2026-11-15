@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Generate iOS splash + app icon from favicon.png:
- * - App icon / splash / web logo: gray-950 radial glow + white mark composite
+ * - Splash: flat gray-950 + centered white mark (matches in-app boot loader)
+ * - App icon: gray-950 radial glow + white mark composite
  *
  * Usage: npm run generate:ios-branding
  */
@@ -27,7 +28,8 @@ const SPLASH_SIZE = 2732
 const ICON_SIZE = 1024
 const ICON_PREVIEW_SIZE = 180
 const WEB_LOGO_SIZE = 512
-const SPLASH_FAVICON_SCALE = 0.42
+/** ~72pt mark on phone when splash is aspect-filled — aligns with web loader */
+const SPLASH_MARK_SCALE = 0.085
 const ICON_FAVICON_SCALE = 0.62
 const ICON_LOGO_SCALE = 0.62
 
@@ -97,15 +99,42 @@ async function loadTightWhiteMark() {
   }).extract({ left: minX, top: minY, width: cropW, height: cropH })
 }
 
+async function buildFlatMarkImage(size, markScale) {
+  const targetWidth = Math.round(size * markScale)
+
+  const background = await sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 3,
+      background: APP_BG,
+    },
+  })
+    .png()
+    .toBuffer()
+
+  const markLayer = await loadTightWhiteMark().then((pipeline) =>
+    pipeline.resize(targetWidth, targetWidth, { fit: 'inside' }).png().toBuffer()
+  )
+
+  const { width: mw, height: mh } = await sharp(markLayer).metadata()
+  const left = Math.round((size - mw) / 2)
+  const top = Math.round((size - mh) / 2)
+
+  return sharp(background)
+    .composite([{ input: markLayer, left, top }])
+    .png()
+    .toBuffer()
+}
+
 async function buildGlowMarkImage(size, markScale) {
   const targetWidth = Math.round(size * markScale)
 
   const background = await sharp(Buffer.from(glowSvg(size))).png().toBuffer()
 
-  const markLayer = await loadTightWhiteMark()
-    .then((pipeline) =>
-      pipeline.resize(targetWidth, targetWidth, { fit: 'inside' }).png().toBuffer()
-    )
+  const markLayer = await loadTightWhiteMark().then((pipeline) =>
+    pipeline.resize(targetWidth, targetWidth, { fit: 'inside' }).png().toBuffer()
+  )
 
   const { width: mw, height: mh } = await sharp(markLayer).metadata()
   const left = Math.round((size - mw) / 2)
@@ -120,9 +149,9 @@ async function buildGlowMarkImage(size, markScale) {
 async function main() {
   await fs.access(FAVICON)
 
-  const splash = await buildGlowMarkImage(SPLASH_SIZE, SPLASH_FAVICON_SCALE)
+  const splash = await buildFlatMarkImage(SPLASH_SIZE, SPLASH_MARK_SCALE)
   const icon = await buildGlowMarkImage(ICON_SIZE, ICON_FAVICON_SCALE)
-  const webLogo = await buildGlowMarkImage(WEB_LOGO_SIZE, ICON_LOGO_SCALE)
+  const webLogo = await buildFlatMarkImage(WEB_LOGO_SIZE, ICON_LOGO_SCALE)
 
   const splashFiles = [
     'splash-2732x2732.png',

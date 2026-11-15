@@ -1,5 +1,5 @@
 import { lockNativeViewportZoom } from '~/composables/useCapacitorPlatform'
-import { hideNativeSplashNow, isDashboardPath, markAppReady, removeHtmlSplashOnce } from '~/utils/appReady'
+import { isDashboardPath, markAppReady, removeHtmlSplashOnce } from '~/utils/appReady'
 
 const FALLBACK_MS = 6000
 
@@ -10,9 +10,6 @@ export default defineNuxtPlugin((nuxtApp) => {
 
   const { initAuth } = useAuth()
   void initAuth()
-
-  // Native splash must not wait for auth — dismiss as soon as JS runs.
-  void hideNativeSplashNow()
 
   nuxtApp.hook('app:mounted', () => {
     const path = window.location.pathname
