@@ -206,7 +206,12 @@ export function isLikelySimulatorRow(
   if ((hints.groundSimTime ?? 0) > 0) return true
   if ((hints.ffs ?? 0) > 0 || (hints.ftd ?? 0) > 0 || (hints.atd ?? 0) > 0) return true
   if (entry && hasSimBucketTime(entry as LogEntry)) return true
-  if (entry && isTrainingDevice(entry)) return true
+  if (
+    entry &&
+    isTrainingDevice(entry, { includeTrainingElements: false })
+  ) {
+    return true
+  }
   return false
 }
 
@@ -254,7 +259,7 @@ function shouldClassifyAsSimulator(entry: LogEntry, hints?: SimImportHints): boo
   if ((hints?.groundSimTime ?? 0) > 0) return true
   if ((hints?.ffs ?? 0) > 0 || (hints?.ftd ?? 0) > 0 || (hints?.atd ?? 0) > 0) return true
   if (hasSimBucketTime(entry)) return true
-  if (isTrainingDevice(entry)) return true
+  if (isTrainingDevice(entry, { includeTrainingElements: false })) return true
   return false
 }
 
