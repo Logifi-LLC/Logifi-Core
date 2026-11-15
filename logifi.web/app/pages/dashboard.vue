@@ -173,7 +173,7 @@
   <!-- iOS sync status banner -->
   <div
     v-if="isIos && iosSyncBannerVisible"
-    class="fixed left-0 right-0 z-[55] px-4 pointer-events-auto"
+    class="fixed left-0 right-0 z-30 px-4 pointer-events-auto"
     :style="{ top: 'calc(env(safe-area-inset-top, 0px) + 3.25rem)' }"
   >
     <div
@@ -222,7 +222,7 @@
       <header>
       <div
         :class="[
-          'left-0 right-0 z-50 overflow-visible transition-[background-color,border-color,backdrop-filter] duration-300',
+          'left-0 right-0 z-30 overflow-visible transition-[background-color,border-color,backdrop-filter] duration-300',
           isIos
             ? 'sticky inset-x-0 top-0 pt-[env(safe-area-inset-top)]'
             : 'fixed top-0',
