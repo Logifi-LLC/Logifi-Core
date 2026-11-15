@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { LogbookColumnConfig } from '../../app/utils/logbookTypes'
 import {
   applyLogbookTableDensity,
+  logbookColumnWidthStyle,
   resolveLogbookTableDensity,
 } from '../../app/utils/logbookTableLayout'
 
@@ -19,10 +20,12 @@ describe('logbookTableLayout', () => {
     expect(resolveLogbookTableDensity(true, true)).toBe('tight')
   })
 
-  it('hides non-essential columns before horizontal scroll', () => {
+  it('hides non-essential columns at condensed and tight density; remaining columns still have a width floor', () => {
     const condensed = applyLogbookTableDensity(cols, 'condensed')
     expect(condensed.find((c) => c.key === 'conditions')?.responsiveClass).toContain('hidden')
     const tight = applyLogbookTableDensity(cols, 'tight')
     expect(tight.find((c) => c.key === 'identification')?.responsiveClass).toContain('hidden')
+    expect(logbookColumnWidthStyle(150)).toBe('width: 150px; min-width: 150px;')
+    expect(logbookColumnWidthStyle(undefined)).toBe('')
   })
 })

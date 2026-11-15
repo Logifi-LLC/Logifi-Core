@@ -21,9 +21,14 @@ const CONDITION_ALIASES: Record<string, string> = {
   'actual instrument': 'actualInstrument',
 }
 
+function isDroppedDayVfr(value: string): boolean {
+  const compact = value.toLowerCase().replace(/[\s_-]/g, '')
+  return compact === 'vfr' || compact === 'dayvfr'
+}
+
 function canonicalizeFlightCondition(condition: string): string | null {
   const trimmed = condition.trim()
-  if (!trimmed || trimmed === 'dayVfr') return null
+  if (!trimmed || isDroppedDayVfr(trimmed)) return null
 
   const lower = trimmed.toLowerCase()
   const byValue = CONDITION_OPTIONS.find((opt) => opt.value.toLowerCase() === lower)

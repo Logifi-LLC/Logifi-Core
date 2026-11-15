@@ -1,6 +1,7 @@
 import type { LogEntry } from './logbookTypes'
 import { findFieldValue } from '../../shared/logbookDataBridge/importMappers'
 import { namesMatchFlexible } from '../../shared/logbookDataBridge/logtenDynamicExport'
+import { looksLikePersonName } from '../../shared/looksLikePersonName'
 
 const PIC_CREW_FIELDS = ['flight_selectedCrewPIC', 'PIC/P1 Crew', 'pic/p1 crew']
 const SIC_CREW_FIELDS = ['flight_selectedCrewSIC', 'SIC/P2 Crew', 'sic/p2 crew']
@@ -198,10 +199,18 @@ function buildCrewCandidates(
   if (flightPropertiesPilot && !isUserName(flightPropertiesPilot, userName)) {
     candidates.push({ name: flightPropertiesPilot, role: 'other', priority: 6 })
   }
-  if (trainingElementsField && !isUserName(trainingElementsField, userName)) {
+  if (
+    trainingElementsField &&
+    !isUserName(trainingElementsField, userName) &&
+    looksLikePersonName(trainingElementsField)
+  ) {
     candidates.push({ name: trainingElementsField, role: 'other', priority: 7 })
   }
-  if (trainingInstructorField && !isUserName(trainingInstructorField, userName)) {
+  if (
+    trainingInstructorField &&
+    !isUserName(trainingInstructorField, userName) &&
+    looksLikePersonName(trainingInstructorField)
+  ) {
     candidates.push({ name: trainingInstructorField, role: 'other', priority: 8 })
   }
 

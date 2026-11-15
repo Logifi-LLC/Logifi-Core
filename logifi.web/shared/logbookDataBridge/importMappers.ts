@@ -14,6 +14,7 @@ import {
   splitAirportCodes,
 } from './formatters'
 import { parseLogtenApproach1 } from './logtenDynamicExport'
+import { looksLikePersonName } from '../looksLikePersonName'
 
 export function findFieldValue(
   rawEntry: Record<string, unknown>,
@@ -763,6 +764,13 @@ export function mapRawRowToLogEntry(
   const crewNames = resolveCrewNamesFromRawRow(rawEntry, entry.role, entry.remarks)
   entry.picName = crewNames.picName
   entry.sicName = crewNames.sicName
+
+  const trainingRaw = entry.trainingElements.trim()
+  const hasRealPicOrSic =
+    looksLikePersonName(entry.picName) || looksLikePersonName(entry.sicName)
+  if (trainingRaw && !looksLikePersonName(trainingRaw) && hasRealPicOrSic) {
+    entry.trainingElements = ''
+  }
 
   const otherCrew = otherCrewJobAndName(entry.role, crewNames.picName, crewNames.sicName)
   if (otherCrew) {
