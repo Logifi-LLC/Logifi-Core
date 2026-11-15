@@ -6906,10 +6906,11 @@ import {
 import { ensureAirportClientDbLoaded } from '../../shared/airportClientDb'
 import { getAirportIanaTimezone, normalizeTimezoneToIANA } from '../../shared/airportTimezone'
 import {
-  formatOooiClockInputOnBlur,
   formatOooiClockToHhMm,
   formatOooiOppositeClockTooltip,
+  normalizeOooiClockOnBlur,
   oooiPairDurationHours,
+  sanitizeOooiClockDigitsWhileTyping,
   toggleOooiClockView,
   type OooiEventKey,
 } from '../../shared/oooiClock'
@@ -14021,11 +14022,6 @@ const filteredAircraftItemsByFamily = computed(() => {
   return map
 })
 
-function formatOOOIInput(value: string): string {
-  // Remove non-digits and limit to 4 characters
-  return value.replace(/\D/g, '').slice(0, 4)
-}
-
 function clearInlineOooiFieldTouched(): void {
   inlineOooiFieldTouched.value = {}
 }
@@ -14039,11 +14035,10 @@ function applyOooiFieldBlurFormat(
   field: OooiEventKey,
   touched: Partial<Record<OooiEventKey, boolean>>
 ): void {
-  if (!oooi || !touched[field]) return
-  const current = String(oooi[field] ?? '')
-  const next = formatOooiClockInputOnBlur(current)
-  if (next !== current) {
-    oooi[field] = next
+  if (!oooi) return
+  const result = normalizeOooiClockOnBlur(oooi[field], !!touched[field])
+  if (result.kind === 'formatted') {
+    oooi[field] = result.value
   }
 }
 
@@ -14059,13 +14054,14 @@ function onInlineOooiFieldInput(field: OooiEventKey, value: string): void {
   if (!inlineEditEntry.value?.oooi) return
   inlineOooiFieldTouched.value[field] = true
   ;(inlineEditEntry.value.oooi as unknown as Record<string, string | null>)[field] =
-    formatOOOIInput(value)
+    sanitizeOooiClockDigitsWhileTyping(value)
 }
 
 function onAddOooiFieldInput(field: OooiEventKey, value: string): void {
   if (!newEntry.oooi) return
   addOooiFieldTouched.value[field] = true
-  ;(newEntry.oooi as unknown as Record<string, string | null>)[field] = formatOOOIInput(value)
+  ;(newEntry.oooi as unknown as Record<string, string | null>)[field] =
+    sanitizeOooiClockDigitsWhileTyping(value)
 }
 
 type OooiClockFormEntry = {

@@ -4,6 +4,8 @@ import {
   convertOooiHhmmBetweenClocks,
   formatOooiClockInputOnBlur,
   formatOooiOppositeClockTooltip,
+  normalizeOooiClockOnBlur,
+  sanitizeOooiClockDigitsWhileTyping,
   localDatetimeToZuluHhmm,
   oooiClockToUtc,
   oooiEventsToUtcInstants,
@@ -266,6 +268,28 @@ describe('oooiClock', () => {
       lookupTz: lookupTestTz,
     })
     expect(next).toEqual({ out: '1432', in: '1600', isZulu: false })
+  })
+
+  it('sanitizes clock input while typing to digits only', () => {
+    expect(sanitizeOooiClockDigitsWhileTyping('22:48x')).toBe('2248')
+    expect(sanitizeOooiClockDigitsWhileTyping('2248123')).toBe('2248')
+  })
+
+  it('formats a new manual entry on blur (3-digit HMM)', () => {
+    const firstEntry = normalizeOooiClockOnBlur('945', true)
+    expect(firstEntry).toEqual({ kind: 'formatted', value: '09:45' })
+  })
+
+  it('leaves stored clocks unchanged on blur when the user did not edit', () => {
+    expect(normalizeOooiClockOnBlur('2248', false)).toEqual({ kind: 'skip' })
+    expect(normalizeOooiClockOnBlur('22:48', false)).toEqual({ kind: 'skip' })
+  })
+
+  it('formats a correction on blur after the user edits', () => {
+    const fixed = normalizeOooiClockOnBlur('2248', true)
+    expect(fixed).toEqual({ kind: 'formatted', value: '22:48' })
+    const already = normalizeOooiClockOnBlur('22:48', true)
+    expect(already).toEqual({ kind: 'unchanged' })
   })
 
   it('formats ON/IN to HH:MM on blur when Zulu sequence is out of order', () => {

@@ -258,6 +258,32 @@ export function formatOooiClockInputOnBlur(value: string | null | undefined): st
   return formatted ?? trimmed
 }
 
+/** Strip non-digits while typing; up to four digits (HHMM). */
+export function sanitizeOooiClockDigitsWhileTyping(value: string): string {
+  return value.replace(/\D/g, '').slice(0, 4)
+}
+
+export type NormalizeOooiClockOnBlurResult =
+  | { kind: 'skip' }
+  | { kind: 'unchanged' }
+  | { kind: 'formatted'; value: string }
+
+/**
+ * Blur normalizer for entry OOOI fields. Skips when the pilot has not edited the
+ * field this session (so unchanged Confirm does not rewrite stored values).
+ */
+export function normalizeOooiClockOnBlur(
+  value: string | null | undefined,
+  userEdited: boolean
+): NormalizeOooiClockOnBlurResult {
+  if (!userEdited) return { kind: 'skip' }
+  const current = String(value ?? '').trim()
+  if (!current) return { kind: 'unchanged' }
+  const next = formatOooiClockInputOnBlur(current)
+  if (next === current) return { kind: 'unchanged' }
+  return { kind: 'formatted', value: next }
+}
+
 /** Four-digit HHMM only — incomplete typed clocks must not tooltip or convert. */
 function completeOooiHhmm(hhmm: string | null | undefined): string | null {
   if (!hhmm) return null
