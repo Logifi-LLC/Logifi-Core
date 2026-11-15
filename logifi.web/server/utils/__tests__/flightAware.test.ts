@@ -228,6 +228,78 @@ describe('fetchFlightAwareActuals', () => {
     expect(result.rateLimitResumeMs).toBeLessThanOrEqual(Date.now() + 91000)
   })
 
+  it('picks the first same-route FlightAware hit (first-leg, not a later turn)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        flights: [
+          {
+            ident: 'AA4442',
+            registration: 'N111AA',
+            origin: { code_iata: 'IND', code_icao: 'KIND' },
+            destination: { code_iata: 'ORD', code_icao: 'KORD' },
+            scheduled_out: '2026-11-13T17:00:00Z',
+            actual_out: '2026-11-13T17:05:00Z',
+            actual_off: '2026-11-13T17:18:00Z',
+            actual_on: '2026-11-13T17:50:00Z',
+            actual_in: '2026-11-13T18:02:00Z',
+          },
+          {
+            ident: 'AA4442',
+            registration: 'N222AA',
+            origin: { code_iata: 'IND', code_icao: 'KIND' },
+            destination: { code_iata: 'ORD', code_icao: 'KORD' },
+            scheduled_out: '2026-11-13T23:00:00Z',
+            actual_out: '2026-11-13T23:10:00Z',
+            actual_off: '2026-11-13T23:22:00Z',
+            actual_on: '2026-11-14T00:01:00Z',
+            actual_in: '2026-11-14T00:12:00Z',
+          },
+        ],
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchFlightAwareActuals('4442', '2026-11-13', 'IND', 'ORD', 'AA')
+    expect(result?.registration).toBe('N111AA')
+    expect(result?.actualOutLocal).toBe('2026-11-13 12:05:00')
+    expect(result?.actualOnLocal).toBe('2026-11-13 11:50:00')
+  })
+
+  it('picks the later same-route hit only when it is first in the FlightAware array', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        flights: [
+          {
+            ident: 'AA4442',
+            registration: 'N222AA',
+            origin: { code_iata: 'IND', code_icao: 'KIND' },
+            destination: { code_iata: 'ORD', code_icao: 'KORD' },
+            scheduled_out: '2026-11-13T23:00:00Z',
+            actual_out: '2026-11-13T23:10:00Z',
+            actual_in: '2026-11-14T00:12:00Z',
+          },
+          {
+            ident: 'AA4442',
+            registration: 'N111AA',
+            origin: { code_iata: 'IND', code_icao: 'KIND' },
+            destination: { code_iata: 'ORD', code_icao: 'KORD' },
+            scheduled_out: '2026-11-13T17:00:00Z',
+            actual_out: '2026-11-13T17:05:00Z',
+            actual_in: '2026-11-13T18:02:00Z',
+          },
+        ],
+      }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchFlightAwareActuals('4442', '2026-11-13', 'IND', 'ORD', 'AA')
+    expect(result?.registration).toBe('N222AA')
+  })
+
   it('reuses cached URL JSON without a second fetch', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

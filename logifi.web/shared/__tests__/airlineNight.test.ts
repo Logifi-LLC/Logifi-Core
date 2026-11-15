@@ -66,6 +66,24 @@ describe('computeAirlineNight', () => {
     expect(result.nightHours).toBeGreaterThan(0)
   })
 
+  it('still uses airport-local source datetimes when stored oooi is Zulu', () => {
+    const result = computeAirlineNight(
+      {
+        depCode: 'KLAX',
+        arrCode: 'KLAX',
+        date: '2026-11-12',
+        outLocalDatetime: '2026-11-12 16:00:00',
+        inLocalDatetime: '2026-11-12 16:45:00',
+        onLocalDatetime: '2026-11-12 16:40:00',
+        oooi: { out: '0000', in: '0045', on: '0040', isZulu: true },
+      },
+      lookups
+    )
+    expect(result.totalHours).toBe(0.8)
+    expect(result.nightHours).toBe(0)
+    expect(result.isNightLanding).toBe(false)
+  })
+
   it('uses Out→In for night hours (block), matching total-time semantics', () => {
     const result = computeAirlineNight(
       {

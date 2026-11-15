@@ -72,6 +72,8 @@ export interface OOOITimes {
   on: string | null
   in: string | null
   isZulu: boolean
+  /** Present on airline imports that could not convert local clocks to Zulu. */
+  tzUnresolved?: boolean
 }
 
 /** Canonical Out → Off → On → In order for display and form fields. */
