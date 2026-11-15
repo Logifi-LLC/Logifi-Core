@@ -48,6 +48,8 @@ import { applySimulatorImport, getSimTimeSum, readSimHintsFromRawRow } from '../
 import { parseWithProvider } from '../import/ImporterFactory'
 import { applyLogtenCrewFields, inferImporterSeat } from '../../app/utils/logbookImportEnrichments'
 import type { LogEntry } from '../../app/utils/logbookTypes'
+import { getDisplayConditions } from '../../app/utils/flightConditions'
+import { collectPilotCatalogNames } from '../looksLikePersonName'
 import {
   catalogAircraftFamilyKey,
   UNKNOWN_AIRCRAFT_FAMILY,
@@ -1266,5 +1268,98 @@ describe('PIC Name / SIC Name import and native export', () => {
     expect(reimported?.picName).toBe('D. Cameron')
     expect(reimported?.sicName).toBe('D. Bird')
     expect(reimported?.flightTime.pic).toBe(1.5)
+  })
+})
+
+describe('Logifi-native lesson text vs crew catalog', () => {
+  const dualHoodWorkRow = {
+    Date: '2024-06-13',
+    Role: 'Dual Received',
+    'PIC Name': 'Harvey Dent',
+    'SIC Name': 'James Gordon',
+    'Aircraft Make/Model': 'C-172',
+    Registration: 'N172GC',
+    Departure: 'KOSH',
+    Destination: 'KORD',
+    'Training Elements': 'Hood work',
+    'Flight Conditions': 'IFR;VFR;Cross-Country',
+    'Dual Received': '1.2',
+    'Cross Country': '1.2',
+    'Total Flight Time': '1.2',
+  }
+
+  function snapshotSavedFields(entry: LogEntry) {
+    return {
+      date: entry.date,
+      role: entry.role,
+      picName: entry.picName,
+      sicName: entry.sicName,
+      aircraftMakeModel: entry.aircraftMakeModel,
+      registration: entry.registration,
+      trainingElements: entry.trainingElements,
+      trainingInstructor: entry.trainingInstructor,
+      flightConditions: [...(entry.flightConditions || [])],
+      dual: entry.flightTime.dual,
+      crossCountry: entry.flightTime.crossCountry,
+      total: entry.flightTime.total,
+    }
+  }
+
+  it('does not catalog Hood work, hides VFR, and round-trips other fields', () => {
+    const entry = mapRawRowToLogEntry(dualHoodWorkRow, { source: 'logifi-native' })
+    expect(entry).not.toBeNull()
+    applyLogtenCrewFields(entry!, dualHoodWorkRow, 'Harvey Dent')
+    entry!.flightConditions = String(dualHoodWorkRow['Flight Conditions'])
+      .split(';')
+      .map((token) => token.trim())
+      .filter(Boolean)
+
+    expect(entry!.trainingElements).not.toBe('Hood work')
+    const catalog = collectPilotCatalogNames(entry!)
+    expect(catalog).toContain('Harvey Dent')
+    expect(catalog).toContain('James Gordon')
+    expect(catalog.some((name) => name.toLowerCase().includes('hood'))).toBe(false)
+
+    expect(getDisplayConditions(entry!)).toEqual(['IFR', 'Cross-Country'])
+    expect(entry!.flightConditions).toEqual(['IFR', 'VFR', 'Cross-Country'])
+
+    const saved = snapshotSavedFields(entry!)
+    const exported = buildHeaderRowObject(LOGIFI_NATIVE_HEADERS, mapEntryToLogifiNativeRow(entry!))
+    const reimported = mapRawRowToLogEntry(exported, { source: 'logifi-native' })
+    expect(reimported).not.toBeNull()
+    applyLogtenCrewFields(reimported!, exported, 'Harvey Dent')
+    reimported!.flightConditions = String(exported['Flight Conditions'] || '')
+      .split(';')
+      .map((token) => token.trim())
+      .filter(Boolean)
+
+    expect(snapshotSavedFields(reimported!)).toEqual(saved)
+  })
+
+  it('still copies Training Elements when it is a person name', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        ...dualHoodWorkRow,
+        'Training Elements': 'Harvey Dent',
+      },
+      { source: 'logifi-native' }
+    )
+    expect(entry?.trainingElements).toBe('Harvey Dent')
+  })
+
+  it('keeps lesson Training Elements when the row has no PIC/SIC name', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        Date: '2024-06-13',
+        Registration: 'N172GC',
+        'Aircraft Make/Model': 'C-172',
+        Departure: 'KOSH',
+        Destination: 'KORD',
+        'Training Elements': 'Hood work',
+        'Dual Received': '1.2',
+      },
+      { source: 'logifi-native' }
+    )
+    expect(entry?.trainingElements).toBe('Hood work')
   })
 })

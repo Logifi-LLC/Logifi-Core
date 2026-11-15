@@ -41,3 +41,9 @@ export function applyLogbookTableDensity(
     return { ...col, responsiveClass }
   })
 }
+
+/** Width plus a min-width floor so column sums can overflow and scroll. */
+export function logbookColumnWidthStyle(width: number | undefined): string {
+  if (!width) return ''
+  return `width: ${width}px; min-width: ${width}px;`
+}
