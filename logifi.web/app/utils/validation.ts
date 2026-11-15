@@ -1,6 +1,7 @@
 import type { LogEntry, FlightTimeBreakdown } from './logbookTypes'
 import { sortEntriesByDateAndOOOI } from '../../shared/oooiSort'
 import { FOREFLIGHT_MISSING_TAIL } from '../../shared/logbookDataBridge/importMappers'
+import { isValidCalendarYmd } from '../../shared/logbookDataBridge/formatters'
 import { toCatalogAirportCode } from '../../shared/airportCodeCanonical'
 
 export interface ValidationResult {
@@ -158,7 +159,33 @@ export function validateDate(entry: LogEntry, allEntries?: LogEntry[]): Validati
   }
 
   try {
+    const isoYmd = entry.date.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (isoYmd) {
+      const year = Number(isoYmd[1])
+      const month = Number(isoYmd[2])
+      const day = Number(isoYmd[3])
+      if (!isValidCalendarYmd(year, month, day)) {
+        results.push({
+          type: 'error',
+          field: 'date',
+          message: `Flight date (${entry.date}) is not a valid calendar date`,
+          suggestion: 'Please enter a real calendar date (YYYY-MM-DD)'
+        })
+        return results
+      }
+    }
+
     const entryDate = new Date(entry.date)
+    if (Number.isNaN(entryDate.getTime())) {
+      results.push({
+        type: 'error',
+        field: 'date',
+        message: `Flight date (${entry.date}) is not a valid date`,
+        suggestion: 'Please enter a valid date'
+      })
+      return results
+    }
+
     const today = new Date()
     // Set time to midnight for accurate date comparison
     today.setHours(0, 0, 0, 0)

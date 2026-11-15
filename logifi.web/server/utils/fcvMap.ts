@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon'
 import {
+  formatOooiTimesForStorage,
   localDatetimeToZuluHhmm,
   utcDatetimeToZuluHhmm,
 } from '../../shared/oooiClock'
@@ -68,7 +69,7 @@ export interface FcvFlight {
   [key: string]: unknown
 }
 
-/** Logifi `oooi` JSONB shape (matches dashboard HHMM digit strings + isZulu). */
+/** Logifi `oooi` JSONB shape (HH:MM clock strings + isZulu). */
 export interface FcvMappedOooi {
   out: string | null
   off: string | null
@@ -351,27 +352,27 @@ export function buildMappedOooiFromAirlineSource(
   }
 
   if (canStoreZulu) {
-    return {
+    return formatOooiTimesForStorage({
       out: zulu.out,
       off: zulu.off,
       on: zulu.on,
       in: zulu.in,
       isZulu: true,
-    }
+    })
   }
 
   const out = firstHHMM(outLocal, null)
   const off = parseFcvLocalDatetimeToHHMM(offLocal)
   const on = parseFcvLocalDatetimeToHHMM(onLocal)
   const inn = firstHHMM(inLocal, null)
-  return {
+  return formatOooiTimesForStorage({
     out: out ?? null,
     off: off ?? null,
     on: on ?? null,
     in: inn ?? null,
     isZulu: false,
     tzUnresolved: true,
-  }
+  })
 }
 
 function buildOooiFromFlight(f: FcvFlight): FcvMappedOooi | null {

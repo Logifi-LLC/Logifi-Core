@@ -45,10 +45,10 @@ describe('mapFcvFlightToEntry', () => {
       fcv_aircraft_type: 'B737',
     })
     expect(e.oooi).toEqual({
-      out: '1500',
-      off: '1512',
-      on: '1730',
-      in: '1745',
+      out: '15:00',
+      off: '15:12',
+      on: '17:30',
+      in: '17:45',
       isZulu: true,
     })
     // Gate OUT→IN (08:00–10:45) wins over `block` HHMM so Total/XC match OOOI
@@ -151,10 +151,10 @@ describe('mapFcvFlightToEntry', () => {
       arr_airport: 'PDX',
     })
     expect(e.oooi).toEqual({
-      out: '1315',
+      out: '13:15',
       off: null,
       on: null,
-      in: '1620',
+      in: '16:20',
       isZulu: true,
     })
   })
@@ -273,10 +273,10 @@ describe('mapFcvFlightToEntry', () => {
       crossCountry: 1.8,
     })
     expect(e.oooi).toEqual({
-      out: '0046',
+      out: '00:46',
       off: null,
       on: null,
-      in: '0234',
+      in: '02:34',
       isZulu: true,
     })
   })
@@ -293,10 +293,10 @@ describe('mapFcvFlightToEntry', () => {
       role: 'PIC',
     })
     expect(e.oooi).toEqual({
-      out: '1700',
-      off: '1710',
-      on: '1740',
-      in: '1800',
+      out: '17:00',
+      off: '17:10',
+      on: '17:40',
+      in: '18:00',
       isZulu: true,
     })
     expect(e.flight_time).toMatchObject({ total: 1.0 })
@@ -318,10 +318,10 @@ describe('mapFcvFlightToEntry', () => {
       role: 'PIC',
     })
     expect(e.oooi).toEqual({
-      out: '1700',
-      off: '1710',
-      on: '1740',
-      in: '1800',
+      out: '17:00',
+      off: '17:10',
+      on: '17:40',
+      in: '18:00',
       isZulu: true,
     })
     expect(e.flight_time).toMatchObject({ total: 1.0 })
@@ -337,10 +337,10 @@ describe('mapFcvFlightToEntry', () => {
       arr_airport: 'YYYY',
     })
     expect(e.oooi).toEqual({
-      out: '1200',
+      out: '12:00',
       off: null,
       on: null,
-      in: '1300',
+      in: '13:00',
       isZulu: false,
       tzUnresolved: true,
     })

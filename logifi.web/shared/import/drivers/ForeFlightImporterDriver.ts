@@ -9,6 +9,7 @@ import {
   normalizeImportNumber,
   parseImportDuration,
 } from '../../logbookDataBridge/formatters'
+import { formatOooiClockForStorage } from '../../oooiClock'
 import type { LogEntry } from '../../../app/utils/logbookTypes'
 import { createBridgeBackedImporter } from './baseDriver'
 import type { ProviderImporter } from '../types'
@@ -44,7 +45,7 @@ export function enrichForeFlightEntries(
 
   const customHourTagsUsed = new Set<string>()
   let noTailCount = 0
-  let defaultedClassCount = 0
+  let missingClassCount = 0
 
   entries.forEach((entry, index) => {
     const raw = rawRows[index]
@@ -88,8 +89,7 @@ export function enrichForeFlightEntries(
       if (inferred) {
         entry.aircraftCategoryClass = inferred
       } else {
-        entry.aircraftCategoryClass = 'ASEL'
-        defaultedClassCount++
+        missingClassCount++
       }
     }
 
@@ -110,10 +110,10 @@ export function enrichForeFlightEntries(
     const timeIn = findFieldValue(raw, ['TimeIn', 'Timein', 'Time In'])
     if (timeOut || timeOff || timeOn || timeIn) {
       entry.oooi = {
-        out: normalizeHhmm(timeOut),
-        off: normalizeHhmm(timeOff),
-        on: normalizeHhmm(timeOn),
-        in: normalizeHhmm(timeIn),
+        out: formatOooiClockForStorage(timeOut),
+        off: formatOooiClockForStorage(timeOff),
+        on: formatOooiClockForStorage(timeOn),
+        in: formatOooiClockForStorage(timeIn),
         isZulu: false,
       }
     }
@@ -140,9 +140,9 @@ export function enrichForeFlightEntries(
     )
   }
 
-  if (defaultedClassCount > 0) {
+  if (missingClassCount > 0) {
     warnings.push(
-      `${defaultedClassCount} flight(s) had no category/class; defaulted to ASEL.`
+      `${missingClassCount} flight(s) had no category/class; left unset.`
     )
   }
 
@@ -232,14 +232,6 @@ function isTruthyFlag(value: string): boolean {
 function appendUniqueTag(entry: LogEntry, tag: string): void {
   const tags = entry.tags ?? (entry.tags = [])
   if (!tags.includes(tag)) tags.push(tag)
-}
-
-/** Normalize ForeFlight 24h clock strings (e.g. 1823 or 18:23) to HHMM digits. */
-function normalizeHhmm(value: string): string | null {
-  if (!value?.trim()) return null
-  const digits = value.replace(/\D/g, '')
-  if (digits.length < 3 || digits.length > 4) return value.trim()
-  return digits.padStart(4, '0')
 }
 
 export const ForeFlightImporterDriver: ProviderImporter = createBridgeBackedImporter({

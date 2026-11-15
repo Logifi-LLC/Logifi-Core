@@ -2314,12 +2314,13 @@
                     v-if="inlineEditEntry?.oooi" 
                     v-model="inlineEditEntry.oooi[field]" 
                     type="text" 
-                    maxlength="4" 
+                    maxlength="5" 
                     placeholder="1430"
                     :readonly="isExpandedEntrySigned"
                     :title="oooiOppositeClockTitle(inlineEditEntry, field)"
                     :aria-describedby="oooiOppositeClockHintId('edit', field, inlineEditEntry)"
-                    @input="(e) => { if (inlineEditEntry?.oooi && field !== 'isZulu') (inlineEditEntry.oooi as unknown as Record<string, string | null>)[field] = formatOOOIInput((e.target as HTMLInputElement).value) }"
+                    @input="(e) => onInlineOooiFieldInput(field as OooiEventKey, (e.target as HTMLInputElement).value)"
+                    @blur="onInlineOooiFieldBlur(field as OooiEventKey)"
                     :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono pointer-events-auto focus:outline-none focus:ring-2 focus:ring-blue-500', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" 
                   />
                   <span
@@ -3549,11 +3550,12 @@
                       v-if="newEntry.oooi" 
                       v-model="newEntry.oooi[field]" 
                       type="text" 
-                      maxlength="4" 
-                      placeholder="1430" 
+                      maxlength="5"
+                      placeholder="1430"
                       :title="oooiOppositeClockTitle(newEntry, field)"
                       :aria-describedby="oooiOppositeClockHintId('entry', field, newEntry)"
-                      @input="(e) => { if (newEntry.oooi && field !== 'isZulu') (newEntry.oooi as unknown as Record<string, string | null>)[field] = formatOOOIInput((e.target as HTMLInputElement).value) }"
+                      @input="(e) => onAddOooiFieldInput(field as OooiEventKey, (e.target as HTMLInputElement).value)"
+                      @blur="onAddOooiFieldBlur(field as OooiEventKey)"
                       :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-blue-500', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" 
                     />
                     <span
@@ -4372,6 +4374,7 @@
       :full-backup-busy="fullBackupBusy"
       :full-backup-progress="fullBackupProgress"
       :full-backup-error="fullBackupError"
+      :import-busy="importBusy"
       @close="closeSettings"
       @logout="handleLogout"
       @account-deleted="handleAccountDeleted"
@@ -4411,6 +4414,7 @@
       @export-logbook="openExportDialog"
       @download-json-backup="handleDownloadJsonBackupFromSettings"
       @download-full-backup="handleDownloadFullBackupFromSettings"
+      @restore-backup="openRestoreBackupFilePicker"
       @generate-8710="showForm8710Modal = true"
       @download-logbook-pdf="openLogbookPdfDialog"
       @import-fcv="handleOpenFcvImportFromSettings"
@@ -6892,11 +6896,23 @@ import {
 import { useLocationLookup } from '../composables/useLocationLookup'
 import { calculateNightTime } from '../utils/nightTimeCalculator'
 import { nightAutoCalcInputKey, shouldApplyAutoNightTime } from '../../shared/nightAutoCalcPolicy'
+import {
+  applyOooiDerivedFlightTimes,
+  oooiClockInputKey,
+  shouldApplyOooiDerivedTimes,
+} from '../../shared/oooiDerivedTimePolicy'
+import {
+  copyPerformanceCounts,
+  normalizePerformanceForDisplay,
+} from '../utils/logEntryPerformance'
 import { ensureAirportClientDbLoaded } from '../../shared/airportClientDb'
 import { getAirportIanaTimezone, normalizeTimezoneToIANA } from '../../shared/airportTimezone'
 import {
+  formatOooiClockToHhMm,
   formatOooiOppositeClockTooltip,
+  normalizeOooiClockOnBlur,
   oooiPairDurationHours,
+  sanitizeOooiClockDigitsWhileTyping,
   toggleOooiClockView,
   type OooiEventKey,
 } from '../../shared/oooiClock'
@@ -6906,12 +6922,9 @@ import { collectPilotCatalogNames } from '../../shared/looksLikePersonName'
 import type { Form8710Data, AircraftCategory8710, ComplianceMetadata } from '../utils/form8710Types'
 import { mapCategoryTo8710, isTrainingDevice } from '../utils/form8710Types'
 import {
-  applySimulatorImport,
   getSimTimeSum,
   inferLogbookType,
-  isLikelySimulatorRow,
   normalizeSimulatorInstrumentTime,
-  readSimHintsFromRawRow,
 } from '../utils/importSimulator'
 import {
   resolveImportNumber,
@@ -6969,17 +6982,13 @@ import {
   EXPORT_DESTINATION_HINTS,
   EXPORT_DESTINATION_LABELS,
 } from '../../shared/logbookDataBridge/types'
-import {
-  findFieldValue,
-  inferCategoryClassFromAircraftHints,
-  mapRawRowToLogEntry,
-} from '../../shared/logbookDataBridge/importMappers'
+import { findFieldValue } from '../../shared/logbookDataBridge/importMappers'
 import {
   clockDurationTruncationWarning,
   detectImportDurationFormat,
   parseImportDuration,
 } from '../../shared/logbookDataBridge/formatters'
-import { applyLogtenCrewFields } from '../utils/logbookImportEnrichments'
+import { normalizeImportedEntry as normalizeImportedLogEntry } from '../utils/normalizeImportedEntry'
 import { parseBridgeFile } from '../../shared/logbookDataBridge/fileParser'
 import {
   enrichForeFlightEntries,
@@ -6987,11 +6996,6 @@ import {
   providerKeyToBridgeSource,
   type ImportProviderKey,
 } from '../../shared/import'
-import {
-  enrichLogtenDynamicExportRow,
-  applyLogtenDynamicRoleAndTime,
-  isLogtenDynamicExportHeaders,
-} from '../../shared/logbookDataBridge/logtenDynamicExport'
 import {
   catalogAircraftFamilyKey,
   UNKNOWN_AIRCRAFT_FAMILY,
@@ -7017,7 +7021,10 @@ import { usePullToRefresh } from '../composables/usePullToRefresh'
 import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
 import { useDashboardShortcuts } from '../composables/useDashboardShortcuts'
 import { useDashboardEntryDeepLink } from '../composables/useDashboardEntryDeepLink'
-import { parseDashboardReturnTo } from '../utils/dashboardReturnTo'
+import {
+  resolveDashboardInlineEditReturnNavigation,
+  type DashboardInlineEditReturn,
+} from '../utils/dashboardInlineEditReturn'
 import AuthModal from '../components/AuthModal.vue'
 import { readStoredReferralCode } from '../utils/referralCapture'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
@@ -8694,6 +8701,11 @@ const setXcTimeManuallySet = (value: boolean) => {
 }
 /** Snapshot of OOOI/date/airports when inline edit opens — auto-night must not overwrite on open. */
 const inlineNightAutoCalcBaseline = ref<string | null>(null)
+/** Snapshot of Out/Off/On/In when a form opens — derived total/pic/sic must not overwrite on hydrate. */
+const inlineOooiDerivedTimeBaseline = ref<string | null>(null)
+const addOooiDerivedTimeBaseline = ref<string | null>(null)
+const inlineOooiFieldTouched = ref<Partial<Record<OooiEventKey, boolean>>>({})
+const addOooiFieldTouched = ref<Partial<Record<OooiEventKey, boolean>>>({})
 const searchTerm = ref('')
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const debouncedSearchTerm = ref('')
@@ -8737,6 +8749,8 @@ function toggleCommercialMode(): void {
     newEntry.oooi = createEmptyOOOI()
   }
   isCommercialMode.value = next
+  captureAddOooiDerivedTimeBaseline()
+  clearAddOooiFieldTouched()
 }
 
 // Sticky header refs
@@ -8790,15 +8804,7 @@ function handleFlicaConnectionChanged(payload: { connected: boolean }): void {
 const isInlineCommercialMode = ref(false)
 const editingEntryId = ref<string | null>(null)
 const expandedEntryId = ref<string | null>(null)
-const inlineEditReturnPath = ref<string | null>(null)
-
-watch(
-  () => route.query.returnTo,
-  (raw) => {
-    inlineEditReturnPath.value = parseDashboardReturnTo(raw)
-  },
-  { immediate: true }
-)
+const inlineEditReturn = ref<DashboardInlineEditReturn | null>(null)
 const inlineEditEntry = ref<LogEntry | null>(null)
 const showSignEntryModal = ref(false)
 const showSignatureFinishModal = ref(false)
@@ -9008,6 +9014,53 @@ function instructorDisplayName(row: { profile: { full_name: string | null } | nu
   return row.profile?.full_name?.trim() || 'Instructor'
 }
 
+function oooiClockSnapshot(oooi: OOOITimes | null | undefined): string {
+  return oooiClockInputKey({
+    out: oooi?.out,
+    off: oooi?.off,
+    on: oooi?.on,
+    in: oooi?.in,
+  })
+}
+
+function captureInlineOooiDerivedTimeBaseline(oooi: OOOITimes | null | undefined): void {
+  inlineOooiDerivedTimeBaseline.value = oooiClockSnapshot(oooi)
+}
+
+function captureAddOooiDerivedTimeBaseline(): void {
+  addOooiDerivedTimeBaseline.value = oooiClockSnapshot(newEntry.oooi)
+}
+
+function clocksFromOooiWatchTuple(
+  tuple: readonly unknown[] | undefined
+): { out: string | null; off: string | null; on: string | null; in: string | null } | null {
+  if (!tuple) return null
+  const asClock = (value: unknown): string | null =>
+    value == null || value === '' ? null : String(value)
+  return {
+    out: asClock(tuple[0]),
+    off: asClock(tuple[1]),
+    on: asClock(tuple[2]),
+    in: asClock(tuple[3]),
+  }
+}
+
+function shouldAutofillOooiDerivedTimes(
+  baseline: string | null,
+  currentTuple: readonly unknown[],
+  previousTuple: readonly unknown[] | undefined
+): boolean {
+  const current = clocksFromOooiWatchTuple(currentTuple)
+  if (!current) return false
+  const previous = clocksFromOooiWatchTuple(previousTuple)
+  return shouldApplyOooiDerivedTimes({
+    inputsUnchangedFromOpen:
+      baseline != null && oooiClockInputKey(current) === baseline,
+    oooiClocksUnchangedFromPrevious:
+      previous != null && oooiClockInputKey(previous) === oooiClockInputKey(current),
+  })
+}
+
 function closeInlineEditDrawer(): void {
   closeAuditTrailSidebar()
   closeSignEntryModal()
@@ -9016,20 +9069,26 @@ function closeInlineEditDrawer(): void {
   inlineEditEntry.value = null
   isInlineCommercialMode.value = false
   inlineNightAutoCalcBaseline.value = null
+  inlineOooiDerivedTimeBaseline.value = null
+  clearInlineOooiFieldTouched()
   showInlineCustomTagInput.value = false
   customTagInputInline.value = ''
 }
 
-function navigateAfterInlineEditIfRequested(): void {
-  const path = inlineEditReturnPath.value
+function navigateAfterInlineEditIfRequested(closingEntryId: string | null | undefined): void {
+  const path = resolveDashboardInlineEditReturnNavigation(
+    inlineEditReturn.value,
+    closingEntryId
+  )
   if (!path) return
-  inlineEditReturnPath.value = null
+  inlineEditReturn.value = null
   void router.push(path)
 }
 
 function dismissInlineEdit(): void {
+  const closingEntryId = expandedEntryId.value
   closeInlineEditDrawer()
-  navigateAfterInlineEditIfRequested()
+  navigateAfterInlineEditIfRequested(closingEntryId)
 }
 
 function setLocalSignaturePending(
@@ -9183,6 +9242,8 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
     }
     if (!Array.isArray(copy.tags)) copy.tags = []
     clearEntryFormFieldUi()
+    captureInlineOooiDerivedTimeBaseline(copy.oooi)
+    clearInlineOooiFieldTouched()
     inlineEditEntry.value = copy
     // Auto-enable commercial mode only when existing OOOI time fields are present
     const hasOOOITimes =
@@ -9212,6 +9273,9 @@ useDashboardEntryDeepLink({
   logEntries,
   setActiveLogbook,
   openEntry: (entry) => beginInlineEditing(entry),
+  onInlineEditReturn: (payload) => {
+    inlineEditReturn.value = payload
+  },
 })
 
 function beginAmendSignedEntry(): void {
@@ -9253,6 +9317,7 @@ function beginAmendSignedEntry(): void {
 
   logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, copy])
   expandedEntryId.value = newId
+  captureInlineOooiDerivedTimeBaseline(copy.oooi)
   inlineEditEntry.value = copy
 
   const hasOOOITimes =
@@ -9364,6 +9429,7 @@ async function beginVoidSignedEntry(): Promise<void> {
   // Optimistic UI — roll back if saveInlineEdit does not persist
   logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, voidEntry])
   expandedEntryId.value = newId
+  captureInlineOooiDerivedTimeBaseline(voidEntry.oooi)
   inlineEditEntry.value = voidEntry
   isInlineCommercialMode.value = false
 
@@ -9390,6 +9456,7 @@ async function beginVoidSignedEntry(): Promise<void> {
     // ignore — may never have been written
   }
   expandedEntryId.value = originalId
+  captureInlineOooiDerivedTimeBaseline(originalSnapshot.oooi)
   inlineEditEntry.value = originalSnapshot
   isInlineCommercialMode.value = priorCommercialMode
   showToast('Could not void entry — changes were not saved', { type: 'error', duration: 6000 })
@@ -9409,6 +9476,8 @@ function toggleInlineOOOIMode(): void {
     inlineEditEntry.value.oooi = createEmptyOOOI()
   }
   isInlineCommercialMode.value = next
+  captureInlineOooiDerivedTimeBaseline(inlineEditEntry.value.oooi)
+  clearInlineOooiFieldTouched()
 }
 
 async function saveInlineEdit(): Promise<boolean> {
@@ -9474,9 +9543,7 @@ async function saveInlineEdit(): Promise<boolean> {
     }, {} as FlightTimeBreakdown),
     performance: (() => {
       const base = { ...createEmptyPerformance() }
-      performanceFields.forEach((field) => {
-        (base as any)[field.key] = inlineEditEntry.value!.performance[field.key] ?? null
-      })
+      copyPerformanceCounts(inlineEditEntry.value!.performance, base)
       const formApproaches = inlineEditEntry.value!.performance.approaches
       const approaches = Array.isArray(formApproaches) && formApproaches.length > 0
         ? formApproaches.map((a) => ({ type: (a.type || '').trim() || 'Unknown', count: Math.max(0, a.count || 1) }))
@@ -9637,6 +9704,7 @@ async function saveInlineEdit(): Promise<boolean> {
                 const savedEntry = mapSupabaseRowToLogEntry(existingAmend)
                 await adoptEntryIntoLocalState(savedEntry, targetId)
                 expandedEntryId.value = savedEntry.id
+                captureInlineOooiDerivedTimeBaseline(savedEntry.oooi)
                 inlineEditEntry.value = savedEntry
                 afterInlineSaveSuccess(savedEntry)
                 return true
@@ -10321,6 +10389,7 @@ function prepareInlineEditFromEntry(savedEntry: LogEntry): void {
     copy.performance.approaches = getApproachesFromPerformance(copy.performance)
   }
   if (!Array.isArray(copy.tags)) copy.tags = []
+  captureInlineOooiDerivedTimeBaseline(copy.oooi)
   inlineEditEntry.value = copy
   const hasOOOITimes =
     !!copy.oooi &&
@@ -11503,225 +11572,14 @@ function getImporterPilotName(): string {
 }
 
 async function normalizeImportedEntry(
-  rawEntry: Record<string, any>,
+  rawEntry: Record<string, unknown>,
   source?: BridgeSource
 ): Promise<LogEntry | null> {
-  try {
-    const entry = mapRawRowToLogEntry(rawEntry, { generateId: generateEntryId, source })
-    if (!entry) return null
-
-    const isLogtenDynamic = isLogtenDynamicExportHeaders(Object.keys(rawEntry))
-    const importerName = getImporterPilotName()
-
-    if (isLogtenDynamic) {
-      enrichLogtenDynamicExportRow(entry, rawEntry, importerName)
-    }
-
-    if (!entry.aircraftCategoryClass?.trim()) {
-      const inferred = inferCategoryClassFromAircraftHints(
-        findFieldValue(rawEntry, [
-          'aircraftType_type',
-          'aircraft_aircraftType',
-          'flight_selectedAircraftType',
-          'Aircraft Type',
-          'aircraft type',
-          'Type',
-        ]),
-        entry.aircraftMakeModel
-      )
-      if (inferred) entry.aircraftCategoryClass = inferred
-    }
-
-    // Reset total for LogTen OOOI-derived block time (calculated below)
-    const hasLogtenNativeKeys = !!findFieldValue(rawEntry, [
-      'flight_flightDate',
-      'flight_flightdate',
-    ])
-    const hasLogtenOOOI = !!(
-      findFieldValue(rawEntry, ['flight_actualDepartureTime']) ||
-      findFieldValue(rawEntry, ['flight_actualArrivalTime'])
-    )
-    if (hasLogtenOOOI) {
-      entry.flightTime.total = null
-    }
-
-    // Parse flight conditions
-    const conditionsStr = rawEntry['Flight Conditions'] || rawEntry.flightConditions || ''
-    if (conditionsStr) {
-      entry.flightConditions = sanitizeFlightConditions(
-        conditionsStr.split(';').map((c: string) => c.trim()).filter((c: string) => c)
-      )
-    }
-    
-    // Parse OOOI times — native LogTen keys, Dynamic Export columns, or generic Out/In
-    const logtenOut = findFieldValue(rawEntry, ['flight_actualDepartureTime'])
-    const logtenIn = findFieldValue(rawEntry, ['flight_actualArrivalTime'])
-    const isLogtenImport = !!(logtenOut || logtenIn || hasLogtenNativeKeys)
-    
-    const out =
-      logtenOut ||
-      findFieldValue(rawEntry, ['Out', 'out']) ||
-      rawEntry.Out ||
-      rawEntry.oooi?.out ||
-      null
-
-    let off: string | null = null
-    let on: string | null = null
-    if (isLogtenDynamic) {
-      off = findFieldValue(rawEntry, ['Off', 'off']) || null
-      on = findFieldValue(rawEntry, ['On', 'on']) || null
-    } else if (isLogtenImport) {
-      off =
-        findFieldValue(rawEntry, ['flight_takeoffTime', 'flight_taxiOutTime']) ||
-        rawEntry.Off ||
-        rawEntry.oooi?.off ||
-        null
-      on =
-        findFieldValue(rawEntry, ['flight_landingTime', 'flight_taxiInTime']) ||
-        rawEntry.On ||
-        rawEntry.oooi?.on ||
-        null
-    } else {
-      off = rawEntry.Off || rawEntry.oooi?.off || null
-      on = rawEntry.On || rawEntry.oooi?.on || null
-    }
-
-    const inTime =
-      logtenIn ||
-      findFieldValue(rawEntry, ['In', 'in']) ||
-      rawEntry.In ||
-      rawEntry.oooi?.in ||
-      null
-    
-    // Determine if times are in Zulu (UTC)
-    // LogTen exports times in Zulu/UTC by default
-    // Check for explicit timezone indicators in the export
-    let isZulu: boolean
-    if (isLogtenImport) {
-      // Check for timezone indicators in LogTen export
-      const timezoneField = findFieldValue(rawEntry, ['timezone', 'Timezone', 'TIMEZONE', 'isZulu', 'Is Zulu', 'is_zulu'])
-      const timezoneLower = timezoneField.toLowerCase()
-      
-      // Check for Zulu/UTC indicators
-      const hasZuluIndicator = timezoneLower.includes('zulu') || 
-                               timezoneLower.includes('utc') ||
-                               timezoneLower === 'z' ||
-                               rawEntry.isZulu === true ||
-                               rawEntry['Is Zulu'] === true
-      
-      // Check for local time indicator
-      const hasLocalIndicator = timezoneLower.includes('local') ||
-                                rawEntry.isZulu === false ||
-                                rawEntry['Is Zulu'] === false
-      
-      // Default to Zulu (true) for LogTen imports unless explicitly marked as local
-      isZulu = hasLocalIndicator ? false : (hasZuluIndicator ? true : true) // Default to true (Zulu)
-    } else {
-      // For non-LogTen imports, check explicit field or default to Zulu
-      isZulu = rawEntry['Is Zulu'] !== undefined ? rawEntry['Is Zulu'] : (rawEntry.oooi?.isZulu !== undefined ? rawEntry.oooi.isZulu : true)
-    }
-    
-    // If we have OOOI times, calculate block time from out to in (gate out to gate in)
-    // For Logten imports, this will override the null initial value
-    // Fall back to off/on if out/in don't exist
-    // Zulu times need no airport timezone lookup (duration is UTC-to-UTC).
-    if (out && inTime) {
-      const startTimezone = isZulu
-        ? null
-        : entry.departure
-          ? await getAirportTimezone(entry.departure)
-          : null
-      const endTimezone = isZulu
-        ? null
-        : entry.destination
-          ? await getAirportTimezone(entry.destination)
-          : null
-
-      const calculatedTime = await calculateDuration(out, inTime, entry.date, startTimezone, endTimezone, isZulu)
-      if (calculatedTime !== null && calculatedTime > 0) {
-        entry.flightTime.total = calculatedTime
-      }
-    } else if (off && on) {
-      const startTimezone = isZulu
-        ? null
-        : entry.departure
-          ? await getAirportTimezone(entry.departure)
-          : null
-      const endTimezone = isZulu
-        ? null
-        : entry.destination
-          ? await getAirportTimezone(entry.destination)
-          : null
-
-      const calculatedTime = await calculateDuration(off, on, entry.date, startTimezone, endTimezone, isZulu)
-      if (calculatedTime !== null && calculatedTime > 0) {
-        entry.flightTime.total = calculatedTime
-      }
-    }
-    
-    // For imports, rely solely on exported night time values
-    // No calculation during import - use what was exported from the source system
-    
-    // For Logten imports without OOOI times, fall back to flight_totalTime
-    if (isLogtenImport && !entry.flightTime.total) {
-      const fallbackTotal = normalizeNumber(rawEntry.flight_totalTime)
-      if (fallbackTotal !== null && fallbackTotal > 0) {
-        entry.flightTime.total = fallbackTotal
-      }
-    }
-    
-    // For Logten imports, if flight is marked as cross-country (flight_crossCountry > 0),
-    // set cross-country time to match total time
-    if (isLogtenImport && entry.flightTime.total) {
-      const logtenXCTime = normalizeNumber(rawEntry.flight_crossCountry)
-      if (logtenXCTime !== null && logtenXCTime > 0) {
-        // Logten marked it as cross-country, so XC time should equal total time
-        entry.flightTime.crossCountry = entry.flightTime.total
-      }
-    }
-    
-    if (out || off || on || inTime) {
-      entry.oooi = {
-        out: out,
-        off: off,
-        on: on,
-        in: inTime,
-        isZulu: Boolean(isZulu)
-      }
-    }
-    
-    // Auto-detect IFR if flight number exists (only add condition, don't auto-set actualInstrument)
-    if (entry.flightNumber && entry.flightNumber.trim() !== '') {
-      const conditionSet = new Set(entry.flightConditions)
-      conditionSet.add('ifr')
-      entry.flightConditions = Array.from(conditionSet)
-    }
-    
-    if (isLogtenDynamic) {
-      applyLogtenDynamicRoleAndTime(entry, rawEntry, importerName)
-    }
-
-    applyLogtenCrewFields(entry, rawEntry, importerName)
-    
-    const simHints = readSimHintsFromRawRow(rawEntry)
-    applySimulatorImport(entry, simHints)
-    entry.logbookType = inferLogbookType(entry)
-
-    // Auto-check flight conditions after simulator normalization (actual → simulated)
-    entry.flightConditions = autoCheckFlightConditions(
-      entry.flightConditions,
-      entry.flightTime.night,
-      entry.flightTime.actualInstrument,
-      entry.flightTime.simulatedInstrument,
-      entry.flightTime.crossCountry,
-      entry.flightTime.nvg ?? null
-    )
-    
-    return entry
-  } catch (error) {
-    console.error('Error normalizing imported entry:', error, rawEntry)
-    return null
-  }
+  return normalizeImportedLogEntry(rawEntry, source, {
+    generateId: generateEntryId,
+    importerName: getImporterPilotName(),
+    getAirportTimezone,
+  })
 }
 
 async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statistics: ImportStatistics; validEntries: LogEntry[]; duplicates: LogEntry[]; errors: { entry: LogEntry; message: string }[] }> {
@@ -12613,6 +12471,11 @@ async function handleImportDrop(event: DragEvent): Promise<void> {
   } else {
     showToast(`Please drop a CSV, TSV, TXT, JSON, or ZIP backup. Received: ${file.type || 'unknown type'}`, { type: 'error' })
   }
+}
+
+function openRestoreBackupFilePicker(): void {
+  if (importBusy.value) return
+  jsonFileInput.value?.click()
 }
 
 async function handleSettingsImportFile(file: File): Promise<void> {
@@ -13798,6 +13661,8 @@ function resetForm(): void {
   // Reset manual XC time tracking when form is reset
   xcTimeManuallySet.value = false
   lastKnownXcTime.value = null
+  captureAddOooiDerivedTimeBaseline()
+  clearAddOooiFieldTouched()
 }
 
 function ensureDefaultSignInstructor(): void {
@@ -13821,6 +13686,7 @@ function openNewEntryForm(draft?: EditableLogEntry): void {
   expandedEntryId.value = null
   inlineEditEntry.value = null
   isInlineCommercialMode.value = false
+  inlineOooiDerivedTimeBaseline.value = null
   successMessage.value = null
   editingEntryId.value = null
   isCommercialMode.value = false
@@ -13828,10 +13694,13 @@ function openNewEntryForm(draft?: EditableLogEntry): void {
   Object.assign(newEntry, createBlankEntry(), draft ?? {})
   showSimSection.value = (draft?.logbookType ?? activeLogbook.value) === 'simulator'
   isEntryFormOpen.value = true
+  captureAddOooiDerivedTimeBaseline()
+  clearAddOooiFieldTouched()
   ensureDefaultSignInstructor()
 }
 
 function closeAddEntryPanel(): void {
+  clearAddOooiFieldTouched()
   clearEntryFormFieldUi()
   validationError.value = null
   duplicateWarning.value = null
@@ -13940,9 +13809,46 @@ const filteredAircraftItemsByFamily = computed(() => {
   return map
 })
 
-function formatOOOIInput(value: string): string {
-  // Remove non-digits and limit to 4 characters
-  return value.replace(/\D/g, '').slice(0, 4)
+function clearInlineOooiFieldTouched(): void {
+  inlineOooiFieldTouched.value = {}
+}
+
+function clearAddOooiFieldTouched(): void {
+  addOooiFieldTouched.value = {}
+}
+
+function applyOooiFieldBlurFormat(
+  oooi: OOOITimes | null | undefined,
+  field: OooiEventKey,
+  touched: Partial<Record<OooiEventKey, boolean>>
+): void {
+  if (!oooi) return
+  const result = normalizeOooiClockOnBlur(oooi[field], !!touched[field])
+  if (result.kind === 'formatted') {
+    oooi[field] = result.value
+  }
+}
+
+function onInlineOooiFieldBlur(field: OooiEventKey): void {
+  applyOooiFieldBlurFormat(inlineEditEntry.value?.oooi ?? null, field, inlineOooiFieldTouched.value)
+}
+
+function onAddOooiFieldBlur(field: OooiEventKey): void {
+  applyOooiFieldBlurFormat(newEntry.oooi, field, addOooiFieldTouched.value)
+}
+
+function onInlineOooiFieldInput(field: OooiEventKey, value: string): void {
+  if (!inlineEditEntry.value?.oooi) return
+  inlineOooiFieldTouched.value[field] = true
+  ;(inlineEditEntry.value.oooi as unknown as Record<string, string | null>)[field] =
+    sanitizeOooiClockDigitsWhileTyping(value)
+}
+
+function onAddOooiFieldInput(field: OooiEventKey, value: string): void {
+  if (!newEntry.oooi) return
+  addOooiFieldTouched.value[field] = true
+  ;(newEntry.oooi as unknown as Record<string, string | null>)[field] =
+    sanitizeOooiClockDigitsWhileTyping(value)
 }
 
 type OooiClockFormEntry = {
@@ -14003,43 +13909,13 @@ function toggleInlineOooiClock(): void {
     in: entry.oooi.in,
     isZulu: entry.oooi.isZulu,
   })
+  captureInlineOooiDerivedTimeBaseline(entry.oooi)
 }
 
 function toggleNewEntryOooiClock(): void {
   applyOooiClockToggle(newEntry)
-}
-
-/**
- * Convert OOOI time format from "HHMM" to "HH:MM"
- * @param time Time string in HHMM format (e.g., "1430") or null
- * @returns Time string in HH:MM format (e.g., "14:30") or null if invalid
- */
-function convertOOOITimeToHHMM(time: string | null): string | null {
-  if (!time || time.length === 0) return null
-  
-  // Remove non-digits
-  let digits = time.replace(/\D/g, '')
-  
-  // Handle 3-digit times (e.g., "083" -> "0803" for 8:03 AM)
-  if (digits.length === 3) {
-    digits = '0' + digits // Prepend 0 to make it 4 digits
-  }
-  
-  // Pad to 4 characters if less than 4 (handles 1-2 digit times)
-  digits = digits.padStart(4, '0')
-  
-  if (digits.length !== 4) return null
-  
-  const hours = parseInt(digits.slice(0, 2), 10)
-  const minutes = parseInt(digits.slice(2, 4), 10)
-  
-  // Validate hours and minutes
-  if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
-    return null
-  }
-  
-  // Format as HH:MM
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`
+  captureAddOooiDerivedTimeBaseline()
+  clearAddOooiFieldTouched()
 }
 
 function autoCheckFlightConditions(
@@ -15103,6 +14979,7 @@ async function beginEditing(entry: LogEntry): Promise<void> {
     newEntry.oooi = createEmptyOOOI()
     isCommercialMode.value = false
   }
+  captureAddOooiDerivedTimeBaseline()
   validationError.value = null
   successMessage.value = null
   isEntryFormOpen.value = false
@@ -15400,9 +15277,10 @@ async function calculateDuration(
 }
 
 // Watcher to auto-calculate total time and flight time
-watch(() => [newEntry.oooi?.out, newEntry.oooi?.off, newEntry.oooi?.on, newEntry.oooi?.in, newEntry.role, newEntry.departure, newEntry.destination, newEntry.date], async () => {
+watch(() => [newEntry.oooi?.out, newEntry.oooi?.off, newEntry.oooi?.on, newEntry.oooi?.in, newEntry.role, newEntry.departure, newEntry.destination, newEntry.date], async (curr, prev) => {
   if (!isCommercialMode.value || !newEntry.oooi) return
-  
+  if (!shouldAutofillOooiDerivedTimes(addOooiDerivedTimeBaseline.value, curr, prev)) return
+
   if (newEntry.oooi.out && newEntry.oooi.in) {
      // Get timezones for departure and destination airports
      const startTimezone = newEntry.oooi.off && newEntry.departure
@@ -15437,21 +15315,10 @@ watch(() => [newEntry.oooi?.out, newEntry.oooi?.off, newEntry.oooi?.on, newEntry
      
      console.log('[FlightTime] Calculated block time:', block)
      if (block !== null) {
-       newEntry.flightTime.total = block
-       
-       // Auto-distribute based on Role
-       if (newEntry.role === 'PIC') {
-         newEntry.flightTime.pic = block
-         newEntry.flightTime.sic = null
-       } else if (newEntry.role === 'SIC') {
-         newEntry.flightTime.sic = block
-         newEntry.flightTime.pic = null
-       } else if (newEntry.role === 'Dual Received') {
-          newEntry.flightTime.dual = block
-       } else if (newEntry.role === 'Solo') {
-          newEntry.flightTime.solo = block
-          newEntry.flightTime.pic = block // Solo is also PIC usually
-       }
+       if (!shouldAutofillOooiDerivedTimes(addOooiDerivedTimeBaseline.value, [
+         newEntry.oooi.out, newEntry.oooi.off, newEntry.oooi.on, newEntry.oooi.in,
+       ], prev)) return
+       applyOooiDerivedFlightTimes(newEntry.flightTime, newEntry.role, block)
      }
   } else if (newEntry.oooi.off && newEntry.oooi.on) {
      // Calculate from OFF to ON (air time)
@@ -15471,21 +15338,10 @@ watch(() => [newEntry.oooi?.out, newEntry.oooi?.off, newEntry.oooi?.on, newEntry
        newEntry.oooi.isZulu
      )
      if (block !== null) {
-       newEntry.flightTime.total = block
-       
-       // Auto-distribute based on Role
-       if (newEntry.role === 'PIC') {
-         newEntry.flightTime.pic = block
-         newEntry.flightTime.sic = null
-       } else if (newEntry.role === 'SIC') {
-         newEntry.flightTime.sic = block
-         newEntry.flightTime.pic = null
-       } else if (newEntry.role === 'Dual Received') {
-          newEntry.flightTime.dual = block
-       } else if (newEntry.role === 'Solo') {
-          newEntry.flightTime.solo = block
-          newEntry.flightTime.pic = block // Solo is also PIC usually
-       }
+       if (!shouldAutofillOooiDerivedTimes(addOooiDerivedTimeBaseline.value, [
+         newEntry.oooi.out, newEntry.oooi.off, newEntry.oooi.on, newEntry.oooi.in,
+       ], prev)) return
+       applyOooiDerivedFlightTimes(newEntry.flightTime, newEntry.role, block)
      }
   }
   
@@ -15565,9 +15421,10 @@ watch(() => [newEntry.departure, newEntry.destination, newEntry.route, newEntry.
   }, 500)
 })
 
-watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.off, inlineEditEntry.value?.oooi?.on, inlineEditEntry.value?.oooi?.in, inlineEditEntry.value?.role, inlineEditEntry.value?.departure, inlineEditEntry.value?.destination, inlineEditEntry.value?.date], async () => {
+watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.off, inlineEditEntry.value?.oooi?.on, inlineEditEntry.value?.oooi?.in, inlineEditEntry.value?.role, inlineEditEntry.value?.departure, inlineEditEntry.value?.destination, inlineEditEntry.value?.date], async (curr, prev) => {
   if (!isInlineCommercialMode.value || !inlineEditEntry.value?.oooi) return
-  
+  if (!shouldAutofillOooiDerivedTimes(inlineOooiDerivedTimeBaseline.value, curr, prev)) return
+
   if (inlineEditEntry.value.oooi.out && inlineEditEntry.value.oooi.in) {
      // Get timezones for departure and destination airports
      const startTimezone = inlineEditEntry.value.oooi.off && inlineEditEntry.value.departure
@@ -15601,23 +15458,12 @@ watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.off,
      )
      
      console.log('[FlightTime Inline] Calculated block time:', block)
-     if (block !== null) {
-       inlineEditEntry.value.flightTime.total = block
-       
-       // Auto-distribute based on Role
-       const role = inlineEditEntry.value.role
-       if (role === 'PIC') {
-         inlineEditEntry.value.flightTime.pic = block
-         inlineEditEntry.value.flightTime.sic = null
-       } else if (role === 'SIC') {
-         inlineEditEntry.value.flightTime.sic = block
-         inlineEditEntry.value.flightTime.pic = null
-       } else if (role === 'Dual Received') {
-          inlineEditEntry.value.flightTime.dual = block
-       } else if (role === 'Solo') {
-          inlineEditEntry.value.flightTime.solo = block
-          inlineEditEntry.value.flightTime.pic = block
-       }
+     if (block !== null && inlineEditEntry.value) {
+       const oooi = inlineEditEntry.value.oooi
+       if (!oooi || !shouldAutofillOooiDerivedTimes(inlineOooiDerivedTimeBaseline.value, [
+         oooi.out, oooi.off, oooi.on, oooi.in,
+       ], prev)) return
+       applyOooiDerivedFlightTimes(inlineEditEntry.value.flightTime, inlineEditEntry.value.role, block)
        syncCrossCountryWithCommercialOooiTotal(inlineEditEntry.value, block)
      }
   } else if (inlineEditEntry.value.oooi.off && inlineEditEntry.value.oooi.on) {
@@ -15637,23 +15483,12 @@ watch(() => [inlineEditEntry.value?.oooi?.out, inlineEditEntry.value?.oooi?.off,
        endTimezone,
        inlineEditEntry.value.oooi.isZulu
      )
-     if (block !== null) {
-       inlineEditEntry.value.flightTime.total = block
-       
-       // Auto-distribute based on Role
-       const role = inlineEditEntry.value.role
-       if (role === 'PIC') {
-         inlineEditEntry.value.flightTime.pic = block
-         inlineEditEntry.value.flightTime.sic = null
-       } else if (role === 'SIC') {
-         inlineEditEntry.value.flightTime.sic = block
-         inlineEditEntry.value.flightTime.pic = null
-       } else if (role === 'Dual Received') {
-          inlineEditEntry.value.flightTime.dual = block
-       } else if (role === 'Solo') {
-          inlineEditEntry.value.flightTime.solo = block
-          inlineEditEntry.value.flightTime.pic = block
-       }
+     if (block !== null && inlineEditEntry.value) {
+       const oooi = inlineEditEntry.value.oooi
+       if (!oooi || !shouldAutofillOooiDerivedTimes(inlineOooiDerivedTimeBaseline.value, [
+         oooi.out, oooi.off, oooi.on, oooi.in,
+       ], prev)) return
+       applyOooiDerivedFlightTimes(inlineEditEntry.value.flightTime, inlineEditEntry.value.role, block)
        syncCrossCountryWithCommercialOooiTotal(inlineEditEntry.value, block)
      }
   }
@@ -15861,8 +15696,8 @@ async function autoCalculateNightTime(
     }
   }
 
-  const outTimeFormatted = convertOOOITimeToHHMM(outTime)
-  const inTimeFormatted = convertOOOITimeToHHMM(inTime)
+  const outTimeFormatted = formatOooiClockToHhMm(outTime)
+  const inTimeFormatted = formatOooiClockToHhMm(inTime)
   if (!outTimeFormatted || !inTimeFormatted) return null
 
   const depLat = typeof depCoords.lat === 'number' ? depCoords.lat : parseFloat(String(depCoords.lat))
@@ -16190,10 +16025,7 @@ async function submitEntry(): Promise<void> {
     }, {} as FlightTimeBreakdown),
     performance: (() => {
       const base = { ...createEmptyPerformance() }
-      performanceFields.forEach((field) => {
-        const v = newEntry.performance[field.key]
-        ;(base as any)[field.key] = v ?? null
-      })
+      copyPerformanceCounts(newEntry.performance, base)
       const approaches = (newEntry.performance.approaches && newEntry.performance.approaches.length > 0)
         ? newEntry.performance.approaches.map((a) => ({ type: (a.type || '').trim() || 'Unknown', count: Math.max(0, a.count || 1) }))
         : []
@@ -16597,7 +16429,7 @@ async function confirmAndDeleteEntry(id: string): Promise<void> {
   if (expandedEntryId.value === id) {
     expandedEntryId.value = null
     inlineEditEntry.value = null
-    navigateAfterInlineEditIfRequested()
+    navigateAfterInlineEditIfRequested(id)
   }
 }
 
@@ -16622,6 +16454,7 @@ async function handleEntryRestored(entryId: string) {
   if (expandedEntryId.value === entryId) {
     const updatedEntry = logEntries.value.find(e => e.id === entryId)
     if (updatedEntry) {
+      captureInlineOooiDerivedTimeBaseline(updatedEntry.oooi)
       inlineEditEntry.value = { ...updatedEntry }
     }
   }
@@ -16634,22 +16467,7 @@ function normalizeLogEntryForDisplay(entry: LogEntry): LogEntry {
     normalizedFlightTime[field.key] = normalizeNumber(entry.flightTime?.[field.key])
   })
 
-  const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
-  performanceFields.forEach((field) => {
-    const rawValue = entry.performance?.[field.key]
-    const val =
-      typeof rawValue === 'string'
-        ? isNaN(parseFloat(rawValue))
-          ? null
-          : parseFloat(rawValue)
-        : normalizeNumber(rawValue)
-    ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
-  })
-  normalizedPerformance.approaches = Array.isArray(entry.performance?.approaches)
-    ? [...entry.performance.approaches]
-    : getApproachesFromPerformance(entry.performance)
-  normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
-  normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
+  const normalizedPerformance = normalizePerformanceForDisplay(entry.performance)
 
   return {
     ...entry,
@@ -17562,17 +17380,7 @@ function loadPersistedEntries(): void {
         })
         
         // Normalize performance values too
-        const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
-        performanceFields.forEach((field) => {
-          const rawValue = entry.performance?.[field.key]
-          const val = typeof rawValue === 'string'
-            ? (isNaN(parseFloat(rawValue)) ? null : parseFloat(rawValue))
-            : (rawValue ?? null)
-          ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
-        })
-        normalizedPerformance.approaches = Array.isArray(entry.performance?.approaches) ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance)
-        normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
-        normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
+        const normalizedPerformance = normalizePerformanceForDisplay(entry.performance)
         
         return {
           ...entry,

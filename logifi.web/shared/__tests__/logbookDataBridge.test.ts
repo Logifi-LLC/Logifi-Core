@@ -7,6 +7,7 @@ import {
   formatExportDate,
   formatRegistrationForExport,
   parseImportDate,
+  parseImportBoolean,
   parseImportDuration,
 } from '../logbookDataBridge/formatters'
 import {
@@ -24,6 +25,7 @@ import {
 import {
   inferCategoryClassFromAircraftHints,
   mapRawRowToLogEntry,
+  normalizeCategoryClassLabel,
 } from '../logbookDataBridge/importMappers'
 import {
   buildHeaderRowObject,
@@ -46,7 +48,11 @@ import {
 import { validatePart61RequiredFields } from '../../app/utils/validation'
 import { applySimulatorImport, getSimTimeSum, readSimHintsFromRawRow } from '../../app/utils/importSimulator'
 import { parseWithProvider } from '../import/ImporterFactory'
-import { applyLogtenCrewFields, inferImporterSeat } from '../../app/utils/logbookImportEnrichments'
+import {
+  applyLogtenCrewFields,
+  applyLogtenFileCrossCountry,
+  inferImporterSeat,
+} from '../../app/utils/logbookImportEnrichments'
 import type { LogEntry } from '../../app/utils/logbookTypes'
 import { getDisplayConditions } from '../../app/utils/flightConditions'
 import { collectPilotCatalogNames } from '../looksLikePersonName'
@@ -191,6 +197,23 @@ describe('parseImportDuration', () => {
     expect(parseImportDuration('   ')).toBeNull()
     expect(parseImportDuration('1:60')).toBeNull()
     expect(parseImportDuration(null)).toBeNull()
+    expect(parseImportDuration('1,5')).toBe(1.5)
+    expect(parseImportDuration('0,8')).toBe(0.8)
+  })
+})
+
+describe('parseImportBoolean', () => {
+  it('parses Yes/No and does not treat No as true', () => {
+    expect(parseImportBoolean('Yes')).toBe(true)
+    expect(parseImportBoolean('No')).toBe(false)
+    expect(parseImportBoolean('true')).toBe(true)
+    expect(parseImportBoolean('false')).toBe(false)
+    expect(parseImportBoolean('local')).toBe(false)
+    expect(parseImportBoolean('zulu')).toBe(true)
+    expect(parseImportBoolean('')).toBeNull()
+    expect(parseImportBoolean(undefined)).toBeNull()
+    expect(parseImportBoolean(true)).toBe(true)
+    expect(parseImportBoolean(false)).toBe(false)
   })
 })
 
@@ -265,6 +288,11 @@ describe('logbookDataBridge formatters', () => {
     expect(formatExportDate('2024-06-13', 'iso')).toBe('2024-06-13')
     expect(formatExportDate('2024-06-13', 'mdy')).toBe('06/13/2024')
     expect(parseImportDate('6/13/2024')).toBe('2024-06-13')
+    expect(parseImportDate('15/04/2026')).toBe('2026-04-15')
+    expect(parseImportDate('2026-02-30')).toBeNull()
+    expect(parseImportDate('2026-15-04')).toBeNull()
+    expect(parseImportDate('Nov 14, 2026')).toBe('2026-11-14')
+    expect(parseImportDate('4/5/26')).toBe('2026-04-05')
   })
 
   it('builds full route strings', () => {
@@ -279,6 +307,10 @@ describe('logbookDataBridge sourceDetector', () => {
     expect(
       detectBridgeSource(['Date', 'AircraftID', 'From', 'To', 'TotalTime', 'PIC'])
     ).toBe('foreflight')
+  })
+
+  it('does not treat generic Date / Registration / Total Time as ForeFlight', () => {
+    expect(detectBridgeSource(['Date', 'Registration', 'Total Time'])).not.toBe('foreflight')
   })
 
   it('detects LogTen TSV-style headers', () => {
@@ -655,7 +687,7 @@ describe('logbookDataBridge importMappers', () => {
     expect(entry).not.toBeNull()
     applyLogtenCrewFields(entry!, LOGTEN_NATIVE_SAMPLE_ROW, 'Derek Farmer')
 
-    expect(entry?.trainingElements).toBe('William Riddle')
+    expect(entry?.trainingElements).toBe('WILLIAM RIDDLE')
     expect(entry?.trainingInstructor).toBe('First Officer')
 
     const errors = validatePart61RequiredFields(entry!).filter((r) => r.type === 'error')
@@ -870,8 +902,8 @@ describe('logbookDataBridge export', () => {
     expect(logifi['Total Flight Time']).toBe('0.8')
     expect(logifi['Ground Simulator']).toBe('1.3')
     expect(logifi.FTD).toBe('1.3')
-    expect(logifi.FFS).toBe('0.0')
-    expect(logifi.ATD).toBe('0.0')
+    expect(logifi.FFS).toBe('')
+    expect(logifi.ATD).toBe('')
     expect(logifi['Actual Instrument']).toBe('0.5')
     expect(logifi['Simulated Instrument']).toBe('0.3')
     expect(logifi['Dual Received']).toBe('0.4')
@@ -1361,5 +1393,237 @@ describe('Logifi-native lesson text vs crew catalog', () => {
       { source: 'logifi-native' }
     )
     expect(entry?.trainingElements).toBe('Hood work')
+  })
+})
+
+describe('import integrity regressions', () => {
+  const picRow = {
+    Date: '2026-04-15',
+    Registration: 'N172FX',
+    From: 'KOSH',
+    To: 'KOSH',
+    PIC: '1.2',
+    'Total Time': '1.2',
+  }
+
+  it('does not treat remarks lesson text as the other crew member', () => {
+    for (const remarks of ['Pattern work', 'Touch and goes', 'XC nav']) {
+      const entry = mapRawRowToLogEntry({ ...picRow, Remarks: remarks })
+      expect(entry?.remarks).toBe(remarks)
+      expect(entry?.sicName).toBeNull()
+      expect(entry?.picName).toBeNull()
+      expect(entry?.trainingElements).toBe('')
+      expect(entry?.trainingInstructor).toBe('')
+    }
+  })
+
+  it('keeps file XC when total is larger', () => {
+    const entry = mapRawRowToLogEntry({
+      flight_flightDate: '2026-04-15',
+      aircraft_aircraftID: 'N430YX',
+      flight_from: 'KLGA',
+      flight_to: 'KDCA',
+      flight_totalTime: '1.6',
+      flight_crossCountry: '1.2',
+      flight_pic: '1.6',
+    })
+    expect(entry?.flightTime.total).toBe(1.6)
+    expect(entry?.flightTime.crossCountry).toBe(1.2)
+
+    entry!.flightTime.total = 1.6
+    applyLogtenFileCrossCountry(entry!, '1.2')
+    expect(entry?.flightTime.crossCountry).toBe(1.2)
+    expect(entry?.flightTime.total).toBe(1.6)
+  })
+
+  it('maps ForeFlight AllLandings minus night, not full-stop day', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        Date: '2026-04-15',
+        AircraftID: 'N172FX',
+        From: 'KOSH',
+        To: 'KOSH',
+        TotalTime: '1.2',
+        PIC: '1.2',
+        AllLandings: '5',
+        DayLandingsFullStop: '1',
+        NightLandingsFullStop: '0',
+      },
+      { source: 'foreflight' }
+    )
+    expect(entry?.performance.dayLandings).toBe(5)
+    expect(entry?.performance.nightLandings).toBe(0)
+  })
+
+  it('maps MyFlightbook Landings minus FS Night, not FS Day', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        Date: '2026-04-15',
+        'Tail Number': 'N172MB',
+        Model: 'C-172',
+        'Total Flight Time': '1.1',
+        PIC: '1.1',
+        Route: 'KOSH KOSH',
+        Landings: '4',
+        'FS Day Landings': '1',
+        'FS Night Landings': '0',
+      },
+      { source: 'myflightbook' }
+    )
+    expect(entry?.performance.dayLandings).toBe(4)
+    expect(entry?.performance.nightLandings).toBe(0)
+  })
+
+  it('maps glider, balloon, powered-lift, and gyroplane to canonical classes', () => {
+    expect(normalizeCategoryClassLabel('glider')).toBe('GLID')
+    expect(normalizeCategoryClassLabel('lighter_than_air_balloon')).toBe('BAL')
+    expect(normalizeCategoryClassLabel('powered_lift')).toBe('PL')
+    expect(normalizeCategoryClassLabel('rotorcraft_gyroplane')).toBe('GYRO')
+    expect(normalizeCategoryClassLabel('rotorcraft_helicopter')).toBe('HELI')
+  })
+
+  it('preserves LogTen crew capitalization and existing job labels', () => {
+    const entry = mapRawRowToLogEntry({
+      Date: '2026-04-15',
+      Registration: 'N172FX',
+      From: 'KOSH',
+      To: 'KORD',
+      PIC: '1.5',
+      'Total Time': '1.5',
+      'PIC Name': 'Pat McDonald',
+      'SIC Name': 'Sam DeLuca',
+      'Training Instructor': 'First Officer',
+    })
+    expect(entry?.trainingInstructor).toBe('First Officer')
+    applyLogtenCrewFields(entry!, {
+      flight_selectedCrewPIC: 'Pat McDonald',
+      flight_selectedCrewSIC: 'Sam DeLuca',
+      'Training Instructor': 'First Officer',
+    }, 'Pat McDonald')
+    expect(entry?.trainingElements).toBe('Sam DeLuca')
+    expect(entry?.trainingInstructor).toBe('First Officer')
+  })
+})
+
+describe('Logifi-native CSV category class time and integrity fields', () => {
+  const nativeBaseRow = {
+    Date: '2025-03-06',
+    Role: 'PIC',
+    Registration: 'N4411F',
+    Departure: 'KSEA',
+    Destination: 'KPDX',
+    'Aircraft Make/Model': 'E170',
+    'Aircraft Category/Class': 'AMEL',
+    PIC: '2.0',
+    'Total Flight Time': '2.0',
+  }
+
+  it('appends Category Class Time without reordering existing headers', () => {
+    expect(LOGIFI_NATIVE_HEADERS[LOGIFI_NATIVE_HEADERS.length - 1]).toBe(
+      'Category Class Time'
+    )
+    expect(LOGIFI_NATIVE_HEADERS).toContain('Signature Pending')
+    expect(
+      LOGIFI_NATIVE_HEADERS.indexOf('Signature Pending')
+    ).toBeLessThan(LOGIFI_NATIVE_HEADERS.indexOf('Category Class Time'))
+    const original = createTestEntry({
+      categoryClassTime: 1.9,
+      flightTime: {
+        ...createTestEntry().flightTime,
+        total: 2.0,
+        pic: 2.0,
+      },
+    })
+    const row = mapEntryToLogifiNativeRow(original)
+    expect(row).toHaveLength(LOGIFI_NATIVE_HEADERS.length)
+    const obj = buildHeaderRowObject(LOGIFI_NATIVE_HEADERS, row)
+    expect(obj['Category Class Time']).toBe('1.9')
+    expect(obj['Total Flight Time']).toBe('2.0')
+  })
+
+  it('maps Category Class Time on native import and does not copy Total', () => {
+    const entry = mapRawRowToLogEntry(
+      { ...nativeBaseRow, 'Category Class Time': '1.9' },
+      { source: 'logifi-native' }
+    )
+    expect(entry?.categoryClassTime).toBe(1.9)
+    expect(entry?.flightTime.total).toBe(2.0)
+  })
+
+  it('keeps a blank Category Class Time blank on native import', () => {
+    const entry = mapRawRowToLogEntry(
+      { ...nativeBaseRow, 'Category Class Time': '' },
+      { source: 'logifi-native' }
+    )
+    expect(entry?.categoryClassTime).toBeNull()
+    expect(entry?.flightTime.total).toBe(2.0)
+  })
+
+  it('falls back to Total when older native CSV omits Category Class Time', () => {
+    const entry = mapRawRowToLogEntry(nativeBaseRow, { source: 'logifi-native' })
+    expect(entry?.categoryClassTime).toBe(2.0)
+    expect(entry?.flightTime.total).toBe(2.0)
+  })
+
+  it('restores native integrity and import columns and preserves Is Imported', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        ...nativeBaseRow,
+        'Category Class Time': '1.9',
+        'Is Imported': 'No',
+        'Import Source': 'logten',
+        'Import Batch ID': 'batch-fiction-001',
+        'Original Entry Date': '2025-03-06T12:00:00.000Z',
+        Version: '3',
+        'Data Hash': 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        'Created At': '2025-03-06T12:00:00.000Z',
+        'Updated At': '2025-03-07T08:30:00.000Z',
+        'Import Metadata': '{"fileName":"fiction-logten.csv"}',
+      },
+      { source: 'logifi-native' }
+    )
+    expect(entry?.isImported).toBe(false)
+    expect(entry?.importSource).toBe('logten')
+    expect(entry?.importBatchId).toBe('batch-fiction-001')
+    expect(entry?.originalEntryDate).toBe('2025-03-06T12:00:00.000Z')
+    expect(entry?.version).toBe(3)
+    expect(entry?.dataHash).toBe(
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    )
+    expect(entry?.createdAt).toBe('2025-03-06T12:00:00.000Z')
+    expect(entry?.updatedAt).toBe('2025-03-07T08:30:00.000Z')
+    expect(entry?.importMetadata).toEqual({ fileName: 'fiction-logten.csv' })
+  })
+
+  it('does not restore an invalid dataHash or version', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        ...nativeBaseRow,
+        Version: 'not-a-number',
+        'Data Hash': 'not-a-sha256',
+      },
+      { source: 'logifi-native' }
+    )
+    expect(entry?.version).toBeUndefined()
+    expect(entry?.dataHash).toBeUndefined()
+  })
+
+  it('does not apply native CSV metadata when the source is not logifi-native', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        ...nativeBaseRow,
+        'Category Class Time': '1.9',
+        'Is Imported': 'No',
+        'Import Source': 'logten',
+        Version: '3',
+        'Created At': '2025-03-06T12:00:00.000Z',
+      },
+      { source: 'generic' }
+    )
+    expect(entry?.isImported).toBe(true)
+    expect(entry?.importSource).toBe('generic')
+    expect(entry?.categoryClassTime).toBe(2.0)
+    expect(entry?.version).toBeUndefined()
+    expect(entry?.createdAt).toBeUndefined()
   })
 })

@@ -226,6 +226,95 @@ export function oooiPairDurationHours(opts: {
   return Math.round((diffMin / 60) * 10) / 10
 }
 
+/**
+ * Parse a single OOOI clock typed in the form (HHMM, HMM, or HH:MM) to HH:MM.
+ * Returns null when the value is not a complete, valid 24h clock.
+ */
+export function formatOooiClockToHhMm(time: string | null | undefined): string | null {
+  if (time === null || time === undefined) return null
+  const trimmed = String(time).trim()
+  if (!trimmed) return null
+
+  let digits = trimmed.replace(/\D/g, '')
+  if (digits.length === 3) digits = `0${digits}`
+  if (digits.length === 0 || digits.length > 4) return null
+  digits = digits.padStart(4, '0')
+
+  const minutes = parseOOOITime(digits)
+  if (minutes === null) return null
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`
+}
+
+/**
+ * Entry-form blur helper: normalize parseable clocks to HH:MM; leave raw text otherwise.
+ * Does not depend on OOOI sequence order (audit handles that separately).
+ */
+export function formatOooiClockInputOnBlur(value: string | null | undefined): string {
+  const trimmed = (value ?? '').trim()
+  if (!trimmed) return ''
+  const formatted = formatOooiClockToHhMm(trimmed)
+  return formatted ?? trimmed
+}
+
+/**
+ * Format-only storage helper for NEW Autofi/import entries.
+ * Parseable clocks become HH:MM; unparseable or empty values are left as-is
+ * (empty → null). Does not change isZulu, dates, or computed totals.
+ */
+export function formatOooiClockForStorage(
+  value: string | null | undefined
+): string | null {
+  if (value == null) return null
+  const trimmed = String(value).trim()
+  if (!trimmed) return null
+  return formatOooiClockToHhMm(trimmed) ?? trimmed
+}
+
+export function formatOooiTimesForStorage<
+  T extends {
+    out?: string | null
+    off?: string | null
+    on?: string | null
+    in?: string | null
+  },
+>(oooi: T): T {
+  return {
+    ...oooi,
+    out: formatOooiClockForStorage(oooi.out ?? null),
+    off: formatOooiClockForStorage(oooi.off ?? null),
+    on: formatOooiClockForStorage(oooi.on ?? null),
+    in: formatOooiClockForStorage(oooi.in ?? null),
+  }
+}
+
+/** Strip non-digits while typing; up to four digits (HHMM). */
+export function sanitizeOooiClockDigitsWhileTyping(value: string): string {
+  return value.replace(/\D/g, '').slice(0, 4)
+}
+
+export type NormalizeOooiClockOnBlurResult =
+  | { kind: 'skip' }
+  | { kind: 'unchanged' }
+  | { kind: 'formatted'; value: string }
+
+/**
+ * Blur normalizer for entry OOOI fields. Skips when the pilot has not edited the
+ * field this session (so unchanged Confirm does not rewrite stored values).
+ */
+export function normalizeOooiClockOnBlur(
+  value: string | null | undefined,
+  userEdited: boolean
+): NormalizeOooiClockOnBlurResult {
+  if (!userEdited) return { kind: 'skip' }
+  const current = String(value ?? '').trim()
+  if (!current) return { kind: 'unchanged' }
+  const next = formatOooiClockInputOnBlur(current)
+  if (next === current) return { kind: 'unchanged' }
+  return { kind: 'formatted', value: next }
+}
+
 /** Four-digit HHMM only — incomplete typed clocks must not tooltip or convert. */
 function completeOooiHhmm(hhmm: string | null | undefined): string | null {
   if (!hhmm) return null

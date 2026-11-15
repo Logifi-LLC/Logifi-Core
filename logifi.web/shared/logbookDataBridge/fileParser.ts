@@ -2,14 +2,20 @@ import type { BridgeSource, ParsedBridgeFile } from './types'
 import { detectBridgeSource } from './sourceDetector'
 import { isLogtenDynamicExportHeaders } from './logtenDynamicExport'
 
-export function parseCSVLine(line: string, delimiter: string = ','): string[] {
-  const result: string[] = []
+/**
+ * RFC 4180-style CSV records. Quoted fields may contain commas, quotes, and
+ * newlines. Does not strip a leading quote that is part of the field value.
+ */
+export function parseCSVRecords(content: string, delimiter: string = ','): string[][] {
+  const records: string[][] = []
+  let row: string[] = []
   let current = ''
   let inQuotes = false
+  const text = content.replace(/^\uFEFF/, '')
 
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i]
-    const nextChar = line[i + 1]
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    const nextChar = text[i + 1]
 
     if (char === '"') {
       if (inQuotes && nextChar === '"') {
@@ -18,29 +24,99 @@ export function parseCSVLine(line: string, delimiter: string = ','): string[] {
       } else {
         inQuotes = !inQuotes
       }
-    } else if (char === delimiter && !inQuotes) {
-      result.push(current)
-      current = ''
-    } else {
-      current += char
+      continue
     }
+
+    if (!inQuotes && char === delimiter) {
+      row.push(current)
+      current = ''
+      continue
+    }
+
+    if (!inQuotes && (char === '\n' || char === '\r')) {
+      if (char === '\r' && nextChar === '\n') i++
+      row.push(current)
+      records.push(row)
+      row = []
+      current = ''
+      continue
+    }
+
+    current += char
   }
-  result.push(current)
-  return result
+
+  if (inQuotes || current.length > 0 || row.length > 0) {
+    row.push(current)
+    records.push(row)
+  }
+
+  return records
+}
+
+export function parseCSVLine(line: string, delimiter: string = ','): string[] {
+  return parseCSVRecords(line, delimiter)[0] ?? ['']
 }
 
 export function detectDelimiter(line: string): string {
-  const tabCount = (line.match(/\t/g) || []).length
-  const commaCount = (line.match(/,/g) || []).length
+  let tabCount = 0
+  let commaCount = 0
+  let inQuotes = false
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    const nextChar = line[i + 1]
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        i++
+      } else {
+        inQuotes = !inQuotes
+      }
+      continue
+    }
+    if (inQuotes) continue
+    if (char === '\t') tabCount++
+    else if (char === ',') commaCount++
+  }
+
   return tabCount > commaCount ? '\t' : ','
 }
 
-function normalizeHeader(header: string): string {
-  return header.trim().replace(/^"|"$/g, '')
+function firstUnquotedLine(content: string): string {
+  const text = content.replace(/^\uFEFF/, '')
+  let inQuotes = false
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    const nextChar = text[i + 1]
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        i++
+      } else {
+        inQuotes = !inQuotes
+      }
+      continue
+    }
+    if (!inQuotes && (char === '\n' || char === '\r')) {
+      return text.slice(0, i)
+    }
+  }
+  return text
 }
 
+function normalizeHeader(header: string): string {
+  return header.trim()
+}
+
+/** Parser already unquoted the field; do not strip a leading content quote. */
 function normalizeCell(value: string): string {
-  return value.trim().replace(/^"|"$/g, '').replace(/""/g, '"')
+  return value.trim()
+}
+
+function isEmptyLineRecord(record: string[]): boolean {
+  return record.length === 0 || (record.length === 1 && record[0] === '')
+}
+
+function isAllEmptyCells(values: string[]): boolean {
+  return values.every((value) => !value.trim())
 }
 
 function headerSet(headers: string[]): Set<string> {
@@ -65,31 +141,33 @@ export function isForeFlightAircraftHeader(headers: string[]): boolean {
 }
 
 function rowsFromSection(
-  lines: string[],
+  records: string[][],
   startIndex: number,
-  delimiter: string,
   options?: { stopOnBlank?: boolean; stopOnForeFlightSectionHeaders?: boolean }
 ): { headers: string[]; rows: Record<string, string>[]; nextIndex: number } | null {
-  const headerLine = lines[startIndex]
-  if (!headerLine?.trim()) return null
+  const headerRecord = records[startIndex]
+  if (!headerRecord || isEmptyLineRecord(headerRecord)) return null
 
-  const headers = parseCSVLine(headerLine, delimiter).map(normalizeHeader)
+  const headers = headerRecord.map(normalizeHeader)
   if (headers.every((h) => !h)) return null
 
   const rows: Record<string, string>[] = []
   let i = startIndex + 1
-  for (; i < lines.length; i++) {
-    const line = lines[i]
+  for (; i < records.length; i++) {
+    const record = records[i]
+    if (!record) continue
+
     // WHY: ForeFlight CSVs separate Aircraft Table and Flights Table with a blank
     // row. Only stop there for ForeFlight section parsing — LogTen Dynamic exports
-    // may include blank separator rows between flight data rows.
-    if (!line?.trim()) {
+    // may include blank separator rows between flight data rows. Comma-filled
+    // "blank" rows (,,,,,,,,) are skipped, not treated as section breaks.
+    if (isEmptyLineRecord(record)) {
       if (options?.stopOnBlank && rows.length > 0) break
       continue
     }
 
-    const values = parseCSVLine(line, delimiter).map(normalizeCell)
-    if (values.every((v) => !v)) continue
+    const values = record.map(normalizeCell)
+    if (isAllEmptyCells(values)) continue
 
     if (options?.stopOnForeFlightSectionHeaders && rows.length > 0) {
       const maybeHeaders = values.map(normalizeHeader)
@@ -154,18 +232,17 @@ function isLikelyForeFlightHangarRow(values: string[]): boolean {
 }
 
 function parseHeaderlessAircraftRows(
-  lines: string[],
-  flightsHeaderIndex: number,
-  delimiter: string
+  records: string[][],
+  flightsHeaderIndex: number
 ): { headers: string[]; rows: Record<string, string>[] } | undefined {
   const headers = [...FOREFLIGHT_FAA_AIRCRAFT_HEADERS]
   const rows: Record<string, string>[] = []
 
   for (let i = 0; i < flightsHeaderIndex; i++) {
-    const line = lines[i]
-    if (!line?.trim()) continue
-    const values = parseCSVLine(line, delimiter).map(normalizeCell)
-    if (values.every((v) => !v)) continue
+    const record = records[i]
+    if (!record || isEmptyLineRecord(record)) continue
+    const values = record.map(normalizeCell)
+    if (isAllEmptyCells(values)) continue
     if (!isLikelyForeFlightHangarRow(values)) continue
 
     const row: Record<string, string> = {}
@@ -178,7 +255,10 @@ function parseHeaderlessAircraftRows(
   return rows.length > 0 ? { headers, rows } : undefined
 }
 
-function findForeFlightSections(lines: string[]): {
+function findForeFlightSections(
+  records: string[][],
+  delimiter: string
+): {
   aircraft?: { headers: string[]; rows: Record<string, string>[] }
   flights?: { headers: string[]; rows: Record<string, string>[]; delimiter: string }
 } {
@@ -190,16 +270,17 @@ function findForeFlightSections(lines: string[]): {
   // WHY: ForeFlight exports use comma-filled "blank" rows and a "Flights Table"
   // banner. A single forward scan that assigns i = nextIndex then i++ skips the
   // Date header. Scan aircraft and flights independently.
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    if (!line?.trim()) continue
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i]
+    if (!record || isEmptyLineRecord(record) || isAllEmptyCells(record.map(normalizeCell))) {
+      continue
+    }
 
-    const delimiter = detectDelimiter(line)
-    const headers = parseCSVLine(line, delimiter).map(normalizeHeader)
+    const headers = record.map(normalizeHeader)
     if (isForeFlightSectionTitle(headers)) continue
 
     if (isForeFlightAircraftHeader(headers)) {
-      const parsed = rowsFromSection(lines, i, delimiter, {
+      const parsed = rowsFromSection(records, i, {
         stopOnBlank: false,
         stopOnForeFlightSectionHeaders: true,
       })
@@ -218,17 +299,18 @@ function findForeFlightSections(lines: string[]): {
 
   let flightsHeaderIndex = -1
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    if (!line?.trim()) continue
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i]
+    if (!record || isEmptyLineRecord(record) || isAllEmptyCells(record.map(normalizeCell))) {
+      continue
+    }
 
-    const delimiter = detectDelimiter(line)
-    const headers = parseCSVLine(line, delimiter).map(normalizeHeader)
+    const headers = record.map(normalizeHeader)
     if (isForeFlightSectionTitle(headers)) continue
 
     if (isForeFlightFlightsHeader(headers) && !isLogtenDynamicExportHeaders(headers)) {
       flightsHeaderIndex = i
-      const parsed = rowsFromSection(lines, i, delimiter, {
+      const parsed = rowsFromSection(records, i, {
         stopOnBlank: true,
         stopOnForeFlightSectionHeaders: true,
       })
@@ -244,11 +326,7 @@ function findForeFlightSections(lines: string[]): {
   }
 
   if (!aircraftSection && flightsHeaderIndex > 0 && flightsSection) {
-    aircraftSection = parseHeaderlessAircraftRows(
-      lines,
-      flightsHeaderIndex,
-      flightsSection.delimiter
-    )
+    aircraftSection = parseHeaderlessAircraftRows(records, flightsHeaderIndex)
   }
 
   return { aircraft: aircraftSection, flights: flightsSection }
@@ -258,8 +336,9 @@ export function parseBridgeFile(
   content: string,
   sourceOverride?: BridgeSource
 ): ParsedBridgeFile {
-  const lines = content.split(/\r?\n/)
-  const foreFlight = findForeFlightSections(lines)
+  const delimiter = detectDelimiter(firstUnquotedLine(content))
+  const records = parseCSVRecords(content, delimiter)
+  const foreFlight = findForeFlightSections(records, delimiter)
 
   if (foreFlight.flights) {
     const source = sourceOverride ?? 'foreflight'
@@ -274,19 +353,20 @@ export function parseBridgeFile(
     }
   }
 
-  const firstNonEmpty = lines.findIndex((l) => l.trim())
+  const firstNonEmpty = records.findIndex(
+    (record) => record && !isEmptyLineRecord(record) && !isAllEmptyCells(record.map(normalizeCell))
+  )
   if (firstNonEmpty < 0) {
     return {
       source: sourceOverride ?? 'generic',
-      delimiter: ',',
+      delimiter,
       headers: [],
       rows: [],
       skippedAircraftRows: 0,
     }
   }
 
-  const delimiter = detectDelimiter(lines[firstNonEmpty]!)
-  const parsed = rowsFromSection(lines, firstNonEmpty, delimiter)
+  const parsed = rowsFromSection(records, firstNonEmpty)
   const headers = parsed?.headers ?? []
   const rows = parsed?.rows ?? []
   const source = sourceOverride ?? detectBridgeSource(headers)
