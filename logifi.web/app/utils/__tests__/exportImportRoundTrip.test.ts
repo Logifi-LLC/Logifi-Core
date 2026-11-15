@@ -11,6 +11,7 @@ import { extractLogbookJsonFromZipBytes } from '../fullBackupImport'
 import { FULL_BACKUP_JSON_ENTRY } from '../fullBackupConstants'
 import { normalizeImportedEntry } from '../normalizeImportedEntry'
 import { normalizePerformanceForDisplay } from '../logEntryPerformance'
+import { LOG_ENTRY_MAPPED_KEYS } from '../logEntrySupabaseRow'
 import { exportToLogifiNative } from '../../../shared/logbookDataBridge/exportService'
 import { parseBridgeFile } from '../../../shared/logbookDataBridge/fileParser'
 
@@ -151,6 +152,34 @@ function fictionalRoundTripEntries(): LogEntry[] {
       signaturePending: false,
     }),
     fictionalBase({
+      id: 'fiction-cat-class-and-integrity',
+      date: '2025-03-06',
+      departure: 'KSEA',
+      destination: 'KPDX',
+      registration: 'N4411F',
+      remarks: 'Cat/class distinct from total',
+      categoryClassTime: 1.9,
+      flightTime: {
+        ...createEmptyFlightTime(),
+        total: 2.0,
+        pic: 2.0,
+      },
+      performance: {
+        ...createEmptyPerformance(),
+        dayTakeoffs: 1,
+        dayLandings: 1,
+      },
+      isImported: false,
+      importSource: 'logten',
+      importBatchId: 'batch-fiction-001',
+      originalEntryDate: '2025-03-06T12:00:00.000Z',
+      importMetadata: { fileName: 'fiction-logten.csv' },
+      version: 3,
+      dataHash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      createdAt: '2025-03-06T12:00:00.000Z',
+      updatedAt: '2025-03-07T08:30:00.000Z',
+    }),
+    fictionalBase({
       id: 'fiction-blank-hours-quoted-remarks',
       date: '2025-03-05',
       departure: 'KOSH',
@@ -189,6 +218,9 @@ function fictionalRoundTripEntries(): LogEntry[] {
   ]
 }
 
+/** Native CSV has no Id / Flagged / Pending Instructor columns. */
+const CSV_UNMAPPED_KEYS = new Set(['id', 'flagged', 'pendingInstructorId'])
+
 function comparableEntry(entry: LogEntry, keepId: boolean) {
   const performance = normalizePerformanceForDisplay(entry.performance)
   return {
@@ -196,6 +228,7 @@ function comparableEntry(entry: LogEntry, keepId: boolean) {
     date: entry.date,
     role: entry.role,
     aircraftCategoryClass: entry.aircraftCategoryClass,
+    categoryClassTime: entry.categoryClassTime ?? null,
     aircraftMakeModel: entry.aircraftMakeModel,
     registration: entry.registration,
     flightNumber: entry.flightNumber ?? null,
@@ -233,6 +266,23 @@ function comparableEntry(entry: LogEntry, keepId: boolean) {
     amendsEntryId: entry.amendsEntryId ?? null,
     signaturePending: entry.signaturePending ?? false,
   }
+}
+
+function csvVsJsonComparable(entry: LogEntry) {
+  return {
+    ...comparableEntry(entry, false),
+    // Blank native CSV Is Imported stays the mapper default (true). JSON omits the key.
+    isImported: entry.isImported ?? true,
+    // Blank Import Source stays the bridge source; JSON omits the key.
+    importSource: entry.importSource ?? 'logifi-native',
+    importBatchId: entry.importBatchId,
+    originalEntryDate: entry.originalEntryDate,
+    importMetadata: entry.importMetadata,
+    version: entry.version,
+    dataHash: entry.dataHash,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+  } as Record<string, unknown>
 }
 
 async function restoreCsv(entries: LogEntry[]): Promise<LogEntry[]> {
@@ -311,15 +361,59 @@ describe('export/import round-trip (fictional fixtures)', () => {
     ])
     expect(zulu.flightTime.nvg).toBe(0.4)
     expect(zulu.performance.nightTakeoffs).toBe(1)
-    const voided = restored[2]!
-    expect(voided.isVoid).toBe(true)
+    const voided = restored.find((entry) => entry.isVoid)!
     expect(voided.flightTime.total).toBe(0)
     expect(voided.amendsEntryId).toBe('fiction-local-oooi')
-    const quoted = restored[3]!
+    const quoted = restored.find((entry) => entry.remarks.includes('"Bat" callsign'))!
     expect(quoted.remarks).toBe('"Bat" callsign\nSecond line of remarks')
     expect(quoted.flightTime.dual).toBeNull()
     expect(quoted.flightTime.sic).toBeNull()
     expect(quoted.flightTime.nvg).toBe(1.1)
+    const catClass = restored.find((entry) => entry.registration === 'N4411F')!
+    expect(catClass.categoryClassTime).toBe(1.9)
+    expect(catClass.flightTime.total).toBe(2.0)
+    expect(catClass.isImported).toBe(false)
+    expect(catClass.importSource).toBe('logten')
+    expect(catClass.importBatchId).toBe('batch-fiction-001')
+    expect(catClass.originalEntryDate).toBe('2025-03-06T12:00:00.000Z')
+    expect(catClass.version).toBe(3)
+    expect(catClass.dataHash).toBe(
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    )
+    expect(catClass.createdAt).toBe('2025-03-06T12:00:00.000Z')
+    expect(catClass.updatedAt).toBe('2025-03-07T08:30:00.000Z')
+  })
+
+  it('native CSV restore matches JSON restore for every mapped LogEntry field CSV can carry', async () => {
+    expect(LOG_ENTRY_MAPPED_KEYS).toEqual(
+      expect.arrayContaining([
+        'categoryClassTime',
+        'createdAt',
+        'updatedAt',
+        'dataHash',
+        'version',
+        'importBatchId',
+        'originalEntryDate',
+        'isImported',
+        'importSource',
+      ])
+    )
+    const jsonRestored = await restoreJson(source)
+    const csvRestored = await restoreCsv(source)
+    expect(csvRestored).toHaveLength(jsonRestored.length)
+    const jsonByRegDate = new Map(
+      jsonRestored.map((entry) => [`${entry.date}|${entry.registration}`, entry])
+    )
+    for (const csvRow of csvRestored) {
+      const jsonRow = jsonByRegDate.get(`${csvRow.date}|${csvRow.registration}`)
+      expect(jsonRow).toBeDefined()
+      const jsonEntry = csvVsJsonComparable(jsonRow!)
+      const csvEntry = csvVsJsonComparable(csvRow)
+      for (const key of LOG_ENTRY_MAPPED_KEYS) {
+        if (CSV_UNMAPPED_KEYS.has(key)) continue
+        expect(csvEntry[key], key).toEqual(jsonEntry[key])
+      }
+    }
   })
 
   it('JSON backup then restore preserves fields including ids', async () => {
@@ -335,7 +429,9 @@ describe('export/import round-trip (fictional fixtures)', () => {
   it('ZIP backup then restore uses the same JSON path', async () => {
     const restored = await restoreZip(source)
     expectFieldByField(source, restored, true)
-    expect(restored[3]!.remarks).toBe('"Bat" callsign\nSecond line of remarks')
+    expect(restored.find((entry) => entry.remarks.includes('"Bat" callsign'))!.remarks).toBe(
+      '"Bat" callsign\nSecond line of remarks'
+    )
     expect(restored[0]!.tags).toEqual(['Checkride'])
     expect(restored[0]!.logbookType).toBe('flight')
   })

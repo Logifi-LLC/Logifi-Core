@@ -17,6 +17,21 @@ import {
 import { parseLogtenApproach1 } from './logtenDynamicExport'
 import { looksLikePersonName } from '../looksLikePersonName'
 
+/** True when a CSV/JSON key is present, including a blank cell. */
+export function hasField(
+  rawEntry: Record<string, unknown>,
+  possibleNames: string[]
+): boolean {
+  for (const name of possibleNames) {
+    if (Object.prototype.hasOwnProperty.call(rawEntry, name)) return true
+    const lowerName = name.toLowerCase()
+    for (const key in rawEntry) {
+      if (key.toLowerCase() === lowerName) return true
+    }
+  }
+  return false
+}
+
 export function findFieldValue(
   rawEntry: Record<string, unknown>,
   possibleNames: string[]
@@ -619,6 +634,137 @@ function collectApproachRecords(rawEntry: Record<string, unknown>): {
   }
 }
 
+const NATIVE_CATEGORY_CLASS_TIME_FIELDS = [
+  'Category Class Time',
+  'categoryClassTime',
+  'category_class_time',
+]
+
+const DANGEROUS_METADATA_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+
+function sanitizeImportMetadata(value: unknown): Record<string, unknown> | undefined {
+  let raw: unknown = value
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return undefined
+    try {
+      raw = JSON.parse(trimmed)
+    } catch {
+      return undefined
+    }
+  }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const out: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(raw as Record<string, unknown>)) {
+    if (DANGEROUS_METADATA_KEYS.has(key)) continue
+    const safeKey = key.trim().slice(0, 80)
+    if (!safeKey) continue
+    if (typeof item === 'string') out[safeKey] = item.replace(/\u0000/g, '').slice(0, 500)
+    else if (typeof item === 'number' && Number.isFinite(item)) out[safeKey] = item
+    else if (typeof item === 'boolean' || item === null) out[safeKey] = item
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+function parseImportTimestamp(value: string): string | undefined {
+  const trimmed = value.trim().slice(0, 40)
+  if (!trimmed) return undefined
+  const parsed = new Date(trimmed)
+  if (Number.isNaN(parsed.getTime())) return undefined
+  return parsed.toISOString()
+}
+
+function parseImportedVersion(value: string): number | undefined {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  const version = Number(trimmed)
+  if (!Number.isFinite(version) || version <= 0) return undefined
+  return Math.round(version)
+}
+
+/** SHA-256 hex from Postgres `encode(digest(..., 'sha256'), 'hex')`. */
+function parseImportedDataHash(value: string): string | undefined {
+  const trimmed = value.trim()
+  if (!/^[a-fA-F0-9]{64}$/.test(trimmed)) return undefined
+  return trimmed.toLowerCase()
+}
+
+/**
+ * Restore Logifi-native CSV columns that other import sources must not honor.
+ * `dataHash` / `version` are in-memory only: DB insert omits them and the
+ * `b_compute_entry_hash_trigger` recomputes `data_hash` from content.
+ */
+function applyLogifiNativeCsvFields(
+  entry: LogEntry,
+  rawEntry: Record<string, unknown>
+): void {
+  if (hasField(rawEntry, NATIVE_CATEGORY_CLASS_TIME_FIELDS)) {
+    entry.categoryClassTime = parseImportDuration(
+      findFieldValue(rawEntry, NATIVE_CATEGORY_CLASS_TIME_FIELDS)
+    )
+  }
+
+  const isImported = parseImportBoolean(
+    findFieldValue(rawEntry, ['Is Imported', 'isImported', 'is_imported'])
+  )
+  if (isImported != null) entry.isImported = isImported
+
+  const importSource = findFieldValue(rawEntry, [
+    'Import Source',
+    'importSource',
+    'import_source',
+  ]).slice(0, 64)
+  if (importSource) entry.importSource = importSource
+
+  const importBatchId = findFieldValue(rawEntry, [
+    'Import Batch ID',
+    'importBatchId',
+    'import_batch_id',
+  ]).slice(0, 80)
+  if (importBatchId && !/[<>\r\n]/.test(importBatchId)) {
+    entry.importBatchId = importBatchId
+  }
+
+  const originalEntryDateRaw = findFieldValue(rawEntry, [
+    'Original Entry Date',
+    'originalEntryDate',
+    'original_entry_date',
+  ])
+  if (originalEntryDateRaw) {
+    entry.originalEntryDate =
+      parseImportTimestamp(originalEntryDateRaw) ??
+      parseImportDate(originalEntryDateRaw) ??
+      undefined
+  }
+
+  const createdAt = parseImportTimestamp(
+    findFieldValue(rawEntry, ['Created At', 'createdAt', 'created_at'])
+  )
+  if (createdAt) entry.createdAt = createdAt
+
+  const updatedAt = parseImportTimestamp(
+    findFieldValue(rawEntry, ['Updated At', 'updatedAt', 'updated_at'])
+  )
+  if (updatedAt) entry.updatedAt = updatedAt
+
+  const version = parseImportedVersion(
+    findFieldValue(rawEntry, ['Version', 'version'])
+  )
+  if (version != null) entry.version = version
+
+  const dataHash = parseImportedDataHash(
+    findFieldValue(rawEntry, ['Data Hash', 'dataHash', 'data_hash'])
+  )
+  if (dataHash) entry.dataHash = dataHash
+
+  const importMetadata = sanitizeImportMetadata(
+    rawEntry['Import Metadata'] ??
+      rawEntry.importMetadata ??
+      rawEntry.import_metadata
+  )
+  if (importMetadata) entry.importMetadata = importMetadata
+}
+
 export function mapRawRowToLogEntry(
   rawEntry: Record<string, unknown>,
   options?: { source?: BridgeSource; generateId?: () => string }
@@ -906,6 +1052,10 @@ export function mapRawRowToLogEntry(
     findFieldValue(rawEntry, ['Signature Pending', 'signaturePending'])
   )
   if (signaturePending != null) entry.signaturePending = signaturePending
+
+  if (options?.source === 'logifi-native') {
+    applyLogifiNativeCsvFields(entry, rawEntry)
+  }
 
   return entry
 }

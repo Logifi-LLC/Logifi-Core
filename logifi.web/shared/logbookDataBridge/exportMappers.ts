@@ -218,6 +218,7 @@ export const LOGIFI_NATIVE_HEADERS = [
   'Is Void',
   'Amends Entry ID',
   'Signature Pending',
+  'Category Class Time',
 ] as const
 
 function formatLogifiBoolean(value: boolean | null | undefined): string {
@@ -516,5 +517,6 @@ export function mapEntryToLogifiNativeRow(entry: LogEntry): string[] {
     formatLogifiBoolean(entry.isVoid),
     entry.amendsEntryId || '',
     formatLogifiBoolean(entry.signaturePending),
+    formatLogifiHours(entry.categoryClassTime),
   ]
 }
