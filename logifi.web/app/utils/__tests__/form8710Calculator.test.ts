@@ -76,6 +76,34 @@ describe('form8710Calculator', () => {
       expect(selCategory?.pic).toBe(2.0)
     })
 
+    it('does not treat XC navigation lesson text as an ATD', () => {
+      const entries: LogEntry[] = [
+        createTestEntry({
+          aircraftMakeModel: 'C-172',
+          aircraftCategoryClass: 'ASEL',
+          trainingElements: 'XC navigation',
+          flightTime: {
+            total: 1.5,
+            pic: 1.5,
+            sic: null,
+            dual: null,
+            solo: null,
+            night: null,
+            actualInstrument: null,
+            simulatedInstrument: 0.4,
+            crossCountry: 1.5,
+          },
+        }),
+      ]
+
+      const result = calculateSectionIII(entries)
+      const selCategory = result.categories.find((cat) => cat.category === 'airplane-sel')
+      const atdCategory = result.categories.find((cat) => cat.category === 'atd')
+      expect(selCategory?.totalFlights).toBe(1)
+      expect(selCategory?.pic).toBe(1.5)
+      expect(atdCategory?.totalFlights ?? 0).toBe(0)
+    })
+
     it('should categorize training devices correctly', () => {
       const entries: LogEntry[] = [
         createTestEntry({
