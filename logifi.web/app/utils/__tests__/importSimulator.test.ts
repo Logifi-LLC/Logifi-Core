@@ -317,5 +317,149 @@ describe('importSimulator', () => {
     it('returns false when explicitly flight', () => {
       expect(isLikelySimulatorRow({ explicitLogbookType: 'flight' })).toBe(false)
     })
+
+    it('does not treat trainingElements lesson text as a simulator signal', () => {
+      const entry = createTestEntry({ trainingElements: 'XC navigation' })
+      expect(isLikelySimulatorRow({}, entry)).toBe(false)
+    })
+  })
+
+  describe('import classification false positives', () => {
+    const lessonTextCases = [
+      'XC navigation',
+      'navigator',
+      'aggregate',
+      'Simon',
+      'Simmons',
+      'precision approach',
+      'elite maneuvers',
+    ]
+
+    it.each(lessonTextCases)('keeps a C-172 flight when training elements are %s', (trainingElements) => {
+      const entry = createTestEntry({
+        aircraftMakeModel: 'C-172',
+        aircraftCategoryClass: 'ASEL',
+        trainingElements,
+        flightTime: { ...createEmptyFlightTime(), total: 1.5, pic: 1.5 },
+      })
+      applySimulatorImport(entry)
+      expect(entry.logbookType).toBe('flight')
+      expect(entry.flightTime.atd ?? 0).toBe(0)
+    })
+
+    it('keeps an ASEL C-172 with simulated instrument only', () => {
+      const entry = createTestEntry({
+        aircraftMakeModel: 'C-172',
+        aircraftCategoryClass: 'ASEL',
+        trainingElements: '',
+        flightTime: { ...createEmptyFlightTime(), total: 1.2, simulatedInstrument: 0.4 },
+      })
+      applySimulatorImport(entry)
+      expect(entry.logbookType).toBe('flight')
+      expect(entry.flightTime.atd ?? 0).toBe(0)
+      expect(entry.flightTime.simulatedInstrument).toBe(0.4)
+    })
+
+    it('still classifies known simulator make/model and category rows', () => {
+      const redbird = createTestEntry({
+        aircraftMakeModel: 'Redbird FMX',
+        flightTime: { ...createEmptyFlightTime(), total: 1 },
+      })
+      applySimulatorImport(redbird)
+      expect(redbird.logbookType).toBe('simulator')
+
+      const frasca = createTestEntry({
+        aircraftMakeModel: 'Frasca GAT',
+        flightTime: { ...createEmptyFlightTime(), total: 1 },
+      })
+      applySimulatorImport(frasca)
+      expect(frasca.logbookType).toBe('simulator')
+
+      for (const category of ['ATD', 'FFS', 'FTD']) {
+        const entry = createTestEntry({
+          aircraftCategoryClass: category,
+          flightTime: { ...createEmptyFlightTime(), total: 1 },
+        })
+        applySimulatorImport(entry)
+        expect(entry.logbookType).toBe('simulator')
+      }
+    })
+
+    it('classifies a Ground Simulator 1.5 row as a simulator', () => {
+      const entry = createTestEntry({
+        aircraftMakeModel: 'Redbird FMX',
+        registration: 'REDBIRD1',
+        flightTime: { ...createEmptyFlightTime(), total: 1.5 },
+      })
+      applySimulatorImport(entry, readSimHintsFromRawRow({ 'Ground Simulator': '1.5' }))
+      expect(entry.logbookType).toBe('simulator')
+      expect(entry.flightTime.atd).toBe(1.5)
+    })
+
+    it('demo-shaped fixture previews only Redbird FMX REDBIRD1', () => {
+      const n172 = createTestEntry({
+        aircraftMakeModel: 'C-172',
+        registration: 'N172GC',
+        aircraftCategoryClass: 'ASEL',
+        trainingElements: 'XC navigation',
+        flightTime: { ...createEmptyFlightTime(), total: 1.5, simulatedInstrument: 0.4 },
+      })
+      const n455 = createTestEntry({
+        aircraftMakeModel: 'C-172',
+        registration: 'N455GC',
+        aircraftCategoryClass: 'ASEL',
+        trainingElements: 'hood/stalls',
+        flightTime: { ...createEmptyFlightTime(), total: 1.2 },
+      })
+      const redbird = createTestEntry({
+        aircraftMakeModel: 'Redbird FMX',
+        registration: 'REDBIRD1',
+        aircraftCategoryClass: 'ASEL',
+        flightTime: { ...createEmptyFlightTime(), total: 1.5 },
+      })
+
+      applySimulatorImport(n172)
+      applySimulatorImport(n455)
+      applySimulatorImport(redbird, readSimHintsFromRawRow({ 'Ground Simulator': '1.5' }))
+
+      const previewed = [n172, n455, redbird]
+        .filter((entry) => inferLogbookType(entry) === 'simulator')
+        .map((entry) => `${entry.aircraftMakeModel} ${entry.registration}`)
+      expect(previewed).toEqual(['Redbird FMX REDBIRD1'])
+    })
+
+    it('round-trips previously misclassified rows as flights with atd = 0', () => {
+      const rows = [
+        createTestEntry({
+          aircraftMakeModel: 'C-172',
+          aircraftCategoryClass: 'ASEL',
+          trainingElements: 'XC navigation',
+          flightTime: { ...createEmptyFlightTime(), total: 1.5, pic: 1.5 },
+        }),
+        createTestEntry({
+          aircraftMakeModel: 'C-172',
+          aircraftCategoryClass: 'ASEL',
+          trainingElements: 'precision approach',
+          flightTime: { ...createEmptyFlightTime(), total: 1.2, pic: 1.2 },
+        }),
+        createTestEntry({
+          aircraftMakeModel: 'C-172',
+          aircraftCategoryClass: 'ASEL',
+          trainingElements: 'elite maneuvers',
+          flightTime: { ...createEmptyFlightTime(), total: 1.0, pic: 1.0 },
+        }),
+        createTestEntry({
+          aircraftMakeModel: 'C-172',
+          aircraftCategoryClass: 'ASEL',
+          flightTime: { ...createEmptyFlightTime(), total: 1.2, simulatedInstrument: 0.4 },
+        }),
+      ]
+
+      for (const entry of rows) {
+        applySimulatorImport(entry)
+        expect(entry.logbookType).toBe('flight')
+        expect(entry.flightTime.atd ?? 0).toBe(0)
+      }
+    })
   })
 })
