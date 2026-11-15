@@ -3,7 +3,9 @@ import {
   convertOooiFieldsToClock,
   convertOooiHhmmBetweenClocks,
   formatOooiClockInputOnBlur,
+  formatOooiClockForStorage,
   formatOooiOppositeClockTooltip,
+  formatOooiTimesForStorage,
   normalizeOooiClockOnBlur,
   sanitizeOooiClockDigitsWhileTyping,
   localDatetimeToZuluHhmm,
@@ -322,5 +324,34 @@ describe('oooiClock', () => {
     })
     expect(events).not.toBeNull()
     expect(oooiSequenceIsInOrder(events!)).toBe(false)
+  })
+
+  it('formats storage clocks to HH:MM without changing the minute', () => {
+    expect(formatOooiClockForStorage('2110')).toBe('21:10')
+    expect(formatOooiClockForStorage('945')).toBe('09:45')
+    expect(formatOooiClockForStorage('21:10')).toBe('21:10')
+    expect(formatOooiClockForStorage('not-a-clock')).toBe('not-a-clock')
+    expect(formatOooiClockForStorage('2025-11-11T15:00:00Z')).toBe('2025-11-11T15:00:00Z')
+    expect(formatOooiClockForStorage(null)).toBeNull()
+  })
+
+  it('keeps Autofi/import totals the same after HH:MM storage format', () => {
+    const raw = formatOooiTimesForStorage({
+      out: '2110',
+      off: '2121',
+      on: '2248',
+      in: '2239',
+      isZulu: true,
+    })
+    expect(raw).toEqual({
+      out: '21:10',
+      off: '21:21',
+      on: '22:48',
+      in: '22:39',
+      isZulu: true,
+    })
+    expect(
+      oooiPairDurationHours({ start: '2110', end: '2239', isZulu: true })
+    ).toBe(oooiPairDurationHours({ start: raw.out, end: raw.in, isZulu: true }))
   })
 })

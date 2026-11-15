@@ -6908,6 +6908,7 @@ import { getAirportIanaTimezone, normalizeTimezoneToIANA } from '../../shared/ai
 import {
   formatOooiClockToHhMm,
   formatOooiOppositeClockTooltip,
+  formatOooiTimesForStorage,
   normalizeOooiClockOnBlur,
   oooiPairDurationHours,
   sanitizeOooiClockDigitsWhileTyping,
@@ -11755,13 +11756,13 @@ async function normalizeImportedEntry(
     }
     
     if (out || off || on || inTime) {
-      entry.oooi = {
+      entry.oooi = formatOooiTimesForStorage({
         out: out,
         off: off,
         on: on,
         in: inTime,
         isZulu: Boolean(isZulu)
-      }
+      })
     }
     
     // Auto-detect IFR if flight number exists (only add condition, don't auto-set actualInstrument)

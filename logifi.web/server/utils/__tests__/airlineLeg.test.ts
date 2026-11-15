@@ -74,9 +74,9 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
     expect(entry.training_elements).toBe('SUTTON, DREW')
     expect(entry.flight_conditions).toContain('ifr')
     expect(entry.flight_conditions).toContain('crossCountry')
-    expect(entry.oooi?.out).toBe('1008')
-    expect(entry.oooi?.in).toBe('1115')
-    expect(entry.oooi?.off).toBe('1020')
+    expect(entry.oooi?.out).toBe('10:08')
+    expect(entry.oooi?.in).toBe('11:15')
+    expect(entry.oooi?.off).toBe('10:20')
     expect(entry.oooi?.isZulu).toBe(true)
   })
 
@@ -224,10 +224,10 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: 128,
     })
     expect(entry.oooi).toEqual({
-      out: '1550',
-      off: '1559',
-      on: '1746',
-      in: '1830',
+      out: '15:50',
+      off: '15:59',
+      on: '17:46',
+      in: '18:30',
       isZulu: true,
     })
     expect((entry.flight_time as Record<string, unknown>).total).toBe(2.7)
@@ -257,8 +257,8 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       is_deadhead: false,
       block_minutes: 198,
     })
-    expect(entry.oooi?.out).toBe('1721')
-    expect(entry.oooi?.in).toBe('2003')
+    expect(entry.oooi?.out).toBe('17:21')
+    expect(entry.oooi?.in).toBe('20:03')
     expect(entry.oooi?.isZulu).toBe(true)
     expect((entry.flight_time as Record<string, unknown>).total).toBe(2.7)
     expect(entry.category_class_time).toBe(2.7)
@@ -338,10 +338,10 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: 76,
     })
     expect(entry.oooi).toEqual({
-      out: '1710',
-      off: '1727',
-      on: '1818',
-      in: '1826',
+      out: '17:10',
+      off: '17:27',
+      on: '18:18',
+      in: '18:26',
       isZulu: true,
     })
     expect(entry.departure).toBe('KRIC')
@@ -373,10 +373,10 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: 123,
     })
     expect(entry.oooi).toEqual({
-      out: '1009',
-      off: '1022',
-      on: '1204',
-      in: '1225',
+      out: '10:09',
+      off: '10:22',
+      on: '12:04',
+      in: '12:25',
       isZulu: true,
     })
     expect((entry.flight_time as Record<string, unknown>).total).toBe(2.3)
@@ -405,10 +405,10 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: 78,
     })
     expect(entry.oooi).toEqual({
-      out: '1335',
-      off: '1354',
-      on: '1438',
-      in: '1450',
+      out: '13:35',
+      off: '13:54',
+      on: '14:38',
+      in: '14:50',
       isZulu: true,
     })
   })
@@ -435,10 +435,10 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: null,
     })
     expect(entry.oooi).toEqual({
-      out: '1541',
+      out: '15:41',
       off: null,
       on: null,
-      in: '1656',
+      in: '16:56',
       isZulu: true,
     })
     expect((entry.flight_time as Record<string, unknown>).total).toBe(1.3)
@@ -518,10 +518,10 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: 60,
     })
     expect(entry.oooi).toEqual({
-      out: '1700',
-      off: '1710',
-      on: '1740',
-      in: '1800',
+      out: '17:00',
+      off: '17:10',
+      on: '17:40',
+      in: '18:00',
       isZulu: true,
     })
     expect((entry.flight_time as Record<string, unknown>).total).toBe(1.0)
@@ -549,10 +549,10 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: 90,
     })
     expect(entry.oooi).toEqual({
-      out: '1500',
-      off: '1512',
-      on: '1620',
-      in: '1630',
+      out: '15:00',
+      off: '15:12',
+      on: '16:20',
+      in: '16:30',
       isZulu: true,
     })
     expect((entry.flight_time as Record<string, unknown>).total).toBe(1.5)
@@ -580,10 +580,10 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: 60,
     })
     expect(entry.oooi).toEqual({
-      out: '1700',
+      out: '17:00',
       off: null,
       on: null,
-      in: '1800',
+      in: '18:00',
       isZulu: true,
     })
     expect((entry.flight_time as Record<string, unknown>).total).toBe(1.0)
@@ -611,10 +611,10 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: 300,
     })
     expect(entry.oooi).toEqual({
-      out: '0630',
+      out: '06:30',
       off: null,
       on: null,
-      in: '1130',
+      in: '11:30',
       isZulu: true,
     })
     expect((entry.flight_time as Record<string, unknown>).total).toBe(5.0)

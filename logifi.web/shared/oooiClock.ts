@@ -258,6 +258,37 @@ export function formatOooiClockInputOnBlur(value: string | null | undefined): st
   return formatted ?? trimmed
 }
 
+/**
+ * Format-only storage helper for NEW Autofi/import entries.
+ * Parseable clocks become HH:MM; unparseable or empty values are left as-is
+ * (empty → null). Does not change isZulu, dates, or computed totals.
+ */
+export function formatOooiClockForStorage(
+  value: string | null | undefined
+): string | null {
+  if (value == null) return null
+  const trimmed = String(value).trim()
+  if (!trimmed) return null
+  return formatOooiClockToHhMm(trimmed) ?? trimmed
+}
+
+export function formatOooiTimesForStorage<
+  T extends {
+    out?: string | null
+    off?: string | null
+    on?: string | null
+    in?: string | null
+  },
+>(oooi: T): T {
+  return {
+    ...oooi,
+    out: formatOooiClockForStorage(oooi.out ?? null),
+    off: formatOooiClockForStorage(oooi.off ?? null),
+    on: formatOooiClockForStorage(oooi.on ?? null),
+    in: formatOooiClockForStorage(oooi.in ?? null),
+  }
+}
+
 /** Strip non-digits while typing; up to four digits (HHMM). */
 export function sanitizeOooiClockDigitsWhileTyping(value: string): string {
   return value.replace(/\D/g, '').slice(0, 4)
