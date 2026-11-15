@@ -31,7 +31,7 @@ describe('public marketing pages', () => {
       `${CANONICAL_ORIGIN}/privacy`,
       `${CANONICAL_ORIGIN}/digifi`,
     ])
-    for (const appPath of ['/dashboard', '/logbook-builder', '/logbook-check', '/login', '/reset-password', '/auth/callback', '/digifi-eye', '/digifi-scan', '/totals-report']) {
+    for (const appPath of ['/dashboard', '/logbook-builder', '/logbook-check', '/login', '/reset-password', '/auth/callback', '/auth/confirm', '/digifi-eye', '/digifi-scan', '/totals-report']) {
       expect(canonicalHrefForPath(appPath)).toBeNull()
     }
   })

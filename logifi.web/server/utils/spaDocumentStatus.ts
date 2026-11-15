@@ -13,6 +13,7 @@
 const EXACT_APP_PATHS = new Set([
   '/',
   '/auth/callback',
+  '/auth/confirm',
   '/dashboard',
   '/data-sources',
   '/developers',

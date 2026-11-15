@@ -140,6 +140,7 @@ describe('referral code rules', () => {
     expect(JSON.stringify(file)).toContain('"ref":"?*"')
     expect(file.applinks.details[0]?.paths).not.toContain('/')
     expect(file.applinks.details[0]?.paths).not.toContain('*')
+    expect(JSON.stringify(file)).not.toContain('/auth/confirm')
   })
 
   it('blocks self-referral and a second referrer, and still accepts a code after a purchase', () => {

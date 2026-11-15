@@ -48,6 +48,7 @@ describe('spa document status', () => {
     expect(isKnownAppPath('/digifi/')).toBe(true)
     expect(isKnownAppPath('/dashboard')).toBe(true)
     expect(isKnownAppPath('/auth/callback')).toBe(true)
+    expect(isKnownAppPath('/auth/confirm')).toBe(true)
     expect(isKnownAppPath('/digifi-capture/abc')).toBe(true)
     expect(isKnownAppPath('/guest-sign/abc')).toBe(true)
   })
