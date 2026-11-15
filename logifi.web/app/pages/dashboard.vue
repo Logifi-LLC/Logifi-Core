@@ -6853,6 +6853,10 @@ import { aircraftEngineDisplay } from '../../shared/aircraftLookupLocal'
 import { useAirportLookup } from '../composables/useAirportLookup'
 import type { AirportInfo } from '../composables/useAirportLookup'
 import { getPilotInitialsFromName } from '../utils/pilotProfile'
+import {
+  logEntryToSupabaseRow,
+  mapSupabaseRowToLogEntry as mapSupabaseRowToLogEntryFields,
+} from '../utils/logEntrySupabaseRow'
 import { getDisplayedPilotInitials, shouldShowCurrencyChips } from '../utils/dashboardHydration'
 import {
   CATEGORY_CLASS_TIME_HELP,
@@ -8853,51 +8857,7 @@ function buildDbPayloadFromLogEntry(
   userId: string,
   options?: { signaturePending?: boolean; pendingInstructorId?: string | null }
 ): Record<string, unknown> {
-  const signaturePending =
-    options?.signaturePending !== undefined
-      ? options.signaturePending
-      : entry.signaturePending === true
-  const pendingInstructorId =
-    options?.pendingInstructorId !== undefined
-      ? options.pendingInstructorId
-      : (entry.pendingInstructorId ?? null)
-
-  return {
-    id: entry.id,
-    user_id: userId,
-    date: entry.date,
-    role: entry.role,
-    aircraft_category_class: entry.aircraftCategoryClass,
-    category_class_time: entry.categoryClassTime,
-    aircraft_make_model: entry.aircraftMakeModel,
-    registration: entry.registration,
-    flight_number: entry.flightNumber,
-    departure: entry.departure,
-    destination: entry.destination,
-    route: entry.route || '',
-    training_elements: entry.trainingElements || null,
-    training_instructor: entry.trainingInstructor || null,
-    instructor_certificate: entry.instructorCertificate || null,
-    pic_name: (entry.picName || '').trim() || null,
-    sic_name: (entry.sicName || '').trim() || null,
-    flight_conditions: entry.flightConditions,
-    remarks: entry.remarks || null,
-    tags: Array.isArray(entry.tags) ? entry.tags : [],
-    logbook_type: entry.logbookType ?? 'flight',
-    flight_time: entry.flightTime,
-    performance: entry.performance,
-    oooi: entry.oooi || null,
-    flagged: entry.flagged ?? false,
-    signature_pending: signaturePending,
-    pending_instructor_id: pendingInstructorId,
-    amends_entry_id: entry.amendsEntryId ?? null,
-    is_void: entry.isVoid === true,
-    is_imported: entry.isImported ?? false,
-    import_source: entry.importSource ?? null,
-    import_batch_id: entry.importBatchId ?? null,
-    original_entry_date: entry.originalEntryDate ?? null,
-    import_metadata: entry.importMetadata ?? null,
-  }
+  return logEntryToSupabaseRow(entry, userId, options)
 }
 
 const activeInstructorsForSigning = computed(() =>
@@ -9805,65 +9765,9 @@ async function saveInlineEdit(): Promise<boolean> {
         }
       }, 200) // Small delay to ensure transaction is committed
       
-      // Update local state IMMEDIATELY with the data returned from database
-      const dbEntryResult = updateResult
-      const entry: LogEntry = {
-        id: dbEntryResult.id,
-        date: dbEntryResult.date,
-        role: dbEntryResult.role,
-        aircraftCategoryClass: dbEntryResult.aircraft_category_class,
-        categoryClassTime: dbEntryResult.category_class_time,
-        aircraftMakeModel: dbEntryResult.aircraft_make_model,
-        registration: dbEntryResult.registration,
-        flightNumber: dbEntryResult.flight_number,
-        departure: dbEntryResult.departure,
-        destination: dbEntryResult.destination,
-        route: dbEntryResult.route || '',
-        trainingElements: dbEntryResult.training_elements || '',
-        trainingInstructor: dbEntryResult.training_instructor || '',
-        instructorCertificate: dbEntryResult.instructor_certificate || '',
-        picName: dbEntryResult.pic_name || null,
-        sicName: dbEntryResult.sic_name || null,
-        flightConditions: sanitizeFlightConditions(dbEntryResult.flight_conditions || []),
-        remarks: dbEntryResult.remarks || '',
-        logbookType: dbEntryResult.logbook_type === 'simulator' ? 'simulator' : 'flight',
-        flightTime: dbEntryResult.flight_time as FlightTimeBreakdown,
-        performance: dbEntryResult.performance as PerformanceMetrics,
-        oooi: dbEntryResult.oooi as OOOITimes | undefined,
-        flagged: dbEntryResult.flagged || false,
-        version: dbEntryResult.version, // Include version to keep frontend in sync with database
-        dataHash: dbEntryResult.data_hash || undefined,
-        signaturePending: dbEntryResult.signature_pending === true,
-        pendingInstructorId: dbEntryResult.pending_instructor_id ?? null,
-        amendsEntryId: dbEntryResult.amends_entry_id ?? null,
-        isVoid: dbEntryResult.is_void === true,
-        isImported: dbEntryResult.is_imported || false,
-        importSource: dbEntryResult.import_source || undefined,
-        importBatchId: dbEntryResult.import_batch_id || undefined,
-        originalEntryDate: dbEntryResult.original_entry_date || undefined,
-        importMetadata: dbEntryResult.import_metadata || undefined
-      }
-      
-      // Normalize values
-      const normalizedFlightTime: FlightTimeBreakdown = { ...createEmptyFlightTime() }
-      flightTimeFields.forEach((field) => {
-        normalizedFlightTime[field.key] = normalizeNumber(entry.flightTime?.[field.key])
-      })
-      entry.flightTime = normalizedFlightTime
-      
-      const normalizedPerformance: PerformanceMetrics = { ...createEmptyPerformance() }
-      performanceFields.forEach((field) => {
-        const rawValue = entry.performance?.[field.key]
-        const val = typeof rawValue === 'string'
-          ? (isNaN(parseFloat(rawValue)) ? null : parseFloat(rawValue))
-          : normalizeNumber(rawValue)
-        ;(normalizedPerformance as unknown as Record<string, number | string | null>)[field.key] = val
-      })
-      normalizedPerformance.approaches = Array.isArray(entry.performance?.approaches) ? [...entry.performance.approaches] : getApproachesFromPerformance(entry.performance)
-      normalizedPerformance.approachCount = getTotalApproachCount(normalizedPerformance) || null
-      normalizedPerformance.approachType = normalizedPerformance.approaches[0]?.type ?? null
-      entry.performance = normalizedPerformance
-      
+      // Rebuild from the canonical mapper so fields like tags/timestamps are not dropped.
+      const entry = mapSupabaseRowToLogEntry(updateResult)
+
       // Update local state immediately
       logEntries.value = sortEntriesByDateAndOOOI(
         logEntries.value.map((e) => (e.id === targetId ? entry : e))
@@ -9882,7 +9786,7 @@ async function saveInlineEdit(): Promise<boolean> {
           'aircraft_make_model', 'registration', 'flight_number', 'departure',
           'destination', 'route', 'training_elements', 'training_instructor',
           'instructor_certificate', 'pic_name', 'sic_name', 'flight_conditions', 'remarks',
-          'flight_time', 'performance', 'oooi', 'flagged'
+          'tags', 'flight_time', 'performance', 'oooi', 'flagged'
         ]
         
         fieldsToCompare.forEach(field => {
@@ -16754,47 +16658,7 @@ function normalizeLogEntryForDisplay(entry: LogEntry): LogEntry {
 }
 
 function mapSupabaseRowToLogEntry(dbEntry: any): LogEntry {
-  const entry: LogEntry = {
-    id: dbEntry.id,
-    date: dbEntry.date,
-    role: dbEntry.role,
-    aircraftCategoryClass: dbEntry.aircraft_category_class,
-    categoryClassTime: dbEntry.category_class_time,
-    aircraftMakeModel: dbEntry.aircraft_make_model,
-    registration: dbEntry.registration,
-    flightNumber: dbEntry.flight_number,
-    departure: dbEntry.departure,
-    destination: dbEntry.destination,
-    route: dbEntry.route || '',
-    trainingElements: dbEntry.training_elements || '',
-    trainingInstructor: dbEntry.training_instructor || '',
-    instructorCertificate: dbEntry.instructor_certificate || '',
-    picName: dbEntry.pic_name || null,
-    sicName: dbEntry.sic_name || null,
-    flightConditions: sanitizeFlightConditions(dbEntry.flight_conditions || []),
-    remarks: dbEntry.remarks || '',
-    tags: Array.isArray(dbEntry.tags) ? [...dbEntry.tags] : [],
-    logbookType: dbEntry.logbook_type === 'simulator' ? 'simulator' : 'flight',
-    flightTime: dbEntry.flight_time as FlightTimeBreakdown,
-    performance: dbEntry.performance as PerformanceMetrics,
-    oooi: dbEntry.oooi as OOOITimes | undefined,
-    flagged: dbEntry.flagged || false,
-    version: dbEntry.version,
-    dataHash: dbEntry.data_hash || undefined,
-    createdAt: dbEntry.created_at || undefined,
-    updatedAt: dbEntry.updated_at || undefined,
-    signaturePending: dbEntry.signature_pending === true,
-    pendingInstructorId: dbEntry.pending_instructor_id ?? null,
-    amendsEntryId: dbEntry.amends_entry_id ?? null,
-    isVoid: dbEntry.is_void === true,
-    isImported: dbEntry.is_imported || false,
-    importSource: dbEntry.import_source || undefined,
-    importBatchId: dbEntry.import_batch_id || undefined,
-    originalEntryDate: dbEntry.original_entry_date || undefined,
-    importMetadata: dbEntry.import_metadata || undefined,
-  }
-
-  return normalizeLogEntryForDisplay(entry)
+  return normalizeLogEntryForDisplay(mapSupabaseRowToLogEntryFields(dbEntry))
 }
 
 const IDB_PERSIST_BATCH = 50
