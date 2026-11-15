@@ -7026,7 +7026,10 @@ import { usePullToRefresh } from '../composables/usePullToRefresh'
 import { useLogbookColumnConfig } from '../composables/useLogbookColumnConfig'
 import { useDashboardShortcuts } from '../composables/useDashboardShortcuts'
 import { useDashboardEntryDeepLink } from '../composables/useDashboardEntryDeepLink'
-import { parseDashboardReturnTo } from '../utils/dashboardReturnTo'
+import {
+  resolveDashboardInlineEditReturnNavigation,
+  type DashboardInlineEditReturn,
+} from '../utils/dashboardInlineEditReturn'
 import AuthModal from '../components/AuthModal.vue'
 import { readStoredReferralCode } from '../utils/referralCapture'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
@@ -8803,15 +8806,7 @@ function handleFlicaConnectionChanged(payload: { connected: boolean }): void {
 const isInlineCommercialMode = ref(false)
 const editingEntryId = ref<string | null>(null)
 const expandedEntryId = ref<string | null>(null)
-const inlineEditReturnPath = ref<string | null>(null)
-
-watch(
-  () => route.query.returnTo,
-  (raw) => {
-    inlineEditReturnPath.value = parseDashboardReturnTo(raw)
-  },
-  { immediate: true }
-)
+const inlineEditReturn = ref<DashboardInlineEditReturn | null>(null)
 const inlineEditEntry = ref<LogEntry | null>(null)
 const showSignEntryModal = ref(false)
 const showSignatureFinishModal = ref(false)
@@ -9081,16 +9076,20 @@ function closeInlineEditDrawer(): void {
   customTagInputInline.value = ''
 }
 
-function navigateAfterInlineEditIfRequested(): void {
-  const path = inlineEditReturnPath.value
+function navigateAfterInlineEditIfRequested(closingEntryId: string | null | undefined): void {
+  const path = resolveDashboardInlineEditReturnNavigation(
+    inlineEditReturn.value,
+    closingEntryId
+  )
   if (!path) return
-  inlineEditReturnPath.value = null
+  inlineEditReturn.value = null
   void router.push(path)
 }
 
 function dismissInlineEdit(): void {
+  const closingEntryId = expandedEntryId.value
   closeInlineEditDrawer()
-  navigateAfterInlineEditIfRequested()
+  navigateAfterInlineEditIfRequested(closingEntryId)
 }
 
 function setLocalSignaturePending(
@@ -9274,6 +9273,9 @@ useDashboardEntryDeepLink({
   logEntries,
   setActiveLogbook,
   openEntry: (entry) => beginInlineEditing(entry),
+  onInlineEditReturn: (payload) => {
+    inlineEditReturn.value = payload
+  },
 })
 
 function beginAmendSignedEntry(): void {
@@ -16624,7 +16626,7 @@ async function confirmAndDeleteEntry(id: string): Promise<void> {
   if (expandedEntryId.value === id) {
     expandedEntryId.value = null
     inlineEditEntry.value = null
-    navigateAfterInlineEditIfRequested()
+    navigateAfterInlineEditIfRequested(id)
   }
 }
 
