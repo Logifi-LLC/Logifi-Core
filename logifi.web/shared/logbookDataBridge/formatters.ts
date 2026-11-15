@@ -79,29 +79,60 @@ export function buildForeFlightRouteIntermediate(
   return fullTokens.slice(1, -1).join(' ')
 }
 
-/** Parse import date strings to ISO YYYY-MM-DD. */
+/** True when year/month/day is a real calendar date (DB DATE column). */
+export function isValidCalendarYmd(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false
+  if (year < 1 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31) return false
+  const dt = new Date(Date.UTC(year, month - 1, day))
+  return dt.getUTCFullYear() === year && dt.getUTCMonth() === month - 1 && dt.getUTCDate() === day
+}
+
+function formatValidYmd(year: number, month: number, day: number): string | null {
+  if (!isValidCalendarYmd(year, month, day)) return null
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+}
+
+function expandTwoDigitYear(year: number): number {
+  if (year >= 100) return year
+  return year >= 70 ? 1900 + year : 2000 + year
+}
+
+/** Parse import date strings to ISO YYYY-MM-DD. Invalid calendar dates are null. */
 export function parseImportDate(value: string): string | null {
   const trimmed = (value ?? '').trim()
   if (!trimmed) return null
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed
+  const iso = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (iso) {
+    return formatValidYmd(
+      Number(iso[1]),
+      Number(iso[2]),
+      Number(iso[3])
+    )
+  }
 
   const slashParts = trimmed.split('/')
   if (slashParts.length === 3 && slashParts[0] && slashParts[1] && slashParts[2]) {
-    const p0 = slashParts[0]
-    const p1 = slashParts[1]
-    const p2 = slashParts[2]
-    if (p2.length === 4) {
-      return `${p2}-${p0.padStart(2, '0')}-${p1.padStart(2, '0')}`
-    }
-    if (p0.length === 4) {
-      return `${p0}-${p1.padStart(2, '0')}-${p2.padStart(2, '0')}`
+    const a = Number(slashParts[0])
+    const b = Number(slashParts[1])
+    const c = Number(slashParts[2])
+    if (Number.isFinite(a) && Number.isFinite(b) && Number.isFinite(c)) {
+      if (slashParts[0].length === 4) {
+        return formatValidYmd(a, b, c)
+      }
+      const year = slashParts[2].length <= 2 ? expandTwoDigitYear(c) : c
+      // First part > 12 cannot be a US month, so treat as DMY.
+      if (a > 12 && b >= 1 && b <= 12) {
+        return formatValidYmd(year, b, a)
+      }
+      return formatValidYmd(year, a, b)
     }
   }
 
   const d = new Date(trimmed)
   if (!Number.isNaN(d.getTime())) {
-    return d.toISOString().split('T')[0] ?? null
+    // Local calendar parts — toISOString is UTC and shifts the day east of UTC.
+    return formatValidYmd(d.getFullYear(), d.getMonth() + 1, d.getDate())
   }
 
   return null
@@ -205,11 +236,18 @@ export function splitMakeModel(makeModel: string): { make: string; model: string
   return { make: parts[0]!, model: parts.slice(1).join(' ') }
 }
 
+/** A single comma between digits is a decimal (1,5 → 1.5); extra commas are thousands. */
+function normalizeNumericInput(value: string): string {
+  const trimmed = value.trim()
+  if (/^\d+,\d+$/.test(trimmed)) return trimmed.replace(',', '.')
+  return trimmed.replace(/,/g, '')
+}
+
 export function normalizeImportNumber(
   value: number | null | string | undefined
 ): number | null {
   if (typeof value === 'string') {
-    const parsed = parseFloat(value.replace(/,/g, ''))
+    const parsed = parseFloat(normalizeNumericInput(value))
     if (Number.isNaN(parsed) || !Number.isFinite(parsed)) return null
     value = parsed
   }
@@ -278,7 +316,7 @@ export function parseImportDuration(
     return roundImportHours(hours + minutes / 60)
   }
 
-  const numeric = trimmed.replace(/,/g, '')
+  const numeric = normalizeNumericInput(trimmed)
   if (!/^(\d+(\.\d*)?|\.\d+)$/.test(numeric)) return null
   return roundImportHours(parseFloat(numeric))
 }

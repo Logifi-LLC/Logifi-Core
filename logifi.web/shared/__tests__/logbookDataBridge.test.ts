@@ -24,6 +24,7 @@ import {
 import {
   inferCategoryClassFromAircraftHints,
   mapRawRowToLogEntry,
+  normalizeCategoryClassLabel,
 } from '../logbookDataBridge/importMappers'
 import {
   buildHeaderRowObject,
@@ -46,7 +47,11 @@ import {
 import { validatePart61RequiredFields } from '../../app/utils/validation'
 import { applySimulatorImport, getSimTimeSum, readSimHintsFromRawRow } from '../../app/utils/importSimulator'
 import { parseWithProvider } from '../import/ImporterFactory'
-import { applyLogtenCrewFields, inferImporterSeat } from '../../app/utils/logbookImportEnrichments'
+import {
+  applyLogtenCrewFields,
+  applyLogtenFileCrossCountry,
+  inferImporterSeat,
+} from '../../app/utils/logbookImportEnrichments'
 import type { LogEntry } from '../../app/utils/logbookTypes'
 import { getDisplayConditions } from '../../app/utils/flightConditions'
 import { collectPilotCatalogNames } from '../looksLikePersonName'
@@ -191,6 +196,8 @@ describe('parseImportDuration', () => {
     expect(parseImportDuration('   ')).toBeNull()
     expect(parseImportDuration('1:60')).toBeNull()
     expect(parseImportDuration(null)).toBeNull()
+    expect(parseImportDuration('1,5')).toBe(1.5)
+    expect(parseImportDuration('0,8')).toBe(0.8)
   })
 })
 
@@ -265,6 +272,11 @@ describe('logbookDataBridge formatters', () => {
     expect(formatExportDate('2024-06-13', 'iso')).toBe('2024-06-13')
     expect(formatExportDate('2024-06-13', 'mdy')).toBe('06/13/2024')
     expect(parseImportDate('6/13/2024')).toBe('2024-06-13')
+    expect(parseImportDate('15/04/2026')).toBe('2026-04-15')
+    expect(parseImportDate('2026-02-30')).toBeNull()
+    expect(parseImportDate('2026-15-04')).toBeNull()
+    expect(parseImportDate('Nov 14, 2026')).toBe('2026-11-14')
+    expect(parseImportDate('4/5/26')).toBe('2026-04-05')
   })
 
   it('builds full route strings', () => {
@@ -279,6 +291,10 @@ describe('logbookDataBridge sourceDetector', () => {
     expect(
       detectBridgeSource(['Date', 'AircraftID', 'From', 'To', 'TotalTime', 'PIC'])
     ).toBe('foreflight')
+  })
+
+  it('does not treat generic Date / Registration / Total Time as ForeFlight', () => {
+    expect(detectBridgeSource(['Date', 'Registration', 'Total Time'])).not.toBe('foreflight')
   })
 
   it('detects LogTen TSV-style headers', () => {
@@ -655,7 +671,7 @@ describe('logbookDataBridge importMappers', () => {
     expect(entry).not.toBeNull()
     applyLogtenCrewFields(entry!, LOGTEN_NATIVE_SAMPLE_ROW, 'Derek Farmer')
 
-    expect(entry?.trainingElements).toBe('William Riddle')
+    expect(entry?.trainingElements).toBe('WILLIAM RIDDLE')
     expect(entry?.trainingInstructor).toBe('First Officer')
 
     const errors = validatePart61RequiredFields(entry!).filter((r) => r.type === 'error')
@@ -1361,5 +1377,114 @@ describe('Logifi-native lesson text vs crew catalog', () => {
       { source: 'logifi-native' }
     )
     expect(entry?.trainingElements).toBe('Hood work')
+  })
+})
+
+describe('import integrity regressions', () => {
+  const picRow = {
+    Date: '2026-04-15',
+    Registration: 'N172FX',
+    From: 'KOSH',
+    To: 'KOSH',
+    PIC: '1.2',
+    'Total Time': '1.2',
+  }
+
+  it('does not treat remarks lesson text as the other crew member', () => {
+    for (const remarks of ['Pattern work', 'Touch and goes', 'XC nav']) {
+      const entry = mapRawRowToLogEntry({ ...picRow, Remarks: remarks })
+      expect(entry?.remarks).toBe(remarks)
+      expect(entry?.sicName).toBeNull()
+      expect(entry?.picName).toBeNull()
+      expect(entry?.trainingElements).toBe('')
+      expect(entry?.trainingInstructor).toBe('')
+    }
+  })
+
+  it('keeps file XC when total is larger', () => {
+    const entry = mapRawRowToLogEntry({
+      flight_flightDate: '2026-04-15',
+      aircraft_aircraftID: 'N430YX',
+      flight_from: 'KLGA',
+      flight_to: 'KDCA',
+      flight_totalTime: '1.6',
+      flight_crossCountry: '1.2',
+      flight_pic: '1.6',
+    })
+    expect(entry?.flightTime.total).toBe(1.6)
+    expect(entry?.flightTime.crossCountry).toBe(1.2)
+
+    entry!.flightTime.total = 1.6
+    applyLogtenFileCrossCountry(entry!, '1.2')
+    expect(entry?.flightTime.crossCountry).toBe(1.2)
+    expect(entry?.flightTime.total).toBe(1.6)
+  })
+
+  it('maps ForeFlight AllLandings minus night, not full-stop day', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        Date: '2026-04-15',
+        AircraftID: 'N172FX',
+        From: 'KOSH',
+        To: 'KOSH',
+        TotalTime: '1.2',
+        PIC: '1.2',
+        AllLandings: '5',
+        DayLandingsFullStop: '1',
+        NightLandingsFullStop: '0',
+      },
+      { source: 'foreflight' }
+    )
+    expect(entry?.performance.dayLandings).toBe(5)
+    expect(entry?.performance.nightLandings).toBe(0)
+  })
+
+  it('maps MyFlightbook Landings minus FS Night, not FS Day', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        Date: '2026-04-15',
+        'Tail Number': 'N172MB',
+        Model: 'C-172',
+        'Total Flight Time': '1.1',
+        PIC: '1.1',
+        Route: 'KOSH KOSH',
+        Landings: '4',
+        'FS Day Landings': '1',
+        'FS Night Landings': '0',
+      },
+      { source: 'myflightbook' }
+    )
+    expect(entry?.performance.dayLandings).toBe(4)
+    expect(entry?.performance.nightLandings).toBe(0)
+  })
+
+  it('maps glider, balloon, powered-lift, and gyroplane to canonical classes', () => {
+    expect(normalizeCategoryClassLabel('glider')).toBe('GLID')
+    expect(normalizeCategoryClassLabel('lighter_than_air_balloon')).toBe('BAL')
+    expect(normalizeCategoryClassLabel('powered_lift')).toBe('PL')
+    expect(normalizeCategoryClassLabel('rotorcraft_gyroplane')).toBe('GYRO')
+    expect(normalizeCategoryClassLabel('rotorcraft_helicopter')).toBe('HELI')
+  })
+
+  it('preserves LogTen crew capitalization and existing job labels', () => {
+    const entry = mapRawRowToLogEntry({
+      Date: '2026-04-15',
+      Registration: 'N172FX',
+      From: 'KOSH',
+      To: 'KORD',
+      PIC: '1.5',
+      'Total Time': '1.5',
+      'PIC Name': 'Pat McDonald',
+      'SIC Name': 'Sam DeLuca',
+      'Training Instructor': 'First Officer',
+    })
+    expect(entry?.trainingInstructor).toBe('First Officer')
+    applyLogtenCrewFields(entry!, {
+      flight_selectedCrewPIC: 'Pat McDonald',
+      flight_selectedCrewSIC: 'Sam DeLuca',
+      'Training Instructor': 'First Officer',
+    }, 'Pat McDonald')
+    expect(entry?.trainingElements).toBe('Sam DeLuca')
+    expect(entry?.trainingInstructor).toBe('First Officer')
   })
 })

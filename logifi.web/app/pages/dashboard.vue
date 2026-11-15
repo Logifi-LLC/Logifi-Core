@@ -6979,7 +6979,7 @@ import {
   detectImportDurationFormat,
   parseImportDuration,
 } from '../../shared/logbookDataBridge/formatters'
-import { applyLogtenCrewFields } from '../utils/logbookImportEnrichments'
+import { applyLogtenCrewFields, applyLogtenFileCrossCountry } from '../utils/logbookImportEnrichments'
 import { parseBridgeFile } from '../../shared/logbookDataBridge/fileParser'
 import {
   enrichForeFlightEntries,
@@ -11670,14 +11670,9 @@ async function normalizeImportedEntry(
       }
     }
     
-    // For Logten imports, if flight is marked as cross-country (flight_crossCountry > 0),
-    // set cross-country time to match total time
-    if (isLogtenImport && entry.flightTime.total) {
-      const logtenXCTime = normalizeNumber(rawEntry.flight_crossCountry)
-      if (logtenXCTime !== null && logtenXCTime > 0) {
-        // Logten marked it as cross-country, so XC time should equal total time
-        entry.flightTime.crossCountry = entry.flightTime.total
-      }
+    // Keep the file's XC. OOOI block time must not replace flight_crossCountry.
+    if (isLogtenImport) {
+      applyLogtenFileCrossCountry(entry, rawEntry.flight_crossCountry)
     }
     
     if (out || off || on || inTime) {
@@ -11701,7 +11696,9 @@ async function normalizeImportedEntry(
       applyLogtenDynamicRoleAndTime(entry, rawEntry, importerName)
     }
 
-    applyLogtenCrewFields(entry, rawEntry, importerName)
+    if (source === 'logten' || isLogtenImport || isLogtenDynamic) {
+      applyLogtenCrewFields(entry, rawEntry, importerName)
+    }
     
     const simHints = readSimHintsFromRawRow(rawEntry)
     applySimulatorImport(entry, simHints)

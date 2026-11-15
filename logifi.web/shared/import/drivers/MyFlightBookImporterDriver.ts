@@ -7,33 +7,23 @@ import type { ProviderImporter } from '../types'
 /**
  * MyFlightBook UTF-8 CSV.
  *
- * WHY: MFB exports both total `Landings` and full-stop breakdowns
- * (`FS Day Landings` / `FS Night Landings`). Using total `Landings` as day
- * landings double-counts / mis-attributes night. Prefer FS columns when present.
+ * WHY: MFB exports total `Landings` plus full-stop breakdowns. Day landings are
+ * all landings minus night (mapper). Do not copy FS Day onto dayLandings — that
+ * drops touch-and-goes. FS Night is the source night count when present.
  *
- * HOW: After base map, re-read FS Day/Night from the raw row and override
- * performance.dayLandings / nightLandings. Base mapper already prefers FS via
- * alias order in importMappers — this driver re-asserts the rule for clarity
- * and future-proofing if alias order drifts.
+ * HOW: Re-read FS Night only. Comments fill remarks when Remarks is empty.
  */
 function enrichMyFlightBookEntries(
   entries: LogEntry[],
   rawRows: Record<string, string>[]
 ): string[] {
   const warnings: string[] = []
-  let fsOverrides = 0
+  let fsNightOverrides = 0
 
   entries.forEach((entry, index) => {
     const raw = rawRows[index]
     if (!raw) return
 
-    const fsDay = normalizeImportNumber(
-      findFieldValue(raw, [
-        'FS Day Landings',
-        'FS Day Landings ',
-        'fs day landings',
-      ])
-    )
     const fsNight = normalizeImportNumber(
       findFieldValue(raw, [
         'FS Night Landings',
@@ -42,13 +32,9 @@ function enrichMyFlightBookEntries(
       ])
     )
 
-    if (fsDay != null) {
-      entry.performance.dayLandings = fsDay
-      fsOverrides++
-    }
-    if (fsNight != null) {
+    if (fsNight != null && entry.performance.nightLandings == null) {
       entry.performance.nightLandings = fsNight
-      fsOverrides++
+      fsNightOverrides++
     }
 
     // WHY: MFB uses Comments for remarks; base mapper already maps Comments → remarks.
@@ -59,9 +45,9 @@ function enrichMyFlightBookEntries(
     }
   })
 
-  if (fsOverrides > 0) {
+  if (fsNightOverrides > 0) {
     warnings.push(
-      `Applied MyFlightBook FS Day/Night landing breakdowns on ${fsOverrides} field(s).`
+      `Applied MyFlightBook FS Night landing counts on ${fsNightOverrides} field(s).`
     )
   }
 

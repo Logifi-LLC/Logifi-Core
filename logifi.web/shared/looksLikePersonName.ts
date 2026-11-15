@@ -11,6 +11,9 @@ const LESSON_WORDS = new Set([
   'pattern',
   'checkride',
   'review',
+  'touch',
+  'goes',
+  'go',
 ])
 
 /** First letter, then letters / hyphen / apostrophe / period only. */
