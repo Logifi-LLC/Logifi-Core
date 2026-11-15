@@ -152,6 +152,7 @@
       @download-json-backup="$emit('download-json-backup')"
       @download-full-backup="$emit('download-full-backup')"
       @generate-8710="$emit('generate-8710')"
+      @download-logbook-pdf="$emit('download-logbook-pdf')"
       @import-fcv="$emit('import-fcv')"
       @flica-connection-changed="$emit('flica-connection-changed', $event)"
       @close="$emit('close')"
@@ -277,6 +278,7 @@ defineEmits<{
   'download-json-backup': []
   'download-full-backup': []
   'generate-8710': []
+  'download-logbook-pdf': []
   'import-fcv': []
   'flica-connection-changed': [{ connected: boolean }]
 }>()

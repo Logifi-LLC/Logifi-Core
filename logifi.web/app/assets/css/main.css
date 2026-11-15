@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+@import "./print.css";
 
 /* Logifi theme is `html.dark` / `html.light` from `useTheme()`, not OS media alone. */
 @custom-variant dark (&:where(.dark, .dark *));

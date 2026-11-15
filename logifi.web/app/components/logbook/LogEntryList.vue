@@ -1,7 +1,7 @@
 <template>
   <div
     :class="[
-      'mt-6 space-y-3 rounded-2xl border p-3 transition-colors duration-300',
+      'logbook-print-root logbook-print-cards mt-6 space-y-3 rounded-2xl border p-3 transition-colors duration-300',
       isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-300 bg-gray-100 shadow-sm',
     ]"
   >
