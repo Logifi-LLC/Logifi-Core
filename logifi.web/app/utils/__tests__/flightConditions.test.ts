@@ -43,6 +43,10 @@ describe('sanitizeFlightConditions', () => {
       'crossCountry',
     ])
   })
+
+  it('drops VFR / day VFR aliases the same as dayVfr', () => {
+    expect(sanitizeFlightConditions(['VFR', 'vfr', 'Day VFR', 'dayVfr', 'dayvfr'])).toEqual([])
+  })
 })
 
 describe('getDisplayConditions', () => {
@@ -60,6 +64,16 @@ describe('getDisplayConditions', () => {
     )
     expect(display.filter((label) => label === 'IFR')).toHaveLength(1)
     expect(display).toEqual(['IFR', 'Actual Instrument', 'Cross-Country'])
+  })
+
+  it('hides imported VFR while keeping IFR and Cross-Country', () => {
+    const display = getDisplayConditions(
+      entry({
+        flightConditions: ['IFR', 'VFR', 'Cross-Country'],
+        flightTime: { ...createEmptyFlightTime(), total: 1.3, crossCountry: 1.3 },
+      })
+    )
+    expect(display).toEqual(['IFR', 'Cross-Country'])
   })
 
   it('shows Night only once when stored as Night and night time is logged', () => {
