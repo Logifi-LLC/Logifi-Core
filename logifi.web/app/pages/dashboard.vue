@@ -6915,12 +6915,9 @@ import { collectPilotCatalogNames } from '../../shared/looksLikePersonName'
 import type { Form8710Data, AircraftCategory8710, ComplianceMetadata } from '../utils/form8710Types'
 import { mapCategoryTo8710, isTrainingDevice } from '../utils/form8710Types'
 import {
-  applySimulatorImport,
   getSimTimeSum,
   inferLogbookType,
-  isLikelySimulatorRow,
   normalizeSimulatorInstrumentTime,
-  readSimHintsFromRawRow,
 } from '../utils/importSimulator'
 import {
   resolveImportNumber,
@@ -6978,17 +6975,13 @@ import {
   EXPORT_DESTINATION_HINTS,
   EXPORT_DESTINATION_LABELS,
 } from '../../shared/logbookDataBridge/types'
-import {
-  findFieldValue,
-  inferCategoryClassFromAircraftHints,
-  mapRawRowToLogEntry,
-} from '../../shared/logbookDataBridge/importMappers'
+import { findFieldValue } from '../../shared/logbookDataBridge/importMappers'
 import {
   clockDurationTruncationWarning,
   detectImportDurationFormat,
   parseImportDuration,
 } from '../../shared/logbookDataBridge/formatters'
-import { applyLogtenCrewFields, applyLogtenFileCrossCountry } from '../utils/logbookImportEnrichments'
+import { normalizeImportedEntry as normalizeImportedLogEntry } from '../utils/normalizeImportedEntry'
 import { parseBridgeFile } from '../../shared/logbookDataBridge/fileParser'
 import {
   enrichForeFlightEntries,
@@ -6996,11 +6989,6 @@ import {
   providerKeyToBridgeSource,
   type ImportProviderKey,
 } from '../../shared/import'
-import {
-  enrichLogtenDynamicExportRow,
-  applyLogtenDynamicRoleAndTime,
-  isLogtenDynamicExportHeaders,
-} from '../../shared/logbookDataBridge/logtenDynamicExport'
 import {
   catalogAircraftFamilyKey,
   UNKNOWN_AIRCRAFT_FAMILY,
@@ -11569,222 +11557,14 @@ function getImporterPilotName(): string {
 }
 
 async function normalizeImportedEntry(
-  rawEntry: Record<string, any>,
+  rawEntry: Record<string, unknown>,
   source?: BridgeSource
 ): Promise<LogEntry | null> {
-  try {
-    const entry = mapRawRowToLogEntry(rawEntry, { generateId: generateEntryId, source })
-    if (!entry) return null
-
-    const isLogtenDynamic = isLogtenDynamicExportHeaders(Object.keys(rawEntry))
-    const importerName = getImporterPilotName()
-
-    if (isLogtenDynamic) {
-      enrichLogtenDynamicExportRow(entry, rawEntry, importerName)
-    }
-
-    if (!entry.aircraftCategoryClass?.trim()) {
-      const inferred = inferCategoryClassFromAircraftHints(
-        findFieldValue(rawEntry, [
-          'aircraftType_type',
-          'aircraft_aircraftType',
-          'flight_selectedAircraftType',
-          'Aircraft Type',
-          'aircraft type',
-          'Type',
-        ]),
-        entry.aircraftMakeModel
-      )
-      if (inferred) entry.aircraftCategoryClass = inferred
-    }
-
-    // Reset total for LogTen OOOI-derived block time (calculated below)
-    const hasLogtenNativeKeys = !!findFieldValue(rawEntry, [
-      'flight_flightDate',
-      'flight_flightdate',
-    ])
-    const hasLogtenOOOI = !!(
-      findFieldValue(rawEntry, ['flight_actualDepartureTime']) ||
-      findFieldValue(rawEntry, ['flight_actualArrivalTime'])
-    )
-    if (hasLogtenOOOI) {
-      entry.flightTime.total = null
-    }
-
-    // Parse flight conditions
-    const conditionsStr = rawEntry['Flight Conditions'] || rawEntry.flightConditions || ''
-    if (conditionsStr) {
-      entry.flightConditions = sanitizeFlightConditions(
-        conditionsStr.split(';').map((c: string) => c.trim()).filter((c: string) => c)
-      )
-    }
-    
-    // Parse OOOI times — native LogTen keys, Dynamic Export columns, or generic Out/In
-    const logtenOut = findFieldValue(rawEntry, ['flight_actualDepartureTime'])
-    const logtenIn = findFieldValue(rawEntry, ['flight_actualArrivalTime'])
-    const isLogtenImport = !!(logtenOut || logtenIn || hasLogtenNativeKeys)
-    
-    const out =
-      logtenOut ||
-      findFieldValue(rawEntry, ['Out', 'out']) ||
-      rawEntry.Out ||
-      rawEntry.oooi?.out ||
-      null
-
-    let off: string | null = null
-    let on: string | null = null
-    if (isLogtenDynamic) {
-      off = findFieldValue(rawEntry, ['Off', 'off']) || null
-      on = findFieldValue(rawEntry, ['On', 'on']) || null
-    } else if (isLogtenImport) {
-      off =
-        findFieldValue(rawEntry, ['flight_takeoffTime', 'flight_taxiOutTime']) ||
-        rawEntry.Off ||
-        rawEntry.oooi?.off ||
-        null
-      on =
-        findFieldValue(rawEntry, ['flight_landingTime', 'flight_taxiInTime']) ||
-        rawEntry.On ||
-        rawEntry.oooi?.on ||
-        null
-    } else {
-      off = rawEntry.Off || rawEntry.oooi?.off || null
-      on = rawEntry.On || rawEntry.oooi?.on || null
-    }
-
-    const inTime =
-      logtenIn ||
-      findFieldValue(rawEntry, ['In', 'in']) ||
-      rawEntry.In ||
-      rawEntry.oooi?.in ||
-      null
-    
-    // Determine if times are in Zulu (UTC)
-    // LogTen exports times in Zulu/UTC by default
-    // Check for explicit timezone indicators in the export
-    let isZulu: boolean
-    if (isLogtenImport) {
-      // Check for timezone indicators in LogTen export
-      const timezoneField = findFieldValue(rawEntry, ['timezone', 'Timezone', 'TIMEZONE', 'isZulu', 'Is Zulu', 'is_zulu'])
-      const timezoneLower = timezoneField.toLowerCase()
-      
-      // Check for Zulu/UTC indicators
-      const hasZuluIndicator = timezoneLower.includes('zulu') || 
-                               timezoneLower.includes('utc') ||
-                               timezoneLower === 'z' ||
-                               rawEntry.isZulu === true ||
-                               rawEntry['Is Zulu'] === true
-      
-      // Check for local time indicator
-      const hasLocalIndicator = timezoneLower.includes('local') ||
-                                rawEntry.isZulu === false ||
-                                rawEntry['Is Zulu'] === false
-      
-      // Default to Zulu (true) for LogTen imports unless explicitly marked as local
-      isZulu = hasLocalIndicator ? false : (hasZuluIndicator ? true : true) // Default to true (Zulu)
-    } else {
-      // For non-LogTen imports, check explicit field or default to Zulu
-      isZulu = rawEntry['Is Zulu'] !== undefined ? rawEntry['Is Zulu'] : (rawEntry.oooi?.isZulu !== undefined ? rawEntry.oooi.isZulu : true)
-    }
-    
-    // If we have OOOI times, calculate block time from out to in (gate out to gate in)
-    // For Logten imports, this will override the null initial value
-    // Fall back to off/on if out/in don't exist
-    // Zulu times need no airport timezone lookup (duration is UTC-to-UTC).
-    if (out && inTime) {
-      const startTimezone = isZulu
-        ? null
-        : entry.departure
-          ? await getAirportTimezone(entry.departure)
-          : null
-      const endTimezone = isZulu
-        ? null
-        : entry.destination
-          ? await getAirportTimezone(entry.destination)
-          : null
-
-      const calculatedTime = await calculateDuration(out, inTime, entry.date, startTimezone, endTimezone, isZulu)
-      if (calculatedTime !== null && calculatedTime > 0) {
-        entry.flightTime.total = calculatedTime
-      }
-    } else if (off && on) {
-      const startTimezone = isZulu
-        ? null
-        : entry.departure
-          ? await getAirportTimezone(entry.departure)
-          : null
-      const endTimezone = isZulu
-        ? null
-        : entry.destination
-          ? await getAirportTimezone(entry.destination)
-          : null
-
-      const calculatedTime = await calculateDuration(off, on, entry.date, startTimezone, endTimezone, isZulu)
-      if (calculatedTime !== null && calculatedTime > 0) {
-        entry.flightTime.total = calculatedTime
-      }
-    }
-    
-    // For imports, rely solely on exported night time values
-    // No calculation during import - use what was exported from the source system
-    
-    // For Logten imports without OOOI times, fall back to flight_totalTime
-    if (isLogtenImport && !entry.flightTime.total) {
-      const fallbackTotal = normalizeNumber(rawEntry.flight_totalTime)
-      if (fallbackTotal !== null && fallbackTotal > 0) {
-        entry.flightTime.total = fallbackTotal
-      }
-    }
-    
-    // Keep the file's XC. OOOI block time must not replace flight_crossCountry.
-    if (isLogtenImport) {
-      applyLogtenFileCrossCountry(entry, rawEntry.flight_crossCountry)
-    }
-    
-    if (out || off || on || inTime) {
-      entry.oooi = {
-        out: out,
-        off: off,
-        on: on,
-        in: inTime,
-        isZulu: Boolean(isZulu)
-      }
-    }
-    
-    // Auto-detect IFR if flight number exists (only add condition, don't auto-set actualInstrument)
-    if (entry.flightNumber && entry.flightNumber.trim() !== '') {
-      const conditionSet = new Set(entry.flightConditions)
-      conditionSet.add('ifr')
-      entry.flightConditions = Array.from(conditionSet)
-    }
-    
-    if (isLogtenDynamic) {
-      applyLogtenDynamicRoleAndTime(entry, rawEntry, importerName)
-    }
-
-    if (source === 'logten' || isLogtenImport || isLogtenDynamic) {
-      applyLogtenCrewFields(entry, rawEntry, importerName)
-    }
-    
-    const simHints = readSimHintsFromRawRow(rawEntry)
-    applySimulatorImport(entry, simHints)
-    entry.logbookType = inferLogbookType(entry)
-
-    // Auto-check flight conditions after simulator normalization (actual → simulated)
-    entry.flightConditions = autoCheckFlightConditions(
-      entry.flightConditions,
-      entry.flightTime.night,
-      entry.flightTime.actualInstrument,
-      entry.flightTime.simulatedInstrument,
-      entry.flightTime.crossCountry,
-      entry.flightTime.nvg ?? null
-    )
-    
-    return entry
-  } catch (error) {
-    console.error('Error normalizing imported entry:', error, rawEntry)
-    return null
-  }
+  return normalizeImportedLogEntry(rawEntry, source, {
+    generateId: generateEntryId,
+    importerName: getImporterPilotName(),
+    getAirportTimezone,
+  })
 }
 
 async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statistics: ImportStatistics; validEntries: LogEntry[]; duplicates: LogEntry[]; errors: { entry: LogEntry; message: string }[] }> {

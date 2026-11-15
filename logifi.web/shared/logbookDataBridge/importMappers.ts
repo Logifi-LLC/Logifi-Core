@@ -9,6 +9,7 @@ import {
   formatRegistrationForExport,
   normalizeImportHoldCount,
   normalizeImportNumber,
+  parseImportBoolean,
   parseImportDate,
   parseImportDuration,
   splitAirportCodes,
@@ -531,6 +532,28 @@ function defaultGenerateId(): string {
   return `import-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
+const APPROACH_TYPED_COUNT_RE = /^(.+?)\s*\((\d+(?:\.\d+)?)\)\s*$/
+
+/** Split `ILS (1); RNAV (1)` or legacy `ILS (1), RNAV (1)` into records. */
+export function parseApproachTypeList(value: string): ApproachRecord[] {
+  const trimmed = (value ?? '').trim()
+  if (!trimmed) return []
+
+  const parts = trimmed.includes(';') ? trimmed.split(';') : trimmed.split(',')
+  const records: ApproachRecord[] = []
+  for (const part of parts) {
+    const token = part.trim()
+    if (!token) continue
+    const match = token.match(APPROACH_TYPED_COUNT_RE)
+    if (!match?.[1]) continue
+    const count = Number(match[2])
+    const type = match[1].trim()
+    if (!type || !Number.isFinite(count) || count <= 0) continue
+    records.push({ type, count: Math.round(count) })
+  }
+  return records
+}
+
 function collectApproachRecords(rawEntry: Record<string, unknown>): {
   approaches: ApproachRecord[]
   approachCount: number | null
@@ -553,6 +576,15 @@ function collectApproachRecords(rawEntry: Record<string, unknown>): {
     const count = normalizeImportNumber(raw)
     if (count != null && count > 0) {
       collected.push({ type: 'Unknown', count })
+    }
+  }
+
+  if (collected.length === 0) {
+    const typeList = parseApproachTypeList(
+      findFieldValue(rawEntry, ['Approach Type', 'approachType', 'ApproachType'])
+    )
+    if (typeList.length > 0) {
+      collected.push(...typeList)
     }
   }
 
@@ -643,8 +675,18 @@ export function mapRawRowToLogEntry(
   const simulatedHours = parseImportDuration(
     findFieldValue(rawEntry, ['SimulatedFlight', 'simulatedflight'])
   )
+  const logbookTypeRaw = findFieldValue(rawEntry, [
+    'Logbook Type',
+    'logbookType',
+    'logbook_type',
+    'LogbookType',
+  ]).toLowerCase()
   const logbookType =
-    simulatedHours != null && simulatedHours > 0 ? ('simulator' as const) : undefined
+    logbookTypeRaw === 'simulator' || logbookTypeRaw === 'flight'
+      ? logbookTypeRaw
+      : simulatedHours != null && simulatedHours > 0
+        ? ('simulator' as const)
+        : undefined
 
   const { approaches, approachCount, approachType } = collectApproachRecords(rawEntry)
 
@@ -757,6 +799,9 @@ export function mapRawRowToLogEntry(
           'Night Time',
         ])
       ),
+      nvg: parseImportDuration(
+        findFieldValue(rawEntry, ['NVG', 'nvg', 'Night Vision Goggle'])
+      ),
       actualInstrument: parseImportDuration(
         findFieldValue(rawEntry, [
           'flight_actualInstrument',
@@ -818,7 +863,13 @@ export function mapRawRowToLogEntry(
     importSource: options?.source ?? 'csv',
   }
 
-  const crewNames = resolveCrewNamesFromRawRow(rawEntry, entry.role, entry.remarks)
+  const crewNames =
+    options?.source === 'logifi-native'
+      ? {
+          picName: normalizeCrewName(findFieldValue(rawEntry, PIC_NAME_FIELDS)),
+          sicName: normalizeCrewName(findFieldValue(rawEntry, SIC_NAME_FIELDS)),
+        }
+      : resolveCrewNamesFromRawRow(rawEntry, entry.role, entry.remarks)
   entry.picName = crewNames.picName
   entry.sicName = crewNames.sicName
 
@@ -829,13 +880,32 @@ export function mapRawRowToLogEntry(
     entry.trainingElements = ''
   }
 
-  const otherCrew = otherCrewJobAndName(entry.role, crewNames.picName, crewNames.sicName)
-  if (otherCrew) {
-    if (!entry.trainingElements.trim()) entry.trainingElements = otherCrew.name
-    if (!entry.trainingInstructor.trim()) entry.trainingInstructor = otherCrew.job
+  if (options?.source !== 'logifi-native') {
+    const otherCrew = otherCrewJobAndName(entry.role, crewNames.picName, crewNames.sicName)
+    if (otherCrew) {
+      if (!entry.trainingElements.trim()) entry.trainingElements = otherCrew.name
+      if (!entry.trainingInstructor.trim()) entry.trainingInstructor = otherCrew.job
+    }
   }
 
   applyNestedDurationFields(entry, rawEntry)
+
+  const isVoid = parseImportBoolean(
+    findFieldValue(rawEntry, ['Is Void', 'isVoid', 'is_void'])
+  )
+  if (isVoid != null) entry.isVoid = isVoid
+
+  const amendsEntryId = findFieldValue(rawEntry, [
+    'Amends Entry ID',
+    'amendsEntryId',
+    'amends_entry_id',
+  ])
+  if (amendsEntryId) entry.amendsEntryId = amendsEntryId
+
+  const signaturePending = parseImportBoolean(
+    findFieldValue(rawEntry, ['Signature Pending', 'signaturePending'])
+  )
+  if (signaturePending != null) entry.signaturePending = signaturePending
 
   return entry
 }

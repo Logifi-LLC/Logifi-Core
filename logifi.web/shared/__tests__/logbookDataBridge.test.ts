@@ -7,6 +7,7 @@ import {
   formatExportDate,
   formatRegistrationForExport,
   parseImportDate,
+  parseImportBoolean,
   parseImportDuration,
 } from '../logbookDataBridge/formatters'
 import {
@@ -198,6 +199,21 @@ describe('parseImportDuration', () => {
     expect(parseImportDuration(null)).toBeNull()
     expect(parseImportDuration('1,5')).toBe(1.5)
     expect(parseImportDuration('0,8')).toBe(0.8)
+  })
+})
+
+describe('parseImportBoolean', () => {
+  it('parses Yes/No and does not treat No as true', () => {
+    expect(parseImportBoolean('Yes')).toBe(true)
+    expect(parseImportBoolean('No')).toBe(false)
+    expect(parseImportBoolean('true')).toBe(true)
+    expect(parseImportBoolean('false')).toBe(false)
+    expect(parseImportBoolean('local')).toBe(false)
+    expect(parseImportBoolean('zulu')).toBe(true)
+    expect(parseImportBoolean('')).toBeNull()
+    expect(parseImportBoolean(undefined)).toBeNull()
+    expect(parseImportBoolean(true)).toBe(true)
+    expect(parseImportBoolean(false)).toBe(false)
   })
 })
 
@@ -886,8 +902,8 @@ describe('logbookDataBridge export', () => {
     expect(logifi['Total Flight Time']).toBe('0.8')
     expect(logifi['Ground Simulator']).toBe('1.3')
     expect(logifi.FTD).toBe('1.3')
-    expect(logifi.FFS).toBe('0.0')
-    expect(logifi.ATD).toBe('0.0')
+    expect(logifi.FFS).toBe('')
+    expect(logifi.ATD).toBe('')
     expect(logifi['Actual Instrument']).toBe('0.5')
     expect(logifi['Simulated Instrument']).toBe('0.3')
     expect(logifi['Dual Received']).toBe('0.4')

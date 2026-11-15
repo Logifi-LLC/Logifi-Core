@@ -243,6 +243,27 @@ function normalizeNumericInput(value: string): string {
   return trimmed.replace(/,/g, '')
 }
 
+const IMPORT_TRUE_RE = /^(true|yes|y|1|zulu|utc|z)$/i
+const IMPORT_FALSE_RE = /^(false|no|n|0|local)$/i
+
+/**
+ * Parse Yes/No, true/false, 1/0, Zulu/local. Empty and unknown are null —
+ * a truthy string like "No" must not count as true.
+ */
+export function parseImportBoolean(value: unknown): boolean | null {
+  if (value === true) return true
+  if (value === false) return false
+  if (value === 1) return true
+  if (value === 0) return false
+  if (value == null) return null
+  if (typeof value !== 'string' && typeof value !== 'number') return null
+  const trimmed = String(value).trim()
+  if (!trimmed) return null
+  if (IMPORT_TRUE_RE.test(trimmed)) return true
+  if (IMPORT_FALSE_RE.test(trimmed)) return false
+  return null
+}
+
 export function normalizeImportNumber(
   value: number | null | string | undefined
 ): number | null {

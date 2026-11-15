@@ -210,11 +210,35 @@ export const LOGIFI_NATIVE_HEADERS = [
   'Data Hash',
   'Created At',
   'Updated At',
+  'Day Takeoffs',
+  'Night Takeoffs',
+  'NVG',
+  'Logbook Type',
+  'Is Zulu',
+  'Is Void',
+  'Amends Entry ID',
+  'Signature Pending',
 ] as const
 
 function formatLogifiBoolean(value: boolean | null | undefined): string {
   if (value === null || value === undefined) return ''
   return value ? 'Yes' : 'No'
+}
+
+function formatLogifiHours(value: number | null | undefined): string {
+  return formatDecimalHours(value, { emptyWhenNull: true })
+}
+
+function formatLogifiCount(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return ''
+  return String(Math.round(Number(value)))
+}
+
+function formatLogifiApproaches(entry: LogEntry): string {
+  return getApproachesFromPerformance(entry.performance)
+    .filter((approach) => approach.type && approach.count > 0)
+    .map((approach) => `${approach.type} (${approach.count})`)
+    .join('; ')
 }
 
 function formatLogifiTimestamp(value: string | null | undefined): string {
@@ -236,11 +260,9 @@ function formatLogifiJsonMetadata(value: Record<string, unknown> | null | undefi
 }
 
 function getInstrumentSplit(entry: LogEntry): [string, string] {
-  const actualVal = entry.flightTime.actualInstrument
-  const simulatedVal = entry.flightTime.simulatedInstrument
   return [
-    actualVal ? formatDecimalHours(actualVal) : '',
-    simulatedVal ? formatDecimalHours(simulatedVal) : '',
+    formatLogifiHours(entry.flightTime.actualInstrument),
+    formatLogifiHours(entry.flightTime.simulatedInstrument),
   ]
 }
 
@@ -436,6 +458,7 @@ export function mapEntryToGenericRow(entry: LogEntry): string[] {
 }
 
 export function mapEntryToLogifiNativeRow(entry: LogEntry): string[] {
+  const approachTotal = getTotalApproachCount(entry.performance)
   return [
     formatLogifiNativeDate(entry.date),
     entry.role || '',
@@ -458,26 +481,24 @@ export function mapEntryToLogifiNativeRow(entry: LogEntry): string[] {
     entry.oooi?.off || '',
     entry.oooi?.on || '',
     entry.oooi?.in || '',
-    formatDecimalHours(entry.flightTime.total),
-    formatDecimalHours(entry.flightTime.pic),
-    formatDecimalHours(entry.flightTime.sic),
-    formatDecimalHours(entry.flightTime.dual),
-    formatDecimalHours(entry.flightTime.solo),
-    formatDecimalHours(entry.flightTime.night),
+    formatLogifiHours(entry.flightTime.total),
+    formatLogifiHours(entry.flightTime.pic),
+    formatLogifiHours(entry.flightTime.sic),
+    formatLogifiHours(entry.flightTime.dual),
+    formatLogifiHours(entry.flightTime.solo),
+    formatLogifiHours(entry.flightTime.night),
     ...getInstrumentSplit(entry),
-    formatDecimalHours(entry.flightTime.crossCountry),
-    formatSimulatorHours(entry),
-    formatDecimalHours(entry.flightTime.ffs),
-    formatDecimalHours(entry.flightTime.ftd),
-    formatDecimalHours(entry.flightTime.atd),
-    formatDecimalHours(entry.flightTime.dualGiven),
-    formatWholeNumber(entry.performance.dayLandings),
-    formatWholeNumber(entry.performance.nightLandings),
-    String(getTotalApproachCount(entry.performance)),
-    getApproachesFromPerformance(entry.performance)
-      .map((a) => `${a.type} (${a.count})`)
-      .join(', ') || '',
-    formatWholeNumber(entry.performance.holdingProcedures),
+    formatLogifiHours(entry.flightTime.crossCountry),
+    formatSimulatorHours(entry, { zeroAsEmpty: true }),
+    formatLogifiHours(entry.flightTime.ffs),
+    formatLogifiHours(entry.flightTime.ftd),
+    formatLogifiHours(entry.flightTime.atd),
+    formatLogifiHours(entry.flightTime.dualGiven),
+    formatLogifiCount(entry.performance.dayLandings),
+    formatLogifiCount(entry.performance.nightLandings),
+    approachTotal > 0 ? String(approachTotal) : '',
+    formatLogifiApproaches(entry),
+    formatLogifiCount(entry.performance.holdingProcedures),
     formatLogifiBoolean(entry.isImported),
     entry.importSource || '',
     entry.importBatchId || '',
@@ -487,5 +508,13 @@ export function mapEntryToLogifiNativeRow(entry: LogEntry): string[] {
     entry.dataHash || '',
     formatLogifiTimestamp(entry.createdAt),
     formatLogifiTimestamp(entry.updatedAt),
+    formatLogifiCount(entry.performance.dayTakeoffs),
+    formatLogifiCount(entry.performance.nightTakeoffs),
+    formatLogifiHours(entry.flightTime.nvg),
+    entry.logbookType || '',
+    formatLogifiBoolean(entry.oooi?.isZulu),
+    formatLogifiBoolean(entry.isVoid),
+    entry.amendsEntryId || '',
+    formatLogifiBoolean(entry.signaturePending),
   ]
 }
