@@ -499,7 +499,7 @@ export const remigrateCrewProfiles = async (userId: string): Promise<{ success: 
 /**
  * Convert LogEntry to database format
  */
-const convertLogEntryToDb = (entry: LogEntry, userId: string) => {
+export const convertLogEntryToDb = (entry: LogEntry, userId: string) => {
   return {
     user_id: userId,
     date: entry.date,
@@ -519,6 +519,8 @@ const convertLogEntryToDb = (entry: LogEntry, userId: string) => {
     sic_name: (entry.sicName || '').trim() || null,
     flight_conditions: entry.flightConditions || [],
     remarks: entry.remarks || null,
+    tags: Array.isArray(entry.tags) ? entry.tags : [],
+    logbook_type: entry.logbookType ?? 'flight',
     flight_time: entry.flightTime,
     performance: entry.performance,
     oooi: entry.oooi || null,
