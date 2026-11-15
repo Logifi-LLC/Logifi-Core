@@ -226,6 +226,38 @@ export function oooiPairDurationHours(opts: {
   return Math.round((diffMin / 60) * 10) / 10
 }
 
+/**
+ * Parse a single OOOI clock typed in the form (HHMM, HMM, or HH:MM) to HH:MM.
+ * Returns null when the value is not a complete, valid 24h clock.
+ */
+export function formatOooiClockToHhMm(time: string | null | undefined): string | null {
+  if (time === null || time === undefined) return null
+  const trimmed = String(time).trim()
+  if (!trimmed) return null
+
+  let digits = trimmed.replace(/\D/g, '')
+  if (digits.length === 3) digits = `0${digits}`
+  if (digits.length === 0 || digits.length > 4) return null
+  digits = digits.padStart(4, '0')
+
+  const minutes = parseOOOITime(digits)
+  if (minutes === null) return null
+  const hours = Math.floor(minutes / 60)
+  const mins = minutes % 60
+  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`
+}
+
+/**
+ * Entry-form blur helper: normalize parseable clocks to HH:MM; leave raw text otherwise.
+ * Does not depend on OOOI sequence order (audit handles that separately).
+ */
+export function formatOooiClockInputOnBlur(value: string | null | undefined): string {
+  const trimmed = (value ?? '').trim()
+  if (!trimmed) return ''
+  const formatted = formatOooiClockToHhMm(trimmed)
+  return formatted ?? trimmed
+}
+
 /** Four-digit HHMM only — incomplete typed clocks must not tooltip or convert. */
 function completeOooiHhmm(hhmm: string | null | undefined): string | null {
   if (!hhmm) return null

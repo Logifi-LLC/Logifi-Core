@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   convertOooiFieldsToClock,
   convertOooiHhmmBetweenClocks,
+  formatOooiClockInputOnBlur,
   formatOooiOppositeClockTooltip,
   localDatetimeToZuluHhmm,
   oooiClockToUtc,
@@ -265,5 +266,37 @@ describe('oooiClock', () => {
       lookupTz: lookupTestTz,
     })
     expect(next).toEqual({ out: '1432', in: '1600', isZulu: false })
+  })
+
+  it('formats ON/IN to HH:MM on blur when Zulu sequence is out of order', () => {
+  /** Fictional Zulu leg — not from a real logbook. IN precedes ON. */
+    const date = '2026-03-15'
+    const oooi = {
+      out: '21:10',
+      off: '21:21',
+      on: '2248',
+      in: '2239',
+      isZulu: true,
+    }
+
+    const onFormatted = formatOooiClockInputOnBlur(oooi.on)
+    const inFormatted = formatOooiClockInputOnBlur(oooi.in)
+    expect(onFormatted).toBe('22:48')
+    expect(inFormatted).toBe('22:39')
+
+    const events = oooiEventsToUtcInstants({
+      date,
+      departure: 'KZZZ',
+      destination: 'KZZY',
+      oooi: {
+        out: oooi.out,
+        off: oooi.off,
+        on: onFormatted,
+        in: inFormatted,
+        isZulu: true,
+      },
+    })
+    expect(events).not.toBeNull()
+    expect(oooiSequenceIsInOrder(events!)).toBe(false)
   })
 })
