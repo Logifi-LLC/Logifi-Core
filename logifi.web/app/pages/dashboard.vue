@@ -1452,7 +1452,7 @@
               v-else
               ref="tableContainerRef"
               :class="[
-                'logbook-print-root mt-6 rounded-2xl border transition-colors duration-300 relative overflow-x-hidden max-w-full',
+                'logbook-print-root mt-6 rounded-2xl border transition-colors duration-300 relative overflow-x-auto max-w-full',
                 isDarkMode
                   ? 'border-gray-700'
                   : 'border-gray-300 shadow-sm'
@@ -1466,7 +1466,7 @@
                     ? 'divide-white/10 bg-gray-900 border-white/10 shadow-md shadow-black/40'
                     : 'divide-gray-200 bg-gray-100'
                 ]"
-                style="table-layout: fixed; width: 100%; max-width: 100%;"
+                style="table-layout: fixed; width: 100%;"
               >
                 <thead
                   ref="tableHeaderRef"
@@ -1487,7 +1487,7 @@
                         col.responsiveClass || '',
                         ...getColumnPadding(col)
                       ]"
-                      :style="col.width ? `width: ${col.width}px;` : ''"
+                      :style="logbookColumnWidthStyle(col.width)"
                     >
                       {{ col.label }}
                       <div
@@ -1525,7 +1525,7 @@
                         v-for="col in visibleColumns"
                         :key="col.key"
                         :class="[...getCellClasses(col), getCellTextColor(col)]"
-                        :style="col.width ? `width: ${col.width}px;` : ''"
+                        :style="logbookColumnWidthStyle(col.width)"
                       >
                         <template v-if="col.key === 'date'">
                           <div>
@@ -6902,6 +6902,7 @@ import {
 } from '../../shared/oooiClock'
 import { sortEntriesByDateAndOOOI } from '../../shared/oooiSort'
 import { listCatalogPersonDisplayNames, tagsExcludingPersonNameMarker, isPersonCatalogNameMarker } from '../../shared/catalogPersonNames'
+import { collectPilotCatalogNames } from '../../shared/looksLikePersonName'
 import type { Form8710Data, AircraftCategory8710, ComplianceMetadata } from '../utils/form8710Types'
 import { mapCategoryTo8710, isTrainingDevice } from '../utils/form8710Types'
 import {
@@ -7031,6 +7032,7 @@ import {
   applyLogbookTableDensity,
   LOGBOOK_TABLE_CONDENSED_MQ,
   LOGBOOK_TABLE_TIGHT_MQ,
+  logbookColumnWidthStyle,
   resolveLogbookTableDensity,
 } from '../utils/logbookTableLayout'
 
@@ -14172,8 +14174,8 @@ function processCatalogEntryIntoAccumulator(
     acc.familyMakeModelCounts[fam][makeModel] = (acc.familyMakeModelCounts[fam][makeModel] || 0) + 1
   }
   getEntryAirportCodes(entry, airportSet).forEach((code) => acc.airports.add(code))
-  if (entry.trainingElements.trim()) {
-    acc.pilots.add(entry.trainingElements.trim())
+  for (const name of collectPilotCatalogNames(entry)) {
+    acc.pilots.add(name)
   }
   if (entry.aircraftCategoryClass.trim()) {
     acc.categoryClass.add(entry.aircraftCategoryClass.trim().toUpperCase())
