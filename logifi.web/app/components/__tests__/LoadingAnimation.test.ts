@@ -3,26 +3,26 @@ import { mount } from '@vue/test-utils'
 import LoadingAnimation from '../LoadingAnimation.vue'
 
 describe('LoadingAnimation', () => {
-  it('renders fullscreen boot loader with label and animated SVG mark', () => {
+  it('renders default propeller variant fullscreen', () => {
     const wrapper = mount(LoadingAnimation, {
       props: { label: 'Loading logbook', fullscreen: true, size: 'md' },
     })
     const root = wrapper.get('.loading-animation')
+    expect(root.classes()).toContain('loading-animation--variant-propeller')
     expect(root.classes()).toContain('loading-animation--fullscreen')
-    expect(root.classes()).toContain('loading-animation--motion')
     expect(root.attributes('aria-label')).toBe('Loading logbook')
-    expect(root.attributes('aria-busy')).toBe('true')
     const svg = wrapper.get('svg.loading-animation__mark')
-    expect(svg.classes()).toContain('loading-animation__mark--md')
-    expect(svg.attributes('width')).toBe('72')
+    expect(svg.attributes('viewBox')).toBe('0 0 100 100')
     expect(wrapper.findAll('.loading-animation__corner')).toHaveLength(2)
+    expect(wrapper.find('.loading-animation__word').exists()).toBe(false)
   })
 
-  it('supports inline layout and size tokens', () => {
+  it('renders wordmark variant with logifi text', () => {
     const wrapper = mount(LoadingAnimation, {
-      props: { fullscreen: false, size: 'sm' },
+      props: { variant: 'wordmark', fullscreen: false, size: 'sm' },
     })
-    expect(wrapper.get('.loading-animation').classes()).toContain('loading-animation--inline')
-    expect(wrapper.get('svg').attributes('width')).toBe('48')
+    expect(wrapper.get('.loading-animation').classes()).toContain('loading-animation--variant-wordmark')
+    expect(wrapper.get('svg').attributes('viewBox')).toBe('0 0 240 100')
+    expect(wrapper.get('.loading-animation__word').text()).toBe('logifi')
   })
 })

@@ -3,53 +3,46 @@
     :class="[
       'loading-animation',
       'loading-animation--motion',
+      `loading-animation--variant-${variant}`,
       fullscreen ? 'loading-animation--fullscreen' : 'loading-animation--inline',
     ]"
     role="status"
     aria-busy="true"
     :aria-label="resolvedLabel"
   >
-    <svg
-      :class="['loading-animation__mark', markSizeClass]"
-      :width="pixelSize"
-      :height="pixelSize"
-      viewBox="0 0 100 100"
-      xmlns="http://www.w3.org/2000/svg"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <g class="loading-animation__stage">
-        <g class="loading-animation__corner loading-animation__corner--bl">
-          <rect x="0" y="33" width="10" height="64" fill="#ffffff" />
-          <rect x="0" y="90" width="87" height="10" fill="#ffffff" />
-        </g>
-        <g class="loading-animation__corner loading-animation__corner--tr">
-          <rect x="14" y="0" width="86" height="10" fill="#ffffff" />
-          <rect x="90" y="0" width="10" height="67" fill="#ffffff" />
-        </g>
-      </g>
-    </svg>
+    <LoadingAnimationPropellerMark
+      v-if="variant === 'propeller'"
+      :pixel-size="pixelSize"
+      :mark-size-class="markSizeClass"
+    />
+    <LoadingAnimationWordmarkMark
+      v-else
+      :pixel-size="pixelSize"
+      :mark-size-class="markSizeClass"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import LoadingAnimationPropellerMark from './loading/LoadingAnimationPropellerMark.vue'
+import LoadingAnimationWordmarkMark from './loading/LoadingAnimationWordmarkMark.vue'
 
 export type LoadingAnimationSize = 'sm' | 'md' | 'lg'
+export type LoadingAnimationVariant = 'propeller' | 'wordmark'
 
 const props = withDefaults(
   defineProps<{
-    /** Logo mark size token */
     size?: LoadingAnimationSize
-    /** Accessible status label (defaults to “Loading”) */
     label?: string
-    /** Full-viewport boot overlay vs centered inline block */
     fullscreen?: boolean
+    variant?: LoadingAnimationVariant
   }>(),
   {
     size: 'md',
     label: undefined,
     fullscreen: true,
+    variant: 'propeller',
   }
 )
 
@@ -62,4 +55,5 @@ const SIZE_PX: Record<LoadingAnimationSize, number> = {
 const pixelSize = computed(() => SIZE_PX[props.size])
 const markSizeClass = computed(() => `loading-animation__mark--${props.size}`)
 const resolvedLabel = computed(() => props.label ?? 'Loading')
+const variant = computed(() => props.variant)
 </script>

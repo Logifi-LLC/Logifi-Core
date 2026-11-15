@@ -1,4 +1,12 @@
 /* Geometry traced from public/favicon.png (tight crop → 100×100). Inner vertices: BL (9, 97), TR (90, 10). */
+@font-face {
+  font-family: 'Amarurgt';
+  src: url('/fonts/amarurgt.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
 .loading-animation {
   display: flex;
   align-items: center;
@@ -22,18 +30,36 @@
   flex-shrink: 0;
 }
 
-.loading-animation__mark--sm {
+.loading-animation__mark--square.loading-animation__mark--sm,
+.loading-animation__mark--sm:not(.loading-animation__mark--wordmark) {
   width: 48px;
   height: 48px;
 }
 
-.loading-animation__mark--md {
+.loading-animation__mark--square.loading-animation__mark--md,
+.loading-animation__mark--md:not(.loading-animation__mark--wordmark) {
   width: 72px;
   height: 72px;
 }
 
-.loading-animation__mark--lg {
+.loading-animation__mark--square.loading-animation__mark--lg,
+.loading-animation__mark--lg:not(.loading-animation__mark--wordmark) {
   width: 96px;
+  height: 96px;
+}
+
+.loading-animation__mark--wordmark.loading-animation__mark--sm {
+  width: 115px;
+  height: 48px;
+}
+
+.loading-animation__mark--wordmark.loading-animation__mark--md {
+  width: 173px;
+  height: 72px;
+}
+
+.loading-animation__mark--wordmark.loading-animation__mark--lg {
+  width: 230px;
   height: 96px;
 }
 
@@ -51,22 +77,32 @@
   transform-box: fill-box;
 }
 
-/*
- * Cycle 2.8s:
- * 0–33% (0–0.92s)   corners slide to center (+)
- * 33–46% (0.92–1.29s) hold merged ~370ms
- * 46–83% (1.29–2.32s) propeller spin 720° (ease-in then steady)
- * 83–100% (2.32–2.8s)  slide back to rest + brief fade
- */
-.loading-animation--motion .loading-animation__corner--bl {
+.loading-animation__corner--bl-wordmark {
+  transform-box: fill-box;
+  transform-origin: 9px 97px;
+}
+
+.loading-animation__corner--tr-wordmark {
+  transform-box: fill-box;
+  transform-origin: 90px 10px;
+}
+
+.loading-animation__word {
+  font-family: Amarurgt, Quicksand, sans-serif;
+  font-size: 34px;
+  letter-spacing: 0.02em;
+}
+
+/* --- Propeller variant (2.8s) --- */
+.loading-animation--variant-propeller.loading-animation--motion .loading-animation__corner--bl {
   animation: loading-animation-corner-bl 2.8s ease-in-out infinite;
 }
 
-.loading-animation--motion .loading-animation__corner--tr {
+.loading-animation--variant-propeller.loading-animation--motion .loading-animation__corner--tr {
   animation: loading-animation-corner-tr 2.8s ease-in-out infinite;
 }
 
-.loading-animation--motion .loading-animation__stage {
+.loading-animation--variant-propeller.loading-animation--motion .loading-animation__stage {
   animation: loading-animation-stage-spin 2.8s cubic-bezier(0.55, 0.12, 0.85, 0.38) infinite;
 }
 
@@ -129,10 +165,62 @@
   }
 }
 
+/* --- Wordmark variant (3s) --- */
+.loading-animation--variant-wordmark.loading-animation--motion .loading-animation__corner--bl-wordmark {
+  animation: loading-animation-wordmark-bl 3s ease-in-out infinite;
+}
+
+.loading-animation--variant-wordmark.loading-animation--motion .loading-animation__corner--tr-wordmark {
+  animation: loading-animation-wordmark-tr 3s ease-in-out infinite;
+}
+
+.loading-animation--variant-wordmark.loading-animation--motion .loading-animation__word {
+  animation: loading-animation-wordmark-text 3s ease-in-out infinite;
+}
+
+@keyframes loading-animation-wordmark-bl {
+  0%,
+  70%,
+  100% {
+    transform: translate(0, 0);
+  }
+  30%,
+  45% {
+    transform: translate(52px, 0);
+  }
+}
+
+@keyframes loading-animation-wordmark-tr {
+  0%,
+  70%,
+  100% {
+    transform: translate(0, 0);
+  }
+  30%,
+  45% {
+    transform: translate(-52px, 0);
+  }
+}
+
+@keyframes loading-animation-wordmark-text {
+  0%,
+  70%,
+  100% {
+    opacity: 1;
+  }
+  30%,
+  45% {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .loading-animation--motion .loading-animation__corner--bl,
   .loading-animation--motion .loading-animation__corner--tr,
-  .loading-animation--motion .loading-animation__stage {
+  .loading-animation--motion .loading-animation__stage,
+  .loading-animation--motion .loading-animation__corner--bl-wordmark,
+  .loading-animation--motion .loading-animation__corner--tr-wordmark,
+  .loading-animation--motion .loading-animation__word {
     animation: none;
   }
 }
