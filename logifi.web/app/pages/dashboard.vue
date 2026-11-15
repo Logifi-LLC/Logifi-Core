@@ -4372,6 +4372,7 @@
       :full-backup-busy="fullBackupBusy"
       :full-backup-progress="fullBackupProgress"
       :full-backup-error="fullBackupError"
+      :import-busy="importBusy"
       @close="closeSettings"
       @logout="handleLogout"
       @account-deleted="handleAccountDeleted"
@@ -4411,6 +4412,7 @@
       @export-logbook="openExportDialog"
       @download-json-backup="handleDownloadJsonBackupFromSettings"
       @download-full-backup="handleDownloadFullBackupFromSettings"
+      @restore-backup="openRestoreBackupFilePicker"
       @generate-8710="showForm8710Modal = true"
       @download-logbook-pdf="openLogbookPdfDialog"
       @import-fcv="handleOpenFcvImportFromSettings"
@@ -12456,6 +12458,11 @@ async function handleImportDrop(event: DragEvent): Promise<void> {
   } else {
     showToast(`Please drop a CSV, TSV, TXT, JSON, or ZIP backup. Received: ${file.type || 'unknown type'}`, { type: 'error' })
   }
+}
+
+function openRestoreBackupFilePicker(): void {
+  if (importBusy.value) return
+  jsonFileInput.value?.click()
 }
 
 async function handleSettingsImportFile(file: File): Promise<void> {
