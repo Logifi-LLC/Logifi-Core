@@ -157,6 +157,75 @@
           </button>
         </div>
 
+        <div
+          v-else-if="authPanel === 'check-reset-email'"
+          class="space-y-6"
+          data-testid="auth-check-reset-email"
+        >
+          <p
+            :class="['text-sm font-quicksand leading-relaxed', isDarkMode ? 'text-gray-300' : 'text-gray-600']"
+          >
+            If an account exists for
+            <span class="font-semibold break-all">{{ pendingResetEmail }}</span>,
+            we sent a reset link.
+          </p>
+          <div v-if="resendResetFeedback" class="animate-fade-in">
+            <div
+              :class="[
+                'rounded-xl border p-4 flex items-start gap-3',
+                resendResetFeedback.type === 'error'
+                  ? isDarkMode
+                    ? 'bg-red-900/20 border-red-800 text-red-300'
+                    : 'bg-red-50 border-red-100 text-red-700'
+                  : isDarkMode
+                    ? 'bg-green-900/20 border-green-800 text-green-300'
+                    : 'bg-green-50 border-green-100 text-green-700',
+              ]"
+            >
+              <Icon
+                :name="resendResetFeedback.type === 'error' ? 'ri:error-warning-fill' : 'ri:checkbox-circle-fill'"
+                size="20"
+                class="flex-shrink-0"
+              />
+              <p class="text-sm font-medium font-quicksand">{{ resendResetFeedback.message }}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            class="w-full min-h-11 py-3 rounded-xl font-bold font-quicksand text-sm transition-all border"
+            :class="[
+              resetResend.canResend
+                ? 'bg-blue-600 text-white hover:bg-blue-700 border-blue-600'
+                : isDarkMode
+                  ? 'bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed'
+                  : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed',
+            ]"
+            :disabled="!resetResend.canResend || isResendingReset"
+            @click="handleResendPasswordReset"
+          >
+            <span v-if="isResendingReset" class="inline-flex items-center justify-center gap-2">
+              <Icon name="ri:loader-4-line" size="18" class="animate-spin" />
+              Sending…
+            </span>
+            <span v-else-if="resetResend.secondsRemaining > 0">
+              Resend in {{ resetResend.secondsRemaining }}s
+            </span>
+            <span v-else>Resend reset email</span>
+          </button>
+          <button
+            type="button"
+            class="w-full min-h-11 py-3 rounded-xl font-bold font-quicksand text-sm border transition-all"
+            :class="[
+              isDarkMode
+                ? 'border-gray-700 text-gray-200 hover:bg-gray-800'
+                : 'border-gray-200 text-gray-700 hover:bg-gray-50',
+            ]"
+            @click="goToSignInAfterReset"
+          >
+            Back to sign in
+          </button>
+        </div>
+
         <template v-else>
         <!-- Social Login -->
         <div class="space-y-3">
@@ -325,10 +394,20 @@
             <button 
               v-if="activeTab === 'signin'"
               type="button"
-              class="text-xs font-bold text-blue-600 hover:text-blue-700 font-quicksand"
+              class="text-xs font-bold font-quicksand min-h-11"
+              :class="[
+                isLoading || isSendingPasswordReset
+                  ? 'text-gray-400 cursor-not-allowed'
+                  : 'text-blue-600 hover:text-blue-700',
+              ]"
+              :disabled="isLoading || isSendingPasswordReset"
               @click="handleForgotPassword"
             >
-              Forgot password?
+              <span v-if="isSendingPasswordReset" class="inline-flex items-center gap-1">
+                <Icon name="ri:loader-4-line" size="14" class="animate-spin" />
+                Sending…
+              </span>
+              <span v-else>Forgot password?</span>
             </button>
           </div>
           <div class="relative">
@@ -503,19 +582,28 @@ const {
 
 const inboxResend = useResendCooldown()
 const signInResend = useResendCooldown()
+const resetResend = useResendCooldown()
 
 const activeTab = ref<'signin' | 'signup'>(props.initialTab)
-const authPanel = ref<'form' | 'check-inbox'>('form')
+const authPanel = ref<'form' | 'check-inbox' | 'check-reset-email'>('form')
 const pendingSignupEmail = ref('')
+const pendingResetEmail = ref('')
 const showReferralField = ref(false)
 const showUnconfirmedResend = ref(false)
 const isResendingInbox = ref(false)
 const isResendingSignIn = ref(false)
+const isResendingReset = ref(false)
+const isSendingPasswordReset = ref(false)
 const resendInboxFeedback = ref<{ type: 'success' | 'error'; message: string } | null>(null)
 const resendSignInFeedback = ref<{ type: 'success' | 'error'; message: string } | null>(null)
+const resendResetFeedback = ref<{ type: 'success' | 'error'; message: string } | null>(null)
+
+const RESET_EMAIL_SENT_MESSAGE =
+  'If an account exists for this address, we sent a reset link.'
 
 const modalTitle = computed(() => {
   if (authPanel.value === 'check-inbox') return 'Check your inbox'
+  if (authPanel.value === 'check-reset-email') return 'Check your email'
   return activeTab.value === 'signin' ? 'Sign in' : 'Sign up'
 })
 const email = ref('')
@@ -783,25 +871,37 @@ const handleSubmit = async () => {
 
 // Handle forgot password
 const handleForgotPassword = async () => {
-  if (isLoading.value) return
+  if (isLoading.value || isSendingPasswordReset.value) return
 
+  emailTouched.value = true
   const emailValue = email.value.trim()
-  const emailValid = EMAIL_PATTERN.test(emailValue)
+  const emailFieldError = emailErrorMessage(email.value)
 
-  if (!emailValid) {
-    authError.value = 'Please enter a valid email address to reset your password.'
+  if (emailFieldError) {
+    authError.value = 'Enter a valid email address to reset your password.'
     successMessage.value = null
+    await nextTick()
+    emailInputRef.value?.focus()
     return
   }
 
   authError.value = null
   successMessage.value = null
+  isSendingPasswordReset.value = true
 
-  const result = await resetPassword(emailValue)
-  if (result.success) {
-    successMessage.value = 'Password reset link sent. Please check your email.'
-  } else if (result.error) {
-    authError.value = result.error
+  try {
+    const result = await resetPassword(emailValue)
+    if (result.success) {
+      pendingResetEmail.value = emailValue
+      authPanel.value = 'check-reset-email'
+      resendResetFeedback.value = null
+      resetResend.startCooldown()
+      authErrorState.value = null
+    } else if (result.error) {
+      authError.value = result.error
+    }
+  } finally {
+    isSendingPasswordReset.value = false
   }
 }
 
@@ -880,6 +980,30 @@ function goToSignInAfterInbox() {
   password.value = ''
   authError.value = null
   successMessage.value = null
+}
+
+async function handleResendPasswordReset() {
+  if (!resetResend.canResend.value || isResendingReset.value || !pendingResetEmail.value) return
+  isResendingReset.value = true
+  resendResetFeedback.value = null
+  const result = await resetPassword(pendingResetEmail.value)
+  isResendingReset.value = false
+  if (result.success) {
+    resendResetFeedback.value = { type: 'success', message: RESET_EMAIL_SENT_MESSAGE }
+    resetResend.startCooldown()
+  } else if (result.error) {
+    resendResetFeedback.value = { type: 'error', message: result.error }
+  }
+}
+
+function goToSignInAfterReset() {
+  authPanel.value = 'form'
+  activeTab.value = 'signin'
+  password.value = ''
+  authError.value = null
+  successMessage.value = null
+  resendResetFeedback.value = null
+  resetResend.resetCooldown()
 }
 
 // Reset form when switching tabs

@@ -5,6 +5,7 @@ import AuthModal from '../../app/components/AuthModal.vue'
 
 const signUp = vi.hoisted(() => vi.fn())
 const signIn = vi.hoisted(() => vi.fn())
+const resetPassword = vi.hoisted(() => vi.fn())
 const resendSignupConfirmation = vi.hoisted(() => vi.fn())
 
 vi.mock('~/composables/useAuth', () => ({
@@ -13,7 +14,7 @@ vi.mock('~/composables/useAuth', () => ({
     signIn,
     signInWithGoogle: vi.fn(),
     signInWithApple: vi.fn(),
-    resetPassword: vi.fn(),
+    resetPassword,
     resendSignupConfirmation,
     isLoading: ref(false),
     error: ref<string | null>(null),
@@ -56,6 +57,7 @@ describe('AuthModal signup validation and focus', () => {
   beforeEach(() => {
     signUp.mockReset()
     signIn.mockReset()
+    resetPassword.mockReset()
   })
 
   afterEach(() => {
@@ -148,6 +150,26 @@ describe('AuthModal signup validation and focus', () => {
     expect(signUp).toHaveBeenCalledWith('you@example.com', 'secret1')
     expect(wrapper.find('[data-testid="auth-check-inbox"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('you@example.com')
+    wrapper.unmount()
+  })
+
+  it('shows check-your-email panel after forgot password send', async () => {
+    resetPassword.mockResolvedValue({ success: true })
+    const wrapper = mountModal({ initialTab: 'signin' })
+    await wrapper.get('#email').setValue('pilot@example.com')
+    const forgot = wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Forgot password'))
+    expect(forgot).toBeTruthy()
+    await forgot!.trigger('click')
+    await flushPromises()
+    await nextTick()
+
+    expect(resetPassword).toHaveBeenCalledWith('pilot@example.com')
+    expect(wrapper.find('[data-testid="auth-check-reset-email"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('If an account exists for')
+    expect(wrapper.text()).toContain('pilot@example.com')
+    expect(wrapper.text()).toContain('Back to sign in')
     wrapper.unmount()
   })
 

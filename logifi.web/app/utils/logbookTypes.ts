@@ -72,6 +72,8 @@ export interface OOOITimes {
   on: string | null
   in: string | null
   isZulu: boolean
+  /** Present on airline imports that could not convert local clocks to Zulu. */
+  tzUnresolved?: boolean
 }
 
 /** Canonical Out → Off → On → In order for display and form fields. */
@@ -288,5 +290,20 @@ export interface AnnualCurrencyStatus {
   status: CurrencyStatusType
   requirements: string[]
   qualifyingEntries: LogEntry[]
+}
+
+/**
+ * 14 CFR 61.57(a)/(b) passenger currency is per category and class, and per
+ * type if a type rating is required. One row per tracked group.
+ */
+export type PassengerCurrencyGroupKind = 'category_class' | 'type'
+
+export interface PassengerCurrencyGroup {
+  kind: PassengerCurrencyGroupKind
+  /** Canonical category/class (ASEL) or ICAO type designator (E170). */
+  key: string
+  label: string
+  passenger: CurrencyStatus
+  night: CurrencyStatus
 }
 

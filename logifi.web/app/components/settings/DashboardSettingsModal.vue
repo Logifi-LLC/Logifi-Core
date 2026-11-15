@@ -97,6 +97,7 @@
       :available-metrics="availableMetrics"
       :selected-metrics="selectedMetrics"
       :show-currency-chips="showCurrencyChips"
+      :show-far117-lookbacks="showFar117Lookbacks"
       :logbook-layout-presets="logbookLayoutPresets"
       :active-logbook-layout-preset-id="activeLogbookLayoutPresetId"
       :logbook-layout-picker-fields="logbookLayoutPickerFields"
@@ -107,6 +108,7 @@
       @set-entry-form-mode="$emit('set-entry-form-mode', $event)"
       @toggle-metric="$emit('toggle-metric', $event)"
       @toggle-currency-chips="$emit('toggle-currency-chips')"
+      @toggle-far117-lookbacks="$emit('toggle-far117-lookbacks')"
       @apply-logbook-layout-preset="$emit('apply-logbook-layout-preset', $event)"
       @toggle-logbook-layout-field="$emit('toggle-logbook-layout-field', $event)"
       @logbook-layout-drag-start="$emit('logbook-layout-drag-start', $event)"
@@ -133,6 +135,10 @@
       :is-drag-over="isDragOverImport"
       :entry-count="entryCount"
       :fcv-connected="fcvConnected"
+      :json-backup-busy="jsonBackupBusy"
+      :full-backup-busy="fullBackupBusy"
+      :full-backup-progress="fullBackupProgress"
+      :full-backup-error="fullBackupError"
       @retry-sync="$emit('retry-sync')"
       @sync-now="$emit('sync-now')"
       @force-full-sync="$emit('force-full-sync')"
@@ -143,7 +149,10 @@
       @import-file="$emit('import-file', $event)"
       @import-provider-file="$emit('import-provider-file', $event)"
       @export-logbook="$emit('export-logbook')"
+      @download-json-backup="$emit('download-json-backup')"
+      @download-full-backup="$emit('download-full-backup')"
       @generate-8710="$emit('generate-8710')"
+      @download-logbook-pdf="$emit('download-logbook-pdf')"
       @import-fcv="$emit('import-fcv')"
       @flica-connection-changed="$emit('flica-connection-changed', $event)"
       @close="$emit('close')"
@@ -204,6 +213,7 @@ const props = defineProps<{
   availableMetrics: { key: string; label: string }[]
   selectedMetrics: string[]
   showCurrencyChips: boolean
+  showFar117Lookbacks: boolean
   isIos: boolean
   logbookLayoutPresets: readonly EntryCardPreset[]
   activeLogbookLayoutPresetId: EntryCardPresetId
@@ -219,6 +229,10 @@ const props = defineProps<{
   entryCount: number
   updatesBadge?: string
   fcvConnected?: boolean
+  jsonBackupBusy?: boolean
+  fullBackupBusy?: boolean
+  fullBackupProgress?: string | null
+  fullBackupError?: string | null
 }>()
 
 const profileSubTabModel = defineModel<'profile' | 'stats'>('profileSubTab', { required: true })
@@ -243,6 +257,7 @@ defineEmits<{
   'set-entry-form-mode': [mode: EntryFormMode]
   'toggle-metric': [key: string]
   'toggle-currency-chips': []
+  'toggle-far117-lookbacks': []
   'apply-logbook-layout-preset': [id: EntryCardPresetId]
   'toggle-logbook-layout-field': [key: LogbookColumnKey]
   'logbook-layout-drag-start': [key: LogbookColumnKey]
@@ -260,7 +275,10 @@ defineEmits<{
   'import-file': [file: File]
   'import-provider-file': [payload: { file: File; provider: ImportProviderKey }]
   'export-logbook': []
+  'download-json-backup': []
+  'download-full-backup': []
   'generate-8710': []
+  'download-logbook-pdf': []
   'import-fcv': []
   'flica-connection-changed': [{ connected: boolean }]
 }>()

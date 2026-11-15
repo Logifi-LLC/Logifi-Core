@@ -14,6 +14,23 @@ export type ProductUpdate = {
 
 export const PRODUCT_UPDATES: ProductUpdate[] = [
   {
+    id: '2026-11-print-backup',
+    date: '2026-11-15',
+    title: 'Print, backup, and smarter time tracking',
+    tagline: 'Print, back up, and watch your limits',
+    summary:
+      'Print your logbook, back up everything, and keep a closer eye on your limits.',
+    bullets: [
+      'Print your logbook or download it as a PDF, plus an 8710 PDF.',
+      'Full backup ZIP with your entries, signatures, and any Digifi photos still on file, and you can restore from it.',
+      'FAR 117 flight-time lookbacks show as a quiet dot by the UTC clock. Turn it on in Settings.',
+      'Currency is now tracked separately by category, class, and type.',
+      'OOOI times are stored in Zulu, and the Local/Zulu button converts the times for you.',
+      'UI updates.',
+      'Also since August: Logbook check for whole-logbook errors, a totals report with calendar windows, a Full or Quick entry form, landing counts, correct night time across UTC midnight, Digifi scan upgrades and referrals, and Autofi actual block times from FlightAware.',
+    ],
+  },
+  {
     id: '2026-08-autofi',
     date: '2026-08-17',
     title: 'Autofi',

@@ -17,6 +17,10 @@ import { isCapacitorIos, isCapacitorNative } from './useCapacitorPlatform'
 import { useOffline } from './useOffline'
 import { claimStoredReferral } from '~/utils/referralClaimClient'
 import { isAuthEmailVerified } from '~/utils/referralClaimAttempt'
+import {
+  isPasswordResetEnumerationError,
+  passwordResetErrorUserMessage,
+} from '~/utils/authErrors'
 
 function isAppleSignInCancellation(err: unknown): boolean {
   if (!err || typeof err !== 'object') return false
@@ -593,15 +597,25 @@ export const useAuth = () => {
       })
 
       if (resetError) {
-        throw resetError
+        if (isPasswordResetEnumerationError(resetError.message)) {
+          return { success: true as const }
+        }
+        const friendly = passwordResetErrorUserMessage(resetError.message)
+        error.value = friendly
+        return { success: false as const, error: friendly }
       }
 
-      return { success: true }
+      return { success: true as const }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to send password reset email'
+      const rawMessage =
+        err instanceof Error ? err.message : 'Failed to send password reset email'
+      if (isPasswordResetEnumerationError(rawMessage)) {
+        return { success: true as const }
+      }
+      const errorMessage = passwordResetErrorUserMessage(rawMessage)
       error.value = errorMessage
       console.error('Reset password error:', err)
-      return { success: false, error: errorMessage }
+      return { success: false as const, error: errorMessage }
     } finally {
       isLoading.value = false
     }

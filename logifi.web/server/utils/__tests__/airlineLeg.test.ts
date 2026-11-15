@@ -74,9 +74,10 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
     expect(entry.training_elements).toBe('SUTTON, DREW')
     expect(entry.flight_conditions).toContain('ifr')
     expect(entry.flight_conditions).toContain('crossCountry')
-    expect(entry.oooi?.out).toBe('0608')
-    expect(entry.oooi?.in).toBe('0715')
-    expect(entry.oooi?.off).toBe('0620')
+    expect(entry.oooi?.out).toBe('1008')
+    expect(entry.oooi?.in).toBe('1115')
+    expect(entry.oooi?.off).toBe('1020')
+    expect(entry.oooi?.isZulu).toBe(true)
   })
 
   it('maps SIC legs with SIC time and Captain as the other crew', () => {
@@ -223,11 +224,11 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: 128,
     })
     expect(entry.oooi).toEqual({
-      out: '1150',
-      off: '1159',
-      on: '1346',
-      in: '1430',
-      isZulu: false,
+      out: '1550',
+      off: '1559',
+      on: '1746',
+      in: '1830',
+      isZulu: true,
     })
     expect((entry.flight_time as Record<string, unknown>).total).toBe(2.7)
     expect((entry.flight_time as Record<string, unknown>).pic).toBe(2.7)
@@ -256,8 +257,9 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       is_deadhead: false,
       block_minutes: 198,
     })
-    expect(entry.oooi?.out).toBe('1221')
-    expect(entry.oooi?.in).toBe('1503')
+    expect(entry.oooi?.out).toBe('1721')
+    expect(entry.oooi?.in).toBe('2003')
+    expect(entry.oooi?.isZulu).toBe(true)
     expect((entry.flight_time as Record<string, unknown>).total).toBe(2.7)
     expect(entry.category_class_time).toBe(2.7)
   })
@@ -336,11 +338,11 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: 76,
     })
     expect(entry.oooi).toEqual({
-      out: '1310',
-      off: '1327',
-      on: '1418',
-      in: '1426',
-      isZulu: false,
+      out: '1710',
+      off: '1727',
+      on: '1818',
+      in: '1826',
+      isZulu: true,
     })
     expect(entry.departure).toBe('KRIC')
     expect(entry.destination).toBe('KLGA')
@@ -371,11 +373,11 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: 123,
     })
     expect(entry.oooi).toEqual({
-      out: '0609',
-      off: '0622',
-      on: '0804',
-      in: '0825',
-      isZulu: false,
+      out: '1009',
+      off: '1022',
+      on: '1204',
+      in: '1225',
+      isZulu: true,
     })
     expect((entry.flight_time as Record<string, unknown>).total).toBe(2.3)
     expect(entry.category_class_time).toBe(2.3)
@@ -403,11 +405,11 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: 78,
     })
     expect(entry.oooi).toEqual({
-      out: '0935',
-      off: '0954',
-      on: '1038',
-      in: '1050',
-      isZulu: false,
+      out: '1335',
+      off: '1354',
+      on: '1438',
+      in: '1450',
+      isZulu: true,
     })
   })
 
@@ -433,11 +435,11 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: null,
     })
     expect(entry.oooi).toEqual({
-      out: '1141',
+      out: '1541',
       off: null,
       on: null,
-      in: '1256',
-      isZulu: false,
+      in: '1656',
+      isZulu: true,
     })
     expect((entry.flight_time as Record<string, unknown>).total).toBe(1.3)
   })
@@ -492,6 +494,130 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
     expect(entry.tags).toEqual(['Deadhead'])
     expect((entry.performance as Record<string, unknown>).nightLandings).toBeUndefined()
     expect((entry.performance as Record<string, unknown>).dayLandings).toBeUndefined()
+  })
+
+  it('stores IND→ORD OOOI as Zulu so On is after Off', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20261113_4401_IND',
+      import_source: 'flica_aerodatabox',
+      flight_number: '4401',
+      trip_number: null,
+      role: 'PIC',
+      dep_airport: 'IND',
+      arr_airport: 'ORD',
+      scheduled_out_local: '2026-11-13 12:00:00',
+      scheduled_in_local: '2026-11-13 12:00:00',
+      actual_out_local: '2026-11-13 12:00:00',
+      actual_in_local: '2026-11-13 12:00:00',
+      actual_off_local: '2026-11-13 12:10:00',
+      actual_on_local: '2026-11-13 11:40:00',
+      fcv_tail_number: 'N123YX',
+      fcv_aircraft_type: 'E75',
+      crew: [],
+      is_deadhead: false,
+      block_minutes: 60,
+    })
+    expect(entry.oooi).toEqual({
+      out: '1700',
+      off: '1710',
+      on: '1740',
+      in: '1800',
+      isZulu: true,
+    })
+    expect((entry.flight_time as Record<string, unknown>).total).toBe(1.0)
+  })
+
+  it('keeps same-zone DCA→CMH total 1.5h after storing Zulu OOOI', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20261113_4402_DCA',
+      import_source: 'flica_aerodatabox',
+      flight_number: '4402',
+      trip_number: null,
+      role: 'PIC',
+      dep_airport: 'DCA',
+      arr_airport: 'CMH',
+      scheduled_out_local: '2026-11-13 10:00:00',
+      scheduled_in_local: '2026-11-13 11:30:00',
+      actual_out_local: '2026-11-13 10:00:00',
+      actual_in_local: '2026-11-13 11:30:00',
+      actual_off_local: '2026-11-13 10:12:00',
+      actual_on_local: '2026-11-13 11:20:00',
+      fcv_tail_number: 'N123YX',
+      fcv_aircraft_type: 'E75',
+      crew: [],
+      is_deadhead: false,
+      block_minutes: 90,
+    })
+    expect(entry.oooi).toEqual({
+      out: '1500',
+      off: '1512',
+      on: '1620',
+      in: '1630',
+      isZulu: true,
+    })
+    expect((entry.flight_time as Record<string, unknown>).total).toBe(1.5)
+  })
+
+  it('converts DST-day IND→ORD local clocks using IANA zones', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20260715_4403_IND',
+      import_source: 'flica_aerodatabox',
+      flight_number: '4403',
+      trip_number: null,
+      role: 'PIC',
+      dep_airport: 'IND',
+      arr_airport: 'ORD',
+      scheduled_out_local: '2026-07-15 13:00:00',
+      scheduled_in_local: '2026-07-15 13:00:00',
+      actual_out_local: '2026-07-15 13:00:00',
+      actual_in_local: '2026-07-15 13:00:00',
+      actual_off_local: null,
+      actual_on_local: null,
+      fcv_tail_number: '',
+      fcv_aircraft_type: 'E75',
+      crew: [],
+      is_deadhead: false,
+      block_minutes: 60,
+    })
+    expect(entry.oooi).toEqual({
+      out: '1700',
+      off: null,
+      on: null,
+      in: '1800',
+      isZulu: true,
+    })
+    expect((entry.flight_time as Record<string, unknown>).total).toBe(1.0)
+  })
+
+  it('stores a LAX→JFK red-eye as Zulu without changing 5.0h total', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20261113_9_LAX',
+      import_source: 'flica_aerodatabox',
+      flight_number: '9',
+      trip_number: null,
+      role: 'SIC',
+      dep_airport: 'LAX',
+      arr_airport: 'JFK',
+      scheduled_out_local: '2026-11-13 22:30:00',
+      scheduled_in_local: '2026-11-14 06:30:00',
+      actual_out_local: '2026-11-13 22:30:00',
+      actual_in_local: '2026-11-14 06:30:00',
+      actual_off_local: null,
+      actual_on_local: null,
+      fcv_tail_number: '',
+      fcv_aircraft_type: 'E75',
+      crew: [],
+      is_deadhead: false,
+      block_minutes: 300,
+    })
+    expect(entry.oooi).toEqual({
+      out: '0630',
+      off: null,
+      on: null,
+      in: '1130',
+      isZulu: true,
+    })
+    expect((entry.flight_time as Record<string, unknown>).total).toBe(5.0)
   })
 
   it('tags deadhead legs', () => {

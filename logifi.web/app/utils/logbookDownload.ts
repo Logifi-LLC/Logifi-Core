@@ -1,4 +1,5 @@
 import type { ExportResult } from '../../shared/logbookDataBridge/types'
+import { triggerBlobDownload } from './clientFileSave'
 
 /** Trigger a browser download for an export result. No-op outside the browser. */
 export function downloadExport(result: ExportResult): void {
@@ -10,13 +11,5 @@ export function downloadExport(result: ExportResult): void {
       : result.content
 
   const blob = new Blob([content], { type: result.mimeType })
-  const link = document.createElement('a')
-  const url = URL.createObjectURL(blob)
-  link.setAttribute('href', url)
-  link.setAttribute('download', result.filename)
-  link.style.visibility = 'hidden'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
+  triggerBlobDownload(blob, result.filename)
 }
