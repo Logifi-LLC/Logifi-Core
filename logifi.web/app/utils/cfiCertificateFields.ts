@@ -11,7 +11,20 @@ export function normalizeCfiCertificateNumber(raw: string | null | undefined): s
 export function normalizeCfiExpiration(raw: string | null | undefined): string {
   const trimmed = (raw || '').trim()
   if (!trimmed) return ''
-  return trimmed.slice(0, 10)
+  const day = trimmed.slice(0, 10)
+  return isIsoDate(day) ? day : ''
+}
+
+function utcTodayIsoDay(): string {
+  const now = new Date()
+  const year = now.getUTCFullYear()
+  const month = String(now.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(now.getUTCDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+export function isCfiExpirationBeforeToday(value: string): boolean {
+  return value < utcTodayIsoDay()
 }
 
 export function cfiCertificateNumberError(raw: string | null | undefined): string | null {
@@ -40,9 +53,11 @@ export function isIsoDate(value: string): boolean {
 }
 
 export function cfiExpirationError(raw: string | null | undefined): string | null {
+  const trimmed = (raw || '').trim()
+  if (!trimmed) return 'Certificate expiration is required'
   const value = normalizeCfiExpiration(raw)
-  if (!value) return 'Certificate expiration is required'
-  if (!isIsoDate(value)) return 'Enter a valid expiration date'
+  if (!value || !isIsoDate(value)) return 'Enter a valid expiration date'
+  if (isCfiExpirationBeforeToday(value)) return 'Certificate is expired'
   return null
 }
 

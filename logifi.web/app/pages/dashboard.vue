@@ -1834,7 +1834,7 @@
                 v-if="expandedGuestSignatureUrl"
                 :src="expandedGuestSignatureUrl"
                 alt="Guest instructor signature"
-                class="max-h-24 w-auto rounded border bg-white object-contain"
+                class="block max-h-32 w-full max-w-md rounded border bg-white object-contain object-left"
                 :class="isDarkMode ? 'border-green-800' : 'border-green-200'"
               />
             </div>
@@ -6895,6 +6895,7 @@ import {
   cfiExpirationError,
   cfiSignerNameError,
   hasCfiIdentity,
+  normalizeCfiExpiration,
 } from '../utils/cfiCertificateFields'
 import {
   flightSignatureFromRow,
@@ -8954,7 +8955,16 @@ function applyLinkedInstructorIdentity(): void {
   if (!row) return
   guestSignerName.value = row.profile?.full_name?.trim() || ''
   guestCertificateNumber.value = row.profile?.cfi_number?.trim() || ''
-  guestCertificateExpiration.value = (row.profile?.cfi_expiration || '').toString().slice(0, 10)
+  guestCertificateExpiration.value = normalizeCfiExpiration(row.profile?.cfi_expiration)
+}
+
+function clearGuestSignerIdentityFields(): void {
+  guestSignerName.value = ''
+  guestCertificateNumber.value = ''
+  guestCertificateExpiration.value = ''
+  guestNameError.value = null
+  guestCertificateError.value = null
+  guestExpirationError.value = null
 }
 
 function openPendingSignaturesInbox(): void {
@@ -8970,11 +8980,13 @@ watch(newEntryNeedsSignature, (needs) => {
 })
 
 watch(isGuestSignerSelected, (guest) => {
-  if (!guest) {
-    guestPadHasInk.value = false
-    resetGuestSignQr()
-    applyLinkedInstructorIdentity()
+  guestPadHasInk.value = false
+  resetGuestSignQr()
+  if (guest) {
+    clearGuestSignerIdentityFields()
+    return
   }
+  applyLinkedInstructorIdentity()
 })
 
 watch(
@@ -12647,7 +12659,9 @@ async function loadPilotProfileFromSupabase(): Promise<void> {
       prefs.role = data.role
     }
     if (data.cfi_number != null) prefs.cfiNumber = data.cfi_number
-    if (data.cfi_expiration != null) prefs.cfiExpiration = data.cfi_expiration
+    if (data.cfi_expiration != null) {
+      prefs.cfiExpiration = normalizeCfiExpiration(String(data.cfi_expiration))
+    }
     const res = data.residential_address as { street?: string; city?: string; state?: string; zip?: string } | null
     if (res) {
       prefs.residentialAddress = res.street ?? ''

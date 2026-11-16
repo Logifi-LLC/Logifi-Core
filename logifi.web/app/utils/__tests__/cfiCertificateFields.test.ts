@@ -4,9 +4,14 @@ import {
   cfiExpirationError,
   cfiSignerNameError,
   hasCfiIdentity,
+  normalizeCfiExpiration,
 } from '../cfiCertificateFields'
 
 describe('guest sign identity', () => {
+  it('normalizes ISO expiration prefixes and rejects non-ISO values', () => {
+    expect(normalizeCfiExpiration('2027-12-31T00:00:00Z')).toBe('2027-12-31')
+    expect(normalizeCfiExpiration('Mon Nov 16 2026')).toBe('')
+  })
   it('rejects missing certificate number and expiration', () => {
     expect(cfiCertificateNumberError('')).toBe('Certificate number is required')
     expect(cfiExpirationError('')).toBe('Certificate expiration is required')
@@ -22,6 +27,11 @@ describe('guest sign identity', () => {
   it('rejects invalid expiration dates', () => {
     expect(cfiExpirationError('not-a-date')).toBe('Enter a valid expiration date')
     expect(cfiExpirationError('2026-13-40')).toBe('Enter a valid expiration date')
+    expect(cfiExpirationError('Mon Nov 16')).toBe('Enter a valid expiration date')
+  })
+
+  it('rejects expired certificates', () => {
+    expect(cfiExpirationError('2020-01-01')).toBe('Certificate is expired')
   })
 
   it('accepts name, certificate number, and a calendar expiration', () => {

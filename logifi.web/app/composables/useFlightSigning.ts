@@ -2,7 +2,12 @@ import { ref } from 'vue'
 import { supabase } from '~/lib/supabase'
 import { useAuth } from '~/composables/useAuth'
 import type { Database } from '~/types/database'
-import { cfiCertificateNumberError, cfiExpirationError, cfiSignerNameError } from '~/utils/cfiCertificateFields'
+import {
+  cfiCertificateNumberError,
+  cfiExpirationError,
+  cfiSignerNameError,
+  normalizeCfiExpiration,
+} from '~/utils/cfiCertificateFields'
 import {
   canAuthenticatedInstructorSign,
   ownerCannotSignAsInstructorError,
@@ -294,7 +299,7 @@ export const useFlightSigning = () => {
       if (fetchError) throw fetchError
       const name = (data?.full_name || '').trim()
       const certificateNumber = (data?.cfi_number || '').trim()
-      const expiration = (data?.cfi_expiration || '').toString().slice(0, 10)
+      const expiration = normalizeCfiExpiration(data?.cfi_expiration)
       const nameError = cfiSignerNameError(name)
       const certError = cfiCertificateNumberError(certificateNumber)
       const expError = cfiExpirationError(expiration)
