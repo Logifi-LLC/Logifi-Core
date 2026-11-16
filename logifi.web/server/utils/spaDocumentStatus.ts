@@ -17,6 +17,7 @@ const EXACT_APP_PATHS = new Set([
   '/dashboard',
   '/data-sources',
   '/developers',
+  '/endorsements',
   '/digifi',
   '/digifi-eye',
   '/digifi-scan',

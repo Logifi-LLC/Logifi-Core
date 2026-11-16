@@ -33,11 +33,11 @@
         :label="item.id === 'digifi' ? 'Open Digifi' : item.label"
         :subtitle="rowSubtitle(item)"
         :icon="item.id === 'profile' && profilePreview ? undefined : item.icon"
-        :badge="item.id === 'updates' && updatesBadge ? updatesBadge : undefined"
+        :badge="rowBadge(item)"
         :is-dark-mode="isDarkMode"
-        :tag="item.id === 'digifi' ? 'NuxtLink' : undefined"
-        :to="item.id === 'digifi' ? digifiRoute : undefined"
-        @click="item.id === 'digifi' ? $emit('close') : $emit('navigate', item.id)"
+        :tag="item.id === 'digifi' || item.id === 'endorsements' ? 'NuxtLink' : undefined"
+        :to="item.id === 'digifi' ? digifiRoute : item.id === 'endorsements' ? '/endorsements?from=dashboard' : undefined"
+        @click="item.id === 'digifi' || item.id === 'endorsements' ? $emit('close') : $emit('navigate', item.id)"
       />
     </SettingsListGroup>
 
@@ -63,10 +63,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import SettingsListGroup from './SettingsListGroup.vue'
 import SettingsListRow from './SettingsListRow.vue'
 import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
+import { useEndorsements } from '~/composables/useEndorsements'
 import { resolveDigifiAppRoute } from '~/utils/digifiMobileReview'
 import {
   SETTINGS_NAV_GROUPS,
@@ -89,7 +90,16 @@ defineEmits<{
 }>()
 
 const { isIos } = useCapacitorPlatform()
+const {
+  pendingSignatureCount,
+  fetchMyEndorsements,
+  fetchInstructorEndorsements,
+} = useEndorsements()
 const navGroups = SETTINGS_NAV_GROUPS
+
+onMounted(() => {
+  void Promise.all([fetchMyEndorsements(), fetchInstructorEndorsements()])
+})
 
 const profilePreviewSubtitle = computed(() => {
   if (!props.profilePreview) return ''
@@ -112,5 +122,13 @@ function itemsForGroup(group: string): SettingsNavItem[] {
 function rowSubtitle(item: SettingsNavItem): string | undefined {
   if (item.id === 'data' && props.syncStatusText) return props.syncStatusText
   return item.subtitle
+}
+
+function rowBadge(item: SettingsNavItem): string | number | undefined {
+  if (item.id === 'updates' && props.updatesBadge) return props.updatesBadge
+  if (item.id === 'endorsements' && pendingSignatureCount.value > 0) {
+    return pendingSignatureCount.value > 9 ? '9+' : pendingSignatureCount.value
+  }
+  return undefined
 }
 </script>

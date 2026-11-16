@@ -44,7 +44,7 @@ export const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
     label: 'Endorsements',
     icon: 'ri:file-list-3-line',
     group: 'You',
-    subtitle: 'AC 61-65H logbook endorsements',
+    subtitle: 'AC 61-65K logbook endorsements',
   },
   {
     id: 'preferences',
