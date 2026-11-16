@@ -1,15 +1,15 @@
 <template>
   <div class="space-y-6">
     <p :class="helper">
-      AC 61-65H Appendix A sample endorsements. Request or issue for Logifi PIN signing, or record historical paper endorsements (not electronically signed).
+      AC 61-65K Appendix A samples. Request or issue for PIN signing, or record paper endorsements.
     </p>
 
     <!-- Compose / request -->
     <SettingsListGroup title="New endorsement" :is-dark-mode="isDarkMode">
       <div class="space-y-3 px-4 py-3">
         <SettingsField label="Mode" :is-dark-mode="isDarkMode">
-          <template #default="{ inputClass }">
-            <select v-model="composeMode" :class="inputClass" :disabled="isBusy">
+          <template #default="{ inputClass, inputId }">
+            <select v-model="composeMode" :id="inputId" :class="inputClass" :disabled="isBusy">
               <option value="request">Request (as student)</option>
               <option value="paper">Record from paper</option>
               <option v-if="isInstructorRole" value="issue">Issue (as instructor)</option>
@@ -22,8 +22,14 @@
           :label="composeMode === 'issue' ? 'Student' : 'Instructor'"
           :is-dark-mode="isDarkMode"
         >
-          <template #default="{ inputClass }">
-            <select v-model="counterpartyId" :class="inputClass" :disabled="isBusy">
+          <template #default="{ inputClass, inputId }">
+            <select
+                v-model="counterpartyId"
+                :id="inputId"
+                :class="inputClass"
+                :disabled="isBusy"
+                @blur="touched.counterparty = true"
+              >
               <option value="" disabled>Select…</option>
               <option
                 v-for="row in counterparties"
@@ -35,33 +41,59 @@
             </select>
           </template>
         </SettingsField>
+        <p
+          v-if="touched.counterparty && composeMode !== 'paper' && !counterpartyId"
+          class="text-xs font-quicksand"
+          :class="destructiveRow"
+        >
+          Required
+        </p>
 
         <template v-if="composeMode === 'paper'">
           <SettingsField label="Paper CFI name" :is-dark-mode="isDarkMode">
-            <template #default="{ inputClass }">
+            <template #default="{ inputClass, inputId }">
               <input
                 v-model="paperCfiName"
+                :id="inputId"
                 type="text"
                 placeholder="As written in the logbook"
                 :class="inputClass"
                 :disabled="isBusy"
+                @blur="touched.paperCfiName = true"
               />
             </template>
           </SettingsField>
+          <p
+            v-if="touched.paperCfiName && !paperCfiName.trim()"
+            class="text-xs font-quicksand"
+            :class="destructiveRow"
+          >
+            Required
+          </p>
           <SettingsField label="Paper endorsement date" :is-dark-mode="isDarkMode">
-            <template #default="{ inputClass }">
+            <template #default="{ inputClass, inputId }">
               <input
                 v-model="paperSignedAt"
+                :id="inputId"
                 type="date"
                 :class="inputClass"
                 :disabled="isBusy"
+                @blur="touched.paperSignedAt = true"
               />
             </template>
           </SettingsField>
+          <p
+            v-if="touched.paperSignedAt && !paperSignedAt.trim()"
+            class="text-xs font-quicksand"
+            :class="destructiveRow"
+          >
+            Required
+          </p>
           <SettingsField label="CFI certificate # (optional)" :is-dark-mode="isDarkMode">
-            <template #default="{ inputClass }">
+            <template #default="{ inputClass, inputId }">
               <input
                 v-model="paperCfiNumber"
+                :id="inputId"
                 type="text"
                 :class="inputClass"
                 :disabled="isBusy"
@@ -69,9 +101,10 @@
             </template>
           </SettingsField>
           <SettingsField label="CFI expiration (optional)" :is-dark-mode="isDarkMode">
-            <template #default="{ inputClass }">
+            <template #default="{ inputClass, inputId }">
               <input
                 v-model="paperCfiExpiration"
+                :id="inputId"
                 type="date"
                 :class="inputClass"
                 :disabled="isBusy"
@@ -84,8 +117,8 @@
         </template>
 
         <SettingsField label="Category" :is-dark-mode="isDarkMode">
-          <template #default="{ inputClass }">
-            <select v-model="categoryFilter" :class="inputClass">
+          <template #default="{ inputClass, inputId }">
+            <select v-model="categoryFilter" :id="inputId" :class="inputClass">
               <option value="">All categories</option>
               <option v-for="cat in ENDORSEMENT_CATEGORIES" :key="cat" :value="cat">
                 {{ cat }}
@@ -95,9 +128,10 @@
         </SettingsField>
 
         <SettingsField label="Search templates" :is-dark-mode="isDarkMode">
-          <template #default="{ inputClass }">
+          <template #default="{ inputClass, inputId }">
             <input
               v-model="templateSearch"
+              :id="inputId"
               type="search"
               placeholder="e.g. solo, A.6, flight review"
               :class="inputClass"
@@ -106,8 +140,14 @@
         </SettingsField>
 
         <SettingsField label="Template" :is-dark-mode="isDarkMode">
-          <template #default="{ inputClass }">
-            <select v-model="selectedCode" :class="inputClass" :disabled="isBusy">
+          <template #default="{ inputClass, inputId }">
+            <select
+                v-model="selectedCode"
+                :id="inputId"
+                :class="inputClass"
+                :disabled="isBusy"
+                @blur="touched.template = true"
+              >
               <option value="" disabled>Select endorsement…</option>
               <option
                 v-for="t in filteredTemplates"
@@ -119,31 +159,47 @@
             </select>
           </template>
         </SettingsField>
+        <p
+          v-if="touched.template && !selectedCode"
+          class="text-xs font-quicksand"
+          :class="destructiveRow"
+        >
+          Required
+        </p>
 
         <p v-if="selectedTemplate" :class="[helper, 'text-xs']">
-          {{ selectedTemplate.regulationRefs || 'AC 61-65H sample endorsement' }}
+          {{ selectedTemplate.regulationRefs || 'AC 61-65K sample endorsement' }}
           <span v-if="selectedTemplate.validityDays">
             · expires {{ selectedTemplate.validityDays }} days after issue
           </span>
         </p>
 
         <div v-if="selectedTemplate" class="space-y-2">
-          <SettingsField
-            v-for="key in selectedTemplate.placeholders"
-            :key="key"
-            :label="placeholderLabel(key)"
-            :is-dark-mode="isDarkMode"
-          >
-            <template #default="{ inputClass }">
-              <input
-                v-model="fieldValues[key]"
-                type="text"
-                :placeholder="placeholderLabel(key)"
-                :class="inputClass"
-                :disabled="isBusy"
-              />
-            </template>
-          </SettingsField>
+          <div v-for="key in selectedTemplate.placeholders" :key="key">
+            <SettingsField
+              :label="placeholderLabel(key)"
+              :is-dark-mode="isDarkMode"
+            >
+              <template #default="{ inputClass, inputId }">
+                <input
+                  v-model="fieldValues[key]"
+                  :id="inputId"
+                  type="text"
+                  :placeholder="placeholderLabel(key)"
+                  :class="inputClass"
+                  :disabled="isBusy"
+                  @blur="touchedFields[key] = true"
+                />
+              </template>
+            </SettingsField>
+            <p
+              v-if="fieldError(key)"
+              class="mt-1 text-xs font-quicksand"
+              :class="destructiveRow"
+            >
+              {{ fieldError(key) }}
+            </p>
+          </div>
         </div>
 
         <div
@@ -158,7 +214,7 @@
 
         <button
           type="button"
-          :class="[btnPrimary, 'w-full']"
+          :class="[btnPrimary, 'min-h-11 w-full']"
           :disabled="isBusy || !canSubmit"
           @click="onSubmitCompose"
         >
@@ -178,7 +234,7 @@
     <!-- Instructor inbox -->
     <SettingsListGroup
       v-if="isInstructorRole"
-      title="Pending to sign"
+      :title="pendingToSignTitle"
       :is-dark-mode="isDarkMode"
     >
       <div
@@ -211,7 +267,7 @@
         <div class="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
-            :class="btnPrimary"
+            :class="[btnPrimary, 'min-h-11']"
             :disabled="isBusy"
             @click="openSign(row)"
           >
@@ -219,7 +275,7 @@
           </button>
           <button
             type="button"
-            :class="btnSecondary"
+            :class="[btnSecondary, 'min-h-11']"
             :disabled="isBusy"
             @click="onCancel(row.id)"
           >
@@ -269,7 +325,7 @@
     </SettingsListGroup>
 
     <!-- Student list -->
-    <SettingsListGroup title="My endorsements" :is-dark-mode="isDarkMode">
+    <SettingsListGroup :title="myEndorsementsTitle" :is-dark-mode="isDarkMode">
       <div
         v-if="asStudent.length === 0"
         :class="[helper, 'px-4 py-6 text-center']"
@@ -353,9 +409,10 @@
         </p>
         <div class="mt-3">
           <SettingsField label="Signing PIN" :is-dark-mode="isDarkMode">
-            <template #default="{ inputClass }">
+            <template #default="{ inputClass, inputId }">
               <input
                 v-model="signPin"
+                :id="inputId"
                 type="password"
                 autocomplete="off"
                 inputmode="numeric"
@@ -367,10 +424,10 @@
           </SettingsField>
         </div>
         <div class="mt-4 flex gap-2">
-          <button type="button" :class="[btnSecondary, 'flex-1']" :disabled="isBusy" @click="signingRow = null">
+          <button type="button" :class="[btnSecondary, 'min-h-11 flex-1']" :disabled="isBusy" @click="signingRow = null">
             Cancel
           </button>
-          <button type="button" :class="[btnPrimary, 'flex-1']" :disabled="isBusy || signPin.trim().length < 4" @click="onConfirmSign">
+          <button type="button" :class="[btnPrimary, 'min-h-11 flex-1']" :disabled="isBusy || signPin.trim().length < 4" @click="onConfirmSign">
             {{ isBusy ? 'Signing…' : 'Sign' }}
           </button>
         </div>
@@ -411,6 +468,7 @@ const {
   asStudent,
   asInstructor,
   pendingForInstructor,
+  pendingForStudent,
   isLoading,
   fetchMyEndorsements,
   fetchInstructorEndorsements,
@@ -437,6 +495,13 @@ const categoryFilter = ref('')
 const templateSearch = ref('')
 const selectedCode = ref('')
 const fieldValues = reactive<Record<string, string>>({})
+const touchedFields = reactive<Record<string, boolean>>({})
+const touched = reactive({
+  counterparty: false,
+  paperCfiName: false,
+  paperSignedAt: false,
+  template: false,
+})
 const signingRow = ref<EndorsementRow | null>(null)
 const signPin = ref('')
 
@@ -452,6 +517,22 @@ const signedByMe = computed(() =>
     .slice()
     .sort((a, b) => String(b.signed_at || '').localeCompare(String(a.signed_at || '')))
 )
+
+const pendingToSignTitle = computed(() => {
+  const n = pendingForInstructor.value.length
+  return n > 0 ? `Pending to sign (${n})` : 'Pending to sign'
+})
+
+const myEndorsementsTitle = computed(() => {
+  const n = pendingForStudent.value.length
+  return n > 0 ? `My endorsements (${n} pending)` : 'My endorsements'
+})
+
+function fieldError(key: string): string | null {
+  if (!touchedFields[key]) return null
+  if (!(fieldValues[key] || '').trim()) return 'Required'
+  return null
+}
 
 const counterparties = computed(() => {
   if (composeMode.value === 'issue') {
@@ -504,6 +585,7 @@ watch(
 
 watch(selectedCode, (code) => {
   Object.keys(fieldValues).forEach((k) => delete fieldValues[k])
+  Object.keys(touchedFields).forEach((k) => delete touchedFields[k])
   const t = code ? getEndorsementTemplate(code) : undefined
   if (t) {
     for (const key of t.placeholders) {

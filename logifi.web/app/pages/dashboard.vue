@@ -280,6 +280,7 @@
           :clock-text-class="isDarkMode ? 'text-gray-400' : 'text-gray-600'"
         />
         <nav class="flex items-center gap-2 relative z-10">
+          <EndorsementsNavButton :is-dark-mode="isDarkMode" />
           <NuxtLink
             to="/feedback?from=dashboard"
             class="hidden sm:inline-block text-xs sm:text-sm font-medium font-quicksand transition-colors mr-2"
@@ -7030,6 +7031,7 @@ import { readStoredReferralCode } from '../utils/referralCapture'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
 import CurrencyStatusChips from '../components/logbook/CurrencyStatusChips.vue'
 import HeaderUtcClockBar from '../components/header/HeaderUtcClockBar.vue'
+import EndorsementsNavButton from '../components/endorsements/EndorsementsNavButton.vue'
 import EntryFieldError from '../components/logbook/EntryFieldError.vue'
 import LogbookEmptyState from '../components/logbook/LogbookEmptyState.vue'
 import LogEntryList from '../components/logbook/LogEntryList.vue'
