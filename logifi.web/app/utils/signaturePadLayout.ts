@@ -5,16 +5,14 @@ export function resolveSignaturePadCssSize(input: {
   frameWidth: number
   frameHeight: number
   fixedHeight: number
-  minWidth?: number
 }): { width: number; height: number } | null {
-  const minWidth = input.minWidth ?? 280
   const frameWidth = Math.floor(input.frameWidth)
   const frameHeight = Math.floor(input.frameHeight)
 
   if (input.fillParent) {
     if (frameWidth <= 0 || frameHeight <= 0) return null
     return {
-      width: Math.max(minWidth, frameWidth),
+      width: frameWidth,
       height: frameHeight,
     }
   }
@@ -23,7 +21,7 @@ export function resolveSignaturePadCssSize(input: {
   const height = input.fixedHeight
   if (height <= 0) return null
   return {
-    width: Math.max(minWidth, frameWidth),
+    width: frameWidth,
     height,
   }
 }

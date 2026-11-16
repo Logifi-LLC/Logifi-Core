@@ -45,4 +45,15 @@ describe('resolveSignaturePadCssSize', () => {
       })
     ).toEqual({ width: 320, height: 160 })
   })
+
+  it('never sizes the canvas wider than the frame (scrollbar / drawer width)', () => {
+    expect(
+      resolveSignaturePadCssSize({
+        fillParent: false,
+        frameWidth: 248,
+        frameHeight: 160,
+        fixedHeight: 160,
+      })
+    ).toEqual({ width: 248, height: 160 })
+  })
 })

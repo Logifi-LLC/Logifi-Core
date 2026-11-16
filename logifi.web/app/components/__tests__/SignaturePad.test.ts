@@ -42,8 +42,10 @@ describe('SignaturePad', () => {
     await nextTick()
 
     const canvas = wrapper.find<HTMLCanvasElement>('canvas').element
-    expect(canvas.style.width).toBe('360px')
-    expect(canvas.style.height).toBe('480px')
+    expect(canvas.style.width).toBe('')
+    expect(canvas.style.height).toBe('')
+    expect(canvas.width).toBe(360)
+    expect(canvas.height).toBe(480)
     expect(canvas.classList.contains('h-full')).toBe(true)
     expect(canvas.classList.contains('w-full')).toBe(true)
 

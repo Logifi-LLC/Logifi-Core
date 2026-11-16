@@ -40,6 +40,9 @@ let lastX = 0
 let lastY = 0
 let ctx: CanvasRenderingContext2D | null = null
 let resizeObserver: ResizeObserver | null = null
+let resizeRaf = 0
+let lastLayoutWidth = 0
+let lastLayoutHeight = 0
 
 function screenInkColor(): string {
   return props.isDarkMode ? DARK_INK : LIGHT_INK
@@ -56,12 +59,19 @@ function applyStrokeStyle(): void {
 function measureFrame(): { width: number; height: number } | null {
   const frame = frameRef.value
   if (!frame) return null
-  const rect = frame.getBoundingClientRect()
   return resolveSignaturePadCssSize({
     fillParent: props.fillParent,
-    frameWidth: rect.width,
-    frameHeight: rect.height,
+    frameWidth: frame.clientWidth,
+    frameHeight: frame.clientHeight,
     fixedHeight: props.height,
+  })
+}
+
+function scheduleResizeCanvas(): void {
+  if (resizeRaf !== 0) return
+  resizeRaf = requestAnimationFrame(() => {
+    resizeRaf = 0
+    resizeCanvas()
   })
 }
 
@@ -74,6 +84,12 @@ function resizeCanvas(): void {
   if (!size) return
 
   const { width, height } = size
+  if (width === lastLayoutWidth && height === lastLayoutHeight && canvas.width > 0) {
+    return
+  }
+  lastLayoutWidth = width
+  lastLayoutHeight = height
+
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
   const snapshot = hasInk.value && canvas.width > 0 && canvas.height > 0
     ? canvas.toDataURL('image/png')
@@ -81,8 +97,8 @@ function resizeCanvas(): void {
 
   canvas.width = Math.floor(width * dpr)
   canvas.height = Math.floor(height * dpr)
-  canvas.style.width = `${width}px`
-  canvas.style.height = `${height}px`
+  canvas.style.removeProperty('width')
+  canvas.style.removeProperty('height')
   ctx = canvas.getContext('2d')
   if (!ctx) return
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
@@ -177,18 +193,22 @@ defineExpose({
 
 onMounted(() => {
   resizeCanvas()
-  window.addEventListener('resize', resizeCanvas)
+  window.addEventListener('resize', scheduleResizeCanvas)
   const frame = frameRef.value
   if (frame && typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(() => {
-      resizeCanvas()
+      scheduleResizeCanvas()
     })
     resizeObserver.observe(frame)
   }
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', resizeCanvas)
+  window.removeEventListener('resize', scheduleResizeCanvas)
+  if (resizeRaf !== 0) {
+    cancelAnimationFrame(resizeRaf)
+    resizeRaf = 0
+  }
   resizeObserver?.disconnect()
   resizeObserver = null
 })
@@ -196,7 +216,9 @@ onBeforeUnmount(() => {
 watch(
   () => [props.isDarkMode, props.height, props.fillParent] as const,
   () => {
-    resizeCanvas()
+    lastLayoutWidth = 0
+    lastLayoutHeight = 0
+    scheduleResizeCanvas()
   }
 )
 </script>
@@ -208,11 +230,11 @@ watch(
       data-signature-pad-frame
       :class="[
         'rounded-lg border overflow-hidden touch-none select-none bg-transparent',
-        fillParent ? 'min-h-0 w-full flex-1' : '',
+        fillParent ? 'min-h-0 w-full flex-1' : 'w-full max-w-full',
         isDarkMode ? 'border-gray-600' : 'border-gray-300',
         disabled ? 'opacity-60 pointer-events-none' : '',
       ]"
-      style="touch-action: none"
+      :style="fillParent ? { touchAction: 'none' } : { touchAction: 'none', height: `${height}px` }"
       @touchmove.prevent
     >
       <canvas

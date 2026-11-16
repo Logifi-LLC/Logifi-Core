@@ -18911,6 +18911,7 @@ function formatSimTotalValue(key: TotalsMetricKey): string {
 [data-add-entry-panel],
 [data-edit-panel] {
   min-width: 0;
+  scrollbar-gutter: stable;
 }
 
 [data-add-entry-panel] .grid,
