@@ -1821,22 +1821,13 @@
             <div
               v-if="isExpandedEntrySigned"
               :class="[
-                'rounded-lg border px-3 py-2 text-sm font-quicksand space-y-2',
+                'rounded-lg border px-3 py-2 text-sm font-quicksand',
                 isDarkMode
                   ? 'border-green-700/60 bg-green-900/20 text-green-200'
                   : 'border-green-200 bg-green-50 text-green-800'
               ]"
             >
-              <p>
-                {{ expandedSignatureBlockText }} — this entry cannot be edited or deleted. Use Amend or Void if it was a mistake.
-              </p>
-              <img
-                v-if="expandedGuestSignatureUrl"
-                :src="expandedGuestSignatureUrl"
-                alt="Guest instructor signature"
-                class="block max-h-32 w-full max-w-md rounded border bg-white object-contain object-left"
-                :class="isDarkMode ? 'border-green-800' : 'border-green-200'"
-              />
+              Signed by instructor — this entry cannot be edited or deleted. Use Amend or Void if it was a mistake.
             </div>
             <div
               v-else-if="isExpandedEntryPending"
@@ -2708,6 +2699,21 @@
              </div>
 
             </template>
+
+            <div
+              v-if="isExpandedEntrySigned"
+              :class="[
+                'space-y-2 pt-2 text-sm font-quicksand',
+                isDarkMode ? 'text-green-200' : 'text-green-900'
+              ]"
+            >
+              <p class="font-medium">{{ expandedSignatureBlockText }}</p>
+              <FlightDrawnSignatureImage
+                v-if="expandedGuestSignatureUrl"
+                :src="expandedGuestSignatureUrl"
+                :is-dark-mode="isDarkMode"
+              />
+            </div>
 
             </div>
 

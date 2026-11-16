@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-const EXPORT_INK = '#111827'
+const EXPORT_INK_RGB = { r: 0x11, g: 0x18, b: 0x27 }
+const LIGHT_INK = '#111827'
+const DARK_INK = '#f9fafb'
 const SIGNATURE_ASPECT = 0.45
+const STROKE_WIDTH_CSS = 3
 
 const props = withDefaults(
   defineProps<{
@@ -36,12 +39,16 @@ let lastX = 0
 let lastY = 0
 let ctx: CanvasRenderingContext2D | null = null
 
+function screenInkColor(): string {
+  return props.isDarkMode ? DARK_INK : LIGHT_INK
+}
+
 function applyStrokeStyle(): void {
   if (!ctx) return
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
-  ctx.lineWidth = props.fillParent ? 3 : 2.25
-  ctx.strokeStyle = EXPORT_INK
+  ctx.lineWidth = STROKE_WIDTH_CSS
+  ctx.strokeStyle = screenInkColor()
 }
 
 function signatureCanvasHeight(parentHeight: number, width: number): number {
@@ -91,9 +98,34 @@ function cropInkToCanvas(source: HTMLCanvasElement): HTMLCanvasElement | null {
   const outCtx = out.getContext('2d')
   if (!outCtx) return null
   outCtx.drawImage(source, minX, minY, cropW, cropH, 0, 0, cropW, cropH)
-  out.style.width = `${cropW / dpr}px`
-  out.style.height = `${cropH / dpr}px`
   return out
+}
+
+function canonicalizeExportInk(canvas: HTMLCanvasElement): void {
+  const exportCtx = canvas.getContext('2d')
+  if (!exportCtx) return
+  const { width, height } = canvas
+  const imageData = exportCtx.getImageData(0, 0, width, height)
+  const { data } = imageData
+  const alphaThreshold = 12
+  for (let i = 0; i < data.length; i += 4) {
+    const alpha = data[i + 3]
+    if (alpha <= alphaThreshold) {
+      data[i + 3] = 0
+      continue
+    }
+    data[i] = EXPORT_INK_RGB.r
+    data[i + 1] = EXPORT_INK_RGB.g
+    data[i + 2] = EXPORT_INK_RGB.b
+  }
+  exportCtx.putImageData(imageData, 0, 0)
+}
+
+function buildExportCanvas(source: HTMLCanvasElement): HTMLCanvasElement {
+  const cropped = cropInkToCanvas(source)
+  const target = cropped ?? source
+  canonicalizeExportInk(target)
+  return target
 }
 
 function resizeCanvas(): void {
@@ -122,6 +154,7 @@ function resizeCanvas(): void {
     const img = new Image()
     img.onload = () => {
       if (!ctx || canvasRef.value !== canvas) return
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
       ctx.drawImage(img, 0, 0, width, height)
       hasInk.value = true
       emit('change', true)
@@ -190,10 +223,9 @@ function clear(): void {
 async function toBlob(mimeType = 'image/png'): Promise<Blob | null> {
   const canvas = canvasRef.value
   if (!canvas || !hasInk.value) return null
-  const cropped = cropInkToCanvas(canvas)
-  const exportTarget = cropped ?? canvas
+  const exportCanvas = buildExportCanvas(canvas)
   return new Promise((resolve) => {
-    exportTarget.toBlob((blob) => resolve(blob), mimeType)
+    exportCanvas.toBlob((blob) => resolve(blob), mimeType)
   })
 }
 
@@ -225,16 +257,15 @@ watch(
   <div :class="['space-y-2', fillParent ? 'flex h-full min-h-0 flex-col' : '']">
     <div
       :class="[
-        'rounded-lg border overflow-hidden touch-none select-none',
+        'rounded-lg border overflow-hidden touch-none select-none bg-transparent',
         fillParent ? 'min-h-0 flex-1 flex items-stretch justify-center' : '',
-        'border-gray-300 bg-white',
-        isDarkMode ? 'ring-1 ring-gray-600/80' : '',
+        isDarkMode ? 'border-gray-600' : 'border-gray-300',
         disabled ? 'opacity-60 pointer-events-none' : '',
       ]"
     >
       <canvas
         ref="canvasRef"
-        class="block w-full cursor-crosshair"
+        class="block w-full cursor-crosshair bg-transparent"
         :class="fillParent ? 'max-h-full' : ''"
         style="touch-action: none"
         @pointerdown="onPointerDown"

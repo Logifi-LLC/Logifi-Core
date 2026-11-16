@@ -612,6 +612,13 @@ async function drawAppendixPages(
         const width = image.width * scale
         const height = image.height * scale
         ensure(height + 12)
+        page.drawRectangle({
+          x: MARGIN_X,
+          y: y - height,
+          width,
+          height,
+          color: pdfLib.rgb(1, 1, 1),
+        })
         page.drawImage(image, {
           x: MARGIN_X,
           y: y - height,
