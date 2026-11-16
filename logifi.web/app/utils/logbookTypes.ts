@@ -121,6 +121,8 @@ export interface LogEntry {
   amendsEntryId?: string | null
   /** True when this amendment voids (withdraws) a signed original; dual time should be zero. */
   isVoid?: boolean
+  /** Restored backup signature for display only. Never an electronic signature. */
+  importedSignatureDisplay?: import('./flightSignatureDisplay').FlightSignatureDisplay | null
   // Import tracking fields
   isImported?: boolean
   importSource?: string // 'csv', 'json', 'paper', etc.

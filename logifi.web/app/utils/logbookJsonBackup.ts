@@ -1,4 +1,6 @@
 import type { LogEntry } from '~/utils/logbookTypes'
+import type { BackupEndorsementRecord } from './logbookBackupRecords'
+import type { FlightSignatureDisplay } from './flightSignatureDisplay'
 
 /** Canonical Logifi JSON backup schema version (unchanged for round-trip). */
 export const LOGBOOK_JSON_BACKUP_VERSION = '1.1' as const
@@ -8,6 +10,10 @@ export interface LogbookJsonBackupPayload {
   version: typeof LOGBOOK_JSON_BACKUP_VERSION
   pilotProfile: Record<string, unknown> | null
   entries: unknown[]
+  /** Owner's endorsements (restore as display-only). */
+  endorsements?: BackupEndorsementRecord[]
+  /** Owner's flight signatures (restore as display-only). */
+  flightSignatures?: FlightSignatureDisplay[]
 }
 
 export function buildLogbookJsonBackupFilename(baseDate: string, filenameSegment = ''): string {
@@ -22,12 +28,16 @@ export function buildLogbookJsonBackupPayload(args: {
   entries: unknown[]
   pilotProfile: Record<string, unknown> | null
   exportedAt?: string
+  endorsements?: BackupEndorsementRecord[]
+  flightSignatures?: FlightSignatureDisplay[]
 }): LogbookJsonBackupPayload {
   return {
     exportedAt: args.exportedAt ?? new Date().toISOString(),
     version: LOGBOOK_JSON_BACKUP_VERSION,
     pilotProfile: args.pilotProfile,
     entries: args.entries,
+    endorsements: args.endorsements ?? [],
+    flightSignatures: args.flightSignatures ?? [],
   }
 }
 
@@ -40,11 +50,15 @@ export function buildLogbookJsonBackupString(args: {
   preparedEntries: unknown[]
   pilotProfile: Record<string, unknown> | null
   exportedAt?: string
+  endorsements?: BackupEndorsementRecord[]
+  flightSignatures?: FlightSignatureDisplay[]
 }): string {
   const payload = buildLogbookJsonBackupPayload({
     entries: args.preparedEntries,
     pilotProfile: args.pilotProfile,
     exportedAt: args.exportedAt,
+    endorsements: args.endorsements,
+    flightSignatures: args.flightSignatures,
   })
   return serializeLogbookJsonBackup(payload)
 }

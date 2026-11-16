@@ -330,12 +330,37 @@
             </div>
             <button
               type="button"
-              :class="btnPrimary"
-              class="shrink-0"
+              :class="[btnPrimary, 'min-h-[44px] shrink-0']"
               :disabled="isLoading || isReviewLoading || isSigning"
               @click="onReview(row.log_entry_id)"
             >
               {{ isReviewLoading && reviewingEntryId === row.log_entry_id ? 'Loading…' : 'Review' }}
+            </button>
+          </div>
+        </div>
+      </SettingsListGroup>
+
+      <SettingsListGroup title="CFI records (last 3 years)" :is-dark-mode="isDarkMode">
+        <div class="space-y-3 px-4 py-3">
+          <p :class="[helper, 'text-xs']">
+            Export endorsements and flight signatures you issued. 14 CFR 61.189.
+          </p>
+          <div class="flex flex-col gap-2 sm:flex-row">
+            <button
+              type="button"
+              :class="[btnSecondary, 'min-h-[44px] w-full']"
+              :disabled="isExportingRecords"
+              @click="exportIssuedRecords('csv')"
+            >
+              {{ isExportingRecords ? 'Exporting…' : 'Download CSV' }}
+            </button>
+            <button
+              type="button"
+              :class="[btnPrimary, 'min-h-[44px] w-full']"
+              :disabled="isExportingRecords"
+              @click="exportIssuedRecords('pdf')"
+            >
+              {{ isExportingRecords ? 'Exporting…' : 'Download PDF' }}
             </button>
           </div>
         </div>
@@ -352,6 +377,8 @@
       :student-name="reviewStudentName"
       :entry="reviewEntry"
       :is-signing="isSigning"
+      :identity-ready="reviewIdentityReady"
+      :identity-error="reviewIdentityError"
       @close="closeReview"
       @sign="onSignFromReview"
     />
@@ -384,6 +411,7 @@ const props = defineProps<{
   role: PilotAccountRole
   /** True when the Instructor Links settings frame is visible (triggers refresh). */
   isActive?: boolean
+  pendingSignEntryId?: string | null
 }>()
 
 const { helper, btnPrimary, btnSecondary, destructiveRow } = useSettingsClasses(
@@ -406,11 +434,14 @@ const {
   pendingSignatures,
   fetchPendingSignaturesForInstructor,
   fetchPendingSignatureEntry,
+  fetchOwnCfiIdentity,
+  fetchIssuedSignaturesForInstructor,
   signLogEntry
 } = useFlightSigning()
 const {
   fetchStudentLogbookSummary,
   fetchStudentEndorsementsAsInstructor,
+  fetchInstructorEndorsements,
 } = useEndorsements()
 
 const instructorEmail = ref('')
@@ -420,6 +451,9 @@ const reviewStudentName = ref<string | null>(null)
 const reviewEntry = ref<LogEntryRow | null>(null)
 const isReviewLoading = ref(false)
 const isSigning = ref(false)
+const isExportingRecords = ref(false)
+const reviewIdentityReady = ref(true)
+const reviewIdentityError = ref<string | null>(null)
 
 const expandedStudentId = ref<string | null>(null)
 const dossierLoading = ref(false)
@@ -530,6 +564,9 @@ async function onReview(entryId: string) {
     }
     reviewStudentName.value = result.data.studentName
     reviewEntry.value = result.data.entry
+    const identity = await fetchOwnCfiIdentity()
+    reviewIdentityReady.value = identity.success
+    reviewIdentityError.value = identity.success ? null : identity.error
     reviewOpen.value = true
   } finally {
     isReviewLoading.value = false
@@ -541,6 +578,13 @@ async function onSignFromReview(pin: string) {
   const instructorId = user.value?.id
   if (!entryId || !instructorId) {
     showToast('You must be signed in to sign', { type: 'error' })
+    return
+  }
+  const identity = await fetchOwnCfiIdentity()
+  if (!identity.success) {
+    reviewIdentityReady.value = false
+    reviewIdentityError.value = identity.error
+    showToast(identity.error, { type: 'error' })
     return
   }
   isSigning.value = true
@@ -555,6 +599,59 @@ async function onSignFromReview(pin: string) {
     await fetchPendingSignaturesForInstructor()
   } finally {
     isSigning.value = false
+  }
+}
+
+async function exportIssuedRecords(kind: 'csv' | 'pdf') {
+  if (isExportingRecords.value) return
+  isExportingRecords.value = true
+  try {
+    const [endorsementsResult, signaturesResult] = await Promise.all([
+      fetchInstructorEndorsements(),
+      fetchIssuedSignaturesForInstructor(),
+    ])
+    if (!endorsementsResult.success) {
+      showToast(endorsementsResult.error, { type: 'error' })
+      return
+    }
+    if (!signaturesResult.success) {
+      showToast(signaturesResult.error, { type: 'error' })
+      return
+    }
+    const { flightSignatureFromRow } = await import('~/utils/flightSignatureDisplay')
+    const {
+      buildCfiIssuedRecordsCsv,
+      cfiIssuedRecordsFilename,
+      generateCfiIssuedRecordsPdf,
+    } = await import('~/utils/cfiIssuedRecordsExport')
+    const { saveClientFile } = await import('~/utils/clientFileSave')
+    const signatures = signaturesResult.data.map(flightSignatureFromRow)
+    if (kind === 'csv') {
+      const csv = buildCfiIssuedRecordsCsv({
+        endorsements: endorsementsResult.data,
+        signatures,
+      })
+      await saveClientFile({
+        filename: cfiIssuedRecordsFilename('csv'),
+        mimeType: 'text/csv;charset=utf-8',
+        data: csv,
+      })
+      return
+    }
+    const bytes = await generateCfiIssuedRecordsPdf({
+      endorsements: endorsementsResult.data,
+      signatures,
+      instructorName: user.value?.email || undefined,
+    })
+    await saveClientFile({
+      filename: cfiIssuedRecordsFilename('pdf'),
+      mimeType: 'application/pdf',
+      data: bytes,
+    })
+  } catch (err) {
+    showToast(err instanceof Error ? err.message : 'Could not export CFI records', { type: 'error' })
+  } finally {
+    isExportingRecords.value = false
   }
 }
 
@@ -633,5 +730,14 @@ watch(
   () => {
     if (props.isActive !== false) void loadLists()
   }
+)
+
+watch(
+  () => props.pendingSignEntryId,
+  (entryId) => {
+    if (!entryId || !isInstructorRole.value) return
+    void onReview(entryId)
+  },
+  { immediate: true }
 )
 </script>

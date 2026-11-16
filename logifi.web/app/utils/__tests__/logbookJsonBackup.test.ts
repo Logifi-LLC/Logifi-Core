@@ -18,6 +18,8 @@ describe('logbookJsonBackup', () => {
     expect(payload.pilotProfile?.name).toBe('Pat Example')
     const roundTrip = JSON.parse(serializeLogbookJsonBackup(payload))
     expect(roundTrip.version).toBe('1.1')
+    expect(roundTrip.endorsements).toEqual([])
+    expect(roundTrip.flightSignatures).toEqual([])
   })
 
   it('reads entries from wrapped or raw arrays', () => {

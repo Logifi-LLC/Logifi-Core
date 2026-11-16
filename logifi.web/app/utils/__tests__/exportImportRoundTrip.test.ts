@@ -219,7 +219,7 @@ function fictionalRoundTripEntries(): LogEntry[] {
 }
 
 /** Native CSV has no Id / Flagged / Pending Instructor columns. */
-const CSV_UNMAPPED_KEYS = new Set(['id', 'flagged', 'pendingInstructorId'])
+const CSV_UNMAPPED_KEYS = new Set(['id', 'flagged', 'pendingInstructorId', 'importedSignatureDisplay'])
 
 function comparableEntry(entry: LogEntry, keepId: boolean) {
   const performance = normalizePerformanceForDisplay(entry.performance)
