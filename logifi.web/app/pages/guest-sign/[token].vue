@@ -307,10 +307,12 @@ onBeforeUnmount(() => {
     <!-- Keep pad mounted (v-show) so ink survives Back/Done -->
     <div
       v-show="signatureFullscreen"
-      class="fixed inset-0 z-50 flex flex-col bg-slate-950 text-slate-100"
+      class="fixed inset-0 z-50 flex touch-none flex-col overscroll-none bg-slate-950 text-slate-100"
+      style="touch-action: none"
       role="dialog"
       aria-modal="true"
       aria-labelledby="guest-sign-fullscreen-title"
+      @touchmove.prevent
     >
       <header
         class="flex shrink-0 items-center justify-between gap-3 border-b border-slate-800 px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]"
@@ -328,7 +330,11 @@ onBeforeUnmount(() => {
         <span class="w-14" aria-hidden="true" />
       </header>
 
-      <div class="min-h-0 flex-1 px-3 py-3">
+      <div
+        class="min-h-0 flex-1 touch-none overscroll-none px-3 py-3"
+        style="touch-action: none"
+        @touchmove.prevent
+      >
         <SignaturePad
           ref="padRef"
           class="h-full"
