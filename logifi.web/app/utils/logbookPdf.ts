@@ -12,6 +12,12 @@ import {
   type PaperLogbookRow,
   type PaperLogbookTotals,
 } from './logbookPrintLayout'
+import { formatEndorsementSignatureBlock } from './endorsementSignature'
+import {
+  formatFlightSignatureBlock,
+  type FlightSignatureDisplay,
+} from './flightSignatureDisplay'
+import type { BackupEndorsementRecord } from './logbookBackupRecords'
 import {
   PDF_CELL_FONT_SIZE,
   PDF_MIN_ROW_HEIGHT,
@@ -23,9 +29,28 @@ import {
 } from './logbookPdfText'
 
 
+export type PaperLogbookPdfSignature = FlightSignatureDisplay & {
+  imageBytes?: Uint8Array | null
+}
+
 export interface GeneratePaperLogbookPdfOptions extends PaginatePaperLogbookOptions {
   onProgress?: (done: number, total: number) => void
   yieldFn?: () => Promise<void>
+  signatures?: PaperLogbookPdfSignature[]
+  endorsements?: Array<
+    Pick<
+      BackupEndorsementRecord,
+      | 'title'
+      | 'templateCode'
+      | 'renderedBody'
+      | 'signedAt'
+      | 'instructorFullName'
+      | 'cfiNumber'
+      | 'cfiExpiration'
+      | 'status'
+      | 'isImported'
+    >
+  >
 }
 
 const PAGE_WIDTH = 792
@@ -533,6 +558,93 @@ export function paperLogbookFilename(options: {
   return `logifi-logbook-${day}.pdf`
 }
 
+async function drawAppendixPages(
+  pdfLib: PdfLib,
+  doc: import('pdf-lib').PDFDocument,
+  font: PDFFont,
+  bold: PDFFont,
+  black: RGB,
+  options: GeneratePaperLogbookPdfOptions,
+  entries: readonly LogEntry[]
+): Promise<void> {
+  const signatures = options.signatures ?? []
+  const endorsements = options.endorsements ?? []
+  if (signatures.length === 0 && endorsements.length === 0) return
+
+  const byId = new Map(entries.map((entry) => [entry.id, entry]))
+  let page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
+  let y = PAGE_HEIGHT - MARGIN_TOP
+
+  const ensure = (need: number) => {
+    if (y - need >= MARGIN_BOTTOM) return
+    page = doc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
+    y = PAGE_HEIGHT - MARGIN_TOP
+  }
+
+  const write = (text: string, size = 9, useBold = false) => {
+    ensure(size + 8)
+    page.drawText(text.slice(0, 180), {
+      x: MARGIN_X,
+      y,
+      size,
+      font: useBold ? bold : font,
+      color: black,
+    })
+    y -= size + 6
+  }
+
+  write('Instructor signatures', 12, true)
+  if (signatures.length === 0) write('None')
+  for (const signature of signatures) {
+    const entry = byId.get(signature.logEntryId)
+    const flight =
+      entry
+        ? `${(entry.date || '').slice(0, 10)}  ${entry.departure || '—'} → ${entry.destination || '—'}  ${entry.registration || ''}`
+        : signature.logEntryId
+    write(flight, 9, true)
+    write(formatFlightSignatureBlock(signature), 8)
+    if (signature.imageBytes && signature.imageBytes.byteLength > 0) {
+      try {
+        const image = await doc.embedPng(signature.imageBytes)
+        const width = Math.min(180, image.width)
+        const height = (image.height / image.width) * width
+        ensure(height + 12)
+        page.drawImage(image, {
+          x: MARGIN_X,
+          y: y - height,
+          width,
+          height,
+        })
+        y -= height + 10
+      } catch {
+        write('(signature image not embedded)', 7)
+      }
+    }
+    y -= 6
+  }
+
+  y -= 10
+  write('Endorsements', 12, true)
+  if (endorsements.length === 0) write('None')
+  for (const row of endorsements) {
+    write(`${(row.signedAt || '').slice(0, 10)}  ${row.templateCode}  ${row.title}`, 9, true)
+    write(
+      formatEndorsementSignatureBlock({
+        signed_at: row.signedAt,
+        instructor_full_name: row.instructorFullName,
+        cfi_number: row.cfiNumber,
+        cfi_expiration: row.cfiExpiration,
+        status: row.status,
+        is_imported: row.isImported,
+      }),
+      8
+    )
+    const body = (row.renderedBody || '').replace(/\s+/g, ' ').trim()
+    if (body) write(body.slice(0, 240), 8)
+    y -= 6
+  }
+}
+
 export async function generatePaperLogbookPdf(
   entries: readonly LogEntry[],
   options: GeneratePaperLogbookPdfOptions = {}
@@ -557,6 +669,7 @@ export async function generatePaperLogbookPdf(
       font,
       color: black,
     })
+    await drawAppendixPages(pdfLib, pdf, font, bold, black, options, entries)
     return pdf.save()
   }
 
@@ -567,5 +680,6 @@ export async function generatePaperLogbookPdf(
     if (i < pages.length - 1) await yieldFn()
   }
 
+  await drawAppendixPages(pdfLib, pdf, font, bold, black, options, entries)
   return pdf.save()
 }

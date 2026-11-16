@@ -154,6 +154,9 @@ import {
   clampRowsPerPage,
   paginatePaperLogbook,
 } from '~/utils/logbookPrintLayout'
+import type { FlightSignatureDisplay } from '~/utils/flightSignatureDisplay'
+import type { BackupEndorsementRecord } from '~/utils/logbookBackupRecords'
+import { useFlightSigning } from '~/composables/useFlightSigning'
 
 const props = defineProps<{
   open: boolean
@@ -162,11 +165,15 @@ const props = defineProps<{
   entries: LogEntry[]
   pilotName: string
   certificateNumber?: string
+  signatures?: FlightSignatureDisplay[]
+  endorsements?: BackupEndorsementRecord[]
 }>()
 
 const emit = defineEmits<{
   close: []
 }>()
+
+const { getDrawnSignatureDisplayUrl } = useFlightSigning()
 
 const dateStart = ref('')
 const dateEnd = ref('')
@@ -213,6 +220,30 @@ function onClose() {
   emit('close')
 }
 
+async function loadSignatureImages(
+  rows: FlightSignatureDisplay[]
+): Promise<Array<FlightSignatureDisplay & { imageBytes?: Uint8Array | null }>> {
+  const out: Array<FlightSignatureDisplay & { imageBytes?: Uint8Array | null }> = []
+  for (const row of rows) {
+    let imageBytes: Uint8Array | null = null
+    if (row.drawnSignatureUrl) {
+      try {
+        const url = await getDrawnSignatureDisplayUrl(row.drawnSignatureUrl)
+        if (url) {
+          const response = await fetch(url)
+          if (response.ok) {
+            imageBytes = new Uint8Array(await response.arrayBuffer())
+          }
+        }
+      } catch {
+        imageBytes = null
+      }
+    }
+    out.push({ ...row, imageBytes })
+  }
+  return out
+}
+
 async function downloadPdf() {
   if (busy.value || includedCount.value === 0) return
   busy.value = true
@@ -223,12 +254,15 @@ async function downloadPdf() {
       import('~/utils/logbookPdf'),
       import('~/utils/clientFileSave'),
     ])
+    const signatures = await loadSignatureImages(props.signatures ?? [])
     const bytes = await generatePaperLogbookPdf(props.entries, {
       pilotName: props.pilotName,
       certificateNumber: props.certificateNumber,
       dateStart: dateStart.value,
       dateEnd: dateEnd.value,
       rowsPerPage: clampRowsPerPage(rowsPerPage.value),
+      signatures,
+      endorsements: props.endorsements ?? [],
       onProgress: (done, total) => {
         progressLabel.value = `Page ${done} of ${total}`
       },

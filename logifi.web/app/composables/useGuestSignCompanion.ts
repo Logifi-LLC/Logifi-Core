@@ -2,10 +2,7 @@ import { computed, onUnmounted, ref } from 'vue'
 import { supabase } from '~/lib/supabase'
 import { useAuth } from '~/composables/useAuth'
 import { apiFetch } from '~/utils/apiFetch'
-
-function toQrUrl(text: string): string {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(text)}`
-}
+import { qrSvgDataUrl } from '~/utils/qrDataUrl'
 
 type CreateSessionResponse = {
   ok: true
@@ -140,7 +137,7 @@ export function useGuestSignCompanion() {
       entryId.value = logEntryId
       mobileUrl.value = result.mobileUrl
       expiresAt.value = result.expiresAt
-      qrDataUrl.value = toQrUrl(result.mobileUrl)
+      qrDataUrl.value = qrSvgDataUrl(result.mobileUrl)
       showModal.value = true
       connectRealtime(logEntryId)
       startPolling()

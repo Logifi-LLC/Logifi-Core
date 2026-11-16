@@ -332,9 +332,21 @@
             isDarkMode ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'
           ]"
         >
-          <label class="block text-sm">
+          <p
+            v-if="!identityReady"
+            :class="[
+              'rounded-lg border px-3 py-2 text-sm',
+              isDarkMode
+                ? 'border-amber-700/60 bg-amber-900/20 text-amber-100'
+                : 'border-amber-200 bg-amber-50 text-amber-900'
+            ]"
+          >
+            {{ identityError || 'Add your name, CFI number, and expiration in Pilot Profile before signing.' }}
+          </p>
+          <label v-else class="block text-sm" for="pending-sign-pin">
             <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Your signing PIN</span>
             <input
+              id="pending-sign-pin"
               v-model="pin"
               type="password"
               autocomplete="off"
@@ -342,7 +354,7 @@
               placeholder="4–12 characters"
               :disabled="isSigning"
               :class="[
-                'mt-1 w-full rounded-lg border px-3 py-2 text-base',
+                'mt-1 min-h-[44px] w-full rounded-lg border px-3 py-2 text-base',
                 isDarkMode
                   ? 'border-gray-600 bg-gray-800 text-gray-100'
                   : 'border-gray-300 bg-white text-gray-900'
@@ -355,7 +367,7 @@
               type="button"
               :disabled="isSigning"
               :class="[
-                'rounded-lg px-4 py-2 text-sm font-semibold border',
+                'min-h-[44px] rounded-lg px-4 py-2 text-sm font-semibold border',
                 isDarkMode
                   ? 'border-gray-600 text-gray-200 hover:bg-gray-800'
                   : 'border-gray-300 text-gray-700 hover:bg-gray-50'
@@ -366,8 +378,8 @@
             </button>
             <button
               type="button"
-              :disabled="isSigning || pin.trim().length < 4"
-              class="rounded-lg px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+              :disabled="isSigning || !identityReady || pin.trim().length < 4"
+              class="min-h-[44px] rounded-lg px-4 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
               @click="onConfirm"
             >
               {{ isSigning ? 'Signing…' : 'Confirm sign' }}
@@ -424,6 +436,8 @@ const props = defineProps<{
   studentName: string | null
   entry: LogEntryRow | null
   isSigning?: boolean
+  identityReady?: boolean
+  identityError?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -650,7 +664,10 @@ const allTagChips = computed(() => {
   return chips.filter((c) => c.active)
 })
 
+const identityReady = computed(() => props.identityReady !== false)
+
 function onConfirm() {
+  if (!identityReady.value) return
   if (pin.value.trim().length < 4 || props.isSigning) return
   emit('sign', pin.value)
 }

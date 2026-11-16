@@ -48,6 +48,7 @@
       :is-dark-mode="isDarkMode"
       :role="profile.role"
       :is-active="open && currentFrame === 'roster'"
+      :pending-sign-entry-id="pendingSignEntryId"
     />
 
     <SettingsEndorsementsTab
@@ -236,6 +237,7 @@ const props = defineProps<{
   fullBackupProgress?: string | null
   fullBackupError?: string | null
   importBusy?: boolean
+  pendingSignEntryId?: string | null
 }>()
 
 const profileSubTabModel = defineModel<'profile' | 'stats'>('profileSubTab', { required: true })
