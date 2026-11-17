@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { supabase } from '~/lib/supabase'
 import { useAuth } from '~/composables/useAuth'
 import type { Database } from '~/types/database'
@@ -38,10 +38,30 @@ const pendingSignatures = ref<PendingSignatureForInstructor[]>([])
 const flightSigningLoading = ref(false)
 const flightSigningError = ref<string | null>(null)
 
+let sessionUserWatchStarted = false
+
+/** Clears module-level signing caches when the auth session changes (sign-out / account switch). */
+export function clearFlightSigningSessionCache(): void {
+  signaturesByEntryId.value = {}
+  pendingSignatures.value = []
+}
+
 export const useFlightSigning = () => {
   const { user, getAccessToken } = useAuth()
   const isLoading = flightSigningLoading
   const error = flightSigningError
+
+  if (import.meta.client && !sessionUserWatchStarted) {
+    sessionUserWatchStarted = true
+    watch(
+      () => user.value?.id ?? null,
+      (nextId, prevId) => {
+        if (nextId !== prevId) {
+          clearFlightSigningSessionCache()
+        }
+      }
+    )
+  }
 
   const requireUserId = (): string => {
     const userId = user.value?.id
