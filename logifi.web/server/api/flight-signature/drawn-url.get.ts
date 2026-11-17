@@ -23,7 +23,6 @@ export default defineEventHandler(async (event) => {
     .maybeSingle()
 
   if (entryError || !entry) {
-    console.info('[drawn-url]', { hasEntry: false, hasPath: false, signed: false })
     throw createError({ statusCode: 404, statusMessage: 'Entry not found' })
   }
 
@@ -40,12 +39,10 @@ export default defineEventHandler(async (event) => {
 
   const storagePath = signature?.drawn_signature_url?.trim()
   if (!storagePath) {
-    console.info('[drawn-url]', { hasEntry: true, hasPath: false, signed: false })
     return { ok: true as const, url: null }
   }
 
   if (/^https?:\/\//i.test(storagePath)) {
-    console.info('[drawn-url]', { hasEntry: true, hasPath: true, signed: true })
     return { ok: true as const, url: storagePath }
   }
 
@@ -64,7 +61,5 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 502, statusMessage: 'Could not sign image URL' })
   }
 
-  const url = data?.signedUrl ?? null
-  console.info('[drawn-url]', { hasEntry: true, hasPath: true, signed: Boolean(url) })
-  return { ok: true as const, url }
+  return { ok: true as const, url: data?.signedUrl ?? null }
 })

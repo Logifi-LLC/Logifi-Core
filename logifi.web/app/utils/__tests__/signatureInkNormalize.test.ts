@@ -54,7 +54,7 @@ describe('normalizeSignatureImageData', () => {
     expect(box.height).toBeLessThan(40)
   })
 
-  it('rotates a tall narrow ink box 90° to read left-to-right', () => {
+  it('rotates a tall narrow ink box 90° CCW (legacy fallback) to read left-to-right', () => {
     const img = blankImageData(120, 120)
     for (let y = 20; y <= 90; y += 3) {
       inkPixel(img, 60, y)
@@ -97,6 +97,27 @@ describe('normalizeSignatureImageData', () => {
     }
     expect(ink).toBeGreaterThan(0)
     expect(transparent).toBeGreaterThan(ink)
+  })
+
+  it('uses capture orientation at export instead of the tall fallback', () => {
+    const img = blankImageData(120, 120)
+    for (let y = 20; y <= 90; y += 3) {
+      inkPixel(img, 60, y)
+    }
+    const withAngle = normalizeSignatureImageData(img, {
+      captureOrientationDegrees: 90,
+      useTallBboxFallback: false,
+      targetWidth: 200,
+      maxHeight: 200,
+    })
+    const withFallback = normalizeSignatureImageData(img, {
+      targetWidth: 200,
+      maxHeight: 200,
+    })
+    expect(withAngle).not.toBeNull()
+    expect(withFallback).not.toBeNull()
+    expect(withAngle!.width).toBeGreaterThan(withAngle!.height)
+    expect(withFallback!.width).toBeGreaterThan(withFallback!.height)
   })
 
   it('scales toward the default target width', () => {

@@ -49,16 +49,6 @@ export function useExpandedDrawnSignatureUrl(options: {
       expandedDrawnSignatureResolved.value = false
     }
 
-    if (import.meta.client) {
-      console.info('[drawn-sig]', {
-        signed,
-        hasMeta: Boolean(meta),
-        method: meta?.sign_method ?? null,
-        attempted,
-        hasPath: Boolean(storagePath),
-      })
-    }
-
     if (!id || !signed || !attempted) {
       if (refreshId !== latestRefreshId) return
       if (!sameKey) {
@@ -66,9 +56,6 @@ export function useExpandedDrawnSignatureUrl(options: {
         lastResolveKey = ''
       }
       expandedDrawnSignatureResolved.value = true
-      if (import.meta.client) {
-        console.info('[drawn-sig]', { gotUrl: false })
-      }
       return
     }
 
@@ -77,9 +64,6 @@ export function useExpandedDrawnSignatureUrl(options: {
     lastResolveKey = resolveKey
     expandedGuestSignatureUrl.value = url
     expandedDrawnSignatureResolved.value = true
-    if (import.meta.client) {
-      console.info('[drawn-sig]', { gotUrl: Boolean(url) })
-    }
   }
 
   watch(

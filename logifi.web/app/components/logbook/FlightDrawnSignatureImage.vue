@@ -16,11 +16,13 @@ const props = withDefaults(
 
 const loadState = ref<'loading' | 'ready' | 'error'>('loading')
 const displaySrc = ref('')
+const triedRawFallback = ref(false)
 
 watch(
   () => props.src,
   async (url) => {
     loadState.value = 'loading'
+    triedRawFallback.value = false
     displaySrc.value = ''
     if (!url) {
       loadState.value = 'error'
@@ -36,27 +38,23 @@ watch(
   { immediate: true }
 )
 
-function onLoad(e: Event): void {
+function onLoad(): void {
   loadState.value = 'ready'
-  const img = e.target as HTMLImageElement
-  if (import.meta.client) {
-    console.info('[drawn-sig-img]', {
-      naturalWidth: img.naturalWidth,
-      naturalHeight: img.naturalHeight,
-    })
-  }
 }
 
 function onError(): void {
-  if (displaySrc.value && displaySrc.value !== props.src) {
+  if (
+    !triedRawFallback.value &&
+    props.src &&
+    displaySrc.value &&
+    displaySrc.value !== props.src
+  ) {
+    triedRawFallback.value = true
     displaySrc.value = props.src
     loadState.value = 'loading'
     return
   }
   loadState.value = 'error'
-  if (import.meta.client) {
-    console.info('[drawn-sig-img]', { error: true })
-  }
 }
 </script>
 
@@ -64,6 +62,7 @@ function onError(): void {
   <div class="min-h-[6rem]">
     <img
       v-show="loadState !== 'error' && displaySrc"
+      :key="displaySrc"
       :src="displaySrc"
       :alt="alt"
       class="block max-h-24 max-w-[320px] w-auto h-auto object-contain object-left"

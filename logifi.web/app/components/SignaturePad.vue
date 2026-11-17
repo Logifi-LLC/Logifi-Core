@@ -2,6 +2,10 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { buildExportCanvas } from '~/utils/signaturePadExport'
 import { resolveSignaturePadCssSize } from '~/utils/signaturePadLayout'
+import {
+  dominantOrientationAngle,
+  readScreenOrientationAngle,
+} from '~/utils/signaturePadOrientation'
 
 const LIGHT_INK = '#111827'
 const DARK_INK = '#f9fafb'
@@ -43,6 +47,15 @@ let resizeObserver: ResizeObserver | null = null
 let resizeRaf = 0
 let lastLayoutWidth = 0
 let lastLayoutHeight = 0
+const orientationSamples: number[] = []
+
+function recordOrientationSample(): void {
+  orientationSamples.push(readScreenOrientationAngle())
+}
+
+function resetOrientationSamples(): void {
+  orientationSamples.length = 0
+}
 
 function screenInkColor(): string {
   return props.isDarkMode ? DARK_INK : LIGHT_INK
@@ -135,6 +148,7 @@ function onPointerDown(e: PointerEvent): void {
   e.preventDefault()
   canvasRef.value?.setPointerCapture(e.pointerId)
   drawing = true
+  recordOrientationSample()
   const p = pointerPos(e)
   lastX = p.x
   lastY = p.y
@@ -143,6 +157,7 @@ function onPointerDown(e: PointerEvent): void {
 function onPointerMove(e: PointerEvent): void {
   if (!drawing || !ctx || props.disabled) return
   e.preventDefault()
+  recordOrientationSample()
   const p = pointerPos(e)
   ctx.beginPath()
   ctx.moveTo(lastX, lastY)
@@ -172,13 +187,16 @@ function clear(): void {
   if (!canvas || !ctx) return
   ctx.clearRect(0, 0, canvas.width, canvas.height)
   hasInk.value = false
+  resetOrientationSamples()
   emit('change', false)
 }
 
 async function toBlob(mimeType = 'image/png'): Promise<Blob | null> {
   const canvas = canvasRef.value
   if (!canvas || !hasInk.value) return null
-  const exportCanvas = buildExportCanvas(canvas)
+  const exportCanvas = buildExportCanvas(canvas, {
+    captureOrientationDegrees: dominantOrientationAngle(orientationSamples),
+  })
   return new Promise((resolve) => {
     exportCanvas.toBlob((blob) => resolve(blob), mimeType)
   })

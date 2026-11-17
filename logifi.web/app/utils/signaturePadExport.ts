@@ -66,8 +66,15 @@ export function canonicalizeExportInk(canvas: HTMLCanvasElement): void {
   exportCtx.putImageData(imageData, 0, 0)
 }
 
-export function buildExportCanvas(source: HTMLCanvasElement): HTMLCanvasElement {
-  const normalized = normalizeSignatureCanvas(source)
+export function buildExportCanvas(
+  source: HTMLCanvasElement,
+  options?: { captureOrientationDegrees?: number }
+): HTMLCanvasElement {
+  const captureAngle = options?.captureOrientationDegrees
+  const normalized = normalizeSignatureCanvas(source, {
+    captureOrientationDegrees: captureAngle,
+    useTallBboxFallback: captureAngle == null || captureAngle === 0,
+  })
   if (normalized) return normalized
   const cropped = cropInkToCanvas(source)
   const target = cropped ?? source

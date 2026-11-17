@@ -1,3 +1,5 @@
+import { orientationCorrectionDegrees } from './signaturePadOrientation'
+
 export const SIGNATURE_EXPORT_INK_RGB = { r: 0x11, g: 0x18, b: 0x27 } as const
 
 export const SIGNATURE_NORMALIZE_TARGET_WIDTH = 600
@@ -71,9 +73,27 @@ function cropImageData(
 }
 
 /**
- * 90° clockwise — matches a phone held in landscape while the guest page stays portrait
- * (common case: device rotated counterclockwise relative to the UI).
+ * 90° counterclockwise — legacy tall-bbox fallback when no capture angle was stored
+ * (phone held clockwise while the signing page stays portrait).
  */
+export function rotateImageData90CounterClockwise(source: ImageData): ImageData {
+  const { width: w, height: h, data } = source
+  const out = new ImageData(h, w)
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const srcIdx = (y * w + x) * 4
+      const newX = y
+      const newY = w - 1 - x
+      const dstIdx = (newY * h + newX) * 4
+      out.data[dstIdx] = data[srcIdx]
+      out.data[dstIdx + 1] = data[srcIdx + 1]
+      out.data[dstIdx + 2] = data[srcIdx + 2]
+      out.data[dstIdx + 3] = data[srcIdx + 3]
+    }
+  }
+  return out
+}
+
 function rotateImageData90Clockwise(source: ImageData): ImageData {
   const { width: w, height: h, data } = source
   const out = new ImageData(h, w)
@@ -90,6 +110,32 @@ function rotateImageData90Clockwise(source: ImageData): ImageData {
     }
   }
   return out
+}
+
+function rotateImageData180(source: ImageData): ImageData {
+  const { width: w, height: h, data } = source
+  const out = new ImageData(w, h)
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const srcIdx = (y * w + x) * 4
+      const newX = w - 1 - x
+      const newY = h - 1 - y
+      const dstIdx = (newY * w + newX) * 4
+      out.data[dstIdx] = data[srcIdx]
+      out.data[dstIdx + 1] = data[srcIdx + 1]
+      out.data[dstIdx + 2] = data[srcIdx + 2]
+      out.data[dstIdx + 3] = data[srcIdx + 3]
+    }
+  }
+  return out
+}
+
+export function rotateImageDataByDegrees(source: ImageData, degrees: number): ImageData {
+  const d = ((degrees % 360) + 360) % 360
+  if (d === 0) return source
+  if (d === 90) return rotateImageData90Clockwise(source)
+  if (d === 180) return rotateImageData180(source)
+  return rotateImageData90CounterClockwise(source)
 }
 
 function scaleImageData(source: ImageData, outW: number, outH: number): ImageData {
@@ -167,14 +213,20 @@ function dilateInk(imageData: ImageData, iterations: number): void {
 /**
  * Crop, upright, scale, and thicken signature ink for display and export.
  */
+export type SignatureNormalizeOptions = {
+  targetWidth?: number
+  maxHeight?: number
+  padRatio?: number
+  tallVsWideRatio?: number
+  /** screen.orientation.angle sampled during signing (export only). */
+  captureOrientationDegrees?: number
+  /** Legacy / display path: CCW tall-bbox guess when no capture angle. Default true. */
+  useTallBboxFallback?: boolean
+}
+
 export function normalizeSignatureImageData(
   source: ImageData,
-  options?: {
-    targetWidth?: number
-    maxHeight?: number
-    padRatio?: number
-    tallVsWideRatio?: number
-  }
+  options?: SignatureNormalizeOptions
 ): ImageData | null {
   const targetWidth = options?.targetWidth ?? SIGNATURE_NORMALIZE_TARGET_WIDTH
   const maxHeight = options?.maxHeight ?? SIGNATURE_NORMALIZE_MAX_HEIGHT
@@ -195,8 +247,15 @@ export function normalizeSignatureImageData(
 
   let working = cropImageData(source, minX, minY, cropW, cropH)
 
-  if (cropH > tallVsWideRatio * cropW) {
-    working = rotateImageData90Clockwise(working)
+  const captureAngle = options?.captureOrientationDegrees
+  const useTallFallback = options?.useTallBboxFallback !== false
+  if (captureAngle != null && captureAngle !== 0) {
+    working = rotateImageDataByDegrees(
+      working,
+      orientationCorrectionDegrees(captureAngle)
+    )
+  } else if (useTallFallback && cropH > tallVsWideRatio * cropW) {
+    working = rotateImageData90CounterClockwise(working)
   }
 
   let scale = targetWidth / working.width
@@ -213,12 +272,15 @@ export function normalizeSignatureImageData(
   return normalized
 }
 
-export function normalizeSignatureCanvas(source: HTMLCanvasElement): HTMLCanvasElement | null {
+export function normalizeSignatureCanvas(
+  source: HTMLCanvasElement,
+  options?: SignatureNormalizeOptions
+): HTMLCanvasElement | null {
   const readCtx = source.getContext('2d')
   if (!readCtx) return null
   if (source.width <= 0 || source.height <= 0) return null
   const imageData = readCtx.getImageData(0, 0, source.width, source.height)
-  const normalized = normalizeSignatureImageData(imageData)
+  const normalized = normalizeSignatureImageData(imageData, options)
   if (!normalized) return null
   const out = document.createElement('canvas')
   out.width = normalized.width
@@ -237,7 +299,7 @@ export function normalizeSignatureFromImageElement(img: HTMLImageElement): strin
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
   ctx.drawImage(img, 0, 0)
-  const out = normalizeSignatureCanvas(canvas)
+  const out = normalizeSignatureCanvas(canvas, { useTallBboxFallback: true })
   if (!out) return null
   return out.toDataURL('image/png')
 }
