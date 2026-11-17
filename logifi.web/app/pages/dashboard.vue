@@ -2610,6 +2610,12 @@
                 :src="expandedGuestSignatureUrl"
                 :is-dark-mode="isDarkMode"
               />
+              <p
+                v-else-if="expandedDrawnSignatureUnavailable"
+                :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-500' : 'text-gray-500']"
+              >
+                Signature image unavailable
+              </p>
             </div>
 
             </div>
@@ -6913,9 +6919,9 @@ import {
 } from '../utils/cfiCertificateFields'
 import {
   flightSignatureFromRow,
-  entryHasDrawnInkSignature,
   formatFlightSignatureBlock,
 } from '../utils/flightSignatureDisplay'
+import { shouldAttemptDrawnSignatureLoad } from '../utils/drawnSignatureImageLoad'
 import {
   attachBackupSignaturesToEntries,
   parseLogbookBackupExtras,
@@ -8802,6 +8808,7 @@ const inlineGuestPadRef = ref<{ toBlob: (mime?: string) => Promise<Blob | null>;
 const addGuestPadRef = ref<{ toBlob: (mime?: string) => Promise<Blob | null>; clear: () => void; hasInk: { value: boolean } } | null>(null)
 const pendingGuestSignatureBlob = ref<Blob | null>(null)
 const expandedGuestSignatureUrl = ref<string | null>(null)
+const expandedDrawnSignatureUnavailable = ref(false)
 
 const isGuestSignerSelected = computed(() => signInstructorId.value === GUEST_SIGNER_VALUE)
 
@@ -8990,16 +8997,21 @@ function openPendingSignaturesInbox(): void {
 async function refreshExpandedDrawnSignatureUrl(): Promise<void> {
   const id = expandedEntryId.value
   const meta = expandedSignatureMeta.value
-  if (!id || !isExpandedEntrySigned.value || !entryHasDrawnInkSignature(meta)) {
+  expandedDrawnSignatureUnavailable.value = false
+  if (!id || !isExpandedEntrySigned.value || !shouldAttemptDrawnSignatureLoad(true, meta)) {
     expandedGuestSignatureUrl.value = null
     return
   }
   const storagePath = meta?.drawn_signature_url?.trim()
-  let url = storagePath ? await getDrawnSignatureDisplayUrl(storagePath) : null
-  if (!url && isValidEntryUUID(id)) {
+  let url: string | null = null
+  if (isValidEntryUUID(id)) {
     url = await getDrawnSignatureDisplayUrlForEntry(id)
   }
+  if (!url && storagePath) {
+    url = await getDrawnSignatureDisplayUrl(storagePath)
+  }
   expandedGuestSignatureUrl.value = url
+  expandedDrawnSignatureUnavailable.value = shouldAttemptDrawnSignatureLoad(true, meta) && !url
 }
 
 watch(newEntryNeedsSignature, (needs) => {
@@ -9067,15 +9079,11 @@ watch(expandedEntryNeedsSignature, (needs) => {
 })
 
 watch(
-  [
-    expandedEntryId,
-    () => expandedSignatureMeta.value?.drawn_signature_url,
-    () => expandedSignatureMeta.value?.sign_method,
-    isExpandedEntrySigned,
-  ],
+  [expandedEntryId, isExpandedEntrySigned, signaturesByEntryId],
   () => {
     void refreshExpandedDrawnSignatureUrl()
-  }
+  },
+  { deep: true, immediate: true }
 )
 
 function instructorDisplayName(row: { profile: { full_name: string | null } | null }): string {
@@ -9339,6 +9347,9 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
     })
     if (!isEntrySigned(entry.id) && requiresInstructorSignature(entry)) {
       ensureDefaultSignInstructor()
+    }
+    if (isValidEntryUUID(entry.id) && (isEntrySigned(entry.id) || entry.signaturePending)) {
+      void fetchSignaturesForEntries([entry.id]).then(() => refreshExpandedDrawnSignatureUrl())
     }
   }
 }

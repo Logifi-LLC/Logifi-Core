@@ -33,12 +33,15 @@ export type PendingSignatureEntryDetail = {
   entry: LogEntryRow
 }
 
+const signaturesByEntryId = ref<Record<string, FlightSignature>>({})
+const pendingSignatures = ref<PendingSignatureForInstructor[]>([])
+const flightSigningLoading = ref(false)
+const flightSigningError = ref<string | null>(null)
+
 export const useFlightSigning = () => {
   const { user, getAccessToken } = useAuth()
-  const signaturesByEntryId = ref<Record<string, FlightSignature>>({})
-  const pendingSignatures = ref<PendingSignatureForInstructor[]>([])
-  const isLoading = ref(false)
-  const error = ref<string | null>(null)
+  const isLoading = flightSigningLoading
+  const error = flightSigningError
 
   const requireUserId = (): string => {
     const userId = user.value?.id
