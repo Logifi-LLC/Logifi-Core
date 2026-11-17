@@ -10,7 +10,9 @@ const props = defineProps<{
   isDarkMode: boolean
 }>()
 
-const inkSrc = computed(() => props.inkUrl?.trim() || '')
+const inkSrc = computed(() =>
+  typeof props.inkUrl === 'string' ? props.inkUrl.trim() : ''
+)
 const showInkImage = computed(() => inkSrc.value.length > 0)
 </script>
 

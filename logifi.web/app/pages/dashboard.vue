@@ -8926,13 +8926,15 @@ async function resolveExpandedDrawnSignatureUrl(
   return url
 }
 
-/** Do not destructure — template binds nested refs for ink URL reactivity in this SFC. */
-const expandedDrawnSignatureUi = useExpandedDrawnSignatureUrl({
-  expandedEntryId,
-  isExpandedEntrySigned,
-  expandedSignatureMeta,
-  resolveUrl: resolveExpandedDrawnSignatureUrl,
-})
+/** reactive() so nested refs from the composable unwrap in the template (not only top-level refs). */
+const expandedDrawnSignatureUi = reactive(
+  useExpandedDrawnSignatureUrl({
+    expandedEntryId,
+    isExpandedEntrySigned,
+    expandedSignatureMeta,
+    resolveUrl: resolveExpandedDrawnSignatureUrl,
+  })
+)
 
 const refreshExpandedDrawnSignatureUrl =
   expandedDrawnSignatureUi.refreshExpandedDrawnSignatureUrl
