@@ -41,6 +41,18 @@ export function formatSignedAt(iso: string | null | undefined): string {
   }
 }
 
+/** True when a live signature row includes a stored drawn ink image path. */
+export function entryHasDrawnInkSignature(row: {
+  drawn_signature_url?: string | null
+  sign_method?: string | null
+} | null | undefined): boolean {
+  const path = row?.drawn_signature_url?.trim()
+  if (!path) return false
+  const method = row?.sign_method
+  if (!method || method === 'guest_drawn') return true
+  return false
+}
+
 export function flightSignatureFromRow(row: {
   log_entry_id: string
   signer_name?: string | null

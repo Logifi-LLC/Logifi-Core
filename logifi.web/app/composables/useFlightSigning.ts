@@ -423,12 +423,28 @@ export const useFlightSigning = () => {
   ): Promise<string | null> => {
     if (!storagePath) return null
     if (/^https?:\/\//i.test(storagePath)) return storagePath
+    const normalized = storagePath.trim().replace(/^flight-signatures\//, '')
     try {
       const { data, error: urlError } = await supabase.storage
         .from('flight-signatures')
-        .createSignedUrl(storagePath, 60 * 60)
+        .createSignedUrl(normalized, 60 * 60)
       if (urlError) throw urlError
       return data?.signedUrl ?? null
+    } catch {
+      return null
+    }
+  }
+
+  const getDrawnSignatureDisplayUrlForEntry = async (
+    entryId: string
+  ): Promise<string | null> => {
+    if (!entryId.trim()) return null
+    try {
+      const { apiFetch } = await import('~/utils/apiFetch')
+      const res = await apiFetch<{ url: string | null }>('/api/flight-signature/drawn-url', {
+        query: { entryId },
+      })
+      return res.url
     } catch {
       return null
     }
@@ -517,6 +533,7 @@ export const useFlightSigning = () => {
     fetchOwnCfiIdentity,
     requestSignatureEmail,
     getDrawnSignatureDisplayUrl,
+    getDrawnSignatureDisplayUrlForEntry,
     markSignaturePending,
     confirmEntryPendingInCloud,
     fetchPendingSignaturesForInstructor,
