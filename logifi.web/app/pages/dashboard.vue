@@ -4277,6 +4277,7 @@
       v-model:current-password="currentPassword"
       v-model:new-password="newPassword"
       v-model:confirm-new-password="confirmNewPassword"
+      v-model:reauth-nonce="reauthNonce"
       :user-email="user?.email"
       :is-updating-email="isUpdatingEmail"
       :is-updating-password="isUpdatingPassword"
@@ -4284,6 +4285,9 @@
       :email-error="emailErrorMessage"
       :password-success="passwordSuccessMessage"
       :password-error="passwordErrorMessage"
+      :require-current-password="requireCurrentPassword"
+      :is-apple-relay-email="isAppleRelayEmail"
+      :needs-nonce="needsNonce"
       :theme="theme"
       :clock-format="clockFormat"
       :clock-zone="clockZone"
@@ -6876,6 +6880,7 @@ import {
 } from '../utils/simDeviceCatalog'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../composables/useAuth'
+import { useAccountCredentials } from '../composables/useAccountCredentials'
 import { useDataIntegrity } from '../composables/useDataIntegrity'
 import { useValidation } from '../composables/useValidation'
 import {
@@ -7061,199 +7066,25 @@ const isBrowser = typeof window !== 'undefined'
 // Authentication setup
 const { user, isAuthenticated, isLoading: authLoading, signOut: authSignOut, session } = useAuth()
 
-// Account settings state
-const accountEmail = ref(user.value?.email ?? '')
-const isUpdatingEmail = ref(false)
-const emailErrorMessage = ref<string | null>(null)
-const emailSuccessMessage = ref<string | null>(null)
-
-const currentPassword = ref('')
-const newPassword = ref('')
-const confirmNewPassword = ref('')
-const isUpdatingPassword = ref(false)
-const passwordErrorMessage = ref<string | null>(null)
-const passwordSuccessMessage = ref<string | null>(null)
+const {
+  accountEmail,
+  currentPassword,
+  newPassword,
+  confirmNewPassword,
+  reauthNonce,
+  needsNonce,
+  isUpdatingEmail,
+  emailErrorMessage,
+  emailSuccessMessage,
+  isUpdatingPassword,
+  passwordErrorMessage,
+  passwordSuccessMessage,
+  requireCurrentPassword,
+  isAppleRelayEmail,
+  handleUpdateEmail,
+  handleUpdatePassword,
+} = useAccountCredentials()
 const fcvImportMessage = ref<string | null>(null)
-
-const validateEmailFormat = (email: string) => {
-  return /\S+@\S+\.\S+/.test(email)
-}
-
-const handleUpdateEmail = async () => {
-  emailErrorMessage.value = null
-  emailSuccessMessage.value = null
-
-  const trimmed = accountEmail.value.trim()
-
-  if (!currentPassword.value) {
-    emailErrorMessage.value = 'Please enter your current password.'
-    return
-  }
-
-  if (!trimmed) {
-    emailErrorMessage.value = 'Please enter an email address.'
-    return
-  }
-
-  if (!validateEmailFormat(trimmed)) {
-    emailErrorMessage.value = 'Please enter a valid email address.'
-    return
-  }
-
-  if (user.value?.email && user.value.email === trimmed) {
-    emailErrorMessage.value = 'That is already your current email.'
-    return
-  }
-
-  isUpdatingEmail.value = true
-
-  try {
-    if (user.value?.email) {
-      const { error: reauthError } = await supabase.auth.signInWithPassword({
-        email: user.value.email,
-        password: currentPassword.value
-      })
-
-      if (reauthError) {
-        const message = reauthError.message || 'Unable to verify current password.'
-        const lower = message.toLowerCase()
-        if (lower.includes('invalid login credentials')) {
-          emailErrorMessage.value = 'Current password is incorrect.'
-        } else if (lower.includes('session') || lower.includes('reauth')) {
-          emailErrorMessage.value = 'Your session has expired. Please sign out and sign back in, then try again.'
-        } else {
-          emailErrorMessage.value = message
-        }
-        return
-      }
-    }
-
-    const { data, error } = await supabase.auth.updateUser({ email: trimmed })
-
-    if (error) {
-      const message = error.message || 'Unable to update email.'
-      const lower = message.toLowerCase()
-
-      if (lower.includes('reauth') || lower.includes('re-auth') || lower.includes('session')) {
-        emailErrorMessage.value = 'Your session has expired. Please sign out and sign back in, then try again.'
-      } else if (lower.includes('invalid email')) {
-        emailErrorMessage.value = 'Please enter a valid email address.'
-      } else if (lower.includes('error sending email change email')) {
-        emailErrorMessage.value =
-          'We could not send the email change confirmation. Please try again in a moment or contact support if this continues.'
-      } else {
-        emailErrorMessage.value = message
-      }
-
-      return
-    }
-
-    if (data?.user) {
-      user.value = data.user
-    }
-
-    emailSuccessMessage.value =
-      'Email updated. If required by your provider, a verification email has been sent.'
-    currentPassword.value = ''
-    accountEmail.value = ''
-  } catch (err: any) {
-    const message = err?.message || 'Unable to update email. Please try again.'
-    emailErrorMessage.value = message
-  } finally {
-    isUpdatingEmail.value = false
-  }
-}
-
-const handleUpdatePassword = async () => {
-  passwordErrorMessage.value = null
-  passwordSuccessMessage.value = null
-
-  if (!currentPassword.value) {
-    passwordErrorMessage.value = 'Please enter your current password.'
-    return
-  }
-
-  if (!newPassword.value) {
-    passwordErrorMessage.value = 'Please enter a new password.'
-    return
-  }
-
-  if (newPassword.value.length < MIN_PASSWORD_LENGTH) {
-    passwordErrorMessage.value = `New password must be at least ${MIN_PASSWORD_LENGTH} characters.`
-    return
-  }
-
-  if (newPassword.value !== confirmNewPassword.value) {
-    passwordErrorMessage.value = 'New password and confirmation do not match.'
-    return
-  }
-
-  if (!user.value?.email) {
-    passwordErrorMessage.value = 'You must be signed in to change your password.'
-    return
-  }
-
-  isUpdatingPassword.value = true
-
-  try {
-    // Re-authenticate with current password to confirm identity
-    const { error: reauthError } = await supabase.auth.signInWithPassword({
-      email: user.value.email,
-      password: currentPassword.value
-    })
-
-    if (reauthError) {
-      const message = reauthError.message || 'Unable to verify current password.'
-      const lower = message.toLowerCase()
-
-      if (lower.includes('invalid login credentials')) {
-        passwordErrorMessage.value = 'Current password is incorrect.'
-      } else if (lower.includes('session') || lower.includes('reauth')) {
-        passwordErrorMessage.value =
-          'Your session has expired. Please sign out and sign back in, then try again.'
-      } else {
-        passwordErrorMessage.value = message
-      }
-
-      return
-    }
-
-    const { data, error } = await supabase.auth.updateUser({
-      password: newPassword.value
-    })
-
-    if (error) {
-      const message = error.message || 'Unable to update password.'
-      const lower = message.toLowerCase()
-
-      if (lower.includes('weak password') || lower.includes('password should')) {
-        passwordErrorMessage.value =
-          'Please choose a stronger password (at least 8 characters and hard to guess).'
-      } else if (lower.includes('session') || lower.includes('reauth')) {
-        passwordErrorMessage.value =
-          'Your session has expired. Please sign out and sign back in, then try again.'
-      } else {
-        passwordErrorMessage.value = message
-      }
-
-      return
-    }
-
-    if (data?.user) {
-      user.value = data.user
-    }
-
-    passwordSuccessMessage.value = 'Password updated successfully.'
-    currentPassword.value = ''
-    newPassword.value = ''
-    confirmNewPassword.value = ''
-  } catch (err: any) {
-    const message = err?.message || 'Unable to update password. Please try again.'
-    passwordErrorMessage.value = message
-  } finally {
-    isUpdatingPassword.value = false
-  }
-}
 const { validateEntry: validateEntryIntegrity } = useDataIntegrity()
 const { validateEntry: validateFlightTimeEntry, validationErrors, validationWarnings, hasErrors, hasWarnings, clearValidation } = useValidation()
 
@@ -10503,7 +10334,6 @@ watch(settingsStack, (stack) => {
   if (current === 'profile') pilotProfileSubTab.value = 'profile'
 })
 
-const MIN_PASSWORD_LENGTH = 8
 const showImportSection = ref(true)
 const showExportSection = ref(true)
 const showIdentDropdown = ref(false)

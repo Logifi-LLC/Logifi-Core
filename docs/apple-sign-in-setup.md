@@ -10,6 +10,8 @@ Manual steps required before TestFlight / App Store builds can complete Apple lo
 
 ## 2. Apple Developer — Services ID (web / OAuth)
 
+Click-by-click web setup (domains, return URL, Client IDs, env flag): **[APPLE_WEB_SIGNIN.md](./APPLE_WEB_SIGNIN.md)**.
+
 Needed for Sign in with Apple on the website (and any non-native OAuth path).
 
 1. Identifiers → **+** → **Services IDs**

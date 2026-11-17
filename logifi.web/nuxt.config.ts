@@ -74,6 +74,8 @@ export default defineNuxtConfig({
       fcvUiLabel: process.env.NUXT_PUBLIC_FCV_UI_LABEL || 'off',
       /** `on` (default) routes iOS Digifi entries to /digifi-scan. `off` keeps /digifi-eye. Route always exists. */
       digifiMobileReview: process.env.NUXT_PUBLIC_DIGIFI_MOBILE_REVIEW || 'on',
+      /** `true` / `on` / `1` shows Continue with Apple on web. Default off until Services ID + Apple provider are live. */
+      appleWebSignIn: process.env.NUXT_PUBLIC_APPLE_WEB_SIGNIN || '',
       /** Lightning / LNURL-pay / Lightning address shown on /developers (Open Source donation). */
       /** Base URL for Digifi phone capture QR/links. Unset in dev to auto-detect LAN IP. */
       companionCaptureOrigin: process.env.NUXT_PUBLIC_COMPANION_CAPTURE_ORIGIN || '',

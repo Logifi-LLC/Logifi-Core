@@ -199,11 +199,13 @@
       />
       <SettingsListRow
         label="Password"
-        value="Change"
+        :value="requireCurrentPassword ? 'Change' : 'Set'"
         :is-dark-mode="isDarkMode"
         @click="$emit('push-password')"
       />
     </SettingsListGroup>
+
+    <SettingsSignInMethods :is-dark-mode="isDarkMode" />
 
     <SettingsListGroup title="Danger zone" :is-dark-mode="isDarkMode">
       <SettingsListRow
@@ -305,10 +307,12 @@
 import { ref, computed, watch } from 'vue'
 import SettingsListGroup from '../SettingsListGroup.vue'
 import SettingsListRow from '../SettingsListRow.vue'
+import SettingsSignInMethods from '../SettingsSignInMethods.vue'
 import DigifiCreditsIndicator from '~/components/digifi/DigifiCreditsIndicator.vue'
 import DigifiCreditHistory from '~/components/digifi/DigifiCreditHistory.vue'
 import DigifiAddCreditsModal from '~/components/digifi/DigifiAddCreditsModal.vue'
 import { useAuth } from '~/composables/useAuth'
+import { shouldRequireCurrentPassword } from '~/utils/authIdentities'
 import { useDigifiDestination } from '~/composables/useDigifiDestination'
 import { useDigifiLearning } from '~/composables/useDigifiLearning'
 import { useDigifiPilotNotes } from '~/composables/useDigifiPilotNotes'
@@ -327,7 +331,12 @@ const emit = defineEmits<{
   'account-deleted': []
 }>()
 
-const { deleteAccount } = useAuth()
+const { deleteAccount, user } = useAuth()
+const requireCurrentPassword = computed(() =>
+  shouldRequireCurrentPassword(user.value?.identities, {
+    providers: user.value?.app_metadata?.providers,
+  })
+)
 const { preferredSink, loadPreferredSink, setPreferredSink, isLoading: sinkLoading } = useDigifiDestination()
 const { isOptedIn: isLearningOptedIn, isLoading: learningLoading, loadOptInStatus, setOptIn, eraseDigifiLearningData } = useDigifiLearning()
 const { notes: pilotNotes, priors: pilotPriors, isLoading: notesLoading, isSaving: notesSaving, loadNotes, saveNotes, eraseNotes } = useDigifiPilotNotes()
