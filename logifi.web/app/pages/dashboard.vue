@@ -2597,6 +2597,8 @@
 
             </template>
 
+            </div>
+
             <div
               v-if="isExpandedEntrySigned"
               :class="[
@@ -2611,13 +2613,11 @@
                 :is-dark-mode="isDarkMode"
               />
               <p
-                v-else-if="expandedDrawnSignatureUnavailable"
+                v-else-if="expandedDrawnSignatureAttempted && expandedDrawnSignatureResolved && !expandedGuestSignatureUrl"
                 :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-500' : 'text-gray-500']"
               >
                 Signature image unavailable
               </p>
-            </div>
-
             </div>
 
             <div
@@ -8808,7 +8808,7 @@ const inlineGuestPadRef = ref<{ toBlob: (mime?: string) => Promise<Blob | null>;
 const addGuestPadRef = ref<{ toBlob: (mime?: string) => Promise<Blob | null>; clear: () => void; hasInk: { value: boolean } } | null>(null)
 const pendingGuestSignatureBlob = ref<Blob | null>(null)
 const expandedGuestSignatureUrl = ref<string | null>(null)
-const expandedDrawnSignatureUnavailable = ref(false)
+const expandedDrawnSignatureResolved = ref(false)
 
 const isGuestSignerSelected = computed(() => signInstructorId.value === GUEST_SIGNER_VALUE)
 
@@ -8924,6 +8924,11 @@ const expandedSignatureMeta = computed(() => {
   return signaturesByEntryId.value[id] ?? null
 })
 
+const expandedDrawnSignatureAttempted = computed(() =>
+  isExpandedEntrySigned.value &&
+  shouldAttemptDrawnSignatureLoad(true, expandedSignatureMeta.value)
+)
+
 const expandedSignatureDisplay = computed(() => {
   const meta = expandedSignatureMeta.value
   if (meta) return flightSignatureFromRow(meta)
@@ -8997,9 +9002,24 @@ function openPendingSignaturesInbox(): void {
 async function refreshExpandedDrawnSignatureUrl(): Promise<void> {
   const id = expandedEntryId.value
   const meta = expandedSignatureMeta.value
-  expandedDrawnSignatureUnavailable.value = false
-  if (!id || !isExpandedEntrySigned.value || !shouldAttemptDrawnSignatureLoad(true, meta)) {
+  const signed = isExpandedEntrySigned.value
+  const attempted = shouldAttemptDrawnSignatureLoad(signed, meta)
+  expandedDrawnSignatureResolved.value = false
+  if (import.meta.client) {
+    console.info('[drawn-sig]', {
+      signed,
+      hasMeta: Boolean(meta),
+      method: meta?.sign_method ?? null,
+      attempted,
+      hasPath: Boolean(meta?.drawn_signature_url?.trim()),
+    })
+  }
+  if (!id || !signed || !attempted) {
     expandedGuestSignatureUrl.value = null
+    expandedDrawnSignatureResolved.value = true
+    if (import.meta.client) {
+      console.info('[drawn-sig]', { gotUrl: false })
+    }
     return
   }
   const storagePath = meta?.drawn_signature_url?.trim()
@@ -9011,7 +9031,10 @@ async function refreshExpandedDrawnSignatureUrl(): Promise<void> {
     url = await getDrawnSignatureDisplayUrl(storagePath)
   }
   expandedGuestSignatureUrl.value = url
-  expandedDrawnSignatureUnavailable.value = shouldAttemptDrawnSignatureLoad(true, meta) && !url
+  expandedDrawnSignatureResolved.value = true
+  if (import.meta.client) {
+    console.info('[drawn-sig]', { gotUrl: Boolean(url) })
+  }
 }
 
 watch(newEntryNeedsSignature, (needs) => {

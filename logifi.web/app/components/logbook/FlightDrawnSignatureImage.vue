@@ -23,23 +23,33 @@ watch(
   { immediate: true }
 )
 
-function onLoad(): void {
+function onLoad(e: Event): void {
   loadState.value = 'ready'
+  const img = e.target as HTMLImageElement
+  if (import.meta.client) {
+    console.info('[drawn-sig-img]', {
+      naturalWidth: img.naturalWidth,
+      naturalHeight: img.naturalHeight,
+    })
+  }
 }
 
 function onError(): void {
   loadState.value = 'error'
+  if (import.meta.client) {
+    console.info('[drawn-sig-img]', { error: true })
+  }
 }
 </script>
 
 <template>
-  <div class="min-h-[2.5rem]">
+  <div class="min-h-[4.5rem]">
     <img
       v-show="loadState !== 'error'"
       :src="src"
       :alt="alt"
-      class="block max-h-36 w-full max-w-md object-contain object-left"
-      :class="isDarkMode ? 'invert' : 'brightness-0'"
+      class="block h-28 w-auto max-w-full object-contain object-left"
+      :class="isDarkMode ? 'invert' : ''"
       @load="onLoad"
       @error="onError"
     />

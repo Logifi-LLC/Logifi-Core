@@ -463,9 +463,10 @@ export const useFlightSigning = () => {
   ): Promise<string | null> => {
     if (!entryId.trim()) return null
     try {
-      const { apiFetch } = await import('~/utils/apiFetch')
+      const token = getAccessToken()
       const res = await apiFetch<{ url: string | null }>('/api/flight-signature/drawn-url', {
         query: { entryId },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
       return res.url
     } catch {
