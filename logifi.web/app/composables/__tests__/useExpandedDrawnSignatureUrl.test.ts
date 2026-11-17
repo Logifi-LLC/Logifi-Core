@@ -75,4 +75,37 @@ describe('useExpandedDrawnSignatureUrl', () => {
     await flushWatchers()
     expect(resolveUrl).toHaveBeenCalledTimes(1)
   })
+
+  it('exposes a resolved ink URL on the returned state object after fetch', async () => {
+    const ink =
+      'https://example.test/storage/v1/object/sign/flight-signatures/demo/ink.png?token=fake'
+    const resolveUrl = vi.fn(async () => ink)
+    const expandedEntryId = ref<string | null>(null)
+    const signatures = ref<
+      Record<string, { drawn_signature_url: string; sign_method: string }>
+    >({})
+
+    const expandedSignatureMeta = computed(() => {
+      const id = expandedEntryId.value
+      return id ? (signatures.value[id] ?? null) : null
+    })
+    const isExpandedEntrySigned = computed(() => Boolean(expandedSignatureMeta.value))
+
+    const ui = useExpandedDrawnSignatureUrl({
+      expandedEntryId,
+      isExpandedEntrySigned,
+      expandedSignatureMeta,
+      resolveUrl,
+    })
+
+    signatures.value[ENTRY] = {
+      drawn_signature_url: 'user/id.png',
+      sign_method: 'guest_drawn',
+    }
+    expandedEntryId.value = ENTRY
+    await flushWatchers()
+
+    expect(ui.expandedGuestSignatureUrl.value).toBe(ink)
+    expect(ui.expandedDrawnSignatureResolved.value).toBe(true)
+  })
 })

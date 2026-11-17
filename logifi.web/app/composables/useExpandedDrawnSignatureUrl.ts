@@ -33,8 +33,10 @@ export function useExpandedDrawnSignatureUrl(options: {
   )
 
   let lastResolveKey = ''
+  let latestRefreshId = 0
 
   async function refreshExpandedDrawnSignatureUrl(): Promise<void> {
+    const refreshId = ++latestRefreshId
     const id = options.expandedEntryId.value
     const meta = options.expandedSignatureMeta.value
     const signed = options.isExpandedEntrySigned.value
@@ -58,6 +60,7 @@ export function useExpandedDrawnSignatureUrl(options: {
     }
 
     if (!id || !signed || !attempted) {
+      if (refreshId !== latestRefreshId) return
       if (!sameKey) {
         expandedGuestSignatureUrl.value = null
         lastResolveKey = ''
@@ -70,6 +73,7 @@ export function useExpandedDrawnSignatureUrl(options: {
     }
 
     const url = await resolveDrawnSignatureUrlCached(id, storagePath, options.resolveUrl)
+    if (refreshId !== latestRefreshId) return
     lastResolveKey = resolveKey
     expandedGuestSignatureUrl.value = url
     expandedDrawnSignatureResolved.value = true

@@ -2599,26 +2599,17 @@
 
             </div>
 
-            <div
-              v-if="isExpandedEntrySigned"
-              :class="[
-                'space-y-2 pt-2 text-sm font-quicksand',
-                isDarkMode ? 'text-green-200' : 'text-green-800'
-              ]"
-            >
-              <p class="font-medium">{{ expandedSignatureBlockText }}</p>
-              <FlightDrawnSignatureImage
-                v-if="expandedGuestSignatureUrl"
-                :src="expandedGuestSignatureUrl"
-                :is-dark-mode="isDarkMode"
-              />
-              <p
-                v-else-if="expandedDrawnSignatureAttempted && expandedDrawnSignatureResolved && !expandedGuestSignatureUrl"
-                :class="['text-xs font-quicksand', isDarkMode ? 'text-gray-500' : 'text-gray-500']"
-              >
-                Signature image unavailable
-              </p>
-            </div>
+            <LogbookExpandedSignedFooter
+              :is-signed="isExpandedEntrySigned"
+              :block-text="expandedSignatureBlockText"
+              :ink-url="expandedDrawnSignatureUi.expandedGuestSignatureUrl"
+              :show-ink-unavailable="
+                expandedDrawnSignatureUi.expandedDrawnSignatureAttempted &&
+                expandedDrawnSignatureUi.expandedDrawnSignatureResolved &&
+                !expandedDrawnSignatureUi.expandedGuestSignatureUrl
+              "
+              :is-dark-mode="isDarkMode"
+            />
 
             <div
               v-if="expandedEntryNeedsSignature"
@@ -8935,17 +8926,16 @@ async function resolveExpandedDrawnSignatureUrl(
   return url
 }
 
-const {
-  expandedGuestSignatureUrl,
-  expandedDrawnSignatureResolved,
-  expandedDrawnSignatureAttempted,
-  refreshExpandedDrawnSignatureUrl,
-} = useExpandedDrawnSignatureUrl({
+/** Do not destructure — template binds nested refs for ink URL reactivity in this SFC. */
+const expandedDrawnSignatureUi = useExpandedDrawnSignatureUrl({
   expandedEntryId,
   isExpandedEntrySigned,
   expandedSignatureMeta,
   resolveUrl: resolveExpandedDrawnSignatureUrl,
 })
+
+const refreshExpandedDrawnSignatureUrl =
+  expandedDrawnSignatureUi.refreshExpandedDrawnSignatureUrl
 
 const expandedSignatureDisplay = computed(() => {
   const meta = expandedSignatureMeta.value
