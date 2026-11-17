@@ -1,7 +1,18 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { supabase } from '~/lib/supabase'
 import { useAuth } from '~/composables/useAuth'
 import type { Database } from '~/types/database'
+import {
+  cfiCertificateNumberError,
+  cfiExpirationError,
+  cfiSignerNameError,
+  normalizeCfiExpiration,
+} from '~/utils/cfiCertificateFields'
+import {
+  canAuthenticatedInstructorSign,
+  ownerCannotSignAsInstructorError,
+} from '~/utils/flightSigningAuth'
+import { apiFetch } from '~/utils/apiFetch'
 
 type FlightSignature = Database['public']['Tables']['flight_signatures']['Row']
 type LogEntryRow = Database['public']['Tables']['log_entries']['Row']
@@ -22,12 +33,35 @@ export type PendingSignatureEntryDetail = {
   entry: LogEntryRow
 }
 
+const signaturesByEntryId = ref<Record<string, FlightSignature>>({})
+const pendingSignatures = ref<PendingSignatureForInstructor[]>([])
+const flightSigningLoading = ref(false)
+const flightSigningError = ref<string | null>(null)
+
+let sessionUserWatchStarted = false
+
+/** Clears module-level signing caches when the auth session changes (sign-out / account switch). */
+export function clearFlightSigningSessionCache(): void {
+  signaturesByEntryId.value = {}
+  pendingSignatures.value = []
+}
+
 export const useFlightSigning = () => {
-  const { user } = useAuth()
-  const signaturesByEntryId = ref<Record<string, FlightSignature>>({})
-  const pendingSignatures = ref<PendingSignatureForInstructor[]>([])
-  const isLoading = ref(false)
-  const error = ref<string | null>(null)
+  const { user, getAccessToken } = useAuth()
+  const isLoading = flightSigningLoading
+  const error = flightSigningError
+
+  if (import.meta.client && !sessionUserWatchStarted) {
+    sessionUserWatchStarted = true
+    watch(
+      () => user.value?.id ?? null,
+      (nextId, prevId) => {
+        if (nextId !== prevId) {
+          clearFlightSigningSessionCache()
+        }
+      }
+    )
+  }
 
   const requireUserId = (): string => {
     const userId = user.value?.id
@@ -78,6 +112,11 @@ export const useFlightSigning = () => {
       }
       if (!isValidUUID(instructorId)) {
         throw new Error('Instructor id is required')
+      }
+
+      const callerId = requireUserId()
+      if (!canAuthenticatedInstructorSign({ callerId, instructorId })) {
+        throw new Error(ownerCannotSignAsInstructorError())
       }
 
       const trimmed = pin.trim()
@@ -270,11 +309,67 @@ export const useFlightSigning = () => {
     }
   }
 
+  const fetchOwnCfiIdentity = async (): Promise<
+    SigningResult<{ name: string; certificateNumber: string; expiration: string }>
+  > => {
+    try {
+      const userId = requireUserId()
+      const { data, error: fetchError } = await supabase
+        .from('user_profiles')
+        .select('full_name, cfi_number, cfi_expiration')
+        .eq('id', userId)
+        .maybeSingle()
+      if (fetchError) throw fetchError
+      const name = (data?.full_name || '').trim()
+      const certificateNumber = (data?.cfi_number || '').trim()
+      const expiration = normalizeCfiExpiration(data?.cfi_expiration)
+      const nameError = cfiSignerNameError(name)
+      const certError = cfiCertificateNumberError(certificateNumber)
+      const expError = cfiExpirationError(expiration)
+      if (nameError || certError || expError) {
+        throw new Error(
+          'Add your name, CFI number, and expiration in Pilot Profile before signing'
+        )
+      }
+      return { success: true, data: { name, certificateNumber, expiration } }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'CFI identity is incomplete'
+      error.value = errorMessage
+      return { success: false, error: errorMessage }
+    }
+  }
+
+  const requestSignatureEmail = async (
+    entryId: string
+  ): Promise<SigningResult<true>> => {
+    try {
+      requireUserId()
+      if (!isValidUUID(entryId)) {
+        throw new Error('Entry must be synced to the cloud before requesting a signature')
+      }
+      const token = getAccessToken()
+      await apiFetch('/api/signature-request', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: { entryId },
+      })
+      return { success: true, data: true }
+    } catch (err) {
+      const errorMessage =
+        (err as { data?: { statusMessage?: string } })?.data?.statusMessage ||
+        (err instanceof Error ? err.message : 'Failed to send signature request')
+      error.value = errorMessage
+      return { success: false, error: errorMessage }
+    }
+  }
+
   const guestSignLogEntry = async (
     entryId: string,
     guestName: string,
     guestCertificateNumber: string | null,
-    signatureBlob: Blob
+    signatureBlob: Blob,
+    guestCertificateExpiration?: string | null
   ): Promise<SigningResult<{ signatureId: string; drawnSignatureUrl: string }>> => {
     try {
       isLoading.value = true
@@ -286,8 +381,19 @@ export const useFlightSigning = () => {
       }
 
       const name = guestName.trim()
-      if (!name) {
-        throw new Error('Guest instructor name is required')
+      const nameError = cfiSignerNameError(name)
+      if (nameError) {
+        throw new Error(nameError)
+      }
+      const cert = (guestCertificateNumber || '').trim()
+      const certError = cfiCertificateNumberError(cert)
+      if (certError) {
+        throw new Error(certError)
+      }
+      const expiration = (guestCertificateExpiration || '').trim().slice(0, 10)
+      const expError = cfiExpirationError(expiration)
+      if (expError) {
+        throw new Error(expError)
       }
       if (!signatureBlob || signatureBlob.size === 0) {
         throw new Error('Draw a signature before signing')
@@ -306,12 +412,12 @@ export const useFlightSigning = () => {
       if (uploadError) throw uploadError
 
       const drawnSignatureUrl = storagePath
-      const cert = guestCertificateNumber?.trim() || null
 
       const { data, error: rpcError } = await supabase.rpc('guest_sign_log_entry', {
         p_entry_id: entryId,
         p_guest_name: name,
         p_guest_certificate_number: cert,
+        p_guest_certificate_expiration: expiration,
         p_drawn_signature_url: drawnSignatureUrl,
       })
 
@@ -340,12 +446,29 @@ export const useFlightSigning = () => {
   ): Promise<string | null> => {
     if (!storagePath) return null
     if (/^https?:\/\//i.test(storagePath)) return storagePath
+    const normalized = storagePath.trim().replace(/^flight-signatures\//, '')
     try {
       const { data, error: urlError } = await supabase.storage
         .from('flight-signatures')
-        .createSignedUrl(storagePath, 60 * 60)
+        .createSignedUrl(normalized, 60 * 60)
       if (urlError) throw urlError
       return data?.signedUrl ?? null
+    } catch {
+      return null
+    }
+  }
+
+  const getDrawnSignatureDisplayUrlForEntry = async (
+    entryId: string
+  ): Promise<string | null> => {
+    if (!entryId.trim()) return null
+    try {
+      const token = getAccessToken()
+      const res = await apiFetch<{ url: string | null }>('/api/flight-signature/drawn-url', {
+        query: { entryId },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      return res.url
     } catch {
       return null
     }
@@ -396,6 +519,33 @@ export const useFlightSigning = () => {
     return Boolean(signaturesByEntryId.value[entryId])
   }
 
+  const fetchIssuedSignaturesForInstructor = async (): Promise<
+    SigningResult<FlightSignature[]>
+  > => {
+    try {
+      isLoading.value = true
+      error.value = null
+      const userId = requireUserId()
+      const cutoff = new Date()
+      cutoff.setUTCFullYear(cutoff.getUTCFullYear() - 3)
+      const { data, error: fetchError } = await supabase
+        .from('flight_signatures')
+        .select('*')
+        .eq('signer_id', userId)
+        .gte('signed_at', cutoff.toISOString())
+        .order('signed_at', { ascending: false })
+      if (fetchError) throw fetchError
+      return { success: true, data: data ?? [] }
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to load issued signatures'
+      error.value = errorMessage
+      return { success: false, error: errorMessage }
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   return {
     signaturesByEntryId,
     pendingSignatures,
@@ -404,12 +554,16 @@ export const useFlightSigning = () => {
     setSigningPin,
     signLogEntry,
     guestSignLogEntry,
+    fetchOwnCfiIdentity,
+    requestSignatureEmail,
     getDrawnSignatureDisplayUrl,
+    getDrawnSignatureDisplayUrlForEntry,
     markSignaturePending,
     confirmEntryPendingInCloud,
     fetchPendingSignaturesForInstructor,
     fetchPendingSignatureEntry,
     fetchSignaturesForEntries,
+    fetchIssuedSignaturesForInstructor,
     isEntrySigned
   }
 }

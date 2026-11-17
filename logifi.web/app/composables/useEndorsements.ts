@@ -52,6 +52,14 @@ export const useEndorsements = () => {
     asInstructor.value.filter((e) => e.status === 'pending' || e.status === 'draft')
   )
 
+  const pendingForStudent = computed(() =>
+    asStudent.value.filter((e) => e.status === 'pending' || e.status === 'draft')
+  )
+
+  const pendingSignatureCount = computed(
+    () => pendingForStudent.value.length + pendingForInstructor.value.length
+  )
+
   const requireUserId = (): string => {
     const userId = user.value?.id
     if (!userId) {
@@ -336,6 +344,8 @@ export const useEndorsements = () => {
     asStudent,
     asInstructor,
     pendingForInstructor,
+    pendingForStudent,
+    pendingSignatureCount,
     isLoading,
     error,
     fetchMyEndorsements,

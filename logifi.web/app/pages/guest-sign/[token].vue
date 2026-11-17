@@ -3,6 +3,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import SignaturePad from '~/components/SignaturePad.vue'
 import { apiFetch } from '~/utils/apiFetch'
+import {
+  cfiCertificateNumberError,
+  cfiExpirationError,
+  cfiSignerNameError,
+} from '~/utils/cfiCertificateFields'
 
 definePageMeta({
   layout: false,
@@ -39,6 +44,10 @@ const sessionError = ref<string | null>(null)
 const session = ref<SessionResponse | null>(null)
 const guestName = ref('')
 const guestCertificate = ref('')
+const guestCertificateExpiration = ref('')
+const guestNameError = ref<string | null>(null)
+const guestCertificateError = ref<string | null>(null)
+const guestExpirationError = ref<string | null>(null)
 const padHasInk = ref(false)
 const submitting = ref(false)
 const submitError = ref<string | null>(null)
@@ -50,10 +59,24 @@ const canSubmit = computed(
   () =>
     Boolean(session.value?.isPending) &&
     !session.value?.alreadySigned &&
-    guestName.value.trim().length > 0 &&
+    !cfiSignerNameError(guestName.value) &&
+    !cfiCertificateNumberError(guestCertificate.value) &&
+    !cfiExpirationError(guestCertificateExpiration.value) &&
     padHasInk.value &&
     !submitting.value
 )
+
+function onGuestNameBlur(): void {
+  guestNameError.value = cfiSignerNameError(guestName.value)
+}
+
+function onGuestCertificateBlur(): void {
+  guestCertificateError.value = cfiCertificateNumberError(guestCertificate.value)
+}
+
+function onGuestExpirationBlur(): void {
+  guestExpirationError.value = cfiExpirationError(guestCertificateExpiration.value)
+}
 
 async function loadSession(): Promise<void> {
   checking.value = true
@@ -116,11 +139,16 @@ async function submitSignature(): Promise<void> {
       throw new Error('Draw a signature before submitting')
     }
     const form = new FormData()
+    onGuestNameBlur()
+    onGuestCertificateBlur()
+    onGuestExpirationBlur()
+    if (guestNameError.value || guestCertificateError.value || guestExpirationError.value) {
+      throw new Error('Certificate number and expiration are required')
+    }
     form.append('token', token.value)
     form.append('guestName', guestName.value.trim())
-    if (guestCertificate.value.trim()) {
-      form.append('guestCertificate', guestCertificate.value.trim())
-    }
+    form.append('guestCertificate', guestCertificate.value.trim())
+    form.append('guestCertificateExpiration', guestCertificateExpiration.value.trim())
     form.append('signature', blob, 'signature.png')
 
     await apiFetch('/api/guest-sign/complete', {
@@ -192,26 +220,56 @@ onBeforeUnmount(() => {
           </p>
         </div>
 
-        <label class="block text-sm space-y-1">
+        <label for="guest-sign-name" class="block text-sm space-y-1">
           <span class="text-slate-300">Your name</span>
           <input
+            id="guest-sign-name"
             v-model="guestName"
             type="text"
             autocomplete="name"
             placeholder="Full name"
-            class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-base text-slate-100"
+            class="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-base text-slate-100"
+            :aria-invalid="guestNameError ? 'true' : 'false'"
+            :aria-describedby="guestNameError ? 'guest-sign-name-error' : undefined"
+            @blur="onGuestNameBlur"
           />
+          <p v-if="guestNameError" id="guest-sign-name-error" class="text-xs text-rose-300">
+            {{ guestNameError }}
+          </p>
         </label>
 
-        <label class="block text-sm space-y-1">
-          <span class="text-slate-300">Certificate # (optional)</span>
+        <label for="guest-sign-certificate" class="block text-sm space-y-1">
+          <span class="text-slate-300">Certificate #</span>
           <input
+            id="guest-sign-certificate"
             v-model="guestCertificate"
             type="text"
             autocomplete="off"
             placeholder="CFI / certificate number"
-            class="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-base text-slate-100"
+            class="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-base text-slate-100"
+            :aria-invalid="guestCertificateError ? 'true' : 'false'"
+            :aria-describedby="guestCertificateError ? 'guest-sign-certificate-error' : undefined"
+            @blur="onGuestCertificateBlur"
           />
+          <p v-if="guestCertificateError" id="guest-sign-certificate-error" class="text-xs text-rose-300">
+            {{ guestCertificateError }}
+          </p>
+        </label>
+
+        <label for="guest-sign-expiration" class="block text-sm space-y-1">
+          <span class="text-slate-300">Certificate expiration</span>
+          <input
+            id="guest-sign-expiration"
+            v-model="guestCertificateExpiration"
+            type="date"
+            class="min-h-[44px] w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-base text-slate-100"
+            :aria-invalid="guestExpirationError ? 'true' : 'false'"
+            :aria-describedby="guestExpirationError ? 'guest-sign-expiration-error' : undefined"
+            @blur="onGuestExpirationBlur"
+          />
+          <p v-if="guestExpirationError" id="guest-sign-expiration-error" class="text-xs text-rose-300">
+            {{ guestExpirationError }}
+          </p>
         </label>
 
         <div class="space-y-1">
@@ -237,7 +295,7 @@ onBeforeUnmount(() => {
 
         <button
           type="button"
-          class="w-full rounded-xl bg-blue-600 px-4 py-3 text-base font-semibold text-white disabled:opacity-50"
+          class="min-h-[44px] w-full rounded-xl bg-blue-600 px-4 py-3 text-base font-semibold text-white disabled:opacity-50"
           :disabled="!canSubmit"
           @click="submitSignature"
         >
@@ -249,10 +307,12 @@ onBeforeUnmount(() => {
     <!-- Keep pad mounted (v-show) so ink survives Back/Done -->
     <div
       v-show="signatureFullscreen"
-      class="fixed inset-0 z-50 flex flex-col bg-slate-950 text-slate-100"
+      class="fixed inset-0 z-50 flex touch-none flex-col overscroll-none bg-slate-950 text-slate-100"
+      style="touch-action: none"
       role="dialog"
       aria-modal="true"
       aria-labelledby="guest-sign-fullscreen-title"
+      @touchmove.prevent
     >
       <header
         class="flex shrink-0 items-center justify-between gap-3 border-b border-slate-800 px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]"
@@ -270,7 +330,11 @@ onBeforeUnmount(() => {
         <span class="w-14" aria-hidden="true" />
       </header>
 
-      <div class="min-h-0 flex-1 px-3 py-3">
+      <div
+        class="min-h-0 flex-1 touch-none overscroll-none px-3 py-3"
+        style="touch-action: none"
+        @touchmove.prevent
+      >
         <SignaturePad
           ref="padRef"
           class="h-full"

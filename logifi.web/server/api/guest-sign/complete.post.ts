@@ -6,6 +6,11 @@ import {
   GUEST_SIGN_BUCKET,
   GUEST_SIGN_MAX_IMAGE_BYTES,
 } from '../../utils/guestSign'
+import {
+  cfiCertificateNumberError,
+  cfiExpirationError,
+  cfiSignerNameError,
+} from '../../../app/utils/cfiCertificateFields'
 
 export default defineEventHandler(async (event) => {
   const service = getSupabaseServiceClient()
@@ -21,6 +26,7 @@ export default defineEventHandler(async (event) => {
   let token = ''
   let guestName = ''
   let guestCertificate = ''
+  let guestCertificateExpiration = ''
   let imageBuffer: Buffer | null = null
   let imageMime = 'image/png'
 
@@ -34,6 +40,9 @@ export default defineEventHandler(async (event) => {
     if (part.name === 'guestCertificate' && part.data) {
       guestCertificate = Buffer.from(part.data).toString('utf8').trim()
     }
+    if (part.name === 'guestCertificateExpiration' && part.data) {
+      guestCertificateExpiration = Buffer.from(part.data).toString('utf8').trim()
+    }
     if (part.name === 'signature' && part.data) {
       imageBuffer = Buffer.from(part.data)
       imageMime = part.type || 'image/png'
@@ -43,8 +52,17 @@ export default defineEventHandler(async (event) => {
   if (!token || !imageBuffer?.length) {
     throw createError({ statusCode: 400, statusMessage: 'Missing token or signature image' })
   }
-  if (!guestName) {
-    throw createError({ statusCode: 400, statusMessage: 'Guest name is required' })
+  const nameError = cfiSignerNameError(guestName)
+  if (nameError) {
+    throw createError({ statusCode: 400, statusMessage: nameError })
+  }
+  const certError = cfiCertificateNumberError(guestCertificate)
+  if (certError) {
+    throw createError({ statusCode: 400, statusMessage: certError })
+  }
+  const expError = cfiExpirationError(guestCertificateExpiration)
+  if (expError) {
+    throw createError({ statusCode: 400, statusMessage: expError })
   }
   if (!GUEST_SIGN_ALLOWED_MIME.has(imageMime)) {
     throw createError({ statusCode: 400, statusMessage: 'Unsupported image type. Use PNG, WebP, or JPEG.' })
@@ -97,7 +115,8 @@ export default defineEventHandler(async (event) => {
     {
       p_session_token: token,
       p_guest_name: guestName,
-      p_guest_certificate_number: guestCertificate || null,
+      p_guest_certificate_number: guestCertificate,
+      p_guest_certificate_expiration: guestCertificateExpiration,
       p_drawn_signature_url: storagePath,
     }
   )

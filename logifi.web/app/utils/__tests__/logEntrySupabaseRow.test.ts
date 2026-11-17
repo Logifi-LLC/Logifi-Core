@@ -118,6 +118,7 @@ function createFullyPopulatedLogEntry(): LogEntry {
     pendingInstructorId: '00000000-0000-4000-8000-0000000000cf',
     amendsEntryId: '00000000-0000-4000-8000-0000000000bb',
     isVoid: true,
+    importedSignatureDisplay: null,
     isImported: true,
     importSource: 'csv',
     importBatchId: '00000000-0000-4000-8000-0000000000cc',

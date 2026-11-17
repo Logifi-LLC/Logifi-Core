@@ -785,6 +785,9 @@ export type Database = {
           guest_name: string | null
           guest_certificate_number: string | null
           sign_method: 'roster_pin' | 'guest_drawn'
+          signer_name: string
+          signer_certificate_number: string
+          signer_certificate_expiration: string
         }
         Insert: {
           id?: string
@@ -797,6 +800,9 @@ export type Database = {
           guest_name?: string | null
           guest_certificate_number?: string | null
           sign_method?: 'roster_pin' | 'guest_drawn'
+          signer_name: string
+          signer_certificate_number: string
+          signer_certificate_expiration: string
         }
         Update: {
           id?: string
@@ -809,6 +815,32 @@ export type Database = {
           guest_name?: string | null
           guest_certificate_number?: string | null
           sign_method?: 'roster_pin' | 'guest_drawn'
+          signer_name?: string
+          signer_certificate_number?: string
+          signer_certificate_expiration?: string
+        }
+      }
+      signature_request_emails: {
+        Row: {
+          id: string
+          student_id: string
+          instructor_id: string
+          log_entry_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          student_id: string
+          instructor_id: string
+          log_entry_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          student_id?: string
+          instructor_id?: string
+          log_entry_id?: string
+          created_at?: string
         }
       }
       guest_sign_sessions: {
@@ -1231,7 +1263,8 @@ export type Database = {
         Args: {
           p_entry_id: string
           p_guest_name: string
-          p_guest_certificate_number: string | null
+          p_guest_certificate_number: string
+          p_guest_certificate_expiration: string
           p_drawn_signature_url: string
         }
         Returns: string
@@ -1240,7 +1273,8 @@ export type Database = {
         Args: {
           p_session_token: string
           p_guest_name: string
-          p_guest_certificate_number: string | null
+          p_guest_certificate_number: string
+          p_guest_certificate_expiration: string
           p_drawn_signature_url: string
         }
         Returns: string

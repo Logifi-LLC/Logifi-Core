@@ -76,22 +76,40 @@
           </div>
           <div v-if="showCfiFields" class="px-4 py-3">
             <SettingsField label="CFI number" :is-dark-mode="isDarkMode">
-              <template #default="{ inputClass }">
+              <template #default="{ inputClass, inputId }">
                 <input
+                  :id="inputId"
                   v-model="profile.cfiNumber"
                   type="text"
                   placeholder="CFI certificate number"
-                  :class="inputClass"
+                  :class="[inputClass, 'min-h-[44px]']"
+                  :aria-invalid="cfiNumberError ? 'true' : 'false'"
+                  :aria-describedby="cfiNumberError ? 'cfi-number-error' : undefined"
+                  @blur="onCfiNumberBlur"
                 />
               </template>
             </SettingsField>
+            <p v-if="cfiNumberError" id="cfi-number-error" class="mt-1 text-xs text-red-600 dark:text-red-300">
+              {{ cfiNumberError }}
+            </p>
           </div>
           <div v-if="showCfiFields" class="px-4 py-3">
             <SettingsField label="CFI expiration" :is-dark-mode="isDarkMode">
-              <template #default="{ inputClass }">
-                <input v-model="profile.cfiExpiration" type="date" :class="inputClass" />
+              <template #default="{ inputClass, inputId }">
+                <input
+                  :id="inputId"
+                  v-model="profile.cfiExpiration"
+                  type="date"
+                  :class="[inputClass, 'min-h-[44px]']"
+                  :aria-invalid="cfiExpirationErrorText ? 'true' : 'false'"
+                  :aria-describedby="cfiExpirationErrorText ? 'cfi-expiration-error' : undefined"
+                  @blur="onCfiExpirationBlur"
+                />
               </template>
             </SettingsField>
+            <p v-if="cfiExpirationErrorText" id="cfi-expiration-error" class="mt-1 text-xs text-red-600 dark:text-red-300">
+              {{ cfiExpirationErrorText }}
+            </p>
           </div>
           <div v-if="showCfiFields" class="space-y-3 px-4 py-3">
             <SettingsField
@@ -315,6 +333,10 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import {
+  cfiCertificateNumberError,
+  cfiExpirationError,
+} from '~/utils/cfiCertificateFields'
 import SettingsField from '../SettingsField.vue'
 import SettingsAutoTextarea from '../SettingsAutoTextarea.vue'
 import SettingsSubNav from '../SettingsSubNav.vue'
@@ -375,6 +397,16 @@ const certificatesTextareaRef = ref<InstanceType<typeof SettingsAutoTextarea> | 
 const signingPin = ref('')
 const signingPinConfirm = ref('')
 const isSavingPin = ref(false)
+const cfiNumberError = ref<string | null>(null)
+const cfiExpirationErrorText = ref<string | null>(null)
+
+function onCfiNumberBlur(): void {
+  cfiNumberError.value = cfiCertificateNumberError(props.profile.cfiNumber)
+}
+
+function onCfiExpirationBlur(): void {
+  cfiExpirationErrorText.value = cfiExpirationError(props.profile.cfiExpiration)
+}
 
 const showCfiFields = computed(
   () => props.profile.role === 'INSTRUCTOR' || props.profile.role === 'DUAL'

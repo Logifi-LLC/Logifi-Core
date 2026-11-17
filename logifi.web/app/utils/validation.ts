@@ -1,5 +1,4 @@
 import type { LogEntry, FlightTimeBreakdown } from './logbookTypes'
-import { sortEntriesByDateAndOOOI } from '../../shared/oooiSort'
 import { FOREFLIGHT_MISSING_TAIL } from '../../shared/logbookDataBridge/importMappers'
 import { isValidCalendarYmd } from '../../shared/logbookDataBridge/formatters'
 import { toCatalogAirportCode } from '../../shared/airportCodeCanonical'
@@ -149,9 +148,8 @@ export function qualifiesForCrossCountryDistance(distance: number): boolean {
 /**
  * Validate date for a log entry
  * @param entry - The log entry to validate
- * @param allEntries - Optional array of all entries for chronological order validation
  */
-export function validateDate(entry: LogEntry, allEntries?: LogEntry[]): ValidationResult[] {
+export function validateDate(entry: LogEntry, _allEntries?: LogEntry[]): ValidationResult[] {
   const results: ValidationResult[] = []
   
   if (!entry.date) {
@@ -226,32 +224,6 @@ export function validateDate(entry: LogEntry, allEntries?: LogEntry[]): Validati
         message: `Flight date (${entry.date}) is more than 100 years ago`,
         suggestion: 'Please verify this date is correct. Historical logbook entries may be valid.'
       })
-    }
-
-    // Chronological order checks (only if allEntries is provided)
-    if (allEntries && allEntries.length > 0) {
-      // Filter out the current entry being validated
-      const otherEntries = allEntries.filter(e => e.id !== entry.id)
-      
-      if (otherEntries.length > 0) {
-        const sortedEntries = sortEntriesByDateAndOOOI(otherEntries)
-
-        // Check if current entry date is before the most recent entry
-        const mostRecentEntry = sortedEntries[0]
-        if (mostRecentEntry && mostRecentEntry.date) {
-          const mostRecentDate = new Date(mostRecentEntry.date)
-          mostRecentDate.setHours(0, 0, 0, 0)
-          
-          if (entryDate < mostRecentDate) {
-            results.push({
-              type: 'warning',
-              field: 'date',
-              message: `Flight date (${entry.date}) is before your most recent entry (${mostRecentEntry.date})`,
-              suggestion: 'Entries are typically added in chronological order. Verify this date is correct.'
-            })
-          }
-        }
-      }
     }
   } catch (err) {
     // Invalid date format

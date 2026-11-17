@@ -1,4 +1,4 @@
-/** Fields needed for an AC 61-65H-style instructor signature block. */
+/** Fields needed for an AC 61-65K-style instructor signature block. */
 export type EndorsementSignatureFields = {
   signed_at?: string | null
   instructor_full_name?: string | null
