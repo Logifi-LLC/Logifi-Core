@@ -6921,7 +6921,7 @@ import {
   flightSignatureFromRow,
   formatFlightSignatureBlock,
 } from '../utils/flightSignatureDisplay'
-import { shouldAttemptDrawnSignatureLoad } from '../utils/drawnSignatureImageLoad'
+import { useExpandedDrawnSignatureUrl } from '../composables/useExpandedDrawnSignatureUrl'
 import {
   attachBackupSignaturesToEntries,
   parseLogbookBackupExtras,
@@ -8807,9 +8807,6 @@ const importedEndorsementDisplay = ref<BackupEndorsementRecord[]>([])
 const inlineGuestPadRef = ref<{ toBlob: (mime?: string) => Promise<Blob | null>; clear: () => void; hasInk: { value: boolean } } | null>(null)
 const addGuestPadRef = ref<{ toBlob: (mime?: string) => Promise<Blob | null>; clear: () => void; hasInk: { value: boolean } } | null>(null)
 const pendingGuestSignatureBlob = ref<Blob | null>(null)
-const expandedGuestSignatureUrl = ref<string | null>(null)
-const expandedDrawnSignatureResolved = ref(false)
-
 const isGuestSignerSelected = computed(() => signInstructorId.value === GUEST_SIGNER_VALUE)
 
 /** UUID shape only — does NOT mean the row exists in Supabase. */
@@ -8924,10 +8921,31 @@ const expandedSignatureMeta = computed(() => {
   return signaturesByEntryId.value[id] ?? null
 })
 
-const expandedDrawnSignatureAttempted = computed(() =>
-  isExpandedEntrySigned.value &&
-  shouldAttemptDrawnSignatureLoad(true, expandedSignatureMeta.value)
-)
+async function resolveExpandedDrawnSignatureUrl(
+  entryId: string,
+  storagePath: string
+): Promise<string | null> {
+  let url: string | null = null
+  if (isValidEntryUUID(entryId)) {
+    url = await getDrawnSignatureDisplayUrlForEntry(entryId)
+  }
+  if (!url && storagePath) {
+    url = await getDrawnSignatureDisplayUrl(storagePath)
+  }
+  return url
+}
+
+const {
+  expandedGuestSignatureUrl,
+  expandedDrawnSignatureResolved,
+  expandedDrawnSignatureAttempted,
+  refreshExpandedDrawnSignatureUrl,
+} = useExpandedDrawnSignatureUrl({
+  expandedEntryId,
+  isExpandedEntrySigned,
+  expandedSignatureMeta,
+  resolveUrl: resolveExpandedDrawnSignatureUrl,
+})
 
 const expandedSignatureDisplay = computed(() => {
   const meta = expandedSignatureMeta.value
@@ -8999,44 +9017,6 @@ function openPendingSignaturesInbox(): void {
   openSettings('roster')
 }
 
-async function refreshExpandedDrawnSignatureUrl(): Promise<void> {
-  const id = expandedEntryId.value
-  const meta = expandedSignatureMeta.value
-  const signed = isExpandedEntrySigned.value
-  const attempted = shouldAttemptDrawnSignatureLoad(signed, meta)
-  expandedDrawnSignatureResolved.value = false
-  if (import.meta.client) {
-    console.info('[drawn-sig]', {
-      signed,
-      hasMeta: Boolean(meta),
-      method: meta?.sign_method ?? null,
-      attempted,
-      hasPath: Boolean(meta?.drawn_signature_url?.trim()),
-    })
-  }
-  if (!id || !signed || !attempted) {
-    expandedGuestSignatureUrl.value = null
-    expandedDrawnSignatureResolved.value = true
-    if (import.meta.client) {
-      console.info('[drawn-sig]', { gotUrl: false })
-    }
-    return
-  }
-  const storagePath = meta?.drawn_signature_url?.trim()
-  let url: string | null = null
-  if (isValidEntryUUID(id)) {
-    url = await getDrawnSignatureDisplayUrlForEntry(id)
-  }
-  if (!url && storagePath) {
-    url = await getDrawnSignatureDisplayUrl(storagePath)
-  }
-  expandedGuestSignatureUrl.value = url
-  expandedDrawnSignatureResolved.value = true
-  if (import.meta.client) {
-    console.info('[drawn-sig]', { gotUrl: Boolean(url) })
-  }
-}
-
 watch(newEntryNeedsSignature, (needs) => {
   if (needs && isEntryFormOpen.value) ensureDefaultSignInstructor()
 })
@@ -9100,14 +9080,6 @@ function shouldAwaitSyncForSigningIntent(): boolean {
 watch(expandedEntryNeedsSignature, (needs) => {
   if (needs && expandedEntryId.value) ensureDefaultSignInstructor()
 })
-
-watch(
-  [expandedEntryId, isExpandedEntrySigned, signaturesByEntryId],
-  () => {
-    void refreshExpandedDrawnSignatureUrl()
-  },
-  { deep: true, immediate: true }
-)
 
 function instructorDisplayName(row: { profile: { full_name: string | null } | null }): string {
   return row.profile?.full_name?.trim() || 'Instructor'
@@ -9372,7 +9344,7 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
       ensureDefaultSignInstructor()
     }
     if (isValidEntryUUID(entry.id) && (isEntrySigned(entry.id) || entry.signaturePending)) {
-      void fetchSignaturesForEntries([entry.id]).then(() => refreshExpandedDrawnSignatureUrl())
+      void fetchSignaturesForEntries([entry.id])
     }
   }
 }
