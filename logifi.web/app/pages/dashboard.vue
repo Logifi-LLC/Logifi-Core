@@ -1821,22 +1821,13 @@
             <div
               v-if="isExpandedEntrySigned"
               :class="[
-                'rounded-lg border px-3 py-2 text-sm font-quicksand space-y-2',
+                'rounded-lg border px-3 py-2 text-sm font-quicksand',
                 isDarkMode
                   ? 'border-green-700/60 bg-green-900/20 text-green-200'
                   : 'border-green-200 bg-green-50 text-green-800'
               ]"
             >
-              <p>
-                {{ expandedSignatureBlockText }} — this entry cannot be edited or deleted. Use Amend or Void if it was a mistake.
-              </p>
-              <img
-                v-if="expandedGuestSignatureUrl"
-                :src="expandedGuestSignatureUrl"
-                alt="Guest instructor signature"
-                class="max-h-24 w-auto rounded border bg-white object-contain"
-                :class="isDarkMode ? 'border-green-800' : 'border-green-200'"
-              />
+              Signed by instructor — this entry cannot be edited or deleted. Use Amend or Void if it was a mistake.
             </div>
             <div
               v-else-if="isExpandedEntryPending"
@@ -1848,109 +1839,6 @@
               ]"
             >
               Pending instructor signature — use <strong>Request signature</strong> if they do not see it yet, or Sign now when they are here.
-            </div>
-
-            <div
-              v-if="expandedEntryNeedsSignature"
-              :class="[
-                'rounded-lg border p-3 space-y-3 font-quicksand',
-                isDarkMode ? 'border-gray-600 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
-              ]"
-            >
-              <p :class="['text-sm font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
-                Instructor signature
-              </p>
-              <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                Dual Received time is set. Sign now on this device, or request a signature from a linked instructor.
-              </p>
-              <label for="edit-sign-instructor" class="block text-sm">
-                <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Instructor</span>
-                <select id="edit-sign-instructor"
-                  v-model="signInstructorId"
-                  :class="[
-                    'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
-                    isDarkMode ? 'border-gray-600 bg-gray-900 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
-                  ]"
-                >
-                  <option disabled value="">Select instructor</option>
-                  <optgroup v-if="mainInstructorsForSigning.length" label="Main">
-                    <option
-                      v-for="row in mainInstructorsForSigning"
-                      :key="row.id"
-                      :value="row.instructor_id"
-                    >
-                      {{ instructorDisplayName(row) }} (Main)
-                    </option>
-                  </optgroup>
-                  <optgroup v-if="otherInstructorsForSigning.length" label="Instructors">
-                    <option
-                      v-for="row in otherInstructorsForSigning"
-                      :key="row.id"
-                      :value="row.instructor_id"
-                    >
-                      {{ instructorDisplayName(row) }}
-                    </option>
-                  </optgroup>
-                  <option :value="GUEST_SIGNER_VALUE">Guest / fill-in instructor</option>
-                </select>
-              </label>
-              <InstructorSignerFields
-                id-prefix="edit-sign"
-                :is-dark-mode="isDarkMode"
-                :name="guestSignerName"
-                :certificate-number="guestCertificateNumber"
-                :expiration="guestCertificateExpiration"
-                :name-error="guestNameError"
-                :certificate-error="guestCertificateError"
-                :expiration-error="guestExpirationError"
-                :name-locked="!isGuestSignerSelected"
-                :disabled="isSubmittingSign || isSavingInlineEdit"
-                @update:name="guestSignerName = $event"
-                @update:certificate-number="guestCertificateNumber = $event"
-                @update:expiration="guestCertificateExpiration = $event"
-                @blur-name="onGuestNameBlur"
-                @blur-certificate="onGuestCertificateBlur"
-                @blur-expiration="onGuestExpirationBlur"
-              />
-              <div>
-                <span :class="['block text-sm mb-1', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Signature</span>
-                <SignaturePad
-                  ref="inlineGuestPadRef"
-                  :is-dark-mode="isDarkMode"
-                  :disabled="isSubmittingSign || isSavingInlineEdit"
-                  @change="(v) => (guestPadHasInk = v)"
-                />
-              </div>
-              <div class="flex flex-col sm:flex-row gap-2">
-                <button
-                  type="button"
-                  :disabled="guestQrCreating || isSavingInlineEdit || isSubmittingSign"
-                  :class="[
-                    'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold border',
-                    isDarkMode
-                      ? 'border-cyan-700/60 bg-cyan-900/30 text-cyan-100 hover:bg-cyan-900/50'
-                      : 'border-cyan-300 bg-cyan-50 text-cyan-900 hover:bg-cyan-100',
-                    (guestQrCreating || isSavingInlineEdit) ? 'opacity-60 cursor-not-allowed' : ''
-                  ]"
-                  @click.stop="startGuestSignOnPhone"
-                >
-                  <Icon v-if="guestQrCreating" name="ri:loader-4-line" class="animate-spin" size="16" />
-                  <Icon v-else name="ri:qr-code-line" size="16" />
-                  {{ guestQrCreating ? 'Creating QR…' : 'Sign on phone (QR)' }}
-                </button>
-              </div>
-              <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
-                Saves the entry, then opens a QR. Certificate # and expiration are required on the phone.
-              </p>
-              <p v-if="guestQrError" :class="['text-xs', isDarkMode ? 'text-red-300' : 'text-red-600']">
-                {{ guestQrError }}
-              </p>
-              <p
-                v-if="activeInstructorsForSigning.length === 0"
-                :class="['text-xs', isDarkMode ? 'text-amber-300' : 'text-amber-700']"
-              >
-                No linked instructors — choose Guest / fill-in, or link someone in Settings → Instructor Links.
-              </p>
             </div>
 
             <div
@@ -2711,6 +2599,121 @@
 
             </div>
 
+            <LogbookExpandedSignedFooter
+              :is-signed="isExpandedEntrySigned"
+              :block-text="expandedSignatureBlockText"
+              :ink-url="expandedDrawnSignatureUi.expandedGuestSignatureUrl"
+              :show-ink-unavailable="
+                expandedDrawnSignatureUi.expandedDrawnSignatureAttempted &&
+                expandedDrawnSignatureUi.expandedDrawnSignatureResolved &&
+                !expandedDrawnSignatureUi.expandedGuestSignatureUrl
+              "
+              :is-dark-mode="isDarkMode"
+            />
+
+            <div
+              v-if="expandedEntryNeedsSignature"
+              :class="[
+                'rounded-lg border p-3 space-y-3 font-quicksand',
+                isDarkMode ? 'border-gray-600 bg-gray-800/50' : 'border-gray-200 bg-gray-50'
+              ]"
+            >
+              <p :class="['text-sm font-semibold', isDarkMode ? 'text-gray-100' : 'text-gray-900']">
+                Instructor signature
+              </p>
+              <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                Dual Received time is set. Sign now on this device, or request a signature from a linked instructor.
+              </p>
+              <label for="edit-sign-instructor" class="block text-sm">
+                <span :class="isDarkMode ? 'text-gray-300' : 'text-gray-700'">Instructor</span>
+                <select id="edit-sign-instructor"
+                  v-model="signInstructorId"
+                  :class="[
+                    'mt-1 w-full rounded-lg border px-3 py-2 text-sm',
+                    isDarkMode ? 'border-gray-600 bg-gray-900 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
+                  ]"
+                >
+                  <option disabled value="">Select instructor</option>
+                  <optgroup v-if="mainInstructorsForSigning.length" label="Main">
+                    <option
+                      v-for="row in mainInstructorsForSigning"
+                      :key="row.id"
+                      :value="row.instructor_id"
+                    >
+                      {{ instructorDisplayName(row) }} (Main)
+                    </option>
+                  </optgroup>
+                  <optgroup v-if="otherInstructorsForSigning.length" label="Instructors">
+                    <option
+                      v-for="row in otherInstructorsForSigning"
+                      :key="row.id"
+                      :value="row.instructor_id"
+                    >
+                      {{ instructorDisplayName(row) }}
+                    </option>
+                  </optgroup>
+                  <option :value="GUEST_SIGNER_VALUE">Guest / fill-in instructor</option>
+                </select>
+              </label>
+              <InstructorSignerFields
+                id-prefix="edit-sign"
+                :is-dark-mode="isDarkMode"
+                :name="guestSignerName"
+                :certificate-number="guestCertificateNumber"
+                :expiration="guestCertificateExpiration"
+                :name-error="guestNameError"
+                :certificate-error="guestCertificateError"
+                :expiration-error="guestExpirationError"
+                :name-locked="!isGuestSignerSelected"
+                :disabled="isSubmittingSign || isSavingInlineEdit"
+                @update:name="guestSignerName = $event"
+                @update:certificate-number="guestCertificateNumber = $event"
+                @update:expiration="guestCertificateExpiration = $event"
+                @blur-name="onGuestNameBlur"
+                @blur-certificate="onGuestCertificateBlur"
+                @blur-expiration="onGuestExpirationBlur"
+              />
+              <div>
+                <span :class="['block text-sm mb-1', isDarkMode ? 'text-gray-300' : 'text-gray-700']">Signature</span>
+                <SignaturePad
+                  ref="inlineGuestPadRef"
+                  :is-dark-mode="isDarkMode"
+                  :disabled="isSubmittingSign || isSavingInlineEdit"
+                  @change="(v) => (guestPadHasInk = v)"
+                />
+              </div>
+              <div class="flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  :disabled="guestQrCreating || isSavingInlineEdit || isSubmittingSign"
+                  :class="[
+                    'inline-flex min-h-[44px] items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold border',
+                    isDarkMode
+                      ? 'border-cyan-700/60 bg-cyan-900/30 text-cyan-100 hover:bg-cyan-900/50'
+                      : 'border-cyan-300 bg-cyan-50 text-cyan-900 hover:bg-cyan-100',
+                    (guestQrCreating || isSavingInlineEdit) ? 'opacity-60 cursor-not-allowed' : ''
+                  ]"
+                  @click.stop="startGuestSignOnPhone"
+                >
+                  <Icon v-if="guestQrCreating" name="ri:loader-4-line" class="animate-spin" size="16" />
+                  <Icon v-else name="ri:qr-code-line" size="16" />
+                  {{ guestQrCreating ? 'Creating QR…' : 'Sign on phone (QR)' }}
+                </button>
+              </div>
+              <p :class="['text-xs', isDarkMode ? 'text-gray-400' : 'text-gray-500']">
+                Saves the entry, then opens a QR. Certificate # and expiration are required on the phone.
+              </p>
+              <p v-if="guestQrError" :class="['text-xs', isDarkMode ? 'text-red-300' : 'text-red-600']">
+                {{ guestQrError }}
+              </p>
+              <p
+                v-if="activeInstructorsForSigning.length === 0"
+                :class="['text-xs', isDarkMode ? 'text-amber-300' : 'text-amber-700']"
+              >
+                No linked instructors — choose Guest / fill-in, or link someone in Settings → Instructor Links.
+              </p>
+            </div>
+
             <div 
               :class="[
                 'flex items-center justify-between mt-2 pt-4 border-t',
@@ -3001,7 +3004,15 @@
             Have the instructor scan this QR code. They enter name, certificate #, expiration, and draw a signature — no account needed.
           </p>
 
-          <div v-if="guestQrCompleted" class="rounded-lg border px-3 py-2 text-sm border-green-600/40 bg-green-900/20 text-green-200">
+          <div
+            v-if="guestQrCompleted"
+            :class="[
+              'rounded-lg border px-3 py-2 text-sm font-medium',
+              isDarkMode
+                ? 'border-green-700/60 bg-green-900/20 text-green-200'
+                : 'border-green-300 bg-green-50 text-green-800'
+            ]"
+          >
             Signature received — entry is locked.
           </div>
           <template v-else>
@@ -6895,11 +6906,13 @@ import {
   cfiExpirationError,
   cfiSignerNameError,
   hasCfiIdentity,
+  normalizeCfiExpiration,
 } from '../utils/cfiCertificateFields'
 import {
   flightSignatureFromRow,
   formatFlightSignatureBlock,
 } from '../utils/flightSignatureDisplay'
+import { useExpandedDrawnSignatureUrl } from '../composables/useExpandedDrawnSignatureUrl'
 import {
   attachBackupSignaturesToEntries,
   parseLogbookBackupExtras,
@@ -7265,6 +7278,7 @@ const {
   signLogEntry,
   guestSignLogEntry,
   getDrawnSignatureDisplayUrl,
+  getDrawnSignatureDisplayUrlForEntry,
   markSignaturePending,
   confirmEntryPendingInCloud,
   fetchPendingSignaturesForInstructor,
@@ -8784,8 +8798,6 @@ const importedEndorsementDisplay = ref<BackupEndorsementRecord[]>([])
 const inlineGuestPadRef = ref<{ toBlob: (mime?: string) => Promise<Blob | null>; clear: () => void; hasInk: { value: boolean } } | null>(null)
 const addGuestPadRef = ref<{ toBlob: (mime?: string) => Promise<Blob | null>; clear: () => void; hasInk: { value: boolean } } | null>(null)
 const pendingGuestSignatureBlob = ref<Blob | null>(null)
-const expandedGuestSignatureUrl = ref<string | null>(null)
-
 const isGuestSignerSelected = computed(() => signInstructorId.value === GUEST_SIGNER_VALUE)
 
 /** UUID shape only — does NOT mean the row exists in Supabase. */
@@ -8900,6 +8912,33 @@ const expandedSignatureMeta = computed(() => {
   return signaturesByEntryId.value[id] ?? null
 })
 
+async function resolveExpandedDrawnSignatureUrl(
+  entryId: string,
+  storagePath: string
+): Promise<string | null> {
+  let url: string | null = null
+  if (isValidEntryUUID(entryId)) {
+    url = await getDrawnSignatureDisplayUrlForEntry(entryId)
+  }
+  if (!url && storagePath) {
+    url = await getDrawnSignatureDisplayUrl(storagePath)
+  }
+  return url
+}
+
+/** reactive() so nested refs from the composable unwrap in the template (not only top-level refs). */
+const expandedDrawnSignatureUi = reactive(
+  useExpandedDrawnSignatureUrl({
+    expandedEntryId,
+    isExpandedEntrySigned,
+    expandedSignatureMeta,
+    resolveUrl: resolveExpandedDrawnSignatureUrl,
+  })
+)
+
+const refreshExpandedDrawnSignatureUrl =
+  expandedDrawnSignatureUi.refreshExpandedDrawnSignatureUrl
+
 const expandedSignatureDisplay = computed(() => {
   const meta = expandedSignatureMeta.value
   if (meta) return flightSignatureFromRow(meta)
@@ -8954,27 +8993,34 @@ function applyLinkedInstructorIdentity(): void {
   if (!row) return
   guestSignerName.value = row.profile?.full_name?.trim() || ''
   guestCertificateNumber.value = row.profile?.cfi_number?.trim() || ''
-  guestCertificateExpiration.value = (row.profile?.cfi_expiration || '').toString().slice(0, 10)
+  guestCertificateExpiration.value = normalizeCfiExpiration(row.profile?.cfi_expiration)
+}
+
+function clearGuestSignerIdentityFields(): void {
+  guestSignerName.value = ''
+  guestCertificateNumber.value = ''
+  guestCertificateExpiration.value = ''
+  guestNameError.value = null
+  guestCertificateError.value = null
+  guestExpirationError.value = null
 }
 
 function openPendingSignaturesInbox(): void {
   openSettings('roster')
 }
 
-const isExpandedGuestSigned = computed(
-  () => expandedSignatureMeta.value?.sign_method === 'guest_drawn'
-)
-
 watch(newEntryNeedsSignature, (needs) => {
   if (needs && isEntryFormOpen.value) ensureDefaultSignInstructor()
 })
 
 watch(isGuestSignerSelected, (guest) => {
-  if (!guest) {
-    guestPadHasInk.value = false
-    resetGuestSignQr()
-    applyLinkedInstructorIdentity()
+  guestPadHasInk.value = false
+  resetGuestSignQr()
+  if (guest) {
+    clearGuestSignerIdentityFields()
+    return
   }
+  applyLinkedInstructorIdentity()
 })
 
 watch(
@@ -8989,6 +9035,7 @@ watch(guestQrCompleted, async (done) => {
   const id = guestQrEntryId.value || expandedEntryId.value
   if (id) {
     await fetchSignaturesForEntries([id])
+    await refreshExpandedDrawnSignatureUrl()
     setLocalSignaturePending(id, false)
     if (user.value?.id) {
       const local = logEntries.value.find((e) => e.id === id)
@@ -9025,16 +9072,6 @@ function shouldAwaitSyncForSigningIntent(): boolean {
 watch(expandedEntryNeedsSignature, (needs) => {
   if (needs && expandedEntryId.value) ensureDefaultSignInstructor()
 })
-
-watch(
-  [expandedEntryId, () => expandedSignatureMeta.value?.drawn_signature_url, () => expandedSignatureMeta.value?.sign_method],
-  async () => {
-    expandedGuestSignatureUrl.value = null
-    const meta = expandedSignatureMeta.value
-    if (meta?.sign_method !== 'guest_drawn' || !meta.drawn_signature_url) return
-    expandedGuestSignatureUrl.value = await getDrawnSignatureDisplayUrl(meta.drawn_signature_url)
-  }
-)
 
 function instructorDisplayName(row: { profile: { full_name: string | null } | null }): string {
   return row.profile?.full_name?.trim() || 'Instructor'
@@ -9297,6 +9334,9 @@ async function beginInlineEditing(entry: LogEntry): Promise<void> {
     })
     if (!isEntrySigned(entry.id) && requiresInstructorSignature(entry)) {
       ensureDefaultSignInstructor()
+    }
+    if (isValidEntryUUID(entry.id) && (isEntrySigned(entry.id) || entry.signaturePending)) {
+      void fetchSignaturesForEntries([entry.id])
     }
   }
 }
@@ -12647,7 +12687,9 @@ async function loadPilotProfileFromSupabase(): Promise<void> {
       prefs.role = data.role
     }
     if (data.cfi_number != null) prefs.cfiNumber = data.cfi_number
-    if (data.cfi_expiration != null) prefs.cfiExpiration = data.cfi_expiration
+    if (data.cfi_expiration != null) {
+      prefs.cfiExpiration = normalizeCfiExpiration(String(data.cfi_expiration))
+    }
     const res = data.residential_address as { street?: string; city?: string; state?: string; zip?: string } | null
     if (res) {
       prefs.residentialAddress = res.street ?? ''
@@ -18891,6 +18933,7 @@ function formatSimTotalValue(key: TotalsMetricKey): string {
 [data-add-entry-panel],
 [data-edit-panel] {
   min-width: 0;
+  scrollbar-gutter: stable;
 }
 
 [data-add-entry-panel] .grid,

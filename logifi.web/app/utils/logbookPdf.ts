@@ -606,9 +606,19 @@ async function drawAppendixPages(
     if (signature.imageBytes && signature.imageBytes.byteLength > 0) {
       try {
         const image = await doc.embedPng(signature.imageBytes)
-        const width = Math.min(180, image.width)
-        const height = (image.height / image.width) * width
+        const maxW = 240
+        const maxH = 80
+        const scale = Math.min(maxW / image.width, maxH / image.height, 1)
+        const width = image.width * scale
+        const height = image.height * scale
         ensure(height + 12)
+        page.drawRectangle({
+          x: MARGIN_X,
+          y: y - height,
+          width,
+          height,
+          color: pdfLib.rgb(1, 1, 1),
+        })
         page.drawImage(image, {
           x: MARGIN_X,
           y: y - height,

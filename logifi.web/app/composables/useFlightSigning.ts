@@ -1,8 +1,13 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { supabase } from '~/lib/supabase'
 import { useAuth } from '~/composables/useAuth'
 import type { Database } from '~/types/database'
-import { cfiCertificateNumberError, cfiExpirationError, cfiSignerNameError } from '~/utils/cfiCertificateFields'
+import {
+  cfiCertificateNumberError,
+  cfiExpirationError,
+  cfiSignerNameError,
+  normalizeCfiExpiration,
+} from '~/utils/cfiCertificateFields'
 import {
   canAuthenticatedInstructorSign,
   ownerCannotSignAsInstructorError,
@@ -28,12 +33,35 @@ export type PendingSignatureEntryDetail = {
   entry: LogEntryRow
 }
 
+const signaturesByEntryId = ref<Record<string, FlightSignature>>({})
+const pendingSignatures = ref<PendingSignatureForInstructor[]>([])
+const flightSigningLoading = ref(false)
+const flightSigningError = ref<string | null>(null)
+
+let sessionUserWatchStarted = false
+
+/** Clears module-level signing caches when the auth session changes (sign-out / account switch). */
+export function clearFlightSigningSessionCache(): void {
+  signaturesByEntryId.value = {}
+  pendingSignatures.value = []
+}
+
 export const useFlightSigning = () => {
   const { user, getAccessToken } = useAuth()
-  const signaturesByEntryId = ref<Record<string, FlightSignature>>({})
-  const pendingSignatures = ref<PendingSignatureForInstructor[]>([])
-  const isLoading = ref(false)
-  const error = ref<string | null>(null)
+  const isLoading = flightSigningLoading
+  const error = flightSigningError
+
+  if (import.meta.client && !sessionUserWatchStarted) {
+    sessionUserWatchStarted = true
+    watch(
+      () => user.value?.id ?? null,
+      (nextId, prevId) => {
+        if (nextId !== prevId) {
+          clearFlightSigningSessionCache()
+        }
+      }
+    )
+  }
 
   const requireUserId = (): string => {
     const userId = user.value?.id
@@ -294,7 +322,7 @@ export const useFlightSigning = () => {
       if (fetchError) throw fetchError
       const name = (data?.full_name || '').trim()
       const certificateNumber = (data?.cfi_number || '').trim()
-      const expiration = (data?.cfi_expiration || '').toString().slice(0, 10)
+      const expiration = normalizeCfiExpiration(data?.cfi_expiration)
       const nameError = cfiSignerNameError(name)
       const certError = cfiCertificateNumberError(certificateNumber)
       const expError = cfiExpirationError(expiration)
@@ -418,12 +446,29 @@ export const useFlightSigning = () => {
   ): Promise<string | null> => {
     if (!storagePath) return null
     if (/^https?:\/\//i.test(storagePath)) return storagePath
+    const normalized = storagePath.trim().replace(/^flight-signatures\//, '')
     try {
       const { data, error: urlError } = await supabase.storage
         .from('flight-signatures')
-        .createSignedUrl(storagePath, 60 * 60)
+        .createSignedUrl(normalized, 60 * 60)
       if (urlError) throw urlError
       return data?.signedUrl ?? null
+    } catch {
+      return null
+    }
+  }
+
+  const getDrawnSignatureDisplayUrlForEntry = async (
+    entryId: string
+  ): Promise<string | null> => {
+    if (!entryId.trim()) return null
+    try {
+      const token = getAccessToken()
+      const res = await apiFetch<{ url: string | null }>('/api/flight-signature/drawn-url', {
+        query: { entryId },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      return res.url
     } catch {
       return null
     }
@@ -512,6 +557,7 @@ export const useFlightSigning = () => {
     fetchOwnCfiIdentity,
     requestSignatureEmail,
     getDrawnSignatureDisplayUrl,
+    getDrawnSignatureDisplayUrlForEntry,
     markSignaturePending,
     confirmEntryPendingInCloud,
     fetchPendingSignaturesForInstructor,
