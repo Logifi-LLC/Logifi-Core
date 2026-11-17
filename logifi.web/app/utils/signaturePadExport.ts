@@ -1,4 +1,6 @@
-export const SIGNATURE_EXPORT_INK_RGB = { r: 0x11, g: 0x18, b: 0x27 } as const
+import { normalizeSignatureCanvas, SIGNATURE_EXPORT_INK_RGB } from './signatureInkNormalize'
+
+export { SIGNATURE_EXPORT_INK_RGB }
 
 export function cropInkToCanvas(source: HTMLCanvasElement): HTMLCanvasElement | null {
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
@@ -65,6 +67,8 @@ export function canonicalizeExportInk(canvas: HTMLCanvasElement): void {
 }
 
 export function buildExportCanvas(source: HTMLCanvasElement): HTMLCanvasElement {
+  const normalized = normalizeSignatureCanvas(source)
+  if (normalized) return normalized
   const cropped = cropInkToCanvas(source)
   const target = cropped ?? source
   canonicalizeExportInk(target)

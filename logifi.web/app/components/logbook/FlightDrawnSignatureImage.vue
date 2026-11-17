@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { normalizeSignatureFromUrl } from '~/utils/signatureInkNormalize'
 
 const props = withDefaults(
   defineProps<{
@@ -14,11 +15,23 @@ const props = withDefaults(
 )
 
 const loadState = ref<'loading' | 'ready' | 'error'>('loading')
+const displaySrc = ref('')
 
 watch(
   () => props.src,
-  () => {
+  async (url) => {
     loadState.value = 'loading'
+    displaySrc.value = ''
+    if (!url) {
+      loadState.value = 'error'
+      return
+    }
+    if (!import.meta.client) {
+      displaySrc.value = url
+      return
+    }
+    const normalized = await normalizeSignatureFromUrl(url)
+    displaySrc.value = normalized ?? url
   },
   { immediate: true }
 )
@@ -35,6 +48,11 @@ function onLoad(e: Event): void {
 }
 
 function onError(): void {
+  if (displaySrc.value && displaySrc.value !== props.src) {
+    displaySrc.value = props.src
+    loadState.value = 'loading'
+    return
+  }
   loadState.value = 'error'
   if (import.meta.client) {
     console.info('[drawn-sig-img]', { error: true })
@@ -43,12 +61,12 @@ function onError(): void {
 </script>
 
 <template>
-  <div class="min-h-[4.5rem]">
+  <div class="min-h-[6rem]">
     <img
-      v-show="loadState !== 'error'"
-      :src="src"
+      v-show="loadState !== 'error' && displaySrc"
+      :src="displaySrc"
       :alt="alt"
-      class="block h-28 w-auto max-w-full object-contain object-left"
+      class="block max-h-24 max-w-[320px] w-auto h-auto object-contain object-left"
       :class="isDarkMode ? 'invert' : ''"
       @load="onLoad"
       @error="onError"
