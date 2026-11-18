@@ -2,6 +2,25 @@ import { LIVE_IOS_API_BASE } from './apiBase'
 
 const IOS_API_HINT = `Rebuild TestFlight with NUXT_PUBLIC_API_BASE=${LIVE_IOS_API_BASE} (dev.logifi.io is not a live host).`
 
+export const FLICA_NETWORK_ERROR_PROD =
+  "Couldn't reach Autofi. Try again when you have a connection."
+
+export const FLICA_API_NOT_FOUND_PROD = "Autofi isn't available on this server."
+
+function networkUnreachableMessage(): string {
+  if (import.meta.dev) {
+    return `Could not reach the Autofi API from this device. ${IOS_API_HINT}`
+  }
+  return FLICA_NETWORK_ERROR_PROD
+}
+
+function apiNotFoundMessage(): string {
+  if (import.meta.dev) {
+    return `FLICA API not found on this server. ${IOS_API_HINT}`
+  }
+  return FLICA_API_NOT_FOUND_PROD
+}
+
 function isNetworkFailureMessage(message: string): boolean {
   return (
     /load failed/i.test(message) ||
@@ -27,18 +46,18 @@ export function messageFromFlicaApiError(e: unknown, fallback: string): string {
     }
     if (typeof rec.statusMessage === 'string' && rec.statusMessage.trim()) return rec.statusMessage.trim()
     if (rec.statusCode === 404) {
-      return `FLICA API not found on this server. ${IOS_API_HINT}`
+      return apiNotFoundMessage()
     }
     if (typeof rec.message === 'string' && rec.message.trim()) {
       if (isNetworkFailureMessage(rec.message)) {
-        return `Could not reach the Autofi API from this device. ${IOS_API_HINT}`
+        return networkUnreachableMessage()
       }
       return rec.message.trim()
     }
   }
   if (e instanceof Error && e.message.trim()) {
     if (isNetworkFailureMessage(e.message)) {
-      return `Could not reach the Autofi API from this device. ${IOS_API_HINT}`
+      return networkUnreachableMessage()
     }
     return e.message.trim()
   }

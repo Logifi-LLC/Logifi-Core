@@ -138,6 +138,12 @@ importers:
         specifier: ^4.6.6
         version: 4.6.7
     devDependencies:
+      '@iconify-json/logos':
+        specifier: 1.2.10
+        version: 1.2.10
+      '@iconify-json/ri':
+        specifier: 1.2.9
+        version: 1.2.9
       '@playwright/test':
         specifier: ^1.57.0
         version: 1.58.2
@@ -593,6 +599,12 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@iconify-json/logos@1.2.10':
+    resolution: {integrity: sha512-qxaXKJ6fu8jzTMPQdHtNxlfx6tBQ0jXRbHZIYy5Ilh8Lx9US9FsAdzZWUR8MXV8PnWTKGDFO4ZZee9VwerCyMA==}
+
+  '@iconify-json/ri@1.2.9':
+    resolution: {integrity: sha512-r9z/Lh0f0At6O6AwO/fpmRAa8jHoL/wSqA188ognPL1whFIBXXbrp1IR4m6OcuPwa41jJdzjCNxLbg7uOt7kYg==}
 
   '@iconify/collections@1.0.638':
     resolution: {integrity: sha512-QP163IfZcCxwEghlKGzVZzYS2VZtdBkyc16LbqQ5s92VgL5oZ/9iQKBwLAPZihJxQb2gWtFQir5Fp25Rfs9YFw==}
@@ -5176,6 +5188,14 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.2':
     optional: true
+
+  '@iconify-json/logos@1.2.10':
+    dependencies:
+      '@iconify/types': 2.0.0
+
+  '@iconify-json/ri@1.2.9':
+    dependencies:
+      '@iconify/types': 2.0.0
 
   '@iconify/collections@1.0.638':
     dependencies:

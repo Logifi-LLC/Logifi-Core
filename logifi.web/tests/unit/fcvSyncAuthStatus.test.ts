@@ -6,6 +6,7 @@ import FcvSync from '../../app/components/fcv/FcvSync.vue'
 const apiFetchMock = vi.fn()
 const sessionRef = ref<{ access_token: string } | null>(null)
 const isAuthenticatedRef = ref(false)
+const isOnlineRef = ref(true)
 
 vi.mock('~/composables/useAuth', () => ({
   useAuth: () => ({
@@ -32,11 +33,26 @@ vi.mock('~/utils/apiFetch', () => ({
   apiFetch: (...args: unknown[]) => apiFetchMock(...args),
 }))
 
+vi.mock('~/composables/useOffline', () => ({
+  useOffline: () => ({
+    isOnline: isOnlineRef,
+    connectivityReady: ref(true),
+    isSyncing: ref(false),
+    syncProgress: ref({ current: 0, total: 0, status: 'idle' as const }),
+    checkOnlineStatus: vi.fn(),
+    updateSyncProgress: vi.fn(),
+    resetSyncProgress: vi.fn(),
+    startMonitoring: vi.fn(),
+    stopMonitoring: vi.fn(),
+  }),
+}))
+
 describe('FcvSync FLICA status when auth settles', () => {
   beforeEach(() => {
     apiFetchMock.mockReset()
     sessionRef.value = null
     isAuthenticatedRef.value = false
+    isOnlineRef.value = true
     apiFetchMock.mockResolvedValue({ connected: false })
   })
 
@@ -51,6 +67,35 @@ describe('FcvSync FLICA status when auth settles', () => {
 
     sessionRef.value = { access_token: 'token' }
     isAuthenticatedRef.value = true
+    await nextTick()
+    await flushPromises()
+
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/flica/status',
+      expect.objectContaining({
+        query: { airlineCode: 'RJET' },
+      })
+    )
+
+    wrapper.unmount()
+  })
+
+  it('does not check FLICA status while offline', async () => {
+    isOnlineRef.value = false
+    sessionRef.value = { access_token: 'token' }
+    isAuthenticatedRef.value = true
+
+    const wrapper = mount(FcvSync, {
+      props: { isDarkMode: false, mode: 'connect' },
+      global: { stubs: { Icon: true, Teleport: true } },
+    })
+
+    await nextTick()
+    await flushPromises()
+
+    expect(apiFetchMock).not.toHaveBeenCalledWith('/api/flica/status', expect.anything())
+
+    isOnlineRef.value = true
     await nextTick()
     await flushPromises()
 

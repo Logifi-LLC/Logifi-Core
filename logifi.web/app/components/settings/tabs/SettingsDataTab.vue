@@ -207,11 +207,6 @@
           @click="!importBusy && $emit('restore-backup')"
         />
       </div>
-      <div class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
-        <p :class="[helper, 'text-xs']">
-          Accepts your Logifi .zip or .json backup. Entries already in your logbook are skipped.
-        </p>
-      </div>
       <div
         v-if="fullBackupBusy || fullBackupError || fullBackupProgress"
         class="border-t px-4 py-3 space-y-2"
@@ -239,11 +234,6 @@
           :class="isDarkMode ? 'text-red-400' : 'text-red-700'"
         >
           {{ fullBackupError }}
-        </p>
-      </div>
-      <div class="border-t px-4 py-3" :class="isDarkMode ? 'border-gray-700' : 'border-gray-100'">
-        <p :class="[helper, 'text-xs']">
-          Full backup includes the same JSON export plus signatures, Digifi images, and other files stored for your account. Import the ZIP or <code class="text-[12px]">logbook.json</code> from it.
         </p>
       </div>
       <SettingsListRow

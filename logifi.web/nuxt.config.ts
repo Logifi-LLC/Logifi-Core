@@ -47,7 +47,23 @@ export default defineNuxtConfig({
   devServer: devHttps ? { https: devHttps } : undefined,
   modules: ['@nuxt/icon'],
   icon: {
+    provider: 'none',
     serverBundle: false,
+    clientBundle: {
+      scan: {
+        globInclude: ['app/**/*.{vue,ts,tsx,jsx}', 'shared/**/*.{vue,ts,tsx,jsx}'],
+        globExclude: ['node_modules', 'dist', 'build', 'coverage', 'test', 'tests', '.*', '**/*.test.ts', '**/__tests__/**'],
+      },
+      icons: [
+        'ri:loader-4-line',
+        'ri:wifi-off-line',
+        'ri:wifi-line',
+        'ri:plane-line',
+        'ri:map-pin-2-line',
+        'ri:user-star-line',
+        'ri:award-line',
+      ],
+    },
   },
   vite: {
     plugins: [
