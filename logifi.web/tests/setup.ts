@@ -9,6 +9,12 @@ vi.mock('~/lib/supabase', () => {
     supabase: {
       auth: {
         getUser: vi.fn(),
+        getUserIdentities: vi.fn(async () => ({ data: { identities: [] }, error: null })),
+        linkIdentity: vi.fn(),
+        unlinkIdentity: vi.fn(),
+        reauthenticate: vi.fn(),
+        refreshSession: vi.fn(),
+        updateUser: vi.fn(),
         signInWithPassword: vi.fn(),
         signUp: vi.fn(),
         signOut: vi.fn(),

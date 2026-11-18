@@ -47,7 +47,23 @@ export default defineNuxtConfig({
   devServer: devHttps ? { https: devHttps } : undefined,
   modules: ['@nuxt/icon'],
   icon: {
+    provider: 'none',
     serverBundle: false,
+    clientBundle: {
+      scan: {
+        globInclude: ['app/**/*.{vue,ts,tsx,jsx}', 'shared/**/*.{vue,ts,tsx,jsx}'],
+        globExclude: ['node_modules', 'dist', 'build', 'coverage', 'test', 'tests', '.*', '**/*.test.ts', '**/__tests__/**'],
+      },
+      icons: [
+        'ri:loader-4-line',
+        'ri:wifi-off-line',
+        'ri:wifi-line',
+        'ri:plane-line',
+        'ri:map-pin-2-line',
+        'ri:user-star-line',
+        'ri:award-line',
+      ],
+    },
   },
   vite: {
     plugins: [
@@ -74,6 +90,8 @@ export default defineNuxtConfig({
       fcvUiLabel: process.env.NUXT_PUBLIC_FCV_UI_LABEL || 'off',
       /** `on` (default) routes iOS Digifi entries to /digifi-scan. `off` keeps /digifi-eye. Route always exists. */
       digifiMobileReview: process.env.NUXT_PUBLIC_DIGIFI_MOBILE_REVIEW || 'on',
+      /** `true` / `on` / `1` shows Continue with Apple on web. Default off until Services ID + Apple provider are live. */
+      appleWebSignIn: process.env.NUXT_PUBLIC_APPLE_WEB_SIGNIN || '',
       /** Lightning / LNURL-pay / Lightning address shown on /developers (Open Source donation). */
       /** Base URL for Digifi phone capture QR/links. Unset in dev to auto-detect LAN IP. */
       companionCaptureOrigin: process.env.NUXT_PUBLIC_COMPANION_CAPTURE_ORIGIN || '',

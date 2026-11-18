@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { useAuth } from '~/composables/useAuth'
+import { useOffline } from '~/composables/useOffline'
+import { useSettingsClasses } from '~/components/settings/useSettingsClasses'
 import { apiFetch } from '~/utils/apiFetch'
 import { messageFromFlicaApiError } from '~/utils/flicaApiError'
 import { AUTOFI_BETA_LINE } from '~/utils/autofiBeta'
@@ -131,6 +133,8 @@ interface HeuristicMatchInfo {
 }
 
 const { session, isAuthenticated } = useAuth()
+const { isOnline } = useOffline()
+const { helper } = useSettingsClasses(computed(() => props.isDarkMode))
 
 const pendingSyncCount = computed(() => Math.max(0, props.pendingSyncCount ?? 0))
 
@@ -146,6 +150,10 @@ const loadingSinceLast = ref(false)
 const loadingImport = ref(false)
 const syncingLogbook = ref(false)
 const error = ref<string | null>(null)
+
+const showOfflineAutofiHint = computed(
+  () => !isOnline.value && isAuthenticated.value && !connected.value
+)
 
 const dateFrom = ref('')
 const dateTo = ref('')
@@ -374,6 +382,11 @@ function authHeaders(): Record<string, string> {
 
 async function checkStatus() {
   if (!isAuthenticated.value) return
+  if (!isOnline.value) {
+    loadingStatus.value = false
+    error.value = null
+    return
+  }
   loadingStatus.value = true
   error.value = null
   try {
@@ -399,14 +412,14 @@ async function checkStatus() {
 watch(
   () => props.externalConnected,
   (v) => {
-    if (v === true && !connected.value && isAuthenticated.value) {
+    if (v === true && !connected.value && isAuthenticated.value && isOnline.value) {
       void checkStatus()
     }
   }
 )
 
 async function connectFlica() {
-  if (!isAuthenticated.value || connectingFlica.value) return
+  if (!isAuthenticated.value || connectingFlica.value || !isOnline.value) return
   const username = flicaUserIdInput.value.trim()
   const password = flicaPasswordInput.value
   if (!username || !password) {
@@ -1247,8 +1260,12 @@ watch(includeAlreadyImportedInImport, (on) => {
 })
 
 watch(isAuthenticated, (authed) => {
-  if (authed) void checkStatus()
+  if (authed && isOnline.value) void checkStatus()
 }, { immediate: true })
+
+watch(isOnline, (online, wasOnline) => {
+  if (online && !wasOnline && isAuthenticated.value) void checkStatus()
+})
 
 /** Logifi brand: plane blue + sun (warm gradient on hover). */
 const btnConnectFcvClass = computed(() =>
@@ -1320,8 +1337,11 @@ const previewModalOverlayClass = computed(() =>
       </div>
     </div>
 
+    <p v-if="showOfflineAutofiHint" :class="[helper, 'text-xs']">
+      You're offline. Connect to the internet to set up Autofi.
+    </p>
     <p
-      v-if="error"
+      v-else-if="error"
       :class="['text-sm', isDarkMode ? 'text-red-400' : 'text-red-600']"
     >
       {{ error }}
@@ -1375,7 +1395,7 @@ const previewModalOverlayClass = computed(() =>
         <button
           type="button"
           :class="btnConnectFcvClass"
-          :disabled="!isAuthenticated || connectingFlica"
+          :disabled="!isAuthenticated || connectingFlica || !isOnline"
           @click="connectFlica"
         >
           <Icon name="ri:link" size="18" class="shrink-0" />
