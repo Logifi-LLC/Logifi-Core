@@ -20,6 +20,7 @@ import { loadLastTemplateIfAny } from '~/composables/useLogbookBuilderLastTempla
 import { recoverDigifiSpreadFromServer } from '~/composables/useDigifiSpreadRecovery'
 import { useTheme } from '~/composables/useTheme'
 import { useAuth } from '~/composables/useAuth'
+import { useAccountCredentials } from '~/composables/useAccountCredentials'
 import { useToast } from '~/composables/useToast'
 import { useDigifiCredits } from '~/composables/useDigifiCredits'
 import { useDigifiLearning } from '~/composables/useDigifiLearning'
@@ -276,17 +277,24 @@ const pilotInitials = computed(() =>
   getDisplayedPilotInitials(pilotProfile.value?.name || '', pilotProfileLoaded.value)
 )
 
-// Account settings state
-const accountEmail = ref('')
-const currentPassword = ref('')
-const newPassword = ref('')
-const confirmNewPassword = ref('')
-const isUpdatingEmail = ref(false)
-const isUpdatingPassword = ref(false)
-const emailSuccessMessage = ref('')
-const emailErrorMessage = ref('')
-const passwordSuccessMessage = ref('')
-const passwordErrorMessage = ref('')
+const {
+  accountEmail,
+  currentPassword,
+  newPassword,
+  confirmNewPassword,
+  reauthNonce,
+  needsNonce,
+  isUpdatingEmail,
+  emailErrorMessage,
+  emailSuccessMessage,
+  isUpdatingPassword,
+  passwordErrorMessage,
+  passwordSuccessMessage,
+  requireCurrentPassword,
+  isAppleRelayEmail,
+  handleUpdateEmail,
+  handleUpdatePassword,
+} = useAccountCredentials()
 
 function openDigifiSettings(tab?: 'account' | 'digifi') {
   digifiSettingsStack.value = tab ? ['root', tab] : ['root']
@@ -306,53 +314,6 @@ function popDigifiSettingsFrame() {
 function closeDigifiSettings() {
   showDigifiSettings.value = false
   digifiSettingsStack.value = ['root']
-}
-
-async function updateAccountEmail() {
-  if (!user.value) return
-  isUpdatingEmail.value = true
-  emailSuccessMessage.value = ''
-  emailErrorMessage.value = ''
-
-  try {
-    const { error } = await supabase.auth.updateUser({ email: accountEmail.value })
-    if (error) throw error
-
-    emailSuccessMessage.value = 'Check your new email for a confirmation link'
-    accountEmail.value = ''
-    currentPassword.value = ''
-  } catch (err: any) {
-    emailErrorMessage.value = err.message || 'Failed to update email'
-  } finally {
-    isUpdatingEmail.value = false
-  }
-}
-
-async function updateAccountPassword() {
-  if (!user.value) return
-  isUpdatingPassword.value = true
-  passwordSuccessMessage.value = ''
-  passwordErrorMessage.value = ''
-
-  if (newPassword.value !== confirmNewPassword.value) {
-    passwordErrorMessage.value = 'Passwords do not match'
-    isUpdatingPassword.value = false
-    return
-  }
-
-  try {
-    const { error } = await supabase.auth.updateUser({ password: newPassword.value })
-    if (error) throw error
-
-    passwordSuccessMessage.value = 'Password updated successfully'
-    currentPassword.value = ''
-    newPassword.value = ''
-    confirmNewPassword.value = ''
-  } catch (err: any) {
-    passwordErrorMessage.value = err.message || 'Failed to update password'
-  } finally {
-    isUpdatingPassword.value = false
-  }
 }
 
 function handleAccountDeleted() {
@@ -869,17 +830,21 @@ watchEffect(async (onCleanup) => {
       v-model:current-password="currentPassword"
       v-model:new-password="newPassword"
       v-model:confirm-new-password="confirmNewPassword"
+      v-model:reauth-nonce="reauthNonce"
       :is-updating-email="isUpdatingEmail"
       :is-updating-password="isUpdatingPassword"
       :email-success="emailSuccessMessage"
       :email-error="emailErrorMessage"
       :password-success="passwordSuccessMessage"
       :password-error="passwordErrorMessage"
+      :require-current-password="requireCurrentPassword"
+      :is-apple-relay-email="isAppleRelayEmail"
+      :needs-nonce="needsNonce"
       @close="closeDigifiSettings"
       @pop="popDigifiSettingsFrame"
       @push="pushDigifiSettingsFrame"
-      @update-email="updateAccountEmail"
-      @update-password="updateAccountPassword"
+      @update-email="handleUpdateEmail"
+      @update-password="handleUpdatePassword"
       @account-deleted="handleAccountDeleted"
       @show-directions="handleShowDirections"
       @show-common-errors="handleShowCommonErrors"

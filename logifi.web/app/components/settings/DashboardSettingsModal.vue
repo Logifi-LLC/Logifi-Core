@@ -62,8 +62,12 @@
       v-else-if="currentFrame === 'account-email'"
       v-model:account-email="accountEmailModel"
       v-model:current-password="currentPasswordModel"
+      v-model:reauth-nonce="reauthNonceModel"
       :is-dark-mode="isDarkMode"
       :is-updating="isUpdatingEmail"
+      :require-current-password="requireCurrentPassword"
+      :is-apple-relay-email="isAppleRelayEmail"
+      :needs-nonce="needsNonce"
       :success="emailSuccess"
       :error="emailError"
       @submit="$emit('update-email')"
@@ -74,8 +78,11 @@
       v-model:current-password="currentPasswordModel"
       v-model:new-password="newPasswordModel"
       v-model:confirm-new-password="confirmPasswordModel"
+      v-model:reauth-nonce="reauthNonceModel"
       :is-dark-mode="isDarkMode"
       :is-updating="isUpdatingPassword"
+      :require-current-password="requireCurrentPassword"
+      :needs-nonce="needsNonce"
       :success="passwordSuccess"
       :error="passwordError"
       @submit="$emit('update-password')"
@@ -205,10 +212,13 @@ const props = defineProps<{
   userEmail?: string | null
   isUpdatingEmail: boolean
   isUpdatingPassword: boolean
-  emailSuccess?: string
-  emailError?: string
-  passwordSuccess?: string
-  passwordError?: string
+  emailSuccess?: string | null
+  emailError?: string | null
+  passwordSuccess?: string | null
+  passwordError?: string | null
+  requireCurrentPassword?: boolean
+  isAppleRelayEmail?: boolean
+  needsNonce?: boolean
   theme: Theme
   clockFormat: '12' | '24'
   clockZone: 'UTC' | 'Local'
@@ -246,6 +256,7 @@ const accountEmailModel = defineModel<string>('accountEmail', { required: true }
 const currentPasswordModel = defineModel<string>('currentPassword', { required: true })
 const newPasswordModel = defineModel<string>('newPassword', { required: true })
 const confirmPasswordModel = defineModel<string>('confirmNewPassword', { required: true })
+const reauthNonceModel = defineModel<string>('reauthNonce', { default: '' })
 
 defineEmits<{
   close: []

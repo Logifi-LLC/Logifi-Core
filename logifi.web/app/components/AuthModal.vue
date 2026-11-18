@@ -231,9 +231,10 @@
         <div class="space-y-3">
           <button
             v-if="showAppleSignIn"
+            type="button"
             @click="handleAppleSignIn"
             :disabled="isLoading"
-            class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl border transition-all font-bold text-sm font-quicksand"
+            class="w-full min-h-11 flex items-center justify-center gap-3 px-4 py-3 rounded-xl border transition-all font-bold text-sm font-quicksand"
             :class="[
               isDarkMode
                 ? 'border-gray-700 bg-black text-white hover:bg-gray-900'
@@ -255,9 +256,10 @@
             {{ isLoading ? 'Connecting...' : 'Continue with Apple' }}
           </button>
           <button
+            type="button"
             @click="handleGoogleSignIn"
             :disabled="isLoading"
-            class="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl border transition-all font-bold text-sm font-quicksand"
+            class="w-full min-h-11 flex items-center justify-center gap-3 px-4 py-3 rounded-xl border transition-all font-bold text-sm font-quicksand"
             :class="[
               isDarkMode 
                 ? 'border-gray-700 text-white hover:bg-gray-800' 
@@ -540,6 +542,7 @@ import {
 } from '~/utils/referralCapture'
 import { isEmailNotConfirmedError, signInErrorUserMessage } from '~/utils/authErrors'
 import { useResendCooldown } from '~/composables/useResendCooldown'
+import { isAppleWebOAuthAvailable } from '~/utils/appleWebSignIn'
 
 const welcomeCredits = WELCOME_CREDITS
 
@@ -739,8 +742,8 @@ onUnmounted(() => {
 const authError = ref<string | null>(null)
 const successMessage = ref<string | null>(null)
 const isLoading = computed(() => authLoading.value)
-/** Native Apple Sign In works on the iOS app only; web OAuth is not configured. */
-const showAppleSignIn = isCapacitorIos()
+/** Native Apple on iOS; web Apple only when NUXT_PUBLIC_APPLE_WEB_SIGNIN is on. */
+const showAppleSignIn = isCapacitorIos() || isAppleWebOAuthAvailable()
 
 // Watch for auth errors from composable
 watch(authErrorState, (newError) => {
