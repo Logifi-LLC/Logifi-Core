@@ -217,7 +217,7 @@ Tester instructions: [ios-testflight-tester-guide.md](../logifi.web/docs/ios-tes
 
 | Symptom | Fix |
 |---------|-----|
-| `Updated list with error: DownloadFailed` / missing icons | Icons must be bundled for Capacitor (`icon.serverBundle: false` in `nuxt.config.ts`). Run `npm run cap:sync` from repo root, then **Product → Clean Build Folder** in Xcode and reinstall |
+| `Updated list with error: DownloadFailed` / missing icons | Icons must be bundled for Capacitor (`icon.provider: 'none'` with `icon.clientBundle` in `logifi.web/nuxt.config.ts`). Run `npm run cap:sync` from repo root, then **Product → Clean Build Folder** in Xcode and reinstall |
 | App feels frozen with 1000+ entries on iOS | iOS uses display-windowed log cards (infinite scroll, ~100/page). Rebuild after `cap:sync` if you still see all entries at once |
 | Cannot scroll / taps ignored on iOS | Pull-to-refresh removed on iOS; entry form no longer auto-opens on empty logbook. Run `cap:sync`, clean Xcode build, reinstall |
 | Stuck on "Syncing logbook" | Check Safari console for `[LoadEntries] Merged entries`. Large logbooks sync in background — UI should stay interactive. Use Settings → Sync to force completion |
