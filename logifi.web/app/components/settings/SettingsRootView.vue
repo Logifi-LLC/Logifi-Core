@@ -59,6 +59,13 @@
         @click="$emit('logout')"
       />
     </SettingsListGroup>
+
+    <p
+      class="pt-2 text-center text-xs font-quicksand select-text"
+      :class="isDarkMode ? 'text-gray-500' : 'text-gray-400'"
+    >
+      {{ versionLabel }}
+    </p>
   </div>
 </template>
 
@@ -66,6 +73,7 @@
 import { computed, onMounted } from 'vue'
 import SettingsListGroup from './SettingsListGroup.vue'
 import SettingsListRow from './SettingsListRow.vue'
+import { useAppVersion } from '~/composables/useAppVersion'
 import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
 import { useEndorsements } from '~/composables/useEndorsements'
 import { resolveDigifiAppRoute } from '~/utils/digifiMobileReview'
@@ -90,6 +98,7 @@ defineEmits<{
 }>()
 
 const { isIos } = useCapacitorPlatform()
+const { versionLabel } = useAppVersion()
 const {
   pendingSignatureCount,
   fetchMyEndorsements,
