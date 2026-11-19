@@ -35,6 +35,6 @@ const linkClass = computed(() => {
   if (props.variant === 'menu') {
     return 'inline-flex items-center justify-center gap-2 w-full py-3 text-sm font-medium text-gray-200 rounded-lg border border-gray-700/50 bg-gray-800/50 hover:bg-gray-800/70 transition-colors'
   }
-  return 'hover:text-blue-400 transition-colors'
+  return 'text-sm font-medium text-gray-400 hover:text-blue-400 transition-[color,opacity] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400 rounded'
 })
 </script>

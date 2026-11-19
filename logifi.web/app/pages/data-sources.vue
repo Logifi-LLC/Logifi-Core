@@ -221,6 +221,8 @@ const { isIos } = useCapacitorPlatform()
 
 const isFromLanding = computed(() => route.query.from === 'landing')
 
+useMarketingDarkDocument(() => isFromLanding.value)
+
 /** Marketing shell stays light (matches home); restore saved theme when leaving. */
 if (import.meta.client) {
   watch(isFromLanding, (val) => {

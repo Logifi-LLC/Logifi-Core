@@ -189,6 +189,8 @@ const heroScreenshotSrc = MARKETING_HERO_SCREENSHOT_SRC
 
 const { theme, isDark, applyDocumentTheme } = useTheme()
 
+useMarketingDarkDocument()
+
 /** Landing stays visually dark (cockpit aesthetic) but drops `html.dark` so `dark:` utilities do not apply (e.g. Auth modal). Restore saved theme when leaving. */
 if (import.meta.client) {
   applyDocumentTheme('light')

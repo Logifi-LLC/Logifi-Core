@@ -4,6 +4,9 @@ import { describe, expect, it } from 'vitest'
 import {
   APP_STORE_URL,
   CANONICAL_ORIGIN,
+  DISCORD_INVITE_URL,
+  GITHUB_REPO_URL,
+  MARKETING_DARK_BG,
   PUBLIC_MARKETING_PATHS,
   SITEMAP_URL,
   canonicalHrefForPath,
@@ -108,5 +111,13 @@ describe('app store smart banner', () => {
 
   it('uses the App Store listing URL', () => {
     expect(APP_STORE_URL).toBe('https://apps.apple.com/us/app/logifi/id6786842277')
+  })
+})
+
+describe('marketing links', () => {
+  it('exposes public social and support URLs', () => {
+    expect(MARKETING_DARK_BG).toBe('#0a0e1a')
+    expect(GITHUB_REPO_URL).toBe('https://github.com/Logifi-LLC/Logifi-Core')
+    expect(DISCORD_INVITE_URL).toBe('https://discord.gg/hBaDkNt2ev')
   })
 })
