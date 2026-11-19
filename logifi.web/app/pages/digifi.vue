@@ -177,6 +177,8 @@ import { isIosApp } from '~/utils/platform'
 import { resolveDigifiAppRoute } from '~/utils/digifiMobileReview'
 
 const { theme, isDark, applyDocumentTheme } = useTheme()
+
+useMarketingDarkDocument()
 const { isAuthenticated } = useAuth()
 const router = useRouter()
 

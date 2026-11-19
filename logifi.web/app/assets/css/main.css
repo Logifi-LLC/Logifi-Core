@@ -56,6 +56,12 @@ body {
   touch-action: manipulation;
 }
 
+html.marketing-dark,
+html.marketing-dark body {
+  background-color: #0a0e1a;
+  overscroll-behavior-y: none;
+}
+
 /*
   `nuxt generate` (Capacitor's webDir) appends the SPA payload after #__nuxt:
   <script type="application/json" id="__NUXT_DATA__">…serverRendered…,prerenderedAt,false]

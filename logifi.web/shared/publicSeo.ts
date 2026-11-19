@@ -14,6 +14,18 @@ export const PUBLIC_MARKETING_PATHS = [
 export const CANONICAL_ORIGIN = 'https://www.logifi.io'
 export const APP_STORE_URL = 'https://apps.apple.com/us/app/logifi/id6786842277'
 export const APP_STORE_APP_ID = '6786842277'
+
+/** Dark marketing shell background (footer, landing pages). */
+export const MARKETING_DARK_BG = '#0a0e1a'
+
+export const GITHUB_REPO_URL = 'https://github.com/Logifi-LLC/Logifi-Core'
+export const DISCORD_INVITE_URL = 'https://discord.gg/hBaDkNt2ev'
+export const LINKEDIN_COMPANY_URL = 'https://www.linkedin.com/company/143944083/'
+export const FACEBOOK_PAGE_URL =
+  'https://www.facebook.com/people/Logifiio/61594164595062/'
+export const INSTAGRAM_URL = 'https://www.instagram.com/logifi.io/'
+export const FOUNDER_X_URL = 'https://x.com/derekfarm'
+export const SUPPORT_EMAIL = 'info@logifi.io'
 export const SITEMAP_URL = `${CANONICAL_ORIGIN}/sitemap.xml`
 export const ROBOTS_NOINDEX = 'noindex'
 
