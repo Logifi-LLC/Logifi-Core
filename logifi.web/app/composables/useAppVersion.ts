@@ -1,9 +1,8 @@
 import { onMounted, ref } from 'vue'
-import { LOGIFI_APP_VERSION } from '~/utils/fullBackupConstants'
+import { LOGIFI_WEB_VERSION } from '~/utils/fullBackupConstants'
 import {
   formatFallbackAppVersionLabel,
-  formatNativeAppVersionLabel,
-  formatWebAppVersionLabel,
+  formatLogifiVersionLabel,
 } from '~/utils/appVersionFormat'
 import { isCapacitorNative } from '~/composables/useCapacitorPlatform'
 
@@ -15,15 +14,13 @@ export function useAppVersion() {
       if (isCapacitorNative()) {
         const { App } = await import('@capacitor/app')
         const info = await App.getInfo()
-        versionLabel.value = formatNativeAppVersionLabel(info.version, info.build)
+        versionLabel.value = formatLogifiVersionLabel(info.version)
         return
       }
 
-      const config = useRuntimeConfig()
-      const sha = String(config.public.gitCommitSha ?? '')
-      versionLabel.value = formatWebAppVersionLabel(LOGIFI_APP_VERSION, sha)
+      versionLabel.value = formatLogifiVersionLabel(LOGIFI_WEB_VERSION)
     } catch {
-      // Keep fallback label — never break Settings.
+      versionLabel.value = formatFallbackAppVersionLabel()
     }
   })
 

@@ -2,7 +2,7 @@ import type { FullBackupFormatVersion } from './fullBackupTypes'
 import {
   FULL_BACKUP_JSON_ENTRY,
   FULL_BACKUP_MANIFEST_ENTRY,
-  LOGIFI_APP_VERSION,
+  LOGIFI_WEB_VERSION,
   FULL_BACKUP_FORMAT_VERSION,
 } from './fullBackupConstants'
 
@@ -42,7 +42,7 @@ export function createFullBackupManifest(args: {
   const failed = args.files.filter((f) => f.status === 'failed').length
 
   return {
-    appVersion: LOGIFI_APP_VERSION,
+    appVersion: LOGIFI_WEB_VERSION,
     exportedAt: args.exportedAt,
     formatVersion: FULL_BACKUP_FORMAT_VERSION,
     logbookJsonPath: FULL_BACKUP_JSON_ENTRY,

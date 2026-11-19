@@ -1,5 +1,10 @@
-/** Matches logifi.web/package.json — surfaced in manifest.json. */
-export const LOGIFI_APP_VERSION = '1.0.0'
+/**
+ * Shown in Settings on web and stored in full-backup manifest.appVersion.
+ * Equals the current App Store marketing version (e.g. 1.0.9).
+ * Web-only releases between iOS builds append a 4th segment (.1, .2, …).
+ * Reset to the new app version when an iOS update ships; bump the 4th segment on each web-only release to main.
+ */
+export const LOGIFI_WEB_VERSION = '1.0.9'
 
 export const FULL_BACKUP_FORMAT_VERSION = 1 as const
 

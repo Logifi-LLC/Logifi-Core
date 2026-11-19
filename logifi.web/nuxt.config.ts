@@ -105,8 +105,6 @@ export default defineNuxtConfig({
         (process.env.NUXT_PUBLIC_LIGHTNING_PAYMENTS_ENABLED ||
           process.env.LIGHTNING_PAYMENTS_ENABLED ||
           '') === 'true',
-      /** Vercel git SHA at build time (public); first 7 chars shown in Settings on web. */
-      gitCommitSha: process.env.VERCEL_GIT_COMMIT_SHA || '',
     },
     // FC View OAuth (server-only; never expose to client)
     fcvClientId: process.env.FCV_CLIENT_ID || '',

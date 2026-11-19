@@ -18,9 +18,6 @@ describe('useAppVersion', () => {
   beforeEach(() => {
     isNative.mockReturnValue(false)
     getInfo.mockReset()
-    vi.stubGlobal('useRuntimeConfig', () => ({
-      public: { gitCommitSha: '' },
-    }))
   })
 
   function mountHarness() {
@@ -39,35 +36,31 @@ describe('useAppVersion', () => {
 
   it('initializes to fallback label before mount hooks run', () => {
     const { versionLabel } = useAppVersion()
-    expect(versionLabel.value).toBe('Logifi 1.0.0')
+    expect(versionLabel.value).toBe('Logifi 1.0.9')
   })
 
-  it('resolves web label with SHA on mount', async () => {
-    vi.stubGlobal('useRuntimeConfig', () => ({
-      public: { gitCommitSha: 'abcdef0123456789' },
-    }))
-
+  it('resolves web label from LOGIFI_WEB_VERSION on mount', async () => {
     const label = mountHarness()
     await flushPromises()
-    expect(label.value).toBe('Logifi 1.0.0 (abcdef0)')
+    expect(label.value).toBe('Logifi 1.0.9')
   })
 
-  it('uses native App.getInfo on Capacitor', async () => {
+  it('uses native App.getInfo version only on Capacitor', async () => {
     isNative.mockReturnValue(true)
-    getInfo.mockResolvedValue({ version: '1.0', build: '8' })
+    getInfo.mockResolvedValue({ version: '1.0.9', build: '8' })
 
     const label = mountHarness()
     await flushPromises()
     expect(getInfo).toHaveBeenCalled()
-    expect(label.value).toBe('Logifi 1.0 (8)')
+    expect(label.value).toBe('Logifi 1.0.9')
   })
 
-  it('keeps fallback when native getInfo throws', async () => {
+  it('keeps web fallback when native getInfo throws', async () => {
     isNative.mockReturnValue(true)
     getInfo.mockRejectedValue(new Error('native unavailable'))
 
     const label = mountHarness()
     await flushPromises()
-    expect(label.value).toBe('Logifi 1.0.0')
+    expect(label.value).toBe('Logifi 1.0.9')
   })
 })
