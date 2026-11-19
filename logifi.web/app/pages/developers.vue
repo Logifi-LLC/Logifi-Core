@@ -377,6 +377,8 @@ const goBack = () => {
 const { theme, isDark, applyDocumentTheme } = useTheme()
 /** `?from=landing` uses marketing shell; app chrome uses theme. */
 const isFromLanding = computed(() => route.query.from === 'landing')
+
+useMarketingDarkDocument(() => isFromLanding.value)
 const isAppShell = computed(() => !isFromLanding.value)
 const effectiveDark = computed(() => isDark.value && !isFromLanding.value)
 

@@ -307,6 +307,8 @@ const backButtonText = computed(() => (route.query.from === 'landing' ? 'Back to
 
 const { theme, isDark, applyDocumentTheme } = useTheme()
 const isFromLanding = computed(() => route.query.from === 'landing')
+
+useMarketingDarkDocument(() => isFromLanding.value)
 const effectiveDark = computed(() => isDark.value && !isFromLanding.value)
 
 if (import.meta.client) {

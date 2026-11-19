@@ -12,5 +12,8 @@
 </template>
 
 <script setup lang="ts">
+import { useMarketingDarkDocument } from '~/composables/useMarketingDarkDocument'
+
 // Dark cockpit aesthetic for all marketing secondary pages
+useMarketingDarkDocument()
 </script>
