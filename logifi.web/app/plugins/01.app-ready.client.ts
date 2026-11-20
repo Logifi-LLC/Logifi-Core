@@ -1,5 +1,5 @@
 import { isCapacitorNative, lockNativeViewportZoom } from '~/composables/useCapacitorPlatform'
-import { armSplashHoldUntil, hideNativeSplashNow, isDashboardPath, markAppReady, removeHtmlSplashOnce } from '~/utils/appReady'
+import { armSplashHoldUntil, hideNativeSplashNow, isDashboardPath, markAppReady, removeHtmlSplashOnce, whenHtmlSplashMarkPainted } from '~/utils/appReady'
 import { PROPELLER_CYCLE_MS, armDocumentBootOnce, markColdBootStart, splashFallbackMs } from '~/utils/bootHold'
 
 export { markAppReady }
@@ -24,19 +24,23 @@ export default defineNuxtPlugin((nuxtApp) => {
 
   // showOnLaunch adds the storyboard on the next main-queue turn and ignores
   // hide() until isVisible is set. launchShowDuration 0 skips that overlay.
-  // Retry through launch anyway: a hide before isVisible is a no-op, and the
-  // successful hide must not wait for markAppReady, which also removes this splash.
+  // Hide only after the HTML mark has been painted, with fadeOutDuration 0,
+  // so the launch image cuts to the propeller instead of fading over it.
+  // Retries cover a hide that landed before isVisible. This hide does not
+  // remove the HTML splash. markAppReady still waits out the cycle first.
   if (isCapacitorNative()) {
     armSplashHoldUntil(Date.now() + PROPELLER_CYCLE_MS)
-    const hideStarted = Date.now()
-    const hideLaunchSplash = () => {
-      void hideNativeSplashNow()
-    }
-    hideLaunchSplash()
-    const hideTimer = window.setInterval(() => {
+    void whenHtmlSplashMarkPainted().then(() => {
+      const hideStarted = Date.now()
+      const hideLaunchSplash = () => {
+        void hideNativeSplashNow()
+      }
       hideLaunchSplash()
-      if (Date.now() - hideStarted >= 1600) window.clearInterval(hideTimer)
-    }, 100)
+      const hideTimer = window.setInterval(() => {
+        hideLaunchSplash()
+        if (Date.now() - hideStarted >= 1600) window.clearInterval(hideTimer)
+      }, 100)
+    })
   }
 
   const { initAuth } = useAuth()
