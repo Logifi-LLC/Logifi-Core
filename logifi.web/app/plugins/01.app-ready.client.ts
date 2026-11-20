@@ -1,18 +1,21 @@
 import { lockNativeViewportZoom } from '~/composables/useCapacitorPlatform'
-import { hideNativeSplashNow, isDashboardPath, markAppReady, removeHtmlSplashOnce } from '~/utils/appReady'
+import { isDashboardPath, markAppReady, removeHtmlSplashOnce } from '~/utils/appReady'
 
 const FALLBACK_MS = 6000
 
 export { markAppReady }
 
 export default defineNuxtPlugin((nuxtApp) => {
+  // Nuxt removes #__nuxt-loader when the app suspends. Keep #app-splash until the handoff below.
+  const splash = document.getElementById('app-splash')
+  if (splash && splash.parentElement !== document.body) {
+    document.body.appendChild(splash)
+  }
+
   lockNativeViewportZoom()
 
   const { initAuth } = useAuth()
   void initAuth()
-
-  // Native splash must not wait for auth — dismiss as soon as JS runs.
-  void hideNativeSplashNow()
 
   nuxtApp.hook('app:mounted', () => {
     const path = window.location.pathname

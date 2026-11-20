@@ -42,6 +42,11 @@ export default defineNuxtConfig({
   experimental: {
     appManifest: false,
   },
+  /**
+   * Nuxt 4 does not render root app.html. This fragment is the #app-splash,
+   * inserted beside #__nuxt so it can cover the first paint.
+   */
+  spaLoadingTemplate: '../app.html',
   devtools: { enabled: false },
   /** FC View OAuth requires https:// redirect URIs; use mkcert + NUXT_DEV_HTTPS_* (see env.example). */
   devServer: devHttps ? { https: devHttps } : undefined,
@@ -204,7 +209,8 @@ export default defineNuxtConfig({
         { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32.png' },
         { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/favicon-16.png' },
         { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
-      ]
+      ],
+      style: [{ innerHTML: 'html,body{margin:0;background:#030712;color:#e5e7eb}' }],
     }
   }
 })
