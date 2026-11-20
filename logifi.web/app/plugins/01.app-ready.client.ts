@@ -6,6 +6,12 @@ const FALLBACK_MS = 6000
 export { markAppReady }
 
 export default defineNuxtPlugin((nuxtApp) => {
+  // Nuxt removes #__nuxt-loader when the app suspends. Keep #app-splash until the handoff below.
+  const splash = document.getElementById('app-splash')
+  if (splash && splash.parentElement !== document.body) {
+    document.body.appendChild(splash)
+  }
+
   lockNativeViewportZoom()
 
   const { initAuth } = useAuth()
