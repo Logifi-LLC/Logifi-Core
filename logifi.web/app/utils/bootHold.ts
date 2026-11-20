@@ -28,6 +28,34 @@ export function shouldStartBootHold(reason: BootHoldReason): boolean {
 }
 
 /**
+ * Returning to the dashboard inside the same document must not replay the
+ * propeller. A fresh sign-in still starts a hold, including after a reload.
+ */
+export function shouldReplayBootHold(input: {
+  alreadyRevealed: boolean
+  signInHold: boolean
+}): boolean {
+  if (input.signInHold) return true
+  return !input.alreadyRevealed
+}
+
+const DOCUMENT_BOOT_KEY = '__logifiDocumentBootArmed'
+
+/** True the first time in this document. In-app route changes do not reset it. */
+export function armDocumentBootOnce(): boolean {
+  if (typeof window === 'undefined') return true
+  const host = window as Window & { [DOCUMENT_BOOT_KEY]?: boolean }
+  if (host[DOCUMENT_BOOT_KEY]) return false
+  host[DOCUMENT_BOOT_KEY] = true
+  return true
+}
+
+export function resetDocumentBootForTests(): void {
+  if (typeof window === 'undefined') return
+  delete (window as Window & { [DOCUMENT_BOOT_KEY]?: boolean })[DOCUMENT_BOOT_KEY]
+}
+
+/**
  * Cold open counts time from process start so a cycle already on screen counts.
  * Sign-in starts a new cycle. Resume returns null.
  */

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { goBackInApp } from '~/utils/inAppBack'
 import IosAppPageShell from '~/components/ios/IosAppPageShell.vue'
 import SettingsEndorsementsTab from '~/components/settings/tabs/SettingsEndorsementsTab.vue'
 import type { PilotAccountRole } from '~/components/settings/tabs/SettingsProfileTab.vue'
@@ -75,11 +76,7 @@ async function loadRole(): Promise<void> {
 }
 
 function goBack() {
-  if (typeof window !== 'undefined' && window.history.length > 1) {
-    router.back()
-    return
-  }
-  void router.push('/dashboard')
+  goBackInApp(router, '/dashboard')
 }
 
 onMounted(() => {

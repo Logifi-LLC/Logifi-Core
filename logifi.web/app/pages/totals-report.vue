@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { goBackInApp } from '~/utils/inAppBack'
 import TotalsReportPanel from '~/components/totals/TotalsReportPanel.vue'
 import { useAuth } from '~/composables/useAuth'
 import { useTheme } from '~/composables/useTheme'
@@ -34,11 +35,7 @@ const windowHint = computed(() => {
 })
 
 function goBack() {
-  if (typeof window !== 'undefined' && window.history.length > 1) {
-    router.back()
-    return
-  }
-  void router.push('/dashboard')
+  goBackInApp(router, '/dashboard')
 }
 
 async function loadEntries() {

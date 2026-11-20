@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTheme } from '~/composables/useTheme'
+import { goBackInApp } from '~/utils/inAppBack'
 
 const props = withDefaults(
   defineProps<{
@@ -29,11 +30,7 @@ const isDark = computed(() => props.isDark ?? themeIsDark.value)
 const router = useRouter()
 
 function onBack() {
-  if (typeof window !== 'undefined' && window.history.length > 1) {
-    router.back()
-    return
-  }
-  void router.push(props.backFallback)
+  goBackInApp(router, props.backFallback)
 }
 </script>
 

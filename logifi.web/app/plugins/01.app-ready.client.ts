@@ -1,10 +1,12 @@
 import { isCapacitorNative, lockNativeViewportZoom } from '~/composables/useCapacitorPlatform'
 import { armSplashHoldUntil, hideNativeSplashNow, isDashboardPath, markAppReady, removeHtmlSplashOnce } from '~/utils/appReady'
-import { PROPELLER_CYCLE_MS, markColdBootStart, splashFallbackMs } from '~/utils/bootHold'
+import { PROPELLER_CYCLE_MS, armDocumentBootOnce, markColdBootStart, splashFallbackMs } from '~/utils/bootHold'
 
 export { markAppReady }
 
 export default defineNuxtPlugin((nuxtApp) => {
+  // Once per document. A client route change must not arm the splash again.
+  if (!armDocumentBootOnce()) return
   markColdBootStart()
 
   // Nuxt removes #__nuxt-loader on suspense, including the <style> and #app-splash

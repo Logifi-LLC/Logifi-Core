@@ -265,7 +265,7 @@
               {{ activeCatalogFilterCount > 9 ? '9+' : activeCatalogFilterCount }}
             </span>
           </button>
-        <a v-if="!isIos" class="left flex items-center shrink-0" href="/dashboard">
+        <NuxtLink v-if="!isIos" class="left flex items-center shrink-0" to="/dashboard">
             <img
               src="/images/logifi-logo.png"
               alt="logifi"
@@ -274,7 +274,7 @@
                 isDarkMode ? '' : 'brightness-[0.2]',
               ]"
             />
-          </a>
+          </NuxtLink>
         </div>
         <HeaderUtcClockBar
           :display-clock="displayClock"
@@ -6839,6 +6839,7 @@ import {
   consumeSignInBootHold,
   getColdBootStartedAt,
   markSignInBootHold,
+  shouldReplayBootHold,
   signedOutColdOpenDelayMs,
   waitUntilBootReveal,
 } from '../utils/bootHold'
@@ -7441,13 +7442,21 @@ async function onUserSessionReady(userId: string): Promise<void> {
   signedOutHoldGeneration += 1
   const generation = ++bootHoldGeneration
   const signInHold = consumeSignInBootHold()
-  const holdStartedAt = bootHoldStartedAt({
-    reason: dashboardBootRevealed || signInHold ? 'sign-in' : 'cold-open',
-    now: Date.now(),
-    coldBootStartedAt: getColdBootStartedAt(),
-  }) ?? Date.now()
-  bootHoldActive.value = true
-  bootCurrencyPending.value = true
+  const replayBoot = shouldReplayBootHold({
+    alreadyRevealed: dashboardBootRevealed,
+    signInHold,
+  })
+  const holdStartedAt = replayBoot
+    ? (bootHoldStartedAt({
+        reason: signInHold || dashboardBootRevealed ? 'sign-in' : 'cold-open',
+        now: Date.now(),
+        coldBootStartedAt: getColdBootStartedAt(),
+      }) ?? Date.now())
+    : null
+  if (replayBoot) {
+    bootHoldActive.value = true
+    bootCurrencyPending.value = true
+  }
   try {
     const hydrate = (async () => {
       resetLogbookHydrationGate()
@@ -7494,22 +7503,31 @@ async function onUserSessionReady(userId: string): Promise<void> {
       await checkOnlineStatus()
       const offlineAtStart = !isOnline.value
       const syncPromise = loadEntries({ mode: 'auto', complete: true })
-      await waitUntilBootReveal({
-        holdStartedAt,
-        sync: syncPromise,
-        isOffline: () => offlineAtStart || !isOnline.value,
-      })
+      if (holdStartedAt != null) {
+        await waitUntilBootReveal({
+          holdStartedAt,
+          sync: syncPromise,
+          isOffline: () => offlineAtStart || !isOnline.value,
+        })
+      } else {
+        void syncPromise
+      }
       void loadDeferredUserData()
     })().catch((error) => {
       console.error('[onUserSessionReady]', error)
     })
-    const remaining = Math.max(0, holdStartedAt + FULL_SYNC_HOLD_CAP_MS - Date.now())
-    await Promise.race([
-      hydrate,
-      new Promise((resolve) => setTimeout(resolve, remaining)),
-    ])
+    if (holdStartedAt != null) {
+      const remaining = Math.max(0, holdStartedAt + FULL_SYNC_HOLD_CAP_MS - Date.now())
+      await Promise.race([
+        hydrate,
+        new Promise((resolve) => setTimeout(resolve, remaining)),
+      ])
+    } else {
+      await hydrate
+    }
   } finally {
     if (generation !== bootHoldGeneration) return
+    if (!replayBoot) return
     dashboardBootRevealed = true
     bootHoldActive.value = false
     if (!isBulkLoadInProgress.value) bootCurrencyPending.value = false
@@ -7601,6 +7619,7 @@ watch(authLoading, (loading) => {
   showAuthModal.value = true
   logbookLocalCacheReadComplete.value = true
   logbookInboundSyncPending.value = false
+  if (dashboardBootRevealed) return
   const delay = signedOutColdOpenDelayMs({
     native: isCapacitorNative(),
     now: Date.now(),
