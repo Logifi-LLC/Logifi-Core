@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { supabase } from '~/lib/supabase'
+import { REMOTE_READ_TIMEOUT_MS, withTimeout } from '~/utils/promiseTimeout'
 import { useAuth } from '~/composables/useAuth'
 import type { Database } from '~/types/database'
 
@@ -30,9 +31,11 @@ export const useRoster = () => {
   }
 
   const fetchMemberProfile = async (memberId: string): Promise<RosterMemberProfile | null> => {
-    const { data, error: profileError } = await supabase.rpc('get_roster_member_profile', {
-      p_user_id: memberId
-    })
+    const { data, error: profileError } = await withTimeout(
+      Promise.resolve(supabase.rpc('get_roster_member_profile', { p_user_id: memberId })),
+      REMOTE_READ_TIMEOUT_MS,
+      'Roster profile'
+    )
 
     if (profileError) throw profileError
     if (!data || data.length === 0) return null
@@ -61,12 +64,18 @@ export const useRoster = () => {
       error.value = null
       const instructorId = requireUserId()
 
-      const { data, error: fetchError } = await supabase
-        .from('instructor_student_relationships')
-        .select('*')
-        .eq('instructor_id', instructorId)
-        .in('status', ['PENDING', 'ACTIVE'])
-        .order('created_at', { ascending: false })
+      const { data, error: fetchError } = await withTimeout(
+        Promise.resolve(
+          supabase
+            .from('instructor_student_relationships')
+            .select('*')
+            .eq('instructor_id', instructorId)
+            .in('status', ['PENDING', 'ACTIVE'])
+            .order('created_at', { ascending: false })
+        ),
+        REMOTE_READ_TIMEOUT_MS,
+        'Student roster'
+      )
 
       if (fetchError) throw fetchError
 
@@ -74,8 +83,11 @@ export const useRoster = () => {
       roster.value = enriched
       return { success: true, data: enriched }
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Failed to fetch student roster'
+      const errorMessage = err instanceof Error && /timed out/i.test(err.message)
+        ? "Couldn't load endorsements."
+        : err instanceof Error
+          ? err.message
+          : 'Failed to fetch student roster'
       error.value = errorMessage
       return { success: false, error: errorMessage }
     } finally {
@@ -89,12 +101,18 @@ export const useRoster = () => {
       error.value = null
       const studentId = requireUserId()
 
-      const { data, error: fetchError } = await supabase
-        .from('instructor_student_relationships')
-        .select('*')
-        .eq('student_id', studentId)
-        .in('status', ['PENDING', 'ACTIVE'])
-        .order('created_at', { ascending: false })
+      const { data, error: fetchError } = await withTimeout(
+        Promise.resolve(
+          supabase
+            .from('instructor_student_relationships')
+            .select('*')
+            .eq('student_id', studentId)
+            .in('status', ['PENDING', 'ACTIVE'])
+            .order('created_at', { ascending: false })
+        ),
+        REMOTE_READ_TIMEOUT_MS,
+        'Instructors'
+      )
 
       if (fetchError) throw fetchError
 
@@ -102,8 +120,11 @@ export const useRoster = () => {
       instructors.value = enriched
       return { success: true, data: enriched }
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Failed to fetch instructors'
+      const errorMessage = err instanceof Error && /timed out/i.test(err.message)
+        ? "Couldn't load endorsements."
+        : err instanceof Error
+          ? err.message
+          : 'Failed to fetch instructors'
       error.value = errorMessage
       return { success: false, error: errorMessage }
     } finally {

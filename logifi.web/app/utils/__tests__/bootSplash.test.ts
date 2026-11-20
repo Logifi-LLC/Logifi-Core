@@ -59,6 +59,10 @@ describe('boot splash variant', () => {
     expect(html.startsWith('<!--')).toBe(true)
     expect(html).not.toContain('{{ APP }}')
     expect(html).not.toContain('<!DOCTYPE')
+    expect(html).not.toContain('</head>')
+    expect(html).not.toContain('<body')
+    expect(html).toContain('hide-nuxt-payload')
+    expect(html).toContain("getElementById('__NUXT_DATA__')")
   })
 
   it('keeps both marks in the splash and hides the wordmark until the class is set', () => {

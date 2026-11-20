@@ -3,11 +3,15 @@ import {
   FULL_SYNC_HOLD_CAP_MS,
   MARKETING_SPLASH_FALLBACK_MS,
   PROPELLER_CYCLE_MS,
+  bootHoldNeedsRemainingSync,
   bootHoldStartedAt,
+  consumeSignInBootHold,
   getColdBootStartedAt,
   markColdBootStart,
+  markSignInBootHold,
   shouldRevealDashboard,
   shouldStartBootHold,
+  signedOutColdOpenDelayMs,
   splashFallbackMs,
   waitUntilBootReveal,
 } from '../bootHold'
@@ -187,11 +191,57 @@ describe('waitUntilBootReveal', () => {
   })
 })
 
+describe('signed-out cold open', () => {
+  it('plays one propeller cycle on Capacitor and none on the website', () => {
+    expect(signedOutColdOpenDelayMs({
+      native: false,
+      now: 0,
+      coldBootStartedAt: 0,
+    })).toBe(0)
+    expect(signedOutColdOpenDelayMs({
+      native: true,
+      now: 400,
+      coldBootStartedAt: 0,
+    })).toBe(PROPELLER_CYCLE_MS - 400)
+    expect(signedOutColdOpenDelayMs({
+      native: true,
+      now: PROPELLER_CYCLE_MS + 50,
+      coldBootStartedAt: 0,
+    })).toBe(0)
+  })
+})
+
+describe('sign-in full sync', () => {
+  it('does not treat the first full page as the finished logbook', () => {
+    expect(bootHoldNeedsRemainingSync({ firstBatchCount: 100, pageSize: 100 })).toBe(true)
+    expect(bootHoldNeedsRemainingSync({ firstBatchCount: 99, pageSize: 100 })).toBe(false)
+    expect(bootHoldNeedsRemainingSync({ firstBatchCount: 0, pageSize: 100 })).toBe(false)
+  })
+
+  it('keeps a sign-in hold across one reload and does not replay it later', () => {
+    sessionStorage.clear()
+    markSignInBootHold(1_000)
+    expect(consumeSignInBootHold(2_000)).toBe(true)
+    expect(consumeSignInBootHold(2_100)).toBe(false)
+    expect(shouldStartBootHold('resume')).toBe(false)
+  })
+
+  it('drops a sign-in hold that is older than the reload window', () => {
+    sessionStorage.clear()
+    markSignInBootHold(0)
+    expect(consumeSignInBootHold(30_000)).toBe(false)
+  })
+})
+
 describe('splash fallback', () => {
   it('does not add the propeller hold to marketing routes', () => {
     expect(splashFallbackMs('/')).toBe(MARKETING_SPLASH_FALLBACK_MS)
     expect(splashFallbackMs('/pricing')).toBe(MARKETING_SPLASH_FALLBACK_MS)
     expect(splashFallbackMs('/dashboard')).toBe(PROPELLER_CYCLE_MS + FULL_SYNC_HOLD_CAP_MS)
+  })
+
+  it('uses the dashboard cap on Capacitor even when the first path is /', () => {
+    expect(splashFallbackMs('/', true)).toBe(PROPELLER_CYCLE_MS + FULL_SYNC_HOLD_CAP_MS)
   })
 
   it('records cold boot once', () => {

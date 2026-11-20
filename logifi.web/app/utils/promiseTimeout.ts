@@ -1,3 +1,6 @@
+/** Bound a remote read so a stuck auth lock cannot leave a page on Loading. */
+export const REMOTE_READ_TIMEOUT_MS = 8_000
+
 export async function withTimeout<T>(
   promise: Promise<T>,
   ms: number,

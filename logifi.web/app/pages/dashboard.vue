@@ -1143,7 +1143,7 @@
                 </div>
     </div>
               <CurrencyStatusChips
-                v-if="shouldShowCurrencyChips(showCurrencyChips) && hasAnyEntriesForActiveLogbook"
+                v-if="shouldShowCurrencyChips(showCurrencyChips) && hasAnyEntriesForActiveLogbook && !bootCurrencyPending"
                 :passenger-currency="passengerCurrency"
                 :night-currency="nightCurrency"
                 :instrument-currency="instrumentCurrency"
@@ -6834,8 +6834,12 @@ import {
 import { markAppReady } from '../utils/appReady'
 import {
   FULL_SYNC_HOLD_CAP_MS,
+  bootHoldNeedsRemainingSync,
   bootHoldStartedAt,
+  consumeSignInBootHold,
   getColdBootStartedAt,
+  markSignInBootHold,
+  signedOutColdOpenDelayMs,
   waitUntilBootReveal,
 } from '../utils/bootHold'
 import {
@@ -7260,10 +7264,14 @@ const isBulkLoadInProgress = ref(false)
 const logbookLocalCacheReadComplete = ref(false)
 const logbookInboundSyncPending = ref(false)
 const bootHoldActive = ref(false)
+/** Hide currency until the boot sync's full recalculation. A partial page is stale. */
+const bootCurrencyPending = ref(false)
 /** True after the first dashboard reveal or the signed-out sheet. Sign-in then starts a new cycle. */
 let dashboardBootRevealed = false
 let bootHoldGeneration = 0
+let signedOutHoldGeneration = 0
 let loadEntriesInFlight: Promise<number> | null = null
+let loadEntriesInFlightComplete = false
 
 type IosSyncStatus = 'idle' | 'loading' | 'success' | 'error' | 'offline'
 const iosSyncStatus = ref<IosSyncStatus>('idle')
@@ -7285,6 +7293,8 @@ interface LoadEntriesOptions {
   skipIfFresh?: boolean
   /** Apply IndexedDB (and local prefs already loaded) without waiting on inbound sync. */
   localOnly?: boolean
+  /** Boot hold only. Wait for the rest of a progressive full sync before resolving. */
+  complete?: boolean
 }
 
 let logEntriesSideEffectTimer: ReturnType<typeof setTimeout> | null = null
@@ -7385,7 +7395,11 @@ function onAuthModalClose() {
 }
 
 function onSignedIn() {
+  signedOutHoldGeneration += 1
+  markSignInBootHold()
   bootHoldActive.value = true
+  bootCurrencyPending.value = true
+  logbookInboundSyncPending.value = true
   showAuthModal.value = false
 }
 
@@ -7424,13 +7438,16 @@ async function handoffNativeBootSplash(): Promise<void> {
 }
 
 async function onUserSessionReady(userId: string): Promise<void> {
+  signedOutHoldGeneration += 1
   const generation = ++bootHoldGeneration
+  const signInHold = consumeSignInBootHold()
   const holdStartedAt = bootHoldStartedAt({
-    reason: dashboardBootRevealed ? 'sign-in' : 'cold-open',
+    reason: dashboardBootRevealed || signInHold ? 'sign-in' : 'cold-open',
     now: Date.now(),
     coldBootStartedAt: getColdBootStartedAt(),
   }) ?? Date.now()
   bootHoldActive.value = true
+  bootCurrencyPending.value = true
   try {
     const hydrate = (async () => {
       resetLogbookHydrationGate()
@@ -7476,7 +7493,7 @@ async function onUserSessionReady(userId: string): Promise<void> {
       startBackgroundSync()
       await checkOnlineStatus()
       const offlineAtStart = !isOnline.value
-      const syncPromise = loadEntries({ mode: 'auto' })
+      const syncPromise = loadEntries({ mode: 'auto', complete: true })
       await waitUntilBootReveal({
         holdStartedAt,
         sync: syncPromise,
@@ -7495,6 +7512,7 @@ async function onUserSessionReady(userId: string): Promise<void> {
     if (generation !== bootHoldGeneration) return
     dashboardBootRevealed = true
     bootHoldActive.value = false
+    if (!isBulkLoadInProgress.value) bootCurrencyPending.value = false
     await handoffNativeBootSplash()
   }
 }
@@ -7575,15 +7593,31 @@ watch(dashboardFcvConnected, (c) => {
   }
 })
 
-// Show auth modal if not authenticated after loading
+// Show auth modal if not authenticated after loading.
+// Capacitor keeps the propeller for one cycle from process start. The website does not.
 watch(authLoading, (loading) => {
-  if (!loading && !isAuthenticated.value) {
-    showAuthModal.value = true
-    logbookLocalCacheReadComplete.value = true
-    logbookInboundSyncPending.value = false
+  if (loading || isAuthenticated.value) return
+  const generation = ++signedOutHoldGeneration
+  showAuthModal.value = true
+  logbookLocalCacheReadComplete.value = true
+  logbookInboundSyncPending.value = false
+  const delay = signedOutColdOpenDelayMs({
+    native: isCapacitorNative(),
+    now: Date.now(),
+    coldBootStartedAt: getColdBootStartedAt(),
+  })
+  void (async () => {
+    if (delay > 0) {
+      bootHoldActive.value = true
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, delay)
+      })
+    }
+    if (generation !== signedOutHoldGeneration || isAuthenticated.value) return
     dashboardBootRevealed = true
-    void handoffNativeBootSplash()
-  }
+    bootHoldActive.value = false
+    await handoffNativeBootSplash()
+  })()
 }, { immediate: true })
 
 // Initialize IndexedDB and scroll handlers on mount
@@ -16556,10 +16590,14 @@ function retryIosSync(): void {
 
 function finalizeBulkLoadSideEffects(): void {
   isBulkLoadInProgress.value = false
-  if (!isBrowser || logEntries.value.length === 0) return
+  if (!isBrowser || logEntries.value.length === 0) {
+    bootCurrencyPending.value = false
+    return
+  }
   if (!(isIos.value && (isCatalogDrawerOpen.value || showSettingsModal.value))) {
     calculateAllCurrency(logEntries.value)
   }
+  bootCurrencyPending.value = false
 }
 
 function hasUsableAuthSession(): boolean {
@@ -16798,7 +16836,7 @@ async function syncInbound(
   userId: string,
   idbEntries: Awaited<ReturnType<typeof getAllIDBLogEntriesForUser>>,
   cachedEntryCount: number,
-  options: { mode: InboundSyncMode; skipIfFresh?: boolean }
+  options: { mode: InboundSyncMode; skipIfFresh?: boolean; complete?: boolean }
 ): Promise<number> {
   const mode = options.mode === 'auto'
     ? (cachedEntryCount > 0 ? 'delta' : 'full')
@@ -16880,14 +16918,34 @@ async function syncInbound(
         reconcileRemoteDeletes: false,
         reconcileQueue: false,
       })
-      calculateAllCurrency(logEntries.value)
+      if (!options.complete) {
+        calculateAllCurrency(logEntries.value)
+      }
       updateIosSyncBanner('loading', `Loading logbook… ${firstBatch.length} entries`)
     }
 
-    if (firstBatch.length < PROGRESSIVE_FIRST_BATCH) {
+    if (!bootHoldNeedsRemainingSync({
+      firstBatchCount: firstBatch.length,
+      pageSize: PROGRESSIVE_FIRST_BATCH,
+    })) {
       finalizeBulkLoadSideEffects()
       updateIosSyncBanner('success', `${logEntries.value.length} entries loaded`)
       return inboundRemovedCount
+    }
+
+    if (options.complete) {
+      try {
+        await backgroundFullRemoteSync(userId)
+        updateIosSyncBanner('success', `${logEntries.value.length} entries loaded`)
+        return inboundRemovedCount
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Sync failed'
+        console.error('[LoadEntries] Full sync failed:', err)
+        updateIosSyncBanner('error', `Sync failed: ${message}`)
+        throw err
+      } finally {
+        finalizeBulkLoadSideEffects()
+      }
     }
 
     void (async () => {
@@ -17076,6 +17134,7 @@ async function loadEntriesInternal(options: LoadEntriesOptions = {}): Promise<nu
               {
                 mode: options.mode ?? 'auto',
                 skipIfFresh: options.skipIfFresh,
+                complete: options.complete,
               }
             )
           } catch {
@@ -17102,12 +17161,26 @@ async function loadEntriesInternal(options: LoadEntriesOptions = {}): Promise<nu
 }
 
 async function loadEntries(options: LoadEntriesOptions = {}): Promise<number> {
-  if (loadEntriesInFlight) return loadEntriesInFlight
-  loadEntriesInFlight = loadEntriesInternal(options)
+  if (loadEntriesInFlight && (!options.complete || loadEntriesInFlightComplete)) {
+    return loadEntriesInFlight
+  }
+  if (loadEntriesInFlight) {
+    try {
+      await loadEntriesInFlight
+    } catch {
+      // The boot hold still starts its own full sync.
+    }
+  }
+  loadEntriesInFlightComplete = options.complete === true
+  const run = loadEntriesInternal(options)
+  loadEntriesInFlight = run
   try {
-    return await loadEntriesInFlight
+    return await run
   } finally {
-    loadEntriesInFlight = null
+    if (loadEntriesInFlight === run) {
+      loadEntriesInFlight = null
+      loadEntriesInFlightComplete = false
+    }
   }
 }
 

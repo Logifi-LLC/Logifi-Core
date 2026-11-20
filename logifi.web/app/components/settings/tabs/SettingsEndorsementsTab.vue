@@ -324,6 +324,17 @@
       </div>
     </SettingsListGroup>
 
+    <div v-if="listError" class="space-y-2 px-4 py-3">
+      <p class="text-sm font-quicksand" :class="destructiveRow">{{ listError }}</p>
+      <button
+        type="button"
+        :class="[btnSecondary, 'min-h-11']"
+        @click="refreshAll"
+      >
+        Retry
+      </button>
+    </div>
+
     <!-- Student list -->
     <SettingsListGroup :title="myEndorsementsTitle" :is-dark-mode="isDarkMode">
       <div
@@ -470,6 +481,7 @@ const {
   pendingForInstructor,
   pendingForStudent,
   isLoading,
+  error: endorsementError,
   fetchMyEndorsements,
   fetchInstructorEndorsements,
   requestEndorsement,
@@ -481,9 +493,12 @@ const {
 const {
   instructors,
   roster,
+  error: rosterError,
   fetchInstructors,
   fetchStudentRoster,
 } = useRoster()
+
+const listError = computed(() => endorsementError.value || rosterError.value)
 
 const composeMode = ref<'request' | 'issue' | 'paper'>('request')
 const counterpartyId = ref('')

@@ -1,6 +1,23 @@
+import { Capacitor } from '@capacitor/core'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '~/types/database'
 import { getSupabaseConfig } from '~/config/supabase'
+
+function isNativeWebView(): boolean {
+  return typeof window !== 'undefined' && Capacitor.isNativePlatform()
+}
+
+/**
+ * WKWebView's navigator.locks can leave GoTrue's auth lock held forever.
+ * Later queries then never resolve. Run the critical section directly on device.
+ */
+function nativeAuthLock<R>(
+  _name: string,
+  _acquireTimeout: number,
+  fn: () => Promise<R>
+): Promise<R> {
+  return fn()
+}
 
 // Lazy initialization - only get config when supabase client is actually used
 let supabaseClient: ReturnType<typeof createClient<Database>> | null = null
@@ -40,7 +57,8 @@ SUPABASE_URL=https://your-project-id.supabase.co`)
         auth: {
           persistSession: true,
           autoRefreshToken: true,
-          detectSessionInUrl: true
+          detectSessionInUrl: true,
+          ...(isNativeWebView() ? { lock: nativeAuthLock } : {}),
         }
       }
     )

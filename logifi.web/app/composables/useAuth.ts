@@ -9,6 +9,7 @@ import {
   clearOfflineSessionSnapshot,
 } from '~/utils/cachedSupabaseSession'
 import { withTimeout } from '~/utils/promiseTimeout'
+import { markSignInBootHold } from '~/utils/bootHold'
 import {
   buildAuthCallbackUrl,
   buildResetPasswordUrl,
@@ -48,6 +49,7 @@ const globalIsLoading = ref(true)
 const globalError = ref<string | null>(null)
 const isPasswordRecoverySession = ref(false)
 let authInitialized = false
+let initAuthPromise: Promise<void> | null = null
 let authStateSubscription: { unsubscribe: () => void } | null = null
 /** True while an explicit user-initiated signOut is in flight. */
 let explicitSignOutInProgress = false
@@ -136,12 +138,17 @@ export const useAuth = () => {
   const isAuthenticated = hasUsableSession
 
   // Initialize auth state (only once globally)
-  const initAuth = async () => {
-    // If already initialized, just return
-    if (authInitialized) {
-      return
+  const initAuth = (): Promise<void> => {
+    if (authInitialized) return Promise.resolve()
+    if (!initAuthPromise) {
+      initAuthPromise = performInitAuth().finally(() => {
+        initAuthPromise = null
+      })
     }
+    return initAuthPromise
+  }
 
+  const performInitAuth = async () => {
     try {
       error.value = null
 
@@ -306,6 +313,7 @@ export const useAuth = () => {
       }
 
       if (data.user && data.session) {
+        markSignInBootHold()
         applySession(data.session)
         claimSessionReferral(data.session)
       } else if (data.user) {
@@ -347,6 +355,7 @@ export const useAuth = () => {
       }
 
       if (data.user && data.session) {
+        markSignInBootHold()
         applySession(data.session)
         claimSessionReferral(data.session)
       }
@@ -700,6 +709,7 @@ export function __resetAuthForTests() {
     authStateSubscription = null
   }
   authInitialized = false
+  initAuthPromise = null
   explicitSignOutInProgress = false
   isPasswordRecoverySession.value = false
   globalUser.value = null
