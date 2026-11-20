@@ -15,13 +15,13 @@ function splashScript(): string {
   return block.slice(open)
 }
 
-function choose(pathname: string, native = false): string {
+function choose(pathname: string, native = false, protocol = 'https:'): string {
   const classes: string[] = []
   const sandbox = {
     window: native
       ? { Capacitor: { isNativePlatform: () => true } }
       : {},
-    location: { pathname },
+    location: { pathname, protocol },
     document: {
       documentElement: {
         classList: {
@@ -51,6 +51,9 @@ describe('boot splash variant', () => {
     }
     expect(choose('/', true)).toBe('boot-propeller')
     expect(choose('/pricing', true)).toBe('boot-propeller')
+    // capacitor://localhost/ is pathname "/", and the bridge may not be injected yet.
+    expect(choose('/', false, 'capacitor:')).toBe('boot-propeller')
+    expect(choose('/index.html')).toBe('boot-propeller')
   })
 
   it('is the fragment Nuxt injects beside the app root', () => {
@@ -72,6 +75,9 @@ describe('boot splash variant', () => {
     expect(html).toContain('translate(194,405)')
     expect(html).toContain('translate(634,315)')
     expect(html).toContain('.boot-splash__wordmark {\n        display: none;')
+    const css = readFileSync(path.resolve(process.cwd(), 'app/assets/css/loading-animation.css'), 'utf8')
+    expect(css).toContain('svg.boot-splash__wordmark')
+    expect(css).toContain('display: none;')
     expect(html).toContain('aria-label="Loading logbook"')
     expect(html).toContain('prefers-reduced-motion: reduce')
   })

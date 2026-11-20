@@ -51,10 +51,11 @@ export default defineNuxtRouteMiddleware((to) => {
     }
   })
 
-  // iOS app: skip marketing landing; open dashboard (login modal if needed)
+  // iOS app: skip marketing landing; open dashboard (login modal if needed).
+  // The webview entry is `/` or `/index.html` (capacitor://localhost/index.html).
   if (!isCapacitorIos()) return
 
-  if (to.path !== '/') return
+  if (to.path !== '/' && to.path !== '/index.html') return
 
   if (routeHasAuthCallback(to)) {
     return navigateTo({

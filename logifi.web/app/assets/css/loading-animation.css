@@ -43,6 +43,22 @@
   overflow: visible;
 }
 
+/* app.html's inline style is removed with #__nuxt-loader. Without this, the
+   wordmark SVG sits beside the propeller (same specificity as the rule above). */
+svg.boot-splash__wordmark {
+  display: none;
+}
+
+html.boot-wordmark svg.boot-splash__propeller {
+  display: none;
+}
+
+html.boot-wordmark svg.boot-splash__wordmark {
+  display: block;
+  width: 72px;
+  height: 72px;
+}
+
 .loading-animation__mark--square.loading-animation__mark--sm {
   width: 48px;
   height: auto;

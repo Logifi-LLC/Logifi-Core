@@ -168,7 +168,15 @@ export default defineNuxtConfig({
   nitro: {
     prerender: {
       routes: ['/']
-    }
+    },
+    hooks: {
+      // ssr:false also prerenders /index.html. Both routes write public/index.html.
+      // Parallel writes leave the tail of the longer file (the `/` canonical tag
+      // makes it 52 bytes longer) after </html>, and WKWebView paints that tail.
+      'prerender:generate'(route: { route?: string; skip?: boolean }) {
+        if (route.route === '/index.html') route.skip = true
+      },
+    },
   },
   app: {
     head: {

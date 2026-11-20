@@ -1,13 +1,18 @@
 import { isCapacitorNative, lockNativeViewportZoom } from '~/composables/useCapacitorPlatform'
-import { hideNativeSplashNow, isDashboardPath, markAppReady, removeHtmlSplashOnce } from '~/utils/appReady'
-import { markColdBootStart, splashFallbackMs } from '~/utils/bootHold'
+import { armSplashHoldUntil, hideNativeSplashNow, isDashboardPath, markAppReady, removeHtmlSplashOnce } from '~/utils/appReady'
+import { PROPELLER_CYCLE_MS, markColdBootStart, splashFallbackMs } from '~/utils/bootHold'
 
 export { markAppReady }
 
 export default defineNuxtPlugin((nuxtApp) => {
   markColdBootStart()
 
-  // Nuxt removes #__nuxt-loader when the app suspends. Keep #app-splash until the handoff below.
+  // Nuxt removes #__nuxt-loader on suspense, including the <style> and #app-splash
+  // inside it. Keep both. The style is what hides the wordmark and runs the spin.
+  const loader = document.getElementById('__nuxt-loader')
+  const splashStyle = loader?.querySelector('style')
+  if (splashStyle) document.head.appendChild(splashStyle)
+
   const splash = document.getElementById('app-splash')
   if (splash && splash.parentElement !== document.body) {
     document.body.appendChild(splash)
@@ -15,14 +20,21 @@ export default defineNuxtPlugin((nuxtApp) => {
 
   lockNativeViewportZoom()
 
-  // The launch storyboard covers the webview. Hide it so the HTML propeller
-  // is the cold-open animation. The first hide can no-op if showOnLaunch has
-  // not marked the view visible yet, so retry once.
+  // showOnLaunch adds the storyboard on the next main-queue turn and ignores
+  // hide() until isVisible is set. launchShowDuration 0 skips that overlay.
+  // Retry through launch anyway: a hide before isVisible is a no-op, and the
+  // successful hide must not wait for markAppReady, which also removes this splash.
   if (isCapacitorNative()) {
-    void hideNativeSplashNow()
-    window.setTimeout(() => {
+    armSplashHoldUntil(Date.now() + PROPELLER_CYCLE_MS)
+    const hideStarted = Date.now()
+    const hideLaunchSplash = () => {
       void hideNativeSplashNow()
-    }, 50)
+    }
+    hideLaunchSplash()
+    const hideTimer = window.setInterval(() => {
+      hideLaunchSplash()
+      if (Date.now() - hideStarted >= 1600) window.clearInterval(hideTimer)
+    }, 100)
   }
 
   const { initAuth } = useAuth()

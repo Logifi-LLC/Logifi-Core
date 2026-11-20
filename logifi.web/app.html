@@ -207,8 +207,11 @@
       (function () {
         var native = false
         try {
+          // capacitor://localhost/ is pathname "/", a marketing path. The scheme
+          // is the native signal; window.Capacitor may not exist yet.
+          if (location.protocol === 'capacitor:') native = true
           var cap = window.Capacitor
-          if (cap && typeof cap.isNativePlatform === 'function') native = !!cap.isNativePlatform()
+          if (cap && typeof cap.isNativePlatform === 'function' && cap.isNativePlatform()) native = true
         } catch (e) {}
         var path = (location.pathname || '/').split('?')[0].split('#')[0]
         if (path.length > 1 && path.charAt(path.length - 1) === '/') path = path.slice(0, -1)
