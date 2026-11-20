@@ -79,7 +79,7 @@ export const MARK_TR_RECTS_LOCAL = [
 export const MARK_BL_ORIGIN = { x: MARK_BL_PIVOT.x, y: MARK_BL_PIVOT.y - 73 } as const
 export const MARK_TR_ORIGIN = { x: MARK_TR_PIVOT.x - 50, y: MARK_ARM } as const
 
-/** Wordmark animation still paints public/images/logifi-logo.png. Vector lockup is public/images/logifi-logo.svg. */
+/** Legacy 400-canvas overlay math. The wordmark loader now uses logifi-logo.svg paths. */
 export const WORDMARK_CANVAS = { width: 400, height: 400 } as const
 
 /**

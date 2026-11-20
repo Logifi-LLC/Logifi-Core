@@ -11,14 +11,15 @@
   --loading-origin-bl-y: 112px;
   --loading-origin-tr-x: 111px;
   --loading-origin-tr-y: 10px;
-  --loading-wordmark-bl-x: 61px;
-  --loading-wordmark-bl-y: 29px;
-  --loading-wordmark-tr-x: -48px;
-  --loading-wordmark-tr-y: -14px;
-  --loading-wordmark-bl-sx: 0.286;
-  --loading-wordmark-bl-sy: 0.827;
-  --loading-wordmark-tr-sx: 0.697;
-  --loading-wordmark-tr-sy: 0.729;
+  /* Lockup brackets (1024 space) scaled onto the 512 mark centered in that canvas. */
+  --loading-wordmark-bl-x: 165.43px;
+  --loading-wordmark-bl-y: 148.89px;
+  --loading-wordmark-tr-x: -206.62px;
+  --loading-wordmark-tr-y: 80.28px;
+  --loading-wordmark-bl-sx: 1.071;
+  --loading-wordmark-bl-sy: 0.7768;
+  --loading-wordmark-tr-sx: 1.0318;
+  --loading-wordmark-tr-sy: 0.8693;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -90,15 +91,11 @@
 }
 
 .loading-animation__motion--bl-wordmark,
-.loading-animation__corner--bl-wordmark {
-  transform-box: fill-box;
-  transform-origin: var(--loading-origin-bl-x) var(--loading-origin-bl-y);
-}
-
+.loading-animation__corner--bl-wordmark,
 .loading-animation__motion--tr-wordmark,
 .loading-animation__corner--tr-wordmark {
-  transform-box: fill-box;
-  transform-origin: var(--loading-origin-tr-x) var(--loading-origin-tr-y);
+  transform-box: view-box;
+  transform-origin: 0 0;
 }
 
 /* --- Propeller variant (2.8s) --- */
@@ -161,21 +158,17 @@
   }
 }
 
-/* --- Wordmark variant (3s): lockup PNG + diagonal scale/translate to icon mark --- */
+/* --- Wordmark variant (3s): letters fade; bracket paths travel to the icon mark --- */
 .loading-animation--variant-wordmark.loading-animation--motion .loading-animation__wordmark-image {
   animation: loading-animation-wordmark-image 3s ease-in-out infinite;
 }
 
 .loading-animation--variant-wordmark.loading-animation--motion .loading-animation__motion--bl-wordmark {
-  animation:
-    loading-animation-wordmark-bl 3s ease-in-out infinite,
-    loading-animation-wordmark-bracket-opacity 3s ease-in-out infinite;
+  animation: loading-animation-wordmark-bl 3s ease-in-out infinite;
 }
 
 .loading-animation--variant-wordmark.loading-animation--motion .loading-animation__motion--tr-wordmark {
-  animation:
-    loading-animation-wordmark-tr 3s ease-in-out infinite,
-    loading-animation-wordmark-bracket-opacity 3s ease-in-out infinite;
+  animation: loading-animation-wordmark-tr 3s ease-in-out infinite;
 }
 
 @keyframes loading-animation-wordmark-image {
@@ -196,11 +189,12 @@
   16%,
   64%,
   100% {
-    transform: translate(0, 0) scale(var(--loading-wordmark-bl-sx), var(--loading-wordmark-bl-sy));
+    transform: translate(0, 0) scale(1, 1);
   }
   28%,
   48% {
-    transform: translate(var(--loading-wordmark-bl-x), var(--loading-wordmark-bl-y)) scale(1, 1);
+    transform: translate(var(--loading-wordmark-bl-x), var(--loading-wordmark-bl-y))
+      scale(var(--loading-wordmark-bl-sx), var(--loading-wordmark-bl-sy));
   }
 }
 
@@ -209,24 +203,12 @@
   16%,
   64%,
   100% {
-    transform: translate(0, 0) scale(var(--loading-wordmark-tr-sx), var(--loading-wordmark-tr-sy));
+    transform: translate(0, 0) scale(1, 1);
   }
   28%,
   48% {
-    transform: translate(var(--loading-wordmark-tr-x), var(--loading-wordmark-tr-y)) scale(1, 1);
-  }
-}
-
-@keyframes loading-animation-wordmark-bracket-opacity {
-  0%,
-  20%,
-  76%,
-  100% {
-    opacity: 0;
-  }
-  28%,
-  64% {
-    opacity: 1;
+    transform: translate(var(--loading-wordmark-tr-x), var(--loading-wordmark-tr-y))
+      scale(var(--loading-wordmark-tr-sx), var(--loading-wordmark-tr-sy));
   }
 }
 
@@ -245,14 +227,9 @@
     animation: none;
   }
 
-  .loading-animation--variant-wordmark .loading-animation__wordmark-image {
-    opacity: 1;
-  }
-
+  .loading-animation--variant-wordmark .loading-animation__wordmark-image,
   .loading-animation--variant-wordmark .loading-animation__motion--bl-wordmark,
-  .loading-animation--variant-wordmark .loading-animation__motion--tr-wordmark,
-  .loading-animation--variant-wordmark .loading-animation__corner--bl-wordmark,
-  .loading-animation--variant-wordmark .loading-animation__corner--tr-wordmark {
-    opacity: 0;
+  .loading-animation--variant-wordmark .loading-animation__motion--tr-wordmark {
+    opacity: 1;
   }
 }

@@ -22,19 +22,17 @@ describe('LoadingAnimation', () => {
     expect(wrapper.find('.loading-animation__word').exists()).toBe(false)
   })
 
-  it('renders wordmark variant with marketing lockup image', () => {
+  it('renders wordmark variant from the logo SVG paths', () => {
     const wrapper = mount(LoadingAnimation, {
       props: { variant: 'wordmark', fullscreen: false, size: 'sm' },
     })
     expect(wrapper.get('.loading-animation').classes()).toContain('loading-animation--variant-wordmark')
     const svg = wrapper.get('svg')
-    expect(svg.attributes('viewBox')).toBe('0 0 400 400')
+    expect(svg.attributes('viewBox')).toBe('0 0 1024 1024')
     expect(svg.attributes('overflow')).toBe('visible')
-    expect(wrapper.find('.loading-animation__wordmark-image').exists()).toBe(true)
-    const pivots = wrapper.findAll('.loading-animation__pivot')
-    expect(pivots).toHaveLength(2)
-    expect(pivots[0].attributes('transform')).toBe('translate(85 251)')
-    expect(pivots[1].attributes('transform')).toBe('translate(316 133)')
-    expect(wrapper.find('.loading-animation__motion--bl-wordmark').attributes('transform')).toBeUndefined()
+    expect(wrapper.find('image').exists()).toBe(false)
+    expect(wrapper.find('.loading-animation__wordmark-image').findAll('path').length).toBe(8)
+    expect(wrapper.find('.loading-animation__motion--bl-wordmark path').attributes('transform')).toBe('translate(194,405)')
+    expect(wrapper.find('.loading-animation__motion--tr-wordmark path').attributes('transform')).toBe('translate(634,315)')
   })
 })
