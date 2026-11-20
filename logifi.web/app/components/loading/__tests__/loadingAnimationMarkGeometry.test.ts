@@ -8,6 +8,10 @@ import {
   MARK_TR_ORIGIN,
   MARK_TR_PIVOT,
   MARK_VIEWBOX,
+  OFFICIAL_MARK_CENTER,
+  OFFICIAL_MARK_MERGE_BL,
+  OFFICIAL_MARK_MERGE_TR,
+  OFFICIAL_MARK_VIEWBOX,
   WORDMARK_BL_TO_ICON,
   WORDMARK_ICON_BL,
   WORDMARK_ICON_TR,
@@ -17,6 +21,16 @@ import {
 } from '../loadingAnimationMarkGeometry'
 
 describe('loadingAnimationMarkGeometry', () => {
+  it('uses the official 512 mark and centers both bars on the cross', () => {
+    expect(OFFICIAL_MARK_VIEWBOX).toEqual({ width: 512, height: 512 })
+    expect(OFFICIAL_MARK_MERGE_BL).toEqual({ x: 127, y: -146.25 })
+    expect(OFFICIAL_MARK_MERGE_TR).toEqual({ x: -128.5, y: 145 })
+    expect((116 + 142) / 2 + OFFICIAL_MARK_MERGE_BL.x).toBe(OFFICIAL_MARK_CENTER.x)
+    expect((389.5 + 415) / 2 + OFFICIAL_MARK_MERGE_BL.y).toBe(OFFICIAL_MARK_CENTER.y)
+    expect((372 + 397) / 2 + OFFICIAL_MARK_MERGE_TR.x).toBe(OFFICIAL_MARK_CENTER.x)
+    expect((98 + 124) / 2 + OFFICIAL_MARK_MERGE_TR.y).toBe(OFFICIAL_MARK_CENTER.y)
+  })
+
   it('uses favicon aspect viewBox 186×210', () => {
     expect(MARK_VIEWBOX).toEqual({ width: 186, height: 210 })
   })

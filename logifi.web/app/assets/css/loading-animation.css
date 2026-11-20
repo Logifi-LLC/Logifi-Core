@@ -1,13 +1,12 @@
-/* Mark: favicon crop 186×210. Merge translates: BL (54, -85), TR (-68, 86).
-   CSS transform is applied only to inner .loading-animation__motion groups so it
-   cannot replace the outer SVG pivot translate(...). */
+/* Propeller uses logifi-mark.svg (512). Merge translates center each bar on (256, 256):
+   BL (127, -146.25), TR (-128.5, 145). CSS transform is only on inner motion groups. */
 .loading-animation {
-  --loading-center-x: 93px;
-  --loading-center-y: 105px;
-  --loading-merge-bl-x: 54px;
-  --loading-merge-bl-y: -85px;
-  --loading-merge-tr-x: -68px;
-  --loading-merge-tr-y: 86px;
+  --loading-center-x: 256px;
+  --loading-center-y: 256px;
+  --loading-merge-bl-x: 127px;
+  --loading-merge-bl-y: -146.25px;
+  --loading-merge-tr-x: -128.5px;
+  --loading-merge-tr-y: 145px;
   --loading-origin-bl-x: 39px;
   --loading-origin-bl-y: 112px;
   --loading-origin-tr-x: 111px;

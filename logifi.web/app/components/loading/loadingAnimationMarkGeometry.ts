@@ -1,4 +1,32 @@
-/** Favicon tight crop 186×209 → viewBox 186×210. Vertex math for propeller merge. */
+/**
+ * Official mark from public/images/logifi-mark.svg (measured from app-logo-mark.png).
+ * Paths stay in absolute 512 space. CSS only translates the inner motion groups.
+ */
+export const OFFICIAL_MARK_VIEWBOX = { width: 512, height: 512 } as const
+export const OFFICIAL_MARK_CENTER = {
+  x: OFFICIAL_MARK_VIEWBOX.width / 2,
+  y: OFFICIAL_MARK_VIEWBOX.height / 2,
+} as const
+
+export const OFFICIAL_MARK_TR_PATH = 'M190.5 98H397V306H372V124H190.5Z'
+export const OFFICIAL_MARK_BL_PATH = 'M116 207.5H142V389.5H323V415H116Z'
+
+/** Bar centers of the approved paths, so the merged + shares one cross. */
+const TR_HORIZ_CENTER_Y = (98 + 124) / 2
+const TR_VERT_CENTER_X = (372 + 397) / 2
+const BL_VERT_CENTER_X = (116 + 142) / 2
+const BL_HORIZ_CENTER_Y = (389.5 + 415) / 2
+
+export const OFFICIAL_MARK_MERGE_TR = {
+  x: OFFICIAL_MARK_CENTER.x - TR_VERT_CENTER_X,
+  y: OFFICIAL_MARK_CENTER.y - TR_HORIZ_CENTER_Y,
+} as const
+export const OFFICIAL_MARK_MERGE_BL = {
+  x: OFFICIAL_MARK_CENTER.x - BL_VERT_CENTER_X,
+  y: OFFICIAL_MARK_CENTER.y - BL_HORIZ_CENTER_Y,
+} as const
+
+/** Favicon tight crop 186×209 → viewBox 186×210. Wordmark overlay still uses this. */
 export const MARK_VIEWBOX = { width: 186, height: 210 } as const
 
 export const MARK_BL_PIVOT = { x: 39, y: 185 } as const
@@ -51,7 +79,7 @@ export const MARK_TR_RECTS_LOCAL = [
 export const MARK_BL_ORIGIN = { x: MARK_BL_PIVOT.x, y: MARK_BL_PIVOT.y - 73 } as const
 export const MARK_TR_ORIGIN = { x: MARK_TR_PIVOT.x - 50, y: MARK_ARM } as const
 
-/** Full-wordmark canvas (`public/images/logifi-logo.png` is the only raster wordmark). */
+/** Wordmark animation still paints public/images/logifi-logo.png. Vector lockup is public/images/logifi-logo.svg. */
 export const WORDMARK_CANVAS = { width: 400, height: 400 } as const
 
 /**

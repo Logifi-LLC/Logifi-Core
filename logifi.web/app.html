@@ -12,12 +12,12 @@
 
       /* Mirrors app/assets/css/loading-animation.css (propeller boot only) */
       .loading-animation {
-        --loading-center-x: 93px;
-        --loading-center-y: 105px;
-        --loading-merge-bl-x: 54px;
-        --loading-merge-bl-y: -85px;
-        --loading-merge-tr-x: -68px;
-        --loading-merge-tr-y: 86px;
+        --loading-center-x: 256px;
+        --loading-center-y: 256px;
+        --loading-merge-bl-x: 127px;
+        --loading-merge-bl-y: -146.25px;
+        --loading-merge-tr-x: -128.5px;
+        --loading-merge-tr-y: 145px;
         --loading-origin-bl-x: 39px;
         --loading-origin-bl-y: 112px;
         --loading-origin-tr-x: 111px;
@@ -126,25 +126,19 @@
       <svg
         class="loading-animation__mark loading-animation__mark--md"
         width="72"
-        height="81"
-        viewBox="0 0 186 210"
+        height="72"
+        viewBox="0 0 512 512"
         overflow="visible"
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden="true"
         focusable="false"
       >
         <g class="loading-animation__stage">
-          <g class="loading-animation__pivot" transform="translate(39 185)">
-            <g class="loading-animation__motion loading-animation__motion--bl">
-              <rect x="-39" y="-112" width="39" height="122" fill="#ffffff" />
-              <rect x="-39" y="0" width="119" height="10" fill="#ffffff" />
-            </g>
+          <g class="loading-animation__motion loading-animation__motion--bl">
+            <path d="M116 207.5H142V389.5H323V415H116Z" fill="#FFFFFF" />
           </g>
-          <g class="loading-animation__pivot" transform="translate(161 24)">
-            <g class="loading-animation__motion loading-animation__motion--tr">
-              <rect x="-111" y="-10" width="121" height="10" fill="#ffffff" />
-              <rect x="0" y="0" width="10" height="113" fill="#ffffff" />
-            </g>
+          <g class="loading-animation__motion loading-animation__motion--tr">
+            <path d="M190.5 98H397V306H372V124H190.5Z" fill="#FFFFFF" />
           </g>
         </g>
       </svg>
