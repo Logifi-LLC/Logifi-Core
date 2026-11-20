@@ -814,6 +814,13 @@ function completeAuthSuccess(delayMs: number) {
   }, delayMs)
 }
 
+/** Close the sheet on the same turn as a session. The dashboard propeller covers the handoff. */
+function handoffSignedInSession() {
+  resetIosInputZoom()
+  emit('success')
+  emit('close')
+}
+
 // Handle form submission
 const handleSubmit = async () => {
   if (isLoading.value) return
@@ -857,10 +864,9 @@ const handleSubmit = async () => {
     } else {
       const result = await signIn(email.value, password.value)
       if (result.success) {
-        successMessage.value = 'Signed in successfully!'
         showUnconfirmedResend.value = false
         resendSignInFeedback.value = null
-        completeAuthSuccess(1000)
+        handoffSignedInSession()
       } else if (result.error) {
         showUnconfirmedResend.value = isEmailNotConfirmedError(result.error)
         resendSignInFeedback.value = null
@@ -921,8 +927,7 @@ const handleAppleSignIn = async () => {
   if (result.success) {
     // Native iOS returns a session immediately; web OAuth redirects away.
     if (isCapacitorIos()) {
-      successMessage.value = 'Signed in successfully!'
-      completeAuthSuccess(800)
+      handoffSignedInSession()
     }
     return
   }

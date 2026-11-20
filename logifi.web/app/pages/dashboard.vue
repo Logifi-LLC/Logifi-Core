@@ -19,7 +19,7 @@
     :referral-open-count="referralOpenCount"
     :notice="authNotice"
     @close="onAuthModalClose"
-    @success="showAuthModal = false"
+    @success="onSignedIn"
   />
 
   <!-- Audit Trail Modal -->
@@ -6833,6 +6833,12 @@ import {
 } from '../utils/totalsLandingCounts'
 import { markAppReady } from '../utils/appReady'
 import {
+  FULL_SYNC_HOLD_CAP_MS,
+  bootHoldStartedAt,
+  getColdBootStartedAt,
+  waitUntilBootReveal,
+} from '../utils/bootHold'
+import {
   formatEntryAirportCode,
   getTotalTimeColorClass,
 } from '../utils/entryFieldDisplay'
@@ -7253,6 +7259,10 @@ const isLoadEntriesRunning = ref(false)
 const isBulkLoadInProgress = ref(false)
 const logbookLocalCacheReadComplete = ref(false)
 const logbookInboundSyncPending = ref(false)
+const bootHoldActive = ref(false)
+/** True after the first dashboard reveal or the signed-out sheet. Sign-in then starts a new cycle. */
+let dashboardBootRevealed = false
+let bootHoldGeneration = 0
 let loadEntriesInFlight: Promise<number> | null = null
 
 type IosSyncStatus = 'idle' | 'loading' | 'success' | 'error' | 'offline'
@@ -7374,6 +7384,11 @@ function onAuthModalClose() {
   authNotice.value = null
 }
 
+function onSignedIn() {
+  bootHoldActive.value = true
+  showAuthModal.value = false
+}
+
 /** After server-side account deletion — local auth already cleared. */
 const handleAccountDeleted = () => {
   stopBackgroundSync()
@@ -7409,53 +7424,79 @@ async function handoffNativeBootSplash(): Promise<void> {
 }
 
 async function onUserSessionReady(userId: string): Promise<void> {
-  resetLogbookHydrationGate()
-  stopBackgroundSync()
-  setActiveUserId(userId)
-  migrateAllGlobalKeysToScoped(userId, false)
-  await migrateLegacyLocalData(userId)
-
-  if (!hasMigrationCompleted(userId)) {
-    isMigrating.value = true
-    try {
-      const result = await migrateLocalStorageToSupabase(
-        userId,
-        (step, current, total) => {
-          migrationProgress.value = { step, current, total }
-        }
-      )
-
-      if (result.success) {
-        console.log('Migration completed:', result)
-      } else {
-        console.error('Migration failed:', result.error)
-      }
-    } catch (error) {
-      console.error('Migration error:', error)
-    } finally {
-      isMigrating.value = false
-    }
-  }
-
-  loadClockPrefs()
-  loadPilotProfilePrefs()
-  loadSelectedTotalsMetrics()
-  loadShowCurrencyChips()
-  loadFar117LookbackPreference()
-  loadEntryFormPreference()
-  loadColumnConfig()
-  loadActiveLogbook()
-
+  const generation = ++bootHoldGeneration
+  const holdStartedAt = bootHoldStartedAt({
+    reason: dashboardBootRevealed ? 'sign-in' : 'cold-open',
+    now: Date.now(),
+    coldBootStartedAt: getColdBootStartedAt(),
+  }) ?? Date.now()
+  bootHoldActive.value = true
   try {
-    await loadEntries({ localOnly: true })
+    const hydrate = (async () => {
+      resetLogbookHydrationGate()
+      stopBackgroundSync()
+      setActiveUserId(userId)
+      migrateAllGlobalKeysToScoped(userId, false)
+      await migrateLegacyLocalData(userId)
+
+      if (!hasMigrationCompleted(userId)) {
+        isMigrating.value = true
+        try {
+          const result = await migrateLocalStorageToSupabase(
+            userId,
+            (step, current, total) => {
+              migrationProgress.value = { step, current, total }
+            }
+          )
+
+          if (result.success) {
+            console.log('Migration completed:', result)
+          } else {
+            console.error('Migration failed:', result.error)
+          }
+        } catch (error) {
+          console.error('Migration error:', error)
+        } finally {
+          isMigrating.value = false
+        }
+      }
+
+      loadClockPrefs()
+      loadPilotProfilePrefs()
+      loadSelectedTotalsMetrics()
+      loadShowCurrencyChips()
+      loadFar117LookbackPreference()
+      loadEntryFormPreference()
+      loadColumnConfig()
+      loadActiveLogbook()
+
+      await loadEntries({ localOnly: true })
+      if (generation !== bootHoldGeneration) return
+
+      startBackgroundSync()
+      await checkOnlineStatus()
+      const offlineAtStart = !isOnline.value
+      const syncPromise = loadEntries({ mode: 'auto' })
+      await waitUntilBootReveal({
+        holdStartedAt,
+        sync: syncPromise,
+        isOffline: () => offlineAtStart || !isOnline.value,
+      })
+      void loadDeferredUserData()
+    })().catch((error) => {
+      console.error('[onUserSessionReady]', error)
+    })
+    const remaining = Math.max(0, holdStartedAt + FULL_SYNC_HOLD_CAP_MS - Date.now())
+    await Promise.race([
+      hydrate,
+      new Promise((resolve) => setTimeout(resolve, remaining)),
+    ])
   } finally {
+    if (generation !== bootHoldGeneration) return
+    dashboardBootRevealed = true
+    bootHoldActive.value = false
     await handoffNativeBootSplash()
   }
-
-  startBackgroundSync()
-
-  void loadEntries({ mode: 'auto' })
-  void loadDeferredUserData()
 }
 
 async function loadDeferredUserData(): Promise<void> {
@@ -7540,6 +7581,7 @@ watch(authLoading, (loading) => {
     showAuthModal.value = true
     logbookLocalCacheReadComplete.value = true
     logbookInboundSyncPending.value = false
+    dashboardBootRevealed = true
     void handoffNativeBootSplash()
   }
 }, { immediate: true })
@@ -7590,6 +7632,7 @@ onMounted(async () => {
 })
 
 function handleAppResume(): void {
+  // Resume does not replay the propeller (shouldStartBootHold('resume') is false).
   if (document.visibilityState !== 'visible') return
   if (!isAuthenticated.value || !user.value || isProcessing.value) return
   if (!isOnline.value) return
@@ -17859,6 +17902,7 @@ const logbookEmptyStateGate = computed(() => ({
 }))
 
 const showLogbookBootLoader = computed(() => {
+  if (bootHoldActive.value) return true
   if (!authLoading.value && !isAuthenticated.value) return false
   return !isLogbookHydratedForUi(logbookEmptyStateGate.value)
 })
