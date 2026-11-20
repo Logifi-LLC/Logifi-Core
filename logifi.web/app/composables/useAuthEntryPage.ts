@@ -1,4 +1,5 @@
 import { ref, onMounted } from 'vue'
+import { isCapacitorNative } from '~/composables/useCapacitorPlatform'
 import { captureReferralFromSearch, storeReferralCode } from '~/utils/referralCapture'
 
 type AuthTab = 'signin' | 'signup'
@@ -45,6 +46,10 @@ export function useAuthEntryPage(defaultTab: AuthTab) {
   }
 
   function handleAuthSuccess() {
+    if (isCapacitorNative()) {
+      void router.replace('/dashboard')
+      return
+    }
     window.location.href = '/dashboard'
   }
 

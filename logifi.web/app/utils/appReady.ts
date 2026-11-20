@@ -13,7 +13,10 @@ async function hideNativeSplash(): Promise<void> {
 
   try {
     const { SplashScreen } = await import('@capacitor/splash-screen')
-    await SplashScreen.hide()
+    // fadeOutDuration 0. A second hide is a no-op once the launch view is gone.
+    // An early hide can no-op if showOnLaunch has not set isVisible yet, so
+    // callers retry once the view is up.
+    await SplashScreen.hide({ fadeOutDuration: 0 })
   } catch (error) {
     console.warn('[app-ready] SplashScreen.hide failed:', error)
   }

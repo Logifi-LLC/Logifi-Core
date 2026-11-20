@@ -9,6 +9,10 @@ import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
 import { useTheme } from '~/composables/useTheme'
 import { supabase } from '~/lib/supabase'
 import {
+  loadEndorsementsPage,
+  parseEndorsementsRole,
+} from '~/utils/endorsementsPageLoad'
+import {
   ACCOUNT_SCOPED_STORAGE_KEYS,
   getScopedItem,
 } from '~/utils/userScopedStorage'
@@ -22,17 +26,13 @@ const { isIos } = useCapacitorPlatform()
 
 const role = ref<PilotAccountRole>('STUDENT')
 const loading = ref(true)
+const loadError = ref<string | null>(null)
 
 const pageBg = computed(() =>
   isDark.value ? 'bg-gray-950 text-gray-100' : 'bg-gray-50 text-gray-900'
 )
 const headerBorder = computed(() => (isDark.value ? 'border-gray-800' : 'border-gray-200'))
 const muted = computed(() => (isDark.value ? 'text-gray-400' : 'text-gray-500'))
-
-function parseRole(value: unknown): PilotAccountRole | null {
-  if (value === 'STUDENT' || value === 'INSTRUCTOR' || value === 'DUAL') return value
-  return null
-}
 
 function loadRoleFromLocal(): PilotAccountRole | null {
   const userId = user.value?.id
@@ -41,27 +41,34 @@ function loadRoleFromLocal(): PilotAccountRole | null {
     const stored = getScopedItem(ACCOUNT_SCOPED_STORAGE_KEYS.PILOT_PROFILE, userId)
     if (!stored) return null
     const parsed = JSON.parse(stored) as { role?: unknown }
-    return parseRole(parsed.role)
+    return parseEndorsementsRole(parsed.role)
   } catch {
     return null
   }
 }
 
+async function readRemoteRole(userId: string): Promise<PilotAccountRole | null> {
+  const { data, error } = await supabase
+    .from('user_profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle()
+  if (error) throw error
+  return parseEndorsementsRole(data?.role)
+}
+
 async function loadRole(): Promise<void> {
   loading.value = true
+  loadError.value = null
   try {
-    await initAuth()
-    const localRole = loadRoleFromLocal()
-    if (localRole) role.value = localRole
-    const userId = user.value?.id
-    if (!userId) return
-    const { data } = await supabase
-      .from('user_profiles')
-      .select('role')
-      .eq('id', userId)
-      .maybeSingle()
-    const remoteRole = parseRole(data?.role)
-    if (remoteRole) role.value = remoteRole
+    const result = await loadEndorsementsPage({
+      initAuth,
+      getUserId: () => user.value?.id ?? null,
+      readLocalRole: loadRoleFromLocal,
+      readRemoteRole,
+    })
+    role.value = result.role
+    loadError.value = result.error
   } finally {
     loading.value = false
   }
@@ -86,13 +93,25 @@ onMounted(() => {
     <p v-else-if="!isAuthenticated" class="pt-4 text-sm" :class="muted">
       Sign in from the logbook to manage endorsements.
     </p>
-    <SettingsEndorsementsTab
-      v-else
-      class="pt-4"
-      :is-dark-mode="isDark"
-      :role="role"
-      :is-active="true"
-    />
+    <div v-else class="space-y-2 pt-4">
+      <p v-if="loadError" class="text-sm" :class="isDark ? 'text-red-400' : 'text-red-700'">
+        {{ loadError }}
+      </p>
+      <button
+        v-if="loadError"
+        type="button"
+        class="inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold"
+        :class="isDark ? 'text-gray-100' : 'text-gray-900'"
+        @click="loadRole"
+      >
+        Retry
+      </button>
+      <SettingsEndorsementsTab
+        :is-dark-mode="isDark"
+        :role="role"
+        :is-active="true"
+      />
+    </div>
   </IosAppPageShell>
 
   <div v-else class="min-h-[100dvh] font-quicksand" :class="pageBg">
@@ -120,12 +139,25 @@ onMounted(() => {
       <p v-else-if="!isAuthenticated" class="text-sm" :class="muted">
         Sign in from the logbook to manage endorsements.
       </p>
-      <SettingsEndorsementsTab
-        v-else
-        :is-dark-mode="isDark"
-        :role="role"
-        :is-active="true"
-      />
+      <div v-else class="space-y-2">
+        <p v-if="loadError" class="text-sm" :class="isDark ? 'text-red-400' : 'text-red-700'">
+          {{ loadError }}
+        </p>
+        <button
+          v-if="loadError"
+          type="button"
+          class="inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold"
+          :class="isDark ? 'text-gray-100' : 'text-gray-900'"
+          @click="loadRole"
+        >
+          Retry
+        </button>
+        <SettingsEndorsementsTab
+          :is-dark-mode="isDark"
+          :role="role"
+          :is-active="true"
+        />
+      </div>
     </main>
   </div>
 </template>

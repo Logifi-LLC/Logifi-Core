@@ -121,8 +121,65 @@ export async function waitUntilBootReveal(options: {
   }
 }
 
-/** Last-resort splash removal. Dashboard matches the hold cap. Other routes stay at 6s. */
-export function splashFallbackMs(path: string): number {
-  if (isDashboardPath(path)) return PROPELLER_CYCLE_MS + FULL_SYNC_HOLD_CAP_MS
+/**
+ * Signed-out cold open on Capacitor keeps the propeller for one cycle, counted
+ * from process start. The website drops the splash as soon as the shell is up.
+ */
+export function signedOutColdOpenDelayMs(input: {
+  native: boolean
+  now: number
+  coldBootStartedAt: number
+  minHoldMs?: number
+}): number {
+  if (!input.native) return 0
+  const minHoldMs = input.minHoldMs ?? PROPELLER_CYCLE_MS
+  return Math.max(0, minHoldMs - (input.now - input.coldBootStartedAt))
+}
+
+/**
+ * Progressive full sync returns after the first page. That page is not the
+ * logbook, so a boot hold must keep waiting for the rest.
+ */
+export function bootHoldNeedsRemainingSync(input: {
+  firstBatchCount: number
+  pageSize: number
+}): boolean {
+  return input.pageSize > 0 && input.firstBatchCount >= input.pageSize
+}
+
+const SIGN_IN_HOLD_KEY = 'logifi.signInBootHold'
+const SIGN_IN_HOLD_MAX_AGE_MS = 30_000
+
+/** Remember a fresh sign-in so a document reload still waits for the full sync. */
+export function markSignInBootHold(now = Date.now()): void {
+  if (typeof sessionStorage === 'undefined') return
+  try {
+    sessionStorage.setItem(SIGN_IN_HOLD_KEY, String(now))
+  } catch {
+    // Storage can throw in private mode. The in-page hold still runs.
+  }
+}
+
+/** True once, and only for a sign-in in the last 30s. Resume does not set this. */
+export function consumeSignInBootHold(now = Date.now()): boolean {
+  if (typeof sessionStorage === 'undefined') return false
+  try {
+    const raw = sessionStorage.getItem(SIGN_IN_HOLD_KEY)
+    if (!raw) return false
+    sessionStorage.removeItem(SIGN_IN_HOLD_KEY)
+    const started = Number(raw)
+    if (!Number.isFinite(started)) return false
+    return now - started >= 0 && now - started < SIGN_IN_HOLD_MAX_AGE_MS
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Last-resort splash removal. Dashboard and Capacitor match the hold cap.
+ * Marketing pages on the website stay at 6s.
+ */
+export function splashFallbackMs(path: string, native = false): number {
+  if (native || isDashboardPath(path)) return PROPELLER_CYCLE_MS + FULL_SYNC_HOLD_CAP_MS
   return MARKETING_SPLASH_FALLBACK_MS
 }

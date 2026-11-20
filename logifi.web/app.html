@@ -7,6 +7,18 @@
         color: #e5e7eb;
       }
 
+      /* WKWebView paints the prerender JSON unless the node has no box. */
+      script,
+      #__NUXT_DATA__,
+      [type='application/json'] {
+        display: none !important;
+        position: absolute !important;
+        width: 0 !important;
+        height: 0 !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+      }
+
       /* Mirrors app/assets/css/loading-animation.css for the pre-Vue splash. */
       .loading-animation {
         --loading-center-x: 256px;
@@ -215,8 +227,6 @@
         document.documentElement.classList.add(native || !marketing[path] ? 'boot-propeller' : 'boot-wordmark')
       })()
     </script>
-  </head>
-  <body>
     <div
       id="app-splash"
       class="loading-animation loading-animation--fullscreen loading-animation--motion loading-animation--variant-propeller"
@@ -271,3 +281,43 @@
           </g>
         </svg>
     </div>
+    <script>
+      /* hide-nuxt-payload: keep __NUXT_DATA__ for Nuxt, but give WKWebView nothing to paint. */
+      (function () {
+        function hidePayload() {
+          var payload = document.getElementById('__NUXT_DATA__')
+          if (payload) {
+            payload.hidden = true
+            payload.style.setProperty('display', 'none', 'important')
+            payload.style.setProperty('position', 'absolute', 'important')
+            payload.style.setProperty('width', '0', 'important')
+            payload.style.setProperty('height', '0', 'important')
+            payload.style.setProperty('overflow', 'hidden', 'important')
+            var parent = payload.parentNode
+            if (parent && parent.id !== 'nuxt-payload-hide') {
+              var wrap = document.createElement('div')
+              wrap.id = 'nuxt-payload-hide'
+              wrap.hidden = true
+              wrap.style.setProperty('display', 'none', 'important')
+              parent.insertBefore(wrap, payload)
+              wrap.appendChild(payload)
+            }
+          }
+          var roots = [document.body, document.documentElement]
+          for (var r = 0; r < roots.length; r++) {
+            var root = roots[r]
+            if (!root) continue
+            var kids = root.childNodes
+            for (var i = kids.length - 1; i >= 0; i--) {
+              var node = kids[i]
+              if (node.nodeType !== 3) continue
+              var text = node.textContent || ''
+              if (text.indexOf('serverRendered') === -1) continue
+              root.removeChild(node)
+            }
+          }
+        }
+        hidePayload()
+        document.addEventListener('DOMContentLoaded', hidePayload)
+      })()
+    </script>
