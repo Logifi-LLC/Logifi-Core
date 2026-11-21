@@ -30,12 +30,19 @@ export function shouldStartBootHold(reason: BootHoldReason): boolean {
 /**
  * Returning to the dashboard inside the same document must not replay the
  * propeller. A fresh sign-in still starts a hold, including after a reload.
+ * A remount for a user already revealed in this document does not, even when
+ * a stale sign-in flag is still in sessionStorage.
  */
 export function shouldReplayBootHold(input: {
   alreadyRevealed: boolean
   signInHold: boolean
+  sameUserAlreadyRevealed?: boolean
+  /** This document already played the post-sign-in cycle for the user. */
+  signInHoldAlreadyPlayed?: boolean
 }): boolean {
-  if (input.signInHold) return true
+  if (input.signInHold && !input.signInHoldAlreadyPlayed) return true
+  if (input.sameUserAlreadyRevealed) return false
+  if (input.signInHold) return false
   return !input.alreadyRevealed
 }
 
@@ -53,6 +60,207 @@ export function armDocumentBootOnce(): boolean {
 export function resetDocumentBootForTests(): void {
   if (typeof window === 'undefined') return
   delete (window as Window & { [DOCUMENT_BOOT_KEY]?: boolean })[DOCUMENT_BOOT_KEY]
+}
+
+const DOCUMENT_DASHBOARD_BOOT_KEY = '__logifiDocumentDashboardBoot'
+
+type DocumentDashboardBoot = {
+  /** Signed-out sheet or a signed-in reveal already happened in this document. */
+  revealed: boolean
+  /** User whose logbook has been revealed and hydrated. Survives a remount. */
+  hydratedUserId: string | null
+  /** User whose onUserSessionReady hold is in flight. */
+  holdUserId: string | null
+  /** User onUserSessionReady has started for. The auth callback can beat the success event. */
+  sessionReadyUserId: string | null
+  /** User whose post-sign-in propeller cycle has started. A late success must not arm another. */
+  signInHoldPlayedForUserId: string | null
+}
+
+type DashboardBootHost = Window & { [DOCUMENT_DASHBOARD_BOOT_KEY]?: DocumentDashboardBoot }
+
+function emptyDocumentDashboardBoot(): DocumentDashboardBoot {
+  return {
+    revealed: false,
+    hydratedUserId: null,
+    holdUserId: null,
+    sessionReadyUserId: null,
+    signInHoldPlayedForUserId: null,
+  }
+}
+
+function readDocumentDashboardBoot(): DocumentDashboardBoot {
+  if (typeof window === 'undefined') return emptyDocumentDashboardBoot()
+  return (window as DashboardBootHost)[DOCUMENT_DASHBOARD_BOOT_KEY] ?? emptyDocumentDashboardBoot()
+}
+
+function writeDocumentDashboardBoot(state: DocumentDashboardBoot): void {
+  if (typeof window === 'undefined') return
+  ;(window as DashboardBootHost)[DOCUMENT_DASHBOARD_BOOT_KEY] = state
+}
+
+/** True after the signed-out sheet or a signed-in reveal in this document. */
+export function isDocumentBootRevealed(): boolean {
+  return readDocumentDashboardBoot().revealed
+}
+
+/** The signed-out propeller has finished. A later sign-in can still start a hold. */
+export function noteDocumentBootRevealed(): void {
+  const state = readDocumentDashboardBoot()
+  state.revealed = true
+  writeDocumentDashboardBoot(state)
+}
+
+export function dashboardHydratedForUser(userId: string | null | undefined): boolean {
+  if (!userId) return false
+  return readDocumentDashboardBoot().hydratedUserId === userId
+}
+
+/**
+ * onUserSessionReady is starting a hold for this user. A late sign-in success
+ * must not arm another one, and this user is not hydrated again until it finishes.
+ */
+export function noteDashboardSessionReady(userId: string): void {
+  const state = readDocumentDashboardBoot()
+  state.sessionReadyUserId = userId
+  writeDocumentDashboardBoot(state)
+}
+
+export function dashboardSessionReadyStartedFor(userId: string | null | undefined): boolean {
+  if (!userId) return false
+  return readDocumentDashboardBoot().sessionReadyUserId === userId
+}
+
+export function noteSignInHoldPlayed(userId: string): void {
+  const state = readDocumentDashboardBoot()
+  state.signInHoldPlayedForUserId = userId
+  writeDocumentDashboardBoot(state)
+}
+
+export function signInHoldPlayedFor(userId: string | null | undefined): boolean {
+  if (!userId) return false
+  return readDocumentDashboardBoot().signInHoldPlayedForUserId === userId
+}
+
+export function noteDashboardHoldStarted(userId: string): void {
+  const state = readDocumentDashboardBoot()
+  state.holdUserId = userId
+  if (state.hydratedUserId === userId) state.hydratedUserId = null
+  writeDocumentDashboardBoot(state)
+  clearRetainedDashboardLogbook()
+}
+
+/** The hold finished and this user's logbook can show without the propeller. */
+export function noteDashboardHoldFinished(userId: string): void {
+  const state = readDocumentDashboardBoot()
+  if (state.holdUserId && state.holdUserId !== userId) return
+  state.holdUserId = null
+  state.hydratedUserId = userId
+  state.revealed = true
+  writeDocumentDashboardBoot(state)
+}
+
+/**
+ * Sign-out drops the hydrated user so the next sign-in plays the propeller.
+ * The document stays revealed, so the signed-out sheet does not replay it.
+ */
+export function noteSignedOutBootRevealed(): void {
+  const state = readDocumentDashboardBoot()
+  state.revealed = true
+  state.holdUserId = null
+  state.hydratedUserId = null
+  state.sessionReadyUserId = null
+  state.signInHoldPlayedForUserId = null
+  writeDocumentDashboardBoot(state)
+  clearRetainedDashboardLogbook()
+}
+
+/** Same-user remount keeps the gate open. A new user or a fresh hold closes it. */
+export function shouldResetHydrationGate(userId: string | null | undefined): boolean {
+  return !dashboardHydratedForUser(userId)
+}
+
+/**
+ * AuthModal success must not re-arm a hold that onUserSessionReady already
+ * owns or has already cleared for this user. That late write never gets a
+ * matching clear, so the propeller stays up.
+ */
+export function shouldArmHoldOnSignInSuccess(userId: string | null | undefined): boolean {
+  const state = readDocumentDashboardBoot()
+  if (userId && state.holdUserId === userId) return false
+  if (userId && state.signInHoldPlayedForUserId === userId) return false
+  if (!userId && (state.holdUserId || state.signInHoldPlayedForUserId)) return false
+  return true
+}
+
+export type SignInBootFlags = {
+  bootHoldActive: boolean
+  bootCurrencyPending: boolean
+  logbookInboundSyncPending: boolean
+}
+
+/**
+ * Flags for the auth success handler. The session-ready path owns the inbound
+ * gate: setting it here sticks after the hold clears, because nothing else
+ * turns it back off. bootHoldActive covers the gap until that path starts.
+ */
+export function signInSuccessBootFlags(
+  input: SignInBootFlags & { userId: string | null | undefined },
+): SignInBootFlags & { markSignInHold: boolean } {
+  if (!shouldArmHoldOnSignInSuccess(input.userId)) {
+    return {
+      bootHoldActive: input.bootHoldActive,
+      bootCurrencyPending: input.bootCurrencyPending,
+      logbookInboundSyncPending: input.logbookInboundSyncPending,
+      markSignInHold: false,
+    }
+  }
+  return {
+    bootHoldActive: true,
+    bootCurrencyPending: true,
+    logbookInboundSyncPending: input.logbookInboundSyncPending,
+    markSignInHold: true,
+  }
+}
+
+export function shouldShowBootLoader(input: {
+  bootHoldActive: boolean
+  authLoading: boolean
+  authenticated: boolean
+  hydrated: boolean
+  sameUserAlreadyRevealed: boolean
+}): boolean {
+  if (input.bootHoldActive) return true
+  if (input.sameUserAlreadyRevealed) return false
+  if (!input.authLoading && !input.authenticated) return false
+  return !input.hydrated
+}
+
+type RetainedLogbook = {
+  userId: string
+  entries: unknown[]
+}
+
+/** In-memory list for a remount in this document. A reload drops it. */
+let retainedLogbook: RetainedLogbook | null = null
+
+export function retainDashboardLogbook(userId: string, entries: readonly unknown[]): void {
+  retainedLogbook = { userId, entries: entries.slice() }
+}
+
+export function takeRetainedDashboardLogbook(userId: string): unknown[] | null {
+  if (!retainedLogbook || retainedLogbook.userId !== userId) return null
+  return retainedLogbook.entries
+}
+
+export function clearRetainedDashboardLogbook(): void {
+  retainedLogbook = null
+}
+
+export function resetDocumentDashboardBootForTests(): void {
+  clearRetainedDashboardLogbook()
+  if (typeof window === 'undefined') return
+  delete (window as DashboardBootHost)[DOCUMENT_DASHBOARD_BOOT_KEY]
 }
 
 /**

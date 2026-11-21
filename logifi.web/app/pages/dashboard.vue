@@ -6836,11 +6836,27 @@ import {
   FULL_SYNC_HOLD_CAP_MS,
   bootHoldNeedsRemainingSync,
   bootHoldStartedAt,
+  clearRetainedDashboardLogbook,
   consumeSignInBootHold,
+  dashboardHydratedForUser,
+  dashboardSessionReadyStartedFor,
   getColdBootStartedAt,
+  isDocumentBootRevealed,
   markSignInBootHold,
+  noteDashboardHoldFinished,
+  noteDashboardHoldStarted,
+  noteDashboardSessionReady,
+  noteDocumentBootRevealed,
+  noteSignInHoldPlayed,
+  noteSignedOutBootRevealed,
+  retainDashboardLogbook,
   shouldReplayBootHold,
+  shouldResetHydrationGate,
+  shouldShowBootLoader,
+  signInHoldPlayedFor,
+  signInSuccessBootFlags,
   signedOutColdOpenDelayMs,
+  takeRetainedDashboardLogbook,
   waitUntilBootReveal,
 } from '../utils/bootHold'
 import {
@@ -7262,13 +7278,19 @@ const migrationProgress = ref({ step: '', current: 0, total: 0 })
 const isDashboardRefreshing = ref(false)
 const isLoadEntriesRunning = ref(false)
 const isBulkLoadInProgress = ref(false)
-const logbookLocalCacheReadComplete = ref(false)
+const bootUserIdAtSetup = isBrowser ? (user.value?.id ?? null) : null
+const returningHydratedUser = dashboardHydratedForUser(bootUserIdAtSetup)
+const logbookLocalCacheReadComplete = ref(returningHydratedUser)
 const logbookInboundSyncPending = ref(false)
 const bootHoldActive = ref(false)
 /** Hide currency until the boot sync's full recalculation. A partial page is stale. */
 const bootCurrencyPending = ref(false)
-/** True after the first dashboard reveal or the signed-out sheet. Sign-in then starts a new cycle. */
-let dashboardBootRevealed = false
+/**
+ * True after the first dashboard reveal or the signed-out sheet.
+ * Window-backed so a remount in this document does not start another cycle.
+ * Sign-in then starts a new cycle.
+ */
+let dashboardBootRevealed = isDocumentBootRevealed()
 let bootHoldGeneration = 0
 let signedOutHoldGeneration = 0
 let loadEntriesInFlight: Promise<number> | null = null
@@ -7303,7 +7325,15 @@ let iosCatalogDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const visibleEntryCount = ref(ENTRIES_PAGE_SIZE)
-const logEntries = ref<LogEntry[]>([])
+
+function seededLogEntries(): LogEntry[] {
+  const id = user.value?.id
+  if (!id || !dashboardHydratedForUser(id)) return []
+  const retained = takeRetainedDashboardLogbook(id)
+  return Array.isArray(retained) ? retained as LogEntry[] : []
+}
+
+const logEntries = ref<LogEntry[]>(seededLogEntries())
 const supersededIdSet = computed(() => buildSupersededIdSet(logEntries.value))
 
 const aircraftTailIndex = computed(() => buildAircraftTailIndex(logEntries.value))
@@ -7377,6 +7407,7 @@ const handleLogout = async () => {
   stopBackgroundSync()
   setActiveUserId(null)
   await authSignOut()
+  noteSignedOutBootRevealed()
   logEntries.value = []
   closeSettings()
   dashboardFcvConnected.value = false
@@ -7397,17 +7428,37 @@ function onAuthModalClose() {
 
 function onSignedIn() {
   signedOutHoldGeneration += 1
-  markSignInBootHold()
-  bootHoldActive.value = true
-  bootCurrencyPending.value = true
-  logbookInboundSyncPending.value = true
   showAuthModal.value = false
+  // onUserSessionReady owns the hold. Success after that cycle has started
+  // must not arm another one. Success after a pass that never saw the
+  // sign-in flag still has to start the cycle.
+  const next = signInSuccessBootFlags({
+    userId: user.value?.id,
+    bootHoldActive: bootHoldActive.value,
+    bootCurrencyPending: bootCurrencyPending.value,
+    logbookInboundSyncPending: logbookInboundSyncPending.value,
+  })
+  if (!next.markSignInHold) return
+  markSignInBootHold()
+  bootHoldActive.value = next.bootHoldActive
+  bootCurrencyPending.value = next.bootCurrencyPending
+  // Supabase fires the session before this success event. That pass can
+  // finish with no sign-in flag. Own the cycle from here when it did.
+  const signedInUserId = user.value?.id
+  if (
+    signedInUserId
+    && dashboardSessionReadyStartedFor(signedInUserId)
+    && !signInHoldPlayedFor(signedInUserId)
+  ) {
+    void onUserSessionReady(signedInUserId)
+  }
 }
 
 /** After server-side account deletion — local auth already cleared. */
 const handleAccountDeleted = () => {
   stopBackgroundSync()
   setActiveUserId(null)
+  noteSignedOutBootRevealed()
   logEntries.value = []
   closeSettings()
   dashboardFcvConnected.value = false
@@ -7424,8 +7475,15 @@ const handleAccountDeleted = () => {
 }
 
 function resetLogbookHydrationGate(): void {
+  if (!shouldResetHydrationGate(user.value?.id)) return
   logbookLocalCacheReadComplete.value = false
   logbookInboundSyncPending.value = false
+}
+
+function rememberLogbookForDocument(): void {
+  const id = user.value?.id
+  if (!id || !dashboardHydratedForUser(id)) return
+  retainDashboardLogbook(id, logEntries.value)
 }
 
 async function handoffNativeBootSplash(): Promise<void> {
@@ -7441,10 +7499,14 @@ async function handoffNativeBootSplash(): Promise<void> {
 async function onUserSessionReady(userId: string): Promise<void> {
   signedOutHoldGeneration += 1
   const generation = ++bootHoldGeneration
+  noteDashboardSessionReady(userId)
+  const sameUserAlreadyRevealed = dashboardHydratedForUser(userId)
   const signInHold = consumeSignInBootHold()
   const replayBoot = shouldReplayBootHold({
     alreadyRevealed: dashboardBootRevealed,
     signInHold,
+    sameUserAlreadyRevealed,
+    signInHoldAlreadyPlayed: signInHoldPlayedFor(userId),
   })
   const holdStartedAt = replayBoot
     ? (bootHoldStartedAt({
@@ -7454,6 +7516,8 @@ async function onUserSessionReady(userId: string): Promise<void> {
       }) ?? Date.now())
     : null
   if (replayBoot) {
+    if (signInHold) noteSignInHoldPlayed(userId)
+    noteDashboardHoldStarted(userId)
     bootHoldActive.value = true
     bootCurrencyPending.value = true
   }
@@ -7527,10 +7591,14 @@ async function onUserSessionReady(userId: string): Promise<void> {
     }
   } finally {
     if (generation !== bootHoldGeneration) return
-    if (!replayBoot) return
-    dashboardBootRevealed = true
     bootHoldActive.value = false
     if (!isBulkLoadInProgress.value) bootCurrencyPending.value = false
+    // Signed out while this hold was in flight. Do not mark that user hydrated.
+    if (user.value?.id !== userId) return
+    noteDashboardHoldFinished(userId)
+    dashboardBootRevealed = true
+    rememberLogbookForDocument()
+    if (!replayBoot) return
     await handoffNativeBootSplash()
   }
 }
@@ -7554,6 +7622,7 @@ watch(
   async (newUserId, oldUserId) => {
     if (newUserId) {
       if (oldUserId && oldUserId !== newUserId) {
+        clearRetainedDashboardLogbook()
         resetLogbookHydrationGate()
         logEntries.value = []
         crewProfiles.value = {}
@@ -7572,6 +7641,8 @@ watch(
         console.warn('[dashboard] Ignoring null auth while offline; keeping local session UX')
         return
       }
+
+      if (oldUserId) noteSignedOutBootRevealed()
 
       stopBackgroundSync()
       setActiveUserId(null)
@@ -7634,6 +7705,7 @@ watch(authLoading, (loading) => {
     }
     if (generation !== signedOutHoldGeneration || isAuthenticated.value) return
     dashboardBootRevealed = true
+    noteDocumentBootRevealed()
     bootHoldActive.value = false
     await handoffNativeBootSplash()
   })()
@@ -7697,6 +7769,7 @@ function handleAppResume(): void {
 
 // Cleanup scroll event listener on unmount
 onUnmounted(() => {
+  rememberLogbookForDocument()
   teardownEntriesLoadMoreObserver()
   if (searchDebounceTimer) {
     clearTimeout(searchDebounceTimer)
@@ -17100,9 +17173,12 @@ async function loadEntriesInternal(options: LoadEntriesOptions = {}): Promise<nu
 
     logbookLocalCacheReadComplete.value = true
     const cachedEntryCount = idbEntries.length
+    // A user already revealed in this document keeps the list up. Raising the
+    // inbound flag here is what paints the propeller on the way back.
+    const gateAlreadyOpen = Boolean(scopedUserId) && !shouldResetHydrationGate(scopedUserId)
 
     if (options.localOnly) {
-      if (isAuthenticated.value && scopedUserId && cachedEntryCount === 0) {
+      if (!gateAlreadyOpen && isAuthenticated.value && scopedUserId && cachedEntryCount === 0) {
         logbookInboundSyncPending.value = true
       } else {
         logbookInboundSyncPending.value = false
@@ -17110,7 +17186,7 @@ async function loadEntriesInternal(options: LoadEntriesOptions = {}): Promise<nu
       return inboundRemovedCount
     }
 
-    if (cachedEntryCount > 0) {
+    if (cachedEntryCount > 0 || gateAlreadyOpen) {
       logbookInboundSyncPending.value = false
     } else if (isAuthenticated.value && user.value) {
       logbookInboundSyncPending.value = true
@@ -17994,9 +18070,13 @@ const logbookEmptyStateGate = computed(() => ({
 }))
 
 const showLogbookBootLoader = computed(() => {
-  if (bootHoldActive.value) return true
-  if (!authLoading.value && !isAuthenticated.value) return false
-  return !isLogbookHydratedForUi(logbookEmptyStateGate.value)
+  return shouldShowBootLoader({
+    bootHoldActive: bootHoldActive.value,
+    authLoading: authLoading.value,
+    authenticated: isAuthenticated.value,
+    hydrated: isLogbookHydratedForUi(logbookEmptyStateGate.value),
+    sameUserAlreadyRevealed: dashboardHydratedForUser(user.value?.id),
+  })
 })
 
 const showLogbookEmptyState = computed(() =>
