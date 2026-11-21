@@ -13,12 +13,24 @@ export function getCapacitorPlatform(): CapacitorPlatform {
   return 'web'
 }
 
+function isCapacitorScheme(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.location.protocol === 'capacitor:'
+  } catch {
+    return false
+  }
+}
+
 export function isCapacitorIos(): boolean {
+  // Capacitor iOS serves the bundle at capacitor://localhost. Android uses https.
+  if (isCapacitorScheme()) return true
   return getCapacitorPlatform() === 'ios'
 }
 
 export function isCapacitorNative(): boolean {
   if (typeof window === 'undefined') return false
+  if (isCapacitorScheme()) return true
   return Capacitor.isNativePlatform()
 }
 

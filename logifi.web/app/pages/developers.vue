@@ -55,7 +55,7 @@
         ]"
       >
         <div class="mr-auto px-6 sm:px-8 py-4 flex items-center justify-between relative">
-          <a class="left" href="/">
+          <NuxtLink class="left" to="/">
             <img
               src="/images/logifi-logo.png"
               alt="logifi"
@@ -64,7 +64,7 @@
                 effectiveDark ? '' : 'brightness-[0.2]'
               ]"
             />
-          </a>
+          </NuxtLink>
 
           <div class="absolute inset-x-0 flex justify-center pointer-events-none">
             <span
@@ -333,6 +333,7 @@ import AuthModal from '~/components/AuthModal.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
 import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
+import { goBackInApp } from '~/utils/inAppBack'
 
 const route = useRoute()
 const router = useRouter()
@@ -350,28 +351,9 @@ const handleAuthSuccess = () => {
   window.location.href = '/dashboard'
 }
 
-const backTarget = computed(() => {
-  const from = route.query.from
-  if (from === 'landing') return '/'
-  if (from === 'dashboard' || from === 'app') return '/dashboard'
-  return '/dashboard' // default
-})
-
 const goBack = () => {
-  const from = route.query.from
-  if (from === 'landing') {
-    router.push('/')
-    return
-  }
-  if (from === 'dashboard' || from === 'app') {
-    router.push('/dashboard')
-    return
-  }
-  if (typeof window !== 'undefined' && window.history.length > 1) {
-    router.back()
-  } else {
-    router.push(backTarget.value)
-  }
+  const fallback = route.query.from === 'landing' ? '/' : '/dashboard'
+  goBackInApp(router, fallback)
 }
 
 const { theme, isDark, applyDocumentTheme } = useTheme()

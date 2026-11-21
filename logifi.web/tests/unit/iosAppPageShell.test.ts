@@ -1,17 +1,24 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import { mount } from '@vue/test-utils'
 import IosAppPageShell from '../../app/components/ios/IosAppPageShell.vue'
+
+const { back, navigateTo } = vi.hoisted(() => ({
+  back: vi.fn(),
+  navigateTo: vi.fn(),
+}))
 
 vi.mock('~/composables/useTheme', () => ({
   useTheme: () => ({ isDark: ref(false) }),
 }))
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ back: vi.fn(), push: vi.fn() }),
+  useRouter: () => ({ back, push: vi.fn() }),
 }))
+
+vi.stubGlobal('navigateTo', navigateTo)
 
 function mountShell(props?: Record<string, unknown>, slots?: { default?: string; footer?: string }) {
   return mount(IosAppPageShell, {
@@ -22,6 +29,30 @@ function mountShell(props?: Record<string, unknown>, slots?: { default?: string;
 }
 
 describe('IosAppPageShell', () => {
+  beforeEach(() => {
+    back.mockClear()
+    navigateTo.mockClear()
+    history.replaceState({}, '')
+  })
+
+  it('goes back when Vue Router recorded an in-app page', async () => {
+    history.replaceState({ back: '/dashboard', current: '/endorsements' }, '')
+    const wrapper = mountShell()
+    await wrapper.get('button').trigger('click')
+    expect(back).toHaveBeenCalledOnce()
+    expect(navigateTo).not.toHaveBeenCalled()
+  })
+
+  it('stays in the app when WebView history is long but has no in-app entry', async () => {
+    history.replaceState({}, '')
+    history.pushState({}, '')
+    expect(history.length).toBeGreaterThan(1)
+    const wrapper = mountShell()
+    await wrapper.get('button').trigger('click')
+    expect(back).not.toHaveBeenCalled()
+    expect(navigateTo).toHaveBeenCalledWith('/dashboard')
+  })
+
   it('keeps document scroll for other screens', () => {
     const wrapper = mountShell({}, { footer: '<p>Import</p>' })
     const root = wrapper.get('div')

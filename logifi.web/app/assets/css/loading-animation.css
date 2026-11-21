@@ -1,0 +1,252 @@
+/* Propeller uses logifi-mark.svg (512). Merge translates center each bar on (256, 256):
+   BL (127, -146.25), TR (-128.5, 145). CSS transform is only on inner motion groups. */
+.loading-animation {
+  --loading-center-x: 256px;
+  --loading-center-y: 256px;
+  --loading-merge-bl-x: 127px;
+  --loading-merge-bl-y: -146.25px;
+  --loading-merge-tr-x: -128.5px;
+  --loading-merge-tr-y: 145px;
+  --loading-origin-bl-x: 39px;
+  --loading-origin-bl-y: 112px;
+  --loading-origin-tr-x: 111px;
+  --loading-origin-tr-y: 10px;
+  /* Lockup brackets (1024 space) scaled onto the 512 mark centered in that canvas. */
+  --loading-wordmark-bl-x: 165.43px;
+  --loading-wordmark-bl-y: 148.89px;
+  --loading-wordmark-tr-x: -206.62px;
+  --loading-wordmark-tr-y: 80.28px;
+  --loading-wordmark-bl-sx: 1.071;
+  --loading-wordmark-bl-sy: 0.7768;
+  --loading-wordmark-tr-sx: 1.0318;
+  --loading-wordmark-tr-sy: 0.8693;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading-animation--fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 99990;
+  background: #030712;
+}
+
+.loading-animation--inline {
+  position: relative;
+  padding: 1rem;
+}
+
+.loading-animation__mark {
+  display: block;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+/* app.html keeps the wordmark SVG in <template id="boot-splash-wordmark">
+   until the marketing shell clones it. These rules still have to beat
+   .loading-animation__mark { display: block } if that clone is in the tree. */
+svg.boot-splash__wordmark {
+  display: none !important;
+}
+
+html.boot-wordmark svg.boot-splash__propeller {
+  display: none !important;
+}
+
+html.boot-wordmark svg.boot-splash__wordmark {
+  display: block !important;
+  width: 72px;
+  height: 72px;
+}
+
+.loading-animation__mark--square.loading-animation__mark--sm {
+  width: 48px;
+  height: auto;
+}
+
+.loading-animation__mark--square.loading-animation__mark--md {
+  width: 72px;
+  height: auto;
+}
+
+.loading-animation__mark--square.loading-animation__mark--lg {
+  width: 96px;
+  height: auto;
+}
+
+.loading-animation__mark--wordmark.loading-animation__mark--sm {
+  width: 48px;
+  height: 48px;
+}
+
+.loading-animation__mark--wordmark.loading-animation__mark--md {
+  width: 72px;
+  height: 72px;
+}
+
+.loading-animation__mark--wordmark.loading-animation__mark--lg {
+  width: 96px;
+  height: 96px;
+}
+
+.loading-animation__stage {
+  transform-box: view-box;
+  transform-origin: var(--loading-center-x) var(--loading-center-y);
+}
+
+.loading-animation__motion--bl,
+.loading-animation__corner--bl {
+  transform-box: fill-box;
+  transform-origin: var(--loading-origin-bl-x) var(--loading-origin-bl-y);
+}
+
+.loading-animation__motion--tr,
+.loading-animation__corner--tr {
+  transform-box: fill-box;
+  transform-origin: var(--loading-origin-tr-x) var(--loading-origin-tr-y);
+}
+
+.loading-animation__motion--bl-wordmark,
+.loading-animation__corner--bl-wordmark,
+.loading-animation__motion--tr-wordmark,
+.loading-animation__corner--tr-wordmark {
+  transform-box: view-box;
+  transform-origin: 0 0;
+}
+
+/* --- Propeller variant (2.8s) --- */
+.loading-animation--variant-propeller.loading-animation--motion .loading-animation__motion--bl {
+  animation: loading-animation-corner-bl 2.8s ease-in-out infinite;
+}
+
+.loading-animation--variant-propeller.loading-animation--motion .loading-animation__motion--tr {
+  animation: loading-animation-corner-tr 2.8s ease-in-out infinite;
+}
+
+.loading-animation--variant-propeller.loading-animation--motion .loading-animation__stage {
+  animation: loading-animation-stage-spin 2.8s cubic-bezier(0.55, 0.12, 0.85, 0.38) infinite;
+}
+
+@keyframes loading-animation-corner-bl {
+  0%,
+  6%,
+  94%,
+  100% {
+    transform: translate(0, 0);
+  }
+  30%,
+  40%,
+  75% {
+    transform: translate(var(--loading-merge-bl-x), var(--loading-merge-bl-y));
+  }
+  88% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes loading-animation-corner-tr {
+  0%,
+  6%,
+  94%,
+  100% {
+    transform: translate(0, 0);
+  }
+  30%,
+  40%,
+  75% {
+    transform: translate(var(--loading-merge-tr-x), var(--loading-merge-tr-y));
+  }
+  88% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes loading-animation-stage-spin {
+  0%,
+  40% {
+    transform: rotate(0deg);
+  }
+  75% {
+    transform: rotate(720deg);
+  }
+  100% {
+    transform: rotate(720deg);
+  }
+}
+
+/* --- Wordmark variant (3s): letters fade; bracket paths travel to the icon mark --- */
+.loading-animation--variant-wordmark.loading-animation--motion .loading-animation__wordmark-image {
+  animation: loading-animation-wordmark-image 3s ease-in-out infinite;
+}
+
+.loading-animation--variant-wordmark.loading-animation--motion .loading-animation__motion--bl-wordmark {
+  animation: loading-animation-wordmark-bl 3s ease-in-out infinite;
+}
+
+.loading-animation--variant-wordmark.loading-animation--motion .loading-animation__motion--tr-wordmark {
+  animation: loading-animation-wordmark-tr 3s ease-in-out infinite;
+}
+
+@keyframes loading-animation-wordmark-image {
+  0%,
+  16%,
+  76%,
+  100% {
+    opacity: 1;
+  }
+  28%,
+  64% {
+    opacity: 0;
+  }
+}
+
+@keyframes loading-animation-wordmark-bl {
+  0%,
+  16%,
+  64%,
+  100% {
+    transform: translate(0, 0) scale(1, 1);
+  }
+  28%,
+  48% {
+    transform: translate(var(--loading-wordmark-bl-x), var(--loading-wordmark-bl-y))
+      scale(var(--loading-wordmark-bl-sx), var(--loading-wordmark-bl-sy));
+  }
+}
+
+@keyframes loading-animation-wordmark-tr {
+  0%,
+  16%,
+  64%,
+  100% {
+    transform: translate(0, 0) scale(1, 1);
+  }
+  28%,
+  48% {
+    transform: translate(var(--loading-wordmark-tr-x), var(--loading-wordmark-tr-y))
+      scale(var(--loading-wordmark-tr-sx), var(--loading-wordmark-tr-sy));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-animation--motion .loading-animation__motion--bl,
+  .loading-animation--motion .loading-animation__motion--tr,
+  .loading-animation--motion .loading-animation__stage,
+  .loading-animation--motion .loading-animation__motion--bl-wordmark,
+  .loading-animation--motion .loading-animation__motion--tr-wordmark,
+  .loading-animation--motion .loading-animation__corner--bl,
+  .loading-animation--motion .loading-animation__corner--tr,
+  .loading-animation--motion .loading-animation__corner--bl-wordmark,
+  .loading-animation--motion .loading-animation__corner--tr-wordmark,
+  .loading-animation--motion .loading-animation__wordmark-image,
+  .loading-animation--motion .loading-animation__word {
+    animation: none;
+  }
+
+  .loading-animation--variant-wordmark .loading-animation__wordmark-image,
+  .loading-animation--variant-wordmark .loading-animation__motion--bl-wordmark,
+  .loading-animation--variant-wordmark .loading-animation__motion--tr-wordmark {
+    opacity: 1;
+  }
+}

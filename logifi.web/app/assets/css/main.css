@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 @import "./print.css";
+@import "./loading-animation.css";
 
 /* Logifi theme is `html.dark` / `html.light` from `useTheme()`, not OS media alone. */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -71,6 +72,11 @@ script,
 #__NUXT_DATA__,
 [type='application/json'] {
   display: none !important;
+  position: absolute !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
 }
 
 html.capacitor-ios,

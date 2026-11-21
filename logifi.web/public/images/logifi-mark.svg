@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>Logifi mark</title>
+  <g id="corner-top-right" fill="#FFFFFF">
+    <path d="M190.5 98H397V306H372V124H190.5Z"/>
+  </g>
+  <g id="corner-bottom-left" fill="#FFFFFF">
+    <path d="M116 207.5H142V389.5H323V415H116Z"/>
+  </g>
+</svg>

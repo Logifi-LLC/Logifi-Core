@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { supabase } from '~/lib/supabase'
+import { REMOTE_READ_TIMEOUT_MS, withTimeout } from '~/utils/promiseTimeout'
 import { useAuth } from '~/composables/useAuth'
 import type { Database } from '~/types/database'
 import type { EndorsementTemplate } from '~/utils/endorsementCatalog'
@@ -94,17 +95,27 @@ export const useEndorsements = () => {
       isLoading.value = true
       error.value = null
       const studentId = requireUserId()
-      const { data, error: fetchError } = await supabase
-        .from('endorsements')
-        .select('*')
-        .eq('student_id', studentId)
-        .neq('status', 'cancelled')
-        .order('created_at', { ascending: false })
+      const { data, error: fetchError } = await withTimeout(
+        Promise.resolve(
+          supabase
+            .from('endorsements')
+            .select('*')
+            .eq('student_id', studentId)
+            .neq('status', 'cancelled')
+            .order('created_at', { ascending: false })
+        ),
+        REMOTE_READ_TIMEOUT_MS,
+        'Load endorsements'
+      )
       if (fetchError) throw fetchError
       asStudent.value = (data ?? []) as EndorsementRow[]
       return { success: true, data: asStudent.value }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to load endorsements'
+      const errorMessage = err instanceof Error && /timed out/i.test(err.message)
+        ? "Couldn't load endorsements."
+        : err instanceof Error
+          ? err.message
+          : 'Failed to load endorsements'
       error.value = errorMessage
       return { success: false, error: errorMessage }
     } finally {
@@ -117,18 +128,27 @@ export const useEndorsements = () => {
       isLoading.value = true
       error.value = null
       const instructorId = requireUserId()
-      const { data, error: fetchError } = await supabase
-        .from('endorsements')
-        .select('*')
-        .eq('instructor_id', instructorId)
-        .neq('status', 'cancelled')
-        .order('created_at', { ascending: false })
+      const { data, error: fetchError } = await withTimeout(
+        Promise.resolve(
+          supabase
+            .from('endorsements')
+            .select('*')
+            .eq('instructor_id', instructorId)
+            .neq('status', 'cancelled')
+            .order('created_at', { ascending: false })
+        ),
+        REMOTE_READ_TIMEOUT_MS,
+        'Load instructor endorsements'
+      )
       if (fetchError) throw fetchError
       asInstructor.value = (data ?? []) as EndorsementRow[]
       return { success: true, data: asInstructor.value }
     } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Failed to load instructor endorsements'
+      const errorMessage = err instanceof Error && /timed out/i.test(err.message)
+        ? "Couldn't load endorsements."
+        : err instanceof Error
+          ? err.message
+          : 'Failed to load instructor endorsements'
       error.value = errorMessage
       return { success: false, error: errorMessage }
     } finally {

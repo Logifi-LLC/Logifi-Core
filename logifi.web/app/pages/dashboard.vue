@@ -8,6 +8,8 @@
     isDarkMode ? 'bg-gray-950' : 'bg-gray-50'
   ]"
 >
+  <LoadingAnimation v-if="showLogbookBootLoader" label="Loading logbook" />
+
   <!-- Auth Modal -->
   <AuthModal
     v-if="showAuthModal"
@@ -17,7 +19,7 @@
     :referral-open-count="referralOpenCount"
     :notice="authNotice"
     @close="onAuthModalClose"
-    @success="showAuthModal = false"
+    @success="onSignedIn"
   />
 
   <!-- Audit Trail Modal -->
@@ -263,7 +265,7 @@
               {{ activeCatalogFilterCount > 9 ? '9+' : activeCatalogFilterCount }}
             </span>
           </button>
-        <a v-if="!isIos" class="left flex items-center shrink-0" href="/dashboard">
+        <NuxtLink v-if="!isIos" class="left flex items-center shrink-0" to="/dashboard">
             <img
               src="/images/logifi-logo.png"
               alt="logifi"
@@ -272,7 +274,7 @@
                 isDarkMode ? '' : 'brightness-[0.2]',
               ]"
             />
-          </a>
+          </NuxtLink>
         </div>
         <HeaderUtcClockBar
           :display-clock="displayClock"
@@ -550,7 +552,7 @@
             </div>
             <template v-if="!isIos || !iosCatalogBuilding">
             <p
-              v-if="!hasAnyEntriesForActiveLogbook"
+              v-if="showLogbookEmptyState"
               :class="['text-sm font-quicksand px-1', isDarkMode ? 'text-gray-400' : 'text-gray-600']"
             >
               Catalog builds from your flights and imports. Add or import entries to populate these lists.
@@ -964,7 +966,7 @@
                     </button>
                   </div>
                   <LogbookEmptyState
-                    v-if="!hasAnyEntriesForActiveLogbook"
+                    v-if="showLogbookEmptyState"
                     class="mt-2"
                     :is-dark-mode="isDarkMode"
                     :is-simulator="activeLogbook === 'simulator'"
@@ -1141,7 +1143,7 @@
                 </div>
     </div>
               <CurrencyStatusChips
-                v-if="shouldShowCurrencyChips(showCurrencyChips) && hasAnyEntriesForActiveLogbook"
+                v-if="shouldShowCurrencyChips(showCurrencyChips) && hasAnyEntriesForActiveLogbook && !bootCurrencyPending"
                 :passenger-currency="passengerCurrency"
                 :night-currency="nightCurrency"
                 :instrument-currency="instrumentCurrency"
@@ -1431,10 +1433,10 @@
           </div>
 
             <div
-              v-if="filteredEntries.length === 0"
+              v-if="filteredEntries.length === 0 && !showLogbookBootLoader"
               :class="[
                 'mt-6 rounded-2xl border border-dashed font-quicksand transition-colors duration-300',
-                !hasAnyEntriesForActiveLogbook ? 'p-6' : 'p-10 text-center',
+                showLogbookEmptyState ? 'p-6' : 'p-10 text-center',
                 isDarkMode
                   ? 'bg-gray-900 border-white/10 text-gray-400 shadow-md shadow-black/40'
                   : 'bg-gray-100 border-gray-300 text-gray-500',
@@ -1443,7 +1445,7 @@
               <template v-if="entriesHiddenOnlyByDateRange">
                 No entries in {{ dateRangeFilterSummary }}. Adjust the date range in Totals Overview above, or choose <strong>All time</strong> to see every entry.
               </template>
-              <template v-else-if="!hasAnyEntriesForActiveLogbook">
+              <template v-else-if="showLogbookEmptyState">
                 <p :class="['text-sm font-quicksand text-center', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
                   Saved entries appear in this list after you add, import, or scan your first flights.
                 </p>
@@ -6810,7 +6812,13 @@ import {
   logEntryToSupabaseRow,
   mapSupabaseRowToLogEntry as mapSupabaseRowToLogEntryFields,
 } from '../utils/logEntrySupabaseRow'
-import { getDisplayedPilotInitials, shouldShowCurrencyChips } from '../utils/dashboardHydration'
+import {
+  canShowLogbookEmptyState,
+  getDisplayedPilotInitials,
+  isLogbookHydratedForUi,
+  shouldShowCurrencyChips,
+} from '../utils/dashboardHydration'
+import LoadingAnimation from '../components/LoadingAnimation.vue'
 import {
   CATEGORY_CLASS_TIME_HELP,
   shouldShowAnyEntryFormField,
@@ -6824,6 +6832,27 @@ import {
   type TotalsDateRange,
 } from '../utils/totalsLandingCounts'
 import { markAppReady } from '../utils/appReady'
+import {
+  FULL_SYNC_HOLD_CAP_MS,
+  beginDashboardSessionReady,
+  bootHoldNeedsRemainingSync,
+  bootHoldStartedAt,
+  clearRetainedDashboardLogbook,
+  dashboardHydratedForUser,
+  getColdBootStartedAt,
+  isDocumentBootRevealed,
+  markSignInBootHold,
+  noteDashboardHoldFinished,
+  noteDocumentBootRevealed,
+  noteSignedOutBootRevealed,
+  retainDashboardLogbook,
+  shouldResetHydrationGate,
+  shouldShowBootLoader,
+  signInSuccessBootAction,
+  signedOutColdOpenDelayMs,
+  takeRetainedDashboardLogbook,
+  waitUntilBootReveal,
+} from '../utils/bootHold'
 import {
   formatEntryAirportCode,
   getTotalTimeColorClass,
@@ -7243,7 +7272,23 @@ const migrationProgress = ref({ step: '', current: 0, total: 0 })
 const isDashboardRefreshing = ref(false)
 const isLoadEntriesRunning = ref(false)
 const isBulkLoadInProgress = ref(false)
+const bootUserIdAtSetup = isBrowser ? (user.value?.id ?? null) : null
+const returningHydratedUser = dashboardHydratedForUser(bootUserIdAtSetup)
+const logbookLocalCacheReadComplete = ref(returningHydratedUser)
+const logbookInboundSyncPending = ref(false)
+const bootHoldActive = ref(false)
+/** Hide currency until the boot sync's full recalculation. A partial page is stale. */
+const bootCurrencyPending = ref(false)
+/**
+ * True after the first dashboard reveal or the signed-out sheet.
+ * Window-backed so a remount in this document does not start another cycle.
+ * Sign-in then starts a new cycle.
+ */
+let dashboardBootRevealed = isDocumentBootRevealed()
+let bootHoldGeneration = 0
+let signedOutHoldGeneration = 0
 let loadEntriesInFlight: Promise<number> | null = null
+let loadEntriesInFlightComplete = false
 
 type IosSyncStatus = 'idle' | 'loading' | 'success' | 'error' | 'offline'
 const iosSyncStatus = ref<IosSyncStatus>('idle')
@@ -7265,6 +7310,8 @@ interface LoadEntriesOptions {
   skipIfFresh?: boolean
   /** Apply IndexedDB (and local prefs already loaded) without waiting on inbound sync. */
   localOnly?: boolean
+  /** Boot hold only. Wait for the rest of a progressive full sync before resolving. */
+  complete?: boolean
 }
 
 let logEntriesSideEffectTimer: ReturnType<typeof setTimeout> | null = null
@@ -7272,7 +7319,15 @@ let iosCatalogDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
 const visibleEntryCount = ref(ENTRIES_PAGE_SIZE)
-const logEntries = ref<LogEntry[]>([])
+
+function seededLogEntries(): LogEntry[] {
+  const id = user.value?.id
+  if (!id || !dashboardHydratedForUser(id)) return []
+  const retained = takeRetainedDashboardLogbook(id)
+  return Array.isArray(retained) ? retained as LogEntry[] : []
+}
+
+const logEntries = ref<LogEntry[]>(seededLogEntries())
 const supersededIdSet = computed(() => buildSupersededIdSet(logEntries.value))
 
 const aircraftTailIndex = computed(() => buildAircraftTailIndex(logEntries.value))
@@ -7346,6 +7401,7 @@ const handleLogout = async () => {
   stopBackgroundSync()
   setActiveUserId(null)
   await authSignOut()
+  noteSignedOutBootRevealed()
   logEntries.value = []
   closeSettings()
   dashboardFcvConnected.value = false
@@ -7364,10 +7420,35 @@ function onAuthModalClose() {
   authNotice.value = null
 }
 
+function onSignedIn() {
+  signedOutHoldGeneration += 1
+  showAuthModal.value = false
+  // onUserSessionReady owns the hold. Success after that cycle has started
+  // must not arm another one. Success after a pass that never saw the
+  // sign-in flag still has to start the cycle.
+  const next = signInSuccessBootAction({
+    userId: user.value?.id,
+    bootHoldActive: bootHoldActive.value,
+    bootCurrencyPending: bootCurrencyPending.value,
+    logbookInboundSyncPending: logbookInboundSyncPending.value,
+  })
+  if (!next.markSignInHold) return
+  markSignInBootHold()
+  bootHoldActive.value = next.bootHoldActive
+  bootCurrencyPending.value = next.bootCurrencyPending
+  // Same document: the session watcher can finish before this success.
+  // That pass never saw the sign-in flag, so it has to run again to clear.
+  const signedInUserId = user.value?.id
+  if (next.rerunSessionReady && signedInUserId) {
+    void onUserSessionReady(signedInUserId)
+  }
+}
+
 /** After server-side account deletion — local auth already cleared. */
 const handleAccountDeleted = () => {
   stopBackgroundSync()
   setActiveUserId(null)
+  noteSignedOutBootRevealed()
   logEntries.value = []
   closeSettings()
   dashboardFcvConnected.value = false
@@ -7383,53 +7464,126 @@ const handleAccountDeleted = () => {
   }
 }
 
+function resetLogbookHydrationGate(): void {
+  if (!shouldResetHydrationGate(user.value?.id)) return
+  logbookLocalCacheReadComplete.value = false
+  logbookInboundSyncPending.value = false
+}
+
+function rememberLogbookForDocument(): void {
+  const id = user.value?.id
+  if (!id || !dashboardHydratedForUser(id)) return
+  retainDashboardLogbook(id, logEntries.value)
+}
+
+async function handoffNativeBootSplash(): Promise<void> {
+  await nextTick()
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => resolve())
+    })
+  })
+  await markAppReady()
+}
+
 async function onUserSessionReady(userId: string): Promise<void> {
-  stopBackgroundSync()
-  setActiveUserId(userId)
-  migrateAllGlobalKeysToScoped(userId, false)
-  await migrateLegacyLocalData(userId)
-
-  if (!hasMigrationCompleted(userId)) {
-    isMigrating.value = true
-    try {
-      const result = await migrateLocalStorageToSupabase(
-        userId,
-        (step, current, total) => {
-          migrationProgress.value = { step, current, total }
-        }
-      )
-
-      if (result.success) {
-        console.log('Migration completed:', result)
-      } else {
-        console.error('Migration failed:', result.error)
-      }
-    } catch (error) {
-      console.error('Migration error:', error)
-    } finally {
-      isMigrating.value = false
-    }
+  signedOutHoldGeneration += 1
+  const generation = ++bootHoldGeneration
+  const { signInHold, replayBoot } = beginDashboardSessionReady({
+    userId,
+    alreadyRevealed: dashboardBootRevealed,
+  })
+  const holdStartedAt = replayBoot
+    ? (bootHoldStartedAt({
+        reason: signInHold || dashboardBootRevealed ? 'sign-in' : 'cold-open',
+        now: Date.now(),
+        coldBootStartedAt: getColdBootStartedAt(),
+      }) ?? Date.now())
+    : null
+  if (replayBoot) {
+    bootHoldActive.value = true
+    bootCurrencyPending.value = true
   }
-
-  loadClockPrefs()
-  loadPilotProfilePrefs()
-  loadSelectedTotalsMetrics()
-  loadShowCurrencyChips()
-  loadFar117LookbackPreference()
-  loadEntryFormPreference()
-  loadColumnConfig()
-  loadActiveLogbook()
-
   try {
-    await loadEntries({ localOnly: true })
+    const hydrate = (async () => {
+      resetLogbookHydrationGate()
+      stopBackgroundSync()
+      setActiveUserId(userId)
+      migrateAllGlobalKeysToScoped(userId, false)
+      await migrateLegacyLocalData(userId)
+
+      if (!hasMigrationCompleted(userId)) {
+        isMigrating.value = true
+        try {
+          const result = await migrateLocalStorageToSupabase(
+            userId,
+            (step, current, total) => {
+              migrationProgress.value = { step, current, total }
+            }
+          )
+
+          if (result.success) {
+            console.log('Migration completed:', result)
+          } else {
+            console.error('Migration failed:', result.error)
+          }
+        } catch (error) {
+          console.error('Migration error:', error)
+        } finally {
+          isMigrating.value = false
+        }
+      }
+
+      loadClockPrefs()
+      loadPilotProfilePrefs()
+      loadSelectedTotalsMetrics()
+      loadShowCurrencyChips()
+      loadFar117LookbackPreference()
+      loadEntryFormPreference()
+      loadColumnConfig()
+      loadActiveLogbook()
+
+      await loadEntries({ localOnly: true })
+      if (generation !== bootHoldGeneration) return
+
+      startBackgroundSync()
+      await checkOnlineStatus()
+      const offlineAtStart = !isOnline.value
+      const syncPromise = loadEntries({ mode: 'auto', complete: true })
+      if (holdStartedAt != null) {
+        await waitUntilBootReveal({
+          holdStartedAt,
+          sync: syncPromise,
+          isOffline: () => offlineAtStart || !isOnline.value,
+        })
+      } else {
+        void syncPromise
+      }
+      void loadDeferredUserData()
+    })().catch((error) => {
+      console.error('[onUserSessionReady]', error)
+    })
+    if (holdStartedAt != null) {
+      const remaining = Math.max(0, holdStartedAt + FULL_SYNC_HOLD_CAP_MS - Date.now())
+      await Promise.race([
+        hydrate,
+        new Promise((resolve) => setTimeout(resolve, remaining)),
+      ])
+    } else {
+      await hydrate
+    }
   } finally {
-    void markAppReady()
+    if (generation !== bootHoldGeneration) return
+    bootHoldActive.value = false
+    if (!isBulkLoadInProgress.value) bootCurrencyPending.value = false
+    // Signed out while this hold was in flight. Do not mark that user hydrated.
+    if (user.value?.id !== userId) return
+    noteDashboardHoldFinished(userId)
+    dashboardBootRevealed = true
+    rememberLogbookForDocument()
+    if (!replayBoot) return
+    await handoffNativeBootSplash()
   }
-
-  startBackgroundSync()
-
-  void loadEntries({ mode: 'auto' })
-  void loadDeferredUserData()
 }
 
 async function loadDeferredUserData(): Promise<void> {
@@ -7451,6 +7605,8 @@ watch(
   async (newUserId, oldUserId) => {
     if (newUserId) {
       if (oldUserId && oldUserId !== newUserId) {
+        clearRetainedDashboardLogbook()
+        resetLogbookHydrationGate()
         logEntries.value = []
         crewProfiles.value = {}
       }
@@ -7468,6 +7624,8 @@ watch(
         console.warn('[dashboard] Ignoring null auth while offline; keeping local session UX')
         return
       }
+
+      if (oldUserId) noteSignedOutBootRevealed()
 
       stopBackgroundSync()
       setActiveUserId(null)
@@ -7507,12 +7665,33 @@ watch(dashboardFcvConnected, (c) => {
   }
 })
 
-// Show auth modal if not authenticated after loading
+// Show auth modal if not authenticated after loading.
+// Capacitor keeps the propeller for one cycle from process start. The website does not.
 watch(authLoading, (loading) => {
-  if (!loading && !isAuthenticated.value) {
-    showAuthModal.value = true
-    void markAppReady()
-  }
+  if (loading || isAuthenticated.value) return
+  const generation = ++signedOutHoldGeneration
+  showAuthModal.value = true
+  logbookLocalCacheReadComplete.value = true
+  logbookInboundSyncPending.value = false
+  if (dashboardBootRevealed) return
+  const delay = signedOutColdOpenDelayMs({
+    native: isCapacitorNative(),
+    now: Date.now(),
+    coldBootStartedAt: getColdBootStartedAt(),
+  })
+  void (async () => {
+    if (delay > 0) {
+      bootHoldActive.value = true
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, delay)
+      })
+    }
+    if (generation !== signedOutHoldGeneration || isAuthenticated.value) return
+    dashboardBootRevealed = true
+    noteDocumentBootRevealed()
+    bootHoldActive.value = false
+    await handoffNativeBootSplash()
+  })()
 }, { immediate: true })
 
 // Initialize IndexedDB and scroll handlers on mount
@@ -7561,6 +7740,7 @@ onMounted(async () => {
 })
 
 function handleAppResume(): void {
+  // Resume does not replay the propeller (shouldStartBootHold('resume') is false).
   if (document.visibilityState !== 'visible') return
   if (!isAuthenticated.value || !user.value || isProcessing.value) return
   if (!isOnline.value) return
@@ -7572,6 +7752,7 @@ function handleAppResume(): void {
 
 // Cleanup scroll event listener on unmount
 onUnmounted(() => {
+  rememberLogbookForDocument()
   teardownEntriesLoadMoreObserver()
   if (searchDebounceTimer) {
     clearTimeout(searchDebounceTimer)
@@ -16484,10 +16665,14 @@ function retryIosSync(): void {
 
 function finalizeBulkLoadSideEffects(): void {
   isBulkLoadInProgress.value = false
-  if (!isBrowser || logEntries.value.length === 0) return
+  if (!isBrowser || logEntries.value.length === 0) {
+    bootCurrencyPending.value = false
+    return
+  }
   if (!(isIos.value && (isCatalogDrawerOpen.value || showSettingsModal.value))) {
     calculateAllCurrency(logEntries.value)
   }
+  bootCurrencyPending.value = false
 }
 
 function hasUsableAuthSession(): boolean {
@@ -16726,7 +16911,7 @@ async function syncInbound(
   userId: string,
   idbEntries: Awaited<ReturnType<typeof getAllIDBLogEntriesForUser>>,
   cachedEntryCount: number,
-  options: { mode: InboundSyncMode; skipIfFresh?: boolean }
+  options: { mode: InboundSyncMode; skipIfFresh?: boolean; complete?: boolean }
 ): Promise<number> {
   const mode = options.mode === 'auto'
     ? (cachedEntryCount > 0 ? 'delta' : 'full')
@@ -16808,14 +16993,34 @@ async function syncInbound(
         reconcileRemoteDeletes: false,
         reconcileQueue: false,
       })
-      calculateAllCurrency(logEntries.value)
+      if (!options.complete) {
+        calculateAllCurrency(logEntries.value)
+      }
       updateIosSyncBanner('loading', `Loading logbook… ${firstBatch.length} entries`)
     }
 
-    if (firstBatch.length < PROGRESSIVE_FIRST_BATCH) {
+    if (!bootHoldNeedsRemainingSync({
+      firstBatchCount: firstBatch.length,
+      pageSize: PROGRESSIVE_FIRST_BATCH,
+    })) {
       finalizeBulkLoadSideEffects()
       updateIosSyncBanner('success', `${logEntries.value.length} entries loaded`)
       return inboundRemovedCount
+    }
+
+    if (options.complete) {
+      try {
+        await backgroundFullRemoteSync(userId)
+        updateIosSyncBanner('success', `${logEntries.value.length} entries loaded`)
+        return inboundRemovedCount
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Sync failed'
+        console.error('[LoadEntries] Full sync failed:', err)
+        updateIosSyncBanner('error', `Sync failed: ${message}`)
+        throw err
+      } finally {
+        finalizeBulkLoadSideEffects()
+      }
     }
 
     void (async () => {
@@ -16949,8 +17154,27 @@ async function loadEntriesInternal(options: LoadEntriesOptions = {}): Promise<nu
       console.error('[LoadEntries] Error loading from IndexedDB:', error)
     }
 
+    logbookLocalCacheReadComplete.value = true
+    const cachedEntryCount = idbEntries.length
+    // A user already revealed in this document keeps the list up. Raising the
+    // inbound flag here is what paints the propeller on the way back.
+    const gateAlreadyOpen = Boolean(scopedUserId) && !shouldResetHydrationGate(scopedUserId)
+
     if (options.localOnly) {
+      if (!gateAlreadyOpen && isAuthenticated.value && scopedUserId && cachedEntryCount === 0) {
+        logbookInboundSyncPending.value = true
+      } else {
+        logbookInboundSyncPending.value = false
+      }
       return inboundRemovedCount
+    }
+
+    if (cachedEntryCount > 0 || gateAlreadyOpen) {
+      logbookInboundSyncPending.value = false
+    } else if (isAuthenticated.value && user.value) {
+      logbookInboundSyncPending.value = true
+    } else {
+      logbookInboundSyncPending.value = false
     }
 
     if (isAuthenticated.value && user.value) {
@@ -16988,6 +17212,7 @@ async function loadEntriesInternal(options: LoadEntriesOptions = {}): Promise<nu
               {
                 mode: options.mode ?? 'auto',
                 skipIfFresh: options.skipIfFresh,
+                complete: options.complete,
               }
             )
           } catch {
@@ -17007,16 +17232,33 @@ async function loadEntriesInternal(options: LoadEntriesOptions = {}): Promise<nu
     return inboundRemovedCount
   } finally {
     isLoadEntriesRunning.value = false
+    if (!options.localOnly) {
+      logbookInboundSyncPending.value = false
+    }
   }
 }
 
 async function loadEntries(options: LoadEntriesOptions = {}): Promise<number> {
-  if (loadEntriesInFlight) return loadEntriesInFlight
-  loadEntriesInFlight = loadEntriesInternal(options)
+  if (loadEntriesInFlight && (!options.complete || loadEntriesInFlightComplete)) {
+    return loadEntriesInFlight
+  }
+  if (loadEntriesInFlight) {
+    try {
+      await loadEntriesInFlight
+    } catch {
+      // The boot hold still starts its own full sync.
+    }
+  }
+  loadEntriesInFlightComplete = options.complete === true
+  const run = loadEntriesInternal(options)
+  loadEntriesInFlight = run
   try {
-    return await loadEntriesInFlight
+    return await run
   } finally {
-    loadEntriesInFlight = null
+    if (loadEntriesInFlight === run) {
+      loadEntriesInFlight = null
+      loadEntriesInFlightComplete = false
+    }
   }
 }
 
@@ -17803,6 +18045,25 @@ const entriesHiddenOnlyByDateRange = computed(() => {
 
 const hasAnyEntriesForActiveLogbook = computed(() =>
   logEntries.value.some((entry) => getEntryLogbookType(entry) === activeLogbook.value)
+)
+
+const logbookEmptyStateGate = computed(() => ({
+  localCacheReadComplete: logbookLocalCacheReadComplete.value,
+  inboundSyncPending: logbookInboundSyncPending.value,
+}))
+
+const showLogbookBootLoader = computed(() => {
+  return shouldShowBootLoader({
+    bootHoldActive: bootHoldActive.value,
+    authLoading: authLoading.value,
+    authenticated: isAuthenticated.value,
+    hydrated: isLogbookHydratedForUi(logbookEmptyStateGate.value),
+    sameUserAlreadyRevealed: dashboardHydratedForUser(user.value?.id),
+  })
+})
+
+const showLogbookEmptyState = computed(() =>
+  canShowLogbookEmptyState(logbookEmptyStateGate.value, hasAnyEntriesForActiveLogbook.value)
 )
 
 /** Superseded originals are hidden from the list; filtered entries drive totals. */

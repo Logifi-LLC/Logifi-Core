@@ -212,6 +212,7 @@ import { useRoute, useRouter } from '#imports'
 import AuthModal from '~/components/AuthModal.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
+import { goBackInApp } from '~/utils/inAppBack'
 
 const route = useRoute()
 const router = useRouter()
@@ -249,19 +250,9 @@ const handleAuthSuccess = () => {
   window.location.href = '/dashboard'
 }
 
-const backTarget = computed(() => {
-  const from = route.query.from
-  if (from === 'landing') return '/'
-  if (from === 'dashboard' || from === 'app') return '/dashboard'
-  return '/dashboard'
-})
-
 const goBack = () => {
-  if (typeof window !== 'undefined' && window.history.length > 1) {
-    router.back()
-  } else {
-    router.push(backTarget.value)
-  }
+  const fallback = route.query.from === 'landing' ? '/' : '/dashboard'
+  goBackInApp(router, fallback)
 }
 
 const backButtonText = computed(() => (route.query.from === 'landing' ? 'Back to Home' : 'Back to Logbook'))
