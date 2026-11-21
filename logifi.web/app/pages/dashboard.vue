@@ -6834,27 +6834,21 @@ import {
 import { markAppReady } from '../utils/appReady'
 import {
   FULL_SYNC_HOLD_CAP_MS,
+  beginDashboardSessionReady,
   bootHoldNeedsRemainingSync,
   bootHoldStartedAt,
   clearRetainedDashboardLogbook,
-  consumeSignInBootHold,
   dashboardHydratedForUser,
-  dashboardSessionReadyStartedFor,
   getColdBootStartedAt,
   isDocumentBootRevealed,
   markSignInBootHold,
   noteDashboardHoldFinished,
-  noteDashboardHoldStarted,
-  noteDashboardSessionReady,
   noteDocumentBootRevealed,
-  noteSignInHoldPlayed,
   noteSignedOutBootRevealed,
   retainDashboardLogbook,
-  shouldReplayBootHold,
   shouldResetHydrationGate,
   shouldShowBootLoader,
-  signInHoldPlayedFor,
-  signInSuccessBootFlags,
+  signInSuccessBootAction,
   signedOutColdOpenDelayMs,
   takeRetainedDashboardLogbook,
   waitUntilBootReveal,
@@ -7432,7 +7426,7 @@ function onSignedIn() {
   // onUserSessionReady owns the hold. Success after that cycle has started
   // must not arm another one. Success after a pass that never saw the
   // sign-in flag still has to start the cycle.
-  const next = signInSuccessBootFlags({
+  const next = signInSuccessBootAction({
     userId: user.value?.id,
     bootHoldActive: bootHoldActive.value,
     bootCurrencyPending: bootCurrencyPending.value,
@@ -7442,14 +7436,10 @@ function onSignedIn() {
   markSignInBootHold()
   bootHoldActive.value = next.bootHoldActive
   bootCurrencyPending.value = next.bootCurrencyPending
-  // Supabase fires the session before this success event. That pass can
-  // finish with no sign-in flag. Own the cycle from here when it did.
+  // Same document: the session watcher can finish before this success.
+  // That pass never saw the sign-in flag, so it has to run again to clear.
   const signedInUserId = user.value?.id
-  if (
-    signedInUserId
-    && dashboardSessionReadyStartedFor(signedInUserId)
-    && !signInHoldPlayedFor(signedInUserId)
-  ) {
+  if (next.rerunSessionReady && signedInUserId) {
     void onUserSessionReady(signedInUserId)
   }
 }
@@ -7499,14 +7489,9 @@ async function handoffNativeBootSplash(): Promise<void> {
 async function onUserSessionReady(userId: string): Promise<void> {
   signedOutHoldGeneration += 1
   const generation = ++bootHoldGeneration
-  noteDashboardSessionReady(userId)
-  const sameUserAlreadyRevealed = dashboardHydratedForUser(userId)
-  const signInHold = consumeSignInBootHold()
-  const replayBoot = shouldReplayBootHold({
+  const { signInHold, replayBoot } = beginDashboardSessionReady({
+    userId,
     alreadyRevealed: dashboardBootRevealed,
-    signInHold,
-    sameUserAlreadyRevealed,
-    signInHoldAlreadyPlayed: signInHoldPlayedFor(userId),
   })
   const holdStartedAt = replayBoot
     ? (bootHoldStartedAt({
@@ -7516,8 +7501,6 @@ async function onUserSessionReady(userId: string): Promise<void> {
       }) ?? Date.now())
     : null
   if (replayBoot) {
-    if (signInHold) noteSignInHoldPlayed(userId)
-    noteDashboardHoldStarted(userId)
     bootHoldActive.value = true
     bootCurrencyPending.value = true
   }

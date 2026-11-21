@@ -223,6 +223,55 @@ export function signInSuccessBootFlags(
   }
 }
 
+export type SessionReadyPlan = {
+  signInHold: boolean
+  replayBoot: boolean
+  sameUserAlreadyRevealed: boolean
+}
+
+/**
+ * Start of onUserSessionReady. The auth callback can run this before the
+ * sign-in flag exists. Consuming here is what a later success has to notice.
+ */
+export function beginDashboardSessionReady(input: {
+  userId: string
+  alreadyRevealed: boolean
+  now?: number
+}): SessionReadyPlan {
+  noteDashboardSessionReady(input.userId)
+  const signInHold = consumeSignInBootHold(input.now)
+  const sameUserAlreadyRevealed = dashboardHydratedForUser(input.userId)
+  const replayBoot = shouldReplayBootHold({
+    alreadyRevealed: input.alreadyRevealed,
+    signInHold,
+    sameUserAlreadyRevealed,
+    signInHoldAlreadyPlayed: signInHoldPlayedFor(input.userId),
+  })
+  if (replayBoot) {
+    if (signInHold) noteSignInHoldPlayed(input.userId)
+    noteDashboardHoldStarted(input.userId)
+  }
+  return { signInHold, replayBoot, sameUserAlreadyRevealed }
+}
+
+/**
+ * AuthModal success on the same document as the signed-out sheet.
+ * rerunSessionReady means the session watcher already ran without the
+ * sign-in flag, so success has to start the cycle that clears the loader.
+ */
+export function signInSuccessBootAction(
+  input: SignInBootFlags & { userId: string | null | undefined },
+): SignInBootFlags & { markSignInHold: boolean; rerunSessionReady: boolean } {
+  const flags = signInSuccessBootFlags(input)
+  const rerunSessionReady = Boolean(
+    flags.markSignInHold
+    && input.userId
+    && dashboardSessionReadyStartedFor(input.userId)
+    && !signInHoldPlayedFor(input.userId),
+  )
+  return { ...flags, rerunSessionReady }
+}
+
 export function shouldShowBootLoader(input: {
   bootHoldActive: boolean
   authLoading: boolean
