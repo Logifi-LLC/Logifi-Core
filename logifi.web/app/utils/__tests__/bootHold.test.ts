@@ -4,18 +4,34 @@ import {
   MARKETING_SPLASH_FALLBACK_MS,
   PROPELLER_CYCLE_MS,
   armDocumentBootOnce,
+  beginDashboardSessionReady,
   bootHoldNeedsRemainingSync,
   bootHoldStartedAt,
   consumeSignInBootHold,
+  dashboardHydratedForUser,
   getColdBootStartedAt,
+  isDocumentBootRevealed,
   markColdBootStart,
   markSignInBootHold,
+  noteDashboardHoldFinished,
+  noteDashboardHoldStarted,
+  noteDocumentBootRevealed,
+  noteSignInHoldPlayed,
+  noteSignedOutBootRevealed,
   resetDocumentBootForTests,
+  resetDocumentDashboardBootForTests,
+  retainDashboardLogbook,
   shouldReplayBootHold,
+  shouldResetHydrationGate,
   shouldRevealDashboard,
+  shouldShowBootLoader,
   shouldStartBootHold,
+  signInHoldPlayedFor,
+  signInSuccessBootAction,
+  signInSuccessBootFlags,
   signedOutColdOpenDelayMs,
   splashFallbackMs,
+  takeRetainedDashboardLogbook,
   waitUntilBootReveal,
 } from '../bootHold'
 
@@ -250,6 +266,254 @@ describe('in-app return', () => {
   it('arms the document splash once', () => {
     expect(armDocumentBootOnce()).toBe(true)
     expect(armDocumentBootOnce()).toBe(false)
+  })
+})
+
+describe('sign-in success after the hold', () => {
+  beforeEach(() => {
+    sessionStorage.clear()
+    resetDocumentDashboardBootForTests()
+  })
+
+  function loaderUp(input: {
+    bootHoldActive: boolean
+    inboundSyncPending: boolean
+    userId: string
+  }): boolean {
+    return shouldShowBootLoader({
+      bootHoldActive: input.bootHoldActive,
+      authLoading: false,
+      authenticated: true,
+      hydrated: !input.inboundSyncPending,
+      sameUserAlreadyRevealed: dashboardHydratedForUser(input.userId),
+    })
+  }
+
+  it('leaves the loader down when success is emitted after the hold resolved', () => {
+    markSignInBootHold(1_000)
+    expect(consumeSignInBootHold(1_100)).toBe(true)
+    noteSignInHoldPlayed('pilot-1')
+    noteDashboardHoldStarted('pilot-1')
+
+    let flags = {
+      bootHoldActive: true,
+      bootCurrencyPending: true,
+      logbookInboundSyncPending: false,
+    }
+    noteDashboardHoldFinished('pilot-1')
+    flags = {
+      bootHoldActive: false,
+      bootCurrencyPending: false,
+      logbookInboundSyncPending: false,
+    }
+
+    const late = signInSuccessBootAction({ userId: 'pilot-1', ...flags })
+    expect(late.markSignInHold).toBe(false)
+    expect(late.rerunSessionReady).toBe(false)
+    expect(late.bootHoldActive).toBe(false)
+    expect(late.bootCurrencyPending).toBe(false)
+    expect(late.logbookInboundSyncPending).toBe(false)
+    expect(consumeSignInBootHold(2_000)).toBe(false)
+    expect(loaderUp({
+      bootHoldActive: late.bootHoldActive,
+      inboundSyncPending: late.logbookInboundSyncPending,
+      userId: 'pilot-1',
+    })).toBe(false)
+  })
+
+  it('does not rewrite the sign-in flag while the hold is in progress', () => {
+    markSignInBootHold(1_000)
+    expect(consumeSignInBootHold(1_100)).toBe(true)
+    noteDashboardHoldStarted('pilot-1')
+    const during = signInSuccessBootFlags({
+      userId: 'pilot-1',
+      bootHoldActive: true,
+      bootCurrencyPending: true,
+      logbookInboundSyncPending: false,
+    })
+    expect(during.markSignInHold).toBe(false)
+    expect(during.bootHoldActive).toBe(true)
+    expect(consumeSignInBootHold(1_200)).toBe(false)
+  })
+
+  it('clears the loader after sign-in from a signed-out dashboard, with no reload', () => {
+    // The signed-out sheet already finished in this document. Submitting
+    // login does not reload, so this window state is still here.
+    noteDocumentBootRevealed()
+
+    let generation = 0
+    let bootHoldActive = false
+    let bootCurrencyPending = false
+    let inbound = false
+    let alreadyRevealed = true
+
+    function sessionReady(userId: string, now: number) {
+      const gen = ++generation
+      const plan = beginDashboardSessionReady({ userId, alreadyRevealed, now })
+      if (plan.replayBoot) {
+        bootHoldActive = true
+        bootCurrencyPending = true
+      }
+      return { gen, plan }
+    }
+
+    function finish(gen: number, userId: string) {
+      if (gen !== generation) return
+      bootHoldActive = false
+      bootCurrencyPending = false
+      noteDashboardHoldFinished(userId)
+      alreadyRevealed = true
+    }
+
+    function loader(userId: string) {
+      return loaderUp({ bootHoldActive, inboundSyncPending: inbound, userId })
+    }
+
+    // supabase-js applies the session before signIn() marks the flag.
+    const early = sessionReady('pilot-1', 1_000)
+    expect(early.plan.signInHold).toBe(false)
+    expect(early.plan.replayBoot).toBe(false)
+    finish(early.gen, 'pilot-1')
+    expect(loader('pilot-1')).toBe(false)
+
+    const success = signInSuccessBootAction({
+      userId: 'pilot-1',
+      bootHoldActive,
+      bootCurrencyPending,
+      logbookInboundSyncPending: inbound,
+    })
+    expect(success.markSignInHold).toBe(true)
+    expect(success.rerunSessionReady).toBe(true)
+    expect(success.logbookInboundSyncPending).toBe(false)
+    markSignInBootHold(2_000)
+    bootHoldActive = success.bootHoldActive
+    bootCurrencyPending = success.bootCurrencyPending
+    inbound = success.logbookInboundSyncPending
+    expect(loader('pilot-1')).toBe(true)
+
+    const second = sessionReady('pilot-1', 2_100)
+    expect(second.plan.signInHold).toBe(true)
+    expect(second.plan.replayBoot).toBe(true)
+    // The pass that ran before the flag must not clear the cycle success started.
+    finish(early.gen, 'pilot-1')
+    expect(bootHoldActive).toBe(true)
+    expect(loader('pilot-1')).toBe(true)
+
+    finish(second.gen, 'pilot-1')
+    expect(bootHoldActive).toBe(false)
+    expect(loader('pilot-1')).toBe(false)
+    expect(consumeSignInBootHold(2_200)).toBe(false)
+
+    const again = signInSuccessBootAction({
+      userId: 'pilot-1',
+      bootHoldActive,
+      bootCurrencyPending,
+      logbookInboundSyncPending: inbound,
+    })
+    expect(again.markSignInHold).toBe(false)
+    expect(again.rerunSessionReady).toBe(false)
+    expect(again.bootHoldActive).toBe(false)
+    expect(loader('pilot-1')).toBe(false)
+  })
+
+  it('reveals a cold open that is already signed in, without a success event', () => {
+    const plan = beginDashboardSessionReady({
+      userId: 'pilot-1',
+      alreadyRevealed: false,
+      now: 1_000,
+    })
+    expect(plan.signInHold).toBe(false)
+    expect(plan.replayBoot).toBe(true)
+    expect(loaderUp({
+      bootHoldActive: true,
+      inboundSyncPending: false,
+      userId: 'pilot-1',
+    })).toBe(true)
+    noteDashboardHoldFinished('pilot-1')
+    expect(loaderUp({
+      bootHoldActive: false,
+      inboundSyncPending: false,
+      userId: 'pilot-1',
+    })).toBe(false)
+    expect(consumeSignInBootHold(1_100)).toBe(false)
+  })
+
+  it('arms when success arrives before the hold has started', () => {
+    const armed = signInSuccessBootFlags({
+      userId: 'pilot-1',
+      bootHoldActive: false,
+      bootCurrencyPending: false,
+      logbookInboundSyncPending: false,
+    })
+    expect(armed.markSignInHold).toBe(true)
+    expect(armed.bootHoldActive).toBe(true)
+    expect(armed.logbookInboundSyncPending).toBe(false)
+    if (armed.markSignInHold) markSignInBootHold(1_000)
+    expect(consumeSignInBootHold(1_050)).toBe(true)
+    noteDashboardHoldStarted('pilot-1')
+    expect(shouldReplayBootHold({
+      alreadyRevealed: isDocumentBootRevealed(),
+      signInHold: true,
+      sameUserAlreadyRevealed: false,
+    })).toBe(true)
+    noteDashboardHoldFinished('pilot-1')
+    expect(loaderUp({
+      bootHoldActive: false,
+      inboundSyncPending: false,
+      userId: 'pilot-1',
+    })).toBe(false)
+  })
+})
+
+describe('dashboard remount', () => {
+  beforeEach(() => {
+    sessionStorage.clear()
+    resetDocumentDashboardBootForTests()
+  })
+
+  it('does not replay the hold or close the gate for a user already revealed', () => {
+    noteSignInHoldPlayed('pilot-1')
+    noteDashboardHoldFinished('pilot-1')
+    retainDashboardLogbook('pilot-1', [{ id: 'flight-1' }])
+    markSignInBootHold(1_000)
+
+    expect(shouldReplayBootHold({
+      alreadyRevealed: isDocumentBootRevealed(),
+      signInHold: consumeSignInBootHold(1_100),
+      sameUserAlreadyRevealed: dashboardHydratedForUser('pilot-1'),
+      signInHoldAlreadyPlayed: signInHoldPlayedFor('pilot-1'),
+    })).toBe(false)
+    expect(shouldResetHydrationGate('pilot-1')).toBe(false)
+    expect(shouldShowBootLoader({
+      bootHoldActive: false,
+      authLoading: false,
+      authenticated: true,
+      hydrated: false,
+      sameUserAlreadyRevealed: true,
+    })).toBe(false)
+    expect(takeRetainedDashboardLogbook('pilot-1')).toEqual([{ id: 'flight-1' }])
+  })
+
+  it('still plays on a fresh sign-in after sign-out and on an account switch', () => {
+    noteDashboardHoldFinished('pilot-1')
+    noteSignedOutBootRevealed()
+    expect(dashboardHydratedForUser('pilot-1')).toBe(false)
+    expect(isDocumentBootRevealed()).toBe(true)
+    expect(takeRetainedDashboardLogbook('pilot-1')).toBeNull()
+    markSignInBootHold(5_000)
+    expect(shouldReplayBootHold({
+      alreadyRevealed: isDocumentBootRevealed(),
+      signInHold: true,
+      sameUserAlreadyRevealed: dashboardHydratedForUser('pilot-1'),
+    })).toBe(true)
+
+    noteDashboardHoldFinished('pilot-1')
+    expect(shouldReplayBootHold({
+      alreadyRevealed: true,
+      signInHold: false,
+      sameUserAlreadyRevealed: dashboardHydratedForUser('pilot-2'),
+    })).toBe(false)
+    expect(shouldResetHydrationGate('pilot-2')).toBe(true)
   })
 })
 
