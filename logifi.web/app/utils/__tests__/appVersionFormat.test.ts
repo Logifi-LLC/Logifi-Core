@@ -11,7 +11,7 @@ describe('appVersionFormat', () => {
   })
 
   it('uses fallback label from web version constant', () => {
-    expect(formatFallbackAppVersionLabel()).toBe('Logifi 1.0.9')
+    expect(formatFallbackAppVersionLabel()).toBe('Logifi 1.0.10')
     expect(formatFallbackAppVersionLabel('2.3.4')).toBe('Logifi 2.3.4')
   })
 })
