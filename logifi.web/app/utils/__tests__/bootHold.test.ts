@@ -1,14 +1,17 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   FULL_SYNC_HOLD_CAP_MS,
   MARKETING_SPLASH_FALLBACK_MS,
   PROPELLER_CYCLE_MS,
+  armDocumentBootOnce,
   bootHoldNeedsRemainingSync,
   bootHoldStartedAt,
   consumeSignInBootHold,
   getColdBootStartedAt,
   markColdBootStart,
   markSignInBootHold,
+  resetDocumentBootForTests,
+  shouldReplayBootHold,
   shouldRevealDashboard,
   shouldStartBootHold,
   signedOutColdOpenDelayMs,
@@ -230,6 +233,23 @@ describe('sign-in full sync', () => {
     sessionStorage.clear()
     markSignInBootHold(0)
     expect(consumeSignInBootHold(30_000)).toBe(false)
+  })
+})
+
+describe('in-app return', () => {
+  beforeEach(() => {
+    resetDocumentBootForTests()
+  })
+
+  it('does not replay the propeller after the dashboard has already revealed', () => {
+    expect(shouldReplayBootHold({ alreadyRevealed: true, signInHold: false })).toBe(false)
+    expect(shouldReplayBootHold({ alreadyRevealed: false, signInHold: false })).toBe(true)
+    expect(shouldReplayBootHold({ alreadyRevealed: true, signInHold: true })).toBe(true)
+  })
+
+  it('arms the document splash once', () => {
+    expect(armDocumentBootOnce()).toBe(true)
+    expect(armDocumentBootOnce()).toBe(false)
   })
 })
 

@@ -18,7 +18,7 @@
     <header v-else>
       <div class="fixed top-0 left-0 right-0 z-50 transition-colors duration-300 bg-transparent">
         <div class="mr-auto px-6 sm:px-8 py-4 flex items-center justify-between relative">
-          <a class="left" href="/">
+          <NuxtLink class="left" to="/">
             <img
               src="/images/logifi-logo.png"
               alt="logifi"
@@ -27,7 +27,7 @@
                 effectiveDark ? '' : 'brightness-[0.2]'
               ]"
             />
-          </a>
+          </NuxtLink>
 
           <div class="absolute inset-x-0 flex justify-center pointer-events-none">
             <span
@@ -263,6 +263,7 @@ import { useRoute, useRouter } from '#imports'
 import AuthModal from '~/components/AuthModal.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
+import { goBackInApp } from '~/utils/inAppBack'
 
 const route = useRoute()
 const router = useRouter()
@@ -279,28 +280,9 @@ const handleAuthSuccess = () => {
   window.location.href = '/dashboard'
 }
 
-const backTarget = computed(() => {
-  const from = route.query.from
-  if (from === 'landing') return '/'
-  if (from === 'dashboard' || from === 'app') return '/dashboard'
-  return '/dashboard'
-})
-
 const goBack = () => {
-  const from = route.query.from
-  if (from === 'landing') {
-    router.push('/')
-    return
-  }
-  if (from === 'dashboard' || from === 'app') {
-    router.push('/dashboard')
-    return
-  }
-  if (typeof window !== 'undefined' && window.history.length > 1) {
-    router.back()
-  } else {
-    router.push(backTarget.value)
-  }
+  const fallback = route.query.from === 'landing' ? '/' : '/dashboard'
+  goBackInApp(router, fallback)
 }
 
 const backButtonText = computed(() => (route.query.from === 'landing' ? 'Back to Home' : 'Back to Logbook'))

@@ -212,6 +212,7 @@ import { useCapacitorPlatform } from '~/composables/useCapacitorPlatform'
 import AuthModal from '~/components/AuthModal.vue'
 import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
+import { goBackInApp } from '~/utils/inAppBack'
 
 const route = useRoute()
 const router = useRouter()
@@ -283,16 +284,8 @@ const backLabel = computed(() =>
 )
 
 const goBack = () => {
-  const from = route.query.from
-  if (from === 'landing') {
-    router.push('/')
-    return
-  }
-  if (typeof window !== 'undefined' && window.history.length > 1) {
-    router.back()
-  } else {
-    router.push('/dashboard')
-  }
+  const fallback = route.query.from === 'landing' ? '/' : '/dashboard'
+  goBackInApp(router, fallback)
 }
 
 useHead({

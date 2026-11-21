@@ -123,14 +123,16 @@
           transform: rotate(720deg);
         }
       }
-      .boot-splash__wordmark {
-        display: none;
+      /* Beats .loading-animation__mark { display: block }, which is the same
+         element. The wordmark SVG is not in the tree on boot-propeller. */
+      svg.boot-splash__wordmark {
+        display: none !important;
       }
-      html.boot-wordmark .boot-splash__propeller {
-        display: none;
+      html.boot-wordmark svg.boot-splash__propeller {
+        display: none !important;
       }
-      html.boot-wordmark .boot-splash__wordmark {
-        display: block;
+      html.boot-wordmark svg.boot-splash__wordmark {
+        display: block !important;
         width: 72px;
         height: 72px;
       }
@@ -207,8 +209,11 @@
       (function () {
         var native = false
         try {
+          // capacitor://localhost/ is pathname "/", a marketing path. The scheme
+          // is the native signal; window.Capacitor may not exist yet.
+          if (location.protocol === 'capacitor:') native = true
           var cap = window.Capacitor
-          if (cap && typeof cap.isNativePlatform === 'function') native = !!cap.isNativePlatform()
+          if (cap && typeof cap.isNativePlatform === 'function' && cap.isNativePlatform()) native = true
         } catch (e) {}
         var path = (location.pathname || '/').split('?')[0].split('#')[0]
         if (path.length > 1 && path.charAt(path.length - 1) === '/') path = path.slice(0, -1)
@@ -253,6 +258,7 @@
           </g>
         </g>
       </svg>
+      <template id="boot-splash-wordmark">
         <svg
           class="loading-animation__mark loading-animation__mark--wordmark loading-animation__mark--md boot-splash__wordmark"
           width="72"
@@ -280,7 +286,18 @@
             <path d="M0 0 C25.8 -0.02 51.6 -0.04 77.4 -0.05 C89.37 -0.06 101.35 -0.06 113.33 -0.08 C123.77 -0.09 134.2 -0.09 144.64 -0.09 C150.17 -0.1 155.7 -0.1 161.23 -0.11 C166.42 -0.11 171.62 -0.11 176.82 -0.11 C178.73 -0.11 180.65 -0.12 182.56 -0.12 C185.16 -0.12 187.76 -0.12 190.36 -0.12 C190.75 -0.12 190.75 -0.12 192.69 -0.13 C197.89 -0.11 197.89 -0.11 199 1 C199.1 4.04 199.13 7.07 199.13 10.11 C199.13 11.08 199.13 12.05 199.13 13.04 C199.14 16.31 199.13 19.58 199.13 22.85 C199.13 25.19 199.13 27.52 199.13 29.85 C199.14 36.21 199.14 42.57 199.13 48.93 C199.13 54.89 199.13 60.86 199.14 66.82 C199.14 79.35 199.13 91.89 199.13 104.42 C199.12 115.19 199.13 125.96 199.13 136.72 C199.14 149.21 199.14 161.7 199.13 174.19 C199.13 180.8 199.13 187.42 199.14 194.03 C199.14 200.25 199.14 206.47 199.13 212.69 C199.13 214.98 199.13 217.27 199.13 219.56 C199.14 222.67 199.13 225.78 199.13 228.89 C199.13 229.81 199.13 230.73 199.13 231.67 C199.11 237.89 199.11 237.89 198 239 C196.16 239.1 194.31 239.13 192.47 239.13 C191.35 239.13 190.23 239.14 189.07 239.14 C187.89 239.13 186.72 239.13 185.5 239.12 C184.91 239.13 184.91 239.13 181.93 239.14 C181.37 239.14 181.37 239.14 178.53 239.13 C177.5 239.13 176.46 239.13 175.39 239.13 C173 239 173 239 172 238 C171.9 235.29 171.87 232.61 171.88 229.91 C171.88 229.48 171.88 229.48 171.88 227.31 C171.88 224.41 171.88 221.51 171.89 218.61 C171.89 216.54 171.89 214.47 171.89 212.4 C171.89 206.77 171.89 201.13 171.9 195.49 C171.9 189.61 171.91 183.73 171.91 177.84 C171.91 166.7 171.92 155.55 171.93 144.4 C171.94 129.34 171.95 114.28 171.95 99.22 C171.96 75.48 171.98 51.74 172 28 C114.91 28 57.82 28 -1 28 L-1 0 L0 0 Z " transform="translate(634,315)" fill="#FFFFFF" />
           </g>
         </svg>
+      </template>
     </div>
+    <script>
+      /* The wordmark SVG is a flex sibling of the propeller. WKWebView still paints it beside the mark when display:none loses. Leave it in the template unless this is the marketing shell. */
+      (function () {
+        if (!document.documentElement.classList.contains('boot-wordmark')) return
+        var splash = document.getElementById('app-splash')
+        var held = document.getElementById('boot-splash-wordmark')
+        if (!splash || !held || !held.content) return
+        splash.appendChild(held.content.cloneNode(true))
+      })()
+    </script>
     <script>
       /* hide-nuxt-payload: keep __NUXT_DATA__ for Nuxt, but give WKWebView nothing to paint. */
       (function () {

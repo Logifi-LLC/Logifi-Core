@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { goBackInApp } from '~/utils/inAppBack'
 import LogbookCheckView from '~/components/logbook/LogbookCheckView.vue'
 import { useAuth } from '~/composables/useAuth'
 import { useTheme } from '~/composables/useTheme'
@@ -35,11 +36,7 @@ const headerBorder = computed(() => (isDark.value ? 'border-gray-800' : 'border-
 const muted = computed(() => (isDark.value ? 'text-gray-400' : 'text-gray-500'))
 
 function goBack() {
-  if (typeof window !== 'undefined' && window.history.length > 1) {
-    router.back()
-    return
-  }
-  void router.push('/dashboard')
+  goBackInApp(router, '/dashboard')
 }
 
 async function loadAndAudit(): Promise<void> {

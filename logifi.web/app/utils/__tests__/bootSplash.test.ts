@@ -15,13 +15,13 @@ function splashScript(): string {
   return block.slice(open)
 }
 
-function choose(pathname: string, native = false): string {
+function choose(pathname: string, native = false, protocol = 'https:'): string {
   const classes: string[] = []
   const sandbox = {
     window: native
       ? { Capacitor: { isNativePlatform: () => true } }
       : {},
-    location: { pathname },
+    location: { pathname, protocol },
     document: {
       documentElement: {
         classList: {
@@ -51,6 +51,9 @@ describe('boot splash variant', () => {
     }
     expect(choose('/', true)).toBe('boot-propeller')
     expect(choose('/pricing', true)).toBe('boot-propeller')
+    // capacitor://localhost/ is pathname "/", and the bridge may not be injected yet.
+    expect(choose('/', false, 'capacitor:')).toBe('boot-propeller')
+    expect(choose('/index.html')).toBe('boot-propeller')
   })
 
   it('is the fragment Nuxt injects beside the app root', () => {
@@ -65,14 +68,25 @@ describe('boot splash variant', () => {
     expect(html).toContain("getElementById('__NUXT_DATA__')")
   })
 
-  it('keeps both marks in the splash and hides the wordmark until the class is set', () => {
-    expect(html).toContain('boot-splash__propeller')
-    expect(html).toContain('boot-splash__wordmark')
-    expect(html).toContain('M116 207.5H142V389.5H323V415H116Z')
-    expect(html).toContain('translate(194,405)')
-    expect(html).toContain('translate(634,315)')
-    expect(html).toContain('.boot-splash__wordmark {\n        display: none;')
+  it('keeps the wordmark out of the propeller flex row', () => {
+    const splash = html.slice(html.indexOf('id="app-splash"'), html.indexOf('hide-nuxt-payload'))
+    const templateStart = splash.indexOf('<template id="boot-splash-wordmark">')
+    const templateEnd = splash.indexOf('</template>')
+    const wordmarkAt = splash.indexOf('class="loading-animation__mark loading-animation__mark--wordmark')
+    expect(templateStart).toBeGreaterThan(-1)
+    expect(wordmarkAt).toBeGreaterThan(templateStart)
+    expect(wordmarkAt).toBeLessThan(templateEnd)
+    expect(splash.indexOf('boot-splash__propeller')).toBeLessThan(templateStart)
+    expect(splash).toContain("classList.contains('boot-wordmark')")
+    expect(splash).toContain('cloneNode(true)')
+    expect(html).toContain('svg.boot-splash__wordmark {\n        display: none !important;')
+    expect(html).toContain('html.boot-wordmark svg.boot-splash__wordmark {\n        display: block !important;')
+    const css = readFileSync(path.resolve(process.cwd(), 'app/assets/css/loading-animation.css'), 'utf8')
+    expect(css).toContain('svg.boot-splash__wordmark {\n  display: none !important;')
+    expect(css).toContain('html.boot-wordmark svg.boot-splash__wordmark {\n  display: block !important;')
     expect(html).toContain('aria-label="Loading logbook"')
     expect(html).toContain('prefers-reduced-motion: reduce')
+    expect(html).toContain('translate(194,405)')
+    expect(html).toContain('translate(634,315)')
   })
 })
