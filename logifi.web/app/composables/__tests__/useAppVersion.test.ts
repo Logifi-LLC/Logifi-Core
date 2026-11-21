@@ -36,23 +36,23 @@ describe('useAppVersion', () => {
 
   it('initializes to fallback label before mount hooks run', () => {
     const { versionLabel } = useAppVersion()
-    expect(versionLabel.value).toBe('Logifi 1.0.9')
+    expect(versionLabel.value).toBe('Logifi 1.0.10')
   })
 
   it('resolves web label from LOGIFI_WEB_VERSION on mount', async () => {
     const label = mountHarness()
     await flushPromises()
-    expect(label.value).toBe('Logifi 1.0.9')
+    expect(label.value).toBe('Logifi 1.0.10')
   })
 
   it('uses native App.getInfo version only on Capacitor', async () => {
     isNative.mockReturnValue(true)
-    getInfo.mockResolvedValue({ version: '1.0.9', build: '8' })
+    getInfo.mockResolvedValue({ version: '1.0.10', build: '8' })
 
     const label = mountHarness()
     await flushPromises()
     expect(getInfo).toHaveBeenCalled()
-    expect(label.value).toBe('Logifi 1.0.9')
+    expect(label.value).toBe('Logifi 1.0.10')
   })
 
   it('keeps web fallback when native getInfo throws', async () => {
@@ -61,6 +61,6 @@ describe('useAppVersion', () => {
 
     const label = mountHarness()
     await flushPromises()
-    expect(label.value).toBe('Logifi 1.0.9')
+    expect(label.value).toBe('Logifi 1.0.10')
   })
 })
