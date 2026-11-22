@@ -167,7 +167,13 @@ export default defineNuxtConfig({
   ssr: false,
   nitro: {
     prerender: {
-      routes: ['/']
+      routes: [
+        '/',
+        '/faq',
+        '/how-to-digitize-a-paper-pilot-logbook',
+        '/import-foreflight-logten-logbook',
+        '/airline-pilot-logbook-app',
+      ]
     },
     hooks: {
       // ssr:false also prerenders /index.html. Both routes write public/index.html.

@@ -133,7 +133,7 @@
               </div>
               <h3 class="text-xl font-bold text-gray-100 mb-3">AI Transcription</h3>
               <p class="text-[#9ca3af] leading-relaxed">
-                Digifi extracts flight entries from the photos. About 70% accuracy tested on one logbook.
+                Digifi extracts flight entries from the photos.
               </p>
             </div>
 

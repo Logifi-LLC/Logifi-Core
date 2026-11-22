@@ -9,6 +9,10 @@ export const PUBLIC_MARKETING_PATHS = [
   '/terms',
   '/privacy',
   '/digifi',
+  '/faq',
+  '/how-to-digitize-a-paper-pilot-logbook',
+  '/import-foreflight-logten-logbook',
+  '/airline-pilot-logbook-app',
 ] as const
 
 export const CANONICAL_ORIGIN = 'https://www.logifi.io'
