@@ -136,7 +136,7 @@ export interface DigifiScanResponse {
   rows: DigifiScanRow[]
   filledCellCount: number
   modelUsed: string
-  providerUsed?: 'gemini' | 'anthropic'
+  providerUsed?: 'gemini' | 'anthropic' | 'openrouter'
   strategyUsed: DigifiScanStrategy
   chunkCount: number
   rescueAttempted: boolean

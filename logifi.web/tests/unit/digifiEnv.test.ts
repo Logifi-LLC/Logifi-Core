@@ -3,12 +3,15 @@ import {
   buildDigifiModelChain,
   buildDigifiThinkingConfig,
   DEFAULT_GEMINI_DIGIFI_MODEL,
+  DEFAULT_OPENROUTER_DIGIFI_MODEL,
+  DEFAULT_OPENROUTER_PROVIDERS,
   getDigifiEnv,
   inferDigifiProvider,
   isDigifiConfigured,
   normalizeDigifiModelId,
   omitsDigifiGeminiSamplingParams,
   resolveDigifiThinkingLevel,
+  resolveDigifiTransport,
   shouldTryNextDigifiModel,
 } from '../../server/utils/digifiEnv'
 
@@ -53,6 +56,12 @@ describe('omitsDigifiGeminiSamplingParams', () => {
 
   it('also omits temperature for Gemini 3.7 models', () => {
     expect(omitsDigifiGeminiSamplingParams('gemini-3.7-flash')).toBe(true)
+  })
+
+  it('omits temperature for Gemini 4 ids the same way as 3.6+', () => {
+    expect(omitsDigifiGeminiSamplingParams('gemini-4-hydrogen')).toBe(true)
+    expect(omitsDigifiGeminiSamplingParams('google/gemini-4-hydrogen')).toBe(true)
+    expect(omitsDigifiGeminiSamplingParams('gemini-3.5-flash')).toBe(false)
   })
 })
 
@@ -102,6 +111,14 @@ describe('resolveDigifiThinkingLevel', () => {
   it('still clamps high to low for Gemini 3.7', () => {
     expect(resolveDigifiThinkingLevel('high', 'gemini-3.7-flash')).toBe('low')
   })
+
+  it('accepts xhigh and caps it to low with medium and high', () => {
+    expect(resolveDigifiThinkingLevel('xhigh')).toBe('low')
+    expect(resolveDigifiThinkingLevel('xhigh', 'gemini-4-hydrogen')).toBe('low')
+    expect(resolveDigifiThinkingLevel('medium', 'gemini-4-hydrogen')).toBe('low')
+    expect(resolveDigifiThinkingLevel('low', 'gemini-4-hydrogen')).toBe('low')
+    expect(resolveDigifiThinkingLevel('minimal', 'gemini-4-hydrogen')).toBe('minimal')
+  })
 })
 
 describe('buildDigifiThinkingConfig', () => {
@@ -120,6 +137,15 @@ describe('buildDigifiThinkingConfig', () => {
   it('uses thinkingBudget 0 for Gemini 2.5 (no thinkingLevel)', () => {
     expect(buildDigifiThinkingConfig('gemini-2.5-flash', 'low')).toEqual({
       thinkingBudget: 0,
+    })
+  })
+
+  it('uses thinkingLevel for Gemini 4 ids', () => {
+    expect(buildDigifiThinkingConfig('gemini-4-hydrogen', 'low')).toEqual({
+      thinkingLevel: 'low',
+    })
+    expect(buildDigifiThinkingConfig('google/gemini-4-hydrogen', 'low')).toEqual({
+      thinkingLevel: 'low',
     })
   })
 })
@@ -191,6 +217,81 @@ describe('isDigifiConfigured', () => {
     expect(isDigifiConfigured()).toBe(true)
 
     delete process.env.ANTHROPIC_API_KEY
+    expect(isDigifiConfigured()).toBe(false)
+  })
+})
+
+describe('openrouter digifi env', () => {
+  const originalEnv = { ...process.env }
+
+  beforeEach(() => {
+    vi.stubGlobal('useRuntimeConfig', () => ({
+      geminiApiKey: '',
+      anthropicApiKey: '',
+      openrouterApiKey: '',
+      digifiProvider: '',
+      digifiOpenrouterModel: '',
+      digifiOpenrouterProviders: '',
+      digifiModel: 'gemini-3.8-flash',
+      digifiModelFallbacks: '',
+      digifiEnableCapacityModelFallback: '',
+      digifiMaxScansPerDay: 10,
+    }))
+    delete process.env.NUXT_DIGIFI_PROVIDER
+    delete process.env.DIGIFI_PROVIDER
+    delete process.env.NUXT_OPENROUTER_API_KEY
+    delete process.env.OPENROUTER_API_KEY
+    delete process.env.NUXT_DIGIFI_OPENROUTER_MODEL
+    delete process.env.DIGIFI_OPENROUTER_MODEL
+    delete process.env.NUXT_DIGIFI_OPENROUTER_PROVIDERS
+    delete process.env.DIGIFI_OPENROUTER_PROVIDERS
+    delete process.env.NUXT_DIGIFI_GEMINI_THINKING_LEVEL
+    delete process.env.DIGIFI_GEMINI_THINKING_LEVEL
+  })
+
+  afterEach(() => {
+    process.env = { ...originalEnv }
+    vi.unstubAllGlobals()
+  })
+
+  it('keeps direct Gemini when the provider flag is unset', () => {
+    expect(resolveDigifiTransport('')).toBe('gemini')
+    expect(resolveDigifiTransport('gemini')).toBe('gemini')
+    const env = getDigifiEnv()
+    expect(env.transport).toBe('gemini')
+    expect(env.openrouterModel).toBe(DEFAULT_OPENROUTER_DIGIFI_MODEL)
+    expect(env.openrouterProviders).toEqual([...DEFAULT_OPENROUTER_PROVIDERS])
+  })
+
+  it('selects openrouter, the model, and a custom provider list', () => {
+    process.env.NUXT_DIGIFI_PROVIDER = 'OpenRouter'
+    process.env.NUXT_DIGIFI_OPENROUTER_MODEL = 'google/gemini-4-hydrogen'
+    process.env.NUXT_DIGIFI_OPENROUTER_PROVIDERS = 'google-ai-studio, other-studio'
+    const env = getDigifiEnv()
+    expect(env.transport).toBe('openrouter')
+    expect(env.openrouterModel).toBe('google/gemini-4-hydrogen')
+    expect(env.openrouterProviders).toEqual(['google-ai-studio', 'other-studio'])
+  })
+
+  it('stores xhigh before the OCR cap is applied', () => {
+    process.env.NUXT_DIGIFI_GEMINI_THINKING_LEVEL = 'xhigh'
+    expect(getDigifiEnv().geminiThinkingLevel).toBe('xhigh')
+    process.env.NUXT_DIGIFI_GEMINI_THINKING_LEVEL = 'nope'
+    expect(getDigifiEnv().geminiThinkingLevel).toBe('low')
+  })
+
+  it('treats an openrouter key or a gemini key as configured', () => {
+    process.env.NUXT_DIGIFI_PROVIDER = 'openrouter'
+    process.env.NUXT_DIGIFI_MODEL = 'gemini-3.8-flash'
+    delete process.env.GEMINI_API_KEY
+    process.env.NUXT_OPENROUTER_API_KEY = 'test-openrouter-key'
+    expect(isDigifiConfigured()).toBe(true)
+
+    delete process.env.NUXT_OPENROUTER_API_KEY
+    process.env.GEMINI_API_KEY = 'test-gemini'
+    expect(isDigifiConfigured()).toBe(true)
+
+    delete process.env.GEMINI_API_KEY
     expect(isDigifiConfigured()).toBe(false)
   })
 })

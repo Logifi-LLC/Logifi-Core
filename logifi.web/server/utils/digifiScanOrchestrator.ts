@@ -48,6 +48,13 @@ export interface RunDigifiScanOrchestrationOptions {
   logLabel: string
   fewShotExamples?: DigifiFewShotPair[]
   sessionPriorPages?: DigifiSessionPriorPage[]
+  /** When set, scan this list instead of getDigifiModelChain(). */
+  modelChain?: string[]
+  /**
+   * When the primary call fails with capacity/config and no alternate model runs, rethrow.
+   * Default keeps the prior behavior: leave the primary result (often empty) in place.
+   */
+  rethrowIfNoModelFallback?: boolean
 }
 
 export async function runDigifiScanOrchestration(
@@ -66,10 +73,12 @@ export async function runDigifiScanOrchestration(
     logLabel,
     fewShotExamples,
     sessionPriorPages,
+    modelChain: modelChainOverride,
+    rethrowIfNoModelFallback = false,
   } = options
 
   const allowedColumnIds = new Set(targetColumns.map((column) => column.id))
-  const modelChain = getDigifiModelChain()
+  const modelChain = modelChainOverride?.length ? modelChainOverride : getDigifiModelChain()
   const sendRowBands = labeledChunks.length > 0 && !env.disableRowBandsToGemini
   const strategyUsed: DigifiScanStrategy = sendRowBands ? 'page-overview+row-bands' : 'page-overview'
   const callStats: DigifiCallStats = { apiRequests: 0 }
@@ -99,15 +108,17 @@ export async function runDigifiScanOrchestration(
       sessionPriorPages,
     })
 
-  const runModelChainFallback = async () => {
+  const runModelChainFallback = async (): Promise<boolean> => {
     if (!env.enableCapacityModelFallback) {
       console.warn('[digifi] capacity model fallback disabled — keeping primary scan result')
-      return
+      return false
     }
     const fallbackModels = modelChain.slice(1)
     if (fallbackModels.length === 0) {
-      console.warn('[digifi] skipping model fallback — no alternate models after primary')
-      return
+      if (!rethrowIfNoModelFallback) {
+        console.warn('[digifi] skipping model fallback — no alternate models after primary')
+      }
+      return false
     }
     console.warn(`[digifi] primary model unavailable, trying ${fallbackModels.join(' → ')}`)
     rescueAttempted = true
@@ -129,6 +140,7 @@ export async function runDigifiScanOrchestration(
     finalRows = fallbackMerged.rows
     duplicateRowIndices = new Set(fallbackMerged.duplicateRowIndices)
     rescueMs += Date.now() - rescueStartedAt
+    return true
   }
 
   const remarksFocusRows = meta.remarksFocusRows?.length
@@ -214,7 +226,10 @@ export async function runDigifiScanOrchestration(
       throw error
     }
     if (shouldTryNextDigifiModel(error.code)) {
-      await runModelChainFallback()
+      const recovered = await runModelChainFallback()
+      if (!recovered && rethrowIfNoModelFallback) {
+        throw error
+      }
     } else {
       throw error
     }
