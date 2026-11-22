@@ -100,7 +100,7 @@ The iOS app uses `nuxt generate` (static). Server routes under `logifi.web/serve
 | `NUXT_PUBLIC_SUPABASE_ANON_KEY` | Client auth |
 | `SUPABASE_SERVICE_ROLE_KEY` | Digifi uploads, FC View token storage, credits |
 | `FCV_*` | FC View OAuth + API |
-| `FLICA_CREDENTIALS_KEY` | Encrypt stored FLICA passwords (`openssl rand -base64 32`). Same value as local if already connected. Missing on Preview → `POST /api/airline-sync/fetch-flica` 503. |
+| `FLICA_CREDENTIALS_KEY` | Encrypt stored FLICA passwords and FC View OAuth tokens (`openssl rand -base64 32`). Same value as local if already connected. No separate FCV key. Missing → FLICA fetch 503, and FC View will not save or refresh tokens. |
 | `FLIGHTAWARE_API_KEY` | FLICA schedule enrichment (tail, actual times). Default provider. Fetch still works without it. |
 | `AERODATABOX_API_KEY` | Rollback only. Also set `FLIGHT_ENRICH_PROVIDER=aerodatabox`. |
 | `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` | Digifi scanning |

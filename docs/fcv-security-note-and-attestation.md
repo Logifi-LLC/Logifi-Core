@@ -11,7 +11,7 @@ These are **drafts** for you to customize, have reviewed by counsel if needed, a
 
 **Authentication.** Logifi uses Flight Crew View’s OAuth 2.0 authorization code flow. Users authenticate on FC View; Logifi’s **server** exchanges the authorization code for access and refresh tokens. Authorization codes and tokens are **not** exposed to the browser client.
 
-**Storage.** FC View access and refresh tokens are stored in our database (`fcv_integrations`), scoped to the Logifi user who completed OAuth. Database access is restricted via Supabase Row Level Security and server-side service role only where required for token exchange and refresh. We apply standard cloud provider encryption at rest (via Supabase / hosting provider).
+**Storage.** FC View access and refresh tokens are stored in `fcv_integrations`, scoped to the Logifi user who completed OAuth. The server seals both tokens with AES-256-GCM before they are written, using the same key as FLICA credentials. Plaintext rows from before that change keep working until the next refresh, which re-seals them. Row Level Security still limits each user to their own row. The anon and authenticated roles cannot select the token columns; token reads and writes use the service role. Disk encryption from the database host still applies.
 
 **Rotation.** When FC View returns new tokens, we replace the stored token pair so the latest credentials are always in use.
 
