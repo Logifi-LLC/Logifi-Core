@@ -20,6 +20,7 @@ export default defineEventHandler(async (event) => {
     .from('fcv_integrations')
     .delete()
     .eq('user_id', userId)
+    .select('id')
 
   if (error) {
     console.error('Failed to disconnect FC View:', error)

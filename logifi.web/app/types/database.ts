@@ -161,7 +161,10 @@ export type Database = {
           id: string
           user_id: string
           access_token: string
+          access_token_nonce: string | null
           refresh_token: string
+          refresh_token_nonce: string | null
+          key_version: number | null
           expires_at: string
           created_at: string
           updated_at: string
@@ -170,7 +173,10 @@ export type Database = {
           id?: string
           user_id: string
           access_token: string
+          access_token_nonce?: string | null
           refresh_token: string
+          refresh_token_nonce?: string | null
+          key_version?: number | null
           expires_at: string
           created_at?: string
           updated_at?: string
@@ -179,7 +185,10 @@ export type Database = {
           id?: string
           user_id?: string
           access_token?: string
+          access_token_nonce?: string | null
           refresh_token?: string
+          refresh_token_nonce?: string | null
+          key_version?: number | null
           expires_at?: string
           created_at?: string
           updated_at?: string

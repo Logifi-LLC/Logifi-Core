@@ -4,6 +4,8 @@ import type { Database } from '../../../app/types/database'
 import { verifyFcvState } from '../../utils/fcvState'
 import { fetchFcvWithRetry } from '../../utils/fcvRetryFetch'
 import { getFcvIntegrationEnv } from '../../utils/fcvEnv'
+import { sealFcvTokenPair } from '../../utils/fcvToken'
+import { SecretBoxError } from '../../utils/secretBox'
 
 const clean = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
 
@@ -174,9 +176,39 @@ export default defineEventHandler(async (event) => {
   }
 
   const tokenData = (await tokenRes.json()) as {
-    access_token: string
-    refresh_token: string
-    expires_in: number
+    access_token?: string
+    refresh_token?: string
+    expires_in?: number
+  }
+
+  if (
+    typeof tokenData.access_token !== 'string' ||
+    !tokenData.access_token ||
+    typeof tokenData.refresh_token !== 'string' ||
+    !tokenData.refresh_token ||
+    typeof tokenData.expires_in !== 'number'
+  ) {
+    console.error('FC View token exchange returned an incomplete token payload')
+    return redirectWithFcvError(
+      event,
+      'FC View did not return tokens. Please try Connect FC View again.',
+      native
+    )
+  }
+
+  let sealed
+  try {
+    sealed = sealFcvTokenPair(tokenData.access_token, tokenData.refresh_token)
+  } catch (e) {
+    if (e instanceof SecretBoxError) {
+      console.error('FC View token seal failed: FLICA_CREDENTIALS_KEY is not configured')
+      return redirectWithFcvError(
+        event,
+        'FC View could not be saved because server encryption is not configured.',
+        native
+      )
+    }
+    throw e
   }
 
   const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
@@ -196,8 +228,7 @@ export default defineEventHandler(async (event) => {
   const { error: upsertError } = await supabase.from('fcv_integrations').upsert(
     {
       user_id: userId,
-      access_token: tokenData.access_token,
-      refresh_token: tokenData.refresh_token,
+      ...sealed,
       expires_at: expiresAt,
       updated_at: new Date().toISOString(),
     },
@@ -208,7 +239,7 @@ export default defineEventHandler(async (event) => {
   )
 
   if (upsertError) {
-    console.error('fcv_integrations upsert failed:', upsertError)
+    console.error('fcv_integrations upsert failed:', upsertError.message)
     return redirectWithFcvError(
       event,
       'Connected to FC View but failed to save integration.',
