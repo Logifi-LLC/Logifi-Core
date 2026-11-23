@@ -11,10 +11,11 @@ type HtmlContext = {
 }
 
 /**
- * Canonicals and the App Store smart-banner tag on the HTML Nitro already
- * renders for each path. noindex meta is added only when the request host
- * is *.vercel.app. FAQ and article routes also get their title, description,
- * JSON-LD, and crawlable body from the same copy the page renders.
+ * Canonicals, homepage JSON-LD, and the App Store smart-banner tag on the
+ * HTML Nitro already renders for each path. noindex meta is added only when
+ * the request host is *.vercel.app. FAQ and article routes also get their
+ * title, description, JSON-LD, and crawlable body from the same copy the
+ * page renders.
  */
 export default defineNitroPlugin((nitroApp) => {
   // Static files (prerendered `/`, sitemap.xml) skip route middleware. This
@@ -52,6 +53,7 @@ export default defineNitroPlugin((nitroApp) => {
       if (tag.includes('rel="canonical"')) return !head.includes('rel="canonical"')
       if (tag.includes('apple-itunes-app')) return !head.includes('apple-itunes-app')
       if (tag.includes('name="robots"')) return !/name="robots"/i.test(head)
+      if (tag.includes('application/ld+json')) return !head.includes('application/ld+json')
       return true
     })
     if (fresh.length) html.head.push(fresh.join(''))

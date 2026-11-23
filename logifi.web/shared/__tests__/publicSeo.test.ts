@@ -1,15 +1,27 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   APP_STORE_URL,
   CANONICAL_ORIGIN,
   DISCORD_INVITE_URL,
+  FACEBOOK_PAGE_URL,
+  FOUNDER_X_URL,
   GITHUB_REPO_URL,
+  HOMEPAGE_JSON_LD_ID,
+  INSTAGRAM_URL,
+  IOS_APP_APPLICATION_CATEGORY,
+  LINKEDIN_COMPANY_URL,
   MARKETING_DARK_BG,
+  OG_IMAGE_URL,
+  ORGANIZATION_LOGO_URL,
+  ORGANIZATION_NAME,
+  ORGANIZATION_SAME_AS,
   PUBLIC_MARKETING_PATHS,
   SITEMAP_URL,
   canonicalHrefForPath,
+  homepageJsonLdJson,
+  homepageStructuredData,
   isVercelAppHost,
   publicCanonicalUrls,
   renderSitemapXml,
@@ -115,6 +127,90 @@ describe('app store smart banner', () => {
 
   it('uses the App Store listing URL', () => {
     expect(APP_STORE_URL).toBe('https://apps.apple.com/us/app/logifi/id6786842277')
+  })
+})
+
+describe('absolute share image', () => {
+  it('points og and twitter images at the canonical origin', () => {
+    expect(OG_IMAGE_URL).toBe('https://www.logifi.io/images/og-image.png')
+    expect(existsSync(path.join(root, 'public/images/og-image.png'))).toBe(true)
+    const config = readFileSync(path.join(root, 'nuxt.config.ts'), 'utf8')
+    expect(config).toContain("import { OG_IMAGE_URL } from './shared/publicSeo'")
+    expect(config).toContain("property: 'og:image', content: OG_IMAGE_URL")
+    expect(config).toContain("name: 'twitter:image', content: OG_IMAGE_URL")
+    expect(config).not.toContain("content: '/images/og-image.png'")
+  })
+})
+
+describe('homepage JSON-LD', () => {
+  it('describes Logifi LLC and the free iOS app on the marketing homepage only', () => {
+    expect(existsSync(path.join(root, 'public/images/logifi-logo.png'))).toBe(true)
+    const home = seoHeadTags({ pathname: '/', hostname: 'www.logifi.io', embedItunes: true }).join('')
+    expect(home).toContain(`id="${HOMEPAGE_JSON_LD_ID}"`)
+    expect(home).toContain('type="application/ld+json"')
+    expect(seoHeadTags({ pathname: '/', hostname: 'logifi-core.vercel.app', embedItunes: false }).join('')).toContain('application/ld+json')
+    for (const pathname of ['/pricing', '/pricing/', '/dashboard', '/login', '/index.html']) {
+      expect(homepageStructuredData(pathname)).toBeNull()
+      expect(seoHeadTags({ pathname, hostname: 'www.logifi.io', embedItunes: true }).join('')).not.toContain('application/ld+json')
+    }
+
+    const data = homepageStructuredData('/') as {
+      '@graph': Array<Record<string, unknown>>
+    }
+    expect(JSON.parse(homepageJsonLdJson('/')!)).toEqual(data)
+    const [org, app] = data['@graph']
+    expect(org).toEqual({
+      '@type': 'Organization',
+      name: ORGANIZATION_NAME,
+      url: CANONICAL_ORIGIN,
+      logo: ORGANIZATION_LOGO_URL,
+      sameAs: [...ORGANIZATION_SAME_AS],
+    })
+    expect(ORGANIZATION_NAME).toBe('Logifi LLC')
+    expect(ORGANIZATION_LOGO_URL).toBe('https://www.logifi.io/images/logifi-logo.png')
+    expect(ORGANIZATION_SAME_AS).toEqual([
+      GITHUB_REPO_URL,
+      DISCORD_INVITE_URL,
+      LINKEDIN_COMPANY_URL,
+      FACEBOOK_PAGE_URL,
+      INSTAGRAM_URL,
+      APP_STORE_URL,
+    ])
+    expect(ORGANIZATION_SAME_AS).not.toContain(FOUNDER_X_URL)
+    expect(app).toEqual({
+      '@type': 'MobileApplication',
+      name: 'Logifi',
+      operatingSystem: 'iOS',
+      applicationCategory: IOS_APP_APPLICATION_CATEGORY,
+      url: APP_STORE_URL,
+      offers: {
+        '@type': 'Offer',
+        price: '0',
+        priceCurrency: 'USD',
+      },
+    })
+    expect(IOS_APP_APPLICATION_CATEGORY).toBe('UtilitiesApplication')
+    const serialized = JSON.stringify(data)
+    expect(serialized).not.toMatch(/aggregateRating|reviewCount|ratingValue/i)
+    expect(home).not.toContain('</script><')
+  })
+})
+
+describe('env.example product keys', () => {
+  it('lists Apple and Digifi settings the server reads', () => {
+    const example = readFileSync(path.join(root, 'env.example'), 'utf8')
+    for (const key of [
+      'NUXT_PUBLIC_APPLE_WEB_SIGNIN',
+      'APPLE_BUNDLE_ID',
+      'APPLE_IAP_ENVIRONMENT',
+      'APPLE_APP_ID',
+      'NUXT_DIGIFI_GEMINI_MEDIA_RESOLUTION',
+      'NUXT_DIGIFI_SEND_ROW_BANDS',
+      'NUXT_DEV_PORT',
+    ]) {
+      expect(example).toContain(key)
+    }
+    expect(example).not.toMatch(/sk_live_|whsec_[A-Za-z0-9]{8,}|re_[A-Za-z0-9]{8,}/)
   })
 })
 

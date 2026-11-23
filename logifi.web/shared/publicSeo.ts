@@ -19,6 +19,23 @@ export const CANONICAL_ORIGIN = 'https://www.logifi.io'
 export const APP_STORE_URL = 'https://apps.apple.com/us/app/logifi/id6786842277'
 export const APP_STORE_APP_ID = '6786842277'
 
+/** Share image. Absolute so crawlers do not resolve it against a preview host. */
+export const OG_IMAGE_URL = `${CANONICAL_ORIGIN}/images/og-image.png`
+
+/** Mark already used in the marketing header and footer. */
+export const ORGANIZATION_LOGO_URL = `${CANONICAL_ORIGIN}/images/logifi-logo.png`
+
+/** Privacy policy: "Logifi is operated by Logifi LLC." */
+export const ORGANIZATION_NAME = 'Logifi LLC'
+
+/**
+ * Schema.org software type for the free logbook app.
+ * The repo does not record an App Store category string.
+ */
+export const IOS_APP_APPLICATION_CATEGORY = 'UtilitiesApplication'
+
+export const HOMEPAGE_JSON_LD_ID = 'logifi-homepage-jsonld'
+
 /** Dark marketing shell background (footer, landing pages). */
 export const MARKETING_DARK_BG = '#0a0e1a'
 
@@ -30,6 +47,16 @@ export const FACEBOOK_PAGE_URL =
 export const INSTAGRAM_URL = 'https://www.instagram.com/logifi.io/'
 export const FOUNDER_X_URL = 'https://x.com/derekfarm'
 export const SUPPORT_EMAIL = 'info@logifi.io'
+
+/** Company profiles from the marketing footer, plus the App Store listing in that footer. */
+export const ORGANIZATION_SAME_AS = [
+  GITHUB_REPO_URL,
+  DISCORD_INVITE_URL,
+  LINKEDIN_COMPANY_URL,
+  FACEBOOK_PAGE_URL,
+  INSTAGRAM_URL,
+  APP_STORE_URL,
+] as const
 export const SITEMAP_URL = `${CANONICAL_ORIGIN}/sitemap.xml`
 export const ROBOTS_NOINDEX = 'noindex'
 
@@ -89,6 +116,47 @@ export function shouldEmbedItunesAppMeta(options?: {
   return true
 }
 
+/** Organization + iOS app facts already published on the marketing site. Homepage only. */
+export function homepageStructuredData(pathname: string): Record<string, unknown> | null {
+  if (normalizePublicPath(pathname) !== '/') return null
+  return {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Organization',
+        name: ORGANIZATION_NAME,
+        url: CANONICAL_ORIGIN,
+        logo: ORGANIZATION_LOGO_URL,
+        sameAs: [...ORGANIZATION_SAME_AS],
+      },
+      {
+        '@type': 'MobileApplication',
+        name: 'Logifi',
+        operatingSystem: 'iOS',
+        applicationCategory: IOS_APP_APPLICATION_CATEGORY,
+        url: APP_STORE_URL,
+        offers: {
+          '@type': 'Offer',
+          price: '0',
+          priceCurrency: 'USD',
+        },
+      },
+    ],
+  }
+}
+
+export function homepageJsonLdJson(pathname: string): string | null {
+  const data = homepageStructuredData(pathname)
+  if (!data) return null
+  return JSON.stringify(data).replace(/</g, '\\u003c')
+}
+
+export function homepageJsonLdScript(pathname: string): string | null {
+  const json = homepageJsonLdJson(pathname)
+  if (!json) return null
+  return `<script type="application/ld+json" id="${HOMEPAGE_JSON_LD_ID}">${json}</script>`
+}
+
 export function seoHeadTags(input: {
   pathname: string
   hostname?: string | null
@@ -103,6 +171,8 @@ export function seoHeadTags(input: {
   if (isVercelAppHost(input.hostname)) {
     tags.push('<meta name="robots" content="noindex">')
   }
+  const jsonLd = homepageJsonLdScript(input.pathname)
+  if (jsonLd) tags.push(jsonLd)
   return tags
 }
 

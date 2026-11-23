@@ -1,7 +1,7 @@
 import type { LogEntry } from './logbookTypes'
 
 const DB_NAME = 'logifi-logbook'
-const DB_VERSION = 2
+const DB_VERSION = 3
 
 export const METADATA_ACTIVE_USER_ID = 'activeUserId'
 export const METADATA_LAST_ACTIVE_USER_ID = 'lastActiveUserId'
@@ -111,6 +111,21 @@ export function initIndexedDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains('metadata')) {
         db.createObjectStore('metadata', { keyPath: 'key' })
       }
+
+      if (oldVersion < 3) {
+        if (!db.objectStoreNames.contains('endorsements')) {
+          const endorsementStore = db.createObjectStore('endorsements', { keyPath: 'id' })
+          endorsementStore.createIndex('userId', '_userId', { unique: false })
+          endorsementStore.createIndex('synced', '_synced', { unique: false })
+          endorsementStore.createIndex('updatedAt', 'updated_at', { unique: false })
+        }
+        if (!db.objectStoreNames.contains('endorsement_sync_queue')) {
+          const eqStore = db.createObjectStore('endorsement_sync_queue', { keyPath: 'id' })
+          eqStore.createIndex('timestamp', 'timestamp', { unique: false })
+          eqStore.createIndex('userId', 'userId', { unique: false })
+          eqStore.createIndex('endorsementId', 'endorsementId', { unique: false })
+        }
+      }
     }
   })
 
@@ -120,7 +135,7 @@ export function initIndexedDB(): Promise<IDBDatabase> {
 /**
  * Get database instance (ensure initialized)
  */
-async function getDB(): Promise<IDBDatabase> {
+export async function getIndexedDBInstance(): Promise<IDBDatabase> {
   if (!dbInstance) {
     await initIndexedDB()
   }
@@ -128,6 +143,10 @@ async function getDB(): Promise<IDBDatabase> {
     throw new Error('Failed to initialize IndexedDB')
   }
   return dbInstance
+}
+
+async function getDB(): Promise<IDBDatabase> {
+  return getIndexedDBInstance()
 }
 
 /** Plain copy of entry so IndexedDB structured clone does not fail on Vue reactive arrays. */
@@ -566,6 +585,9 @@ export async function clearAllDataForUser(userId: string): Promise<void> {
   for (const item of queue) {
     await removeFromSyncQueue(item.id)
   }
+
+  const { clearEndorsementDataForUser } = await import('~/utils/endorsementIndexedDB')
+  await clearEndorsementDataForUser(userId)
 
   const active = await getActiveUserId()
   if (active === userId) {
