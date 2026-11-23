@@ -59,7 +59,7 @@
               You review and edit before importing.
             </p>
             <p class="text-lg leading-relaxed">
-              Scan images are stored in our private storage bucket for up to <strong class="text-gray-100">24 hours</strong> (for support), then deleted.
+              Scan images are kept in private storage and deleted within <strong class="text-gray-100">48 hours</strong>.
               We do not send airline portal credentials or schedule tokens to Gemini or any other AI provider.
             </p>
             <p class="text-lg leading-relaxed">
