@@ -7,6 +7,8 @@ describe('spa index prerender', () => {
     const config = readFileSync(path.resolve(process.cwd(), 'nuxt.config.ts'), 'utf8')
     expect(config).toContain("route.route === '/index.html'")
     expect(config).toContain('route.skip = true')
-    expect(config).toContain("routes: ['/']")
+    const routes = config.match(/routes:\s*\[[\s\S]*?\]/)?.[0] ?? ''
+    expect(routes).toContain("'/'")
+    expect(routes).not.toContain("'/index.html'")
   })
 })

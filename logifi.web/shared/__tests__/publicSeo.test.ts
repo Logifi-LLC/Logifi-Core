@@ -33,8 +33,8 @@ import {
 const root = path.resolve(process.cwd())
 
 describe('public marketing pages', () => {
-  it('lists the nine public pages and skips app routes', () => {
-    expect(PUBLIC_MARKETING_PATHS).toHaveLength(9)
+  it('lists the public pages and skips app routes', () => {
+    expect(PUBLIC_MARKETING_PATHS).toHaveLength(13)
     expect(publicCanonicalUrls()).toEqual([
       `${CANONICAL_ORIGIN}/`,
       `${CANONICAL_ORIGIN}/integrations`,
@@ -45,6 +45,10 @@ describe('public marketing pages', () => {
       `${CANONICAL_ORIGIN}/terms`,
       `${CANONICAL_ORIGIN}/privacy`,
       `${CANONICAL_ORIGIN}/digifi`,
+      `${CANONICAL_ORIGIN}/faq`,
+      `${CANONICAL_ORIGIN}/how-to-digitize-a-paper-pilot-logbook`,
+      `${CANONICAL_ORIGIN}/import-foreflight-logten-logbook`,
+      `${CANONICAL_ORIGIN}/airline-pilot-logbook-app`,
     ])
     for (const appPath of ['/dashboard', '/logbook-builder', '/logbook-check', '/login', '/reset-password', '/auth/callback', '/auth/confirm', '/digifi-eye', '/digifi-scan', '/totals-report']) {
       expect(canonicalHrefForPath(appPath)).toBeNull()

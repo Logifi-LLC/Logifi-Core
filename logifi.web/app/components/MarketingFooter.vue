@@ -62,6 +62,16 @@
         </div>
       </div>
 
+      <div class="mt-8">
+        <h2 class="text-sm font-bold text-gray-200">Guides</h2>
+        <nav class="mt-3 flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:gap-x-6 sm:gap-y-1" aria-label="Guides">
+          <NuxtLink to="/faq" :class="guideLinkClass('faq')">FAQ</NuxtLink>
+          <NuxtLink to="/how-to-digitize-a-paper-pilot-logbook" :class="guideLinkClass('digitize-logbook')">Digitize a paper logbook</NuxtLink>
+          <NuxtLink to="/import-foreflight-logten-logbook" :class="guideLinkClass('import-logbook')">Import ForeFlight or LogTen</NuxtLink>
+          <NuxtLink to="/airline-pilot-logbook-app" :class="guideLinkClass('airline-logbook')">Airline pilot logbook</NuxtLink>
+        </nav>
+      </div>
+
       <div
         class="mt-10 flex flex-col gap-3 border-t border-gray-800/50 pt-6 text-xs text-[#9ca3af] sm:flex-row sm:items-center sm:justify-between sm:gap-4"
       >
@@ -124,5 +134,14 @@ const socialLinks = [
 function linkClass(page: MarketingActivePage) {
   const isActive = props.activePage === page
   return [columnLinkClass, 'block w-fit', isActive ? 'text-blue-400' : '']
+}
+
+function guideLinkClass(page: MarketingActivePage) {
+  const isActive = props.activePage === page
+  return [
+    columnLinkClass,
+    'inline-flex min-h-11 min-w-11 max-w-full items-center whitespace-normal break-words',
+    isActive ? 'text-blue-400' : '',
+  ]
 }
 </script>
