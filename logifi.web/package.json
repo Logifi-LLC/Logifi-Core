@@ -38,6 +38,7 @@
     "@nuxt/icon": "2.2.0",
     "@nwpr/airport-codes": "^3.0.3",
     "@supabase/supabase-js": "^2.90.1",
+    "@vercel/analytics": "^1.6.1",
     "@tailwindcss/vite": "^4.1.18",
     "csv-parse": "^7.0.3",
     "fflate": "^0.8.3",
