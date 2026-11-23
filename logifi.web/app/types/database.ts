@@ -1178,6 +1178,7 @@ export type Database = {
           p_field_values: Record<string, string>
           p_rendered_body: string
           p_expires_at?: string | null
+          p_id?: string | null
         }
         Returns: string
       }
@@ -1191,6 +1192,7 @@ export type Database = {
           p_field_values: Record<string, string>
           p_rendered_body: string
           p_expires_at?: string | null
+          p_id?: string | null
         }
         Returns: string
       }
@@ -1198,6 +1200,7 @@ export type Database = {
         Args: {
           p_endorsement_id: string
           p_pin: string
+          p_signed_at?: string | null
         }
         Returns: string
       }
@@ -1250,6 +1253,7 @@ export type Database = {
           p_cfi_expiration?: string | null
           p_paper_signed_at?: string | null
           p_expires_at?: string | null
+          p_id?: string | null
         }
         Returns: string
       }
