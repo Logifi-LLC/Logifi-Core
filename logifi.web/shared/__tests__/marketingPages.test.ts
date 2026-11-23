@@ -90,6 +90,8 @@ describe('marketing copy pages', () => {
       expect(published).not.toContain('70%')
       expect(published.toLowerCase()).not.toContain('self-host')
       expect(published.toLowerCase()).not.toContain('you own your data')
+      expect(published.toLowerCase()).not.toContain('who owns my logbook')
+      expect(published.toLowerCase()).not.toContain('you own your logbook data')
       expect(PUBLIC_MARKETING_PATHS).toContain(source.path)
       expect(canonicalHrefForPath(source.path)).toBe(page?.canonical)
     }
