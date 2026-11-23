@@ -13,6 +13,7 @@ import {
   loadEndorsementsPage,
   parseEndorsementsRole,
 } from '~/utils/endorsementsPageLoad'
+import { writeCachedAccountRole } from '~/utils/cachedAccountRole'
 import {
   ACCOUNT_SCOPED_STORAGE_KEYS,
   getScopedItem,
@@ -70,6 +71,10 @@ async function loadRole(): Promise<void> {
     })
     role.value = result.role
     loadError.value = result.error
+    const userId = user.value?.id
+    if (userId && result.authenticated && !result.error) {
+      writeCachedAccountRole(userId, result.role)
+    }
   } finally {
     loading.value = false
   }

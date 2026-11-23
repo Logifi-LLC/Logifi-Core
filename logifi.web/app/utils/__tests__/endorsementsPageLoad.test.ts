@@ -69,12 +69,12 @@ describe('loadEndorsementsPage', () => {
     })
     expect(result.authenticated).toBe(true)
     expect(result.role).toBe('INSTRUCTOR')
-    expect(result.error).toBe("Couldn't load endorsements.")
+    expect(result.error).toBeNull()
     expect(endorsementsPagePhase({
       loading: false,
       authenticated: true,
       error: result.error,
-    })).toBe('error')
+    })).toBe('ready')
   })
 
   it('uses the remote role and clears the error when the read succeeds', async () => {

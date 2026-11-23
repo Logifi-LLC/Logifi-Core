@@ -4,6 +4,26 @@
       AC 61-65K Appendix A samples. Request or issue for PIN signing, or record paper endorsements.
     </p>
 
+    <div
+      v-if="hasUnsyncedEndorsements || endorsementSyncError"
+      class="rounded-lg border px-4 py-3"
+      :class="isDarkMode ? 'border-amber-500/30 bg-amber-500/10' : 'border-amber-200 bg-amber-50'"
+    >
+      <p class="text-sm font-quicksand" :class="isDarkMode ? 'text-amber-200' : 'text-amber-900'">
+        <span v-if="endorsementSyncError">Sync failed. {{ endorsementSyncError }}</span>
+        <span v-else>Waiting to upload ({{ endorsementQueueLength }})</span>
+      </p>
+      <button
+        type="button"
+        class="mt-2 inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold"
+        :class="btnSecondary"
+        :disabled="isBusy"
+        @click="onRetrySync"
+      >
+        Retry sync
+      </button>
+    </div>
+
     <!-- Compose / request -->
     <SettingsListGroup title="New endorsement" :is-dark-mode="isDarkMode">
       <div class="space-y-3 px-4 py-3">
@@ -253,7 +273,7 @@
           {{ row.template_code }} · {{ row.title.replace(/^A\.\d+\s+/, '') }}
         </p>
         <p :class="[helper, 'mt-1 text-xs']">
-          Status: {{ row.status }}
+          Status: {{ statusLabel(row) }}
           <span v-if="row.expires_at"> · expires {{ formatDate(row.expires_at) }}</span>
         </p>
         <p
@@ -482,6 +502,10 @@ const {
   pendingForStudent,
   isLoading,
   error: endorsementError,
+  endorsementSyncError,
+  endorsementQueueLength,
+  hasUnsyncedEndorsements,
+  retryEndorsementSync,
   fetchMyEndorsements,
   fetchInstructorEndorsements,
   requestEndorsement,
@@ -622,6 +646,11 @@ async function refreshAll() {
   }
 }
 
+async function onRetrySync() {
+  await retryEndorsementSync()
+  await refreshAll()
+}
+
 function displayName(row: RosterRelationship): string {
   return row.profile?.full_name?.trim() || 'Unnamed pilot'
 }
@@ -640,6 +669,11 @@ function isExpired(row: EndorsementRow): boolean {
 }
 
 function statusLabel(row: EndorsementRow): string {
+  if (row._localSyncPending) {
+    const base = row.status.toUpperCase()
+    if (row._localSyncError) return `${base} (sync failed)`
+    return `${base} (pending sync)`
+  }
   if (isPaperImportedEndorsement(row)) {
     return isExpired(row) ? 'PAPER / IMPORTED (expired)' : 'PAPER / IMPORTED'
   }

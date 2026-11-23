@@ -54,12 +54,15 @@ export async function loadEndorsementsPage(deps: {
       timeoutMs,
       'Profile role'
     )
-    return { authenticated: true, role: remote ?? role, error: null }
+    if (remote) {
+      return { authenticated: true, role: remote, error: null }
+    }
+    return { authenticated: true, role, error: null }
   } catch {
     return {
       authenticated: true,
       role,
-      error: "Couldn't load endorsements.",
+      error: localRole ? null : "Couldn't load endorsements.",
     }
   }
 }
