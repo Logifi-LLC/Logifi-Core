@@ -8,9 +8,12 @@ import {
   parseFlicaLastUpdatedMs,
   flicaHtmlHasTripHeader,
   parseFlicaSchedule,
+  parseFlicaScheduleOrThrow,
+  FlicaScheduleParseError,
   pickFlicaGateHhmm,
   summarizeFlicaHtml,
 } from '../flicaParse'
+import { GENERIC_FLICA_TRIP_ID_PATTERN } from '../../../shared/flicaTripId'
 
 const FLICA_FIXTURE = `
 August Schedule
@@ -1048,5 +1051,69 @@ describe('parseFlicaLastUpdatedMs', () => {
         .toUTC()
         .toMillis()
     )
+  })
+})
+
+/** Synthetic non-Republic refrigerator. Ids are made up. Q is not a Republic pairing letter. */
+const GENERIC_FLICA_FIXTURE = `
+August Schedule
+SYNTHETIC PILOT
+(200002)
+Last Updated Aug 4, 2026 09:00:00 EDT
+Pairing Q8123 : 04AUG
+Base/Equip: BOS/CR9 CA01FO01
+TU 04 2101 BOS-DCA 0800 0930 0130
+Crew:
+CA 200002 SYNTHETIC, PILOT FO 200003 EXAMPLE, ALEX
+ID: 45821 - 05AUG
+Base/Equip: BOS/CR9 CA01FO01
+WE 05 2102 DCA-BOS 1000 1130 0130
+Crew:
+CA 200002 SYNTHETIC, PILOT
+`
+
+describe('generic FLICA refrigerator layout', () => {
+  it('parses labeled pairing headers and a numeric pairing id', () => {
+    const legs = parseFlicaSchedule(GENERIC_FLICA_FIXTURE, {
+      tripIdPattern: GENERIC_FLICA_TRIP_ID_PATTERN,
+    })
+    expect(legs.map((l) => l.trip_number)).toEqual(['Q8123', '45821'])
+    expect(legs.map((l) => l.flight_number)).toEqual(['2101', '2102'])
+    expect(legs.map((l) => l.dep_airport)).toEqual(['BOS', 'DCA'])
+    expect(legs.map((l) => l.arr_airport)).toEqual(['DCA', 'BOS'])
+    expect(legs.map((l) => l.scheduled_out_local?.slice(0, 10))).toEqual([
+      '2026-08-04',
+      '2026-08-05',
+    ])
+    expect(legs.every((l) => l.role === 'PIC')).toBe(true)
+    expect(legs.every((l) => l.fcv_aircraft_type === 'CR9')).toBe(true)
+    expect(legs[0]?.crew.map((c) => c.name)).toEqual(['SYNTHETIC, PILOT', 'EXAMPLE, ALEX'])
+  })
+
+  it('does not treat those ids as Republic trip headers', () => {
+    const legs = parseFlicaSchedule(GENERIC_FLICA_FIXTURE)
+    expect(legs.every((l) => l.trip_number == null)).toBe(true)
+    expect(flicaHtmlHasTripHeader(GENERIC_FLICA_FIXTURE)).toBe(false)
+    expect(
+      flicaHtmlHasTripHeader(GENERIC_FLICA_FIXTURE, GENERIC_FLICA_TRIP_ID_PATTERN)
+    ).toBe(true)
+  })
+
+  it('fails loudly on a layout that is not a refrigerator schedule', () => {
+    const foreign = 'Date,Flight,From,To\n2026-08-04,2101,BOS,DCA\n'
+    expect(parseFlicaSchedule(foreign, { tripIdPattern: GENERIC_FLICA_TRIP_ID_PATTERN })).toEqual(
+      []
+    )
+    expect(() =>
+      parseFlicaScheduleOrThrow(foreign, { tripIdPattern: GENERIC_FLICA_TRIP_ID_PATTERN })
+    ).toThrow(FlicaScheduleParseError)
+    try {
+      parseFlicaScheduleOrThrow(foreign, { tripIdPattern: GENERIC_FLICA_TRIP_ID_PATTERN })
+    } catch (e) {
+      expect(e).toBeInstanceOf(FlicaScheduleParseError)
+      expect((e as FlicaScheduleParseError).code).toBe('unrecognized_layout')
+      expect((e as Error).message).not.toContain('2101')
+      expect((e as Error).message).toMatch(/Nothing was imported/)
+    }
   })
 })

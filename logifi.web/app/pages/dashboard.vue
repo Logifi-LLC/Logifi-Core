@@ -362,7 +362,7 @@
               <AutofiBetaPill :is-dark-mode="isDarkMode" />
             </div>
             <p :class="['text-sm mt-1', isDarkMode ? 'text-gray-400' : 'text-gray-600']">
-              Fetch and import flights from Republic (RJET) FLICA.
+              Fetch and import flights from your FLICA schedule.
             </p>
           </div>
           <button
@@ -391,6 +391,7 @@
             mode="fetch"
             :is-dark-mode="isDarkMode"
             :external-connected="dashboardFcvConnected"
+            :airline-code="dashboardFlicaAirlineCode"
             :before-duplicate-check="prepareLogbookForFcvImport"
             :pending-sync-count="queueLength"
             :catalog-person-names="catalogPersonNames"
@@ -436,7 +437,7 @@
               <p
                 :class="['text-xs mt-1 font-quicksand', isDarkMode ? 'text-gray-400' : 'text-gray-600']"
               >
-                Pull new flights from Republic (RJET) FLICA. Review before importing.
+                Pull new flights from FLICA. Review before importing.
               </p>
             </header>
             <div
@@ -448,6 +449,7 @@
                 compact
                 :is-dark-mode="isDarkMode"
                 :external-connected="dashboardFcvConnected"
+                :airline-code="dashboardFlicaAirlineCode"
                 :before-duplicate-check="prepareLogbookForFcvImport"
                 :pending-sync-count="queueLength"
                 :catalog-person-names="catalogPersonNames"
@@ -6896,6 +6898,7 @@ import {
 } from '../../shared/oooiClock'
 import { sortEntriesByDateAndOOOI } from '../../shared/oooiSort'
 import { listCatalogPersonDisplayNames, tagsExcludingPersonNameMarker, isPersonCatalogNameMarker } from '../../shared/catalogPersonNames'
+import { DEFAULT_FLICA_AIRLINE_CODE, preferredFlicaAirlineCode } from '../../shared/flicaCarriers'
 import { collectPilotCatalogNames } from '../../shared/looksLikePersonName'
 import type { Form8710Data, AircraftCategory8710, ComplianceMetadata } from '../utils/form8710Types'
 import { mapCategoryTo8710, isTrainingDevice } from '../utils/form8710Types'
@@ -7351,26 +7354,37 @@ function effectiveFamilyKeyForEntry(entry: {
 // Logout function
 const router = useRouter()
 
-/** Header fetch CTA when FLICA is connected (see `/api/flica/status`). */
+/** Header fetch CTA when any FLICA airline is connected. */
 const dashboardFcvConnected = ref(false)
+const dashboardFlicaAirlineCode = ref(DEFAULT_FLICA_AIRLINE_CODE)
 const showFcvFetchPanel = ref(false)
+
+function resetDashboardFlicaAirline(): void {
+  dashboardFcvConnected.value = false
+  dashboardFlicaAirlineCode.value = DEFAULT_FLICA_AIRLINE_CODE
+  showFcvFetchPanel.value = false
+}
 
 async function refreshDashboardFcvStatus(): Promise<void> {
   if (!isAuthenticated.value) {
-    dashboardFcvConnected.value = false
+    resetDashboardFlicaAirline()
     return
   }
   const token = session.value?.access_token
   if (!token) {
-    dashboardFcvConnected.value = false
+    resetDashboardFlicaAirline()
     return
   }
   try {
-    const data = await apiFetch<{ connected: boolean }>('/api/flica/status', {
-      headers: { Authorization: `Bearer ${token}` },
-      query: { airlineCode: 'RJET' },
-    })
-    dashboardFcvConnected.value = Boolean(data?.connected)
+    const data = await apiFetch<{ affiliations?: Array<{ airlineCode?: string }> }>(
+      '/api/me/airline-affiliations',
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    const codes = (data?.affiliations ?? [])
+      .map((row) => (typeof row.airlineCode === 'string' ? row.airlineCode : ''))
+      .filter((code) => code.length > 0)
+    dashboardFcvConnected.value = codes.length > 0
+    dashboardFlicaAirlineCode.value = preferredFlicaAirlineCode(codes)
   } catch {
     dashboardFcvConnected.value = false
   }
@@ -7404,8 +7418,7 @@ const handleLogout = async () => {
   noteSignedOutBootRevealed()
   logEntries.value = []
   closeSettings()
-  dashboardFcvConnected.value = false
-  showFcvFetchPanel.value = false
+  resetDashboardFlicaAirline()
   if (isIos.value) {
     showAuthModal.value = true
     router.push('/dashboard')
@@ -7451,8 +7464,7 @@ const handleAccountDeleted = () => {
   noteSignedOutBootRevealed()
   logEntries.value = []
   closeSettings()
-  dashboardFcvConnected.value = false
-  showFcvFetchPanel.value = false
+  resetDashboardFlicaAirline()
   authNotice.value = 'Your account has been deleted.'
   authInitialTab.value = 'signin'
   if (isIos.value) {
@@ -7631,8 +7643,7 @@ watch(
       setActiveUserId(null)
       logEntries.value = []
       showAuthModal.value = true
-      dashboardFcvConnected.value = false
-      showFcvFetchPanel.value = false
+      resetDashboardFlicaAirline()
     }
   },
   { immediate: true }
@@ -8775,12 +8786,13 @@ function handleOpenFcvImportFromSettings(): void {
 }
 
 function handleFlicaConnectionChanged(payload: { connected: boolean }): void {
-  dashboardFcvConnected.value = !!payload?.connected
-  if (payload?.connected) {
-    showFcvFetchPanel.value = true
-  } else {
-    showFcvFetchPanel.value = false
-  }
+  void refreshDashboardFcvStatus().then(() => {
+    if (dashboardFcvConnected.value && payload?.connected) {
+      showFcvFetchPanel.value = true
+    } else if (!dashboardFcvConnected.value) {
+      showFcvFetchPanel.value = false
+    }
+  })
 }
 const isInlineCommercialMode = ref(false)
 const editingEntryId = ref<string | null>(null)

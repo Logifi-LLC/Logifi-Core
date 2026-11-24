@@ -14,6 +14,19 @@ export type ProductUpdate = {
 
 export const PRODUCT_UPDATES: ProductUpdate[] = [
   {
+    id: '2026-11-autofi-airlines',
+    date: '2026-11-24',
+    title: 'Autofi for more FLICA airlines',
+    tagline: 'Same import, more airlines',
+    summary:
+      'Autofi can connect to other FLICA airlines. Republic stays verified. The rest are beta until a pilot confirms the schedule page.',
+    bullets: [
+      'Pick your airline when you connect FLICA.',
+      'Republic (RJET) is unchanged.',
+      'Other airlines are beta. Review every leg before import.',
+    ],
+  },
+  {
     id: '2026-11-print-backup',
     date: '2026-11-15',
     title: 'Print, backup, and smarter time tracking',

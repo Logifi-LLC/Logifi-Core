@@ -5,7 +5,7 @@
     <main class="pt-32 pb-16 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto">
       <h1 class="text-4xl font-bold text-gray-100 mb-4">Pricing</h1>
       <p class="text-gray-400 mb-8 text-lg font-medium">
-        Logifi is free. Autofi (FLICA) is in public beta with Republic (RJET) and included—see
+        Logifi is free. Autofi (FLICA) is in public beta and included. See
         <NuxtLink to="/integrations" class="text-blue-400 hover:text-blue-300 transition-colors">Integrations</NuxtLink>
         for details. Digifi scanning uses pay-per-spread credits (below).
       </p>

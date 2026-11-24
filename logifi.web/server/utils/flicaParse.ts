@@ -2,11 +2,18 @@ import { DateTime } from 'luxon'
 import { getAirportIanaTimezoneServer } from './airportIana'
 import { normalizeCalendarYmd } from '../../shared/localCalendarDate'
 import {
+  FLICA_TRIP_ID_PATTERN,
+  GENERIC_FLICA_TRIP_ID_PATTERN,
+  REPUBLIC_TRIP_ID_PATTERN,
+} from '../../shared/flicaTripId'
+import {
   FLICA_IMPORT_SOURCE,
   hhmmToLocalDatetime,
   type AirlineLeg,
   type AirlineLegCrewMember,
 } from './airlineLeg'
+
+export { FLICA_TRIP_ID_PATTERN, GENERIC_FLICA_TRIP_ID_PATTERN, REPUBLIC_TRIP_ID_PATTERN }
 
 /** Republic pairings are Eastern-based; used when airport TZ is unknown and for naive `nowIso`. */
 export const FLICA_DEFAULT_NOW_ZONE = 'America/New_York'
@@ -43,38 +50,39 @@ const MONTH_MAP: Record<string, number> = {
   DEC: 12,
 }
 
-/**
- * Republic trip IDs: base letter + 4 digits + optional suffix.
- * The letter is not the pilot's base — any allowed letter is accepted.
- * Word boundaries reject reserve codes and other short tokens, and stop a
- * longer token from matching as a prefix.
- *
- * Checked-in schedule text also uses letter + digit + letter + two digits on
- * the same `ID : DDMMM` header. That shape stays accepted so those fixtures
- * still parse.
- */
-export const FLICA_TRIP_ID_PATTERN = '[BCWRILOZPD](?:\\d{4}[A-Z]?|\\d[A-Z]\\d{2})'
-
 const TRIP_MONTH_PATTERN = Object.keys(MONTH_MAP).join('|')
 
-const TRIP_ID_BOUNDED = `(?<![A-Z0-9])(${FLICA_TRIP_ID_PATTERN})(?![A-Z0-9])`
+/** Optional `Trip` / `Pairing` / `Pair` / `ID` label in front of the pairing id. */
+const TRIP_HEADER_LABEL = '(?:\\b(?:TRIP|PAIRING|PAIR|ID)\\b\\s*[:#]?\\s*)?'
 
-/** `B9001 : 04AUG` / `B9001B : 04AUG`. Month must be a real abbreviation. */
-const TRIP_RE = new RegExp(
-  `${TRIP_ID_BOUNDED}\\s*:\\s*(\\d{1,2})(${TRIP_MONTH_PATTERN})\\b`,
-  'gi'
-)
+interface FlicaTripRegexes {
+  tripRe: RegExp
+  headerRe: RegExp
+  suffixRe: RegExp
+}
 
-/** Same header, for detectors that only need a yes/no (no `g` flag). */
-const TRIP_HEADER_RE = new RegExp(
-  `${TRIP_ID_BOUNDED}\\s*:\\s*\\d{1,2}(?:${TRIP_MONTH_PATTERN})\\b`,
-  'i'
-)
+function tripIdPatternOrRepublic(pattern?: string): string {
+  const trimmed = pattern?.trim()
+  return trimmed || REPUBLIC_TRIP_ID_PATTERN
+}
 
-const TRIP_ID_SUFFIX_RE = new RegExp(`\\s+${TRIP_ID_BOUNDED}\\s*:.*`, 'i')
+function flicaTripRegexes(pattern?: string): FlicaTripRegexes {
+  const id = `(?<![A-Z0-9])(${tripIdPatternOrRepublic(pattern)})(?![A-Z0-9])`
+  return {
+    tripRe: new RegExp(
+      `${TRIP_HEADER_LABEL}${id}\\s*[:-]\\s*(\\d{1,2})(${TRIP_MONTH_PATTERN})\\b`,
+      'gi'
+    ),
+    headerRe: new RegExp(
+      `${TRIP_HEADER_LABEL}${id}\\s*[:-]\\s*\\d{1,2}(?:${TRIP_MONTH_PATTERN})\\b`,
+      'i'
+    ),
+    suffixRe: new RegExp(`\\s+${id}\\s*:.*`, 'i'),
+  }
+}
 
-export function flicaHtmlHasTripHeader(htmlOrText: string): boolean {
-  return TRIP_HEADER_RE.test(htmlOrText)
+export function flicaHtmlHasTripHeader(htmlOrText: string, tripIdPattern?: string): boolean {
+  return flicaTripRegexes(tripIdPattern).headerRe.test(htmlOrText)
 }
 
 const EQUIP_RE = /Base\/Equip:[\s|]*[A-Z]{3}\/([A-Z0-9]+)((?:[\s|]*(?:CA|FO)\d{2})*)/gi
@@ -91,10 +99,15 @@ const ROW_SENTINEL = '\u001e'
 export interface FlicaParseOptions {
   /** Default year when schedule text omits it (YYYY). */
   defaultYear?: number
-  /** Pilot employee id from schedule header, e.g. 624619 */
+  /** Pilot employee id from schedule header. */
   selfEmployeeId?: string
   /** Pilot last name for crew self-detection */
   selfLastName?: string
+  /**
+   * Pairing-id regex source from the carrier table. Omitted means Republic,
+   * so existing callers keep the Republic shape.
+   */
+  tripIdPattern?: string
 }
 
 function inferYear(text: string, defaultYear?: number): number {
@@ -582,10 +595,11 @@ export interface FlicaHtmlSummary {
 }
 
 /** Redacted parse diagnostics for fetch/probe warnings (no cookies/HTML dump). */
-export function summarizeFlicaHtml(htmlOrText: string): FlicaHtmlSummary {
+export function summarizeFlicaHtml(htmlOrText: string, tripIdPattern?: string): FlicaHtmlSummary {
   const text = flicaHtmlToText(htmlOrText)
-  const trips = text.match(new RegExp(TRIP_HEADER_RE.source, 'gi')) ?? []
-  let sampleStart = text.search(TRIP_HEADER_RE)
+  const { headerRe } = flicaTripRegexes(tripIdPattern)
+  const trips = text.match(new RegExp(headerRe.source, 'gi')) ?? []
+  let sampleStart = text.search(headerRe)
   if (sampleStart < 0) {
     sampleStart = text.search(/\b(?:MO|TU|WE|TH|FR|SA|SU)\s+\d{1,2}\b/i)
   }
@@ -662,7 +676,7 @@ function isNoiseLine(line: string): boolean {
 }
 
 /** Trip / duty chrome that must not donate leftover HHMMs to the previous leg. */
-function shouldBreakOrphanGateAttach(line: string): boolean {
+function shouldBreakOrphanGateAttach(line: string, headerRe: RegExp): boolean {
   const t = line.replace(/\|/g, ' ').trim()
   if (!t) return false
   if (/^D-END\b/i.test(t)) return true
@@ -671,7 +685,7 @@ function shouldBreakOrphanGateAttach(line: string): boolean {
   if (/^Crew:/i.test(t)) return true
   if (/Base\/Equip:/i.test(t)) return true
   if (/^GDO\b/i.test(t)) return true
-  if (TRIP_HEADER_RE.test(t)) return true
+  if (headerRe.test(t)) return true
   return false
 }
 
@@ -679,8 +693,8 @@ function shouldBreakOrphanGateAttach(line: string): boolean {
  * Published actuals often live on a continuation row with empty day/flight
  * cells (`| | | | | |0606|0809|0203`). Fold those HHMMs into the previous leg.
  */
-function extractOrphanGateNums(line: string): string[] {
-  if (shouldBreakOrphanGateAttach(line)) return []
+function extractOrphanGateNums(line: string, headerRe: RegExp): string[] {
+  if (shouldBreakOrphanGateAttach(line, headerRe)) return []
   const nums = line.match(/\b\d{4}\b/g) ?? []
   const clocks = nums.filter((n) => isValidClockHhmm(n))
   return clocks.length >= 2 ? clocks : []
@@ -755,10 +769,10 @@ function parseLegLine(line: string, index: number): ParseHit | null {
   }
 }
 
-function collectHits(text: string): ParseHit[] {
+function collectHits(text: string, regexes: FlicaTripRegexes): ParseHit[] {
   const hits: ParseHit[] = []
 
-  for (const m of text.matchAll(TRIP_RE)) {
+  for (const m of text.matchAll(regexes.tripRe)) {
     if (m.index == null) continue
     hits.push({
       kind: 'trip',
@@ -789,7 +803,7 @@ function collectHits(text: string): ParseHit[] {
     const line = text
       .slice(lineStart)
       .split('\n')[0]
-      ?.replace(TRIP_ID_SUFFIX_RE, '')
+      ?.replace(regexes.suffixRe, '')
       ?.trim()
     if (!line) continue
     const crew = parseCrewLine(line)
@@ -799,7 +813,7 @@ function collectHits(text: string): ParseHit[] {
   let offset = 0
   let lastLeg: Extract<ParseHit, { kind: 'leg' }> | null = null
   for (const line of text.split('\n')) {
-    if (shouldBreakOrphanGateAttach(line)) {
+    if (shouldBreakOrphanGateAttach(line, regexes.headerRe)) {
       lastLeg = null
       offset += line.length + 1
       continue
@@ -809,7 +823,7 @@ function collectHits(text: string): ParseHit[] {
       hits.push(hit)
       lastLeg = hit
     } else if (lastLeg) {
-      const extra = extractOrphanGateNums(line)
+      const extra = extractOrphanGateNums(line, regexes.headerRe)
       if (extra.length >= 2) {
         lastLeg.remainder = `${lastLeg.remainder} ${extra.join(' ')}`.trim()
       }
@@ -830,9 +844,9 @@ function resolveRole(
 }
 
 /**
- * Parse Republic FLICA schedule detail text/HTML into AirlineLeg rows.
- * Walks every trip on the page. Pairing length is not capped (1-day turns,
- * 5-day lines, 6-day reserve, IROPS into days off / next month).
+ * Parse a CAE FLICA refrigerator / schedule page into AirlineLeg rows.
+ * Pairing length is not capped (1-day turns, multi-day lines, reserve, IROPS).
+ * Trip-id shape comes from `options.tripIdPattern` (Republic when omitted).
  */
 export function parseFlicaSchedule(
   htmlOrText: string,
@@ -850,6 +864,7 @@ export function parseFlicaSchedule(
   }
 
   const year = inferYear(text, options.defaultYear)
+  const regexes = flicaTripRegexes(options.tripIdPattern)
   const legs: AirlineLeg[] = []
   let currentTrip: string | null = null
   let currentMonthAbbr: string | null = null
@@ -869,7 +884,7 @@ export function parseFlicaSchedule(
     }
   }
 
-  for (const hit of collectHits(text)) {
+  for (const hit of collectHits(text, regexes)) {
     if (hit.kind === 'trip') {
       currentTrip = hit.id
       currentMonthAbbr = hit.monthAbbr
@@ -945,6 +960,29 @@ export function parseFlicaSchedule(
     unique.push(leg)
   }
   return unique
+}
+
+export class FlicaScheduleParseError extends Error {
+  readonly code = 'unrecognized_layout' as const
+  constructor(message: string) {
+    super(message)
+    this.name = 'FlicaScheduleParseError'
+  }
+}
+
+/**
+ * Same parser, but an empty result is a failure. Callers must not treat
+ * "zero legs" as a successful import.
+ */
+export function parseFlicaScheduleOrThrow(
+  htmlOrText: string,
+  options: FlicaParseOptions = {}
+): AirlineLeg[] {
+  const legs = parseFlicaSchedule(htmlOrText, options)
+  if (legs.length > 0) return legs
+  throw new FlicaScheduleParseError(
+    'FLICA returned a schedule, but no flight legs matched this airline\'s refrigerator layout. Nothing was imported.'
+  )
 }
 
 export interface AirlineLegFilterStats {

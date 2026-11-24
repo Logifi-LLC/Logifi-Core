@@ -108,4 +108,36 @@ describe('FcvSync FLICA status when auth settles', () => {
 
     wrapper.unmount()
   })
+
+  it('uses a connected non-Republic airline when Republic is not connected', async () => {
+    apiFetchMock.mockImplementation((url: string) => {
+      if (String(url).includes('airline-affiliations')) {
+        return Promise.resolve({ affiliations: [{ airlineCode: 'EDV' }] })
+      }
+      return Promise.resolve({ connected: true })
+    })
+
+    const wrapper = mount(FcvSync, {
+      props: { isDarkMode: false, mode: 'fetch' },
+      global: { stubs: { Icon: true, Teleport: true } },
+    })
+
+    sessionRef.value = { access_token: 'token' }
+    isAuthenticatedRef.value = true
+    await nextTick()
+    await flushPromises()
+
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/flica/status',
+      expect.objectContaining({
+        query: { airlineCode: 'EDV' },
+      })
+    )
+    expect((wrapper.get('select').element as HTMLSelectElement).value).toBe('EDV')
+    const optionText = wrapper.findAll('option').map((o) => o.text())
+    expect(optionText[0]).toContain('Republic')
+    expect(optionText.some((text) => text.includes('Endeavor Air'))).toBe(true)
+
+    wrapper.unmount()
+  })
 })

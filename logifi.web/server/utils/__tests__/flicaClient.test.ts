@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
+import { GENERIC_FLICA_TRIP_ID_PATTERN } from '../../../shared/flicaTripId'
 import {
   decodeFlicaHtmlBytes,
   extractFlicaPairingLinks,
@@ -556,6 +557,22 @@ describe('extractFlicaPairingLinks', () => {
     const found = [...new Set(extractFlicaPairingLinks(html).map((l) => l.tripId))].sort()
     expect(found).toEqual([...ids].sort())
     for (const id of rejected) expect(found).not.toContain(id)
+  })
+
+  it('finds generic pairing ids only when that pattern is passed', () => {
+    const html = [
+      '<a href="viewpairing.cgi?Trip=Q8123&token=abc">Q8123</a>',
+      '<a href="/full/viewpairing.cgi?Trip=45821&token=abc">45821</a>',
+      '<a href="viewpairing.cgi?Trip=R11&token=abc">R11</a>',
+      '<a href="viewpairing.cgi?Trip=OFF&token=abc">OFF</a>',
+    ].join('\n')
+    const generic = [
+      ...new Set(
+        extractFlicaPairingLinks(html, GENERIC_FLICA_TRIP_ID_PATTERN).map((l) => l.tripId)
+      ),
+    ].sort()
+    expect(generic).toEqual(['45821', 'Q8123'])
+    expect(extractFlicaPairingLinks(html)).toEqual([])
   })
 })
 

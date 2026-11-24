@@ -1,4 +1,4 @@
-import { defineEventHandler, createError } from 'h3'
+import { defineEventHandler, readBody, createError } from 'h3'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import { loginFlica, probeFlicaMenu, FlicaClientError } from '../../utils/flicaClient'
 import { resolveFlicaPortal } from '../../utils/flicaPortal'
@@ -14,9 +14,16 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
 
+  let body: { airlineCode?: string } = {}
+  try {
+    body = (await readBody(event)) ?? {}
+  } catch {
+    body = {}
+  }
+
   let portal
   try {
-    portal = resolveFlicaPortal('RJET')
+    portal = resolveFlicaPortal(body?.airlineCode)
   } catch (e) {
     throw createError({
       statusCode: 400,
@@ -63,7 +70,7 @@ export default defineEventHandler(async (event) => {
       username: integration.username,
       password,
     })
-    const probe = await probeFlicaMenu(session)
+    const probe = await probeFlicaMenu(session, { tripIdPattern: portal.tripIdPattern })
     return { success: true, probe }
   } catch (e) {
     const message =
