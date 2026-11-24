@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
   if (!username) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'FLICA User ID is required (e.g. RPA624619 or employee number)',
+      statusMessage: 'FLICA User ID is required',
     })
   }
 

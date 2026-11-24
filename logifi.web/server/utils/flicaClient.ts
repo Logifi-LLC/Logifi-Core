@@ -9,12 +9,12 @@
 import { normalizeCalendarYmd } from '../../shared/localCalendarDate'
 import type { AirlineLeg } from './airlineLeg'
 import {
-  FLICA_TRIP_ID_PATTERN,
   flicaHtmlHasTripHeader,
   parseFlicaLastUpdatedMs,
   parseFlicaSchedule,
   summarizeFlicaHtml,
 } from './flicaParse'
+import { FLICA_TRIP_ID_PATTERN } from '../../shared/flicaTripId'
 
 const FLICA_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -415,14 +415,16 @@ export interface FlicaPairingLink {
   href: string
 }
 
-const PAIRING_TRIP_QUERY_RE = new RegExp(
-  `[?&](?:trip|pairing|pairid|pair)=?(${FLICA_TRIP_ID_PATTERN})(?![A-Z0-9])`,
-  'i'
-)
-const PAIRING_TRIP_PATH_RE = new RegExp(
-  `/(${FLICA_TRIP_ID_PATTERN})(?![A-Z0-9])(?:[/?&#]|$)`,
-  'i'
-)
+function pairingTripQueryRe(tripIdPattern?: string): RegExp {
+  const pattern = tripIdPattern?.trim() || FLICA_TRIP_ID_PATTERN
+  return new RegExp(`[?&](?:trip|pairing|pairid|pair)=?(${pattern})(?![A-Z0-9])`, 'i')
+}
+
+function pairingTripPathRe(tripIdPattern?: string): RegExp {
+  const pattern = tripIdPattern?.trim() || FLICA_TRIP_ID_PATTERN
+  return new RegExp(`/(${pattern})(?![A-Z0-9])(?:[/?&#]|$)`, 'i')
+}
+
 const PAIRING_CGI_RE =
   /(?:\/(?:online|full)\/)?[\w.-]*(?:pairing|opentrip|viewtrip|tripdetail)[\w.-]*\.cgi\?[^"'\\\s<>]*/gi
 
@@ -438,16 +440,18 @@ function resolvePairingHref(href: string): string[] {
 
 /**
  * Pairing-detail CGI links from month refrigerator HTML (`Trip=<id>`).
+ * `tripIdPattern` defaults to Republic so existing callers stay unchanged.
  */
-export function extractFlicaPairingLinks(html: string): FlicaPairingLink[] {
+export function extractFlicaPairingLinks(html: string, tripIdPattern?: string): FlicaPairingLink[] {
+  const queryRe = pairingTripQueryRe(tripIdPattern)
+  const pathRe = pairingTripPathRe(tripIdPattern)
   const out: FlicaPairingLink[] = []
   const seen = new Set<string>()
   const consider = (raw: string) => {
     const cleaned = raw.replace(/&amp;/g, '&').trim()
     if (!/\.cgi/i.test(cleaned)) return
-    if (/scheduledetail\.cgi/i.test(cleaned) && !PAIRING_TRIP_QUERY_RE.test(cleaned)) return
-    const tripMatch =
-      cleaned.match(PAIRING_TRIP_QUERY_RE) ?? cleaned.match(PAIRING_TRIP_PATH_RE)
+    if (/scheduledetail\.cgi/i.test(cleaned) && !queryRe.test(cleaned)) return
+    const tripMatch = cleaned.match(queryRe) ?? cleaned.match(pathRe)
     if (!tripMatch) return
     const tripId = tripMatch[1].toUpperCase()
     for (const href of resolvePairingHref(cleaned)) {
@@ -458,14 +462,14 @@ export function extractFlicaPairingLinks(html: string): FlicaPairingLink[] {
     }
   }
 
-  PAIRING_CGI_RE.lastIndex = 0
+  const pairingCgiRe = new RegExp(PAIRING_CGI_RE.source, 'gi')
   let match: RegExpExecArray | null
-  while ((match = PAIRING_CGI_RE.exec(html))) {
+  while ((match = pairingCgiRe.exec(html))) {
     consider(match[0])
   }
   const genericCgi = /(?:\/(?:online|full)\/)?[\w.-]+\.cgi\?[^"'\\\s<>]+/gi
   while ((match = genericCgi.exec(html))) {
-    if (PAIRING_TRIP_QUERY_RE.test(match[0])) consider(match[0])
+    if (queryRe.test(match[0])) consider(match[0])
   }
   for (const { href } of anchorEntries(html)) {
     consider(href)
@@ -480,12 +484,15 @@ export function extractFlicaPairingLinks(html: string): FlicaPairingLink[] {
 export async function fetchFlicaPairingOverlays(
   session: FlicaSession,
   monthHtml: string,
-  opts: { dateFrom: string; dateTo: string; defaultYear?: number }
+  opts: { dateFrom: string; dateTo: string; defaultYear?: number; tripIdPattern?: string }
 ): Promise<AirlineLeg[]> {
-  const links = extractFlicaPairingLinks(monthHtml)
+  const links = extractFlicaPairingLinks(monthHtml, opts.tripIdPattern)
   if (!links.length) return []
 
-  const monthLegs = parseFlicaSchedule(monthHtml, { defaultYear: opts.defaultYear })
+  const monthLegs = parseFlicaSchedule(monthHtml, {
+    defaultYear: opts.defaultYear,
+    tripIdPattern: opts.tripIdPattern,
+  })
   const dateFrom = normalizeCalendarYmd(opts.dateFrom) ?? opts.dateFrom
   const dateTo = normalizeCalendarYmd(opts.dateTo) ?? opts.dateTo
   const wantedTrips = new Set(
@@ -524,7 +531,10 @@ export async function fetchFlicaPairingOverlays(
       ) {
         continue
       }
-      const legs = parseFlicaSchedule(page.html, { defaultYear: opts.defaultYear })
+      const legs = parseFlicaSchedule(page.html, {
+        defaultYear: opts.defaultYear,
+        tripIdPattern: opts.tripIdPattern,
+      })
       overlays.push(...legs)
     } catch {
       continue
@@ -709,8 +719,8 @@ export function findScheduleMonthLinks(
  * True only for refrigerator / trip-detail HTML — not crew mainmenu chrome.
  * Requires a pairing header (`ID : DDMMM`) and at least one route/leg signal.
  */
-export function htmlLooksLikeScheduleDetail(html: string): boolean {
-  const hasTrip = flicaHtmlHasTripHeader(html)
+export function htmlLooksLikeScheduleDetail(html: string, tripIdPattern?: string): boolean {
+  const hasTrip = flicaHtmlHasTripHeader(html, tripIdPattern)
   const hasLeg =
     /\b(?:MO|TU|WE|TH|FR|SA|SU)\s+\d{1,2}\s+(?:\*\s+)?\d{3,4}\s+[A-Z]{3}-[A-Z]{3}/i.test(
       html
@@ -723,11 +733,11 @@ export function htmlLooksLikeScheduleDetail(html: string): boolean {
 }
 
 /** Prefer parser over raw-HTML heuristics (table markup breaks leg regexes). */
-export function htmlHasParseableScheduleLegs(html: string): boolean {
-  if (htmlLooksLikeScheduleDetail(html)) return true
+export function htmlHasParseableScheduleLegs(html: string, tripIdPattern?: string): boolean {
+  if (htmlLooksLikeScheduleDetail(html, tripIdPattern)) return true
   if (/<frameset\b/i.test(html)) return false
   try {
-    return parseFlicaSchedule(html).length > 0
+    return parseFlicaSchedule(html, { tripIdPattern }).length > 0
   } catch {
     return false
   }
@@ -752,10 +762,10 @@ function isWarmScheduleStub(html: string): boolean {
 }
 
 /** True for GO=1 schedule HTML that is safe to parse for Autofi Out/In. */
-export function isImportableScheduleHtml(html: string): boolean {
+export function isImportableScheduleHtml(html: string, tripIdPattern?: string): boolean {
   if (!html || isWarmScheduleStub(html)) return false
   if (html.length < FLICA_IMPORTABLE_SCHEDULE_MIN_BYTES) return false
-  return htmlHasParseableScheduleLegs(html) || flicaHtmlHasTripHeader(html)
+  return htmlHasParseableScheduleLegs(html, tripIdPattern) || flicaHtmlHasTripHeader(html, tripIdPattern)
 }
 
 function redactTokenInUrl(url: string): string {
@@ -787,23 +797,25 @@ export function extractFlicaToken(html: string): string | null {
   return m?.[1] ?? null
 }
 
-function htmlTextSnippet(html: string, maxLen = 220): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, maxLen)
-}
-
 /**
  * After login, fetch refrigerator-list / schedule-detail HTML for the date range.
- * Republic path: mainmenu frameset → leftmenu.cgi → scheduledetail.cgi?BlockDate=MMYY.
+ * Same CGI path for every carrier: mainmenu frameset, leftmenu.cgi, then
+ * scheduledetail.cgi?BlockDate=MMYY. `tripIdPattern` selects which pairing ids
+ * count as a schedule page. Omitted means Republic.
+ *
+ * TODO(flica-calendar-export): CAE's public help describes a Refrigerator List
+ * and FLICA Calendar "Export" that downloads the month on screen as Outlook or
+ * .vcs (iCalendar). Examples:
+ *   https://hal.flica.net/webhelp/webhelphalcm/Information_and_Tools/Export_Schedule.htm
+ *   https://rpa.flica.net/webhelp/webhelprpacm/Information_and_Tools/FLiCA_Calendar.htm
+ *   https://airwis.flica.net/webhelp/webhelpawicm/Schedules/View_Your_Monthly_Schedule.htm
+ * Those pages do not publish a stable CGI path, and there is no scrubbed VCS
+ * fixture. Do not guess the URL. A calendar-file fallback stays unimplemented
+ * until a volunteer provides the request and a synthetic file.
  */
 export async function fetchScheduleHtml(
   session: FlicaSession,
-  opts: { dateFrom: string; dateTo: string }
+  opts: { dateFrom: string; dateTo: string; tripIdPattern?: string }
 ): Promise<string> {
   const dateFrom =
     normalizeCalendarYmd(opts.dateFrom) || opts.dateFrom || new Date().toISOString().slice(0, 10)
@@ -839,7 +851,6 @@ export async function fetchScheduleHtml(
 
   let token = extractFlicaToken(leftHtml) || extractFlicaToken(menu.html)
   const detailFromMenu = findScheduleDetailLinks(leftHtml || menu.html)
-  const wantedBlocks = new Set(targets.map((t) => flicaBlockDate(t.year, t.month)))
 
   if (!token) {
     for (const href of detailFromMenu) {
@@ -853,22 +864,14 @@ export async function fetchScheduleHtml(
         url: string
         bytes: number
         parsedLegs: number
-        looksLikeDetail: boolean
-        snippet: string
       }
     | null = null
 
-  const recordAttempt = (path: string, html: string, status: number) => {
-    const is404 =
-      status === 404 || /404\s*-\s*file or directory not found/i.test(html)
+  const recordAttempt = (path: string, html: string) => {
     lastAttempt = {
       url: redactTokenInUrl(path),
       bytes: html.length,
-      parsedLegs: parseFlicaSchedule(html).length,
-      looksLikeDetail: htmlLooksLikeScheduleDetail(html),
-      snippet: is404
-        ? `HTTP ${status}: ${htmlTextSnippet(html)}`
-        : htmlTextSnippet(html),
+      parsedLegs: parseFlicaSchedule(html, { tripIdPattern: opts.tripIdPattern }).length,
     }
   }
 
@@ -922,7 +925,7 @@ export async function fetchScheduleHtml(
         })
         pagesScanned++
         if (looksLikeLoginPage(warm.html, warm.finalUrl)) continue
-        recordAttempt(warmPath, warm.html, warm.response.status)
+        recordAttempt(warmPath, warm.html)
         const warm404 =
           warm.response.status === 404 ||
           /404\s*-\s*file or directory not found/i.test(warm.html)
@@ -953,7 +956,7 @@ export async function fetchScheduleHtml(
           },
         })
         pagesScanned++
-        recordAttempt(goPath, go.html, go.response.status)
+        recordAttempt(goPath, go.html)
         return go
       }
 
@@ -964,7 +967,7 @@ export async function fetchScheduleHtml(
           go.response.status === 404 ||
           /404\s*-\s*file or directory not found/i.test(go.html)
         if (go404) continue
-        if (isImportableScheduleHtml(go.html)) {
+        if (isImportableScheduleHtml(go.html, opts.tripIdPattern)) {
           collected.push(go.html)
           continue monthLoop
         }
@@ -977,7 +980,7 @@ export async function fetchScheduleHtml(
           go.response.status === 404 ||
           /404\s*-\s*file or directory not found/i.test(go.html)
         if (retry404) continue
-        if (isImportableScheduleHtml(go.html)) {
+        if (isImportableScheduleHtml(go.html, opts.tripIdPattern)) {
           collected.push(go.html)
           continue monthLoop
         }
@@ -991,18 +994,20 @@ export async function fetchScheduleHtml(
     return collected.join('\n')
   }
 
-  const monthLinkCount = detailFromMenu.filter((href) => {
-    const block = href.match(/BlockDate=(\d{4})/i)?.[1]
-    return !block || wantedBlocks.has(block)
-  }).length
-
   const attemptHint = lastAttempt
-    ? ` Last scheduledetail try: ${lastAttempt.url} (${lastAttempt.bytes} bytes, parser=${lastAttempt.parsedLegs} leg(s)). Page text: "${lastAttempt.snippet}"`
-    : ' No scheduledetail response body was usable.'
+    ? ` Last page was ${lastAttempt.bytes} bytes and the parser found ${lastAttempt.parsedLegs} leg(s).`
+    : ''
+
+  console.info('[flica] schedule not recognized', {
+    pagesScanned,
+    bytes: lastAttempt?.bytes ?? 0,
+    parsedLegs: lastAttempt?.parsedLegs ?? 0,
+    url: lastAttempt?.url ?? null,
+  })
 
   throw new FlicaClientError(
     'schedule_not_found',
-    `Logged into FLICA but could not load schedule detail for that date range (scanned ${pagesScanned} pages, ${monthLinkCount} month link(s), token=${token ? 'yes' : 'no'}).${attemptHint}`
+    `Logged into FLICA but could not read a refrigerator schedule for that date (scanned ${pagesScanned} pages).${attemptHint} Nothing was imported.`
   )
 }
 
@@ -1040,7 +1045,7 @@ export interface FlicaMenuProbeResult {
  */
 export async function probeFlicaMenu(
   session: FlicaSession,
-  opts: { dateFrom?: string; dateTo?: string } = {}
+  opts: { dateFrom?: string; dateTo?: string; tripIdPattern?: string } = {}
 ): Promise<FlicaMenuProbeResult> {
   const dateFrom =
     normalizeCalendarYmd(opts.dateFrom) || opts.dateFrom || new Date().toISOString().slice(0, 10)
@@ -1113,12 +1118,17 @@ export async function probeFlicaMenu(
     error: null,
   }
   try {
-    const scheduleHtml = await fetchScheduleHtml(session, { dateFrom, dateTo })
-    const sum = summarizeFlicaHtml(scheduleHtml)
+    const scheduleHtml = await fetchScheduleHtml(session, {
+      dateFrom,
+      dateTo,
+      tripIdPattern: opts.tripIdPattern,
+    })
+    const sum = summarizeFlicaHtml(scheduleHtml, opts.tripIdPattern)
     const defaultYear = parseInt(dateFrom.slice(0, 4), 10)
     scheduleSummary.htmlLength = sum.bytes
     scheduleSummary.parsedLegCount = parseFlicaSchedule(scheduleHtml, {
       defaultYear: Number.isFinite(defaultYear) ? defaultYear : undefined,
+      tripIdPattern: opts.tripIdPattern,
     }).length
     scheduleSummary.tripCount = sum.tripCount
     scheduleSummary.hasL7G13 = sum.hasL7G13

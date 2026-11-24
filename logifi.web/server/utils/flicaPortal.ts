@@ -1,35 +1,62 @@
+import {
+  airlineHasActiveCrewDigest,
+  findFlicaCarrier,
+  listFlicaCarriers,
+  DEFAULT_FLICA_AIRLINE_CODE,
+  type FlicaCarrier,
+} from '../../shared/flicaCarriers'
+import { GENERIC_FLICA_TRIP_ID_PATTERN, REPUBLIC_TRIP_ID_PATTERN } from '../../shared/flicaTripId'
+
 export interface FlicaPortalConfig {
   airlineCode: string
   host: string
   label: string
   /** Prefixed onto employee numbers when the user enters digits only. */
   userIdPrefix?: string
+  beta: boolean
+  crewDigest: boolean
+  /** Pairing-id regex source. Republic's base-letter shape, or the generic one. */
+  tripIdPattern: string
 }
 
-const PORTALS: Record<string, FlicaPortalConfig> = {
-  RJET: {
-    airlineCode: 'RJET',
-    host: 'rpa.flica.net',
-    label: 'Republic',
-    userIdPrefix: 'RPA',
-  },
+function tripIdPatternFor(carrier: FlicaCarrier): string {
+  return carrier.tripIdKind === 'republic'
+    ? REPUBLIC_TRIP_ID_PATTERN
+    : GENERIC_FLICA_TRIP_ID_PATTERN
+}
+
+function toPortal(carrier: FlicaCarrier): FlicaPortalConfig {
+  return {
+    airlineCode: carrier.airlineCode,
+    host: carrier.host,
+    label: carrier.displayName,
+    userIdPrefix: carrier.userIdPrefix,
+    beta: carrier.beta,
+    crewDigest: carrier.crewDigest,
+    tripIdPattern: tripIdPatternFor(carrier),
+  }
 }
 
 export function listFlicaPortals(): FlicaPortalConfig[] {
-  return Object.values(PORTALS)
+  return listFlicaCarriers().map(toPortal)
 }
 
 export function resolveFlicaPortal(airlineCode?: string | null): FlicaPortalConfig {
-  const code = (airlineCode ?? 'RJET').trim().toUpperCase() || 'RJET'
-  const portal = PORTALS[code]
-  if (!portal) {
+  const raw = (airlineCode ?? '').trim()
+  const code = (raw || DEFAULT_FLICA_AIRLINE_CODE).toUpperCase()
+  const carrier = findFlicaCarrier(code)
+  if (!carrier || carrier.airlineCode !== code) {
     throw new Error(`Unsupported FLICA airline code: ${code}`)
   }
-  return portal
+  return toPortal(carrier)
 }
 
+export { airlineHasActiveCrewDigest }
+
 /**
- * Normalize FLICA User ID. Accepts full id (RPA624619) or employee number (624619).
+ * Normalize FLICA User ID. When the carrier has a confirmed prefix, digits-only
+ * input (100001) becomes that prefix plus the digits. Otherwise the value is
+ * stored as entered.
  */
 export function normalizeFlicaUserId(raw: string, portal: FlicaPortalConfig): string {
   const id = raw.trim()

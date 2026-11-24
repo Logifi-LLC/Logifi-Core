@@ -129,7 +129,7 @@ useHead({
     {
       name: 'description',
       content:
-        'Logifi integrations: Autofi FLICA import (public beta with Republic / RJET) and Google Gemini for Digifi paper scanning.',
+        'Logifi integrations: Autofi FLICA import (public beta, Republic verified) and Google Gemini for Digifi paper scanning.',
     },
   ],
 })

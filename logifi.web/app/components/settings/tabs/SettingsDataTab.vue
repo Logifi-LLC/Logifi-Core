@@ -154,7 +154,7 @@
       <SettingsListRow
         v-if="fcvConnected"
         label="Import airline schedule (Autofi)"
-        subtitle="Public beta · Republic (RJET)"
+        subtitle="Public beta. Republic verified."
         icon="ri:download-cloud-2-line"
         :is-dark-mode="isDarkMode"
         @click="$emit('import-fcv')"
