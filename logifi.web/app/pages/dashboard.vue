@@ -7085,6 +7085,7 @@ import {
   getAllIDBLogEntriesForUser,
   getSyncQueue,
   removeQueuedOperationsForEntry,
+  hasPendingSyncOperation,
   migrateLegacyLocalData,
   getLastSuccessfulRemoteSyncAt,
   setLastSuccessfulRemoteSyncAt,
@@ -9772,11 +9773,42 @@ async function saveInlineEdit(): Promise<boolean> {
         amends_entry_id:
           updatedEntry.amendsEntryId ?? oldEntryData?.amends_entry_id ?? null,
         is_void: updatedEntry.isVoid === true || oldEntryData?.is_void === true,
-        is_imported: oldEntryData?.is_imported ?? false,
-        import_source: oldEntryData?.import_source ?? null,
-        import_batch_id: oldEntryData?.import_batch_id ?? null,
-        original_entry_date: oldEntryData?.original_entry_date ?? null,
-        import_metadata: oldEntryData?.import_metadata ?? null
+        // No server row to read (never synced): keep the local entry's import provenance.
+        ...(oldEntryData
+          ? {
+              is_imported: oldEntryData.is_imported ?? false,
+              import_source: oldEntryData.import_source ?? null,
+              import_batch_id: oldEntryData.import_batch_id ?? null,
+              original_entry_date: oldEntryData.original_entry_date ?? null,
+              import_metadata: oldEntryData.import_metadata ?? null,
+            }
+          : {
+              is_imported: updatedEntry.isImported ?? false,
+              import_source: updatedEntry.importSource ?? null,
+              import_batch_id: updatedEntry.importBatchId ?? null,
+              original_entry_date: updatedEntry.originalEntryDate ?? null,
+              import_metadata: updatedEntry.importMetadata ?? null,
+            }),
+      }
+
+      // An earlier write for this entry is still queued. Merge into it so the older queued
+      // copy can never land after (and overwrite) this save.
+      if (isOnline.value && (await hasPendingSyncOperation(targetId, user.value.id))) {
+        await updateEntryInIndexedDB(updatedEntry, { userId: user.value.id, synced: false })
+        await addToQueue(
+          'update',
+          targetId,
+          { ...dbEntry, id: targetId, user_id: user.value.id },
+          user.value.id,
+          { awaitSync: shouldAwaitSyncForSigningIntent() }
+        )
+        logEntries.value = sortEntriesByDateAndOOOI(
+          logEntries.value.some((e) => e.id === targetId)
+            ? logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
+            : [...logEntries.value, updatedEntry]
+        )
+        afterInlineSaveSuccess(updatedEntry)
+        return true
       }
 
       // Entry not in Supabase yet (0 rows): insert directly when online; queue when offline
