@@ -273,41 +273,6 @@ export async function grantWelcomeCredits(
   return { credits, granted: true }
 }
 
-/** @deprecated Use consumeCreditForSpread for Digifi scans. */
-export async function consumeCredit(
-  service: ServiceClient,
-  userId: string
-): Promise<{ ok: boolean; balance: number }> {
-  await ensureUserProfile(service, userId)
-  const current = await getCreditsBalance(service, userId)
-  if (current < 1) {
-    return { ok: false, balance: current }
-  }
-
-  const next = current - 1
-
-  const { data, error } = await service
-    .from('user_profiles')
-    .update({ credits: next, updated_at: new Date().toISOString() })
-    .eq('id', userId)
-    .select('credits')
-    .single()
-
-  if (error) {
-    throw new Error(`Failed to consume credit: ${error.message}`)
-  }
-
-  await insertCreditTransaction(service, {
-    userId,
-    amount: -1,
-    balanceAfter: data.credits,
-    type: 'scan',
-    description: 'Digifi scan',
-  })
-
-  return { ok: true, balance: data.credits }
-}
-
 export async function assertCanScanSpread(
   service: ServiceClient,
   userId: string,
