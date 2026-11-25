@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
   const { data: integration, error: loadErr } = await supabase
     .from('flica_integrations')
     .select(
-      'id, username, password_ciphertext, password_nonce, portal_host, airline_code'
+      'id, username, password_ciphertext, password_nonce, airline_code'
     )
     .eq('user_id', userId)
     .eq('airline_code', portal.airlineCode)
@@ -66,7 +66,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const session = await loginFlica({
-      host: integration.portal_host || portal.host,
+      host: portal.host,
       username: integration.username,
       password,
     })
