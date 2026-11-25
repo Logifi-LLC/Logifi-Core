@@ -115,6 +115,23 @@ describe('mergeRemoteLogEntries', () => {
     expect(result.mergedEntries[0]?.remarks).toBe('from server')
   })
 
+  it('keeps the local copy when a queued write for it has not been sent yet', () => {
+    const local = buildEntry('edited-offline', {
+      version: 1,
+      updatedAt: '2026-01-01T00:00:00Z',
+      remarks: 'edited offline',
+    })
+    const remote = buildEntry('edited-offline', { version: 1, updatedAt: '2026-01-01T00:00:00Z' })
+
+    const result = mergeRemoteLogEntries({
+      localEntries: [{ entry: local, synced: false }],
+      remoteEntries: [remote],
+      syncQueue: [{ operation: 'update', entryId: 'edited-offline' }],
+    })
+
+    expect(result.mergedEntries[0]?.remarks).toBe('edited offline')
+  })
+
   it('adds remote-only entries not present locally', () => {
     const remote = buildEntry('remote-only')
     const result = mergeRemoteLogEntries({

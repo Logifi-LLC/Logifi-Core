@@ -249,6 +249,29 @@ describe('useSyncQueue coalescing and ordering', () => {
     expect(server.rows.get(ENTRY_ID)?.flight_time).toEqual({ total: 1.5 })
   })
 
+  it('runs inbound work only after an in-flight drain finishes', async () => {
+    const { userId, queue } = await setup()
+    await queue.addToQueue('insert', ENTRY_ID, row(userId, 1.0), userId)
+
+    let releaseInsert!: () => void
+    server.onInsert = () => new Promise<void>((resolve) => (releaseInsert = resolve))
+    offlineState.isOnline = true
+    const drain = queue.processQueue({ silent: true })
+
+    const order: string[] = []
+    const inbound = queue.runExclusive(async () => {
+      order.push(server.rows.has(ENTRY_ID) ? 'inbound-after-push' : 'inbound-before-push')
+      return 7
+    })
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(order).toEqual([])
+
+    releaseInsert()
+    await drain
+    expect(await inbound).toBe(7)
+    expect(order).toEqual(['inbound-after-push'])
+  })
+
   it('a delete replaces pending writes for the entry', async () => {
     const { userId, idb, queue } = await setup()
     await queue.addToQueue('insert', ENTRY_ID, row(userId, 1.0), userId)

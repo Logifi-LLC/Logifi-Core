@@ -7169,7 +7169,7 @@ const {
   entryId: guestQrEntryId,
 } = useGuestSignCompanion()
 const { instructors: rosterInstructors, fetchInstructors } = useRoster()
-const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync, retryFailed, reconcileSyncQueue, setActiveUserId, refreshQueueLength } = useSyncQueue()
+const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync, retryFailed, reconcileSyncQueue, setActiveUserId, refreshQueueLength, runExclusive: runExclusiveWithSyncQueue } = useSyncQueue()
 
 function getStorageUserId(): string | undefined {
   return user.value?.id
@@ -16797,7 +16797,20 @@ async function applyRemoteSync(
 ): Promise<number> {
   const reconcileRemoteDeletes = options.reconcileRemoteDeletes ?? true
   const syncQueue = await getSyncQueue(userId)
-  const localWithSync = idbEntries.map((entry) => ({
+  // idbEntries can predate a save made while the remote fetch was in flight; re-read those.
+  const pendingWriteIds = [
+    ...new Set(syncQueue.filter((item) => item.operation !== 'delete').map((item) => item.entryId)),
+  ]
+  const freshPending = new Map<string, (typeof idbEntries)[number]>()
+  for (const id of pendingWriteIds) {
+    const fresh = await getEntryFromIndexedDB(id)
+    if (fresh && fresh._userId === userId) freshPending.set(id, fresh)
+  }
+  const snapshotIds = new Set(idbEntries.map((entry) => entry.id))
+  const localWithSync = [
+    ...idbEntries.map((entry) => freshPending.get(entry.id) ?? entry),
+    ...[...freshPending.values()].filter((entry) => !snapshotIds.has(entry.id)),
+  ].map((entry) => ({
     entry: mapIdbEntryToLogEntry(entry),
     synced: entry._synced,
   }))
@@ -17028,7 +17041,7 @@ async function syncInbound(
 
     void (async () => {
       try {
-        const removed = await backgroundFullRemoteSync(userId)
+        const removed = await runExclusiveWithSyncQueue(() => backgroundFullRemoteSync(userId))
         updateIosSyncBanner('success', `${logEntries.value.length} entries loaded`)
         void removed
       } catch (err) {
@@ -17103,7 +17116,9 @@ async function persistSyncedEntriesToIndexedDB(
   remoteIds: Set<string>,
   userId: string
 ): Promise<void> {
-  const toPersist = entries.filter((entry) => remoteIds.has(entry.id))
+  // Never overwrite a local copy that still has a queued write (or delete) with the server copy.
+  const pendingIds = new Set((await getSyncQueue(userId)).map((item) => item.entryId))
+  const toPersist = entries.filter((entry) => remoteIds.has(entry.id) && !pendingIds.has(entry.id))
   for (let i = 0; i < toPersist.length; i += IDB_PERSIST_BATCH) {
     const batch = toPersist.slice(i, i + IDB_PERSIST_BATCH)
     await Promise.all(batch.map((entry) => saveSyncedEntryToIndexedDB(entry, userId)))
@@ -17208,15 +17223,13 @@ async function loadEntriesInternal(options: LoadEntriesOptions = {}): Promise<nu
           }
         } else {
           try {
-            inboundRemovedCount = await syncInbound(
-              user.value.id,
-              idbEntries,
-              idbEntries.length,
-              {
+            const inboundUserId = user.value.id
+            inboundRemovedCount = await runExclusiveWithSyncQueue(() =>
+              syncInbound(inboundUserId, idbEntries, idbEntries.length, {
                 mode: options.mode ?? 'auto',
                 skipIfFresh: options.skipIfFresh,
                 complete: options.complete,
-              }
+              })
             )
           } catch {
             // Error already logged and banner updated in syncInbound

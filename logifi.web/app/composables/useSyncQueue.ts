@@ -23,6 +23,20 @@ const activeUserId = ref<string | null>(null)
 /** Serializes processQueue across all callers so awaitSync never no-ops mid-run. */
 let processChain: Promise<void> = Promise.resolve()
 
+/**
+ * Run work on the same chain as queue drains so an inbound merge never overlaps an outbound
+ * drain (a fetch from before a push must not be merged after it). Do not await processQueue
+ * inside fn: that would wait on itself.
+ */
+function runExclusiveWithSyncQueue<T>(fn: () => Promise<T>): Promise<T> {
+  const result = processChain.then(fn, fn)
+  processChain = result.then(
+    () => undefined,
+    () => undefined
+  )
+  return result
+}
+
 export type ProcessQueueOptions = {
   silent?: boolean
 }
@@ -690,5 +704,6 @@ export const useSyncQueue = () => {
     refreshQueueLength,
     setActiveUserId,
     getCurrentUserId,
+    runExclusive: runExclusiveWithSyncQueue,
   }
 }
