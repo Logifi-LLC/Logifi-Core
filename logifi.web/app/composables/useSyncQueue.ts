@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { supabase } from '~/lib/supabase'
 import {
   addToSyncQueue,
+  completeSyncQueueEntry,
   getSyncQueue,
   removeFromSyncQueue,
   updateSyncQueueEntry,
@@ -127,6 +128,7 @@ export const useSyncQueue = () => {
 
       if (success) {
         const userId = item.userId ?? activeUserId.value
+        const completed = await completeSyncQueueEntry(item)
         if (item.operation === 'insert' && insertedData && insertedData.id && userId) {
           try {
             const {
@@ -145,7 +147,7 @@ export const useSyncQueue = () => {
                     dataHash: insertedData.data_hash || undefined,
                     version: insertedData.version || undefined,
                   },
-                  { userId, synced: true }
+                  { userId, synced: completed }
                 )
                 // Old local id may remain if keyPath changed via put with new id
                 if (item.entryId !== insertedData.id) {
@@ -162,7 +164,7 @@ export const useSyncQueue = () => {
                     dataHash: insertedData.data_hash || undefined,
                     version: insertedData.version || undefined,
                   },
-                  { userId, synced: true }
+                  { userId, synced: completed }
                 )
               }
             }
@@ -171,13 +173,13 @@ export const useSyncQueue = () => {
           }
         }
 
-        try {
-          await markEntryAsSynced(item.entryId)
-        } catch (err) {
-          console.warn('Could not mark entry as synced:', err)
+        if (completed) {
+          try {
+            await markEntryAsSynced(item.entryId)
+          } catch (err) {
+            console.warn('Could not mark entry as synced:', err)
+          }
         }
-
-        await removeFromSyncQueue(item.id)
         return true
       }
 
@@ -273,6 +275,17 @@ export const useSyncQueue = () => {
   }
 
   /**
+   * The row for this insert already exists (an earlier attempt landed). If later local edits
+   * were merged into the queued insert, push them as an update instead of dropping them.
+   */
+  const applyMergedEditsToLandedInsert = async (item: SyncQueueEntry, existing: any): Promise<any> => {
+    if ((item.revision ?? 0) > 0 && existing?.id === item.entryId) {
+      await syncUpdate({ ...item, operation: 'update' })
+    }
+    return existing
+  }
+
+  /**
    * Sync insert operation — user_id must match queued item owner
    */
   const syncInsert = async (item: SyncQueueEntry): Promise<any> => {
@@ -317,7 +330,7 @@ export const useSyncQueue = () => {
         const existing = await findExistingInsertRow(insertData, item)
         if (existing) {
           console.warn('[SyncQueue] Insert duplicate — treating as already synced:', item.entryId)
-          return existing
+          return applyMergedEditsToLandedInsert(item, existing)
         }
       }
       console.error('[SyncQueue] Insert error:', error.code, error.message, error.details)
@@ -327,7 +340,7 @@ export const useSyncQueue = () => {
       const existing = await findExistingInsertRow(insertData, item)
       if (existing) {
         console.warn('[SyncQueue] Insert returned no row — matched existing entry:', item.entryId)
-        return existing
+        return applyMergedEditsToLandedInsert(item, existing)
       }
       throw new Error('Insert returned no row (possible RLS or constraint issue)')
     }
@@ -423,7 +436,12 @@ export const useSyncQueue = () => {
           item.entryData as Record<string, unknown>,
           item
         )
-        if (existing) shouldRemove = true
+        if (existing && (item.revision ?? 0) > 0 && existing.id === item.entryId) {
+          // Landed earlier, but newer local edits were merged in afterwards: send them as an update.
+          await updateSyncQueueEntry(item.id, { operation: 'update' })
+        } else if (existing) {
+          shouldRemove = true
+        }
       }
 
       if (

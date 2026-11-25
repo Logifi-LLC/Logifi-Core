@@ -22,6 +22,8 @@ export interface SyncQueueEntry {
   retryCount: number
   lastError?: string
   userId?: string
+  /** Bumped each time a later local write for the same entry is merged into this item. */
+  revision?: number
 }
 
 interface IDBMetadata {
@@ -334,7 +336,12 @@ export async function getUnsyncedEntries(userId: string): Promise<IDBLogEntry[]>
 // Sync Queue Operations
 
 /**
- * Add operation to sync queue
+ * Add operation to sync queue.
+ *
+ * Writes for an entry that already has a pending insert/update are merged into that one
+ * item (field-wise, newest wins) so the queue never holds two versions of the same flight.
+ * A pending insert stays an insert; anything merged into a pending update stays an update.
+ * A delete replaces every pending op for the entry.
  */
 export async function addToSyncQueue(
   operation: 'insert' | 'update' | 'delete',
@@ -344,24 +351,96 @@ export async function addToSyncQueue(
 ): Promise<string> {
   const db = await getDB()
   const plainEntryData = entryData != null ? JSON.parse(JSON.stringify(entryData)) : null
-  const queueEntry: SyncQueueEntry = {
-    id: crypto.randomUUID(),
-    operation,
-    entryId,
-    entryData: plainEntryData,
-    timestamp: Date.now(),
-    retryCount: 0,
-    userId,
-  }
 
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(['sync_queue'], 'readwrite')
     const store = transaction.objectStore('sync_queue')
-    const request = store.add(queueEntry)
+    let resultId: string | null = null
+    transaction.oncomplete = () => resolve(resultId!)
+    transaction.onerror = () =>
+      reject(new Error(`Failed to add to sync queue: ${transaction.error?.message}`))
 
-    request.onsuccess = () => resolve(queueEntry.id)
-    request.onerror = () => reject(new Error(`Failed to add to sync queue: ${request.error?.message}`))
+    const pendingRequest = store.index('userId').getAll(userId)
+    pendingRequest.onsuccess = () => {
+      const pending = ((pendingRequest.result || []) as SyncQueueEntry[])
+        .filter((item) => item.entryId === entryId)
+        .sort((a, b) => a.timestamp - b.timestamp)
+      const writes = pending.filter((item) => item.operation !== 'delete')
+
+      if (operation !== 'delete' && writes.length > 0 && writes.length === pending.length) {
+        const base = writes.find((item) => item.operation === 'insert') ?? writes[0]!
+        const merged = writes.reduce<Record<string, unknown>>(
+          (acc, item) => ({ ...acc, ...(item.entryData ?? {}) }),
+          {}
+        )
+        store.put({
+          ...base,
+          entryData: { ...merged, ...(plainEntryData ?? {}) },
+          retryCount: 0,
+          lastError: undefined,
+          revision: (base.revision ?? 0) + 1,
+        } satisfies SyncQueueEntry)
+        for (const item of writes) {
+          if (item.id !== base.id) store.delete(item.id)
+        }
+        resultId = base.id
+        return
+      }
+
+      if (operation === 'delete') {
+        for (const item of pending) store.delete(item.id)
+      }
+      const queueEntry: SyncQueueEntry = {
+        id: crypto.randomUUID(),
+        operation,
+        entryId,
+        entryData: plainEntryData,
+        timestamp: Date.now(),
+        retryCount: 0,
+        userId,
+        revision: 0,
+      }
+      store.add(queueEntry)
+      resultId = queueEntry.id
+    }
   })
+}
+
+/**
+ * Finish a processed queue item. Removes it only if no newer local write was merged in
+ * while it was in flight; otherwise keeps the newer data queued (an insert that landed
+ * becomes an update). Returns true when nothing is left pending for that item.
+ */
+export async function completeSyncQueueEntry(item: SyncQueueEntry): Promise<boolean> {
+  const db = await getDB()
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(['sync_queue'], 'readwrite')
+    const store = transaction.objectStore('sync_queue')
+    let completed = true
+    transaction.oncomplete = () => resolve(completed)
+    transaction.onerror = () =>
+      reject(new Error(`Failed to complete sync queue entry: ${transaction.error?.message}`))
+
+    const getRequest = store.get(item.id)
+    getRequest.onsuccess = () => {
+      const current = getRequest.result as SyncQueueEntry | undefined
+      if (!current) return
+      if ((current.revision ?? 0) === (item.revision ?? 0)) {
+        store.delete(item.id)
+        return
+      }
+      completed = false
+      if (current.operation === 'insert') {
+        store.put({ ...current, operation: 'update' } satisfies SyncQueueEntry)
+      }
+    }
+  })
+}
+
+export async function hasPendingSyncOperation(entryId: string, userId: string): Promise<boolean> {
+  const queue = await getSyncQueue(userId)
+  return queue.some((item) => item.entryId === entryId)
 }
 
 /**

@@ -123,7 +123,8 @@ describe('indexedDB sync helpers', () => {
     const removedCount = await removeQueuedOperationsForEntry('ghost-entry', USER_A)
     const remainingQueue = await getSyncQueue(USER_A)
 
-    expect(removedCount).toBe(2)
+    // The update was merged into the pending insert, so one queue row covered both writes.
+    expect(removedCount).toBe(1)
     expect(remainingQueue).toHaveLength(1)
     expect(remainingQueue[0].entryId).toBe('keep-entry')
   })
