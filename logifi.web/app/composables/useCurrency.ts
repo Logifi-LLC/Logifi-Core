@@ -15,6 +15,7 @@ import {
   calculatePassengerCurrencyGroups,
   summarizePassengerCurrencyFromGroups,
 } from '~/utils/currencyCalculator'
+import { filterEntriesForTotalsReport } from '~/utils/totalsReport'
 
 export const useCurrency = () => {
   const passengerCurrency: Ref<CurrencyStatus | null> = ref(null)
@@ -28,13 +29,14 @@ export const useCurrency = () => {
 
   /**
    * Calculate all currency types for the given entries
-   * @param entries - Array of log entries
+   * @param allEntries - Array of log entries; superseded originals and void amendments are ignored
    * @param referenceDate - Optional reference date (defaults to today)
    */
-  const calculateAllCurrency = (entries: LogEntry[], referenceDate?: Date) => {
+  const calculateAllCurrency = (allEntries: LogEntry[], referenceDate?: Date) => {
     try {
       isLoading.value = true
       error.value = null
+      const entries = filterEntriesForTotalsReport(allEntries)
 
       const groups = calculatePassengerCurrencyGroups(entries, referenceDate)
       const pooledPassenger = calculatePassengerCurrency(entries, referenceDate)
