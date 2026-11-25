@@ -132,6 +132,16 @@ describe('mergeRemoteLogEntries', () => {
     expect(result.mergedEntries[0]?.remarks).toBe('edited offline')
   })
 
+  it('does not bring back an entry deleted offline while its delete is queued', () => {
+    const result = mergeRemoteLogEntries({
+      localEntries: [],
+      remoteEntries: [buildEntry('deleted-offline'), buildEntry('kept')],
+      syncQueue: [{ operation: 'delete', entryId: 'deleted-offline' }],
+    })
+
+    expect(result.mergedEntries.map((e) => e.id)).toEqual(['kept'])
+  })
+
   it('adds remote-only entries not present locally', () => {
     const remote = buildEntry('remote-only')
     const result = mergeRemoteLogEntries({

@@ -51,6 +51,9 @@ export function mergeRemoteLogEntries(options: {
   const pendingWriteIds = new Set(
     syncQueue.filter((item) => item.operation !== 'delete').map((item) => item.entryId)
   )
+  const pendingDeleteIds = new Set(
+    syncQueue.filter((item) => item.operation === 'delete').map((item) => item.entryId)
+  )
 
   const entryMap = new Map<string, LogEntry>()
   const removedEntryIds: string[] = []
@@ -84,6 +87,8 @@ export function mergeRemoteLogEntries(options: {
   }
 
   for (const remoteEntry of remoteEntries) {
+    // Deleted locally; the server copy is only there until the queued delete is sent.
+    if (pendingDeleteIds.has(remoteEntry.id)) continue
     if (!entryMap.has(remoteEntry.id)) {
       entryMap.set(remoteEntry.id, remoteEntry)
     }
