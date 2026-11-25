@@ -179,20 +179,28 @@ function isPassengerCurrencyAircraftEntry(entry: LogEntry): boolean {
 }
 
 /**
+ * Takeoffs as logged; when not logged (null or empty) they count as that entry's landings,
+ * so entries and imports without takeoffs behave as before takeoffs were tracked.
+ */
+function takeoffsOrLandings(takeoffs: unknown, landings: number): number {
+  if (takeoffs === null || takeoffs === undefined || takeoffs === '') return landings
+  const n = typeof takeoffs === 'number' ? takeoffs : Number(takeoffs)
+  return Number.isFinite(n) ? n : landings
+}
+
+/**
  * 14 CFR 61.57(a): 3 takeoffs and 3 landings in the preceding 90 days.
  * Night full-stop landings (and night takeoffs) count; (a) does not require
  * full-stop except for tailwheel airplanes. There is no tailwheel flag on
  * the aircraft model, so tailwheel is not split.
- * Landing counts also increment takeoffs when takeoffs were not logged
- * separately (same heuristic as before: a landing implies a takeoff).
  */
 function passengerTakeoffLandingCounts(entry: LogEntry): { takeoffs: number; landings: number } {
-  const dayTakeoffs = entry.performance?.dayTakeoffs ?? 0
-  const nightTakeoffs = entry.performance?.nightTakeoffs ?? 0
   const dayLandings = entry.performance?.dayLandings ?? 0
   const nightLandings = entry.performance?.nightLandings ?? 0
   return {
-    takeoffs: dayTakeoffs + nightTakeoffs + dayLandings + nightLandings,
+    takeoffs:
+      takeoffsOrLandings(entry.performance?.dayTakeoffs, dayLandings) +
+      takeoffsOrLandings(entry.performance?.nightTakeoffs, nightLandings),
     landings: dayLandings + nightLandings,
   }
 }
@@ -203,10 +211,9 @@ function passengerTakeoffLandingCounts(entry: LogEntry): { takeoffs: number; lan
  * full-stop (conservative relative to inventing a stop type).
  */
 function nightTakeoffLandingCounts(entry: LogEntry): { takeoffs: number; landings: number } {
-  const nightTakeoffs = entry.performance?.nightTakeoffs ?? 0
   const nightLandings = entry.performance?.nightLandings ?? 0
   return {
-    takeoffs: nightTakeoffs + nightLandings,
+    takeoffs: takeoffsOrLandings(entry.performance?.nightTakeoffs, nightLandings),
     landings: nightLandings,
   }
 }
@@ -565,7 +572,11 @@ function instrumentLookbackStart(asOf: DateTime): DateTime {
   return asOf.startOf('month').minus({ months: 6 }).startOf('day')
 }
 
-function experienceCurrentUntilInWindow(entries: LogEntry[], start: DateTime, end: DateTime): DateTime | null {
+function instrumentExperienceInWindow(
+  entries: LogEntry[],
+  start: DateTime,
+  end: DateTime
+): { until: DateTime; oldestTask: DateTime } | null {
   const inWindow = entriesInWindow(entries, start, end).filter(isInstrumentRelated)
   const counts = instrumentTaskCounts(inWindow)
   if (!counts.isMet) return null
@@ -578,13 +589,43 @@ function experienceCurrentUntilInWindow(entries: LogEntry[], start: DateTime, en
     .filter((dt): dt is DateTime => dt !== null)
   if (limitingDates.length === 0) return null
   // Currency ages out with the earlier of the 6-approach cluster and the holding used.
-  return endOfNthCalendarMonthAfter(DateTime.min(...limitingDates), 6)
+  const oldestTask = DateTime.min(...limitingDates)
+  return { until: endOfNthCalendarMonthAfter(oldestTask, 6), oldestTask }
+}
+
+function instrumentGraceEnd(currentUntil: DateTime): DateTime {
+  return currentUntil.startOf('month').plus({ months: 6 }).endOf('month')
+}
+
+/**
+ * 61.57(d): once the grace period after the last currency has passed, only an IPC restores it,
+ * so experience whose oldest task falls after that grace period does not count. With no earlier
+ * instrument currency in the logbook (for example a new rating), experience counts.
+ */
+function experienceCurrentUntilInWindow(
+  entries: LogEntry[],
+  start: DateTime,
+  end: DateTime,
+  enforceLapse = true
+): DateTime | null {
+  const experience = instrumentExperienceInWindow(entries, start, end)
+  if (!experience) return null
+  if (enforceLapse) {
+    const prior = lastInstrumentCurrentUntil(entries, experience.oldestTask.minus({ days: 1 }), false)
+    if (prior && instrumentGraceEnd(prior) < experience.oldestTask) return null
+  }
+  return experience.until
 }
 
 /**
  * Most recent date through which 61.57(c) or an IPC (61.57(d)) kept the pilot current.
+ * `enforceLapse` false skips the IPC-after-grace check (used for the prior-history lookup).
  */
-function lastInstrumentCurrentUntil(entries: LogEntry[], ref: DateTime): DateTime | null {
+function lastInstrumentCurrentUntil(
+  entries: LogEntry[],
+  ref: DateTime,
+  enforceLapse = true
+): DateTime | null {
   const ipcUntil = ipcCurrentUntil(entries, ref)
 
   const monthKeys = new Set<string>()
@@ -601,7 +642,7 @@ function lastInstrumentCurrentUntil(entries: LogEntry[], ref: DateTime): DateTim
     const [year, month] = key.split('-').map(Number)
     const monthEnd = DateTime.local(year, month, 1).endOf('month')
     const asOf = monthEnd < ref ? monthEnd : ref
-    const until = experienceCurrentUntilInWindow(entries, instrumentLookbackStart(asOf), asOf)
+    const until = experienceCurrentUntilInWindow(entries, instrumentLookbackStart(asOf), asOf, enforceLapse)
     if (until) {
       experienceUntil = until
       break
@@ -645,7 +686,7 @@ export function calculateInstrumentCurrency(
     const daysRemaining = daysRemainingOnOrBefore(currentUntil, refDate)
     const monthsRemaining = currentUntil.diff(refDate, 'months').months
     const status: CurrencyStatusType = monthsRemaining < 2 ? 'expiring_soon' : 'current'
-    const gracePeriodEndsAt = currentUntil.startOf('month').plus({ months: 6 }).endOf('month')
+    const gracePeriodEndsAt = instrumentGraceEnd(currentUntil)
     return {
       isCurrent: true,
       monthsRemaining,
@@ -663,7 +704,7 @@ export function calculateInstrumentCurrency(
 
   const lastUntil = lastInstrumentCurrentUntil(entries, refDate)
   if (lastUntil) {
-    const graceUntil = lastUntil.startOf('month').plus({ months: 6 }).endOf('month')
+    const graceUntil = instrumentGraceEnd(lastUntil)
     if (refDate <= graceUntil) {
       return {
         isCurrent: false,

@@ -224,4 +224,15 @@ describe('normalizeScanRows year rollover', () => {
     )
     expect(rows[2].cells.dt).toBe('2023-01-31')
   })
+
+  it('carries a Dec→Jan rollover across a page without letting OCR years jump further', () => {
+    const date = { id: 'd', label: 'Date', fieldKey: 'date', order: 0, width: 80 } as any
+    const rows = ['12/28', '1/31', '2/1', '2/5'].map((value, rowIndex) => ({
+      rowIndex,
+      cells: { d: value },
+    }))
+    rows.push({ rowIndex: 4, cells: { d: '3/2/2026' } })
+    const out = normalizeScanRows(rows, [date], 2023).map((r) => r.cells.d)
+    expect(out).toEqual(['2023-12-28', '2024-01-31', '2024-02-01', '2024-02-05', '2024-03-02'])
+  })
 })

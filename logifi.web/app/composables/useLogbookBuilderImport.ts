@@ -11,7 +11,7 @@ import {
   buildDigifiFeedbackContextKey,
   normalizeDigifiFeedbackValue,
 } from '~/utils/digifiFeedback'
-import type { BuilderRow, BuilderColumn } from '~/utils/logbookBuilderTypes'
+import { createEmptyBuilderRow, type BuilderRow, type BuilderColumn } from '~/utils/logbookBuilderTypes'
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
 import type { useLogbookBuilderGrid } from '~/composables/useLogbookBuilderGrid'
 import { useValidation } from '~/composables/useValidation'
@@ -41,6 +41,7 @@ import {
 } from '~/utils/importSimulator'
 import { sanitizeFlightConditions } from '~/utils/flightConditions'
 import { normalizeDigifiDateCell } from '~/utils/digifiDateNormalize'
+import type { DigifiSpreadYearState } from '~/utils/digifiSpreadYear'
 import {
   customColumnTagsOnRows,
   deriveNightFromDayAndTotal,
@@ -121,17 +122,21 @@ function normalizeRoleFromCell(val: string): string {
   return v
 }
 
+/** Rows gridToEntries turns into entries, in the same order (one entry per row). */
+export function builderRowsWithData(columns: BuilderColumn[], rows: BuilderRow[]): BuilderRow[] {
+  return rows.filter((row) => columns.some((col) => (row.cells?.[col.id] ?? '').trim() !== ''))
+}
+
 /** Build LogEntry[] from grid rows using column mapping. Only includes rows that have at least one non-empty cell. */
 export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
   const { columns, rows, defaultRole = 'PIC', defaultYear, tailIndex } = options
   const sortedCols = [...columns].sort((a, b) => a.order - b.order)
   const entries: LogEntry[] = []
   let lastDateIso: string | null = null
+  const spreadYear: DigifiSpreadYearState = { year: null }
 
-  for (const row of rows) {
+  for (const row of builderRowsWithData(columns, rows)) {
     const cells = row.cells ?? {}
-    const hasAny = sortedCols.some((col) => (cells[col.id] ?? '').trim() !== '')
-    if (!hasAny) continue
 
     const flightTime = createEmptyFlightTime()
     const performance = createEmptyPerformance()
@@ -285,7 +290,7 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
       typeof defaultYear === 'number' && Number.isFinite(defaultYear)
         ? defaultYear
         : new Date().getFullYear()
-    date = normalizeDateWithRollover(date, defaultYear, lastDateIso)
+    date = normalizeDateWithRollover(date, defaultYear, lastDateIso, spreadYear)
     if (!date) {
       // Fallback to today's date in LOCAL calendar (not UTC to avoid timezone shifts)
       const now = new Date()
@@ -872,8 +877,10 @@ export async function runValidateAndImport(
   const importedAt = new Date().toISOString()
   const { addToQueue } = useSyncQueue()
   const queuedEntryIds: string[] = []
+  const sourceRows = builderRowsWithData(grid.columns.value, grid.rows.value)
+  const savedRows = new Set<BuilderRow>()
 
-  for (const entry of entries) {
+  for (const [index, entry] of entries.entries()) {
     const entryToStore: LogEntry = {
       ...entry,
       isImported: true,
@@ -887,6 +894,8 @@ export async function runValidateAndImport(
       await saveEntryToIndexedDB(entryToStore, userId)
       await addToQueue('insert', entry.id, dbEntry, userId)
       queuedEntryIds.push(entry.id)
+      const sourceRow = sourceRows[index]
+      if (sourceRow) savedRows.add(sourceRow)
       result.imported++
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Failed to save locally'
@@ -896,10 +905,19 @@ export async function runValidateAndImport(
 
   if (result.imported > 0) {
     await ensureCustomColumnTagPresets(userId, grid.columns.value, grid.rows.value)
-    runLogbookBuilderDigifiLearningSideEffects(grid, userId)
     runLogbookBuilderImportBatchSideEffects(userId, queuedEntryIds, result.imported)
-    grid.clearGrid()
-    clearBuilderDraft(userId)
+    if (result.errors.length === 0) {
+      runLogbookBuilderDigifiLearningSideEffects(grid, userId)
+      grid.clearGrid()
+      clearBuilderDraft(userId)
+    } else {
+      // Keep the rows that did not save so they can be fixed and imported again; blank only
+      // the saved ones so a retry does not import them twice.
+      const columnIds = grid.columns.value.map((col) => col.id)
+      grid.rows.value = grid.rows.value.map((row) =>
+        savedRows.has(row) ? createEmptyBuilderRow(columnIds) : row
+      )
+    }
   }
   return result
 }

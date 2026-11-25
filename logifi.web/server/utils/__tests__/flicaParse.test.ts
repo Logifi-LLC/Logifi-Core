@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DateTime } from 'luxon'
 import {
+  detectOwnRole,
   flicaHtmlToText,
   filterAirlineLegs,
   filterAirlineLegsWithStats,
@@ -1115,5 +1116,25 @@ describe('generic FLICA refrigerator layout', () => {
       expect((e as Error).message).not.toContain('2101')
       expect((e as Error).message).toMatch(/Nothing was imported/)
     }
+  })
+})
+
+describe('detectOwnRole', () => {
+  const crew = [
+    { position: 'CA', name: 'SMITHERS, ALEX', employeeId: '10001' },
+    { position: 'FO', name: 'SMITH, JORDAN', employeeId: '10002' },
+  ]
+
+  it('prefers an employee id match anywhere in the crew list over a name match', () => {
+    expect(detectOwnRole(crew, { selfEmployeeId: '10002', selfLastName: 'SMITH' })).toBe('SIC')
+  })
+
+  it('prefers a whole-word last name over a longer name that contains it', () => {
+    expect(detectOwnRole(crew, { selfLastName: 'Smith' })).toBe('SIC')
+  })
+
+  it('still falls back to a partial name match', () => {
+    expect(detectOwnRole([{ position: 'FO', name: 'SMITHJ' }], { selfLastName: 'SMITH' })).toBe('SIC')
+    expect(detectOwnRole(crew, { selfLastName: 'NOBODY' })).toBeNull()
   })
 })

@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { supabase } from '~/lib/supabase'
 import {
   addToSyncQueue,
+  completeSyncQueueEntry,
   getSyncQueue,
   removeFromSyncQueue,
   updateSyncQueueEntry,
@@ -21,6 +22,20 @@ const activeUserId = ref<string | null>(null)
 
 /** Serializes processQueue across all callers so awaitSync never no-ops mid-run. */
 let processChain: Promise<void> = Promise.resolve()
+
+/**
+ * Run work on the same chain as queue drains so an inbound merge never overlaps an outbound
+ * drain (a fetch from before a push must not be merged after it). Do not await processQueue
+ * inside fn: that would wait on itself.
+ */
+function runExclusiveWithSyncQueue<T>(fn: () => Promise<T>): Promise<T> {
+  const result = processChain.then(fn, fn)
+  processChain = result.then(
+    () => undefined,
+    () => undefined
+  )
+  return result
+}
 
 export type ProcessQueueOptions = {
   silent?: boolean
@@ -127,6 +142,7 @@ export const useSyncQueue = () => {
 
       if (success) {
         const userId = item.userId ?? activeUserId.value
+        const completed = await completeSyncQueueEntry(item)
         if (item.operation === 'insert' && insertedData && insertedData.id && userId) {
           try {
             const {
@@ -145,7 +161,7 @@ export const useSyncQueue = () => {
                     dataHash: insertedData.data_hash || undefined,
                     version: insertedData.version || undefined,
                   },
-                  { userId, synced: true }
+                  { userId, synced: completed }
                 )
                 // Old local id may remain if keyPath changed via put with new id
                 if (item.entryId !== insertedData.id) {
@@ -162,7 +178,7 @@ export const useSyncQueue = () => {
                     dataHash: insertedData.data_hash || undefined,
                     version: insertedData.version || undefined,
                   },
-                  { userId, synced: true }
+                  { userId, synced: completed }
                 )
               }
             }
@@ -171,13 +187,13 @@ export const useSyncQueue = () => {
           }
         }
 
-        try {
-          await markEntryAsSynced(item.entryId)
-        } catch (err) {
-          console.warn('Could not mark entry as synced:', err)
+        if (completed) {
+          try {
+            await markEntryAsSynced(item.entryId)
+          } catch (err) {
+            console.warn('Could not mark entry as synced:', err)
+          }
         }
-
-        await removeFromSyncQueue(item.id)
         return true
       }
 
@@ -273,6 +289,17 @@ export const useSyncQueue = () => {
   }
 
   /**
+   * The row for this insert already exists (an earlier attempt landed). If later local edits
+   * were merged into the queued insert, push them as an update instead of dropping them.
+   */
+  const applyMergedEditsToLandedInsert = async (item: SyncQueueEntry, existing: any): Promise<any> => {
+    if ((item.revision ?? 0) > 0 && existing?.id === item.entryId) {
+      await syncUpdate({ ...item, operation: 'update' })
+    }
+    return existing
+  }
+
+  /**
    * Sync insert operation — user_id must match queued item owner
    */
   const syncInsert = async (item: SyncQueueEntry): Promise<any> => {
@@ -317,7 +344,7 @@ export const useSyncQueue = () => {
         const existing = await findExistingInsertRow(insertData, item)
         if (existing) {
           console.warn('[SyncQueue] Insert duplicate — treating as already synced:', item.entryId)
-          return existing
+          return applyMergedEditsToLandedInsert(item, existing)
         }
       }
       console.error('[SyncQueue] Insert error:', error.code, error.message, error.details)
@@ -327,7 +354,7 @@ export const useSyncQueue = () => {
       const existing = await findExistingInsertRow(insertData, item)
       if (existing) {
         console.warn('[SyncQueue] Insert returned no row — matched existing entry:', item.entryId)
-        return existing
+        return applyMergedEditsToLandedInsert(item, existing)
       }
       throw new Error('Insert returned no row (possible RLS or constraint issue)')
     }
@@ -423,7 +450,12 @@ export const useSyncQueue = () => {
           item.entryData as Record<string, unknown>,
           item
         )
-        if (existing) shouldRemove = true
+        if (existing && (item.revision ?? 0) > 0 && existing.id === item.entryId) {
+          // Landed earlier, but newer local edits were merged in afterwards: send them as an update.
+          await updateSyncQueueEntry(item.id, { operation: 'update' })
+        } else if (existing) {
+          shouldRemove = true
+        }
       }
 
       if (
@@ -519,14 +551,18 @@ export const useSyncQueue = () => {
         return
       }
 
-      queue.sort((a, b) => {
-        if (a.retryCount !== b.retryCount) {
-          return a.retryCount - b.retryCount
+      // Strict FIFO. An entry whose earlier op failed (or is out of retries) is held back so a
+      // later op for it never lands first and is then overwritten by the older one.
+      queue.sort((a, b) => a.timestamp - b.timestamp)
+      const blockedEntryIds = new Set<string>()
+      const processableItems = queue.filter((item) => {
+        if (blockedEntryIds.has(item.entryId)) return false
+        if (item.retryCount >= MAX_RETRIES) {
+          blockedEntryIds.add(item.entryId)
+          return false
         }
-        return a.timestamp - b.timestamp
+        return true
       })
-
-      const processableItems = queue.filter((item) => item.retryCount < MAX_RETRIES)
 
       if (processableItems.length === 0) {
         resetSyncProgress()
@@ -543,7 +579,9 @@ export const useSyncQueue = () => {
         if (!silent) {
           updateSyncProgress(i, processableItems.length, 'syncing')
         }
-        await processQueueItem(item)
+        if (blockedEntryIds.has(item.entryId)) continue
+        const ok = await processQueueItem(item)
+        if (!ok) blockedEntryIds.add(item.entryId)
 
         // Small yield between items to keep the UI responsive without serializing drains.
         if (i < processableItems.length - 1) {
@@ -666,5 +704,6 @@ export const useSyncQueue = () => {
     refreshQueueLength,
     setActiveUserId,
     getCurrentUserId,
+    runExclusive: runExclusiveWithSyncQueue,
   }
 }

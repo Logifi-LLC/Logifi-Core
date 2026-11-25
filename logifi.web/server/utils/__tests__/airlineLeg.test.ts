@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fcvFlightToAirlineLeg, mapAirlineLegToFcvMappedEntry } from '../airlineLeg'
+import { isDeadheadMappedFlight } from '../../../shared/airlineOwnRole'
 import type { FcvFlight } from '../fcvMap'
 
 describe('fcvFlightToAirlineLeg', () => {
@@ -644,3 +645,120 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
     expect(entry.tags).toEqual(['Deadhead'])
   })
 })
+
+describe('deadhead legs', () => {
+  it('log no seat, cross-country or night time and need no seat', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20261103_9001_SEA',
+      import_source: 'flica_aerodatabox',
+      flight_number: '9001',
+      trip_number: 'T0000',
+      role: 'SIC',
+      dep_airport: 'SEA',
+      arr_airport: 'PDX',
+      scheduled_out_local: '2026-11-03 18:30:00',
+      scheduled_in_local: '2026-11-03 19:40:00',
+      actual_out_local: '2026-11-03 18:32:00',
+      actual_in_local: '2026-11-03 19:38:00',
+      actual_off_local: '2026-11-03 18:45:00',
+      actual_on_local: '2026-11-03 19:30:00',
+      fcv_tail_number: 'N900ZZ',
+      fcv_aircraft_type: 'E75',
+      crew: [
+        { position: 'CA', name: 'DOE, JANE' },
+        { position: 'FO', name: 'ROE, RICHARD' },
+      ],
+      is_deadhead: true,
+      block_minutes: 66,
+    })
+
+    expect(entry.flight_time).toEqual({})
+    expect(entry.category_class_time).toBeNull()
+    expect(entry.flight_conditions).toEqual([])
+    expect(entry.performance).toEqual({})
+    expect(entry.tags).toEqual(['Deadhead'])
+    expect(isDeadheadMappedFlight(entry)).toBe(true)
+  })
+})
+
+describe('entry date', () => {
+  it('uses the block-out date when takeoff is after midnight', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20261104_9003_SEA',
+      import_source: 'flica_aerodatabox',
+      flight_number: '9003',
+      trip_number: 'T0000',
+      role: 'PIC',
+      dep_airport: 'SEA',
+      arr_airport: 'PDX',
+      scheduled_out_local: '2026-11-04 23:40:00',
+      scheduled_in_local: '2026-11-05 00:50:00',
+      actual_out_local: '2026-11-04 23:52:00',
+      actual_in_local: '2026-11-05 01:05:00',
+      actual_off_local: '2026-11-05 00:15:00',
+      actual_on_local: '2026-11-05 00:58:00',
+      fcv_tail_number: 'N900ZZ',
+      fcv_aircraft_type: 'E75',
+      crew: [{ position: 'CA', name: 'DOE, JANE' }],
+      is_deadhead: false,
+      block_minutes: 73,
+    })
+    expect(entry.date).toBe('2026-11-04')
+  })
+})
+
+describe('Autofi takeoffs and landings', () => {
+  const leg = (overrides: Partial<Parameters<typeof mapAirlineLegToFcvMappedEntry>[0]> = {}) =>
+    mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20261103_9101_SEA',
+      import_source: 'flica_aerodatabox',
+      flight_number: '9101',
+      trip_number: 'T0000',
+      role: 'SIC',
+      dep_airport: 'SEA',
+      arr_airport: 'PDX',
+      scheduled_out_local: '2026-11-03 05:00:00',
+      scheduled_in_local: '2026-11-03 06:30:00',
+      actual_out_local: '2026-11-03 05:05:00',
+      actual_in_local: '2026-11-03 06:30:00',
+      actual_off_local: '2026-11-03 05:20:00',
+      actual_on_local: '2026-11-03 06:20:00',
+      fcv_tail_number: 'N900ZZ',
+      fcv_aircraft_type: 'E75',
+      crew: [
+        { position: 'CA', name: 'DOE, JANE' },
+        { position: 'FO', name: 'ROE, RICHARD' },
+      ],
+      is_deadhead: false,
+      block_minutes: 85,
+      ...overrides,
+    })
+
+  it('logs a night takeoff and a day landing on the same leg', () => {
+    expect(leg().performance).toEqual({ nightTakeoffs: 1, dayLandings: 1 })
+  })
+
+  it('logs a day takeoff and a night landing on the same leg', () => {
+    const entry = leg({
+      scheduled_out_local: '2026-11-03 16:45:00',
+      scheduled_in_local: '2026-11-03 18:20:00',
+      actual_out_local: '2026-11-03 16:50:00',
+      actual_off_local: '2026-11-03 17:00:00',
+      actual_on_local: '2026-11-03 18:10:00',
+      actual_in_local: '2026-11-03 18:20:00',
+    })
+    expect(entry.performance).toEqual({ dayTakeoffs: 1, nightLandings: 1 })
+  })
+
+  it('leaves takeoffs null when the departure airport is unresolved', () => {
+    const entry = leg({ dep_airport: 'ZZZQ', external_flight_id: 'FLICA_20261103_9101_ZZZQ' })
+    const perf = entry.performance as Record<string, unknown>
+    expect(perf.dayTakeoffs).toBeUndefined()
+    expect(perf.nightTakeoffs).toBeUndefined()
+  })
+
+  it('logs nothing for a deadhead', () => {
+    expect(leg({ is_deadhead: true }).performance).toEqual({})
+  })
+})
+

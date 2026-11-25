@@ -1,6 +1,6 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { isRecognizedAirlineSeat } from '../../../shared/airlineOwnRole'
+import { isDeadheadMappedFlight, isRecognizedAirlineSeat } from '../../../shared/airlineOwnRole'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import type { FcvMappedEntry } from '../../utils/fcvMap'
 import type { Database } from '../../../app/types/database'
@@ -254,7 +254,10 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const unmatchedSeat = flights.some((f) => !isRecognizedAirlineSeat(f.role))
+  // Deadheads carry no seat time, so they do not need a PIC/SIC seat.
+  const unmatchedSeat = flights.some(
+    (f) => !isDeadheadMappedFlight(f) && !isRecognizedAirlineSeat(f.role)
+  )
   if (unmatchedSeat) {
     throw createError({
       statusCode: 400,

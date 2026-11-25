@@ -1,8 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import { normalizeCellValue } from '../../server/utils/digifiNormalize'
 
-function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: string | null): string {
-  return normalizeCellValue(val, 'date', defaultYear, undefined, lastDateIso)
+function normalizeDate(
+  val: string,
+  defaultYear: number | null,
+  lastDateIso?: string | null,
+  yearState?: { year: number | null }
+): string {
+  return normalizeCellValue(val, 'date', defaultYear, undefined, lastDateIso, yearState)
 }
 
 describe('Date Normalization', () => {
@@ -114,11 +119,12 @@ describe('Date Normalization', () => {
       // Scenario: Logbook page dated 2026, entries span Dec 2026 to Jan 2027
       const results: string[] = []
       let lastDate: string | null = null
+      const yearState = { year: null as number | null }
       
       const dates = ['12/28', '12/29', '12/31', '1/2', '1/5', '1/8']
       
       for (const date of dates) {
-        const normalized = normalizeDate(date, 2026, lastDate)
+        const normalized = normalizeDate(date, 2026, lastDate, yearState)
         results.push(normalized)
         lastDate = normalized
       }
@@ -137,11 +143,12 @@ describe('Date Normalization', () => {
       // Scenario: Normal logbook page, all September 2026
       const results: string[] = []
       let lastDate: string | null = null
+      const yearState = { year: null as number | null }
       
       const dates = ['9/1', '9/5', '9/8', '9/10', '9/15']
       
       for (const date of dates) {
-        const normalized = normalizeDate(date, 2026, lastDate)
+        const normalized = normalizeDate(date, 2026, lastDate, yearState)
         results.push(normalized)
         lastDate = normalized
       }

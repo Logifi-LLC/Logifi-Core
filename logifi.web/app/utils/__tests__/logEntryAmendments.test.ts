@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildSupersededIdSet, buildVoidAmendment, isEntrySuperseded } from '../logEntryAmendments'
+import {
+  buildSupersededIdSet,
+  buildVoidAmendment,
+  isAmendmentPair,
+  isEntrySuperseded,
+  prepareAmendmentLinksForInsert,
+} from '../logEntryAmendments'
 import type { LogEntry } from '../logbookTypes'
 import { createEmptyFlightTime, createEmptyPerformance } from '../logbookTypes'
 import {
@@ -71,5 +77,30 @@ describe('isMainInstructorRelationship', () => {
   it('detects main kind', () => {
     expect(isMainInstructorRelationship({ relationship_kind: 'main' })).toBe(true)
     expect(isMainInstructorRelationship({ relationship_kind: 'linked' })).toBe(false)
+  })
+})
+
+describe('restore amendment links', () => {
+  it('treats an amendment and its original as a pair, not duplicates', () => {
+    const amendment = { ...sample, id: 'amend-1', amendsEntryId: 'orig-1', remarks: 'Corrected' }
+    expect(isAmendmentPair(amendment, sample)).toBe(true)
+    expect(isAmendmentPair(sample, amendment)).toBe(true)
+    expect(isAmendmentPair(sample, { ...sample, id: 'other' })).toBe(false)
+  })
+
+  it('orders originals before amendments and clears links to originals that are missing', () => {
+    const second = { ...sample, id: 'amend-2', amendsEntryId: 'amend-1' }
+    const first = { ...sample, id: 'amend-1', amendsEntryId: 'orig-1' }
+    const orphan = { ...sample, id: 'orphan', amendsEntryId: 'not-in-backup' }
+    const linkedToExisting = { ...sample, id: 'linked', amendsEntryId: 'already-in-logbook' }
+
+    const ordered = prepareAmendmentLinksForInsert(
+      [second, first, orphan, { ...sample }, linkedToExisting],
+      new Set(['already-in-logbook'])
+    )
+
+    expect(ordered.map((e) => e.id)).toEqual(['orphan', 'orig-1', 'linked', 'amend-1', 'amend-2'])
+    expect(orphan.amendsEntryId).toBeNull()
+    expect(linkedToExisting.amendsEntryId).toBe('already-in-logbook')
   })
 })

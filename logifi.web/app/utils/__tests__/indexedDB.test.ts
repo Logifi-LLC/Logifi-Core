@@ -1,10 +1,13 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  addInsertsToSyncQueue,
   addToSyncQueue,
   deleteEntryFromIndexedDB,
   getAllEntriesFromIndexedDB,
   getEntryFromIndexedDB,
+  getLastSuccessfulRemoteSyncAt,
+  getRemoteSyncWatermark,
   getSyncQueue,
   getUnsyncedEntries,
   initIndexedDB,
@@ -13,7 +16,9 @@ import {
   removeQueuedOperationsForEntry,
   saveEntryToIndexedDB,
   saveSyncedEntryToIndexedDB,
+  setLastSuccessfulRemoteSyncAt,
   setMetadata,
+  setRemoteSyncWatermark,
   updateEntryInIndexedDB,
   METADATA_LAST_ACTIVE_USER_ID,
 } from '../indexedDB'
@@ -123,7 +128,8 @@ describe('indexedDB sync helpers', () => {
     const removedCount = await removeQueuedOperationsForEntry('ghost-entry', USER_A)
     const remainingQueue = await getSyncQueue(USER_A)
 
-    expect(removedCount).toBe(2)
+    // The update was merged into the pending insert, so one queue row covered both writes.
+    expect(removedCount).toBe(1)
     expect(remainingQueue).toHaveLength(1)
     expect(remainingQueue[0].entryId).toBe('keep-entry')
   })
@@ -167,5 +173,30 @@ describe('indexedDB sync helpers', () => {
     await putLegacyEntry(buildEntry('legacy-entry-2'))
     await migrateLegacyLocalData(USER_B)
     expect(await getAllEntriesFromIndexedDB(USER_B)).toHaveLength(0)
+  })
+
+  it('keeps the inbound sync watermark per user', async () => {
+    await setRemoteSyncWatermark(USER_A, '2026-03-01T10:00:00.000Z')
+    await setLastSuccessfulRemoteSyncAt(USER_A, 1000)
+
+    expect(await getRemoteSyncWatermark(USER_A)).toBe('2026-03-01T10:00:00.000Z')
+    expect(await getRemoteSyncWatermark(USER_B)).toBeNull()
+    expect(await getLastSuccessfulRemoteSyncAt(USER_B)).toBeNull()
+  })
+
+  it('queues many imported inserts in order and merges ids that are already pending', async () => {
+    await addToSyncQueue('insert', 'import-2', USER_A, { id: 'import-2', remarks: 'earlier' })
+
+    await addInsertsToSyncQueue(USER_A, [
+      { entryId: 'import-1', entryData: { id: 'import-1' } },
+      { entryId: 'import-2', entryData: { id: 'import-2', remarks: 'from file' } },
+      { entryId: 'import-3', entryData: { id: 'import-3' } },
+    ])
+
+    const queue = await getSyncQueue(USER_A)
+    expect(queue.map((item) => item.entryId).sort()).toEqual(['import-1', 'import-2', 'import-3'])
+    const at = (id: string) => queue.find((item) => item.entryId === id)!.timestamp
+    expect(at('import-1')).toBeLessThan(at('import-3'))
+    expect(queue.find((item) => item.entryId === 'import-2')?.entryData.remarks).toBe('from file')
   })
 })

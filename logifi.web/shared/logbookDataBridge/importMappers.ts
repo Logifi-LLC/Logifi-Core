@@ -984,6 +984,7 @@ export function mapRawRowToLogEntry(
       ...createEmptyPerformance(),
       dayTakeoffs: normalizeImportNumber(
         findFieldValue(rawEntry, [
+          'flight_dayTakeoffs',
           'DayTakeoffs',
           'Day Takeoffs',
           'daytakeoffs',
@@ -993,6 +994,7 @@ export function mapRawRowToLogEntry(
       ),
       nightTakeoffs: normalizeImportNumber(
         findFieldValue(rawEntry, [
+          'flight_nightTakeoffs',
           'NightTakeoffs',
           'Night Takeoffs',
           'nighttakeoffs',
