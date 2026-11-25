@@ -5,6 +5,8 @@ import {
   deleteEntryFromIndexedDB,
   getAllEntriesFromIndexedDB,
   getEntryFromIndexedDB,
+  getLastSuccessfulRemoteSyncAt,
+  getRemoteSyncWatermark,
   getSyncQueue,
   getUnsyncedEntries,
   initIndexedDB,
@@ -13,7 +15,9 @@ import {
   removeQueuedOperationsForEntry,
   saveEntryToIndexedDB,
   saveSyncedEntryToIndexedDB,
+  setLastSuccessfulRemoteSyncAt,
   setMetadata,
+  setRemoteSyncWatermark,
   updateEntryInIndexedDB,
   METADATA_LAST_ACTIVE_USER_ID,
 } from '../indexedDB'
@@ -168,5 +172,14 @@ describe('indexedDB sync helpers', () => {
     await putLegacyEntry(buildEntry('legacy-entry-2'))
     await migrateLegacyLocalData(USER_B)
     expect(await getAllEntriesFromIndexedDB(USER_B)).toHaveLength(0)
+  })
+
+  it('keeps the inbound sync watermark per user', async () => {
+    await setRemoteSyncWatermark(USER_A, '2026-03-01T10:00:00.000Z')
+    await setLastSuccessfulRemoteSyncAt(USER_A, 1000)
+
+    expect(await getRemoteSyncWatermark(USER_A)).toBe('2026-03-01T10:00:00.000Z')
+    expect(await getRemoteSyncWatermark(USER_B)).toBeNull()
+    expect(await getLastSuccessfulRemoteSyncAt(USER_B)).toBeNull()
   })
 })

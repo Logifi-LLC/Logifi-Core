@@ -16772,16 +16772,17 @@ watch([isCatalogDrawerOpen, showSettingsModal], () => {
 })
 
 async function advanceSyncWatermarks(
+  userId: string,
   entries: LogEntry[],
   tombstones: LogEntryDeletionTombstone[] = []
 ): Promise<void> {
   const incoming = computeRemoteSyncWatermark(entries, tombstones)
-  const existing = await getRemoteSyncWatermark()
+  const existing = await getRemoteSyncWatermark(userId)
   const merged = mergeWatermarks(existing, incoming)
   if (merged) {
-    await setRemoteSyncWatermark(merged)
+    await setRemoteSyncWatermark(userId, merged)
   }
-  await setLastSuccessfulRemoteSyncAt(Date.now())
+  await setLastSuccessfulRemoteSyncAt(userId, Date.now())
 }
 
 async function applyRemoteSync(
@@ -16836,7 +16837,7 @@ async function applyRemoteSync(
   }
 
   assignLogEntries(afterTombstones.mergedEntries)
-  await advanceSyncWatermarks(supabaseEntries, options.tombstones ?? [])
+  await advanceSyncWatermarks(userId, supabaseEntries, options.tombstones ?? [])
 
   if (options.reconcileQueue !== false && reconcileRemoteDeletes) {
     await reconcileSyncQueue(userId, {
@@ -16873,7 +16874,7 @@ async function applyDeltaRemoteSync(
   userId: string
 ): Promise<number> {
   if (changedEntries.length === 0 && tombstones.length === 0) {
-    await setLastSuccessfulRemoteSyncAt(Date.now())
+    await setLastSuccessfulRemoteSyncAt(userId, Date.now())
     return 0
   }
 
@@ -16901,7 +16902,7 @@ async function backgroundDeltaRemoteSync(
   userId: string,
   idbEntries: Awaited<ReturnType<typeof getAllIDBLogEntriesForUser>>
 ): Promise<number> {
-  const watermark = await getRemoteSyncWatermark()
+  const watermark = await getRemoteSyncWatermark(userId)
   if (!watermark) {
     return backgroundFullRemoteSync(userId)
   }
@@ -16934,7 +16935,7 @@ async function syncInbound(
     : options.mode
 
   if (options.skipIfFresh && mode === 'delta') {
-    const lastSyncAt = await getLastSuccessfulRemoteSyncAt()
+    const lastSyncAt = await getLastSuccessfulRemoteSyncAt(userId)
     if (lastSyncAt != null && Date.now() - lastSyncAt < CACHE_FRESH_MS) {
       return 0
     }
@@ -16965,7 +16966,7 @@ async function syncInbound(
     }
   }
 
-  const lastSyncAt = await getLastSuccessfulRemoteSyncAt()
+  const lastSyncAt = await getLastSuccessfulRemoteSyncAt(userId)
   const cacheFresh =
     cachedEntryCount > 0 &&
     lastSyncAt != null &&

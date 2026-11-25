@@ -583,22 +583,27 @@ export async function setLastSyncTimestamp(timestamp: number): Promise<void> {
 export const METADATA_LAST_SUCCESSFUL_REMOTE_SYNC = 'lastSuccessfulRemoteSyncAt'
 export const METADATA_REMOTE_SYNC_WATERMARK = 'remoteSyncWatermark'
 
-export async function getLastSuccessfulRemoteSyncAt(): Promise<number | null> {
-  return getMetadata(METADATA_LAST_SUCCESSFUL_REMOTE_SYNC)
+/** Scoped per user: on a shared device one account's sync point must not skip another's changes. */
+function userScopedKey(key: string, userId: string): string {
+  return `${key}:${userId}`
 }
 
-export async function setLastSuccessfulRemoteSyncAt(timestamp: number): Promise<void> {
-  return setMetadata(METADATA_LAST_SUCCESSFUL_REMOTE_SYNC, timestamp)
+export async function getLastSuccessfulRemoteSyncAt(userId: string): Promise<number | null> {
+  return getMetadata(userScopedKey(METADATA_LAST_SUCCESSFUL_REMOTE_SYNC, userId))
+}
+
+export async function setLastSuccessfulRemoteSyncAt(userId: string, timestamp: number): Promise<void> {
+  return setMetadata(userScopedKey(METADATA_LAST_SUCCESSFUL_REMOTE_SYNC, userId), timestamp)
 }
 
 /** Max server `updated_at` (or tombstone `deleted_at`) from the last successful inbound sync. */
-export async function getRemoteSyncWatermark(): Promise<string | null> {
-  const value = await getMetadata(METADATA_REMOTE_SYNC_WATERMARK)
+export async function getRemoteSyncWatermark(userId: string): Promise<string | null> {
+  const value = await getMetadata(userScopedKey(METADATA_REMOTE_SYNC_WATERMARK, userId))
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
-export async function setRemoteSyncWatermark(iso: string): Promise<void> {
-  return setMetadata(METADATA_REMOTE_SYNC_WATERMARK, iso)
+export async function setRemoteSyncWatermark(userId: string, iso: string): Promise<void> {
+  return setMetadata(userScopedKey(METADATA_REMOTE_SYNC_WATERMARK, userId), iso)
 }
 
 /**
