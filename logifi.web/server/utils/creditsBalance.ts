@@ -173,7 +173,7 @@ export async function listCreditTransactions(
   userId: string,
   limit = 20
 ): Promise<CreditTransactionRow[]> {
-  const safeLimit = Math.min(Math.max(1, limit), 100)
+  const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(1, Math.floor(limit)), 100) : 20
   const { data, error } = await service
     .from('credit_transactions')
     .select('*')
