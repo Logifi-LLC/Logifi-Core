@@ -71,8 +71,7 @@
 import { computed, ref } from 'vue'
 import type { LogEntry } from '~/utils/logbookTypes'
 import { ATP_TRACK_OPTIONS, type AtpTrackId } from '~/utils/atpRequirements'
-import { buildAtpProgress, progressPercent } from '~/utils/atpProgress'
-import { calculateTotalsReport } from '~/utils/totalsReport'
+import { buildAtpProgress, computeAtpHourAggregates, progressPercent } from '~/utils/atpProgress'
 
 const props = defineProps<{
   entries: LogEntry[]
@@ -84,8 +83,8 @@ const trackOptions = ATP_TRACK_OPTIONS
 
 const progress = computed(() => {
   if (!props.entries.length) return null
-  const report = calculateTotalsReport(props.entries, 'all')
-  return buildAtpProgress(report.grandTotal.airplane, track.value)
+  const aggregates = computeAtpHourAggregates(props.entries)
+  return buildAtpProgress(aggregates, track.value)
 })
 
 function formatHours(n: number): string {

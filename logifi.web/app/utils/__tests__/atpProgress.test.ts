@@ -1,41 +1,80 @@
 import { describe, expect, it } from 'vitest'
-import { buildAtpProgress, progressPercent } from '../atpProgress'
-import type { AirplaneTotals } from '../totalsReport'
+import {
+  buildAtpProgress,
+  computeAtpHourAggregates,
+  progressPercent,
+} from '../atpProgress'
+import {
+  createEmptyFlightTime,
+  createEmptyOOOI,
+  createEmptyPerformance,
+  type LogEntry,
+} from '../logbookTypes'
 import { requirementsForAtpTrack } from '../atpRequirements'
 
-const sampleTotals: AirplaneTotals = {
-  total: 1200,
-  pic: 300,
-  sic: 50,
-  crossCountry: 400,
-  night: 80,
-  actualInstrument: 50,
-  simulatedInstrument: 10,
-  dualReceived: 0,
-  dualGiven: 0,
-  multiEngine: 25,
-  approaches: 40,
-  dayLandings: 100,
-  nightLandings: 20,
+function entry(overrides: Partial<LogEntry>): LogEntry {
+  return {
+    id: overrides.id ?? 'e1',
+    date: '2026-01-15',
+    role: 'PIC',
+    aircraftCategoryClass: 'ASEL',
+    categoryClassTime: null,
+    aircraftMakeModel: 'C172',
+    registration: 'N17XX',
+    flightNumber: null,
+    departure: 'KATL',
+    destination: 'KORD',
+    route: '',
+    trainingElements: '',
+    trainingInstructor: '',
+    instructorCertificate: '',
+    picName: null,
+    sicName: null,
+    flightConditions: [],
+    remarks: '',
+    tags: [],
+    logbookType: 'flight',
+    flightTime: {
+      ...createEmptyFlightTime(),
+      total: 2,
+      pic: 2,
+      crossCountry: 1.5,
+      night: 0.5,
+      actualInstrument: 0.5,
+      simulatedInstrument: 0.1,
+    },
+    performance: createEmptyPerformance(),
+    oooi: createEmptyOOOI(),
+    flagged: false,
+    ...overrides,
+  }
 }
 
 describe('atpProgress', () => {
   it('builds rows for ATP track with 1500 total requirement', () => {
-    const snap = buildAtpProgress(sampleTotals, 'atp')
+    const aggregates = computeAtpHourAggregates([entry({})])
+    const snap = buildAtpProgress(aggregates, 'atp')
     const totalRow = snap.rows.find((r) => r.key === 'total')
     expect(totalRow?.requiredHours).toBe(1500)
-    expect(totalRow?.actualHours).toBe(1200)
+    expect(totalRow?.actualHours).toBe(aggregates.total)
   })
 
-  it('switches total requirement for R-ATP 1250', () => {
-    const snap = buildAtpProgress(sampleTotals, 'ratp_1250')
+  it('switches total requirement for R-ATP 1250 only', () => {
+    const aggregates = computeAtpHourAggregates([entry({})])
+    const snap = buildAtpProgress(aggregates, 'ratp_1250')
     expect(snap.rows.find((r) => r.key === 'total')?.requiredHours).toBe(1250)
+    expect(snap.rows.find((r) => r.key === 'crossCountry')?.requiredHours).toBe(500)
   })
 
   it('counts instrument as actual plus simulated', () => {
-    const snap = buildAtpProgress(sampleTotals, 'atp')
-    const inst = snap.rows.find((r) => r.key === 'instrument')
-    expect(inst?.actualHours).toBe(60)
+    const aggregates = computeAtpHourAggregates([entry({})])
+    expect(aggregates.instrument).toBe(0.6)
+  })
+
+  it('derives PIC XC and PIC night from per-entry mins', () => {
+    const aggregates = computeAtpHourAggregates([entry({})])
+    expect(aggregates.picCrossCountry).toBe(1.5)
+    expect(aggregates.picNight).toBe(0.5)
   })
 
   it('progressPercent caps at 100', () => {

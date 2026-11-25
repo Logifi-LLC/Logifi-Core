@@ -1166,7 +1166,7 @@
               />
               <SoloEndorsementLine :is-dark-mode="isDarkMode" />
               <AtpProgressPanel
-                v-if="hasAnyEntriesForActiveLogbook && totalsViewMode === 'flight'"
+                v-if="shouldShowAtpProgress(showAtpProgress) && hasAnyEntriesForActiveLogbook && totalsViewMode === 'flight'"
                 :entries="entriesForTotals"
                 :is-dark-mode="isDarkMode"
               />
@@ -4326,6 +4326,7 @@
       :available-metrics="availableTotalsMetrics"
       :selected-metrics="selectedTotalsMetrics"
       :show-currency-chips="showCurrencyChips === true"
+      :show-atp-progress="showAtpProgress === true"
       :show-far117-lookbacks="showFar117Lookbacks === true"
       :is-online="isOnline"
       :is-syncing="isSyncing"
@@ -4356,6 +4357,7 @@
       @set-entry-form-mode="onSetEntryFormMode"
       @toggle-metric="toggleTotalsMetric"
       @toggle-currency-chips="toggleShowCurrencyChips"
+      @toggle-atp-progress="toggleAtpProgress"
       @toggle-far117-lookbacks="toggleFar117Lookbacks"
       :logbook-layout-presets="logbookLayoutPresets"
       :active-logbook-layout-preset-id="activePresetId"
@@ -6835,6 +6837,7 @@ import {
   getDisplayedPilotInitials,
   isLogbookHydratedForUi,
   shouldShowCurrencyChips,
+  shouldShowAtpProgress,
 } from '../utils/dashboardHydration'
 import LoadingAnimation from '../components/LoadingAnimation.vue'
 import {
@@ -7026,6 +7029,7 @@ import {
 } from '../../shared/aircraftTailIndex'
 import { useCurrency } from '../composables/useCurrency'
 import { useFar117LookbackPreference } from '../composables/useFar117LookbackPreference'
+import { useAtpProgressPreference } from '../composables/useAtpProgressPreference'
 import {
   clearFar117LookbackFlightEntries,
   setFar117LookbackFlightEntries,
@@ -7569,6 +7573,7 @@ async function onUserSessionReady(userId: string): Promise<void> {
       loadPilotProfilePrefs()
       loadSelectedTotalsMetrics()
       loadShowCurrencyChips()
+      loadAtpProgressPreference()
       loadFar117LookbackPreference()
       loadEntryFormPreference()
       loadColumnConfig()
@@ -8354,6 +8359,12 @@ const {
   loadFar117LookbackPreference,
   toggleFar117Lookbacks,
 } = useFar117LookbackPreference()
+
+const {
+  showAtpProgress,
+  loadAtpProgressPreference,
+  toggleAtpProgress,
+} = useAtpProgressPreference()
 
 watch(
   logEntries,

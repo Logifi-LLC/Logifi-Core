@@ -1,9 +1,23 @@
-import type { AirplaneTotals } from './totalsReport'
+import type { LogEntry } from './logbookTypes'
+import { calculateTotalsReport, filterEntriesForTotalsReport } from './totalsReport'
 import {
   type AtpRequirementRow,
   type AtpTrackId,
   requirementsForAtpTrack,
 } from './atpRequirements'
+
+export interface AtpHourAggregates {
+  total: number
+  crossCountry: number
+  night: number
+  multiEngine: number
+  instrument: number
+  pic: number
+  /** Sum of min(PIC, XC) per entry where PIC is logged (61.159(a)(5) PIC XC). */
+  picCrossCountry: number
+  /** Sum of min(PIC, night) per entry where PIC is logged (61.159(a)(5) PIC night). */
+  picNight: number
+}
 
 export interface AtpProgressRow {
   key: string
@@ -18,27 +32,57 @@ export interface AtpProgressSnapshot {
   rows: AtpProgressRow[]
 }
 
-function hoursForRequirementKey(totals: AirplaneTotals, key: string): number {
+export function computeAtpHourAggregates(entries: readonly LogEntry[]): AtpHourAggregates {
+  const airplane = calculateTotalsReport(entries, 'all').grandTotal.airplane
+  let picCrossCountry = 0
+  let picNight = 0
+
+  for (const entry of filterEntriesForTotalsReport(entries)) {
+    const pic = entry.flightTime?.pic ?? 0
+    if (pic <= 0) continue
+    const xc = entry.flightTime?.crossCountry ?? 0
+    if (xc > 0) picCrossCountry += Math.min(pic, xc)
+    const night = entry.flightTime?.night ?? 0
+    if (night > 0) picNight += Math.min(pic, night)
+  }
+
+  return {
+    total: airplane.total,
+    crossCountry: airplane.crossCountry,
+    night: airplane.night,
+    multiEngine: airplane.multiEngine,
+    instrument: airplane.actualInstrument + airplane.simulatedInstrument,
+    pic: airplane.pic,
+    picCrossCountry: roundTenth(picCrossCountry),
+    picNight: roundTenth(picNight),
+  }
+}
+
+function hoursForRequirementKey(aggregates: AtpHourAggregates, key: string): number {
   switch (key) {
     case 'total':
-      return totals.total
+      return aggregates.total
     case 'pic':
-      return totals.pic
+      return aggregates.pic
     case 'crossCountry':
-      return totals.crossCountry
+      return aggregates.crossCountry
     case 'night':
-      return totals.night
+      return aggregates.night
     case 'instrument':
-      return totals.actualInstrument + totals.simulatedInstrument
+      return aggregates.instrument
     case 'multiEngine':
-      return totals.multiEngine
+      return aggregates.multiEngine
+    case 'picCrossCountry':
+      return aggregates.picCrossCountry
+    case 'picNight':
+      return aggregates.picNight
     default:
       return 0
   }
 }
 
 export function buildAtpProgress(
-  airplaneTotals: AirplaneTotals,
+  aggregates: AtpHourAggregates,
   track: AtpTrackId
 ): AtpProgressSnapshot {
   const requirements = requirementsForAtpTrack(track)
@@ -46,7 +90,7 @@ export function buildAtpProgress(
     key: req.key,
     label: req.label,
     requiredHours: req.requiredHours,
-    actualHours: roundTenth(hoursForRequirementKey(airplaneTotals, req.key)),
+    actualHours: roundTenth(hoursForRequirementKey(aggregates, req.key)),
     regulation: req.regulation,
   }))
   return { track, rows }

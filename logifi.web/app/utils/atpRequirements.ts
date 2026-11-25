@@ -1,6 +1,9 @@
 /**
  * Airline transport pilot aeronautical experience (airplane category).
  * Display-only constants; log totals are compared elsewhere.
+ *
+ * 14 CFR 61.160 reduces total time only for eligible R-ATP pathways; other
+ * 61.159(a) experience minimums still apply unless 61.160 states otherwise.
  */
 
 export type AtpTrackId = 'atp' | 'ratp_1000' | 'ratp_1250'
@@ -14,83 +17,83 @@ export interface AtpRequirementRow {
   regulation: string
 }
 
-/** 14 CFR 61.159 airplane category (standard ATP). */
-export const ATP_AIRPLANE_REQUIREMENTS: AtpRequirementRow[] = [
-  { key: 'total', label: 'Total time', requiredHours: 1500, regulation: '14 CFR 61.159(a)(1)' },
-  { key: 'pic', label: 'PIC', requiredHours: 250, regulation: '14 CFR 61.159(a)(2)' },
+export interface AtpTotalRequirement {
+  track: AtpTrackId
+  label: string
+  requiredHours: number
+  regulation: string
+}
+
+/** Shared 61.159(a) minimums after total time (same for ATP and R-ATP tracks). */
+export const ATP_SHARED_EXPERIENCE_REQUIREMENTS: AtpRequirementRow[] = [
   {
     key: 'crossCountry',
-    label: 'PIC cross-country',
+    label: 'Cross-country',
     requiredHours: 500,
+    regulation: '14 CFR 61.159(a)(1)',
+  },
+  { key: 'night', label: 'Night', requiredHours: 100, regulation: '14 CFR 61.159(a)(2)' },
+  {
+    key: 'multiEngine',
+    label: 'Class (multi-engine)',
+    requiredHours: 50,
+    regulation: '14 CFR 61.159(a)(3)',
+  },
+  {
+    key: 'instrument',
+    label: 'Instrument',
+    requiredHours: 75,
     regulation: '14 CFR 61.159(a)(4)',
   },
-  { key: 'night', label: 'Night', requiredHours: 100, regulation: '14 CFR 61.159(a)(5)' },
+  { key: 'pic', label: 'PIC', requiredHours: 250, regulation: '14 CFR 61.159(a)(5)' },
   {
-    key: 'instrument',
-    label: 'Instrument',
-    requiredHours: 75,
-    regulation: '14 CFR 61.159(a)(6)',
+    key: 'picCrossCountry',
+    label: 'PIC cross-country',
+    requiredHours: 100,
+    regulation: '14 CFR 61.159(a)(5)',
   },
   {
-    key: 'multiEngine',
-    label: 'Multi-engine',
-    requiredHours: 50,
-    regulation: '14 CFR 61.159(a)(7)',
-  },
-]
-
-/**
- * 14 CFR 61.160 reduced ATP (airplane). Totals differ by pathway; other rows follow
- * the simplified 1000/1250 progress style used in Logifi analytics (not every
- * 61.160 paragraph is modeled here).
- */
-export const RATP_1000_AIRPLANE_REQUIREMENTS: AtpRequirementRow[] = [
-  { key: 'total', label: 'Total time', requiredHours: 1000, regulation: '14 CFR 61.160(a)(1)' },
-  { key: 'pic', label: 'PIC', requiredHours: 250, regulation: '14 CFR 61.159(a)(2)' },
-  { key: 'crossCountry', label: 'Cross-country', requiredHours: 200, regulation: '14 CFR 61.160(a)(2)' },
-  { key: 'night', label: 'Night', requiredHours: 100, regulation: '14 CFR 61.159(a)(5)' },
-  {
-    key: 'instrument',
-    label: 'Instrument',
-    requiredHours: 75,
-    regulation: '14 CFR 61.159(a)(6)',
-  },
-  {
-    key: 'multiEngine',
-    label: 'Multi-engine',
-    requiredHours: 50,
-    regulation: '14 CFR 61.159(a)(7)',
+    key: 'picNight',
+    label: 'PIC night',
+    requiredHours: 25,
+    regulation: '14 CFR 61.159(a)(5)',
   },
 ]
 
-export const RATP_1250_AIRPLANE_REQUIREMENTS: AtpRequirementRow[] = [
-  { key: 'total', label: 'Total time', requiredHours: 1250, regulation: '14 CFR 61.160(b)(1)' },
-  { key: 'pic', label: 'PIC', requiredHours: 250, regulation: '14 CFR 61.159(a)(2)' },
-  { key: 'crossCountry', label: 'Cross-country', requiredHours: 200, regulation: '14 CFR 61.160(b)(2)' },
-  { key: 'night', label: 'Night', requiredHours: 100, regulation: '14 CFR 61.159(a)(5)' },
-  {
-    key: 'instrument',
-    label: 'Instrument',
-    requiredHours: 75,
-    regulation: '14 CFR 61.159(a)(6)',
+export const ATP_TOTAL_BY_TRACK: Record<AtpTrackId, AtpTotalRequirement> = {
+  atp: {
+    track: 'atp',
+    label: 'Total time',
+    requiredHours: 1500,
+    regulation: '14 CFR 61.159(a)',
   },
-  {
-    key: 'multiEngine',
-    label: 'Multi-engine',
-    requiredHours: 50,
-    regulation: '14 CFR 61.159(a)(7)',
+  ratp_1000: {
+    track: 'ratp_1000',
+    label: 'Total time',
+    requiredHours: 1000,
+    regulation: '14 CFR 61.160(a)(1)',
   },
-]
+  ratp_1250: {
+    track: 'ratp_1250',
+    label: 'Total time',
+    requiredHours: 1250,
+    regulation: '14 CFR 61.160(b)(1)',
+  },
+}
+
+/** 61.160 military 750-hour pathway not modeled in the track toggle (omit bar). */
 
 export function requirementsForAtpTrack(track: AtpTrackId): AtpRequirementRow[] {
-  switch (track) {
-    case 'ratp_1000':
-      return RATP_1000_AIRPLANE_REQUIREMENTS
-    case 'ratp_1250':
-      return RATP_1250_AIRPLANE_REQUIREMENTS
-    default:
-      return ATP_AIRPLANE_REQUIREMENTS
-  }
+  const total = ATP_TOTAL_BY_TRACK[track]
+  return [
+    {
+      key: 'total',
+      label: total.label,
+      requiredHours: total.requiredHours,
+      regulation: total.regulation,
+    },
+    ...ATP_SHARED_EXPERIENCE_REQUIREMENTS,
+  ]
 }
 
 export const ATP_TRACK_OPTIONS: { id: AtpTrackId; label: string }[] = [

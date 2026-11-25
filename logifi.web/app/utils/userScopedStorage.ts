@@ -14,6 +14,7 @@ export const ACCOUNT_SCOPED_STORAGE_KEYS = {
   TOTALS_METRICS: 'logifi-totals-metrics',
   SHOW_CURRENCY_CHIPS: 'logifi-show-currency-chips',
   SHOW_FAR117_LOOKBACKS: 'logifi-show-far117-lookbacks',
+  SHOW_ATP_PROGRESS: 'logifi-show-atp-progress',
   ENTRY_FORM_MODE: 'logifi-entry-form-mode',
   BUILDER_DRAFT: 'logifi-logbook-builder-draft',
   BUILDER_DEFAULT_ROLE: 'logifi-logbook-builder-default-role',

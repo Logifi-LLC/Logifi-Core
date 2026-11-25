@@ -10,6 +10,11 @@ export function shouldShowCurrencyChips(pref: boolean | null): boolean {
   return pref === true
 }
 
+/** ATP progress panel stays hidden until pref is read; default off when unset. */
+export function shouldShowAtpProgress(pref: boolean | null): boolean {
+  return pref === true
+}
+
 /** Avoid flashing the new-user empty state before IndexedDB (and empty-cache inbound sync) settle. */
 export function canShowLogbookEmptyState(
   gate: LogbookEmptyStateGate,
