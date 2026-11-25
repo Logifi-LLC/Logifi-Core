@@ -6960,7 +6960,9 @@ import {
   buildSupersededIdSet,
   buildVoidAmendment,
   getAmendmentFor,
+  isAmendmentPair,
   isEntrySuperseded,
+  prepareAmendmentLinksForInsert,
 } from '../utils/logEntryAmendments'
 import { isRosterRelationshipSignable } from '../utils/rosterRelationships'
 import { withTimeout } from '../utils/promiseTimeout'
@@ -11837,8 +11839,8 @@ async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statist
     const aircraftKey = `${entry.aircraftMakeModel} (${entry.registration})`
     aircraftBreakdown[aircraftKey] = (aircraftBreakdown[aircraftKey] || 0) + 1
     
-    const logbookMatches = findDuplicateEntries(entry, logEntries.value)
-    const batchMatches = findDuplicateEntries(entry, batchAccepted)
+    const logbookMatches = findDuplicateEntries(entry, logEntries.value).filter((m) => !isAmendmentPair(entry, m))
+    const batchMatches = findDuplicateEntries(entry, batchAccepted).filter((m) => !isAmendmentPair(entry, m))
     const matches = [...logbookMatches, ...batchMatches]
     if (matches.length > 0) {
       duplicates.push(entry)
@@ -12012,7 +12014,7 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
     const matches = [
       ...findDuplicateEntries(entry, logEntries.value),
       ...findDuplicateEntries(entry, toInsert),
-    ]
+    ].filter((match) => !isAmendmentPair(entry, match))
     if (matches.length > 0 && !importDuplicates) {
       const incomingTags = Array.isArray(entry.tags) ? entry.tags : []
       if (incomingTags.length > 0) {
@@ -12056,6 +12058,12 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
     }
   }
 
+  const orderedToInsert = prepareAmendmentLinksForInsert(
+    toInsert,
+    new Set(logEntries.value.map((e) => e.id))
+  )
+  toInsert.splice(0, toInsert.length, ...orderedToInsert)
+
   const storedEntries: LogEntry[] = []
 
   function buildImportDbRow(entry: LogEntry, userId: string): Record<string, unknown> {
@@ -12085,6 +12093,8 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
       performance: entry.performance,
       oooi: entry.oooi || null,
       flagged: entry.flagged || false,
+      amends_entry_id: entry.amendsEntryId ?? null,
+      is_void: entry.isVoid === true,
       is_imported: true,
       import_source: importSource,
       import_batch_id: importBatchId,
