@@ -706,3 +706,59 @@ describe('entry date', () => {
     expect(entry.date).toBe('2026-11-04')
   })
 })
+
+describe('Autofi takeoffs and landings', () => {
+  const leg = (overrides: Partial<Parameters<typeof mapAirlineLegToFcvMappedEntry>[0]> = {}) =>
+    mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20261103_9101_SEA',
+      import_source: 'flica_aerodatabox',
+      flight_number: '9101',
+      trip_number: 'T0000',
+      role: 'SIC',
+      dep_airport: 'SEA',
+      arr_airport: 'PDX',
+      scheduled_out_local: '2026-11-03 05:00:00',
+      scheduled_in_local: '2026-11-03 06:30:00',
+      actual_out_local: '2026-11-03 05:05:00',
+      actual_in_local: '2026-11-03 06:30:00',
+      actual_off_local: '2026-11-03 05:20:00',
+      actual_on_local: '2026-11-03 06:20:00',
+      fcv_tail_number: 'N900ZZ',
+      fcv_aircraft_type: 'E75',
+      crew: [
+        { position: 'CA', name: 'DOE, JANE' },
+        { position: 'FO', name: 'ROE, RICHARD' },
+      ],
+      is_deadhead: false,
+      block_minutes: 85,
+      ...overrides,
+    })
+
+  it('logs a night takeoff and a day landing on the same leg', () => {
+    expect(leg().performance).toEqual({ nightTakeoffs: 1, dayLandings: 1 })
+  })
+
+  it('logs a day takeoff and a night landing on the same leg', () => {
+    const entry = leg({
+      scheduled_out_local: '2026-11-03 16:45:00',
+      scheduled_in_local: '2026-11-03 18:20:00',
+      actual_out_local: '2026-11-03 16:50:00',
+      actual_off_local: '2026-11-03 17:00:00',
+      actual_on_local: '2026-11-03 18:10:00',
+      actual_in_local: '2026-11-03 18:20:00',
+    })
+    expect(entry.performance).toEqual({ dayTakeoffs: 1, nightLandings: 1 })
+  })
+
+  it('leaves takeoffs null when the departure airport is unresolved', () => {
+    const entry = leg({ dep_airport: 'ZZZQ', external_flight_id: 'FLICA_20261103_9101_ZZZQ' })
+    const perf = entry.performance as Record<string, unknown>
+    expect(perf.dayTakeoffs).toBeUndefined()
+    expect(perf.nightTakeoffs).toBeUndefined()
+  })
+
+  it('logs nothing for a deadhead', () => {
+    expect(leg({ is_deadhead: true }).performance).toEqual({})
+  })
+})
+

@@ -674,6 +674,7 @@ export function mapFcvFlightToEntry(flight: FcvFlight): FcvMappedEntry {
   applyAirlineNightToMappedEntry(mapped, {
     outLocal: pickOutLocalDatetimeForGateDuration(flight) ?? null,
     inLocal: pickInLocalDatetimeForGateDuration(flight) ?? null,
+    offLocal: typeof flight.actual_off_local === 'string' ? flight.actual_off_local : null,
     onLocal: typeof flight.actual_on_local === 'string' ? flight.actual_on_local : null,
     isDeadhead,
   })

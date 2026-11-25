@@ -358,6 +358,7 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
 
   applyAirlineNightToMappedEntry(mapped, {
     outLocal: firstDatetime(leg.actual_out_local, leg.scheduled_out_local),
+    offLocal: leg.actual_off_local,
     inLocal: firstDatetime(leg.actual_in_local, leg.scheduled_in_local),
     onLocal: leg.actual_on_local,
     isDeadhead: leg.is_deadhead,
