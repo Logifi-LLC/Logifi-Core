@@ -1375,6 +1375,22 @@ describe('Logifi-native lesson text vs crew catalog', () => {
     expect(snapshotSavedFields(reimported!)).toEqual(saved)
   })
 
+  it('keeps the exported Role on a native round trip even when PIC time is logged', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        Date: '2024-06-13',
+        Role: 'Instructor',
+        Registration: 'N172GC',
+        'Aircraft Make/Model': 'C-172',
+        'Total Flight Time': '1.5',
+        PIC: '1.5',
+        'Dual Given': '1.5',
+      },
+      { source: 'logifi-native' }
+    )
+    expect(entry?.role).toBe('Instructor')
+  })
+
   it('still copies Training Elements when it is a person name', () => {
     const entry = mapRawRowToLogEntry(
       {
