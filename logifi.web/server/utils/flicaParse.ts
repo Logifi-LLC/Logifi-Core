@@ -588,8 +588,6 @@ export function flicaHtmlToText(htmlOrText: string): string {
 export interface FlicaHtmlSummary {
   bytes: number
   tripCount: number
-  hasL7G13: boolean
-  has4442: boolean
   textChars: number
   sample: string
 }
@@ -611,8 +609,6 @@ export function summarizeFlicaHtml(htmlOrText: string, tripIdPattern?: string): 
   return {
     bytes: htmlOrText.length,
     tripCount: trips.length,
-    hasL7G13: /L7G13/i.test(htmlOrText) || /L7G13/i.test(text),
-    has4442: /\b4442\b/.test(htmlOrText) || /\b4442\b/.test(text),
     textChars: text.length,
     sample,
   }

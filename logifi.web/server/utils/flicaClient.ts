@@ -1034,8 +1034,6 @@ export interface FlicaMenuProbeResult {
   scheduleHtmlLength: number | null
   scheduleParsedLegCount: number | null
   scheduleTripCount: number | null
-  scheduleHasL7G13: boolean | null
-  scheduleHas4442: boolean | null
   scheduleSample: string | null
   scheduleError: string | null
 }
@@ -1104,16 +1102,12 @@ export async function probeFlicaMenu(
     htmlLength: number | null
     parsedLegCount: number | null
     tripCount: number | null
-    hasL7G13: boolean | null
-    has4442: boolean | null
     sample: string | null
     error: string | null
   } = {
     htmlLength: null,
     parsedLegCount: null,
     tripCount: null,
-    hasL7G13: null,
-    has4442: null,
     sample: null,
     error: null,
   }
@@ -1131,8 +1125,6 @@ export async function probeFlicaMenu(
       tripIdPattern: opts.tripIdPattern,
     }).length
     scheduleSummary.tripCount = sum.tripCount
-    scheduleSummary.hasL7G13 = sum.hasL7G13
-    scheduleSummary.has4442 = sum.has4442
     scheduleSummary.sample = sum.sample
   } catch (e) {
     scheduleSummary.error =
@@ -1165,8 +1157,6 @@ export async function probeFlicaMenu(
     scheduleHtmlLength: scheduleSummary.htmlLength,
     scheduleParsedLegCount: scheduleSummary.parsedLegCount,
     scheduleTripCount: scheduleSummary.tripCount,
-    scheduleHasL7G13: scheduleSummary.hasL7G13,
-    scheduleHas4442: scheduleSummary.has4442,
     scheduleSample: scheduleSummary.sample,
     scheduleError: scheduleSummary.error,
   }
