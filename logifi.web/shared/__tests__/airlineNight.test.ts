@@ -102,3 +102,92 @@ describe('computeAirlineNight', () => {
     expect(result.isNightLanding).toBe(false)
   })
 })
+
+describe('computeAirlineNight takeoffs (61.57(b) window at the departure airport)', () => {
+  const KSEA = { latitude: 47.4502, longitude: -122.3088 }
+  const KPDX = { latitude: 45.5887, longitude: -122.5975 }
+  const pnw = {
+    lookupCoords: (code: string) => ({ KSEA, KPDX } as Record<string, typeof KSEA>)[code] ?? null,
+    lookupTz: (code: string) => (code === 'KSEA' || code === 'KPDX' ? 'America/Los_Angeles' : null),
+  }
+
+  it('classifies a night takeoff separately from a day landing', () => {
+    const result = computeAirlineNight(
+      {
+        depCode: 'KSEA',
+        arrCode: 'KPDX',
+        outLocalDatetime: '2026-11-03 05:05:00',
+        offLocalDatetime: '2026-11-03 05:20:00',
+        onLocalDatetime: '2026-11-03 06:20:00',
+        inLocalDatetime: '2026-11-03 06:30:00',
+      },
+      pnw
+    )
+    expect(result.isNightTakeoff).toBe(true)
+    expect(result.isNightLanding).toBe(false)
+  })
+
+  it('classifies a day takeoff separately from a night landing', () => {
+    const result = computeAirlineNight(
+      {
+        depCode: 'KSEA',
+        arrCode: 'KPDX',
+        outLocalDatetime: '2026-11-03 16:50:00',
+        offLocalDatetime: '2026-11-03 17:00:00',
+        onLocalDatetime: '2026-11-03 18:10:00',
+        inLocalDatetime: '2026-11-03 18:20:00',
+      },
+      pnw
+    )
+    expect(result.isNightTakeoff).toBe(false)
+    expect(result.isNightLanding).toBe(true)
+  })
+
+  it('uses wheels-off, not block-out, when both are known', () => {
+    const result = computeAirlineNight(
+      {
+        depCode: 'KSEA',
+        arrCode: 'KPDX',
+        outLocalDatetime: '2026-11-03 17:40:00',
+        offLocalDatetime: '2026-11-03 18:05:00',
+        inLocalDatetime: '2026-11-03 19:00:00',
+      },
+      pnw
+    )
+    expect(result.isNightTakeoff).toBe(true)
+  })
+
+  it('falls back to block-out when no wheels-off time exists', () => {
+    const result = computeAirlineNight(
+      {
+        depCode: 'KSEA',
+        arrCode: 'KPDX',
+        outLocalDatetime: '2026-11-03 05:10:00',
+        inLocalDatetime: '2026-11-03 06:30:00',
+      },
+      pnw
+    )
+    expect(result.isNightTakeoff).toBe(true)
+  })
+
+  it('leaves takeoffs unclassified when the departure airport is unresolved', () => {
+    const noZone = computeAirlineNight(
+      {
+        depCode: 'KSEA',
+        arrCode: 'KPDX',
+        offLocalDatetime: '2026-11-03 05:20:00',
+        outLocalDatetime: '2026-11-03 05:05:00',
+        inLocalDatetime: '2026-11-03 06:30:00',
+      },
+      { ...pnw, lookupTz: (code: string) => (code === 'KPDX' ? 'America/Los_Angeles' : null) }
+    )
+    expect(noZone.isNightTakeoff).toBeNull()
+
+    const noCoords = computeAirlineNight(
+      { depCode: 'ZZZZ', arrCode: 'KPDX', offLocalDatetime: '2026-11-03 05:20:00' },
+      pnw
+    )
+    expect(noCoords.isNightTakeoff).toBeNull()
+  })
+})
+

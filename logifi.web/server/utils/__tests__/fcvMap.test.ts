@@ -225,7 +225,7 @@ describe('mapFcvFlightToEntry', () => {
     expect(e.route).toBeNull()
     expect(e.remarks).toBeNull()
     expect(e.tags).toEqual(['Deadhead'])
-    expect(e.flight_conditions).toEqual(['ifr'])
+    expect(e.flight_conditions).toEqual([])
     expect(e.import_metadata?.fcv_raw).toMatchObject({
       fcv_flight_id: '4',
       extra_field: 'kept',
@@ -385,5 +385,19 @@ describe('mapFcvFlightToEntry', () => {
       aircraft_category: 'AIRPLANE',
     })
     expect(e.aircraft_category_class).toBe('AMEL')
+  })
+})
+
+describe('mapFcvFlightToEntry entry date', () => {
+  it('uses the block-out date when takeoff is after midnight', () => {
+    const e = mapFcvFlightToEntry({
+      fcv_flight_id: 'date-1',
+      scheduled_out_local: '2026-11-04 23:40:00',
+      actual_out_local: '2026-11-04 23:52:00',
+      actual_off_local: '2026-11-05 00:15:00',
+      dep_airport: 'SEA',
+      arr_airport: 'PDX',
+    })
+    expect(e.date).toBe('2026-11-04')
   })
 })

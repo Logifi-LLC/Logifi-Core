@@ -23,6 +23,7 @@ import {
 import {
   applySeatToFlightTime,
   formatListedCrewHint,
+  isDeadheadMappedFlight,
   isOwnRoleUnmatchedMetadata,
   parseAirlineOwnSeat,
   pickOppositeCrew,
@@ -1153,6 +1154,7 @@ function unmatchedReasonFromFlight(f: FcvMappedEntry): OwnRoleUnmatchedReason | 
 }
 
 function isFlightOwnRoleUnmatched(f: FcvMappedEntry): boolean {
+  if (isDeadheadMappedFlight(f)) return false
   if (isOwnRoleUnmatchedMetadata(f.import_metadata)) return true
   return parseAirlineOwnSeat(f.role) == null
 }

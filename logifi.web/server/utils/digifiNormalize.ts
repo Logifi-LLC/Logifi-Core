@@ -5,6 +5,7 @@ import {
   formatDigifiIsoDate,
   parseDigifiIsoDateParts,
   resolveDigifiSpreadYear,
+  type DigifiSpreadYearState,
 } from '../../app/utils/digifiSpreadYear'
 import type { LogbookColumnKey } from '../../app/utils/logbookTypes'
 import { normalizeDigifiRemarksCell } from '../../app/utils/digifiRemarksNormalize'
@@ -130,22 +131,28 @@ export function normalizeRemarks(val: string): string {
   return normalizeDigifiRemarksCell(val)
 }
 
-function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: string | null): string {
+function normalizeDate(
+  val: string,
+  defaultYear: number | null,
+  lastDateIso?: string | null,
+  yearState?: DigifiSpreadYearState
+): string {
   const s = val.trim()
   if (!s) return ''
   const lockedYear =
     typeof defaultYear === 'number' && Number.isFinite(defaultYear) ? defaultYear : null
   const year = lockedYear ?? new Date().getFullYear()
+  const resolveYear = (m: number, d: number, baseYear: number): number => {
+    const y = resolveDigifiSpreadYear(m, d, baseYear, lastDateIso, yearState?.year)
+    if (yearState) yearState.year = y
+    return y
+  }
 
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
     const parts = parseDigifiIsoDateParts(s)
     if (!parts) return s
     if (lockedYear != null) {
-      return formatDigifiIsoDate(
-        resolveDigifiSpreadYear(parts.m, parts.d, lockedYear, lastDateIso),
-        parts.m,
-        parts.d
-      )
+      return formatDigifiIsoDate(resolveYear(parts.m, parts.d, lockedYear), parts.m, parts.d)
     }
     return s
   }
@@ -155,11 +162,7 @@ function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: st
     const m = parseInt(slashParts[0], 10)
     const d = parseInt(slashParts[1], 10)
     if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      const y =
-        lockedYear != null
-          ? resolveDigifiSpreadYear(m, d, lockedYear, lastDateIso)
-          : resolveDigifiSpreadYear(m, d, year, lastDateIso)
-      return formatDigifiIsoDate(y, m, d)
+      return formatDigifiIsoDate(resolveYear(m, d, year), m, d)
     }
   }
   if (slashParts.length === 3) {
@@ -169,8 +172,7 @@ function normalizeDate(val: string, defaultYear: number | null, lastDateIso?: st
     const parsedY = parseInt(yRaw, 10)
     if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
       if (lockedYear != null) {
-        const y = resolveDigifiSpreadYear(m, d, lockedYear, lastDateIso)
-        return formatDigifiIsoDate(y, m, d)
+        return formatDigifiIsoDate(resolveYear(m, d, lockedYear), m, d)
       }
       let y = year
       if (Number.isFinite(parsedY)) {
@@ -200,14 +202,15 @@ export function normalizeCellValue(
   fieldKey: LogbookColumnKey | null,
   defaultYear: number | null,
   categoryClassValue?: string,
-  lastDateIso?: string | null
+  lastDateIso?: string | null,
+  yearState?: DigifiSpreadYearState
 ): string {
   const trimmed = (value ?? '').trim()
   if (!trimmed) return ''
   if (fieldKey === 'remarks') return normalizeRemarks(trimmed)
   let v = trimmed.replace(/\s+/g, ' ')
   if (!fieldKey) return v
-  if (fieldKey === 'date') return normalizeDate(v, defaultYear, lastDateIso)
+  if (fieldKey === 'date') return normalizeDate(v, defaultYear, lastDateIso, yearState)
   if (fieldKey === 'identification') return normalizeDigifiRegistrationKey(v)
   if (fieldKey && AIRPORT_KEYS.has(fieldKey)) return normalizeAirport(v, fieldKey)
   if (NUMERIC_KEYS.has(fieldKey) || (fieldKey === 'categoryClass' && categoryClassValue)) {
@@ -224,6 +227,7 @@ export function normalizeScanRows(
   const colById = new Map(columns.map((c) => [c.id, c]))
   const dateCol = columns.find((c) => c.fieldKey === 'date')
   let lastDateIso: string | null = null
+  const yearState: DigifiSpreadYearState = { year: null }
   const ordered = [...rows].sort((a, b) => a.rowIndex - b.rowIndex)
   return ordered.map((row) => {
     const reconciledRaw = reconcileRowAirports(row.cells, columns)
@@ -236,7 +240,8 @@ export function normalizeScanRows(
         col?.fieldKey ?? null,
         defaultYear,
         col?.categoryClassValue,
-        col?.fieldKey === 'date' ? lastDateIso : undefined
+        col?.fieldKey === 'date' ? lastDateIso : undefined,
+        col?.fieldKey === 'date' ? yearState : undefined
       )
     }
     if (dateCol && cells[dateCol.id]) lastDateIso = cells[dateCol.id]

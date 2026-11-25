@@ -76,4 +76,16 @@ describe('copyPerformanceCounts save paths', () => {
     expect(saved.nightTakeoffs).toBeNull()
     expect(saved.dayLandings).toBe(2)
   })
+
+  it('stores a cleared takeoff field as not logged, and an entered 0 as 0', () => {
+    const saved = rebuildPerformanceForSave({
+      ...createEmptyPerformance(),
+      dayTakeoffs: '' as unknown as number,
+      nightTakeoffs: 0,
+      dayLandings: 2,
+    })
+    expect(saved.dayTakeoffs).toBeNull()
+    expect(saved.nightTakeoffs).toBe(0)
+  })
 })
+

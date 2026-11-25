@@ -2427,6 +2427,14 @@
              <!-- Performance Inline -->
              <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2']">
                <div>
+                  <label for="edit-dayTakeoffs" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day T/O</label>
+                  <input id="edit-dayTakeoffs" v-model.number="inlineEditEntry.performance.dayTakeoffs" type="number" min="0" :placeholder="inlineEditEntry.performance.dayLandings != null ? String(inlineEditEntry.performance.dayLandings) : ''" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner placeholder:text-gray-600' : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400']" />
+               </div>
+               <div>
+                  <label for="edit-nightTakeoffs" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night T/O</label>
+                  <input id="edit-nightTakeoffs" v-model.number="inlineEditEntry.performance.nightTakeoffs" type="number" min="0" :placeholder="inlineEditEntry.performance.nightLandings != null ? String(inlineEditEntry.performance.nightLandings) : ''" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner placeholder:text-gray-600' : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400']" />
+               </div>
+               <div>
                   <label for="edit-dayLandings" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day Ldg</label>
                   <input id="edit-dayLandings" v-model.number="inlineEditEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                </div>
@@ -3769,6 +3777,14 @@
 
                <!-- Performance -->
                <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2']">
+                 <div>
+                    <label for="entry-dayTakeoffs" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day T/O</label>
+                    <input id="entry-dayTakeoffs" v-model.number="newEntry.performance.dayTakeoffs" type="number" min="0" :placeholder="newEntry.performance.dayLandings != null ? String(newEntry.performance.dayLandings) : ''" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner placeholder:text-gray-600' : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400']" />
+                 </div>
+                 <div>
+                    <label for="entry-nightTakeoffs" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night T/O</label>
+                    <input id="entry-nightTakeoffs" v-model.number="newEntry.performance.nightTakeoffs" type="number" min="0" :placeholder="newEntry.performance.nightLandings != null ? String(newEntry.performance.nightLandings) : ''" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner placeholder:text-gray-600' : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400']" />
+                 </div>
                  <div>
                     <label for="entry-dayLandings" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day Ldg</label>
                     <input id="entry-dayLandings" v-model.number="newEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
@@ -6960,7 +6976,9 @@ import {
   buildSupersededIdSet,
   buildVoidAmendment,
   getAmendmentFor,
+  isAmendmentPair,
   isEntrySuperseded,
+  prepareAmendmentLinksForInsert,
 } from '../utils/logEntryAmendments'
 import { isRosterRelationshipSignable } from '../utils/rosterRelationships'
 import { withTimeout } from '../utils/promiseTimeout'
@@ -7085,6 +7103,8 @@ import {
   getAllIDBLogEntriesForUser,
   getSyncQueue,
   removeQueuedOperationsForEntry,
+  hasPendingSyncOperation,
+  addInsertsToSyncQueue,
   migrateLegacyLocalData,
   getLastSuccessfulRemoteSyncAt,
   setLastSuccessfulRemoteSyncAt,
@@ -7168,7 +7188,7 @@ const {
   entryId: guestQrEntryId,
 } = useGuestSignCompanion()
 const { instructors: rosterInstructors, fetchInstructors } = useRoster()
-const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync, retryFailed, reconcileSyncQueue, setActiveUserId, refreshQueueLength } = useSyncQueue()
+const { queueLength, isProcessing, syncError, addToQueue, processQueue, startBackgroundSync, stopBackgroundSync, retryFailed, reconcileSyncQueue, setActiveUserId, refreshQueueLength, runExclusive: runExclusiveWithSyncQueue } = useSyncQueue()
 
 function getStorageUserId(): string | undefined {
   return user.value?.id
@@ -9772,11 +9792,42 @@ async function saveInlineEdit(): Promise<boolean> {
         amends_entry_id:
           updatedEntry.amendsEntryId ?? oldEntryData?.amends_entry_id ?? null,
         is_void: updatedEntry.isVoid === true || oldEntryData?.is_void === true,
-        is_imported: oldEntryData?.is_imported ?? false,
-        import_source: oldEntryData?.import_source ?? null,
-        import_batch_id: oldEntryData?.import_batch_id ?? null,
-        original_entry_date: oldEntryData?.original_entry_date ?? null,
-        import_metadata: oldEntryData?.import_metadata ?? null
+        // No server row to read (never synced): keep the local entry's import provenance.
+        ...(oldEntryData
+          ? {
+              is_imported: oldEntryData.is_imported ?? false,
+              import_source: oldEntryData.import_source ?? null,
+              import_batch_id: oldEntryData.import_batch_id ?? null,
+              original_entry_date: oldEntryData.original_entry_date ?? null,
+              import_metadata: oldEntryData.import_metadata ?? null,
+            }
+          : {
+              is_imported: updatedEntry.isImported ?? false,
+              import_source: updatedEntry.importSource ?? null,
+              import_batch_id: updatedEntry.importBatchId ?? null,
+              original_entry_date: updatedEntry.originalEntryDate ?? null,
+              import_metadata: updatedEntry.importMetadata ?? null,
+            }),
+      }
+
+      // An earlier write for this entry is still queued. Merge into it so the older queued
+      // copy can never land after (and overwrite) this save.
+      if (isOnline.value && (await hasPendingSyncOperation(targetId, user.value.id))) {
+        await updateEntryInIndexedDB(updatedEntry, { userId: user.value.id, synced: false })
+        await addToQueue(
+          'update',
+          targetId,
+          { ...dbEntry, id: targetId, user_id: user.value.id },
+          user.value.id,
+          { awaitSync: shouldAwaitSyncForSigningIntent() }
+        )
+        logEntries.value = sortEntriesByDateAndOOOI(
+          logEntries.value.some((e) => e.id === targetId)
+            ? logEntries.value.map((e) => (e.id === targetId ? updatedEntry : e))
+            : [...logEntries.value, updatedEntry]
+        )
+        afterInlineSaveSuccess(updatedEntry)
+        return true
       }
 
       // Entry not in Supabase yet (0 rows): insert directly when online; queue when offline
@@ -9954,76 +10005,7 @@ async function saveInlineEdit(): Promise<boolean> {
       )
       console.log('[SaveInlineEdit] Local state updated immediately with database result')
 
-      // Create audit log entry
-      try {
-        const changedFields: string[] = []
-        const oldData: any = {}
-        const newData: any = {}
-        
-        // Compare all fields
-        const fieldsToCompare = [
-          'date', 'role', 'aircraft_category_class', 'category_class_time',
-          'aircraft_make_model', 'registration', 'flight_number', 'departure',
-          'destination', 'route', 'training_elements', 'training_instructor',
-          'instructor_certificate', 'pic_name', 'sic_name', 'flight_conditions', 'remarks',
-          'tags', 'flight_time', 'performance', 'oooi', 'flagged'
-        ]
-        
-        fieldsToCompare.forEach(field => {
-          const oldVal = oldEntryData[field]
-          const newVal = dbEntry[field]
-          
-          // Deep comparison for objects/arrays
-          if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
-            changedFields.push(field)
-            oldData[field] = oldVal
-            newData[field] = newVal
-          }
-        })
-        
-        if (changedFields.length > 0) {
-          // Create change summary
-          const summaryParts = changedFields.slice(0, 3).map(field => {
-            const fieldName = field.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
-            return fieldName
-          })
-          const changeSummary = changedFields.length > 3
-            ? `Updated ${summaryParts.join(', ')} and ${changedFields.length - 3} more field${changedFields.length - 3 > 1 ? 's' : ''}`
-            : `Updated ${summaryParts.join(', ')}`
-          
-          console.log('[SaveInlineEdit] Creating audit log:', {
-            entry_id: targetId,
-            user_id: user.value.id,
-            changed_fields_count: changedFields.length
-          })
-          
-          const { data: auditData, error: auditError } = await (supabase
-            .from('audit_logs') as any)
-            .insert({
-              entry_id: targetId,
-              user_id: user.value.id,
-              action: 'update',
-              old_data: oldData,
-              new_data: newData,
-              changed_fields: changedFields,
-              change_summary: changeSummary,
-              is_compliance_event: false
-            })
-            .select()
-            .single()
-          
-          if (auditError) {
-            console.error('[SaveInlineEdit] Failed to create audit log:', auditError)
-            console.error('[SaveInlineEdit] Audit error details:', JSON.stringify(auditError, null, 2))
-          } else {
-            console.log('[SaveInlineEdit] Audit log created successfully:', auditData)
-          }
-        } else {
-          console.log('[SaveInlineEdit] No fields changed, skipping audit log')
-        }
-      } catch (auditError) {
-        console.error('[SaveInlineEdit] Exception creating audit log:', auditError)
-      }
+      // The log_entries AFTER UPDATE trigger writes the audit row (old/new data, changed fields).
 
       // Verification is already done - we have the data from updateResult
       // No need to reload, we already updated local state with the returned data
@@ -11805,8 +11787,8 @@ async function calculateImportStatistics(entries: LogEntry[]): Promise<{ statist
     const aircraftKey = `${entry.aircraftMakeModel} (${entry.registration})`
     aircraftBreakdown[aircraftKey] = (aircraftBreakdown[aircraftKey] || 0) + 1
     
-    const logbookMatches = findDuplicateEntries(entry, logEntries.value)
-    const batchMatches = findDuplicateEntries(entry, batchAccepted)
+    const logbookMatches = findDuplicateEntries(entry, logEntries.value).filter((m) => !isAmendmentPair(entry, m))
+    const batchMatches = findDuplicateEntries(entry, batchAccepted).filter((m) => !isAmendmentPair(entry, m))
     const matches = [...logbookMatches, ...batchMatches]
     if (matches.length > 0) {
       duplicates.push(entry)
@@ -11897,9 +11879,16 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
   const importSource = importPreviewMetadata.value?.fileType?.toLowerCase() || 'unknown'
   const fileName = importPreviewMetadata.value?.fileName || 'unknown'
   
+  // Signed in but cloud unreachable: save locally and queue (no import batch row until online).
+  let cloudReachable = false
+  if (isAuthenticated.value && user.value) {
+    await checkOnlineStatus()
+    cloudReachable = isOnline.value
+  }
+
   // Create import batch if authenticated
   let importBatchId: string | null = null
-  if (isAuthenticated.value && user.value) {
+  if (isAuthenticated.value && user.value && cloudReachable) {
     try {
       // Calculate statistics for the batch
       const totalEntries = entries.length
@@ -11980,7 +11969,7 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
     const matches = [
       ...findDuplicateEntries(entry, logEntries.value),
       ...findDuplicateEntries(entry, toInsert),
-    ]
+    ].filter((match) => !isAmendmentPair(entry, match))
     if (matches.length > 0 && !importDuplicates) {
       const incomingTags = Array.isArray(entry.tags) ? entry.tags : []
       if (incomingTags.length > 0) {
@@ -12024,6 +12013,12 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
     }
   }
 
+  const orderedToInsert = prepareAmendmentLinksForInsert(
+    toInsert,
+    new Set(logEntries.value.map((e) => e.id))
+  )
+  toInsert.splice(0, toInsert.length, ...orderedToInsert)
+
   const storedEntries: LogEntry[] = []
 
   function buildImportDbRow(entry: LogEntry, userId: string): Record<string, unknown> {
@@ -12053,6 +12048,8 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
       performance: entry.performance,
       oooi: entry.oooi || null,
       flagged: entry.flagged || false,
+      amends_entry_id: entry.amendsEntryId ?? null,
+      is_void: entry.isVoid === true,
       is_imported: true,
       import_source: importSource,
       import_batch_id: importBatchId,
@@ -12110,7 +12107,51 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
 
   isBulkLoadInProgress.value = true
   try {
-    if (isAuthenticated.value && user.value) {
+    if (isAuthenticated.value && user.value && !cloudReachable) {
+      const userId = user.value.id
+      const queued: Array<{ entryId: string; entryData: unknown }> = []
+      for (let i = 0; i < toInsert.length; i++) {
+        const entry: LogEntry = {
+          ...toInsert[i]!,
+          isImported: true,
+          importSource,
+          importBatchId: undefined,
+          originalEntryDate: toInsert[i]!.date,
+        }
+        try {
+          await saveEntryToIndexedDB(entry, userId)
+          queued.push({ entryId: entry.id, entryData: buildImportDbRow(entry, userId) })
+          storedEntries.push(entry)
+          for (const tag of entry.tags || []) {
+            const trimmed = tag.trim()
+            if (trimmed) importedTagPresets.add(trimmed)
+          }
+        } catch (error) {
+          result.errors.push(
+            `Entry ${entry.date} ${entry.registration}: ${error instanceof Error ? error.message : 'Failed to save'}`
+          )
+        }
+        if ((i + 1) % IMPORT_UI_YIELD_EVERY === 0) {
+          setImportBusy(`Saving ${i + 1} / ${toInsert.length}`)
+          await yieldToImportUi()
+        }
+      }
+      try {
+        await addInsertsToSyncQueue(userId, queued)
+      } catch (error) {
+        // Saved locally but not queued: drop the local copies so nothing sits unsynced forever.
+        for (const entry of storedEntries) {
+          await deleteEntryFromIndexedDB(entry.id).catch(() => undefined)
+        }
+        storedEntries.length = 0
+        result.errors.push(`Could not queue entries for sync: ${error instanceof Error ? error.message : 'unknown error'}`)
+      }
+      await refreshQueueLength()
+      result.imported = storedEntries.length
+      if (storedEntries.length > 0) {
+        logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, ...storedEntries])
+      }
+    } else if (isAuthenticated.value && user.value) {
       const userId = user.value.id
       for (let i = 0; i < toInsert.length; i += IMPORT_INSERT_BATCH) {
         const chunk = toInsert.slice(i, i + IMPORT_INSERT_BATCH)
@@ -16412,7 +16453,6 @@ async function removeEntry(id: string): Promise<void> {
   }
 
   let supabaseId = id
-  let entryData: Record<string, unknown> | null = null
   let existsOnServer = isValidUUID(id)
 
   if (!isValidUUID(id) && localEntry) {
@@ -16453,17 +16493,7 @@ async function removeEntry(id: string): Promise<void> {
   }
 
   try {
-    try {
-      const { data } = await (supabase
-        .from('log_entries') as any)
-        .select('*')
-        .eq('id', supabaseId)
-        .single()
-      entryData = data
-    } catch (err) {
-      console.warn('Could not fetch entry data for audit log:', err)
-    }
-
+    // The BEFORE DELETE trigger on log_entries writes the 'delete' audit row with the full old row.
     const { error } = await (supabase
       .from('log_entries') as any)
       .delete()
@@ -16480,25 +16510,6 @@ async function removeEntry(id: string): Promise<void> {
       console.warn('[RemoveEntry] Supabase delete failed; queueing for retry:', error)
       await addToQueue('delete', supabaseId, undefined, userId)
       return
-    }
-
-    if (entryData) {
-      try {
-        await (supabase
-          .from('audit_logs') as any)
-          .insert({
-            entry_id: supabaseId,
-            user_id: userId,
-            action: 'delete',
-            old_data: entryData,
-            new_data: null,
-            changed_fields: [],
-            change_summary: `Deleted log entry for ${entryData.date}`,
-            is_compliance_event: false,
-          })
-      } catch (auditError) {
-        console.warn('Failed to create audit log for deletion:', auditError)
-      }
     }
   } catch (error) {
     console.warn('[RemoveEntry] Delete failed; queueing for retry:', error)
@@ -16740,16 +16751,17 @@ watch([isCatalogDrawerOpen, showSettingsModal], () => {
 })
 
 async function advanceSyncWatermarks(
+  userId: string,
   entries: LogEntry[],
   tombstones: LogEntryDeletionTombstone[] = []
 ): Promise<void> {
   const incoming = computeRemoteSyncWatermark(entries, tombstones)
-  const existing = await getRemoteSyncWatermark()
+  const existing = await getRemoteSyncWatermark(userId)
   const merged = mergeWatermarks(existing, incoming)
   if (merged) {
-    await setRemoteSyncWatermark(merged)
+    await setRemoteSyncWatermark(userId, merged)
   }
-  await setLastSuccessfulRemoteSyncAt(Date.now())
+  await setLastSuccessfulRemoteSyncAt(userId, Date.now())
 }
 
 async function applyRemoteSync(
@@ -16765,7 +16777,20 @@ async function applyRemoteSync(
 ): Promise<number> {
   const reconcileRemoteDeletes = options.reconcileRemoteDeletes ?? true
   const syncQueue = await getSyncQueue(userId)
-  const localWithSync = idbEntries.map((entry) => ({
+  // idbEntries can predate a save made while the remote fetch was in flight; re-read those.
+  const pendingWriteIds = [
+    ...new Set(syncQueue.filter((item) => item.operation !== 'delete').map((item) => item.entryId)),
+  ]
+  const freshPending = new Map<string, (typeof idbEntries)[number]>()
+  for (const id of pendingWriteIds) {
+    const fresh = await getEntryFromIndexedDB(id)
+    if (fresh && fresh._userId === userId) freshPending.set(id, fresh)
+  }
+  const snapshotIds = new Set(idbEntries.map((entry) => entry.id))
+  const localWithSync = [
+    ...idbEntries.map((entry) => freshPending.get(entry.id) ?? entry),
+    ...[...freshPending.values()].filter((entry) => !snapshotIds.has(entry.id)),
+  ].map((entry) => ({
     entry: mapIdbEntryToLogEntry(entry),
     synced: entry._synced,
   }))
@@ -16791,7 +16816,7 @@ async function applyRemoteSync(
   }
 
   assignLogEntries(afterTombstones.mergedEntries)
-  await advanceSyncWatermarks(supabaseEntries, options.tombstones ?? [])
+  await advanceSyncWatermarks(userId, supabaseEntries, options.tombstones ?? [])
 
   if (options.reconcileQueue !== false && reconcileRemoteDeletes) {
     await reconcileSyncQueue(userId, {
@@ -16828,7 +16853,7 @@ async function applyDeltaRemoteSync(
   userId: string
 ): Promise<number> {
   if (changedEntries.length === 0 && tombstones.length === 0) {
-    await setLastSuccessfulRemoteSyncAt(Date.now())
+    await setLastSuccessfulRemoteSyncAt(userId, Date.now())
     return 0
   }
 
@@ -16856,7 +16881,7 @@ async function backgroundDeltaRemoteSync(
   userId: string,
   idbEntries: Awaited<ReturnType<typeof getAllIDBLogEntriesForUser>>
 ): Promise<number> {
-  const watermark = await getRemoteSyncWatermark()
+  const watermark = await getRemoteSyncWatermark(userId)
   if (!watermark) {
     return backgroundFullRemoteSync(userId)
   }
@@ -16889,7 +16914,7 @@ async function syncInbound(
     : options.mode
 
   if (options.skipIfFresh && mode === 'delta') {
-    const lastSyncAt = await getLastSuccessfulRemoteSyncAt()
+    const lastSyncAt = await getLastSuccessfulRemoteSyncAt(userId)
     if (lastSyncAt != null && Date.now() - lastSyncAt < CACHE_FRESH_MS) {
       return 0
     }
@@ -16920,7 +16945,7 @@ async function syncInbound(
     }
   }
 
-  const lastSyncAt = await getLastSuccessfulRemoteSyncAt()
+  const lastSyncAt = await getLastSuccessfulRemoteSyncAt(userId)
   const cacheFresh =
     cachedEntryCount > 0 &&
     lastSyncAt != null &&
@@ -16996,7 +17021,7 @@ async function syncInbound(
 
     void (async () => {
       try {
-        const removed = await backgroundFullRemoteSync(userId)
+        const removed = await runExclusiveWithSyncQueue(() => backgroundFullRemoteSync(userId))
         updateIosSyncBanner('success', `${logEntries.value.length} entries loaded`)
         void removed
       } catch (err) {
@@ -17071,7 +17096,9 @@ async function persistSyncedEntriesToIndexedDB(
   remoteIds: Set<string>,
   userId: string
 ): Promise<void> {
-  const toPersist = entries.filter((entry) => remoteIds.has(entry.id))
+  // Never overwrite a local copy that still has a queued write (or delete) with the server copy.
+  const pendingIds = new Set((await getSyncQueue(userId)).map((item) => item.entryId))
+  const toPersist = entries.filter((entry) => remoteIds.has(entry.id) && !pendingIds.has(entry.id))
   for (let i = 0; i < toPersist.length; i += IDB_PERSIST_BATCH) {
     const batch = toPersist.slice(i, i + IDB_PERSIST_BATCH)
     await Promise.all(batch.map((entry) => saveSyncedEntryToIndexedDB(entry, userId)))
@@ -17176,15 +17203,13 @@ async function loadEntriesInternal(options: LoadEntriesOptions = {}): Promise<nu
           }
         } else {
           try {
-            inboundRemovedCount = await syncInbound(
-              user.value.id,
-              idbEntries,
-              idbEntries.length,
-              {
+            const inboundUserId = user.value.id
+            inboundRemovedCount = await runExclusiveWithSyncQueue(() =>
+              syncInbound(inboundUserId, idbEntries, idbEntries.length, {
                 mode: options.mode ?? 'auto',
                 skipIfFresh: options.skipIfFresh,
                 complete: options.complete,
-              }
+              })
             )
           } catch {
             // Error already logged and banner updated in syncInbound

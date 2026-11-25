@@ -506,21 +506,27 @@ function mergeCrewMembers(
   return out
 }
 
-function detectOwnRole(
+/**
+ * The pilot's own seat from the crew list. An employee id match anywhere in the list wins over
+ * any name match, and a whole-word last name wins over a substring (SMITH vs SMITHERS).
+ */
+export function detectOwnRole(
   crew: AirlineLegCrewMember[],
   opts: FlicaParseOptions
 ): 'PIC' | 'SIC' | null {
   const selfId = opts.selfEmployeeId
-  const selfLast = opts.selfLastName?.toUpperCase()
-  for (const m of crew) {
-    if (selfId && m.employeeId === selfId) {
-      return normalizeRoleFromPosition(m.position)
-    }
-    if (selfLast && m.name.toUpperCase().includes(selfLast)) {
-      return normalizeRoleFromPosition(m.position)
-    }
-  }
-  return null
+  const selfLast = opts.selfLastName?.trim().toUpperCase()
+
+  const byId = selfId ? crew.find((m) => m.employeeId === selfId) : undefined
+  if (byId) return normalizeRoleFromPosition(byId.position)
+  if (!selfLast) return null
+
+  const wholeWord = new RegExp(`(^|[^A-Z])${selfLast.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^A-Z])`)
+  const byWord = crew.find((m) => wholeWord.test(m.name.toUpperCase()))
+  if (byWord) return normalizeRoleFromPosition(byWord.position)
+
+  const bySubstring = crew.find((m) => m.name.toUpperCase().includes(selfLast))
+  return bySubstring ? normalizeRoleFromPosition(bySubstring.position) : null
 }
 
 function normalizeRoleFromPosition(position: string): 'PIC' | 'SIC' {

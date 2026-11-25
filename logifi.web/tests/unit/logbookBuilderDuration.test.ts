@@ -32,4 +32,18 @@ describe('logbook builder import durations', () => {
     expect(entry?.flightTime.pic).toBe(1.3)
     expect(entry?.performance.dayLandings).toBe(2)
   })
+
+  it('keeps the rolled year after a Dec→Jan rollover on a locked page', () => {
+    const columns: BuilderColumn[] = [
+      { id: 'date', fieldKey: 'date', label: 'Date', order: 0 },
+      { id: 'total', fieldKey: 'total', label: 'Total', order: 1 },
+    ]
+    const rows: BuilderRow[] = ['12/28', '1/31', '2/1', '2/5'].map((date) => ({
+      cells: { date, total: '1.0' },
+    }))
+
+    const dates = gridToEntries({ columns, rows, defaultYear: 2023 }).map((e) => e.date)
+    expect(dates).toEqual(['2023-12-28', '2024-01-31', '2024-02-01', '2024-02-05'])
+  })
 })
+
