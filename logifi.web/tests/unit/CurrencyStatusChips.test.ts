@@ -70,7 +70,7 @@ describe('CurrencyStatusChips', () => {
       },
     })
     const passengerButton = wrapper.findAll('button')[0]
-    expect(passengerButton?.text()).toBe('90-day: 3 T/O + 3 ldg to go')
+    expect(passengerButton?.text()).toBe('90-day: 3 T/O · 3 ldg')
     expect(passengerButton?.classes().join(' ')).toContain('bg-red-100')
     wrapper.unmount()
   })

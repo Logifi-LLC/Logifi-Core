@@ -21,7 +21,8 @@
         type="button"
         class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full px-2.5 py-1 text-xs font-medium font-quicksand transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-500"
         :class="chipClass(chip.status)"
-        :aria-label="`${chip.label}. Open currency details`"
+        :title="chip.title"
+        :aria-label="`${chip.title ?? chip.label}. Open currency details`"
         @click="$emit('open')"
       >
         {{ chip.label }}
@@ -33,7 +34,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { CurrencyStatus, CurrencyStatusType } from '~/utils/logbookTypes'
-import { formatCurrencyChipLabel } from '~/utils/currencyItemDisplay'
+import { formatCurrencyChipForChips } from '~/utils/currencyItemDisplay'
 import type { CurrencyChipKind } from '~/utils/currencyCalculator'
 import { CURRENCY_TRACKING_NEUTRAL_LABEL } from '~/utils/currencyHistoryPolicy'
 
@@ -62,7 +63,12 @@ const neutralChipClass = computed(() =>
 )
 
 const chips = computed(() => {
-  const items: { kind: CurrencyChipKind; label: string; status: CurrencyStatusType }[] = []
+  const items: {
+    kind: CurrencyChipKind
+    label: string
+    title?: string
+    status: CurrencyStatusType
+  }[] = []
   const kinds: { kind: CurrencyChipKind; currency: CurrencyStatus | null | undefined }[] = [
     { kind: 'passenger', currency: props.passengerCurrency },
     { kind: 'night', currency: props.nightCurrency },
@@ -71,9 +77,11 @@ const chips = computed(() => {
   ]
   for (const { kind, currency } of kinds) {
     if (!currency) continue
+    const display = formatCurrencyChipForChips(kind, currency)
     items.push({
       kind,
-      label: formatCurrencyChipLabel(kind, currency),
+      label: display.label,
+      title: display.title,
       status: currency.status,
     })
   }

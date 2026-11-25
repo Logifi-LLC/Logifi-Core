@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CurrencyStatus } from '../logbookTypes'
-import {
-  formatCurrencyChipLabel,
-  formatCurrencyChipShortDeficit,
-} from '../currencyItemDisplay'
+import { formatCurrencyChipForChips } from '../currencyItemDisplay'
 
 function status(partial: Partial<CurrencyStatus>): CurrencyStatus {
   return {
@@ -18,57 +15,53 @@ function status(partial: Partial<CurrencyStatus>): CurrencyStatus {
 describe('currencyItemDisplay', () => {
   const ref = new Date('2026-03-01T12:00:00')
 
-  it('formatCurrencyChipShortDeficit for night takeoffs and landings', () => {
-    expect(
-      formatCurrencyChipShortDeficit(
-        'night',
-        status({ takeoffs: 0, landings: 0, isCurrent: false })
-      )
-    ).toBe('Night: 3 T/O + 3 ldg to go')
-    expect(
-      formatCurrencyChipShortDeficit(
-        'night',
-        status({ takeoffs: 2, landings: 3, isCurrent: false })
-      )
-    ).toBe('Night: 1 T/O to go')
+  it('compact night deficit with middle dot', () => {
+    const display = formatCurrencyChipForChips(
+      'night',
+      status({ takeoffs: 0, landings: 0, isCurrent: false }),
+      ref
+    )
+    expect(display.label).toBe('Night: 3 T/O · 3 ldg')
+    expect(display.title).toMatch(/Needs 3 more takeoffs/)
   })
 
-  it('formatCurrencyChipShortDeficit for IFR approaches', () => {
+  it('single-axis deficit stays one fragment', () => {
     expect(
-      formatCurrencyChipShortDeficit(
-        'instrument',
-        status({ approaches: 4, isCurrent: false })
-      )
-    ).toBe('IFR: 2 appr to go')
+      formatCurrencyChipForChips(
+        'night',
+        status({ takeoffs: 2, landings: 3, isCurrent: false }),
+        ref
+      ).label
+    ).toBe('Night: 1 T/O')
   })
 
-  it('formatCurrencyChipLabel keeps current chip copy', () => {
+  it('IFR approach deficit is short with title', () => {
+    const display = formatCurrencyChipForChips(
+      'instrument',
+      status({ approaches: 4, isCurrent: false }),
+      ref
+    )
+    expect(display.label).toBe('IFR: 2 appr')
+    expect(display.title).toBe('Needs 2 more approaches')
+  })
+
+  it('keeps current chip copy when short', () => {
     expect(
-      formatCurrencyChipLabel(
+      formatCurrencyChipForChips(
         'passenger',
         status({ isCurrent: true, status: 'current', takeoffs: 3, landings: 3 }),
         ref
-      )
+      ).label
     ).toBe('90-day ✓ until Apr 12')
   })
 
-  it('formatCurrencyChipLabel uses deficit instead of generic expired', () => {
-    expect(
-      formatCurrencyChipLabel(
-        'night',
-        status({ takeoffs: 1, landings: 1, isCurrent: false, status: 'expired' }),
-        ref
-      )
-    ).toBe('Night: 2 T/O + 2 ldg to go')
-  })
-
-  it('formatCurrencyChipLabel keeps IFR IPC copy', () => {
-    expect(
-      formatCurrencyChipLabel(
-        'instrument',
-        status({ needsIpc: true, isCurrent: false, status: 'expired' }),
-        ref
-      )
-    ).toBe('IFR expired, needs IPC')
+  it('IFR IPC uses short chip and full title', () => {
+    const display = formatCurrencyChipForChips(
+      'instrument',
+      status({ needsIpc: true, isCurrent: false, status: 'expired' }),
+      ref
+    )
+    expect(display.label).toBe('IFR: IPC')
+    expect(display.title).toBe('IFR expired, needs IPC')
   })
 })
