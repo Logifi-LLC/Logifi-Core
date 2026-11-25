@@ -9989,76 +9989,7 @@ async function saveInlineEdit(): Promise<boolean> {
       )
       console.log('[SaveInlineEdit] Local state updated immediately with database result')
 
-      // Create audit log entry
-      try {
-        const changedFields: string[] = []
-        const oldData: any = {}
-        const newData: any = {}
-        
-        // Compare all fields
-        const fieldsToCompare = [
-          'date', 'role', 'aircraft_category_class', 'category_class_time',
-          'aircraft_make_model', 'registration', 'flight_number', 'departure',
-          'destination', 'route', 'training_elements', 'training_instructor',
-          'instructor_certificate', 'pic_name', 'sic_name', 'flight_conditions', 'remarks',
-          'tags', 'flight_time', 'performance', 'oooi', 'flagged'
-        ]
-        
-        fieldsToCompare.forEach(field => {
-          const oldVal = oldEntryData[field]
-          const newVal = dbEntry[field]
-          
-          // Deep comparison for objects/arrays
-          if (JSON.stringify(oldVal) !== JSON.stringify(newVal)) {
-            changedFields.push(field)
-            oldData[field] = oldVal
-            newData[field] = newVal
-          }
-        })
-        
-        if (changedFields.length > 0) {
-          // Create change summary
-          const summaryParts = changedFields.slice(0, 3).map(field => {
-            const fieldName = field.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
-            return fieldName
-          })
-          const changeSummary = changedFields.length > 3
-            ? `Updated ${summaryParts.join(', ')} and ${changedFields.length - 3} more field${changedFields.length - 3 > 1 ? 's' : ''}`
-            : `Updated ${summaryParts.join(', ')}`
-          
-          console.log('[SaveInlineEdit] Creating audit log:', {
-            entry_id: targetId,
-            user_id: user.value.id,
-            changed_fields_count: changedFields.length
-          })
-          
-          const { data: auditData, error: auditError } = await (supabase
-            .from('audit_logs') as any)
-            .insert({
-              entry_id: targetId,
-              user_id: user.value.id,
-              action: 'update',
-              old_data: oldData,
-              new_data: newData,
-              changed_fields: changedFields,
-              change_summary: changeSummary,
-              is_compliance_event: false
-            })
-            .select()
-            .single()
-          
-          if (auditError) {
-            console.error('[SaveInlineEdit] Failed to create audit log:', auditError)
-            console.error('[SaveInlineEdit] Audit error details:', JSON.stringify(auditError, null, 2))
-          } else {
-            console.log('[SaveInlineEdit] Audit log created successfully:', auditData)
-          }
-        } else {
-          console.log('[SaveInlineEdit] No fields changed, skipping audit log')
-        }
-      } catch (auditError) {
-        console.error('[SaveInlineEdit] Exception creating audit log:', auditError)
-      }
+      // The log_entries AFTER UPDATE trigger writes the audit row (old/new data, changed fields).
 
       // Verification is already done - we have the data from updateResult
       // No need to reload, we already updated local state with the returned data
@@ -16506,7 +16437,6 @@ async function removeEntry(id: string): Promise<void> {
   }
 
   let supabaseId = id
-  let entryData: Record<string, unknown> | null = null
   let existsOnServer = isValidUUID(id)
 
   if (!isValidUUID(id) && localEntry) {
@@ -16547,17 +16477,7 @@ async function removeEntry(id: string): Promise<void> {
   }
 
   try {
-    try {
-      const { data } = await (supabase
-        .from('log_entries') as any)
-        .select('*')
-        .eq('id', supabaseId)
-        .single()
-      entryData = data
-    } catch (err) {
-      console.warn('Could not fetch entry data for audit log:', err)
-    }
-
+    // The BEFORE DELETE trigger on log_entries writes the 'delete' audit row with the full old row.
     const { error } = await (supabase
       .from('log_entries') as any)
       .delete()
@@ -16574,25 +16494,6 @@ async function removeEntry(id: string): Promise<void> {
       console.warn('[RemoveEntry] Supabase delete failed; queueing for retry:', error)
       await addToQueue('delete', supabaseId, undefined, userId)
       return
-    }
-
-    if (entryData) {
-      try {
-        await (supabase
-          .from('audit_logs') as any)
-          .insert({
-            entry_id: supabaseId,
-            user_id: userId,
-            action: 'delete',
-            old_data: entryData,
-            new_data: null,
-            changed_fields: [],
-            change_summary: `Deleted log entry for ${entryData.date}`,
-            is_compliance_event: false,
-          })
-      } catch (auditError) {
-        console.warn('Failed to create audit log for deletion:', auditError)
-      }
     }
   } catch (error) {
     console.warn('[RemoveEntry] Delete failed; queueing for retry:', error)
