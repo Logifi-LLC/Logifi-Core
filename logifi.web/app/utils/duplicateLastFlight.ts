@@ -1,3 +1,4 @@
+import { localCalendarYmd } from '../../shared/localCalendarDate'
 import { sortEntriesByDateAndOOOI } from '../../shared/oooiSort'
 import { inferLogbookType } from './importSimulator'
 import {
@@ -28,6 +29,41 @@ function emptyHoursKeepingSimType(source: LogEntry) {
   if (source.flightTime?.ftd != null) flightTime.ftd = 0
   if (source.flightTime?.atd != null) flightTime.atd = 0
   return flightTime
+}
+
+/**
+ * Prefill a new entry from the latest flight: aircraft, route, role, and today's date.
+ * Hours, performance, OOOI, and amend metadata stay empty; caller must save explicitly.
+ */
+export function buildRepeatLastFlightDraft(
+  source: LogEntry,
+  todayYmd: string = localCalendarYmd()
+): EditableLogEntry {
+  return {
+    date: todayYmd,
+    role: source.role,
+    aircraftCategoryClass: source.aircraftCategoryClass,
+    categoryClassTime: null,
+    aircraftMakeModel: source.aircraftMakeModel,
+    registration: source.registration,
+    flightNumber: null,
+    departure: source.departure,
+    destination: source.destination,
+    route: source.route,
+    trainingElements: '',
+    trainingInstructor: '',
+    instructorCertificate: '',
+    picName: null,
+    sicName: null,
+    flightConditions: [],
+    remarks: '',
+    tags: [],
+    logbookType: inferLogbookType(source),
+    flightTime: emptyHoursKeepingSimType(source),
+    performance: createEmptyPerformance(),
+    oooi: createEmptyOOOI(),
+    flagged: false,
+  }
 }
 
 /** Copy aircraft/route/crew/date/logbookType. Hours, OOOI, and amend link stay empty. */

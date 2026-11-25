@@ -1154,6 +1154,22 @@
                 :is-dark-mode="isDarkMode"
                 @open="showCurrencyDashboard = true"
               />
+              <CurrencyOverviewCards
+                v-if="shouldShowCurrencyChips(showCurrencyChips) && hasAnyEntriesForActiveLogbook && !bootCurrencyPending"
+                :passenger-currency="passengerCurrency"
+                :night-currency="nightCurrency"
+                :instrument-currency="instrumentCurrency"
+                :flight-review-currency="flightReviewCurrency"
+                :passenger-currency-groups="passengerCurrencyGroups"
+                :insufficient-history="currencyHistoryInsufficient"
+                :is-dark-mode="isDarkMode"
+              />
+              <SoloEndorsementLine :is-dark-mode="isDarkMode" />
+              <AtpProgressPanel
+                v-if="hasAnyEntriesForActiveLogbook && totalsViewMode === 'flight'"
+                :entries="entriesForTotals"
+                :is-dark-mode="isDarkMode"
+              />
 <Transition
                 enter-active-class="transition ease-out duration-300"
                 enter-from-class="opacity-0 -translate-y-2"
@@ -3148,15 +3164,15 @@
 
               <!-- Simulator layout -->
               <template v-if="activeLogbook === 'simulator'">
-                <div v-if="duplicableLastEntry" class="flex items-center justify-end mb-2">
+                <div v-if="duplicableLastEntry && !editingEntryId" class="flex items-center justify-end mb-2">
                   <button
                     type="button"
-                    @click="duplicateLastFlight"
+                    @click="repeatLastFlight"
                     :class="['text-xs uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors',
                       isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200'
                     ]"
                   >
-                    Duplicate last
+                    Repeat last flight
                   </button>
                 </div>
                 <div class="grid gap-6">
@@ -3488,14 +3504,14 @@
                   {{ isCommercialMode ? 'OOOI Active' : '+ OOOI' }}
                 </button>
                 <button
-                  v-if="duplicableLastEntry"
+                  v-if="duplicableLastEntry && !editingEntryId"
                   type="button"
-                  @click="duplicateLastFlight"
+                  @click="repeatLastFlight"
                   :class="['text-xs uppercase font-bold tracking-wider px-2 py-0.5 rounded border transition-colors',
                     isDarkMode ? 'text-gray-500 border-gray-700' : 'text-gray-400 border-gray-200'
                   ]"
                 >
-                  Duplicate last
+                  Repeat last flight
                 </button>
               </div>
 
@@ -7029,6 +7045,9 @@ import AuthModal from '../components/AuthModal.vue'
 import { readStoredReferralCode } from '../utils/referralCapture'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
 import CurrencyStatusChips from '../components/logbook/CurrencyStatusChips.vue'
+import CurrencyOverviewCards from '../components/logbook/CurrencyOverviewCards.vue'
+import AtpProgressPanel from '../components/logbook/AtpProgressPanel.vue'
+import SoloEndorsementLine from '../components/logbook/SoloEndorsementLine.vue'
 import HeaderUtcClockBar from '../components/header/HeaderUtcClockBar.vue'
 import EndorsementsNavButton from '../components/endorsements/EndorsementsNavButton.vue'
 import EntryFieldError from '../components/logbook/EntryFieldError.vue'
@@ -7059,8 +7078,8 @@ import type { SettingsStackFrame, SettingsTabId } from '../components/settings/s
 import { migrateLocalStorageToSupabase, hasMigrationCompleted } from '../utils/migrateLocalStorage'
 import { findDuplicateEntries, checkDuplicatesWithLocalFallback } from '../utils/duplicateDetection'
 import {
-  buildDuplicatedDraft,
   findDuplicableLastEntry,
+  buildRepeatLastFlightDraft,
 } from '../utils/duplicateLastFlight'
 import {
   entryMatchesAviationSearch,
@@ -13883,10 +13902,15 @@ const duplicableLastEntry = computed(() =>
   findDuplicableLastEntry(logEntries.value, activeLogbook.value, supersededIdSet.value)
 )
 
-function duplicateLastFlight(): void {
+function repeatLastFlight(): void {
+  if (editingEntryId.value) return
   const source = duplicableLastEntry.value
   if (!source) return
-  openNewEntryForm(buildDuplicatedDraft(source))
+  const draft = buildRepeatLastFlightDraft(source)
+  Object.assign(newEntry, draft)
+  captureAddOooiDerivedTimeBaseline()
+  clearAddOooiFieldTouched()
+  xcTimeManuallySet.value = false
 }
 
 function toggleCatalogSection(key: CatalogKey): void {
