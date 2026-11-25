@@ -41,6 +41,7 @@ import {
 } from '~/utils/importSimulator'
 import { sanitizeFlightConditions } from '~/utils/flightConditions'
 import { normalizeDigifiDateCell } from '~/utils/digifiDateNormalize'
+import type { DigifiSpreadYearState } from '~/utils/digifiSpreadYear'
 import {
   customColumnTagsOnRows,
   deriveNightFromDayAndTotal,
@@ -132,6 +133,7 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
   const sortedCols = [...columns].sort((a, b) => a.order - b.order)
   const entries: LogEntry[] = []
   let lastDateIso: string | null = null
+  const spreadYear: DigifiSpreadYearState = { year: null }
 
   for (const row of builderRowsWithData(columns, rows)) {
     const cells = row.cells ?? {}
@@ -288,7 +290,7 @@ export function gridToEntries(options: GridToEntriesOptions): LogEntry[] {
       typeof defaultYear === 'number' && Number.isFinite(defaultYear)
         ? defaultYear
         : new Date().getFullYear()
-    date = normalizeDateWithRollover(date, defaultYear, lastDateIso)
+    date = normalizeDateWithRollover(date, defaultYear, lastDateIso, spreadYear)
     if (!date) {
       // Fallback to today's date in LOCAL calendar (not UTC to avoid timezone shifts)
       const now = new Date()

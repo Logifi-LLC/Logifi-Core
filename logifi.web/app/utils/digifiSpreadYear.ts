@@ -9,50 +9,32 @@ export function formatDigifiIsoDate(y: number, m: number, d: number): string {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
+/** Year in effect while resolving one page's rows in order. Start each sequence at { year: null }. */
+export interface DigifiSpreadYearState {
+  year: number | null
+}
+
 /**
  * Year for a spread row when the pilot locked defaultYear before scan.
- * Rolls to defaultYear + 1 only on Dec → Jan; duplicate/out-of-order days stay on defaultYear.
+ *
+ * The year in effect is `spreadYear` (the locked year until the spread rolls over). The only
+ * change is a December row followed by a January row, which rolls forward by exactly one year,
+ * never past defaultYear + 1. The rolled year then holds for the following rows. A later year
+ * from anywhere else (OCR, or a January row without the December before it) is ignored, and
+ * the year never moves backward.
  */
 export function resolveDigifiSpreadYear(
   m: number,
-  d: number,
+  _d: number,
   defaultYear: number,
-  lastDateIso?: string | null
+  lastDateIso?: string | null,
+  spreadYear?: number | null
 ): number {
-  if (!lastDateIso) return defaultYear
-  const last = parseDigifiIsoDateParts(lastDateIso)
-  if (!last) return defaultYear
-
-  if (last.m === m && last.d === d) {
-    if (last.y === defaultYear + 1 && last.m === 1 && last.d === 31) {
-      return defaultYear
-    }
-    if (last.y >= defaultYear && last.y <= defaultYear + 1) return last.y
-    return defaultYear
-  }
-
-  const atDefaultYear = new Date(defaultYear, m - 1, d).getTime()
-  const atLastYear = new Date(last.y, m - 1, d).getTime()
-  const lastTime = new Date(last.y, last.m - 1, last.d).getTime()
-
-  if (
-    last.y === defaultYear + 1 &&
-    last.m === 1 &&
-    last.d === 31 &&
-    m === 2 &&
-    d === 1
-  ) {
-    return defaultYear
-  }
-
-  // Continue January on the rolled year after Dec→Jan, not OCR-inflated years on the prior page.
-  if (last.y === defaultYear + 1 && last.m === 1 && atLastYear >= lastTime) {
-    return last.y
-  }
-
-  if (last.m === 12 && m === 1 && atDefaultYear < lastTime) {
-    return defaultYear + 1
-  }
-
-  return defaultYear
+  const base =
+    typeof spreadYear === 'number' && spreadYear >= defaultYear && spreadYear <= defaultYear + 1
+      ? spreadYear
+      : defaultYear
+  const last = lastDateIso ? parseDigifiIsoDateParts(lastDateIso) : null
+  if (last && last.m === 12 && m === 1) return Math.min(base + 1, defaultYear + 1)
+  return base
 }
