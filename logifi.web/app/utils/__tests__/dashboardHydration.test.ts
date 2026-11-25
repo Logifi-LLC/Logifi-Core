@@ -5,6 +5,7 @@ import {
   getDisplayedPilotInitials,
   isLogbookHydratedForUi,
   shouldShowCurrencyChips,
+  shouldShowAtpProgress,
 } from '../dashboardHydration'
 
 describe('shouldShowCurrencyChips', () => {
@@ -15,6 +16,17 @@ describe('shouldShowCurrencyChips', () => {
   it('shows chips only when the preference is true', () => {
     expect(shouldShowCurrencyChips(true)).toBe(true)
     expect(shouldShowCurrencyChips(false)).toBe(false)
+  })
+})
+
+describe('shouldShowAtpProgress', () => {
+  it('hides panel while pref is unset or false', () => {
+    expect(shouldShowAtpProgress(null)).toBe(false)
+    expect(shouldShowAtpProgress(false)).toBe(false)
+  })
+
+  it('shows panel when pref is true', () => {
+    expect(shouldShowAtpProgress(true)).toBe(true)
   })
 })
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildSupersededIdSet } from '../../app/utils/logEntryAmendments'
 import {
   buildDuplicatedDraft,
+  buildRepeatLastFlightDraft,
   findDuplicableLastEntry,
 } from '../../app/utils/duplicateLastFlight'
 import {
@@ -101,6 +102,24 @@ describe('findDuplicableLastEntry', () => {
         new Set()
       )
     ).toBeNull()
+  })
+})
+
+describe('buildRepeatLastFlightDraft', () => {
+  it('sets today, role, aircraft, route, and clears times', () => {
+    const source = entry({ id: 'src', remarks: 'note', trainingInstructor: 'CFI' })
+    const draft = buildRepeatLastFlightDraft(source, '2026-11-25')
+
+    expect(draft.date).toBe('2026-11-25')
+    expect(draft.role).toBe('PIC')
+    expect(draft.aircraftMakeModel).toBe('C172')
+    expect(draft.route).toBe('V97')
+    expect(draft.departure).toBe('KATL')
+    expect(draft.registration).toBe('N17XX')
+    expect(draft.trainingInstructor).toBe('')
+    expect(draft.remarks).toBe('')
+    expect(draft.flightTime).toEqual(createEmptyFlightTime())
+    expect(draft.performance).toEqual(createEmptyPerformance())
   })
 })
 
