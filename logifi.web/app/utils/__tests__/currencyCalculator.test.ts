@@ -501,6 +501,46 @@ describe('currencyCalculator', () => {
       expect(expired.needsIpc).toBe(true)
     })
 
+    describe('after the grace period has passed (61.57(d))', () => {
+      it('does not restore currency with approaches alone', () => {
+        const entries = [instrumentPack('2024-01-15'), instrumentPack('2025-06-10')]
+        const result = calculateInstrumentCurrency(entries, new Date(2025, 5, 15))
+        expect(result.isCurrent).toBe(false)
+        expect(result.status).toBe('expired')
+        expect(result.needsIpc).toBe(true)
+      })
+
+      it('stays expired later instead of showing a grace period from the post-lapse approaches', () => {
+        const entries = [instrumentPack('2024-01-15'), instrumentPack('2025-06-10')]
+        const result = calculateInstrumentCurrency(entries, new Date(2026, 0, 15))
+        expect(result.status).toBe('expired')
+        expect(result.needsIpc).toBe(true)
+      })
+
+      it('is restored by an IPC, and approaches after the IPC extend it', () => {
+        const entries = [
+          instrumentPack('2024-01-15'),
+          createTestEntry({ date: '2025-06-01', tags: ['IPC'] }),
+          instrumentPack('2025-11-10'),
+        ]
+        const result = calculateInstrumentCurrency(entries, new Date(2026, 2, 1))
+        expect(result.isCurrent).toBe(true)
+        expectYmd(result.expirationDate, '2026-05-31')
+      })
+
+      it('still lets approaches flown inside the grace period restore currency', () => {
+        const entries = [instrumentPack('2024-01-15'), instrumentPack('2024-11-10')]
+        const result = calculateInstrumentCurrency(entries, new Date(2024, 11, 1))
+        expect(result.isCurrent).toBe(true)
+        expectYmd(result.expirationDate, '2025-05-31')
+      })
+
+      it('counts experience when the logbook has no earlier instrument currency', () => {
+        const result = calculateInstrumentCurrency([instrumentPack('2025-06-10')], new Date(2025, 5, 15))
+        expect(result.isCurrent).toBe(true)
+      })
+    })
+
     it('does not treat IPC in remarks as an IPC', () => {
       const entries = [
         createTestEntry({

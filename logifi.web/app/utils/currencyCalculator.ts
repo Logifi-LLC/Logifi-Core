@@ -565,7 +565,11 @@ function instrumentLookbackStart(asOf: DateTime): DateTime {
   return asOf.startOf('month').minus({ months: 6 }).startOf('day')
 }
 
-function experienceCurrentUntilInWindow(entries: LogEntry[], start: DateTime, end: DateTime): DateTime | null {
+function instrumentExperienceInWindow(
+  entries: LogEntry[],
+  start: DateTime,
+  end: DateTime
+): { until: DateTime; oldestTask: DateTime } | null {
   const inWindow = entriesInWindow(entries, start, end).filter(isInstrumentRelated)
   const counts = instrumentTaskCounts(inWindow)
   if (!counts.isMet) return null
@@ -578,13 +582,43 @@ function experienceCurrentUntilInWindow(entries: LogEntry[], start: DateTime, en
     .filter((dt): dt is DateTime => dt !== null)
   if (limitingDates.length === 0) return null
   // Currency ages out with the earlier of the 6-approach cluster and the holding used.
-  return endOfNthCalendarMonthAfter(DateTime.min(...limitingDates), 6)
+  const oldestTask = DateTime.min(...limitingDates)
+  return { until: endOfNthCalendarMonthAfter(oldestTask, 6), oldestTask }
+}
+
+function instrumentGraceEnd(currentUntil: DateTime): DateTime {
+  return currentUntil.startOf('month').plus({ months: 6 }).endOf('month')
+}
+
+/**
+ * 61.57(d): once the grace period after the last currency has passed, only an IPC restores it,
+ * so experience whose oldest task falls after that grace period does not count. With no earlier
+ * instrument currency in the logbook (for example a new rating), experience counts.
+ */
+function experienceCurrentUntilInWindow(
+  entries: LogEntry[],
+  start: DateTime,
+  end: DateTime,
+  enforceLapse = true
+): DateTime | null {
+  const experience = instrumentExperienceInWindow(entries, start, end)
+  if (!experience) return null
+  if (enforceLapse) {
+    const prior = lastInstrumentCurrentUntil(entries, experience.oldestTask.minus({ days: 1 }), false)
+    if (prior && instrumentGraceEnd(prior) < experience.oldestTask) return null
+  }
+  return experience.until
 }
 
 /**
  * Most recent date through which 61.57(c) or an IPC (61.57(d)) kept the pilot current.
+ * `enforceLapse` false skips the IPC-after-grace check (used for the prior-history lookup).
  */
-function lastInstrumentCurrentUntil(entries: LogEntry[], ref: DateTime): DateTime | null {
+function lastInstrumentCurrentUntil(
+  entries: LogEntry[],
+  ref: DateTime,
+  enforceLapse = true
+): DateTime | null {
   const ipcUntil = ipcCurrentUntil(entries, ref)
 
   const monthKeys = new Set<string>()
@@ -601,7 +635,7 @@ function lastInstrumentCurrentUntil(entries: LogEntry[], ref: DateTime): DateTim
     const [year, month] = key.split('-').map(Number)
     const monthEnd = DateTime.local(year, month, 1).endOf('month')
     const asOf = monthEnd < ref ? monthEnd : ref
-    const until = experienceCurrentUntilInWindow(entries, instrumentLookbackStart(asOf), asOf)
+    const until = experienceCurrentUntilInWindow(entries, instrumentLookbackStart(asOf), asOf, enforceLapse)
     if (until) {
       experienceUntil = until
       break
@@ -645,7 +679,7 @@ export function calculateInstrumentCurrency(
     const daysRemaining = daysRemainingOnOrBefore(currentUntil, refDate)
     const monthsRemaining = currentUntil.diff(refDate, 'months').months
     const status: CurrencyStatusType = monthsRemaining < 2 ? 'expiring_soon' : 'current'
-    const gracePeriodEndsAt = currentUntil.startOf('month').plus({ months: 6 }).endOf('month')
+    const gracePeriodEndsAt = instrumentGraceEnd(currentUntil)
     return {
       isCurrent: true,
       monthsRemaining,
@@ -663,7 +697,7 @@ export function calculateInstrumentCurrency(
 
   const lastUntil = lastInstrumentCurrentUntil(entries, refDate)
   if (lastUntil) {
-    const graceUntil = lastUntil.startOf('month').plus({ months: 6 }).endOf('month')
+    const graceUntil = instrumentGraceEnd(lastUntil)
     if (refDate <= graceUntil) {
       return {
         isCurrent: false,
