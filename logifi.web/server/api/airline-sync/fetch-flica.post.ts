@@ -362,12 +362,7 @@ export default defineEventHandler(async (event) => {
       .eq('id', integration.id)
 
     if (e instanceof FlicaClientError) {
-      const status =
-        e.code === 'login_failed' || e.code === 'mfa_required'
-          ? 401
-          : e.code === 'schedule_not_found'
-            ? 502
-            : 502
+      const status = e.code === 'login_failed' || e.code === 'mfa_required' ? 401 : 502
       throw createError({ statusCode: status, statusMessage: message })
     }
     throw createError({ statusCode: 502, statusMessage: message })
