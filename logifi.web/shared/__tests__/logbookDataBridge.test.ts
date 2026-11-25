@@ -808,6 +808,39 @@ describe('logbookDataBridge export', () => {
     expect(obj['TotalTime']).toBe('1.5')
   })
 
+  it('carries logged takeoffs through ForeFlight and LogTen export and re-import', () => {
+    const logged = createTestEntry()
+    logged.performance = { ...logged.performance, dayTakeoffs: 2, nightTakeoffs: 1, dayLandings: 3, nightLandings: 1 }
+
+    const ff = buildHeaderRowObject(FOREFLIGHT_FLIGHT_HEADERS, mapEntryToForeFlightFlightRow(logged))
+    expect([ff['DayTakeoffs'], ff['NightTakeoffs']]).toEqual(['2', '1'])
+    const ffBack = mapRawRowToLogEntry(ff, { source: 'foreflight' })
+    expect([ffBack?.performance.dayTakeoffs, ffBack?.performance.nightTakeoffs]).toEqual([2, 1])
+
+    const lt = buildHeaderRowObject(LOGTEN_HEADERS, mapEntryToLogTenRow(logged))
+    expect([lt.flight_dayTakeoffs, lt.flight_nightTakeoffs]).toEqual(['2', '1'])
+    const ltBack = mapRawRowToLogEntry(lt, { source: 'logten' })
+    expect([ltBack?.performance.dayTakeoffs, ltBack?.performance.nightTakeoffs]).toEqual([2, 1])
+  })
+
+  it('leaves takeoffs blank on export when they were not logged', () => {
+    const notLogged = createTestEntry()
+    notLogged.performance = { ...notLogged.performance, dayTakeoffs: null, nightTakeoffs: null, dayLandings: 3 }
+
+    const ff = buildHeaderRowObject(FOREFLIGHT_FLIGHT_HEADERS, mapEntryToForeFlightFlightRow(notLogged))
+    expect(ff['DayTakeoffs']).toBe('')
+    expect(mapRawRowToLogEntry(ff, { source: 'foreflight' })?.performance.dayTakeoffs).toBeNull()
+
+    const lt = buildHeaderRowObject(LOGTEN_HEADERS, mapEntryToLogTenRow(notLogged))
+    expect(lt.flight_dayTakeoffs).toBe('')
+    expect(mapRawRowToLogEntry(lt, { source: 'logten' })?.performance.dayTakeoffs).toBeNull()
+  })
+
+  it('does not add takeoff columns to formats that have none', () => {
+    expect(MYFLIGHTBOOK_HEADERS.some((h) => /takeoff|t\/o/i.test(h))).toBe(false)
+    expect(GENERIC_HEADERS.some((h) => /takeoff|t\/o/i.test(h))).toBe(false)
+  })
+
   it('maps LogTen flat keys', () => {
     const row = mapEntryToLogTenRow(createTestEntry())
     const obj = buildHeaderRowObject(LOGTEN_HEADERS, row)

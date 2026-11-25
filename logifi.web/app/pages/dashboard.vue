@@ -2427,6 +2427,14 @@
              <!-- Performance Inline -->
              <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2']">
                <div>
+                  <label for="edit-dayTakeoffs" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day T/O</label>
+                  <input id="edit-dayTakeoffs" v-model.number="inlineEditEntry.performance.dayTakeoffs" type="number" min="0" :placeholder="inlineEditEntry.performance.dayLandings != null ? String(inlineEditEntry.performance.dayLandings) : ''" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner placeholder:text-gray-600' : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400']" />
+               </div>
+               <div>
+                  <label for="edit-nightTakeoffs" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night T/O</label>
+                  <input id="edit-nightTakeoffs" v-model.number="inlineEditEntry.performance.nightTakeoffs" type="number" min="0" :placeholder="inlineEditEntry.performance.nightLandings != null ? String(inlineEditEntry.performance.nightLandings) : ''" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner placeholder:text-gray-600' : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400']" />
+               </div>
+               <div>
                   <label for="edit-dayLandings" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day Ldg</label>
                   <input id="edit-dayLandings" v-model.number="inlineEditEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />
                </div>
@@ -3769,6 +3777,14 @@
 
                <!-- Performance -->
                <div :class="['grid gap-4', isIos ? 'entry-grid-ios-2' : 'grid-cols-1 sm:grid-cols-2']">
+                 <div>
+                    <label for="entry-dayTakeoffs" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day T/O</label>
+                    <input id="entry-dayTakeoffs" v-model.number="newEntry.performance.dayTakeoffs" type="number" min="0" :placeholder="newEntry.performance.dayLandings != null ? String(newEntry.performance.dayLandings) : ''" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner placeholder:text-gray-600' : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400']" />
+                 </div>
+                 <div>
+                    <label for="entry-nightTakeoffs" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Night T/O</label>
+                    <input id="entry-nightTakeoffs" v-model.number="newEntry.performance.nightTakeoffs" type="number" min="0" :placeholder="newEntry.performance.nightLandings != null ? String(newEntry.performance.nightLandings) : ''" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner placeholder:text-gray-600' : 'bg-white border-gray-300 text-gray-900 placeholder:text-gray-400']" />
+                 </div>
                  <div>
                     <label for="entry-dayLandings" :class="['block text-xs uppercase font-bold mb-1', isDarkMode ? 'text-gray-500' : 'text-gray-400']">Day Ldg</label>
                     <input id="entry-dayLandings" v-model.number="newEntry.performance.dayLandings" type="number" min="0" :class="['w-full rounded border px-2 py-1 text-sm text-center font-mono', isDarkMode ? 'bg-black/20 border-white/10 text-white shadow-inner' : 'bg-white border-gray-300 text-gray-900']" />

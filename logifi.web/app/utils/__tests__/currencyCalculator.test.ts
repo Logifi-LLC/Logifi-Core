@@ -57,6 +57,56 @@ describe('currencyCalculator', () => {
     ...overrides
   })
 
+  describe('takeoffs (61.57(a)/(b) need takeoffs and landings)', () => {
+    const perf = (p: Partial<LogEntry['performance']>): LogEntry['performance'] => ({
+      dayTakeoffs: null,
+      nightTakeoffs: null,
+      dayLandings: null,
+      nightLandings: null,
+      approachCount: null,
+      holdingProcedures: null,
+      ...p,
+    })
+    const today = new Date(2024, 2, 15)
+
+    it('counts takeoffs that were not logged as the landings, as before', () => {
+      const entries = [createTestEntry({ date: '2024-03-01', performance: perf({ dayLandings: 3 }) })]
+      const result = calculatePassengerCurrency(entries, today)
+      expect(result.isCurrent).toBe(true)
+      expect(result.takeoffs).toBe(3)
+      expect(result.landings).toBe(3)
+    })
+
+    it('requires the logged takeoffs, not landings, once takeoffs are entered', () => {
+      const entries = [
+        createTestEntry({ date: '2024-03-01', performance: perf({ dayTakeoffs: 1, dayLandings: 3 }) }),
+      ]
+      const result = calculatePassengerCurrency(entries, today)
+      expect(result.isCurrent).toBe(false)
+      expect(result.takeoffs).toBe(1)
+    })
+
+    it('treats an explicit 0 as no takeoffs', () => {
+      const entries = [
+        createTestEntry({ date: '2024-03-01', performance: perf({ nightTakeoffs: 0, nightLandings: 3 }) }),
+      ]
+      expect(calculateNightCurrency(entries, today).isCurrent).toBe(false)
+    })
+
+    it('adds day and night takeoffs and defaults each side on its own', () => {
+      const entries = [
+        createTestEntry({
+          date: '2024-03-01',
+          performance: perf({ dayTakeoffs: 1, dayLandings: 1, nightLandings: 2 }),
+        }),
+      ]
+      const passenger = calculatePassengerCurrency(entries, today)
+      expect(passenger.takeoffs).toBe(3)
+      expect(passenger.isCurrent).toBe(true)
+      expect(calculateNightCurrency(entries, today).takeoffs).toBe(2)
+    })
+  })
+
   describe('calculatePassengerCurrency', () => {
     it('should return expired status when no entries provided', () => {
       const result = calculatePassengerCurrency([])
@@ -327,9 +377,9 @@ describe('currencyCalculator', () => {
             crossCountry: null,
           },
           performance: {
-            dayTakeoffs: 0,
+            dayTakeoffs: null,
             dayLandings: 0,
-            nightTakeoffs: 0,
+            nightTakeoffs: null,
             nightLandings: 3,
             approachCount: null,
             holdingProcedures: null,
