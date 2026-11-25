@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fcvFlightToAirlineLeg, mapAirlineLegToFcvMappedEntry } from '../airlineLeg'
+import { isDeadheadMappedFlight } from '../../../shared/airlineOwnRole'
 import type { FcvFlight } from '../fcvMap'
 
 describe('fcvFlightToAirlineLeg', () => {
@@ -642,5 +643,40 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       block_minutes: 67,
     })
     expect(entry.tags).toEqual(['Deadhead'])
+  })
+})
+
+describe('deadhead legs', () => {
+  it('log no seat, cross-country or night time and need no seat', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20261103_9001_SEA',
+      import_source: 'flica_aerodatabox',
+      flight_number: '9001',
+      trip_number: 'T0000',
+      role: 'SIC',
+      dep_airport: 'SEA',
+      arr_airport: 'PDX',
+      scheduled_out_local: '2026-11-03 18:30:00',
+      scheduled_in_local: '2026-11-03 19:40:00',
+      actual_out_local: '2026-11-03 18:32:00',
+      actual_in_local: '2026-11-03 19:38:00',
+      actual_off_local: '2026-11-03 18:45:00',
+      actual_on_local: '2026-11-03 19:30:00',
+      fcv_tail_number: 'N900ZZ',
+      fcv_aircraft_type: 'E75',
+      crew: [
+        { position: 'CA', name: 'DOE, JANE' },
+        { position: 'FO', name: 'ROE, RICHARD' },
+      ],
+      is_deadhead: true,
+      block_minutes: 66,
+    })
+
+    expect(entry.flight_time).toEqual({})
+    expect(entry.category_class_time).toBeNull()
+    expect(entry.flight_conditions).toEqual([])
+    expect(entry.performance).toEqual({})
+    expect(entry.tags).toEqual(['Deadhead'])
+    expect(isDeadheadMappedFlight(entry)).toBe(true)
   })
 })

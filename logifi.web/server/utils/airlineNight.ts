@@ -23,6 +23,8 @@ export function applyAirlineNightToMappedEntry(
     isDeadhead?: boolean
   }
 ): void {
+  if (raw.isDeadhead) return
+
   const result = computeAirlineNight(
     {
       depCode: entry.departure,
@@ -40,7 +42,7 @@ export function applyAirlineNightToMappedEntry(
     entry.flight_time = { ...entry.flight_time, night: result.nightHours }
   }
 
-  if (raw.isDeadhead || result.isNightLanding == null) return
+  if (result.isNightLanding == null) return
 
   entry.performance = {
     ...entry.performance,

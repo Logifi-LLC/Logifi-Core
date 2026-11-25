@@ -225,7 +225,7 @@ describe('mapFcvFlightToEntry', () => {
     expect(e.route).toBeNull()
     expect(e.remarks).toBeNull()
     expect(e.tags).toEqual(['Deadhead'])
-    expect(e.flight_conditions).toEqual(['ifr'])
+    expect(e.flight_conditions).toEqual([])
     expect(e.import_metadata?.fcv_raw).toMatchObject({
       fcv_flight_id: '4',
       extra_field: 'kept',

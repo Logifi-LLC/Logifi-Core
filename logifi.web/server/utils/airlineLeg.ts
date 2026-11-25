@@ -302,11 +302,12 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
   const otherCrew = ownRole ? extractOtherCrewFromLeg(leg, ownRole) : null
   const otherPilotName = otherCrew?.name.trim() || null
   const otherPilotLabel = otherPilotName ? (otherCrew?.label ?? null) : null
-  const flight_time = buildFlightTimeForLeg(blockHours, dep, arr, ownRole)
+  // A deadhead is positioning as a passenger: no loggable flight time or conditions.
+  const flight_time = leg.is_deadhead ? {} : buildFlightTimeForLeg(blockHours, dep, arr, ownRole)
   const xcRaw = flight_time.crossCountry
   const xcHours =
     typeof xcRaw === 'number' && Number.isFinite(xcRaw) && xcRaw > 0 ? xcRaw : null
-  const flight_conditions = buildFlightConditions(xcHours)
+  const flight_conditions = leg.is_deadhead ? [] : buildFlightConditions(xcHours)
 
   const importSource = leg.import_source
 
@@ -315,7 +316,7 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
     date: date || '',
     role: ownRole ?? '',
     aircraft_category_class: mapAircraftCategoryClass(sourceCategory),
-    category_class_time: blockHours,
+    category_class_time: leg.is_deadhead ? null : blockHours,
     aircraft_make_model: aircraftType || 'Unknown',
     registration,
     flight_number: fn,

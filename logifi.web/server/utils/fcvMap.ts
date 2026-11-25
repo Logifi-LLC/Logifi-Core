@@ -618,18 +618,20 @@ export function mapFcvFlightToEntry(flight: FcvFlight): FcvMappedEntry {
   const unmatched = ownRole == null
   const crewListed = listFcvCrew(flight)
   const otherCrew = extractOtherCrew(flight, ownRole)
-  const flight_time = buildFlightTimeForFcv(blockHours, dep, arr, ownRole)
+  // A deadhead is positioning as a passenger: no loggable flight time or conditions.
+  const isDeadhead = flight.is_deadhead === 1 || flight.is_deadhead === true
+  const flight_time = isDeadhead ? {} : buildFlightTimeForFcv(blockHours, dep, arr, ownRole)
   const xcRaw = flight_time.crossCountry
   const xcHours =
     typeof xcRaw === 'number' && Number.isFinite(xcRaw) && xcRaw > 0 ? xcRaw : null
-  const flight_conditions = buildFcvFlightConditions(xcHours)
+  const flight_conditions = isDeadhead ? [] : buildFcvFlightConditions(xcHours)
 
   const mapped: FcvMappedEntry = {
     fcv_flight_id: fcvId,
     date: date || '',
     role: ownRole ?? '',
     aircraft_category_class: mapAircraftCategoryClass(sourceCategory),
-    category_class_time: blockHours,
+    category_class_time: isDeadhead ? null : blockHours,
     aircraft_make_model: aircraftType || 'Unknown',
     registration,
     flight_number: fn,
@@ -672,7 +674,7 @@ export function mapFcvFlightToEntry(flight: FcvFlight): FcvMappedEntry {
     outLocal: pickOutLocalDatetimeForGateDuration(flight) ?? null,
     inLocal: pickInLocalDatetimeForGateDuration(flight) ?? null,
     onLocal: typeof flight.actual_on_local === 'string' ? flight.actual_on_local : null,
-    isDeadhead: flight.is_deadhead === 1 || flight.is_deadhead === true,
+    isDeadhead,
   })
   return mapped
 }

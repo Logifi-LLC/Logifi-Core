@@ -106,3 +106,9 @@ export function formatListedCrewHint(
   if (!listed) return 'You were not found on the crew list.'
   return `Crew listed: ${listed} — you were not found.`
 }
+
+/** Deadhead legs log no seat time, so they never need a PIC/SIC seat before import. */
+export function isDeadheadMappedFlight(flight: { import_metadata?: unknown }): boolean {
+  const meta = flight.import_metadata as { is_deadhead?: unknown } | null | undefined
+  return meta?.is_deadhead === true || meta?.is_deadhead === 1
+}
