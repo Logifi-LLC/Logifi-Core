@@ -387,3 +387,17 @@ describe('mapFcvFlightToEntry', () => {
     expect(e.aircraft_category_class).toBe('AMEL')
   })
 })
+
+describe('mapFcvFlightToEntry entry date', () => {
+  it('uses the block-out date when takeoff is after midnight', () => {
+    const e = mapFcvFlightToEntry({
+      fcv_flight_id: 'date-1',
+      scheduled_out_local: '2026-11-04 23:40:00',
+      actual_out_local: '2026-11-04 23:52:00',
+      actual_off_local: '2026-11-05 00:15:00',
+      dep_airport: 'SEA',
+      arr_airport: 'PDX',
+    })
+    expect(e.date).toBe('2026-11-04')
+  })
+})

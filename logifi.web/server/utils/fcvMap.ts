@@ -569,8 +569,9 @@ function extractOtherCrew(
   return { name: picked.name, label: picked.label, rawName: picked.name }
 }
 
+/** Logbook date is the block-out date; takeoff can fall after midnight on a late push. */
 function primaryDepartureLocal(f: FcvFlight): string | undefined {
-  const candidates = [f.actual_off_local, f.actual_out_local, f.scheduled_out_local]
+  const candidates = [f.actual_out_local, f.actual_off_local, f.scheduled_out_local]
   for (const c of candidates) {
     if (typeof c === 'string' && c.length >= 10) return c
   }

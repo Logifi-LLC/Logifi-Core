@@ -680,3 +680,29 @@ describe('deadhead legs', () => {
     expect(isDeadheadMappedFlight(entry)).toBe(true)
   })
 })
+
+describe('entry date', () => {
+  it('uses the block-out date when takeoff is after midnight', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20261104_9003_SEA',
+      import_source: 'flica_aerodatabox',
+      flight_number: '9003',
+      trip_number: 'T0000',
+      role: 'PIC',
+      dep_airport: 'SEA',
+      arr_airport: 'PDX',
+      scheduled_out_local: '2026-11-04 23:40:00',
+      scheduled_in_local: '2026-11-05 00:50:00',
+      actual_out_local: '2026-11-04 23:52:00',
+      actual_in_local: '2026-11-05 01:05:00',
+      actual_off_local: '2026-11-05 00:15:00',
+      actual_on_local: '2026-11-05 00:58:00',
+      fcv_tail_number: 'N900ZZ',
+      fcv_aircraft_type: 'E75',
+      crew: [{ position: 'CA', name: 'DOE, JANE' }],
+      is_deadhead: false,
+      block_minutes: 73,
+    })
+    expect(entry.date).toBe('2026-11-04')
+  })
+})
