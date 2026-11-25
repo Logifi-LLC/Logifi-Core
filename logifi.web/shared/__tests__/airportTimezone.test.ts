@@ -11,6 +11,19 @@ describe('normalizeTimezoneToIANA', () => {
     expect(normalizeTimezoneToIANA('-5')).toBe('America/New_York')
     expect(normalizeTimezoneToIANA('UTC-6')).toBe('America/Chicago')
   })
+
+  it('does not flip unsigned positive offsets to US zones', () => {
+    expect(normalizeTimezoneToIANA('9')).toBeNull()
+    expect(normalizeTimezoneToIANA('8')).toBeNull()
+    expect(normalizeTimezoneToIANA('10')).toBeNull()
+    expect(normalizeTimezoneToIANA('+9')).toBeNull()
+  })
+
+  it('returns null for offsets Luxon cannot use as a zone', () => {
+    expect(normalizeTimezoneToIANA('0')).toBeNull()
+    expect(normalizeTimezoneToIANA('5.5')).toBeNull()
+    expect(normalizeTimezoneToIANA('1')).toBeNull()
+  })
 })
 
 describe('getAirportIanaTimezone', () => {
