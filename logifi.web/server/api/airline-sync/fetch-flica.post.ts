@@ -288,7 +288,7 @@ export default defineEventHandler(async (event) => {
   const { data: integration, error: loadErr } = await supabase
     .from('flica_integrations')
     .select(
-      'id, username, password_ciphertext, password_nonce, portal_host, airline_code'
+      'id, username, password_ciphertext, password_nonce, airline_code'
     )
     .eq('user_id', userId)
     .eq('airline_code', portal.airlineCode)
@@ -321,7 +321,8 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const host = integration.portal_host || portal.host
+  // portal_host is user-writable under RLS; only connect to the carrier table's host.
+  const host = portal.host
   const nowMs = Date.now()
   const todayYmd = DateTime.fromMillis(nowMs, { zone: FLICA_DEFAULT_NOW_ZONE }).toFormat(
     'yyyy-MM-dd'
@@ -361,12 +362,7 @@ export default defineEventHandler(async (event) => {
       .eq('id', integration.id)
 
     if (e instanceof FlicaClientError) {
-      const status =
-        e.code === 'login_failed' || e.code === 'mfa_required'
-          ? 401
-          : e.code === 'schedule_not_found'
-            ? 502
-            : 502
+      const status = e.code === 'login_failed' || e.code === 'mfa_required' ? 401 : 502
       throw createError({ statusCode: status, statusMessage: message })
     }
     throw createError({ statusCode: 502, statusMessage: message })

@@ -100,6 +100,24 @@ describe('useCurrency', () => {
     expect(annualRequirements.value?.isCurrent).toBe(true)
   })
 
+  it('ignores a voided flight review and its superseded original', () => {
+    const { calculateAllCurrency, flightReviewCurrency } = useCurrency()
+    calculateAllCurrency(
+      [
+        createTestEntry({ id: 'orig', date: '2024-01-10', tags: ['Flight Review'] }),
+        createTestEntry({
+          id: 'void-1',
+          date: '2024-01-10',
+          tags: ['Flight Review'],
+          amendsEntryId: 'orig',
+          isVoid: true,
+        }),
+      ],
+      new Date(2025, 0, 15)
+    )
+    expect(flightReviewCurrency.value?.status).toBe('missing')
+  })
+
   it('does not treat remarks as a flight review', () => {
     const { calculateAllCurrency, flightReviewCurrency } = useCurrency()
     calculateAllCurrency(

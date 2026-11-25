@@ -698,6 +698,9 @@ function applyLogifiNativeCsvFields(
   entry: LogEntry,
   rawEntry: Record<string, unknown>
 ): void {
+  const role = findFieldValue(rawEntry, ['Role', 'role', 'ROLE']).slice(0, 64)
+  if (role) entry.role = role
+
   if (hasField(rawEntry, NATIVE_CATEGORY_CLASS_TIME_FIELDS)) {
     entry.categoryClassTime = parseImportDuration(
       findFieldValue(rawEntry, NATIVE_CATEGORY_CLASS_TIME_FIELDS)

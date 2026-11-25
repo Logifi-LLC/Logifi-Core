@@ -8,6 +8,7 @@ import {
 } from '../../app/utils/digifiSpreadYear'
 import type { LogbookColumnKey } from '../../app/utils/logbookTypes'
 import { normalizeDigifiRemarksCell } from '../../app/utils/digifiRemarksNormalize'
+import { parseImportDuration } from '../../shared/logbookDataBridge/formatters'
 
 const NUMERIC_KEYS: Set<LogbookColumnKey> = new Set([
   'pic',
@@ -36,9 +37,15 @@ export function splitAirportCodes(value: string): string[] {
   return matches ?? []
 }
 
+const CLOCK_DURATION_RE = /^\d+\s*[:+]\s*\d{1,2}$/
+
 function normalizeNumeric(val: string): string {
   const s = val.replace(/\$/g, '').replace(/,/g, '').trim()
   if (!s) return ''
+  if (CLOCK_DURATION_RE.test(s)) {
+    const hours = parseImportDuration(s)
+    return hours == null ? s : String(hours)
+  }
   const n = parseFloat(s)
   if (!Number.isFinite(n) || n < 0) return s
   return String(Math.round(n * 10) / 10)

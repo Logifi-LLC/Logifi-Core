@@ -183,10 +183,7 @@ function gateDurationMinutesTimezoneAware(
   const inDT = parseFcvLocalDatetimeInZone(inStr, arrTz)
   if (!outDT || !inDT) return null
   let diffMin = inDT.toUTC().diff(outDT.toUTC(), 'minutes').minutes
-  if (diffMin < 0) {
-    if (diffMin < -12 * 60) diffMin += 24 * 60
-    else diffMin += 24 * 60
-  }
+  if (diffMin < 0) diffMin += 24 * 60
   if (diffMin <= 0 || diffMin > 24 * 60) return null
   return diffMin
 }

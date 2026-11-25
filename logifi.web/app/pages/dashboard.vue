@@ -11336,7 +11336,12 @@ function loadClockPrefs(): void {
 }
 
 function handleExportCsv(entries?: LogEntry[]): void {
-  const list = entries ?? logEntries.value
+  const scoped = entries ?? logEntries.value
+  // Logifi CSV is a lossless backup; other apps have no amend/void model and would double count.
+  const list =
+    exportDestination.value === 'logifi-native'
+      ? scoped
+      : scoped.filter((e) => e.isVoid !== true && !supersededIdSet.value.has(e.id))
   if (list.length === 0) return
 
   const baseDate = new Date().toISOString().split('T')[0] ?? ''
@@ -11972,7 +11977,10 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
       }
     }
 
-    const matches = findDuplicateEntries(entry, logEntries.value)
+    const matches = [
+      ...findDuplicateEntries(entry, logEntries.value),
+      ...findDuplicateEntries(entry, toInsert),
+    ]
     if (matches.length > 0 && !importDuplicates) {
       const incomingTags = Array.isArray(entry.tags) ? entry.tags : []
       if (incomingTags.length > 0) {
@@ -15089,55 +15097,6 @@ const crewStats = computed(() => {
     lastFlight
   }
 })
-
-async function beginEditing(entry: LogEntry): Promise<void> {
-  editingEntryId.value = entry.id
-  newEntry.date = normalizeDateForInput(entry.date)
-  newEntry.role = entry.role
-  newEntry.aircraftCategoryClass = entry.aircraftCategoryClass ? normalizeCategoryClassLabel(entry.aircraftCategoryClass) : ''
-  newEntry.categoryClassTime = entry.categoryClassTime
-  newEntry.aircraftMakeModel = entry.aircraftMakeModel
-  newEntry.registration = entry.registration
-  newEntry.departure = entry.departure
-  newEntry.destination = entry.destination
-  newEntry.route = entry.route
-  newEntry.trainingElements = entry.trainingElements
-  newEntry.trainingInstructor = entry.trainingInstructor
-  newEntry.instructorCertificate = entry.instructorCertificate
-  newEntry.picName = entry.picName ?? null
-  newEntry.sicName = entry.sicName ?? null
-  newEntry.flightConditions = sanitizeFlightConditions(entry.flightConditions || [])
-  newEntry.remarks = entry.remarks
-  Object.assign(newEntry.flightTime, entry.flightTime)
-  Object.assign(newEntry.performance, entry.performance)
-  // Reset manual XC time tracking when editing (assume existing values are intentional)
-  xcTimeManuallySet.value = entry.flightTime.crossCountry ? true : false
-  if (entry.flightTime.night != null) addFormTouched.night = true
-  lastKnownXcTime.value = entry.flightTime.crossCountry ?? null
-  if (entry.oooi) {
-    newEntry.oooi = { ...entry.oooi }
-    const hasOOOITimes =
-      !!(
-        (entry.oooi.out && entry.oooi.out.trim()) ||
-        (entry.oooi.off && entry.oooi.off.trim()) ||
-        (entry.oooi.on && entry.oooi.on.trim()) ||
-        (entry.oooi.in && entry.oooi.in.trim())
-      )
-    isCommercialMode.value = hasOOOITimes
-  } else {
-    newEntry.oooi = createEmptyOOOI()
-    isCommercialMode.value = false
-  }
-  captureAddOooiDerivedTimeBaseline()
-  validationError.value = null
-  successMessage.value = null
-  isEntryFormOpen.value = false
-
-  // If category/class is missing, try to populate from aircraft lookup
-  if (!newEntry.aircraftCategoryClass && newEntry.registration) {
-    tryPopulateAircraftCategory(newEntry.registration)
-  }
-}
 
 function deriveCategoryFromText(text: string): string {
   const t = (text || '').toLowerCase()

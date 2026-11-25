@@ -1,4 +1,1 @@
-export {
-  rowHasThinFlightIdentity,
-  sanitizeDigifiScanRows,
-} from '../../app/utils/digifiScanSanitize'
+export { sanitizeDigifiScanRows } from '../../app/utils/digifiScanSanitize'

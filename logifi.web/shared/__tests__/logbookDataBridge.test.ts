@@ -295,6 +295,13 @@ describe('logbookDataBridge formatters', () => {
     expect(parseImportDate('4/5/26')).toBe('2026-04-05')
   })
 
+  it('keeps the written calendar day for ISO timestamps with a zone', () => {
+    expect(parseImportDate('2026-08-29T00:00:00.000Z')).toBe('2026-08-29')
+    expect(parseImportDate('2026-08-29T23:30:00-05:00')).toBe('2026-08-29')
+    expect(parseImportDate('2024-06-13 14:30')).toBe('2024-06-13')
+    expect(parseImportDate('2026-15-04T00:00:00Z')).toBeNull()
+  })
+
   it('builds full route strings', () => {
     expect(buildFullRoute('KIND', '', 'KORD')).toBe('KIND KORD')
     expect(buildFullRoute('KIND', 'KMCX', 'KORD')).toBe('KIND KMCX KORD')
@@ -1366,6 +1373,22 @@ describe('Logifi-native lesson text vs crew catalog', () => {
       .filter(Boolean)
 
     expect(snapshotSavedFields(reimported!)).toEqual(saved)
+  })
+
+  it('keeps the exported Role on a native round trip even when PIC time is logged', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        Date: '2024-06-13',
+        Role: 'Instructor',
+        Registration: 'N172GC',
+        'Aircraft Make/Model': 'C-172',
+        'Total Flight Time': '1.5',
+        PIC: '1.5',
+        'Dual Given': '1.5',
+      },
+      { source: 'logifi-native' }
+    )
+    expect(entry?.role).toBe('Instructor')
   })
 
   it('still copies Training Elements when it is a person name', () => {

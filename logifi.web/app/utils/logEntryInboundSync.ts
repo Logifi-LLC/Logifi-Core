@@ -10,12 +10,12 @@ const DELTA_BATCH_SIZE = 1000
 
 export type MapSupabaseRowFn = (row: Record<string, unknown>) => LogEntry
 
+/** deleted_at is left to the column default (server NOW()) so it is comparable with server updated_at watermarks. */
 export async function insertLogEntryTombstone(userId: string, entryId: string): Promise<void> {
   const { error } = await (supabase.from('log_entry_deletions') as any).upsert(
     {
       user_id: userId,
       entry_id: entryId,
-      deleted_at: new Date().toISOString(),
     },
     { onConflict: 'user_id,entry_id' }
   )

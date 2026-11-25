@@ -25,6 +25,12 @@ describe('normalizeCalendarYmd', () => {
     expect(normalizeCalendarYmd('Sep 2, 2026')).toBe('2026-09-02')
   })
 
+  it('keeps flights logged before 2000', () => {
+    expect(normalizeCalendarYmd('1998-06-01')).toBe('1998-06-01')
+    expect(normalizeCalendarYmd('06/01/1987')).toBe('1987-06-01')
+    expect(normalizeCalendarYmd('1899-12-31')).toBeNull()
+  })
+
   it('returns null for empty or invalid input', () => {
     expect(normalizeCalendarYmd('')).toBeNull()
     expect(normalizeCalendarYmd('not a date')).toBeNull()

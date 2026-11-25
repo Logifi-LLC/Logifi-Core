@@ -7,6 +7,7 @@ import type {
   TimeTotals
 } from './form8710Types'
 import { mapCategoryTo8710 as mapCategory, isTrainingDevice as checkTrainingDevice } from './form8710Types'
+import { filterEntriesForTotalsReport } from './totalsReport'
 import { DateTime } from 'luxon'
 
 /**
@@ -28,7 +29,7 @@ export function calculateSectionIII(entries: LogEntry[]): Form8710SectionIII {
   })
 
   // Process each entry
-  entries.forEach(entry => {
+  filterEntriesForTotalsReport(entries).forEach(entry => {
     const ffs = entry.flightTime.ffs ?? 0
     const ftd = entry.flightTime.ftd ?? 0
     const atd = entry.flightTime.atd ?? 0
@@ -178,11 +179,12 @@ export function calculateSectionII(entries: LogEntry[]): Form8710SectionII {
   const sixMonthsAgo = now.minus({ months: 6 })
   const twelveMonthsAgo = now.minus({ months: 12 })
   const twentyFourMonthsAgo = now.minus({ months: 24 })
+  const eligible = filterEntriesForTotalsReport(entries)
 
-  const last6Months = calculateTimeTotalsForPeriod(entries, sixMonthsAgo, now)
-  const last12Months = calculateTimeTotalsForPeriod(entries, twelveMonthsAgo, now)
-  const last24Months = calculateTimeTotalsForPeriod(entries, twentyFourMonthsAgo, now)
-  const allTime = calculateTimeTotalsForPeriod(entries, DateTime.fromMillis(0), now)
+  const last6Months = calculateTimeTotalsForPeriod(eligible, sixMonthsAgo, now)
+  const last12Months = calculateTimeTotalsForPeriod(eligible, twelveMonthsAgo, now)
+  const last24Months = calculateTimeTotalsForPeriod(eligible, twentyFourMonthsAgo, now)
+  const allTime = calculateTimeTotalsForPeriod(eligible, DateTime.fromMillis(0), now)
 
   return {
     last6Months,

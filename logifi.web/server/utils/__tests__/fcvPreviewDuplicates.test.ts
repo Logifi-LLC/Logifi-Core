@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { FcvMappedEntry } from '../fcvMap'
 import {
   fcvMappedToMatchShape,
+  findHeuristicMatchForFcvFlight,
   logEntryRowToExistingForDedup,
   logEntryRowToMatchShape,
   partitionFcvPreviewDuplicates,
@@ -302,5 +303,19 @@ describe('fcvMappedToMatchShape', () => {
     const f = flight({ fcv_flight_id: 'x', date: '2026-01-01' })
     expect(fcvMappedToMatchShape(f).oooiOut).toBe('1000')
     expect(fcvMappedToMatchShape(f).flightTimeTotal).toBe(1)
+  })
+})
+
+describe('findHeuristicMatchForFcvFlight', () => {
+  it('keeps a second same-route leg when the logged row has a different flight number', () => {
+    const second = flight({ fcv_flight_id: 'fcv-4005', date: '2026-04-16', flight_number: '4005' })
+    const logged = existingRow({ id: 'ex-4001', date: '2026-04-16', flight_number: '4001' })
+    expect(findHeuristicMatchForFcvFlight(second, [logged])).toBeNull()
+  })
+
+  it('matches any flight number when the existing row has none, so import must select flight_number', () => {
+    const second = flight({ fcv_flight_id: 'fcv-4005', date: '2026-04-16', flight_number: '4005' })
+    const withoutNumber = existingRow({ id: 'ex-4001', date: '2026-04-16' })
+    expect(findHeuristicMatchForFcvFlight(second, [withoutNumber])?.id).toBe('ex-4001')
   })
 })

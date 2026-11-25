@@ -11,6 +11,13 @@ describe('digifiNormalize', () => {
     expect(normalizeCellValue('$2.3', 'total', 2024)).toBe('2.3')
   })
 
+  it('converts H:MM and H+MM times instead of truncating to whole hours', () => {
+    expect(normalizeCellValue('1:30', 'pic', 2024)).toBe('1.5')
+    expect(normalizeCellValue('2+06', 'total', 2024)).toBe('2.1')
+    expect(normalizeCellValue('0:45', 'night', 2024)).toBe('0.8')
+    expect(normalizeCellValue('1:75', 'total', 2024)).toBe('1:75')
+  })
+
   it('normalizes airport codes', () => {
     expect(normalizeCellValue('kord', 'departure', 2024)).toBe('KORD')
   })
