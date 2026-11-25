@@ -7088,6 +7088,7 @@ import {
   getSyncQueue,
   removeQueuedOperationsForEntry,
   hasPendingSyncOperation,
+  addInsertsToSyncQueue,
   migrateLegacyLocalData,
   getLastSuccessfulRemoteSyncAt,
   setLastSuccessfulRemoteSyncAt,
@@ -11931,9 +11932,16 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
   const importSource = importPreviewMetadata.value?.fileType?.toLowerCase() || 'unknown'
   const fileName = importPreviewMetadata.value?.fileName || 'unknown'
   
+  // Signed in but cloud unreachable: save locally and queue (no import batch row until online).
+  let cloudReachable = false
+  if (isAuthenticated.value && user.value) {
+    await checkOnlineStatus()
+    cloudReachable = isOnline.value
+  }
+
   // Create import batch if authenticated
   let importBatchId: string | null = null
-  if (isAuthenticated.value && user.value) {
+  if (isAuthenticated.value && user.value && cloudReachable) {
     try {
       // Calculate statistics for the batch
       const totalEntries = entries.length
@@ -12152,7 +12160,51 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
 
   isBulkLoadInProgress.value = true
   try {
-    if (isAuthenticated.value && user.value) {
+    if (isAuthenticated.value && user.value && !cloudReachable) {
+      const userId = user.value.id
+      const queued: Array<{ entryId: string; entryData: unknown }> = []
+      for (let i = 0; i < toInsert.length; i++) {
+        const entry: LogEntry = {
+          ...toInsert[i]!,
+          isImported: true,
+          importSource,
+          importBatchId: undefined,
+          originalEntryDate: toInsert[i]!.date,
+        }
+        try {
+          await saveEntryToIndexedDB(entry, userId)
+          queued.push({ entryId: entry.id, entryData: buildImportDbRow(entry, userId) })
+          storedEntries.push(entry)
+          for (const tag of entry.tags || []) {
+            const trimmed = tag.trim()
+            if (trimmed) importedTagPresets.add(trimmed)
+          }
+        } catch (error) {
+          result.errors.push(
+            `Entry ${entry.date} ${entry.registration}: ${error instanceof Error ? error.message : 'Failed to save'}`
+          )
+        }
+        if ((i + 1) % IMPORT_UI_YIELD_EVERY === 0) {
+          setImportBusy(`Saving ${i + 1} / ${toInsert.length}`)
+          await yieldToImportUi()
+        }
+      }
+      try {
+        await addInsertsToSyncQueue(userId, queued)
+      } catch (error) {
+        // Saved locally but not queued: drop the local copies so nothing sits unsynced forever.
+        for (const entry of storedEntries) {
+          await deleteEntryFromIndexedDB(entry.id).catch(() => undefined)
+        }
+        storedEntries.length = 0
+        result.errors.push(`Could not queue entries for sync: ${error instanceof Error ? error.message : 'unknown error'}`)
+      }
+      await refreshQueueLength()
+      result.imported = storedEntries.length
+      if (storedEntries.length > 0) {
+        logEntries.value = sortEntriesByDateAndOOOI([...logEntries.value, ...storedEntries])
+      }
+    } else if (isAuthenticated.value && user.value) {
       const userId = user.value.id
       for (let i = 0; i < toInsert.length; i += IMPORT_INSERT_BATCH) {
         const chunk = toInsert.slice(i, i + IMPORT_INSERT_BATCH)

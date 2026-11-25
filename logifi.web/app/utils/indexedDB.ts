@@ -438,6 +438,46 @@ export async function completeSyncQueueEntry(item: SyncQueueEntry): Promise<bool
   })
 }
 
+/**
+ * Queue inserts for many entries in one transaction (offline file import), in the given order.
+ * Entries that already have a pending op go through addToSyncQueue so they are merged.
+ */
+export async function addInsertsToSyncQueue(
+  userId: string,
+  items: Array<{ entryId: string; entryData: unknown }>
+): Promise<void> {
+  const pendingIds = new Set((await getSyncQueue(userId)).map((item) => item.entryId))
+  const fresh = items.filter((item) => !pendingIds.has(item.entryId))
+  const db = await getDB()
+
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(['sync_queue'], 'readwrite')
+    const store = transaction.objectStore('sync_queue')
+    const now = Date.now()
+    fresh.forEach((item, index) => {
+      store.add({
+        id: crypto.randomUUID(),
+        operation: 'insert',
+        entryId: item.entryId,
+        entryData: JSON.parse(JSON.stringify(item.entryData)),
+        timestamp: now + index,
+        retryCount: 0,
+        userId,
+        revision: 0,
+      } satisfies SyncQueueEntry)
+    })
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () =>
+      reject(new Error(`Failed to queue inserts: ${transaction.error?.message}`))
+  })
+
+  for (const item of items) {
+    if (pendingIds.has(item.entryId)) {
+      await addToSyncQueue('insert', item.entryId, userId, item.entryData)
+    }
+  }
+}
+
 export async function hasPendingSyncOperation(entryId: string, userId: string): Promise<boolean> {
   const queue = await getSyncQueue(userId)
   return queue.some((item) => item.entryId === entryId)

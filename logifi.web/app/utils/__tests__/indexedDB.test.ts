@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  addInsertsToSyncQueue,
   addToSyncQueue,
   deleteEntryFromIndexedDB,
   getAllEntriesFromIndexedDB,
@@ -181,5 +182,19 @@ describe('indexedDB sync helpers', () => {
     expect(await getRemoteSyncWatermark(USER_A)).toBe('2026-03-01T10:00:00.000Z')
     expect(await getRemoteSyncWatermark(USER_B)).toBeNull()
     expect(await getLastSuccessfulRemoteSyncAt(USER_B)).toBeNull()
+  })
+
+  it('queues many imported inserts in order and merges ids that are already pending', async () => {
+    await addToSyncQueue('insert', 'import-2', USER_A, { id: 'import-2', remarks: 'earlier' })
+
+    await addInsertsToSyncQueue(USER_A, [
+      { entryId: 'import-1', entryData: { id: 'import-1' } },
+      { entryId: 'import-2', entryData: { id: 'import-2', remarks: 'from file' } },
+      { entryId: 'import-3', entryData: { id: 'import-3' } },
+    ])
+
+    const queue = (await getSyncQueue(USER_A)).sort((a, b) => a.timestamp - b.timestamp)
+    expect(queue.map((item) => item.entryId)).toEqual(['import-2', 'import-1', 'import-3'])
+    expect(queue.find((item) => item.entryId === 'import-2')?.entryData.remarks).toBe('from file')
   })
 })
