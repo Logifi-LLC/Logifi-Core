@@ -11336,7 +11336,12 @@ function loadClockPrefs(): void {
 }
 
 function handleExportCsv(entries?: LogEntry[]): void {
-  const list = entries ?? logEntries.value
+  const scoped = entries ?? logEntries.value
+  // Logifi CSV is a lossless backup; other apps have no amend/void model and would double count.
+  const list =
+    exportDestination.value === 'logifi-native'
+      ? scoped
+      : scoped.filter((e) => e.isVoid !== true && !supersededIdSet.value.has(e.id))
   if (list.length === 0) return
 
   const baseDate = new Date().toISOString().split('T')[0] ?? ''
