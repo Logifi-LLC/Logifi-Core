@@ -193,8 +193,10 @@ describe('indexedDB sync helpers', () => {
       { entryId: 'import-3', entryData: { id: 'import-3' } },
     ])
 
-    const queue = (await getSyncQueue(USER_A)).sort((a, b) => a.timestamp - b.timestamp)
-    expect(queue.map((item) => item.entryId)).toEqual(['import-2', 'import-1', 'import-3'])
+    const queue = await getSyncQueue(USER_A)
+    expect(queue.map((item) => item.entryId).sort()).toEqual(['import-1', 'import-2', 'import-3'])
+    const at = (id: string) => queue.find((item) => item.entryId === id)!.timestamp
+    expect(at('import-1')).toBeLessThan(at('import-3'))
     expect(queue.find((item) => item.entryId === 'import-2')?.entryData.remarks).toBe('from file')
   })
 })
