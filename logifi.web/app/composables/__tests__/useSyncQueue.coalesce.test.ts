@@ -223,6 +223,32 @@ describe('useSyncQueue coalescing and ordering', () => {
     expect(await idb.getSyncQueue(userId)).toHaveLength(0)
   })
 
+  it('never replays an older queued edit over a newer one after a transient failure', async () => {
+    const { userId, idb, queue } = await setup()
+    server.rows.set(ENTRY_ID, { ...row(userId, 1.0), version: 1 })
+
+    // Two separate items for one entry, as an older app version could leave in the queue.
+    const db = await idb.getIndexedDBInstance()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(['sync_queue'], 'readwrite')
+      const store = tx.objectStore('sync_queue')
+      store.add({ id: 'older', operation: 'update', entryId: ENTRY_ID, entryData: { flight_time: { total: 1.2 } }, timestamp: 1, retryCount: 0, userId })
+      store.add({ id: 'newer', operation: 'update', entryId: ENTRY_ID, entryData: { flight_time: { total: 1.5 } }, timestamp: 2, retryCount: 0, userId })
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+
+    server.failUpdates = 1
+    offlineState.isOnline = true
+    await queue.processQueue({ silent: true })
+    // The older edit failed, so the newer one must not have been sent ahead of it.
+    expect(server.updateCalls).toEqual([])
+
+    await queue.processQueue({ silent: true })
+    expect(server.updateCalls.map((u) => u.flight_time.total)).toEqual([1.2, 1.5])
+    expect(server.rows.get(ENTRY_ID)?.flight_time).toEqual({ total: 1.5 })
+  })
+
   it('a delete replaces pending writes for the entry', async () => {
     const { userId, idb, queue } = await setup()
     await queue.addToQueue('insert', ENTRY_ID, row(userId, 1.0), userId)

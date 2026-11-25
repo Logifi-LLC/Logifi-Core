@@ -537,14 +537,18 @@ export const useSyncQueue = () => {
         return
       }
 
-      queue.sort((a, b) => {
-        if (a.retryCount !== b.retryCount) {
-          return a.retryCount - b.retryCount
+      // Strict FIFO. An entry whose earlier op failed (or is out of retries) is held back so a
+      // later op for it never lands first and is then overwritten by the older one.
+      queue.sort((a, b) => a.timestamp - b.timestamp)
+      const blockedEntryIds = new Set<string>()
+      const processableItems = queue.filter((item) => {
+        if (blockedEntryIds.has(item.entryId)) return false
+        if (item.retryCount >= MAX_RETRIES) {
+          blockedEntryIds.add(item.entryId)
+          return false
         }
-        return a.timestamp - b.timestamp
+        return true
       })
-
-      const processableItems = queue.filter((item) => item.retryCount < MAX_RETRIES)
 
       if (processableItems.length === 0) {
         resetSyncProgress()
@@ -561,7 +565,9 @@ export const useSyncQueue = () => {
         if (!silent) {
           updateSyncProgress(i, processableItems.length, 'syncing')
         }
-        await processQueueItem(item)
+        if (blockedEntryIds.has(item.entryId)) continue
+        const ok = await processQueueItem(item)
+        if (!ok) blockedEntryIds.add(item.entryId)
 
         // Small yield between items to keep the UI responsive without serializing drains.
         if (i < processableItems.length - 1) {
