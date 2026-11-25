@@ -11972,7 +11972,10 @@ async function importEntries(entries: LogEntry[], importDuplicates: boolean = fa
       }
     }
 
-    const matches = findDuplicateEntries(entry, logEntries.value)
+    const matches = [
+      ...findDuplicateEntries(entry, logEntries.value),
+      ...findDuplicateEntries(entry, toInsert),
+    ]
     if (matches.length > 0 && !importDuplicates) {
       const incomingTags = Array.isArray(entry.tags) ? entry.tags : []
       if (incomingTags.length > 0) {
