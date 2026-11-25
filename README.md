@@ -2,6 +2,8 @@
 
 Open-source digital flight logbook. Import/export, Digifi paper scanning, FLICA schedule import, AC 120-78B audit trail.
 
+Try it free at [logifi.io](https://logifi.io)
+
 ## Features
 
 - **AC 120-78B design**: Audit trail, amend/void signed rows, export with compliance metadata
