@@ -1154,16 +1154,6 @@
                 :is-dark-mode="isDarkMode"
                 @open="showCurrencyDashboard = true"
               />
-              <CurrencyOverviewCards
-                v-if="shouldShowCurrencyChips(showCurrencyChips) && hasAnyEntriesForActiveLogbook && !bootCurrencyPending"
-                :passenger-currency="passengerCurrency"
-                :night-currency="nightCurrency"
-                :instrument-currency="instrumentCurrency"
-                :flight-review-currency="flightReviewCurrency"
-                :passenger-currency-groups="passengerCurrencyGroups"
-                :insufficient-history="currencyHistoryInsufficient"
-                :is-dark-mode="isDarkMode"
-              />
               <SoloEndorsementLine :is-dark-mode="isDarkMode" />
               <AtpProgressPanel
                 v-if="shouldShowAtpProgress(showAtpProgress) && hasAnyEntriesForActiveLogbook && totalsViewMode === 'flight'"
@@ -7067,7 +7057,6 @@ import AuthModal from '../components/AuthModal.vue'
 import { readStoredReferralCode } from '../utils/referralCapture'
 import IntegrityStatus from '../components/IntegrityStatus.vue'
 import CurrencyStatusChips from '../components/logbook/CurrencyStatusChips.vue'
-import CurrencyOverviewCards from '../components/logbook/CurrencyOverviewCards.vue'
 import AtpProgressPanel from '../components/logbook/AtpProgressPanel.vue'
 import SoloEndorsementLine from '../components/logbook/SoloEndorsementLine.vue'
 import HeaderUtcClockBar from '../components/header/HeaderUtcClockBar.vue'

@@ -33,7 +33,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { CurrencyStatus, CurrencyStatusType } from '~/utils/logbookTypes'
-import { formatCurrencyChip, type CurrencyChipKind } from '~/utils/currencyCalculator'
+import { formatCurrencyChipLabel } from '~/utils/currencyItemDisplay'
+import type { CurrencyChipKind } from '~/utils/currencyCalculator'
 import { CURRENCY_TRACKING_NEUTRAL_LABEL } from '~/utils/currencyHistoryPolicy'
 
 const props = defineProps<{
@@ -72,7 +73,7 @@ const chips = computed(() => {
     if (!currency) continue
     items.push({
       kind,
-      label: formatCurrencyChip(kind, currency),
+      label: formatCurrencyChipLabel(kind, currency),
       status: currency.status,
     })
   }
