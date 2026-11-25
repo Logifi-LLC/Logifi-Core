@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   validateDate,
+  validateDateFormat,
   validateFlightTime,
   validateCrossCountry,
   validatePart61RequiredFields,
@@ -76,6 +77,21 @@ describe('validation', () => {
       expect(results.length).toBeGreaterThan(0)
       expect(results[0].type).toBe('error')
       expect(results[0].field).toBe('date')
+    })
+
+    describe('local calendar day', () => {
+      afterEach(() => {
+        vi.useRealTimers()
+      })
+
+      it('rejects tomorrow and accepts today in the device time zone', () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date(2026, 10, 25, 20, 0, 0))
+        expect(validateDate(createTestEntry({ date: '2026-11-26' })).some((r) => r.type === 'error')).toBe(true)
+        expect(validateDateFormat('2026-11-26').some((r) => r.type === 'error')).toBe(true)
+        expect(validateDate(createTestEntry({ date: '2026-11-25' }))).toEqual([])
+        expect(validateDateFormat('2026-11-25')).toEqual([])
+      })
     })
 
     it('should warn for dates before 1900', () => {
