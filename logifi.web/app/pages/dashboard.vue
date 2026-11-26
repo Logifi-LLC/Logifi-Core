@@ -7411,7 +7411,9 @@ async function refreshDashboardFcvStatus(): Promise<void> {
     const data = await apiFetch<{
       affiliations?: Array<{ airlineCode?: string; supported?: boolean }>
     }>('/api/me/airline-affiliations', { headers: { Authorization: `Bearer ${token}` } })
-    const supported = (data?.affiliations ?? []).filter((row) => row.supported !== false)
+    const supported = (data?.affiliations ?? []).filter(
+      (row) => row.supported !== false && row.enabled !== false
+    )
     const codes = supported
       .map((row) => (typeof row.airlineCode === 'string' ? row.airlineCode : ''))
       .filter((code) => code.length > 0)

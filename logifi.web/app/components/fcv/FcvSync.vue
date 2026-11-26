@@ -11,6 +11,7 @@ import {
   DEFAULT_FLICA_AIRLINE_CODE,
   findFlicaCarrier,
   flicaAirlineSsoUserMessage,
+  flicaAirlineUnavailableUserMessage,
   listSelectableFlicaCarriers,
   preferredFlicaAirlineCode,
   type FlicaCarrier,
@@ -159,7 +160,9 @@ const connectingFlica = ref(false)
 const flicaUserIdInput = ref('')
 const flicaPasswordInput = ref('')
 const flicaCarriers = listSelectableFlicaCarriers()
-const savedAffiliations = ref<Array<{ airlineCode: string; supported: boolean }>>([])
+const savedAffiliations = ref<Array<{ airlineCode: string; supported: boolean; enabled: boolean }>>(
+  []
+)
 const selectedAirlineCode = ref(props.airlineCode || DEFAULT_FLICA_AIRLINE_CODE)
 const airlinePinnedByUser = ref(false)
 const userIdTouched = ref(false)
@@ -407,13 +410,19 @@ const selectedCarrier = computed((): FlicaCarrier | undefined =>
   undefined
 )
 
-const unsupportedAffiliation = computed(() => {
-  const row = savedAffiliations.value.find((aff) => aff.supported === false)
+const inactiveAffiliation = computed(() => {
+  const row = savedAffiliations.value.find(
+    (aff) => aff.supported === false || aff.enabled === false
+  )
   if (!row) return null
   const name = findFlicaCarrier(row.airlineCode)?.displayName ?? row.airlineCode
+  const message =
+    row.supported === false
+      ? flicaAirlineSsoUserMessage(name)
+      : flicaAirlineUnavailableUserMessage(name)
   return {
     airlineCode: row.airlineCode,
-    message: flicaAirlineSsoUserMessage(name),
+    message,
   }
 })
 
@@ -442,7 +451,7 @@ const userIdHint = computed(() =>
 async function refreshSavedAffiliations(): Promise<void> {
   try {
     const data = await apiFetch<{
-      affiliations?: Array<{ airlineCode?: string; supported?: boolean }>
+      affiliations?: Array<{ airlineCode?: string; supported?: boolean; enabled?: boolean }>
     }>('/api/me/airline-affiliations', { headers: authHeaders() })
     const rows = data?.affiliations ?? []
     savedAffiliations.value = rows
@@ -452,9 +461,12 @@ async function refreshSavedAffiliations(): Promise<void> {
         return {
           airlineCode,
           supported: row.supported !== false,
+          enabled: row.enabled !== false,
         }
       })
-      .filter((row): row is { airlineCode: string; supported: boolean } => row !== null)
+      .filter(
+        (row): row is { airlineCode: string; supported: boolean; enabled: boolean } => row !== null
+      )
   } catch {
     savedAffiliations.value = []
   }
@@ -1281,7 +1293,9 @@ const isCompactFetch = computed(() => props.compact && isFetchOnly.value)
 const showConnectCta = computed(() => !loadingStatus.value && !connected.value)
 const showFetchControls = computed(() => !isConnectOnly.value && connected.value)
 const showConnectManage = computed(() => isConnectOnly.value && connected.value)
-const showAirlinePicker = computed(() => !loadingStatus.value)
+const showAirlinePicker = computed(
+  () => !loadingStatus.value && flicaCarriers.length > 1
+)
 const showFetchNeedsConnection = computed(() => false)
 
 const totalTime = computed(() => {
@@ -1479,20 +1493,20 @@ const previewModalOverlayClass = computed(() =>
     </p>
 
     <div
-      v-if="unsupportedAffiliation"
+      v-if="inactiveAffiliation"
       :class="[
         'max-w-md space-y-2 rounded-lg border px-3 py-2.5',
         isDarkMode ? 'border-amber-800/60 bg-amber-950/30' : 'border-amber-200 bg-amber-50',
       ]"
     >
       <p :class="['text-sm', isDarkMode ? 'text-amber-100' : 'text-amber-950']">
-        {{ unsupportedAffiliation.message }}
+        {{ inactiveAffiliation.message }}
       </p>
       <button
         type="button"
         :class="btnOutlineClass"
         :disabled="disconnecting"
-        @click="disconnectFlica(unsupportedAffiliation.airlineCode)"
+        @click="disconnectFlica(inactiveAffiliation.airlineCode)"
       >
         {{ disconnecting ? 'Disconnecting…' : 'Disconnect' }}
       </button>

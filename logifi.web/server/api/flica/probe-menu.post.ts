@@ -2,6 +2,7 @@ import { defineEventHandler, readBody, createError } from 'h3'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import { loginFlica, probeFlicaMenu, FlicaClientError } from '../../utils/flicaClient'
 import {
+  FlicaDisabledAirlineError,
   FlicaUnsupportedAirlineError,
   flicaAirlineSsoUserMessage,
   resolveFlicaPortal,
@@ -29,7 +30,7 @@ export default defineEventHandler(async (event) => {
   try {
     portal = resolveFlicaPortal(body?.airlineCode)
   } catch (e) {
-    if (e instanceof FlicaUnsupportedAirlineError) {
+    if (e instanceof FlicaUnsupportedAirlineError || e instanceof FlicaDisabledAirlineError) {
       throw createError({ statusCode: 409, statusMessage: e.message })
     }
     throw createError({

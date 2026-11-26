@@ -109,16 +109,9 @@ describe('FcvSync FLICA status when auth settles', () => {
     wrapper.unmount()
   })
 
-  it('uses a connected non-Republic airline when Republic is not connected', async () => {
-    apiFetchMock.mockImplementation((url: string) => {
-      if (String(url).includes('airline-affiliations')) {
-        return Promise.resolve({ affiliations: [{ airlineCode: 'EDV' }] })
-      }
-      return Promise.resolve({ connected: true })
-    })
-
+  it('with only Republic enabled, does not render the airline picker', async () => {
     const wrapper = mount(FcvSync, {
-      props: { isDarkMode: false, mode: 'fetch' },
+      props: { isDarkMode: false, mode: 'connect' },
       global: { stubs: { Icon: true, Teleport: true } },
     })
 
@@ -127,16 +120,7 @@ describe('FcvSync FLICA status when auth settles', () => {
     await nextTick()
     await flushPromises()
 
-    expect(apiFetchMock).toHaveBeenCalledWith(
-      '/api/flica/status',
-      expect.objectContaining({
-        query: { airlineCode: 'EDV' },
-      })
-    )
-    expect((wrapper.get('select').element as HTMLSelectElement).value).toBe('EDV')
-    const optionText = wrapper.findAll('option').map((o) => o.text())
-    expect(optionText[0]).toContain('Republic')
-    expect(optionText.some((text) => text.includes('Endeavor Air'))).toBe(true)
+    expect(wrapper.find('select').exists()).toBe(false)
 
     wrapper.unmount()
   })
@@ -167,6 +151,32 @@ describe('FcvSync FLICA status when auth settles', () => {
     expect(wrapper.findAll('option').map((o) => o.text()).some((t) => t.includes('PSA'))).toBe(
       false
     )
+
+    wrapper.unmount()
+  })
+
+  it('shows unavailable notice when a saved affiliation is not on the enable allowlist', async () => {
+    apiFetchMock.mockImplementation((url: string) => {
+      if (String(url).includes('airline-affiliations')) {
+        return Promise.resolve({
+          affiliations: [{ airlineCode: 'EDV', supported: true, enabled: false }],
+        })
+      }
+      return Promise.resolve({ connected: false })
+    })
+
+    const wrapper = mount(FcvSync, {
+      props: { isDarkMode: false, mode: 'connect' },
+      global: { stubs: { Icon: true, Teleport: true } },
+    })
+
+    sessionRef.value = { access_token: 'token' }
+    isAuthenticatedRef.value = true
+    await nextTick()
+    await flushPromises()
+
+    expect(wrapper.text()).toMatch(/Autofi isn't available for Endeavor Air yet/)
+    expect(wrapper.text()).toContain('Disconnect')
 
     wrapper.unmount()
   })

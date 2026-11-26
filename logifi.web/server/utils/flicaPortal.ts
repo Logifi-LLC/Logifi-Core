@@ -2,6 +2,8 @@ import {
   airlineHasActiveCrewDigest,
   findFlicaCarrier,
   flicaAirlineSsoUserMessage,
+  flicaAirlineUnavailableUserMessage,
+  isFlicaCarrierEnabled,
   listSelectableFlicaCarriers,
   DEFAULT_FLICA_AIRLINE_CODE,
   type FlicaCarrier,
@@ -28,6 +30,19 @@ export class FlicaUnsupportedAirlineError extends Error {
   constructor(carrier: FlicaCarrier) {
     super(flicaAirlineSsoUserMessage(carrier.displayName))
     this.name = 'FlicaUnsupportedAirlineError'
+    this.airlineCode = carrier.airlineCode
+    this.displayName = carrier.displayName
+  }
+}
+
+export class FlicaDisabledAirlineError extends Error {
+  readonly code = 'not_enabled' as const
+  readonly airlineCode: string
+  readonly displayName: string
+
+  constructor(carrier: FlicaCarrier) {
+    super(flicaAirlineUnavailableUserMessage(carrier.displayName))
+    this.name = 'FlicaDisabledAirlineError'
     this.airlineCode = carrier.airlineCode
     this.displayName = carrier.displayName
   }
@@ -65,10 +80,13 @@ export function resolveFlicaPortal(airlineCode?: string | null): FlicaPortalConf
   if (carrier.unsupportedReason === 'airline_sso') {
     throw new FlicaUnsupportedAirlineError(carrier)
   }
+  if (!isFlicaCarrierEnabled(carrier.airlineCode)) {
+    throw new FlicaDisabledAirlineError(carrier)
+  }
   return toPortal(carrier)
 }
 
-export { airlineHasActiveCrewDigest, flicaAirlineSsoUserMessage }
+export { airlineHasActiveCrewDigest, flicaAirlineSsoUserMessage, flicaAirlineUnavailableUserMessage }
 
 /**
  * Normalize FLICA User ID. When the carrier has a confirmed prefix, digits-only
