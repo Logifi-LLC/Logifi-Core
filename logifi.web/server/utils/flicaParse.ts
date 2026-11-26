@@ -983,7 +983,7 @@ export function parseFlicaScheduleOrThrow(
   const legs = parseFlicaSchedule(htmlOrText, options)
   if (legs.length > 0) return legs
   throw new FlicaScheduleParseError(
-    'FLICA returned a schedule, but no flight legs matched this airline\'s refrigerator layout. Nothing was imported.'
+    'FLICA returned a schedule, but no flight legs matched this airline\'s monthly schedule layout. Nothing was imported.'
   )
 }
 

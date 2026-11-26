@@ -12,12 +12,16 @@ export const DEFAULT_FLICA_AIRLINE_CODE = 'RJET'
 
 export type FlicaTripIdKind = 'republic' | 'generic'
 
+export type FlicaUnsupportedReason = 'airline_sso'
+
 export interface FlicaCarrier {
   airlineCode: string
   displayName: string
   host: string
   /** False only for Republic, the airline Autofi was built against. */
   beta: boolean
+  /** When set, Autofi must not offer connect/fetch for this carrier. */
+  unsupportedReason?: FlicaUnsupportedReason
   /**
    * Prefixed onto a digits-only employee number. Set only when that prefix
    * is confirmed. Other airlines must send the full FLICA User ID.
@@ -71,6 +75,7 @@ export const FLICA_CARRIERS: readonly FlicaCarrier[] = [
     displayName: 'Piedmont',
     host: 'pdt.flica.net',
     beta: true,
+    unsupportedReason: 'airline_sso',
     tripIdKind: 'generic',
     crewDigest: false,
   },
@@ -83,10 +88,12 @@ export const FLICA_CARRIERS: readonly FlicaCarrier[] = [
     crewDigest: false,
   },
   {
+    // Crew now sign in at psa.flica.net via American Airlines PingFederate (idp.aa.com); moved 2024-09-12.
     airlineCode: 'JIA',
     displayName: 'PSA Airlines',
     host: 'jia.flica.net',
     beta: true,
+    unsupportedReason: 'airline_sso',
     tripIdKind: 'generic',
     crewDigest: false,
   },
@@ -110,6 +117,16 @@ export const FLICA_CARRIERS: readonly FlicaCarrier[] = [
 
 const BY_CODE = new Map(FLICA_CARRIERS.map((carrier) => [carrier.airlineCode, carrier]))
 
+export function flicaAirlineSsoUserMessage(displayName: string): string {
+  return `${displayName} now signs in to FLICA through airline single sign-on, which Autofi can't use yet. Your FLICA login was not used. You can disconnect it below.`
+}
+
+export function isFlicaCarrierSupported(airlineCode?: string | null): boolean {
+  const carrier = findFlicaCarrier(airlineCode)
+  if (!carrier) return false
+  return carrier.unsupportedReason !== 'airline_sso'
+}
+
 /** Republic first, then display name. Stable for the airline picker. */
 export function listFlicaCarriers(): FlicaCarrier[] {
   const republic = FLICA_CARRIERS.filter((c) => c.airlineCode === DEFAULT_FLICA_AIRLINE_CODE)
@@ -117,6 +134,11 @@ export function listFlicaCarriers(): FlicaCarrier[] {
     (a, b) => a.displayName.localeCompare(b.displayName)
   )
   return [...republic, ...rest]
+}
+
+/** Carriers Autofi may offer in the connect picker (unsupported entries stay in FLICA_CARRIERS). */
+export function listSelectableFlicaCarriers(): FlicaCarrier[] {
+  return listFlicaCarriers().filter((carrier) => isFlicaCarrierSupported(carrier.airlineCode))
 }
 
 export function findFlicaCarrier(airlineCode?: string | null): FlicaCarrier | null {
@@ -132,7 +154,9 @@ export function findFlicaCarrier(airlineCode?: string | null): FlicaCarrier | nu
 export function preferredFlicaAirlineCode(connectedCodes: readonly string[]): string {
   const codes = connectedCodes
     .map((code) => code.trim().toUpperCase())
-    .filter((code) => code.length > 0 && BY_CODE.has(code))
+    .filter(
+      (code) => code.length > 0 && BY_CODE.has(code) && isFlicaCarrierSupported(code)
+    )
   if (codes.includes(DEFAULT_FLICA_AIRLINE_CODE)) return DEFAULT_FLICA_AIRLINE_CODE
   return codes[0] ?? DEFAULT_FLICA_AIRLINE_CODE
 }

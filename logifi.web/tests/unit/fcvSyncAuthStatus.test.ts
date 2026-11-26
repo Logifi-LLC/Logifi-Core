@@ -140,4 +140,34 @@ describe('FcvSync FLICA status when auth settles', () => {
 
     wrapper.unmount()
   })
+
+  it('shows an unsupported-carrier notice when a saved affiliation requires airline SSO', async () => {
+    apiFetchMock.mockImplementation((url: string) => {
+      if (String(url).includes('airline-affiliations')) {
+        return Promise.resolve({
+          affiliations: [{ airlineCode: 'JIA', supported: false }],
+        })
+      }
+      return Promise.resolve({ connected: false })
+    })
+
+    const wrapper = mount(FcvSync, {
+      props: { isDarkMode: false, mode: 'connect' },
+      global: { stubs: { Icon: true, Teleport: true } },
+    })
+
+    sessionRef.value = { access_token: 'token' }
+    isAuthenticatedRef.value = true
+    await nextTick()
+    await flushPromises()
+
+    const text = wrapper.text()
+    expect(text).toMatch(/single sign-on/)
+    expect(text).toContain('Disconnect')
+    expect(wrapper.findAll('option').map((o) => o.text()).some((t) => t.includes('PSA'))).toBe(
+      false
+    )
+
+    wrapper.unmount()
+  })
 })

@@ -1,7 +1,11 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import { loginFlica, probeFlicaMenu, FlicaClientError } from '../../utils/flicaClient'
-import { resolveFlicaPortal } from '../../utils/flicaPortal'
+import {
+  FlicaUnsupportedAirlineError,
+  flicaAirlineSsoUserMessage,
+  resolveFlicaPortal,
+} from '../../utils/flicaPortal'
 import { unsealSecret, SecretBoxError } from '../../utils/secretBox'
 
 /**
@@ -25,6 +29,9 @@ export default defineEventHandler(async (event) => {
   try {
     portal = resolveFlicaPortal(body?.airlineCode)
   } catch (e) {
+    if (e instanceof FlicaUnsupportedAirlineError) {
+      throw createError({ statusCode: 409, statusMessage: e.message })
+    }
     throw createError({
       statusCode: 400,
       statusMessage: e instanceof Error ? e.message : 'Unsupported airline',
@@ -75,9 +82,16 @@ export default defineEventHandler(async (event) => {
   } catch (e) {
     const message =
       e instanceof FlicaClientError ? e.message : 'Failed to probe FLICA menu'
-    throw createError({
-      statusCode: e instanceof FlicaClientError && e.code === 'login_failed' ? 401 : 502,
-      statusMessage: message,
-    })
+    const status =
+      e instanceof FlicaClientError && e.code === 'airline_sso'
+        ? 409
+        : e instanceof FlicaClientError && e.code === 'login_failed'
+          ? 401
+          : 502
+    const statusMessage =
+      e instanceof FlicaClientError && e.code === 'airline_sso'
+        ? flicaAirlineSsoUserMessage(portal.label)
+        : message
+    throw createError({ statusCode: status, statusMessage })
   }
 })

@@ -1,7 +1,12 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import { loginFlica, FlicaClientError } from '../../utils/flicaClient'
-import { normalizeFlicaUserId, resolveFlicaPortal } from '../../utils/flicaPortal'
+import {
+  FlicaUnsupportedAirlineError,
+  flicaAirlineSsoUserMessage,
+  normalizeFlicaUserId,
+  resolveFlicaPortal,
+} from '../../utils/flicaPortal'
 import { sealSecret, SecretBoxError } from '../../utils/secretBox'
 
 interface ConnectBody {
@@ -35,6 +40,9 @@ export default defineEventHandler(async (event) => {
   try {
     portal = resolveFlicaPortal(body?.airlineCode)
   } catch (e) {
+    if (e instanceof FlicaUnsupportedAirlineError) {
+      throw createError({ statusCode: 409, statusMessage: e.message })
+    }
     throw createError({
       statusCode: 400,
       statusMessage: e instanceof Error ? e.message : 'Unsupported airline',
@@ -53,6 +61,12 @@ export default defineEventHandler(async (event) => {
     await loginFlica({ host: portal.host, username, password })
   } catch (e) {
     if (e instanceof FlicaClientError) {
+      if (e.code === 'airline_sso') {
+        throw createError({
+          statusCode: 409,
+          statusMessage: flicaAirlineSsoUserMessage(portal.label),
+        })
+      }
       const status = e.code === 'network' ? 502 : 401
       throw createError({ statusCode: status, statusMessage: e.message })
     }

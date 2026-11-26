@@ -7408,11 +7408,11 @@ async function refreshDashboardFcvStatus(): Promise<void> {
     return
   }
   try {
-    const data = await apiFetch<{ affiliations?: Array<{ airlineCode?: string }> }>(
-      '/api/me/airline-affiliations',
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-    const codes = (data?.affiliations ?? [])
+    const data = await apiFetch<{
+      affiliations?: Array<{ airlineCode?: string; supported?: boolean }>
+    }>('/api/me/airline-affiliations', { headers: { Authorization: `Bearer ${token}` } })
+    const supported = (data?.affiliations ?? []).filter((row) => row.supported !== false)
+    const codes = supported
       .map((row) => (typeof row.airlineCode === 'string' ? row.airlineCode : ''))
       .filter((code) => code.length > 0)
     dashboardFcvConnected.value = codes.length > 0

@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
+  FlicaUnsupportedAirlineError,
   listFlicaPortals,
   normalizeFlicaUserId,
   resolveFlicaPortal,
 } from '../flicaPortal'
 import {
   airlineHasActiveCrewDigest,
+  isFlicaCarrierSupported,
   listFlicaCarriers,
+  listSelectableFlicaCarriers,
   preferredFlicaAirlineCode,
 } from '../../../shared/flicaCarriers'
 
@@ -41,10 +44,24 @@ describe('flicaPortal', () => {
     expect(p.tripIdPattern).not.toBe(resolveFlicaPortal('RJET').tripIdPattern)
   })
 
+  it('marks PSA and Piedmont unsupported (airline SSO) and excludes them from selectable lists', () => {
+    expect(isFlicaCarrierSupported('JIA')).toBe(false)
+    expect(isFlicaCarrierSupported('PDT')).toBe(false)
+    expect(isFlicaCarrierSupported('RJET')).toBe(true)
+    const selectable = listSelectableFlicaCarriers().map((c) => c.airlineCode)
+    expect(selectable).not.toContain('JIA')
+    expect(selectable).not.toContain('PDT')
+    expect(selectable).toContain('RJET')
+    expect(() => resolveFlicaPortal('JIA')).toThrow(FlicaUnsupportedAirlineError)
+    expect(() => resolveFlicaPortal('PDT')).toThrow(
+      expect.objectContaining({ code: 'airline_sso' })
+    )
+  })
+
   it('lists confirmed portals and keeps the crew digest on Republic only', () => {
     const portals = listFlicaPortals()
     expect(portals.map((p) => p.airlineCode).sort()).toEqual(
-      ['AWI', 'EDV', 'FFT', 'HAL', 'JIA', 'NKS', 'PDT', 'RJET', 'WJA'].sort()
+      ['AWI', 'EDV', 'FFT', 'HAL', 'NKS', 'RJET', 'WJA'].sort()
     )
     expect(portals.filter((p) => p.crewDigest).map((p) => p.airlineCode)).toEqual(['RJET'])
     expect(portals.filter((p) => !p.beta).map((p) => p.airlineCode)).toEqual(['RJET'])
@@ -56,6 +73,8 @@ describe('flicaPortal', () => {
     expect(preferredFlicaAirlineCode(['EDV'])).toBe('EDV')
     expect(preferredFlicaAirlineCode(['EDV', 'RJET'])).toBe('RJET')
     expect(preferredFlicaAirlineCode(['ZZZ'])).toBe('RJET')
+    expect(preferredFlicaAirlineCode(['JIA'])).toBe('RJET')
+    expect(preferredFlicaAirlineCode(['JIA', 'AWI'])).toBe('AWI')
     expect(airlineHasActiveCrewDigest('RJET')).toBe(true)
     expect(airlineHasActiveCrewDigest('EDV')).toBe(false)
     expect(airlineHasActiveCrewDigest(null)).toBe(true)

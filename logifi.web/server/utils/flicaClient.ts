@@ -24,7 +24,48 @@ export type FlicaClientErrorCode =
   | 'mfa_required'
   | 'schedule_not_found'
   | 'network'
+  | 'airline_sso'
   | 'unknown'
+
+function urlHostOnFlicaNet(url: string): boolean {
+  try {
+    return new URL(url).hostname.toLowerCase().endsWith('.flica.net')
+  } catch {
+    return false
+  }
+}
+
+function maySendFlicaCookies(sessionHost: string, targetUrl: string): boolean {
+  try {
+    const host = new URL(targetUrl).hostname.toLowerCase()
+    const portal = sessionHost.replace(/^https?:\/\//, '').replace(/\/$/, '').toLowerCase()
+    if (host === portal) return true
+    return host.endsWith('.flica.net')
+  } catch {
+    return false
+  }
+}
+
+function htmlIndicatesAirlineSso(html: string): boolean {
+  return (
+    html.includes('SAMLRequest') ||
+    html.includes('SAMLResponse') ||
+    html.includes('startSSO.ping')
+  )
+}
+
+function throwFlicaAirlineSso(): never {
+  throw new FlicaClientError(
+    'airline_sso',
+    'FLICA redirected to airline single sign-on. Autofi cannot complete this login.'
+  )
+}
+
+export function assertFlicaLoginAllowed(html: string, finalUrl: string): void {
+  if (!urlHostOnFlicaNet(finalUrl) || htmlIndicatesAirlineSso(html)) {
+    throwFlicaAirlineSso()
+  }
+}
 
 export class FlicaClientError extends Error {
   code: FlicaClientErrorCode
@@ -47,7 +88,8 @@ export class FlicaSession {
     return `https://${this.host}`
   }
 
-  private absorbCookies(response: Response) {
+  private absorbCookies(response: Response, responseUrl: string) {
+    if (!maySendFlicaCookies(this.host, responseUrl)) return
     const headerWithGetter = response.headers as Headers & { getSetCookie?: () => string[] }
     const setCookies =
       typeof headerWithGetter.getSetCookie === 'function'
@@ -85,7 +127,7 @@ export class FlicaSession {
       ...(init.headers as Record<string, string> | undefined),
     }
     const cookie = this.cookieHeader()
-    if (cookie) headers.Cookie = cookie
+    if (cookie && maySendFlicaCookies(this.host, url)) headers.Cookie = cookie
 
     let response: Response
     try {
@@ -98,7 +140,7 @@ export class FlicaSession {
       throw new FlicaClientError('network', 'Could not reach FLICA. Check network and try again.')
     }
 
-    this.absorbCookies(response)
+    this.absorbCookies(response, url)
 
     // Follow redirects manually so we keep cookies.
     let hops = 0
@@ -112,21 +154,25 @@ export class FlicaSession {
     ) {
       const loc = current.headers.get('location')!
       currentUrl = loc.startsWith('http') ? loc : new URL(loc, currentUrl).toString()
+      const redirectCookie = this.cookieHeader()
+      const redirectHeaders: Record<string, string> = {
+        'User-Agent': FLICA_USER_AGENT,
+        Accept: headers.Accept,
+        Referer: url,
+      }
+      if (redirectCookie && maySendFlicaCookies(this.host, currentUrl)) {
+        redirectHeaders.Cookie = redirectCookie
+      }
       try {
         current = await fetch(currentUrl, {
           method: 'GET',
-          headers: {
-            'User-Agent': FLICA_USER_AGENT,
-            Accept: headers.Accept,
-            Cookie: this.cookieHeader(),
-            Referer: url,
-          },
+          headers: redirectHeaders,
           redirect: 'manual',
         })
       } catch {
         throw new FlicaClientError('network', 'Could not reach FLICA after login redirect.')
       }
-      this.absorbCookies(current)
+      this.absorbCookies(current, currentUrl)
       hops++
     }
 
@@ -250,6 +296,8 @@ export async function loginFlica(opts: {
     body: body.toString(),
   })
 
+  assertFlicaLoginAllowed(html, finalUrl)
+
   if (looksLikeMfaOrChallenge(html)) {
     throw new FlicaClientError(
       'mfa_required',
@@ -280,6 +328,7 @@ export async function loginFlica(opts: {
     method: 'GET',
     headers: { Referer: `https://${opts.host}/public/flicaLogon.cgi` },
   })
+  assertFlicaLoginAllowed(menu.html, menu.finalUrl)
   if (looksLikeLoginPage(menu.html, menu.finalUrl)) {
     throw new FlicaClientError(
       'login_failed',
@@ -1007,7 +1056,7 @@ export async function fetchScheduleHtml(
 
   throw new FlicaClientError(
     'schedule_not_found',
-    `Logged into FLICA but could not read a refrigerator schedule for that date (scanned ${pagesScanned} pages).${attemptHint} Nothing was imported.`
+    `Logged into FLICA but could not read a monthly schedule for that date (scanned ${pagesScanned} pages).${attemptHint} Nothing was imported.`
   )
 }
 

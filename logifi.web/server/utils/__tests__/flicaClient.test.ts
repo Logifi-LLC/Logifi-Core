@@ -611,3 +611,206 @@ describe('fetchFlicaPairingOverlays', () => {
     )
   })
 })
+
+describe('FlicaSession cookie scope', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('does not send stored cookies to an off-host redirect', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      const u = String(url)
+      if (u.includes('rpa.flica.net/start')) {
+        return {
+          ok: true,
+          status: 302,
+          headers: {
+            get: (name: string) =>
+              name.toLowerCase() === 'location' ? 'https://idp.example.test/saml' : null,
+            getSetCookie: () => ['SID=abc; Path=/'],
+          },
+          text: async () => '',
+        }
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null, getSetCookie: () => [] },
+        text: async () => '',
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const session = new FlicaSession('rpa.flica.net')
+    await session.request('https://rpa.flica.net/start', { method: 'GET' })
+
+    const offHostCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes('idp.example.test')
+    )
+    expect(offHostCall).toBeDefined()
+    const headers = (offHostCall?.[1] as RequestInit | undefined)?.headers as
+      | Record<string, string>
+      | undefined
+    expect(headers?.Cookie).toBeUndefined()
+  })
+
+  it('sends cookies when redirect stays on *.flica.net', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      const u = String(url)
+      if (u.includes('rpa.flica.net/start')) {
+        return {
+          ok: true,
+          status: 302,
+          headers: {
+            get: (name: string) =>
+              name.toLowerCase() === 'location' ? 'https://alt.rpa.flica.net/menu' : null,
+            getSetCookie: () => ['SID=abc; Path=/'],
+          },
+          text: async () => '',
+        }
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null, getSetCookie: () => [] },
+        text: async () => '',
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const session = new FlicaSession('rpa.flica.net')
+    await session.request('https://rpa.flica.net/start', { method: 'GET' })
+
+    const flicaRedirect = fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes('alt.rpa.flica.net')
+    )
+    const headers = (flicaRedirect?.[1] as RequestInit | undefined)?.headers as
+      | Record<string, string>
+      | undefined
+    expect(headers?.Cookie).toContain('SID=abc')
+  })
+})
+
+describe('loginFlica airline SSO guard', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('rejects login that redirects off *.flica.net', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        const u = String(url)
+        if (u.includes('login/index')) {
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => null, getSetCookie: () => [] },
+            text: async () => '<html>login</html>',
+          }
+        }
+        if (u.includes('flicaLogon.cgi') && init?.method === 'POST') {
+          return {
+            ok: true,
+            status: 302,
+            headers: {
+              get: (name: string) =>
+                name.toLowerCase() === 'location' ? 'https://idp.example.test/sso' : null,
+              getSetCookie: () => [],
+            },
+            text: async () => '',
+          }
+        }
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null, getSetCookie: () => [] },
+          text: async () => '<html>sso</html>',
+        }
+      })
+    )
+
+    await expect(
+      loginFlica({ host: 'rpa.flica.net', username: 'RPA1', password: 'ok' })
+    ).rejects.toMatchObject({ code: 'airline_sso' } satisfies Partial<FlicaClientError>)
+  })
+
+  it('rejects SAML login pages without echoing the SAML payload in the error', async () => {
+    const secretToken = 'SAML_TOKEN_SHOULD_NOT_LEAK_9f3c2a'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url: string) => {
+        const u = String(url)
+        if (u.includes('login/index')) {
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => null, getSetCookie: () => [] },
+            text: async () => '<html>login</html>',
+          }
+        }
+        if (u.includes('flicaLogon.cgi')) {
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => null, getSetCookie: () => [] },
+            text: async () =>
+              `<html><form><input name="SAMLRequest" value="${secretToken}"/></form></html>`,
+          }
+        }
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null, getSetCookie: () => [] },
+          text: async () => '<html></html>',
+        }
+      })
+    )
+
+    try {
+      await loginFlica({ host: 'rpa.flica.net', username: 'RPA1', password: 'ok' })
+      expect.fail('expected airline_sso')
+    } catch (e) {
+      expect(e).toMatchObject({ code: 'airline_sso' })
+      expect((e as Error).message).not.toContain(secretToken)
+    }
+  })
+})
+
+describe('fetchScheduleHtml user-facing copy', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('mentions monthly schedule, not refrigerator, when no schedule is found', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url: string) => {
+        const u = String(url)
+        if (u.includes('mainmenu.cgi')) {
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => null, getSetCookie: () => [] },
+            text: async () => '<html><body>Crewmember Menu Schedules</body></html>',
+          }
+        }
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null, getSetCookie: () => [] },
+          text: async () => '<html><body>other</body></html>',
+        }
+      })
+    )
+    const session = new FlicaSession('rpa.flica.net')
+    try {
+      await fetchScheduleHtml(session, { dateFrom: '2026-08-20', dateTo: '2026-08-20' })
+      expect.fail('expected schedule_not_found')
+    } catch (e) {
+      expect(e).toMatchObject({ code: 'schedule_not_found' })
+      expect((e as Error).message.toLowerCase()).toContain('monthly schedule')
+      expect((e as Error).message.toLowerCase()).not.toContain('refrigerator')
+    }
+  })
+})
