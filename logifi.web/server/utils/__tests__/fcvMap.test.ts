@@ -112,8 +112,8 @@ describe('mapFcvFlightToEntry', () => {
       arr_airport_icao: 'KLGA',
       block: '0121',
       crew_list: [
-        { position: 'CA', name: 'FARMER, DEREK', id: '624619' },
-        { position: 'FO', name: 'MATHENY, PRESTON', id: '624601' },
+        { position: 'CA', name: 'EXAMPLE, JANE', id: '900001' },
+        { position: 'FO', name: 'ROE, RICHARD', id: '900004' },
       ],
     })
     expect(e.role).toBe('PIC')
@@ -122,7 +122,7 @@ describe('mapFcvFlightToEntry', () => {
       pic: 1 + 21 / 60,
       crossCountry: 1 + 21 / 60,
     })
-    expect(e.training_elements).toBe('MATHENY, PRESTON')
+    expect(e.training_elements).toBe('ROE, RICHARD')
     expect(e.training_instructor).toBe('First Officer')
   })
 

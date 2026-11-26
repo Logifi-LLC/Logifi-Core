@@ -33,11 +33,11 @@ describe('shouldShowAtpProgress', () => {
 describe('getDisplayedPilotInitials', () => {
   it('does not show PP from an empty name before the profile has loaded', () => {
     expect(getDisplayedPilotInitials('', false)).toBe('')
-    expect(getDisplayedPilotInitials('Derek Farmer', false)).toBe('')
+    expect(getDisplayedPilotInitials('Jane Example', false)).toBe('')
   })
 
   it('shows real initials after the profile has loaded', () => {
-    expect(getDisplayedPilotInitials('Derek Farmer', true)).toBe('DF')
+    expect(getDisplayedPilotInitials('Jane Example', true)).toBe('JE')
   })
 
   it('returns empty string after load when name is empty (for paper airplane avatar fallback)', () => {
