@@ -102,6 +102,9 @@
               </div>
               <p class="text-gray-300 leading-relaxed flex-1">
                 Pulls your pairings into the book so you're not typing after a trip. Free while in beta.
+                <NuxtLink to="/airline-pilot-logbook-app" class="mt-2 block text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors">
+                  Airline pilot logbook app
+                </NuxtLink>
               </p>
               <NuxtLink
                 to="/integrations"
@@ -118,7 +121,10 @@
               </div>
               <h3 class="text-xl font-bold text-gray-100 mb-3">Digifi</h3>
               <p class="text-gray-300 leading-relaxed">
-                Scan paper spreads into Logifi when you're coming off a paper book. Credits for scans.
+                Scan paper pages into Logifi when you're coming off a paper book. Credits for scans.
+                <NuxtLink to="/how-to-digitize-a-paper-pilot-logbook" class="mt-2 block text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors">
+                  How to digitize a paper logbook
+                </NuxtLink>
               </p>
             </div>
 
@@ -130,6 +136,9 @@
               <h3 class="text-xl font-bold text-gray-100 mb-3">Import</h3>
               <p class="text-gray-300 leading-relaxed">
                 Bring an existing digital logbook with you.
+                <NuxtLink to="/import-foreflight-logten-logbook" class="mt-2 block text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors">
+                  Import ForeFlight or LogTen
+                </NuxtLink>
               </p>
             </div>
           </div>
@@ -145,6 +154,8 @@
           <h2 class="text-3xl sm:text-4xl font-bold text-gray-100 mb-6">What the book is</h2>
           <p class="text-xl text-gray-300 leading-relaxed">
             One professional logbook for airline flying. Totals, history, export when you need it.
+            Questions about pricing, imports, or Digifi?
+            <NuxtLink to="/faq" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">See the FAQ</NuxtLink>.
           </p>
           <button
             type="button"
@@ -183,6 +194,7 @@ import MarketingPaperPlanes from '~/components/MarketingPaperPlanes.vue'
 import ProductSwitcher from '~/components/ProductSwitcher.vue'
 import { MARKETING_HERO_SCREENSHOT_SRC } from '~/utils/marketingHeroScreenshot'
 import { captureReferralFromSearch, storeReferralCode } from '~/utils/referralCapture'
+import { MARKETING_SHELL_SEO } from '../../shared/publicSeo'
 
 const heroScreenshotSrc = MARKETING_HERO_SCREENSHOT_SRC
 
@@ -238,14 +250,9 @@ const handleAuthSuccess = () => {
   window.location.href = '/dashboard'
 }
 
+const homeSeo = MARKETING_SHELL_SEO['/']
 useHead({
-  title: 'Logifi — Airline pilot logbook',
-  meta: [
-    {
-      name: 'description',
-      content:
-        'Free, open-source digital logbook for airline flying. Autofi FLICA import, Digifi paper scanning, import from other apps, and export.',
-    },
-  ],
+  title: homeSeo.title,
+  meta: [{ name: 'description', content: homeSeo.description }],
 })
 </script>

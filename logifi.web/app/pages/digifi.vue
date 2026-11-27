@@ -94,10 +94,10 @@
               <span class="relative z-10">{{ isAuthenticated ? 'Continue Scanning' : 'Start Scanning' }}</span>
             </button>
             <NuxtLink 
-              to="/"
+              to="/how-to-digitize-a-paper-pilot-logbook"
               class="w-full sm:w-auto px-8 py-4 bg-gray-800 text-gray-100 text-lg font-bold rounded-lg border border-gray-700 hover:bg-gray-700 hover:border-gray-600 transition-all active:scale-[0.98]"
             >
-              Learn More
+              How to digitize a paper logbook
             </NuxtLink>
           </div>
         </div>
@@ -148,6 +148,10 @@
               </p>
             </div>
           </div>
+          <p class="mt-10 text-center text-lg text-gray-400">
+            Credits are 10 pages free, then $0.50 per page.
+            <NuxtLink to="/pricing" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">See Pricing</NuxtLink>.
+          </p>
         </div>
       </section>
 
@@ -175,6 +179,7 @@ import ProductSwitcher from '~/components/ProductSwitcher.vue'
 import { useAuth } from '~/composables/useAuth'
 import { isIosApp } from '~/utils/platform'
 import { resolveDigifiAppRoute } from '~/utils/digifiMobileReview'
+import { MARKETING_SHELL_SEO } from '../../shared/publicSeo'
 
 const { theme, isDark, applyDocumentTheme } = useTheme()
 
@@ -228,15 +233,10 @@ onMounted(() => {
   }
 })
 
+const digifiSeo = MARKETING_SHELL_SEO['/digifi']
 useHead({
-  title: 'Digifi | Logifi',
-  meta: [
-    {
-      name: 'description',
-      content:
-        'Photograph paper logbook spreads and review Digifi transcription before import. Every account includes 10 free spreads; additional scans use credits.',
-    },
-  ],
+  title: digifiSeo.title,
+  meta: [{ name: 'description', content: digifiSeo.description }],
 })
 </script>
 

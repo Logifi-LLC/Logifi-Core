@@ -7,7 +7,7 @@
       <p class="text-gray-400 mb-8 text-lg font-medium">
         Logifi is free. Autofi (FLICA) is in public beta and included. See
         <NuxtLink to="/integrations" class="text-blue-400 hover:text-blue-300 transition-colors">Integrations</NuxtLink>
-        for details. Digifi scanning uses pay-per-spread credits (below).
+        for details. Digifi scanning uses credits per page (below).
       </p>
 
       <div
@@ -29,11 +29,16 @@
         <div class="border-t border-gray-800/50 pt-8">
           <p class="text-sm font-bold uppercase tracking-wide text-blue-400">Digifi Credits</p>
           <p class="text-gray-300 mt-2 text-lg leading-relaxed">
-            Every account starts with <strong class="text-gray-100">{{ welcomeCredits }} free Digifi spreads</strong>.
-            Scan a few spreads, review and import them, and Digifi starts learning your aircraft and handwriting. Re-scanning the same spread is always free.
+            Every account starts with <strong class="text-gray-100">{{ welcomeCredits }} free Digifi pages</strong>.
+            Scan a few pages, review and import them, and Digifi learns your logbook over the free pages. Re-scanning a page that was already charged is free.
+            <NuxtLink to="/how-to-digitize-a-paper-pilot-logbook" class="mt-2 block text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors">
+              How to digitize a paper logbook
+            </NuxtLink>
           </p>
           <p class="text-gray-300 mt-4 text-lg leading-relaxed">
-            <strong class="text-gray-100">1 credit = 1 logbook spread</strong> (left + right pages).
+            <strong class="text-gray-100">1 credit = 1 logbook page</strong> (the left and right sides of the paper book).
+            Additional pages are ${{ stripeRateDollars.toFixed(2) }} each by card after the free pages.
+            More detail is in <NuxtLink to="/faq" class="font-bold text-blue-400 hover:text-blue-300 transition-colors">the FAQ</NuxtLink>.
           </p>
           <ul class="mt-4 space-y-3 text-lg text-gray-300">
             <li>
@@ -74,6 +79,7 @@ import {
   minPagesForMethod,
 } from '~/utils/creditsPricing'
 import { WELCOME_CREDITS } from '../../shared/creditsWelcome'
+import { MARKETING_SHELL_SEO } from '../../shared/publicSeo'
 
 const welcomeCredits = WELCOME_CREDITS
 
@@ -107,14 +113,9 @@ const handleAuthSuccess = () => {
   window.location.href = '/dashboard'
 }
 
+const pricingSeo = MARKETING_SHELL_SEO['/pricing']
 useHead({
-  title: 'Pricing | Logifi',
-  meta: [
-    {
-      name: 'description',
-      content:
-        'Logifi is free. Every account includes 10 free Digifi spreads. Additional scanning uses pay-per-spread credits ($0.40–$0.50).',
-    },
-  ],
+  title: pricingSeo.title,
+  meta: [{ name: 'description', content: pricingSeo.description }],
 })
 </script>

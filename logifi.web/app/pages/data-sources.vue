@@ -105,6 +105,13 @@
           <p :class="['leading-relaxed mb-4', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             To remove imported flights, use Logifi’s logbook tools. To revoke the FLICA connection
             and delete stored credentials, you can disconnect your account below.
+            <NuxtLink
+              v-if="isFromLanding"
+              to="/airline-pilot-logbook-app"
+              class="mt-2 block text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              Airline pilot logbook app
+            </NuxtLink>
           </p>
 
           <div
@@ -159,6 +166,13 @@
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             Scan images are kept in private storage and deleted within <strong :class="isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white'">48 hours</strong>.
             We do not send airline portal credentials to Gemini or any other AI provider.
+            <NuxtLink
+              v-if="isFromLanding"
+              to="/how-to-digitize-a-paper-pilot-logbook"
+              class="mt-2 block text-sm font-bold text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              How to digitize a paper logbook
+            </NuxtLink>
           </p>
         </section>
 

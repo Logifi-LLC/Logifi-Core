@@ -24,7 +24,9 @@ import {
   homepageStructuredData,
   isVercelAppHost,
   publicCanonicalUrls,
+  lastmodForPublicPath,
   renderSitemapXml,
+  SITEMAP_MARKETING_COPY_LASTMOD,
   robotsNoindexHeader,
   seoHeadTags,
   shouldEmbedItunesAppMeta,
@@ -66,7 +68,12 @@ describe('sitemap and robots', () => {
   it('serves a static sitemap that matches the public canonicals', () => {
     const xml = renderSitemapXml()
     expect(readFileSync(path.join(root, 'public/sitemap.xml'), 'utf8')).toBe(xml)
-    for (const loc of publicCanonicalUrls()) expect(xml).toContain(`<loc>${loc}</loc>`)
+    for (const loc of publicCanonicalUrls()) {
+      expect(xml).toContain(`<loc>${loc}</loc>`)
+      const path = loc === `${CANONICAL_ORIGIN}/` ? '/' : loc.replace(CANONICAL_ORIGIN, '')
+      expect(xml).toContain(`<lastmod>${lastmodForPublicPath(path)}</lastmod>`)
+    }
+    expect(lastmodForPublicPath('/faq')).toBe(SITEMAP_MARKETING_COPY_LASTMOD)
     expect(xml).not.toContain('/dashboard')
     expect(xml).not.toContain('/logbook-builder')
     expect(xml).not.toContain('/logbook-check')
@@ -211,6 +218,15 @@ describe('env.example product keys', () => {
       expect(example).toContain(key)
     }
     expect(example).not.toMatch(/sk_live_|whsec_[A-Za-z0-9]{8,}|re_[A-Za-z0-9]{8,}/)
+  })
+})
+
+describe('llms.txt', () => {
+  it('ships crawler guidance at /llms.txt', () => {
+    const llms = readFileSync(path.join(root, 'public/llms.txt'), 'utf8')
+    expect(llms).toContain('10 pages free, then 50 cents a page')
+    expect(llms).not.toMatch(/\bspreads?\b/i)
+    expect(llms).not.toContain('70%')
   })
 })
 

@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://www.logifi.io/</loc></url>
-  <url><loc>https://www.logifi.io/integrations</loc></url>
-  <url><loc>https://www.logifi.io/pricing</loc></url>
-  <url><loc>https://www.logifi.io/developers</loc></url>
-  <url><loc>https://www.logifi.io/feedback</loc></url>
-  <url><loc>https://www.logifi.io/data-sources</loc></url>
-  <url><loc>https://www.logifi.io/terms</loc></url>
-  <url><loc>https://www.logifi.io/privacy</loc></url>
-  <url><loc>https://www.logifi.io/digifi</loc></url>
-  <url><loc>https://www.logifi.io/faq</loc></url>
-  <url><loc>https://www.logifi.io/how-to-digitize-a-paper-pilot-logbook</loc></url>
-  <url><loc>https://www.logifi.io/import-foreflight-logten-logbook</loc></url>
-  <url><loc>https://www.logifi.io/airline-pilot-logbook-app</loc></url>
+  <url><loc>https://www.logifi.io/</loc><lastmod>2026-09-14</lastmod></url>
+  <url><loc>https://www.logifi.io/integrations</loc><lastmod>2026-09-14</lastmod></url>
+  <url><loc>https://www.logifi.io/pricing</loc><lastmod>2026-09-14</lastmod></url>
+  <url><loc>https://www.logifi.io/developers</loc><lastmod>2026-09-14</lastmod></url>
+  <url><loc>https://www.logifi.io/feedback</loc><lastmod>2026-09-14</lastmod></url>
+  <url><loc>https://www.logifi.io/data-sources</loc><lastmod>2026-09-14</lastmod></url>
+  <url><loc>https://www.logifi.io/terms</loc><lastmod>2026-09-14</lastmod></url>
+  <url><loc>https://www.logifi.io/privacy</loc><lastmod>2026-09-14</lastmod></url>
+  <url><loc>https://www.logifi.io/digifi</loc><lastmod>2026-09-14</lastmod></url>
+  <url><loc>https://www.logifi.io/faq</loc><lastmod>2026-11-21</lastmod></url>
+  <url><loc>https://www.logifi.io/how-to-digitize-a-paper-pilot-logbook</loc><lastmod>2026-11-21</lastmod></url>
+  <url><loc>https://www.logifi.io/import-foreflight-logten-logbook</loc><lastmod>2026-11-21</lastmod></url>
+  <url><loc>https://www.logifi.io/airline-pilot-logbook-app</loc><lastmod>2026-11-21</lastmod></url>
 </urlset>
