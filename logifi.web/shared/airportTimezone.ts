@@ -21,7 +21,7 @@ export function normalizeTimezoneToIANA(timezone: string | undefined | null): st
   let offset: number | null = null
 
   if (offsetMatch1 && offsetMatch1[2]) {
-    const sign = offsetMatch1[1] || '-'
+    const sign = offsetMatch1[1] || '+'
     const hours = offsetMatch1[2]
     offset = parseInt(sign + hours, 10)
   } else if (offsetMatch2) {
@@ -71,12 +71,7 @@ export function normalizeTimezoneToIANA(timezone: string | undefined | null): st
     return timezoneMap[tz]
   }
 
-  try {
-    DateTime.now().setZone(tz)
-    return tz
-  } catch {
-    return null
-  }
+  return DateTime.now().setZone(tz).isValid ? tz : null
 }
 
 /**

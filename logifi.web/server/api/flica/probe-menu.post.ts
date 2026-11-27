@@ -1,7 +1,12 @@
-import { defineEventHandler, createError } from 'h3'
+import { defineEventHandler, readBody, createError } from 'h3'
 import { getUserIdFromEvent, getSupabaseClient } from '../../utils/supabase'
 import { loginFlica, probeFlicaMenu, FlicaClientError } from '../../utils/flicaClient'
-import { resolveFlicaPortal } from '../../utils/flicaPortal'
+import {
+  FlicaDisabledAirlineError,
+  FlicaUnsupportedAirlineError,
+  flicaAirlineSsoUserMessage,
+  resolveFlicaPortal,
+} from '../../utils/flicaPortal'
 import { unsealSecret, SecretBoxError } from '../../utils/secretBox'
 
 /**
@@ -14,10 +19,20 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
 
+  let body: { airlineCode?: string } = {}
+  try {
+    body = (await readBody(event)) ?? {}
+  } catch {
+    body = {}
+  }
+
   let portal
   try {
-    portal = resolveFlicaPortal('RJET')
+    portal = resolveFlicaPortal(body?.airlineCode)
   } catch (e) {
+    if (e instanceof FlicaUnsupportedAirlineError || e instanceof FlicaDisabledAirlineError) {
+      throw createError({ statusCode: 409, statusMessage: e.message })
+    }
     throw createError({
       statusCode: 400,
       statusMessage: e instanceof Error ? e.message : 'Unsupported airline',
@@ -28,7 +43,7 @@ export default defineEventHandler(async (event) => {
   const { data: integration, error: loadErr } = await supabase
     .from('flica_integrations')
     .select(
-      'id, username, password_ciphertext, password_nonce, portal_host, airline_code'
+      'id, username, password_ciphertext, password_nonce, airline_code'
     )
     .eq('user_id', userId)
     .eq('airline_code', portal.airlineCode)
@@ -59,18 +74,25 @@ export default defineEventHandler(async (event) => {
 
   try {
     const session = await loginFlica({
-      host: integration.portal_host || portal.host,
+      host: portal.host,
       username: integration.username,
       password,
     })
-    const probe = await probeFlicaMenu(session)
+    const probe = await probeFlicaMenu(session, { tripIdPattern: portal.tripIdPattern })
     return { success: true, probe }
   } catch (e) {
     const message =
       e instanceof FlicaClientError ? e.message : 'Failed to probe FLICA menu'
-    throw createError({
-      statusCode: e instanceof FlicaClientError && e.code === 'login_failed' ? 401 : 502,
-      statusMessage: message,
-    })
+    const status =
+      e instanceof FlicaClientError && e.code === 'airline_sso'
+        ? 409
+        : e instanceof FlicaClientError && e.code === 'login_failed'
+          ? 401
+          : 502
+    const statusMessage =
+      e instanceof FlicaClientError && e.code === 'airline_sso'
+        ? flicaAirlineSsoUserMessage(portal.label)
+        : message
+    throw createError({ statusCode: status, statusMessage })
   }
 })

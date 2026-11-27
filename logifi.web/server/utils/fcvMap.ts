@@ -183,10 +183,7 @@ function gateDurationMinutesTimezoneAware(
   const inDT = parseFcvLocalDatetimeInZone(inStr, arrTz)
   if (!outDT || !inDT) return null
   let diffMin = inDT.toUTC().diff(outDT.toUTC(), 'minutes').minutes
-  if (diffMin < 0) {
-    if (diffMin < -12 * 60) diffMin += 24 * 60
-    else diffMin += 24 * 60
-  }
+  if (diffMin < 0) diffMin += 24 * 60
   if (diffMin <= 0 || diffMin > 24 * 60) return null
   return diffMin
 }
@@ -572,8 +569,9 @@ function extractOtherCrew(
   return { name: picked.name, label: picked.label, rawName: picked.name }
 }
 
+/** Logbook date is the block-out date; takeoff can fall after midnight on a late push. */
 function primaryDepartureLocal(f: FcvFlight): string | undefined {
-  const candidates = [f.actual_off_local, f.actual_out_local, f.scheduled_out_local]
+  const candidates = [f.actual_out_local, f.actual_off_local, f.scheduled_out_local]
   for (const c of candidates) {
     if (typeof c === 'string' && c.length >= 10) return c
   }
@@ -621,18 +619,20 @@ export function mapFcvFlightToEntry(flight: FcvFlight): FcvMappedEntry {
   const unmatched = ownRole == null
   const crewListed = listFcvCrew(flight)
   const otherCrew = extractOtherCrew(flight, ownRole)
-  const flight_time = buildFlightTimeForFcv(blockHours, dep, arr, ownRole)
+  // A deadhead is positioning as a passenger: no loggable flight time or conditions.
+  const isDeadhead = flight.is_deadhead === 1 || flight.is_deadhead === true
+  const flight_time = isDeadhead ? {} : buildFlightTimeForFcv(blockHours, dep, arr, ownRole)
   const xcRaw = flight_time.crossCountry
   const xcHours =
     typeof xcRaw === 'number' && Number.isFinite(xcRaw) && xcRaw > 0 ? xcRaw : null
-  const flight_conditions = buildFcvFlightConditions(xcHours)
+  const flight_conditions = isDeadhead ? [] : buildFcvFlightConditions(xcHours)
 
   const mapped: FcvMappedEntry = {
     fcv_flight_id: fcvId,
     date: date || '',
     role: ownRole ?? '',
     aircraft_category_class: mapAircraftCategoryClass(sourceCategory),
-    category_class_time: blockHours,
+    category_class_time: isDeadhead ? null : blockHours,
     aircraft_make_model: aircraftType || 'Unknown',
     registration,
     flight_number: fn,
@@ -674,8 +674,9 @@ export function mapFcvFlightToEntry(flight: FcvFlight): FcvMappedEntry {
   applyAirlineNightToMappedEntry(mapped, {
     outLocal: pickOutLocalDatetimeForGateDuration(flight) ?? null,
     inLocal: pickInLocalDatetimeForGateDuration(flight) ?? null,
+    offLocal: typeof flight.actual_off_local === 'string' ? flight.actual_off_local : null,
     onLocal: typeof flight.actual_on_local === 'string' ? flight.actual_on_local : null,
-    isDeadhead: flight.is_deadhead === 1 || flight.is_deadhead === true,
+    isDeadhead,
   })
   return mapped
 }

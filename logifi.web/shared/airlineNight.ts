@@ -7,6 +7,7 @@
  *
  * Night hours use Out→In (block), matching Logifi total time.
  * Night landings use On at the arrival airport, then In if On is missing.
+ * Night takeoffs use Off at the departure airport, then Out if Off is missing.
  */
 
 import { calculateNightTimeFromInstants } from './nightTimeCalculator'
@@ -34,10 +35,12 @@ export interface AirlineNightInput {
   /** YYYY-MM-DD fallback when a datetime string is missing the calendar day. */
   date?: string | null
   outLocalDatetime?: string | null
+  offLocalDatetime?: string | null
   inLocalDatetime?: string | null
   onLocalDatetime?: string | null
   oooi?: {
     out?: string | null
+    off?: string | null
     in?: string | null
     on?: string | null
     isZulu?: boolean
@@ -48,6 +51,8 @@ export interface AirlineNightResult {
   nightHours: number | null
   totalHours: number | null
   isNightLanding: boolean | null
+  /** Null when the departure airport's zone or coordinates are unresolved, or no Off/Out time. */
+  isNightTakeoff: boolean | null
 }
 
 export function parseLocalDatetimeInZone(dt: string, zone: string): Date | null {
@@ -88,7 +93,7 @@ export function computeAirlineNight(
   const depCoords = lookups.lookupCoords(dep)
   const arrCoords = lookups.lookupCoords(arr) ?? depCoords
   if (!depCoords) {
-    return { nightHours: null, totalHours: null, isNightLanding: null }
+    return { nightHours: null, totalHours: null, isNightLanding: null, isNightTakeoff: null }
   }
 
   const isZulu = input.oooi?.isZulu === true
@@ -98,6 +103,7 @@ export function computeAirlineNight(
   let outInstant: Date | null = null
   let inInstant: Date | null = null
   let landingInstant: Date | null = null
+  let takeoffInstant: Date | null = null
 
   if (input.outLocalDatetime) {
     outInstant = parseSourceDatetime(input.outLocalDatetime, depTz)
@@ -107,6 +113,9 @@ export function computeAirlineNight(
   }
   if (input.onLocalDatetime) {
     landingInstant = parseSourceDatetime(input.onLocalDatetime, arrTz)
+  }
+  if (input.offLocalDatetime) {
+    takeoffInstant = parseSourceDatetime(input.offLocalDatetime, depTz)
   }
 
   const dateYmd = input.date && /^\d{4}-\d{2}-\d{2}$/.test(input.date) ? input.date : null
@@ -121,9 +130,22 @@ export function computeAirlineNight(
   if (!landingInstant && dateYmd && input.oooi?.on) {
     landingInstant = parseClockOnDate(dateYmd, input.oooi.on, isZulu, clockArrTz)
   }
+  if (!takeoffInstant && dateYmd && input.oooi?.off) {
+    takeoffInstant = parseClockOnDate(dateYmd, input.oooi.off, isZulu, clockDepTz)
+  }
+  if (takeoffInstant && outInstant && takeoffInstant.getTime() < outInstant.getTime()) {
+    takeoffInstant = ensureInAfterOut(outInstant, takeoffInstant)
+  }
+
+  // 61.57(b) uses the same 1 h after sunset to 1 h before sunrise window for takeoffs.
+  const takeoffAt = takeoffInstant ?? outInstant
+  const isNightTakeoff =
+    depTz && takeoffAt
+      ? isFarNightLanding(takeoffAt, depCoords.latitude, depCoords.longitude)
+      : null
 
   if (!outInstant || !inInstant) {
-    return { nightHours: null, totalHours: null, isNightLanding: null }
+    return { nightHours: null, totalHours: null, isNightLanding: null, isNightTakeoff }
   }
 
   inInstant = ensureInAfterOut(outInstant, inInstant)
@@ -152,5 +174,6 @@ export function computeAirlineNight(
     nightHours: night.success ? night.nightHours : null,
     totalHours: night.success ? night.totalHours : null,
     isNightLanding,
+    isNightTakeoff,
   }
 }

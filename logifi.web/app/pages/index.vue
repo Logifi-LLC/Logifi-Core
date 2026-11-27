@@ -96,7 +96,6 @@
                   <h3 class="text-xl font-bold text-gray-100">Autofi</h3>
                   <AutofiBetaPill
                     tone="marketing"
-                    label="Republic pilots only during beta"
                     class="mt-1"
                   />
                 </div>

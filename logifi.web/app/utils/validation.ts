@@ -31,6 +31,15 @@ function getNumericValue(value: number | null | undefined): number {
   return value
 }
 
+/** `new Date('YYYY-MM-DD')` is UTC midnight, which is the previous local day west of UTC. */
+function parseDateAsLocalDay(value: string): Date {
+  const ymd = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!ymd) return new Date(value)
+  const local = new Date(2000, 0, 1)
+  local.setFullYear(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]))
+  return local
+}
+
 /**
  * Helper function to check if a value is provided (not null/undefined)
  */
@@ -173,7 +182,7 @@ export function validateDate(entry: LogEntry, _allEntries?: LogEntry[]): Validat
       }
     }
 
-    const entryDate = new Date(entry.date)
+    const entryDate = parseDateAsLocalDay(entry.date)
     if (Number.isNaN(entryDate.getTime())) {
       results.push({
         type: 'error',
@@ -821,7 +830,7 @@ export function validateDateFormat(date: string | null | undefined): ValidationR
 
   // Try to parse the date - JavaScript Date constructor is flexible with formats
   // It handles: YYYY-MM-DD, MM/DD/YYYY, and other common formats
-  const parsedDate = new Date(trimmedDate)
+  const parsedDate = parseDateAsLocalDay(trimmedDate)
   
   // Check if the date is invalid
   if (isNaN(parsedDate.getTime())) {

@@ -193,6 +193,11 @@ describe('formatPaperHours', () => {
 })
 
 describe('paginatePaperLogbook', () => {
+  it('keeps flights dated before 2000', () => {
+    const doc = paginatePaperLogbook([entry({ id: 'OLD', date: '1998-06-01' })], { rowsPerPage: 2 })
+    expect(doc.pages[0]!.rows.map((r) => r.id)).toEqual(['OLD'])
+  })
+
   it('builds hand-worked page totals and forwarded totals at 2 rows/page', () => {
     const doc = paginatePaperLogbook(fictionalLogbook(), {
       rowsPerPage: 2,

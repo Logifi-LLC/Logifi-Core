@@ -90,7 +90,7 @@
         <section class="mb-10">
           <h2 :class="['text-xl font-bold font-quicksand mb-3', isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white']">Airline schedule (FLICA)</h2>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
-            Autofi is in public beta with Republic (RJET). Other airlines are not supported yet.
+            Autofi is in public beta. Republic is verified. Other FLICA airlines are beta.
           </p>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
             If you choose to connect FLICA, you provide your airline portal credentials in Logifi.
@@ -157,8 +157,8 @@
             You review and edit before importing into your digital logbook.
           </p>
           <p :class="['leading-relaxed mb-3', isFromLanding ? 'text-gray-300' : 'text-gray-700 dark:text-gray-300']">
-            Scan images are stored in our private storage bucket for up to <strong :class="isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white'">24 hours</strong>
-            (for support), then deleted. We do not send airline portal credentials to Gemini or any other AI provider.
+            Scan images are kept in private storage and deleted within <strong :class="isFromLanding ? 'text-gray-100' : 'text-gray-900 dark:text-white'">48 hours</strong>.
+            We do not send airline portal credentials to Gemini or any other AI provider.
           </p>
         </section>
 

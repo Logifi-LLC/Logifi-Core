@@ -58,6 +58,12 @@ describe('buildLogTenFlightEntity', () => {
     expect(entity.flight_totalTime).toBe('1.5')
   })
 
+  it('sets the IFR flag from the stored ifr condition', () => {
+    const entry = { ...createBaseEntry(), flightConditions: ['ifr'] }
+    expect(buildLogTenFlightEntity(entry).flight_ifrCapacity).toBe(true)
+    expect(buildLogTenFlightEntity(createBaseEntry()).flight_ifrCapacity).toBeUndefined()
+  })
+
   it('preserves date without timezone shifting - MDY format per Coradine API', () => {
     const entry = createBaseEntry()
     entry.date = '2026-09-08'

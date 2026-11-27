@@ -170,6 +170,10 @@ export type MarketingActivePage =
   | 'terms'
   | 'privacy'
   | 'data-sources'
+  | 'faq'
+  | 'digitize-logbook'
+  | 'import-logbook'
+  | 'airline-logbook'
 
 const props = withDefaults(
   defineProps<{

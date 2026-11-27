@@ -28,7 +28,15 @@ function aircraftLine(registration: string | null, makeModel: string | null): st
   return ident || type || '—'
 }
 
-function buildEmail(args: {
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+export function buildEmail(args: {
   date: string
   aircraft: string
   route: string
@@ -49,8 +57,8 @@ function buildEmail(args: {
   ].join('\n')
   const html = [
     '<p>A student requested your instructor signature.</p>',
-    `<p>Date: ${args.date}<br/>Aircraft: ${args.aircraft}<br/>Route: ${args.route}<br/>Duration: ${args.duration} hours</p>`,
-    `<p><a href="${args.reviewUrl}">Review and sign</a> while signed in to Logifi.</p>`,
+    `<p>Date: ${escapeHtml(args.date)}<br/>Aircraft: ${escapeHtml(args.aircraft)}<br/>Route: ${escapeHtml(args.route)}<br/>Duration: ${escapeHtml(args.duration)} hours</p>`,
+    `<p><a href="${escapeHtml(args.reviewUrl)}">Review and sign</a> while signed in to Logifi.</p>`,
   ].join('')
   return { subject, text, html }
 }

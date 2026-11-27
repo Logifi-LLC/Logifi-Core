@@ -3,29 +3,35 @@ import {
   formatDigifiIsoDate,
   parseDigifiIsoDateParts,
   resolveDigifiSpreadYear,
+  type DigifiSpreadYearState,
 } from '~/utils/digifiSpreadYear'
 
-/** Normalize date string to YYYY-MM-DD (locked defaultYear + spread rollover). */
+/**
+ * Normalize date string to YYYY-MM-DD (locked defaultYear + spread rollover).
+ * Pass one `yearState` per page so a Dec→Jan rollover carries to the following rows.
+ */
 export function normalizeDigifiDateCell(
   dateStr: string,
   defaultYear: number | null | undefined,
-  lastDateIso: string | null
+  lastDateIso: string | null,
+  yearState?: DigifiSpreadYearState
 ): string {
   const s = (dateStr || '').trim()
   if (!s) return ''
   const lockedYear =
     typeof defaultYear === 'number' && Number.isFinite(defaultYear) ? defaultYear : null
   const year = lockedYear ?? new Date().getFullYear()
+  const resolveYear = (m: number, d: number, baseYear: number): number => {
+    const y = resolveDigifiSpreadYear(m, d, baseYear, lastDateIso, yearState?.year)
+    if (yearState) yearState.year = y
+    return y
+  }
 
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(s)) {
     const parts = parseDigifiIsoDateParts(s)
     if (!parts) return s
     if (lockedYear != null) {
-      return formatDigifiIsoDate(
-        resolveDigifiSpreadYear(parts.m, parts.d, lockedYear, lastDateIso),
-        parts.m,
-        parts.d
-      )
+      return formatDigifiIsoDate(resolveYear(parts.m, parts.d, lockedYear), parts.m, parts.d)
     }
     return s
   }
@@ -35,8 +41,7 @@ export function normalizeDigifiDateCell(
     const m = parseInt(slashParts[0], 10)
     const d = parseInt(slashParts[1], 10)
     if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
-      const y = resolveDigifiSpreadYear(m, d, year, lastDateIso)
-      return formatDigifiIsoDate(y, m, d)
+      return formatDigifiIsoDate(resolveYear(m, d, year), m, d)
     }
   }
   if (slashParts.length === 3) {
@@ -46,8 +51,7 @@ export function normalizeDigifiDateCell(
     const parsedY = parseInt(yRaw, 10)
     if (Number.isFinite(m) && Number.isFinite(d) && m >= 1 && m <= 12 && d >= 1 && d <= 31) {
       if (lockedYear != null) {
-        const y = resolveDigifiSpreadYear(m, d, lockedYear, lastDateIso)
-        return formatDigifiIsoDate(y, m, d)
+        return formatDigifiIsoDate(resolveYear(m, d, lockedYear), m, d)
       }
       let y: number
       if (!Number.isFinite(parsedY)) {
@@ -75,8 +79,9 @@ export function normalizeDigifiCellDate(
   value: string,
   fieldKey: LogbookColumnKey | null | undefined,
   defaultYear: number | null | undefined,
-  lastDateIso: string | null
+  lastDateIso: string | null,
+  yearState?: DigifiSpreadYearState
 ): string {
   if (fieldKey !== 'date') return value
-  return normalizeDigifiDateCell(value, defaultYear, lastDateIso)
+  return normalizeDigifiDateCell(value, defaultYear, lastDateIso, yearState)
 }

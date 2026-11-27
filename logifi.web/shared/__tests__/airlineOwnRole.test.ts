@@ -41,24 +41,24 @@ describe('pickOppositeCrew', () => {
   it('picks FO when own seat is PIC', () => {
     const other = pickOppositeCrew(
       [
-        { position: 'CA', name: 'FARMER, DEREK' },
-        { position: 'FO', name: 'SUTTON, DREW' },
+        { position: 'CA', name: 'EXAMPLE, JANE' },
+        { position: 'FO', name: 'SAMPLE, JOHN' },
       ],
       'PIC'
     )
-    expect(other).toEqual({ name: 'SUTTON, DREW', label: 'First Officer' })
+    expect(other).toEqual({ name: 'SAMPLE, JOHN', label: 'First Officer' })
   })
 
   it('returns null when the opposite seat is missing', () => {
-    expect(pickOppositeCrew([{ position: 'CA', name: 'FARMER, DEREK' }], 'PIC')).toBeNull()
+    expect(pickOppositeCrew([{ position: 'CA', name: 'EXAMPLE, JANE' }], 'PIC')).toBeNull()
   })
 
   it('does not treat the user as the other pilot when the opposite row shares their employee id', () => {
     expect(
       pickOppositeCrew(
         [
-          { position: 'CA', name: 'FARMER, DEREK', employeeId: '624619' },
-          { position: 'FO', name: 'FARMER, DEREK', employeeId: '624619' },
+          { position: 'CA', name: 'EXAMPLE, JANE', employeeId: '900001' },
+          { position: 'FO', name: 'EXAMPLE, JANE', employeeId: '900001' },
         ],
         'PIC'
       )
@@ -71,11 +71,11 @@ describe('formatListedCrewHint', () => {
     expect(
       formatListedCrewHint(
         [
-          { position: 'CA', name: 'FARMER, DEREK' },
-          { position: 'FO', name: 'SUTTON, DREW' },
+          { position: 'CA', name: 'EXAMPLE, JANE' },
+          { position: 'FO', name: 'SAMPLE, JOHN' },
         ],
         'not_on_crew'
       )
-    ).toBe('Crew listed: CA FARMER, DEREK · FO SUTTON, DREW — you were not found.')
+    ).toBe('Crew listed: CA EXAMPLE, JANE · FO SAMPLE, JOHN — you were not found.')
   })
 })

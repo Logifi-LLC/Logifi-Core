@@ -81,3 +81,42 @@ export function formatAmendsLabel(original: LogEntry): string {
   const route = `${original.departure || '—'} → ${original.destination || '—'}`
   return date ? `${date} · ${route}` : route
 }
+
+/** An amendment repeats its original's date, tail and route by design; the pair is never a duplicate. */
+export function isAmendmentPair(a: LogEntry, b: LogEntry): boolean {
+  return (!!a.amendsEntryId && a.amendsEntryId === b.id) || (!!b.amendsEntryId && b.amendsEntryId === a.id)
+}
+
+/**
+ * Prepare restored rows for insert. amends_entry_id is a foreign key, so a link to an original
+ * that is neither in this batch nor already in the logbook is cleared, and originals are
+ * ordered before the amendments that point at them. Mutates amendsEntryId on the given rows.
+ */
+export function prepareAmendmentLinksForInsert(
+  entries: LogEntry[],
+  existingIds: ReadonlySet<string>
+): LogEntry[] {
+  const byId = new Map(entries.map((entry) => [entry.id, entry]))
+  for (const entry of entries) {
+    if (entry.amendsEntryId && !byId.has(entry.amendsEntryId) && !existingIds.has(entry.amendsEntryId)) {
+      entry.amendsEntryId = null
+    }
+  }
+
+  const depthOf = (entry: LogEntry): number => {
+    let depth = 0
+    const seen = new Set<string>([entry.id])
+    let current = entry
+    while (current.amendsEntryId && byId.has(current.amendsEntryId) && !seen.has(current.amendsEntryId)) {
+      current = byId.get(current.amendsEntryId)!
+      seen.add(current.id)
+      depth++
+    }
+    return depth
+  }
+
+  return entries
+    .map((entry, index) => ({ entry, index, depth: depthOf(entry) }))
+    .sort((a, b) => a.depth - b.depth || a.index - b.index)
+    .map(({ entry }) => entry)
+}

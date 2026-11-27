@@ -48,6 +48,12 @@ export function mergeRemoteLogEntries(options: {
   const pendingInsertIds = new Set(
     syncQueue.filter((item) => item.operation === 'insert').map((item) => item.entryId)
   )
+  const pendingWriteIds = new Set(
+    syncQueue.filter((item) => item.operation !== 'delete').map((item) => item.entryId)
+  )
+  const pendingDeleteIds = new Set(
+    syncQueue.filter((item) => item.operation === 'delete').map((item) => item.entryId)
+  )
 
   const entryMap = new Map<string, LogEntry>()
   const removedEntryIds: string[] = []
@@ -56,7 +62,9 @@ export function mergeRemoteLogEntries(options: {
   for (const { entry, synced } of localEntries) {
     if (remoteIds.has(entry.id)) {
       const remote = remoteById.get(entry.id)!
-      entryMap.set(entry.id, shouldPreferRemoteEntry(entry, remote) ? remote : entry)
+      // A queued local write is newer than any server copy until it is sent.
+      const keepLocal = pendingWriteIds.has(entry.id) || !shouldPreferRemoteEntry(entry, remote)
+      entryMap.set(entry.id, keepLocal ? entry : remote)
       continue
     }
 
@@ -79,6 +87,8 @@ export function mergeRemoteLogEntries(options: {
   }
 
   for (const remoteEntry of remoteEntries) {
+    // Deleted locally; the server copy is only there until the queued delete is sent.
+    if (pendingDeleteIds.has(remoteEntry.id)) continue
     if (!entryMap.has(remoteEntry.id)) {
       entryMap.set(remoteEntry.id, remoteEntry)
     }

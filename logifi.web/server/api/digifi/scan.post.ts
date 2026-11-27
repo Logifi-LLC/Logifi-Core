@@ -174,6 +174,7 @@ export default defineEventHandler(async (event) => {
   const ext = extForMime(imageMime)
   const storagePath = `${userId}/${scanId}.${ext}`
 
+  let storageUploaded = false
   if (service) {
     const { error: uploadError } = await service.storage
       .from('digifi-scans')
@@ -183,6 +184,8 @@ export default defineEventHandler(async (event) => {
       })
     if (uploadError) {
       console.error('[digifi] storage upload failed:', uploadError.message)
+    } else {
+      storageUploaded = true
     }
   }
 
@@ -257,6 +260,14 @@ export default defineEventHandler(async (event) => {
         console.warn('[digifi] failed to roll back scan session after extraction error:', rollbackError.message)
       } else {
         scanSessionStubCreated = false
+      }
+    }
+
+    // The 48h purge walks session rows, so a photo without a row would never be deleted.
+    if (storageUploaded && service && !scanSessionStubCreated) {
+      const { error: removeError } = await service.storage.from('digifi-scans').remove([storagePath])
+      if (removeError) {
+        console.warn('[digifi] failed to remove scan image after extraction error:', removeError.message)
       }
     }
 

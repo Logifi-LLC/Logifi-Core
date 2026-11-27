@@ -698,6 +698,9 @@ function applyLogifiNativeCsvFields(
   entry: LogEntry,
   rawEntry: Record<string, unknown>
 ): void {
+  const role = findFieldValue(rawEntry, ['Role', 'role', 'ROLE']).slice(0, 64)
+  if (role) entry.role = role
+
   if (hasField(rawEntry, NATIVE_CATEGORY_CLASS_TIME_FIELDS)) {
     entry.categoryClassTime = parseImportDuration(
       findFieldValue(rawEntry, NATIVE_CATEGORY_CLASS_TIME_FIELDS)
@@ -981,6 +984,7 @@ export function mapRawRowToLogEntry(
       ...createEmptyPerformance(),
       dayTakeoffs: normalizeImportNumber(
         findFieldValue(rawEntry, [
+          'flight_dayTakeoffs',
           'DayTakeoffs',
           'Day Takeoffs',
           'daytakeoffs',
@@ -990,6 +994,7 @@ export function mapRawRowToLogEntry(
       ),
       nightTakeoffs: normalizeImportNumber(
         findFieldValue(rawEntry, [
+          'flight_nightTakeoffs',
           'NightTakeoffs',
           'Night Takeoffs',
           'nighttakeoffs',

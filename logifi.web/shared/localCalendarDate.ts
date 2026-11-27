@@ -38,7 +38,7 @@ const MONTH_NAME_TO_NUM: Record<string, number> = {
 
 function isValidYmd(year: number, month: number, day: number): boolean {
   if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return false
-  if (year < 2000 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) return false
+  if (year < 1900 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) return false
   const dt = new Date(Date.UTC(year, month - 1, day))
   return dt.getUTCFullYear() === year && dt.getUTCMonth() === month - 1 && dt.getUTCDate() === day
 }

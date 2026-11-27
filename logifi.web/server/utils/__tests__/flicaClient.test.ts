@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
+import { GENERIC_FLICA_TRIP_ID_PATTERN } from '../../../shared/flicaTripId'
 import {
   decodeFlicaHtmlBytes,
   extractFlicaPairingLinks,
@@ -19,23 +20,23 @@ import { overlayFlicaPairingLegs, parseFlicaSchedule } from '../flicaParse'
 
 const SCHEDULE_FIXTURE = `
 August Schedule
-DEREK FARMER
-(624619)
+JANE EXAMPLE
+(900001)
 Last Updated Aug 12, 2026 09:51:14 EDT
-L7513 : 04AUG  EXCEPT SUN SAT  BSE REPT: 0520L
+Z7513 : 04AUG  EXCEPT SUN SAT  BSE REPT: 0520L
 Base/Equip: LGA/EM7 CA01FO01
 TU 04  5770 LGA-DCA0605 0712 0107 0100 8823
 Crew:
-CA 624619 FARMER, DEREK FO 627385 SUTTON, DREW
+CA 900001 EXAMPLE, JANE FO 900003 SAMPLE, JOHN
 `
 
-const L7G13_DETAIL = `
-L7G13 : 12AUG  ONLY ON WED  BSE REPT: 1019L
+const Z7G13_DETAIL = `
+Z7G13 : 12AUG  ONLY ON WED  BSE REPT: 1019L
 Base/Equip: LGA/EM7 CA01
 WE 12  4442 LGA-RIC 1059 1226 0127
 WE 12  4442 RIC-LGA 1310 1426 0116
 Crew:
-CA 624619 FARMER, DEREK
+CA 900001 EXAMPLE, JANE
 `
 
 describe('flicaBlockDate', () => {
@@ -88,14 +89,14 @@ describe('htmlLooksLikeScheduleDetail', () => {
     expect(htmlLooksLikeScheduleDetail(menu)).toBe(false)
   })
 
-  it('accepts trip detail with L7G13 and legs', () => {
-    expect(htmlLooksLikeScheduleDetail(L7G13_DETAIL)).toBe(true)
+  it('accepts trip detail with Z7G13 and legs', () => {
+    expect(htmlLooksLikeScheduleDetail(Z7G13_DETAIL)).toBe(true)
   })
 
   it('accepts table HTML via parser even when raw-leg regex fails', async () => {
     const { htmlHasParseableScheduleLegs } = await import('../flicaClient')
     const html = `
-      <div>L7G13 : 12AUG</div>
+      <div>Z7G13 : 12AUG</div>
       <table>
         <tr><td>WE</td><td>12</td><td></td><td>4442</td><td>LGA-RIC</td><td>1059</td><td>1226</td><td>0127</td></tr>
         <tr><td>WE</td><td>12</td><td></td><td>4442</td><td>RIC-LGA</td><td>1310</td><td>1426</td><td>0116</td></tr>
@@ -186,7 +187,7 @@ describe('loginFlica', () => {
       }
       if (u.includes('flicaLogon.cgi') && init?.method === 'POST') {
         const body = String(init.body ?? '')
-        expect(body).toContain('UserId=RPA624619')
+        expect(body).toContain('UserId=TST000000')
         expect(body).toContain('Password=ok')
         expect(body).not.toMatch(/(^|&)id=/)
         expect(body).not.toMatch(/(^|&)password=/)
@@ -220,7 +221,7 @@ describe('loginFlica', () => {
 
     await loginFlica({
       host: 'rpa.flica.net',
-      username: 'RPA624619',
+      username: 'TST000000',
       password: 'ok',
     })
   })
@@ -271,7 +272,7 @@ describe('loginFlica', () => {
 
     const session = await loginFlica({
       host: 'rpa.flica.net',
-      username: 'RPA624619',
+      username: 'TST000000',
       password: 'ok',
     })
     expect(session.host).toBe('rpa.flica.net')
@@ -312,27 +313,27 @@ const LEFT_MENU_HTML = `
 const WARM_SCHEDULE_HTML = `
 <html><body>
 <a href="/full/scheduledetail.cgi?GO=1&token=${GO_TOKEN}&BlockDate=0826&JUNK=1">go</a>
-L7H18 : 18AUG
+Z7H18 : 18AUG
 Base/Equip: LGA/EM7 CA01FO01
 TH 20  4809 ATL-LGA 0609 0825 0216
 TH 20  4584 LGA-RIC 0912 1047 0135
 TH 20  4584 RIC-LGA 1117 1239 0122
 Crew:
-CA 624619 FARMER, DEREK
+CA 900001 EXAMPLE, JANE
 </body></html>
 `
 
 const GO_ACTUALS_HTML = padScheduleHtml(
   `
 <html><body>
-<div>L7H18 : 18AUG</div>
+<div>Z7H18 : 18AUG</div>
 <div>Last Updated Aug 20, 2026 14:00:00 EDT</div>
 <div>Base/Equip: LGA/EM7 CA01FO01</div>
 <div>TH 20 * 4809 ATL-LGA 0606 0809 0203</div>
 <div>TH 20  4584 LGA-RIC 0908 1103 0155</div>
 <div>TH 20  4584 RIC-LGA 1141 1256</div>
 <div>Crew:</div>
-<div>CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE</div>
+<div>CA 900001 EXAMPLE, JANE FO 900002 DOE, RICHARD</div>
 </body></html>
 `,
   FLICA_IMPORTABLE_SCHEDULE_MIN_BYTES
@@ -451,12 +452,12 @@ describe('fetchScheduleHtml', () => {
     const goSep = padScheduleHtml(
       `
 <html><body>
-<div>L8A01 : 01SEP</div>
+<div>Z8A01 : 01SEP</div>
 <div>Last Updated Sep 2, 2026 09:00:00 EDT</div>
 <div>Base/Equip: LGA/EM7 CA01</div>
 <div>TU 01  5001 LGA-ORD 0800 1000 0200</div>
 <div>Crew:</div>
-<div>CA 624619 FARMER, DEREK</div>
+<div>CA 900001 EXAMPLE, JANE</div>
 </body></html>
 `,
       FLICA_IMPORTABLE_SCHEDULE_MIN_BYTES
@@ -502,13 +503,13 @@ describe('fetchScheduleHtml', () => {
 const PAIRING_PUBLISHED_HTML = `
 <html><body>
 <div>Last Updated Aug 20, 2026 16:00:00 EDT</div>
-<div>L7H18 : 18AUG</div>
+<div>Z7H18 : 18AUG</div>
 <div>Base/Equip: LGA/EM7 CA01FO01</div>
 <div>TH 20 * 4809 ATL-LGA 0606 0809 0203</div>
 <div>TH 20  4584 LGA-RIC 0908 1103 0155</div>
 <div>TH 20  4584 RIC-LGA 1141 1256</div>
 <div>Crew:</div>
-<div>CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE</div>
+<div>CA 900001 EXAMPLE, JANE FO 900002 DOE, RICHARD</div>
 </body></html>
 `
 
@@ -516,14 +517,14 @@ const GO_WITH_PAIRING_LINK_HTML = padScheduleHtml(
   `
 <html><body>
 <div>Last Updated Aug 18, 2026 09:00:00 EDT</div>
-<div>L7H18 : 18AUG</div>
+<div>Z7H18 : 18AUG</div>
 <div>Base/Equip: LGA/EM7 CA01FO01</div>
-<a href="viewpairing.cgi?Trip=L7H18&token=abc">L7H18</a>
+<a href="viewpairing.cgi?Trip=Z7H18&token=abc">Z7H18</a>
 <div>TH 20 * 4809 ATL-LGA 0609 0825 0216</div>
 <div>TH 20  4584 LGA-RIC 0912 1047 0135</div>
 <div>TH 20  4584 RIC-LGA 1117 1239 0122</div>
 <div>Crew:</div>
-<div>CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE</div>
+<div>CA 900001 EXAMPLE, JANE FO 900002 DOE, RICHARD</div>
 </body></html>
 `,
   FLICA_IMPORTABLE_SCHEDULE_MIN_BYTES
@@ -532,7 +533,7 @@ const GO_WITH_PAIRING_LINK_HTML = padScheduleHtml(
 describe('extractFlicaPairingLinks', () => {
   it('finds Trip= pairing CGI links on the month refrigerator', () => {
     const links = extractFlicaPairingLinks(GO_WITH_PAIRING_LINK_HTML)
-    expect(links.some((l) => l.tripId === 'L7H18' && l.href.includes('viewpairing.cgi'))).toBe(
+    expect(links.some((l) => l.tripId === 'Z7H18' && l.href.includes('viewpairing.cgi'))).toBe(
       true
     )
   })
@@ -556,6 +557,22 @@ describe('extractFlicaPairingLinks', () => {
     const found = [...new Set(extractFlicaPairingLinks(html).map((l) => l.tripId))].sort()
     expect(found).toEqual([...ids].sort())
     for (const id of rejected) expect(found).not.toContain(id)
+  })
+
+  it('finds generic pairing ids only when that pattern is passed', () => {
+    const html = [
+      '<a href="viewpairing.cgi?Trip=Q8123&token=abc">Q8123</a>',
+      '<a href="/full/viewpairing.cgi?Trip=45821&token=abc">45821</a>',
+      '<a href="viewpairing.cgi?Trip=R11&token=abc">R11</a>',
+      '<a href="viewpairing.cgi?Trip=OFF&token=abc">OFF</a>',
+    ].join('\n')
+    const generic = [
+      ...new Set(
+        extractFlicaPairingLinks(html, GENERIC_FLICA_TRIP_ID_PATTERN).map((l) => l.tripId)
+      ),
+    ].sort()
+    expect(generic).toEqual(['45821', 'Q8123'])
+    expect(extractFlicaPairingLinks(html)).toEqual([])
   })
 })
 
@@ -592,5 +609,208 @@ describe('fetchFlicaPairingOverlays', () => {
     expect(merged.find((l) => l.flight_number === '4809')?.scheduled_in_local).toBe(
       '2026-08-20 08:09:00'
     )
+  })
+})
+
+describe('FlicaSession cookie scope', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('does not send stored cookies to an off-host redirect', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      const u = String(url)
+      if (u.includes('rpa.flica.net/start')) {
+        return {
+          ok: true,
+          status: 302,
+          headers: {
+            get: (name: string) =>
+              name.toLowerCase() === 'location' ? 'https://idp.example.test/saml' : null,
+            getSetCookie: () => ['SID=abc; Path=/'],
+          },
+          text: async () => '',
+        }
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null, getSetCookie: () => [] },
+        text: async () => '',
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const session = new FlicaSession('rpa.flica.net')
+    await session.request('https://rpa.flica.net/start', { method: 'GET' })
+
+    const offHostCall = fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes('idp.example.test')
+    )
+    expect(offHostCall).toBeDefined()
+    const headers = (offHostCall?.[1] as RequestInit | undefined)?.headers as
+      | Record<string, string>
+      | undefined
+    expect(headers?.Cookie).toBeUndefined()
+  })
+
+  it('sends cookies when redirect stays on *.flica.net', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+      const u = String(url)
+      if (u.includes('rpa.flica.net/start')) {
+        return {
+          ok: true,
+          status: 302,
+          headers: {
+            get: (name: string) =>
+              name.toLowerCase() === 'location' ? 'https://alt.rpa.flica.net/menu' : null,
+            getSetCookie: () => ['SID=abc; Path=/'],
+          },
+          text: async () => '',
+        }
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => null, getSetCookie: () => [] },
+        text: async () => '',
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const session = new FlicaSession('rpa.flica.net')
+    await session.request('https://rpa.flica.net/start', { method: 'GET' })
+
+    const flicaRedirect = fetchMock.mock.calls.find((call) =>
+      String(call[0]).includes('alt.rpa.flica.net')
+    )
+    const headers = (flicaRedirect?.[1] as RequestInit | undefined)?.headers as
+      | Record<string, string>
+      | undefined
+    expect(headers?.Cookie).toContain('SID=abc')
+  })
+})
+
+describe('loginFlica airline SSO guard', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('rejects login that redirects off *.flica.net', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url: string, init?: RequestInit) => {
+        const u = String(url)
+        if (u.includes('login/index')) {
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => null, getSetCookie: () => [] },
+            text: async () => '<html>login</html>',
+          }
+        }
+        if (u.includes('flicaLogon.cgi') && init?.method === 'POST') {
+          return {
+            ok: true,
+            status: 302,
+            headers: {
+              get: (name: string) =>
+                name.toLowerCase() === 'location' ? 'https://idp.example.test/sso' : null,
+              getSetCookie: () => [],
+            },
+            text: async () => '',
+          }
+        }
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null, getSetCookie: () => [] },
+          text: async () => '<html>sso</html>',
+        }
+      })
+    )
+
+    await expect(
+      loginFlica({ host: 'rpa.flica.net', username: 'RPA1', password: 'ok' })
+    ).rejects.toMatchObject({ code: 'airline_sso' } satisfies Partial<FlicaClientError>)
+  })
+
+  it('rejects SAML login pages without echoing the SAML payload in the error', async () => {
+    const secretToken = 'SAML_TOKEN_SHOULD_NOT_LEAK_9f3c2a'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url: string) => {
+        const u = String(url)
+        if (u.includes('login/index')) {
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => null, getSetCookie: () => [] },
+            text: async () => '<html>login</html>',
+          }
+        }
+        if (u.includes('flicaLogon.cgi')) {
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => null, getSetCookie: () => [] },
+            text: async () =>
+              `<html><form><input name="SAMLRequest" value="${secretToken}"/></form></html>`,
+          }
+        }
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null, getSetCookie: () => [] },
+          text: async () => '<html></html>',
+        }
+      })
+    )
+
+    try {
+      await loginFlica({ host: 'rpa.flica.net', username: 'RPA1', password: 'ok' })
+      expect.fail('expected airline_sso')
+    } catch (e) {
+      expect(e).toMatchObject({ code: 'airline_sso' })
+      expect((e as Error).message).not.toContain(secretToken)
+    }
+  })
+})
+
+describe('fetchScheduleHtml user-facing copy', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('mentions monthly schedule, not refrigerator, when no schedule is found', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url: string) => {
+        const u = String(url)
+        if (u.includes('mainmenu.cgi')) {
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => null, getSetCookie: () => [] },
+            text: async () => '<html><body>Crewmember Menu Schedules</body></html>',
+          }
+        }
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null, getSetCookie: () => [] },
+          text: async () => '<html><body>other</body></html>',
+        }
+      })
+    )
+    const session = new FlicaSession('rpa.flica.net')
+    try {
+      await fetchScheduleHtml(session, { dateFrom: '2026-08-20', dateTo: '2026-08-20' })
+      expect.fail('expected schedule_not_found')
+    } catch (e) {
+      expect(e).toMatchObject({ code: 'schedule_not_found' })
+      expect((e as Error).message.toLowerCase()).toContain('monthly schedule')
+      expect((e as Error).message.toLowerCase()).not.toContain('refrigerator')
+    }
   })
 })

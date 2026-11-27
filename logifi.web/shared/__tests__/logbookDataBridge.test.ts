@@ -66,8 +66,8 @@ const LOGTEN_NATIVE_SAMPLE_ROW = {
   flight_flightNumber: '4487',
   flight_from: 'KLGA',
   flight_to: 'KDCA',
-  flight_selectedCrewPIC: 'Derek Farmer',
-  flight_selectedCrewSIC: 'WILLIAM RIDDLE',
+  flight_selectedCrewPIC: 'Jane Example',
+  flight_selectedCrewSIC: 'Alex Pilot',
   flight_actualDepartureTime: '12:16',
   flight_actualArrivalTime: '13:21',
   flight_takeoffTime: '12:29',
@@ -87,7 +87,7 @@ const LOGTEN_NATIVE_SIC_TIME_ROW = {
   flight_flightNumber: '0003',
   flight_from: 'KBDL',
   flight_to: 'KBUF',
-  flight_selectedCrewPIC: 'Derek Farmer',
+  flight_selectedCrewPIC: 'Jane Example',
   flight_selectedCrewSIC: 'Ron Weasley',
   flight_totalTime: '3.00',
   flight_sic: '3.00',
@@ -128,8 +128,8 @@ const LOGTEN_DYNAMIC_SAMPLE_ROW = {
   Out: '1216',
   In: '1321',
   'Total Time': '1.08',
-  'PIC/P1 Crew': 'Derek Farmer',
-  'SIC/P2 Crew': 'WILLIAM RIDDLE',
+  'PIC/P1 Crew': 'Jane Example',
+  'SIC/P2 Crew': 'Alex Pilot',
   'Pilot Flying': '1',
   'Day Ldg': '1',
   'Approach 1': '1;01;KDCA',
@@ -293,6 +293,13 @@ describe('logbookDataBridge formatters', () => {
     expect(parseImportDate('2026-15-04')).toBeNull()
     expect(parseImportDate('Nov 14, 2026')).toBe('2026-11-14')
     expect(parseImportDate('4/5/26')).toBe('2026-04-05')
+  })
+
+  it('keeps the written calendar day for ISO timestamps with a zone', () => {
+    expect(parseImportDate('2026-08-29T00:00:00.000Z')).toBe('2026-08-29')
+    expect(parseImportDate('2026-08-29T23:30:00-05:00')).toBe('2026-08-29')
+    expect(parseImportDate('2024-06-13 14:30')).toBe('2024-06-13')
+    expect(parseImportDate('2026-15-04T00:00:00Z')).toBeNull()
   })
 
   it('builds full route strings', () => {
@@ -548,8 +555,8 @@ describe('logbookDataBridge importMappers', () => {
   it('enriches LogTen Dynamic Export row for PIC role and validation', () => {
     const entry = mapRawRowToLogEntry(LOGTEN_DYNAMIC_SAMPLE_ROW, { source: 'logten' })
     expect(entry).not.toBeNull()
-    enrichLogtenDynamicExportRow(entry!, LOGTEN_DYNAMIC_SAMPLE_ROW, 'Derek Farmer')
-    applyLogtenDynamicRoleAndTime(entry!, LOGTEN_DYNAMIC_SAMPLE_ROW, 'Derek Farmer')
+    enrichLogtenDynamicExportRow(entry!, LOGTEN_DYNAMIC_SAMPLE_ROW, 'Jane Example')
+    applyLogtenDynamicRoleAndTime(entry!, LOGTEN_DYNAMIC_SAMPLE_ROW, 'Jane Example')
 
     expect(entry?.role).toBe('PIC')
     expect(entry?.flightTime.pic).toBe(1.1)
@@ -567,7 +574,7 @@ describe('logbookDataBridge importMappers', () => {
     }
     const entry = mapRawRowToLogEntry(row, { source: 'logten' })
     expect(entry?.aircraftMakeModel).toBe('EMBRAER (Brazil) EMB-170/175')
-    enrichLogtenDynamicExportRow(entry!, row, 'Derek Farmer')
+    enrichLogtenDynamicExportRow(entry!, row, 'Jane Example')
     expect(entry?.aircraftMakeModel).toBe('EMBRAER (Brazil) EMB-170/175')
   })
 
@@ -586,11 +593,11 @@ describe('logbookDataBridge importMappers', () => {
   })
 
   it('matches crew names flexibly by last name and first initial', () => {
-    expect(namesMatchFlexible('Derek Farmer', 'DEREK FARMER')).toBe(true)
-    expect(namesMatchFlexible('Derek Farmer', 'Farmer, Derek')).toBe(false)
-    expect(namesMatchFlexible('D Farmer', 'Derek Farmer')).toBe(true)
-    expect(namesMatchFlexible('Derek', 'Derek Farmer')).toBe(true)
-    expect(namesMatchFlexible('Derek Farmer', 'Derek')).toBe(true)
+    expect(namesMatchFlexible('Jane Example', 'JANE EXAMPLE')).toBe(true)
+    expect(namesMatchFlexible('Jane Example', 'Example, Jane')).toBe(false)
+    expect(namesMatchFlexible('J Example', 'Jane Example')).toBe(true)
+    expect(namesMatchFlexible('Jane', 'Jane Example')).toBe(true)
+    expect(namesMatchFlexible('Jane Example', 'Jane')).toBe(true)
   })
 
   it('parses LogTen Approach 1 semicolon format', () => {
@@ -674,8 +681,8 @@ describe('logbookDataBridge importMappers', () => {
     expect(entry?.registration).toBe('N430YX')
     expect(entry?.flightNumber).toBe('4487')
     expect(entry?.role).toBe('PIC')
-    expect(entry?.picName).toBe('Derek Farmer')
-    expect(entry?.sicName).toBe('WILLIAM RIDDLE')
+    expect(entry?.picName).toBe('Jane Example')
+    expect(entry?.sicName).toBe('Alex Pilot')
     expect(entry?.flightTime.pic).toBe(1.1)
     expect(entry?.flightTime.total).toBeNull()
     expect(entry?.aircraftCategoryClass).toBe('AMEL')
@@ -685,9 +692,9 @@ describe('logbookDataBridge importMappers', () => {
   it('assigns other crew member for LogTen native PIC import', () => {
     const entry = mapRawRowToLogEntry(LOGTEN_NATIVE_SAMPLE_ROW, { source: 'logten' })
     expect(entry).not.toBeNull()
-    applyLogtenCrewFields(entry!, LOGTEN_NATIVE_SAMPLE_ROW, 'Derek Farmer')
+    applyLogtenCrewFields(entry!, LOGTEN_NATIVE_SAMPLE_ROW, 'Jane Example')
 
-    expect(entry?.trainingElements).toBe('WILLIAM RIDDLE')
+    expect(entry?.trainingElements).toBe('Alex Pilot')
     expect(entry?.trainingInstructor).toBe('First Officer')
 
     const errors = validatePart61RequiredFields(entry!).filter((r) => r.type === 'error')
@@ -702,7 +709,7 @@ describe('logbookDataBridge importMappers', () => {
 
     const seat = inferImporterSeat(
       entry!,
-      'Derek Farmer',
+      'Jane Example',
       'Ron Weasley',
       'Test Test'
     )
@@ -714,7 +721,7 @@ describe('logbookDataBridge importMappers', () => {
     expect(entry).not.toBeNull()
     applyLogtenCrewFields(entry!, LOGTEN_NATIVE_SIC_TIME_ROW, 'Test Test')
 
-    expect(entry?.trainingElements).toBe('Derek Farmer')
+    expect(entry?.trainingElements).toBe('Jane Example')
     expect(entry?.trainingInstructor).toBe('Captain')
     expect(entry?.role).toBe('SIC')
   })
@@ -722,7 +729,7 @@ describe('logbookDataBridge importMappers', () => {
   it('assigns Ron Weasley as Captain when profile is in PIC column but SIC time logged', () => {
     const entry = mapRawRowToLogEntry(LOGTEN_NATIVE_SIC_TIME_ROW, { source: 'logten' })
     expect(entry).not.toBeNull()
-    applyLogtenCrewFields(entry!, LOGTEN_NATIVE_SIC_TIME_ROW, 'Derek Farmer')
+    applyLogtenCrewFields(entry!, LOGTEN_NATIVE_SIC_TIME_ROW, 'Jane Example')
 
     expect(entry?.trainingElements).toBe('Ron Weasley')
     expect(entry?.trainingInstructor).toBe('Captain')
@@ -799,6 +806,39 @@ describe('logbookDataBridge export', () => {
     const obj = buildHeaderRowObject(FOREFLIGHT_FLIGHT_HEADERS, row)
     expect(obj['AircraftID']).toBe('N172P')
     expect(obj['TotalTime']).toBe('1.5')
+  })
+
+  it('carries logged takeoffs through ForeFlight and LogTen export and re-import', () => {
+    const logged = createTestEntry()
+    logged.performance = { ...logged.performance, dayTakeoffs: 2, nightTakeoffs: 1, dayLandings: 3, nightLandings: 1 }
+
+    const ff = buildHeaderRowObject(FOREFLIGHT_FLIGHT_HEADERS, mapEntryToForeFlightFlightRow(logged))
+    expect([ff['DayTakeoffs'], ff['NightTakeoffs']]).toEqual(['2', '1'])
+    const ffBack = mapRawRowToLogEntry(ff, { source: 'foreflight' })
+    expect([ffBack?.performance.dayTakeoffs, ffBack?.performance.nightTakeoffs]).toEqual([2, 1])
+
+    const lt = buildHeaderRowObject(LOGTEN_HEADERS, mapEntryToLogTenRow(logged))
+    expect([lt.flight_dayTakeoffs, lt.flight_nightTakeoffs]).toEqual(['2', '1'])
+    const ltBack = mapRawRowToLogEntry(lt, { source: 'logten' })
+    expect([ltBack?.performance.dayTakeoffs, ltBack?.performance.nightTakeoffs]).toEqual([2, 1])
+  })
+
+  it('leaves takeoffs blank on export when they were not logged', () => {
+    const notLogged = createTestEntry()
+    notLogged.performance = { ...notLogged.performance, dayTakeoffs: null, nightTakeoffs: null, dayLandings: 3 }
+
+    const ff = buildHeaderRowObject(FOREFLIGHT_FLIGHT_HEADERS, mapEntryToForeFlightFlightRow(notLogged))
+    expect(ff['DayTakeoffs']).toBe('')
+    expect(mapRawRowToLogEntry(ff, { source: 'foreflight' })?.performance.dayTakeoffs).toBeNull()
+
+    const lt = buildHeaderRowObject(LOGTEN_HEADERS, mapEntryToLogTenRow(notLogged))
+    expect(lt.flight_dayTakeoffs).toBe('')
+    expect(mapRawRowToLogEntry(lt, { source: 'logten' })?.performance.dayTakeoffs).toBeNull()
+  })
+
+  it('does not add takeoff columns to formats that have none', () => {
+    expect(MYFLIGHTBOOK_HEADERS.some((h) => /takeoff|t\/o/i.test(h))).toBe(false)
+    expect(GENERIC_HEADERS.some((h) => /takeoff|t\/o/i.test(h))).toBe(false)
   })
 
   it('maps LogTen flat keys', () => {
@@ -1077,8 +1117,8 @@ describe('logbookDataBridge ingest', () => {
         '',
         '1321',
         '1.08',
-        'Derek Farmer',
-        'WILLIAM RIDDLE',
+        'Jane Example',
+        'Alex Pilot',
         '1',
         '1;01;KDCA',
         '1.08',
@@ -1096,8 +1136,8 @@ describe('logbookDataBridge ingest', () => {
         '',
         '1519',
         '2.40',
-        'Derek Farmer',
-        'WILLIAM RIDDLE',
+        'Jane Example',
+        'Alex Pilot',
         '1',
         '1;22;KLGA',
         '2.40',
@@ -1116,7 +1156,7 @@ describe('logbookDataBridge ingest', () => {
         '',
         '0900',
         '1.0',
-        'Derek Farmer',
+        'Jane Example',
         'OTHER PILOT',
         '',
         '',
@@ -1226,20 +1266,20 @@ describe('PIC Name / SIC Name import and native export', () => {
     expect(entry?.flightTime.total).toBe(1.5)
   })
 
-  it('fills Job and Pilot name from E-175 remarks (Derek Farmer 624619)', () => {
+  it('fills Job and Pilot name from E-175 remarks with synthetic name and employee number', () => {
     const row = {
       ...crewBaseRow,
       Role: 'PIC',
       PIC: '1.5',
-      Remarks: 'Derek Farmer 624619',
+      Remarks: 'Jane Example 900001',
     }
     const entry = mapRawRowToLogEntry(row)
-    expect(entry?.sicName).toBe('Derek Farmer')
-    expect(entry?.trainingElements).toBe('Derek Farmer')
+    expect(entry?.sicName).toBe('Jane Example')
+    expect(entry?.trainingElements).toBe('Jane Example')
     expect(entry?.trainingInstructor).toBe('First Officer')
 
     applyLogtenCrewFields(entry!, row, 'Someone Else')
-    expect(entry?.trainingElements).toBe('Derek Farmer')
+    expect(entry?.trainingElements).toBe('Jane Example')
     expect(entry?.trainingInstructor).toBe('First Officer')
     expect(entry?.flightTime.pic).toBe(1.5)
   })
@@ -1366,6 +1406,22 @@ describe('Logifi-native lesson text vs crew catalog', () => {
       .filter(Boolean)
 
     expect(snapshotSavedFields(reimported!)).toEqual(saved)
+  })
+
+  it('keeps the exported Role on a native round trip even when PIC time is logged', () => {
+    const entry = mapRawRowToLogEntry(
+      {
+        Date: '2024-06-13',
+        Role: 'Instructor',
+        Registration: 'N172GC',
+        'Aircraft Make/Model': 'C-172',
+        'Total Flight Time': '1.5',
+        PIC: '1.5',
+        'Dual Given': '1.5',
+      },
+      { source: 'logifi-native' }
+    )
+    expect(entry?.role).toBe('Instructor')
   })
 
   it('still copies Training Elements when it is a person name', () => {

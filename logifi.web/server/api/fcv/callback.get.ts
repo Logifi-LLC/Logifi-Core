@@ -4,6 +4,8 @@ import type { Database } from '../../../app/types/database'
 import { verifyFcvState } from '../../utils/fcvState'
 import { fetchFcvWithRetry } from '../../utils/fcvRetryFetch'
 import { getFcvIntegrationEnv } from '../../utils/fcvEnv'
+import { sealFcvToken } from '../../utils/fcvToken'
+import { SecretBoxError } from '../../utils/secretBox'
 
 const clean = (value: unknown) => (typeof value === 'string' ? value.trim() : '')
 
@@ -181,6 +183,22 @@ export default defineEventHandler(async (event) => {
 
   const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000).toISOString()
 
+  let sealedAccess: string
+  let sealedRefresh: string
+  try {
+    sealedAccess = sealFcvToken(tokenData.access_token)
+    sealedRefresh = sealFcvToken(tokenData.refresh_token)
+  } catch (e) {
+    console.error('FC View token seal failed:', e instanceof Error ? e.message : 'unknown')
+    return redirectWithFcvError(
+      event,
+      e instanceof SecretBoxError
+        ? 'FC View token encryption is not configured.'
+        : 'Connected to FC View but failed to save integration.',
+      native
+    )
+  }
+
   if (!serviceRoleKey) {
     return redirectWithFcvError(
       event,
@@ -196,8 +214,8 @@ export default defineEventHandler(async (event) => {
   const { error: upsertError } = await supabase.from('fcv_integrations').upsert(
     {
       user_id: userId,
-      access_token: tokenData.access_token,
-      refresh_token: tokenData.refresh_token,
+      access_token: sealedAccess,
+      refresh_token: sealedRefresh,
       expires_at: expiresAt,
       updated_at: new Date().toISOString(),
     },

@@ -1,9 +1,6 @@
 import type { DigifiScanRow, DigifiTemplateColumn } from '~/utils/digifiTypes'
 import type { LogbookColumnKey } from '~/utils/logbookTypes'
-import {
-  detectPageFooterOutlierRowIndex,
-  rowHasThinFlightIdentity,
-} from '~/utils/digifiScanRowReview'
+import { detectPageFooterOutlierRowIndex } from '~/utils/digifiScanRowReview'
 
 const TOTALS_KEYWORD_RE =
   /\b(total|totals|brought forward|carried forward|amount forward|page total)\b/i
@@ -102,5 +99,3 @@ export function sanitizeDigifiScanRows(
     footerOutlierRowIndex,
   }
 }
-
-export { rowHasThinFlightIdentity }

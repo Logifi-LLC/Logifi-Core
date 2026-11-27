@@ -105,6 +105,7 @@
       :available-metrics="availableMetrics"
       :selected-metrics="selectedMetrics"
       :show-currency-chips="showCurrencyChips"
+      :show-atp-progress="showAtpProgress"
       :show-far117-lookbacks="showFar117Lookbacks"
       :logbook-layout-presets="logbookLayoutPresets"
       :active-logbook-layout-preset-id="activeLogbookLayoutPresetId"
@@ -116,6 +117,7 @@
       @set-entry-form-mode="$emit('set-entry-form-mode', $event)"
       @toggle-metric="$emit('toggle-metric', $event)"
       @toggle-currency-chips="$emit('toggle-currency-chips')"
+      @toggle-atp-progress="$emit('toggle-atp-progress')"
       @toggle-far117-lookbacks="$emit('toggle-far117-lookbacks')"
       @apply-logbook-layout-preset="$emit('apply-logbook-layout-preset', $event)"
       @toggle-logbook-layout-field="$emit('toggle-logbook-layout-field', $event)"
@@ -226,6 +228,7 @@ const props = defineProps<{
   availableMetrics: { key: string; label: string }[]
   selectedMetrics: string[]
   showCurrencyChips: boolean
+  showAtpProgress: boolean
   showFar117Lookbacks: boolean
   isIos: boolean
   logbookLayoutPresets: readonly EntryCardPreset[]
@@ -273,6 +276,7 @@ defineEmits<{
   'set-entry-form-mode': [mode: EntryFormMode]
   'toggle-metric': [key: string]
   'toggle-currency-chips': []
+  'toggle-atp-progress': []
   'toggle-far117-lookbacks': []
   'apply-logbook-layout-preset': [id: EntryCardPresetId]
   'toggle-logbook-layout-field': [key: LogbookColumnKey]

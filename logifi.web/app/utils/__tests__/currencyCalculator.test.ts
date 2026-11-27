@@ -57,6 +57,56 @@ describe('currencyCalculator', () => {
     ...overrides
   })
 
+  describe('takeoffs (61.57(a)/(b) need takeoffs and landings)', () => {
+    const perf = (p: Partial<LogEntry['performance']>): LogEntry['performance'] => ({
+      dayTakeoffs: null,
+      nightTakeoffs: null,
+      dayLandings: null,
+      nightLandings: null,
+      approachCount: null,
+      holdingProcedures: null,
+      ...p,
+    })
+    const today = new Date(2024, 2, 15)
+
+    it('counts takeoffs that were not logged as the landings, as before', () => {
+      const entries = [createTestEntry({ date: '2024-03-01', performance: perf({ dayLandings: 3 }) })]
+      const result = calculatePassengerCurrency(entries, today)
+      expect(result.isCurrent).toBe(true)
+      expect(result.takeoffs).toBe(3)
+      expect(result.landings).toBe(3)
+    })
+
+    it('requires the logged takeoffs, not landings, once takeoffs are entered', () => {
+      const entries = [
+        createTestEntry({ date: '2024-03-01', performance: perf({ dayTakeoffs: 1, dayLandings: 3 }) }),
+      ]
+      const result = calculatePassengerCurrency(entries, today)
+      expect(result.isCurrent).toBe(false)
+      expect(result.takeoffs).toBe(1)
+    })
+
+    it('treats an explicit 0 as no takeoffs', () => {
+      const entries = [
+        createTestEntry({ date: '2024-03-01', performance: perf({ nightTakeoffs: 0, nightLandings: 3 }) }),
+      ]
+      expect(calculateNightCurrency(entries, today).isCurrent).toBe(false)
+    })
+
+    it('adds day and night takeoffs and defaults each side on its own', () => {
+      const entries = [
+        createTestEntry({
+          date: '2024-03-01',
+          performance: perf({ dayTakeoffs: 1, dayLandings: 1, nightLandings: 2 }),
+        }),
+      ]
+      const passenger = calculatePassengerCurrency(entries, today)
+      expect(passenger.takeoffs).toBe(3)
+      expect(passenger.isCurrent).toBe(true)
+      expect(calculateNightCurrency(entries, today).takeoffs).toBe(2)
+    })
+  })
+
   describe('calculatePassengerCurrency', () => {
     it('should return expired status when no entries provided', () => {
       const result = calculatePassengerCurrency([])
@@ -327,9 +377,9 @@ describe('currencyCalculator', () => {
             crossCountry: null,
           },
           performance: {
-            dayTakeoffs: 0,
+            dayTakeoffs: null,
             dayLandings: 0,
-            nightTakeoffs: 0,
+            nightTakeoffs: null,
             nightLandings: 3,
             approachCount: null,
             holdingProcedures: null,
@@ -499,6 +549,46 @@ describe('currencyCalculator', () => {
 
       const expired = calculateInstrumentCurrency(entries, new Date(2025, 3, 1))
       expect(expired.needsIpc).toBe(true)
+    })
+
+    describe('after the grace period has passed (61.57(d))', () => {
+      it('does not restore currency with approaches alone', () => {
+        const entries = [instrumentPack('2024-01-15'), instrumentPack('2025-06-10')]
+        const result = calculateInstrumentCurrency(entries, new Date(2025, 5, 15))
+        expect(result.isCurrent).toBe(false)
+        expect(result.status).toBe('expired')
+        expect(result.needsIpc).toBe(true)
+      })
+
+      it('stays expired later instead of showing a grace period from the post-lapse approaches', () => {
+        const entries = [instrumentPack('2024-01-15'), instrumentPack('2025-06-10')]
+        const result = calculateInstrumentCurrency(entries, new Date(2026, 0, 15))
+        expect(result.status).toBe('expired')
+        expect(result.needsIpc).toBe(true)
+      })
+
+      it('is restored by an IPC, and approaches after the IPC extend it', () => {
+        const entries = [
+          instrumentPack('2024-01-15'),
+          createTestEntry({ date: '2025-06-01', tags: ['IPC'] }),
+          instrumentPack('2025-11-10'),
+        ]
+        const result = calculateInstrumentCurrency(entries, new Date(2026, 2, 1))
+        expect(result.isCurrent).toBe(true)
+        expectYmd(result.expirationDate, '2026-05-31')
+      })
+
+      it('still lets approaches flown inside the grace period restore currency', () => {
+        const entries = [instrumentPack('2024-01-15'), instrumentPack('2024-11-10')]
+        const result = calculateInstrumentCurrency(entries, new Date(2024, 11, 1))
+        expect(result.isCurrent).toBe(true)
+        expectYmd(result.expirationDate, '2025-05-31')
+      })
+
+      it('counts experience when the logbook has no earlier instrument currency', () => {
+        const result = calculateInstrumentCurrency([instrumentPack('2025-06-10')], new Date(2025, 5, 15))
+        expect(result.isCurrent).toBe(true)
+      })
     })
 
     it('does not treat IPC in remarks as an IPC', () => {

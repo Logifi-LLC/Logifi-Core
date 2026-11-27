@@ -530,6 +530,12 @@ describe('fetchFlightAwareActuals', () => {
     ])
   })
 
+  it('prefixes a non-Republic code and does not use the Republic ident tiers', () => {
+    expect(flightAwareSearchIdents('2101', 'EDV')).toEqual(['EDV2101'])
+    expect(flightAwareSearchIdentTiers('2101', 'EDV')).toEqual([['EDV2101']])
+    expect(aeroDataBoxFlightNumberCandidates('2101', 'EDV')).toEqual(['2101'])
+  })
+
   it('does not query tier-2 RJET idents when tier-1 RPA hits', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

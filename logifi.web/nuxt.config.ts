@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import tailwindcss from '@tailwindcss/vite'
+import { OG_IMAGE_URL } from './shared/publicSeo'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -167,7 +168,13 @@ export default defineNuxtConfig({
   ssr: false,
   nitro: {
     prerender: {
-      routes: ['/']
+      routes: [
+        '/',
+        '/faq',
+        '/how-to-digitize-a-paper-pilot-logbook',
+        '/import-foreflight-logten-logbook',
+        '/airline-pilot-logbook-app',
+      ]
     },
     hooks: {
       // ssr:false also prerenders /index.html. Both routes write public/index.html.
@@ -201,7 +208,7 @@ export default defineNuxtConfig({
           content:
             'Free, FAA-compliant digital pilot logbooks. AI-powered paper scanning with Digifi, airline schedule import, and open-source transparency.',
         },
-        { property: 'og:image', content: '/images/og-image.png' },
+        { property: 'og:image', content: OG_IMAGE_URL },
         { property: 'og:image:width', content: '1200' },
         { property: 'og:image:height', content: '630' },
         { name: 'twitter:card', content: 'summary_large_image' },
@@ -211,7 +218,7 @@ export default defineNuxtConfig({
           content:
             'Free, FAA-compliant digital pilot logbooks. AI-powered paper scanning with Digifi, airline schedule import, and open-source transparency.',
         },
-        { name: 'twitter:image', content: '/images/og-image.png' },
+        { name: 'twitter:image', content: OG_IMAGE_URL },
       ],
       link: [
         { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32.png' },

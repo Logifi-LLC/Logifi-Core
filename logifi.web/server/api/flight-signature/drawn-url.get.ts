@@ -52,6 +52,12 @@ export default defineEventHandler(async (event) => {
   }
 
   const normalizedPath = storagePath.replace(/^flight-signatures\//, '')
+  // Drawn ink is always uploaded under the entry owner's folder. A stored path elsewhere
+  // would make the service role sign another user's image.
+  if (!normalizedPath.startsWith(`${userId}/`) || normalizedPath.includes('..')) {
+    console.warn('[flight-signature] refusing drawn signature path outside owner folder')
+    throw createError({ statusCode: 403, statusMessage: 'Signature image not available' })
+  }
   const { data, error: urlError } = await service.storage
     .from(GUEST_SIGN_BUCKET)
     .createSignedUrl(normalizedPath, 60 * 60)

@@ -141,10 +141,11 @@ function extractOtherCrewFromLeg(
   return { name: picked.name, label: picked.label, rawName: picked.name }
 }
 
+/** Logbook date is the block-out date; takeoff can fall after midnight on a late push. */
 function primaryDepartureLocal(leg: AirlineLeg): string | null {
   const candidates = [
-    leg.actual_off_local,
     leg.actual_out_local,
+    leg.actual_off_local,
     leg.scheduled_out_local,
   ]
   for (const c of candidates) {
@@ -302,11 +303,12 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
   const otherCrew = ownRole ? extractOtherCrewFromLeg(leg, ownRole) : null
   const otherPilotName = otherCrew?.name.trim() || null
   const otherPilotLabel = otherPilotName ? (otherCrew?.label ?? null) : null
-  const flight_time = buildFlightTimeForLeg(blockHours, dep, arr, ownRole)
+  // A deadhead is positioning as a passenger: no loggable flight time or conditions.
+  const flight_time = leg.is_deadhead ? {} : buildFlightTimeForLeg(blockHours, dep, arr, ownRole)
   const xcRaw = flight_time.crossCountry
   const xcHours =
     typeof xcRaw === 'number' && Number.isFinite(xcRaw) && xcRaw > 0 ? xcRaw : null
-  const flight_conditions = buildFlightConditions(xcHours)
+  const flight_conditions = leg.is_deadhead ? [] : buildFlightConditions(xcHours)
 
   const importSource = leg.import_source
 
@@ -315,7 +317,7 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
     date: date || '',
     role: ownRole ?? '',
     aircraft_category_class: mapAircraftCategoryClass(sourceCategory),
-    category_class_time: blockHours,
+    category_class_time: leg.is_deadhead ? null : blockHours,
     aircraft_make_model: aircraftType || 'Unknown',
     registration,
     flight_number: fn,
@@ -356,6 +358,7 @@ export function mapAirlineLegToFcvMappedEntry(leg: AirlineLeg): FcvMappedEntry {
 
   applyAirlineNightToMappedEntry(mapped, {
     outLocal: firstDatetime(leg.actual_out_local, leg.scheduled_out_local),
+    offLocal: leg.actual_off_local,
     inLocal: firstDatetime(leg.actual_in_local, leg.scheduled_in_local),
     onLocal: leg.actual_on_local,
     isDeadhead: leg.is_deadhead,

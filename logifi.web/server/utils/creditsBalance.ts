@@ -173,7 +173,7 @@ export async function listCreditTransactions(
   userId: string,
   limit = 20
 ): Promise<CreditTransactionRow[]> {
-  const safeLimit = Math.min(Math.max(1, limit), 100)
+  const safeLimit = Number.isFinite(limit) ? Math.min(Math.max(1, Math.floor(limit)), 100) : 20
   const { data, error } = await service
     .from('credit_transactions')
     .select('*')
@@ -273,41 +273,6 @@ export async function grantWelcomeCredits(
   return { credits, granted: true }
 }
 
-/** @deprecated Use consumeCreditForSpread for Digifi scans. */
-export async function consumeCredit(
-  service: ServiceClient,
-  userId: string
-): Promise<{ ok: boolean; balance: number }> {
-  await ensureUserProfile(service, userId)
-  const current = await getCreditsBalance(service, userId)
-  if (current < 1) {
-    return { ok: false, balance: current }
-  }
-
-  const next = current - 1
-
-  const { data, error } = await service
-    .from('user_profiles')
-    .update({ credits: next, updated_at: new Date().toISOString() })
-    .eq('id', userId)
-    .select('credits')
-    .single()
-
-  if (error) {
-    throw new Error(`Failed to consume credit: ${error.message}`)
-  }
-
-  await insertCreditTransaction(service, {
-    userId,
-    amount: -1,
-    balanceAfter: data.credits,
-    type: 'scan',
-    description: 'Digifi scan',
-  })
-
-  return { ok: true, balance: data.credits }
-}
-
 export async function assertCanScanSpread(
   service: ServiceClient,
   userId: string,
@@ -365,19 +330,9 @@ export async function consumeCreditForSpread(
     return { ok: false, charged: false, balance }
   }
 
-  const next = balance - 1
-
-  const { data: updated, error: updateError } = await service
-    .from('user_profiles')
-    .update({ credits: next, updated_at: new Date().toISOString() })
-    .eq('id', userId)
-    .select('credits')
-    .single()
-
-  if (updateError) {
-    throw new Error(`Failed to consume credit: ${updateError.message}`)
-  }
-
+  // Claim the spread first: its UNIQUE (user_id, spread_id) stops a concurrent retry from
+  // charging twice. Then decrement atomically so a purchase landing mid-scan is never
+  // overwritten by a stale balance.
   const { error: chargeError } = await service.from('digifi_spread_charges').insert({
     user_id: userId,
     spread_id: input.spreadId,
@@ -386,30 +341,41 @@ export async function consumeCreditForSpread(
   })
 
   if (chargeError) {
-    // Roll back balance if spread charge row failed (e.g. race on unique constraint)
-    await service
-      .from('user_profiles')
-      .update({ credits: balance, updated_at: new Date().toISOString() })
-      .eq('id', userId)
-
     if (chargeError.code === '23505') {
       const retryBalance = await getCreditsBalance(service, userId)
       return { ok: true, charged: false, balance: retryBalance }
     }
-
     throw new Error(`Failed to record spread charge: ${chargeError.message}`)
+  }
+
+  let newBalance: number
+  try {
+    newBalance = await incrementCreditsBalance(service, userId, -1)
+  } catch (err) {
+    const { error: releaseError } = await service
+      .from('digifi_spread_charges')
+      .delete()
+      .eq('user_id', userId)
+      .eq('spread_id', input.spreadId)
+    if (releaseError) {
+      console.error('[credits] failed to release spread charge after debit error:', releaseError.message)
+    }
+    if (err instanceof Error && /insufficient credits/i.test(err.message)) {
+      return { ok: false, charged: false, balance: await getCreditsBalance(service, userId) }
+    }
+    throw err instanceof Error ? err : new Error('Failed to consume credit')
   }
 
   await insertCreditTransaction(service, {
     userId,
     amount: -1,
-    balanceAfter: updated.credits,
+    balanceAfter: newBalance,
     type: 'scan',
     description: 'Digifi spread scan',
     spreadId: input.spreadId,
   })
 
-  return { ok: true, charged: true, balance: updated.credits }
+  return { ok: true, charged: true, balance: newBalance }
 }
 
 export async function linkSpreadChargeToScanSession(

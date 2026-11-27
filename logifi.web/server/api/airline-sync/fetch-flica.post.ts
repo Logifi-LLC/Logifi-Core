@@ -28,7 +28,13 @@ import {
   FlicaClientError,
   type FlicaSession,
 } from '../../utils/flicaClient'
-import { resolveFlicaPortal } from '../../utils/flicaPortal'
+import {
+  airlineHasActiveCrewDigest,
+  FlicaDisabledAirlineError,
+  FlicaUnsupportedAirlineError,
+  flicaAirlineSsoUserMessage,
+  resolveFlicaPortal,
+} from '../../utils/flicaPortal'
 import { unsealSecret, SecretBoxError } from '../../utils/secretBox'
 import type { FcvMappedEntry } from '../../utils/fcvMap'
 import { normalizeCalendarYmd } from '../../../shared/localCalendarDate'
@@ -278,6 +284,9 @@ export default defineEventHandler(async (event) => {
   try {
     portal = resolveFlicaPortal(body.airlineCode)
   } catch (e) {
+    if (e instanceof FlicaUnsupportedAirlineError || e instanceof FlicaDisabledAirlineError) {
+      throw createError({ statusCode: 409, statusMessage: e.message })
+    }
     throw createError({
       statusCode: 400,
       statusMessage: e instanceof Error ? e.message : 'Unsupported airline',
@@ -288,7 +297,7 @@ export default defineEventHandler(async (event) => {
   const { data: integration, error: loadErr } = await supabase
     .from('flica_integrations')
     .select(
-      'id, username, password_ciphertext, password_nonce, portal_host, airline_code'
+      'id, username, password_ciphertext, password_nonce, airline_code'
     )
     .eq('user_id', userId)
     .eq('airline_code', portal.airlineCode)
@@ -321,7 +330,8 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const host = integration.portal_host || portal.host
+  // portal_host is user-writable under RLS; only connect to the carrier table's host.
+  const host = portal.host
   const nowMs = Date.now()
   const todayYmd = DateTime.fromMillis(nowMs, { zone: FLICA_DEFAULT_NOW_ZONE }).toFormat(
     'yyyy-MM-dd'
@@ -341,7 +351,11 @@ export default defineEventHandler(async (event) => {
       username: integration.username,
       password,
     })
-    scheduleHtml = await fetchScheduleHtml(session, { dateFrom, dateTo })
+    scheduleHtml = await fetchScheduleHtml(session, {
+      dateFrom,
+      dateTo,
+      tripIdPattern: portal.tripIdPattern,
+    })
     await supabase
       .from('flica_integrations')
       .update({ last_ok_at: new Date().toISOString(), last_error: null })
@@ -358,12 +372,14 @@ export default defineEventHandler(async (event) => {
 
     if (e instanceof FlicaClientError) {
       const status =
-        e.code === 'login_failed' || e.code === 'mfa_required'
-          ? 401
-          : e.code === 'schedule_not_found'
-            ? 502
+        e.code === 'airline_sso'
+          ? 409
+          : e.code === 'login_failed' || e.code === 'mfa_required'
+            ? 401
             : 502
-      throw createError({ statusCode: status, statusMessage: message })
+      const statusMessage =
+        e.code === 'airline_sso' ? flicaAirlineSsoUserMessage(portal.label) : message
+      throw createError({ statusCode: status, statusMessage })
     }
     throw createError({ statusCode: 502, statusMessage: message })
   }
@@ -371,13 +387,13 @@ export default defineEventHandler(async (event) => {
   const defaultYear = parseInt(dateFrom.slice(0, 4), 10)
   const parseOpts = {
     defaultYear: Number.isFinite(defaultYear) ? defaultYear : undefined,
+    tripIdPattern: portal.tripIdPattern,
   }
-  const htmlSummary = summarizeFlicaHtml(scheduleHtml)
+  const htmlSummary = summarizeFlicaHtml(scheduleHtml, portal.tripIdPattern)
   console.info('[flica] schedule html', {
+    airline: portal.airlineCode,
     bytes: htmlSummary.bytes,
     trips: htmlSummary.tripCount,
-    hasL7G13: htmlSummary.hasL7G13,
-    has4442: htmlSummary.has4442,
   })
   let parsed = parseFlicaSchedule(scheduleHtml, parseOpts)
   try {
@@ -385,12 +401,27 @@ export default defineEventHandler(async (event) => {
       dateFrom,
       dateTo,
       defaultYear: parseOpts.defaultYear,
+      tripIdPattern: portal.tripIdPattern,
     })
     if (pairingLegs.length > 0) {
       parsed = overlayFlicaPairingLegs(parsed, pairingLegs)
     }
   } catch {
     /* month HTML is still usable */
+  }
+
+  if (parsed.length === 0 || !parsed.some((leg) => leg.trip_number)) {
+    console.info('[flica] unrecognized schedule layout', {
+      airline: portal.airlineCode,
+      bytes: htmlSummary.bytes,
+      trips: htmlSummary.tripCount,
+      parsedLegs: parsed.length,
+    })
+    throw createError({
+      statusCode: 422,
+      statusMessage:
+        "FLICA returned a schedule, but no pairing matched this airline's monthly schedule layout. Nothing was imported.",
+    })
   }
 
   const pre = filterAirlineLegsWithStats(parsed, {
@@ -449,12 +480,7 @@ export default defineEventHandler(async (event) => {
         : `Could not enrich ${enrichAttempted} flight(s) from ${providerName}. Preview shows FLICA schedule times only.`
     )
   }
-  if (parsed.length === 0) {
-    warningParts.push(
-      `FLICA schedule HTML loaded (${htmlSummary.bytes} bytes, ${htmlSummary.tripCount} trip header(s), L7G13=${htmlSummary.hasL7G13 ? 'yes' : 'no'}, 4442=${htmlSummary.has4442 ? 'yes' : 'no'}) but no flight legs were recognized.` +
-        (htmlSummary.sample ? ` Sample: "${htmlSummary.sample}"` : '')
-    )
-  } else if (mapped.length === 0) {
+  if (mapped.length === 0) {
     const bits: string[] = []
     if (excludedDeadheads > 0) {
       bits.push(`${excludedDeadheads} deadhead(s) — enable Include deadheads`)
@@ -485,6 +511,7 @@ export default defineEventHandler(async (event) => {
     enrichAttempted,
     enrichedCount,
     enrichDetail: enrichDetail ?? undefined,
+    crewDigestActive: airlineHasActiveCrewDigest(portal.airlineCode),
     warning: warningParts.length > 0 ? warningParts.join(' ') : undefined,
   }
 })

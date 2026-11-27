@@ -185,7 +185,7 @@ export function buildLogTenFlightEntity(entry: LogEntry): LogTenEntity {
   }
 
   // Flight conditions as boolean flags
-  if (entry.flightConditions?.includes('IFR')) {
+  if (entry.flightConditions?.some((condition) => condition.toLowerCase() === 'ifr')) {
     entity.flight_ifrCapacity = true
   }
 

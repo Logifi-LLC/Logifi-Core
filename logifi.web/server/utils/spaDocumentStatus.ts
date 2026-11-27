@@ -33,6 +33,10 @@ const EXACT_APP_PATHS = new Set([
   '/reset-password',
   '/terms',
   '/totals-report',
+  '/faq',
+  '/how-to-digitize-a-paper-pilot-logbook',
+  '/import-foreflight-logten-logbook',
+  '/airline-pilot-logbook-app',
 ])
 
 const DYNAMIC_APP_PATHS = [

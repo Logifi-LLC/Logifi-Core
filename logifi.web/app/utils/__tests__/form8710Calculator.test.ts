@@ -76,6 +76,31 @@ describe('form8710Calculator', () => {
       expect(selCategory?.pic).toBe(2.0)
     })
 
+    it('counts an amended flight once and skips void amendments', () => {
+      const flightTime = (total: number) => ({
+        total,
+        pic: total,
+        sic: null,
+        dual: null,
+        solo: null,
+        night: null,
+        actualInstrument: null,
+        simulatedInstrument: null,
+        crossCountry: null,
+      })
+      const entries: LogEntry[] = [
+        createTestEntry({ id: 'orig', flightTime: flightTime(2.0) }),
+        createTestEntry({ id: 'amend', amendsEntryId: 'orig', flightTime: flightTime(1.8) }),
+        createTestEntry({ id: 'voided', flightTime: flightTime(1.0) }),
+        createTestEntry({ id: 'void-row', amendsEntryId: 'voided', isVoid: true, flightTime: flightTime(0) }),
+      ]
+
+      const sel = calculateSectionIII(entries).categories.find((cat) => cat.category === 'airplane-sel')
+      expect(sel?.totalFlights).toBe(1)
+      expect(sel?.pic).toBe(1.8)
+      expect(calculateSectionII(entries).allTime.totalTime).toBe(1.8)
+    })
+
     it('does not treat XC navigation lesson text as an ATD', () => {
       const entries: LogEntry[] = [
         createTestEntry({

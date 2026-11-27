@@ -1,7 +1,7 @@
 import type { LogEntry } from './logbookTypes'
 
 const DB_NAME = 'logifi-logbook'
-const DB_VERSION = 2
+const DB_VERSION = 3
 
 export const METADATA_ACTIVE_USER_ID = 'activeUserId'
 export const METADATA_LAST_ACTIVE_USER_ID = 'lastActiveUserId'
@@ -22,6 +22,8 @@ export interface SyncQueueEntry {
   retryCount: number
   lastError?: string
   userId?: string
+  /** Bumped each time a later local write for the same entry is merged into this item. */
+  revision?: number
 }
 
 interface IDBMetadata {
@@ -111,6 +113,21 @@ export function initIndexedDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains('metadata')) {
         db.createObjectStore('metadata', { keyPath: 'key' })
       }
+
+      if (oldVersion < 3) {
+        if (!db.objectStoreNames.contains('endorsements')) {
+          const endorsementStore = db.createObjectStore('endorsements', { keyPath: 'id' })
+          endorsementStore.createIndex('userId', '_userId', { unique: false })
+          endorsementStore.createIndex('synced', '_synced', { unique: false })
+          endorsementStore.createIndex('updatedAt', 'updated_at', { unique: false })
+        }
+        if (!db.objectStoreNames.contains('endorsement_sync_queue')) {
+          const eqStore = db.createObjectStore('endorsement_sync_queue', { keyPath: 'id' })
+          eqStore.createIndex('timestamp', 'timestamp', { unique: false })
+          eqStore.createIndex('userId', 'userId', { unique: false })
+          eqStore.createIndex('endorsementId', 'endorsementId', { unique: false })
+        }
+      }
     }
   })
 
@@ -120,7 +137,7 @@ export function initIndexedDB(): Promise<IDBDatabase> {
 /**
  * Get database instance (ensure initialized)
  */
-async function getDB(): Promise<IDBDatabase> {
+export async function getIndexedDBInstance(): Promise<IDBDatabase> {
   if (!dbInstance) {
     await initIndexedDB()
   }
@@ -128,6 +145,10 @@ async function getDB(): Promise<IDBDatabase> {
     throw new Error('Failed to initialize IndexedDB')
   }
   return dbInstance
+}
+
+async function getDB(): Promise<IDBDatabase> {
+  return getIndexedDBInstance()
 }
 
 /** Plain copy of entry so IndexedDB structured clone does not fail on Vue reactive arrays. */
@@ -315,7 +336,12 @@ export async function getUnsyncedEntries(userId: string): Promise<IDBLogEntry[]>
 // Sync Queue Operations
 
 /**
- * Add operation to sync queue
+ * Add operation to sync queue.
+ *
+ * Writes for an entry that already has a pending insert/update are merged into that one
+ * item (field-wise, newest wins) so the queue never holds two versions of the same flight.
+ * A pending insert stays an insert; anything merged into a pending update stays an update.
+ * A delete replaces every pending op for the entry.
  */
 export async function addToSyncQueue(
   operation: 'insert' | 'update' | 'delete',
@@ -325,24 +351,136 @@ export async function addToSyncQueue(
 ): Promise<string> {
   const db = await getDB()
   const plainEntryData = entryData != null ? JSON.parse(JSON.stringify(entryData)) : null
-  const queueEntry: SyncQueueEntry = {
-    id: crypto.randomUUID(),
-    operation,
-    entryId,
-    entryData: plainEntryData,
-    timestamp: Date.now(),
-    retryCount: 0,
-    userId,
-  }
 
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(['sync_queue'], 'readwrite')
     const store = transaction.objectStore('sync_queue')
-    const request = store.add(queueEntry)
+    let resultId: string | null = null
+    transaction.oncomplete = () => resolve(resultId!)
+    transaction.onerror = () =>
+      reject(new Error(`Failed to add to sync queue: ${transaction.error?.message}`))
 
-    request.onsuccess = () => resolve(queueEntry.id)
-    request.onerror = () => reject(new Error(`Failed to add to sync queue: ${request.error?.message}`))
+    const pendingRequest = store.index('userId').getAll(userId)
+    pendingRequest.onsuccess = () => {
+      const pending = ((pendingRequest.result || []) as SyncQueueEntry[])
+        .filter((item) => item.entryId === entryId)
+        .sort((a, b) => a.timestamp - b.timestamp)
+      const writes = pending.filter((item) => item.operation !== 'delete')
+
+      if (operation !== 'delete' && writes.length > 0 && writes.length === pending.length) {
+        const base = writes.find((item) => item.operation === 'insert') ?? writes[0]!
+        const merged = writes.reduce<Record<string, unknown>>(
+          (acc, item) => ({ ...acc, ...(item.entryData ?? {}) }),
+          {}
+        )
+        store.put({
+          ...base,
+          entryData: { ...merged, ...(plainEntryData ?? {}) },
+          retryCount: 0,
+          lastError: undefined,
+          revision: (base.revision ?? 0) + 1,
+        } satisfies SyncQueueEntry)
+        for (const item of writes) {
+          if (item.id !== base.id) store.delete(item.id)
+        }
+        resultId = base.id
+        return
+      }
+
+      if (operation === 'delete') {
+        for (const item of pending) store.delete(item.id)
+      }
+      const queueEntry: SyncQueueEntry = {
+        id: crypto.randomUUID(),
+        operation,
+        entryId,
+        entryData: plainEntryData,
+        timestamp: Date.now(),
+        retryCount: 0,
+        userId,
+        revision: 0,
+      }
+      store.add(queueEntry)
+      resultId = queueEntry.id
+    }
   })
+}
+
+/**
+ * Finish a processed queue item. Removes it only if no newer local write was merged in
+ * while it was in flight; otherwise keeps the newer data queued (an insert that landed
+ * becomes an update). Returns true when nothing is left pending for that item.
+ */
+export async function completeSyncQueueEntry(item: SyncQueueEntry): Promise<boolean> {
+  const db = await getDB()
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(['sync_queue'], 'readwrite')
+    const store = transaction.objectStore('sync_queue')
+    let completed = true
+    transaction.oncomplete = () => resolve(completed)
+    transaction.onerror = () =>
+      reject(new Error(`Failed to complete sync queue entry: ${transaction.error?.message}`))
+
+    const getRequest = store.get(item.id)
+    getRequest.onsuccess = () => {
+      const current = getRequest.result as SyncQueueEntry | undefined
+      if (!current) return
+      if ((current.revision ?? 0) === (item.revision ?? 0)) {
+        store.delete(item.id)
+        return
+      }
+      completed = false
+      if (current.operation === 'insert') {
+        store.put({ ...current, operation: 'update' } satisfies SyncQueueEntry)
+      }
+    }
+  })
+}
+
+/**
+ * Queue inserts for many entries in one transaction (offline file import), in the given order.
+ * Entries that already have a pending op go through addToSyncQueue so they are merged.
+ */
+export async function addInsertsToSyncQueue(
+  userId: string,
+  items: Array<{ entryId: string; entryData: unknown }>
+): Promise<void> {
+  const pendingIds = new Set((await getSyncQueue(userId)).map((item) => item.entryId))
+  const fresh = items.filter((item) => !pendingIds.has(item.entryId))
+  const db = await getDB()
+
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(['sync_queue'], 'readwrite')
+    const store = transaction.objectStore('sync_queue')
+    const now = Date.now()
+    fresh.forEach((item, index) => {
+      store.add({
+        id: crypto.randomUUID(),
+        operation: 'insert',
+        entryId: item.entryId,
+        entryData: JSON.parse(JSON.stringify(item.entryData)),
+        timestamp: now + index,
+        retryCount: 0,
+        userId,
+        revision: 0,
+      } satisfies SyncQueueEntry)
+    })
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () =>
+      reject(new Error(`Failed to queue inserts: ${transaction.error?.message}`))
+  })
+
+  for (const item of items) {
+    if (pendingIds.has(item.entryId)) {
+      await addToSyncQueue('insert', item.entryId, userId, item.entryData)
+    }
+  }
+}
+
+export async function hasPendingSyncOperation(entryId: string, userId: string): Promise<boolean> {
+  const queue = await getSyncQueue(userId)
+  return queue.some((item) => item.entryId === entryId)
 }
 
 /**
@@ -485,22 +623,27 @@ export async function setLastSyncTimestamp(timestamp: number): Promise<void> {
 export const METADATA_LAST_SUCCESSFUL_REMOTE_SYNC = 'lastSuccessfulRemoteSyncAt'
 export const METADATA_REMOTE_SYNC_WATERMARK = 'remoteSyncWatermark'
 
-export async function getLastSuccessfulRemoteSyncAt(): Promise<number | null> {
-  return getMetadata(METADATA_LAST_SUCCESSFUL_REMOTE_SYNC)
+/** Scoped per user: on a shared device one account's sync point must not skip another's changes. */
+function userScopedKey(key: string, userId: string): string {
+  return `${key}:${userId}`
 }
 
-export async function setLastSuccessfulRemoteSyncAt(timestamp: number): Promise<void> {
-  return setMetadata(METADATA_LAST_SUCCESSFUL_REMOTE_SYNC, timestamp)
+export async function getLastSuccessfulRemoteSyncAt(userId: string): Promise<number | null> {
+  return getMetadata(userScopedKey(METADATA_LAST_SUCCESSFUL_REMOTE_SYNC, userId))
+}
+
+export async function setLastSuccessfulRemoteSyncAt(userId: string, timestamp: number): Promise<void> {
+  return setMetadata(userScopedKey(METADATA_LAST_SUCCESSFUL_REMOTE_SYNC, userId), timestamp)
 }
 
 /** Max server `updated_at` (or tombstone `deleted_at`) from the last successful inbound sync. */
-export async function getRemoteSyncWatermark(): Promise<string | null> {
-  const value = await getMetadata(METADATA_REMOTE_SYNC_WATERMARK)
+export async function getRemoteSyncWatermark(userId: string): Promise<string | null> {
+  const value = await getMetadata(userScopedKey(METADATA_REMOTE_SYNC_WATERMARK, userId))
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
-export async function setRemoteSyncWatermark(iso: string): Promise<void> {
-  return setMetadata(METADATA_REMOTE_SYNC_WATERMARK, iso)
+export async function setRemoteSyncWatermark(userId: string, iso: string): Promise<void> {
+  return setMetadata(userScopedKey(METADATA_REMOTE_SYNC_WATERMARK, userId), iso)
 }
 
 /**
@@ -566,6 +709,9 @@ export async function clearAllDataForUser(userId: string): Promise<void> {
   for (const item of queue) {
     await removeFromSyncQueue(item.id)
   }
+
+  const { clearEndorsementDataForUser } = await import('~/utils/endorsementIndexedDB')
+  await clearEndorsementDataForUser(userId)
 
   const active = await getActiveUserId()
   if (active === userId) {

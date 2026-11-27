@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { fcvFlightToAirlineLeg, mapAirlineLegToFcvMappedEntry } from '../airlineLeg'
+import { isDeadheadMappedFlight } from '../../../shared/airlineOwnRole'
 import type { FcvFlight } from '../fcvMap'
 
 describe('fcvFlightToAirlineLeg', () => {
@@ -7,7 +8,7 @@ describe('fcvFlightToAirlineLeg', () => {
     const flight: FcvFlight = {
       fcv_flight_id: 'fcv-99',
       flight_number: '5770',
-      trip_number: 'L7513',
+      trip_number: 'Z7513',
       role: 'CA',
       dep_airport_icao: 'KLGA',
       arr_airport_icao: 'KDCA',
@@ -45,7 +46,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260804_5770_LGA',
       import_source: 'flica_aerodatabox',
       flight_number: '5770',
-      trip_number: 'L7513',
+      trip_number: 'Z7513',
       role: 'PIC',
       dep_airport: 'LGA',
       arr_airport: 'DCA',
@@ -58,8 +59,8 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       fcv_tail_number: 'N12345',
       fcv_aircraft_type: 'E75',
       crew: [
-        { position: 'CA', name: 'FARMER, DEREK' },
-        { position: 'FO', name: 'SUTTON, DREW' },
+        { position: 'CA', name: 'EXAMPLE, JANE' },
+        { position: 'FO', name: 'SAMPLE, JOHN' },
       ],
       is_deadhead: false,
       block_minutes: 67,
@@ -71,7 +72,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
     expect(entry.destination).toBe('KDCA')
     expect(entry.registration).toBe('N12345')
     expect(entry.date).toBe('2026-08-04')
-    expect(entry.training_elements).toBe('SUTTON, DREW')
+    expect(entry.training_elements).toBe('SAMPLE, JOHN')
     expect(entry.flight_conditions).toContain('ifr')
     expect(entry.flight_conditions).toContain('crossCountry')
     expect(entry.oooi?.out).toBe('10:08')
@@ -85,7 +86,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260804_5772_DCA',
       import_source: 'flica_aerodatabox',
       flight_number: '5772',
-      trip_number: 'L7513',
+      trip_number: 'Z7513',
       role: 'SIC',
       dep_airport: 'DCA',
       arr_airport: 'LGA',
@@ -98,8 +99,8 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       fcv_tail_number: 'N12345',
       fcv_aircraft_type: 'E75',
       crew: [
-        { position: 'CA', name: 'FARMER, DEREK' },
-        { position: 'FO', name: 'SUTTON, DREW' },
+        { position: 'CA', name: 'EXAMPLE, JANE' },
+        { position: 'FO', name: 'SAMPLE, JOHN' },
       ],
       is_deadhead: false,
       block_minutes: 60,
@@ -109,7 +110,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       (entry.flight_time as Record<string, unknown>).total
     )
     expect((entry.flight_time as Record<string, unknown>).pic).toBeUndefined()
-    expect(entry.training_elements).toBe('FARMER, DEREK')
+    expect(entry.training_elements).toBe('EXAMPLE, JANE')
     expect(entry.training_instructor).toBe('Captain')
     expect(entry.import_metadata?.own_role_unmatched).toBeUndefined()
   })
@@ -119,7 +120,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260804_5772_DCA',
       import_source: 'flica_aerodatabox',
       flight_number: '5772',
-      trip_number: 'L7513',
+      trip_number: 'Z7513',
       role: 'PIC',
       dep_airport: 'DCA',
       arr_airport: 'LGA',
@@ -131,7 +132,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       actual_on_local: null,
       fcv_tail_number: '',
       fcv_aircraft_type: 'E75',
-      crew: [{ position: 'CA', name: 'FARMER, DEREK', employeeId: '624619' }],
+      crew: [{ position: 'CA', name: 'EXAMPLE, JANE', employeeId: '900001' }],
       is_deadhead: false,
       block_minutes: 60,
     })
@@ -147,7 +148,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260804_5772_DCA',
       import_source: 'flica_aerodatabox',
       flight_number: '5772',
-      trip_number: 'L7513',
+      trip_number: 'Z7513',
       role: '',
       dep_airport: 'DCA',
       arr_airport: 'LGA',
@@ -180,7 +181,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260812_4442_LGA',
       import_source: 'flica_aerodatabox',
       flight_number: '4442',
-      trip_number: 'L7G13',
+      trip_number: 'Z7G13',
       role: '',
       dep_airport: 'LGA',
       arr_airport: 'RIC',
@@ -207,7 +208,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260819_4349_LGA',
       import_source: 'flica_aerodatabox',
       flight_number: '4349',
-      trip_number: 'L7H18',
+      trip_number: 'Z7H18',
       role: 'PIC',
       dep_airport: 'LGA',
       arr_airport: 'ATL',
@@ -241,7 +242,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20261112_4506_LGA',
       import_source: 'flica_aerodatabox',
       flight_number: '4506',
-      trip_number: 'L8012',
+      trip_number: 'Z8012',
       role: 'PIC',
       dep_airport: 'LGA',
       arr_airport: 'CAE',
@@ -269,7 +270,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260804_5770_LGA',
       import_source: 'flica_aerodatabox',
       flight_number: '5770',
-      trip_number: 'L7513',
+      trip_number: 'Z7513',
       role: 'PIC',
       dep_airport: 'LGA',
       arr_airport: 'DCA',
@@ -321,7 +322,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260812_4442_RIC',
       import_source: 'flica_aerodatabox',
       flight_number: '4442',
-      trip_number: 'L7G13',
+      trip_number: 'Z7G13',
       role: 'PIC',
       dep_airport: 'RIC',
       arr_airport: 'LGA',
@@ -353,7 +354,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260820_4809_ATL',
       import_source: 'flica_aerodatabox',
       flight_number: '4809',
-      trip_number: 'L7H18',
+      trip_number: 'Z7H18',
       role: 'PIC',
       dep_airport: 'ATL',
       arr_airport: 'LGA',
@@ -366,8 +367,8 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       fcv_tail_number: 'N648RW',
       fcv_aircraft_type: 'E75',
       crew: [
-        { position: 'CA', name: 'FARMER, DEREK' },
-        { position: 'FO', name: 'JOHNS, LUKE' },
+        { position: 'CA', name: 'EXAMPLE, JANE' },
+        { position: 'FO', name: 'DOE, RICHARD' },
       ],
       is_deadhead: false,
       block_minutes: 123,
@@ -388,7 +389,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260915_5759_LGA',
       import_source: 'flica_aerodatabox',
       flight_number: '5759',
-      trip_number: 'L8X01',
+      trip_number: 'Z8X01',
       role: 'PIC',
       dep_airport: 'LGA',
       arr_airport: 'BOS',
@@ -418,7 +419,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260820_4584_RIC',
       import_source: 'flica_aerodatabox',
       flight_number: '4584',
-      trip_number: 'L7H18',
+      trip_number: 'Z7H18',
       role: 'PIC',
       dep_airport: 'RIC',
       arr_airport: 'LGA',
@@ -644,3 +645,120 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
     expect(entry.tags).toEqual(['Deadhead'])
   })
 })
+
+describe('deadhead legs', () => {
+  it('log no seat, cross-country or night time and need no seat', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20261103_9001_SEA',
+      import_source: 'flica_aerodatabox',
+      flight_number: '9001',
+      trip_number: 'T0000',
+      role: 'SIC',
+      dep_airport: 'SEA',
+      arr_airport: 'PDX',
+      scheduled_out_local: '2026-11-03 18:30:00',
+      scheduled_in_local: '2026-11-03 19:40:00',
+      actual_out_local: '2026-11-03 18:32:00',
+      actual_in_local: '2026-11-03 19:38:00',
+      actual_off_local: '2026-11-03 18:45:00',
+      actual_on_local: '2026-11-03 19:30:00',
+      fcv_tail_number: 'N900ZZ',
+      fcv_aircraft_type: 'E75',
+      crew: [
+        { position: 'CA', name: 'DOE, JANE' },
+        { position: 'FO', name: 'ROE, RICHARD' },
+      ],
+      is_deadhead: true,
+      block_minutes: 66,
+    })
+
+    expect(entry.flight_time).toEqual({})
+    expect(entry.category_class_time).toBeNull()
+    expect(entry.flight_conditions).toEqual([])
+    expect(entry.performance).toEqual({})
+    expect(entry.tags).toEqual(['Deadhead'])
+    expect(isDeadheadMappedFlight(entry)).toBe(true)
+  })
+})
+
+describe('entry date', () => {
+  it('uses the block-out date when takeoff is after midnight', () => {
+    const entry = mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20261104_9003_SEA',
+      import_source: 'flica_aerodatabox',
+      flight_number: '9003',
+      trip_number: 'T0000',
+      role: 'PIC',
+      dep_airport: 'SEA',
+      arr_airport: 'PDX',
+      scheduled_out_local: '2026-11-04 23:40:00',
+      scheduled_in_local: '2026-11-05 00:50:00',
+      actual_out_local: '2026-11-04 23:52:00',
+      actual_in_local: '2026-11-05 01:05:00',
+      actual_off_local: '2026-11-05 00:15:00',
+      actual_on_local: '2026-11-05 00:58:00',
+      fcv_tail_number: 'N900ZZ',
+      fcv_aircraft_type: 'E75',
+      crew: [{ position: 'CA', name: 'DOE, JANE' }],
+      is_deadhead: false,
+      block_minutes: 73,
+    })
+    expect(entry.date).toBe('2026-11-04')
+  })
+})
+
+describe('Autofi takeoffs and landings', () => {
+  const leg = (overrides: Partial<Parameters<typeof mapAirlineLegToFcvMappedEntry>[0]> = {}) =>
+    mapAirlineLegToFcvMappedEntry({
+      external_flight_id: 'FLICA_20261103_9101_SEA',
+      import_source: 'flica_aerodatabox',
+      flight_number: '9101',
+      trip_number: 'T0000',
+      role: 'SIC',
+      dep_airport: 'SEA',
+      arr_airport: 'PDX',
+      scheduled_out_local: '2026-11-03 05:00:00',
+      scheduled_in_local: '2026-11-03 06:30:00',
+      actual_out_local: '2026-11-03 05:05:00',
+      actual_in_local: '2026-11-03 06:30:00',
+      actual_off_local: '2026-11-03 05:20:00',
+      actual_on_local: '2026-11-03 06:20:00',
+      fcv_tail_number: 'N900ZZ',
+      fcv_aircraft_type: 'E75',
+      crew: [
+        { position: 'CA', name: 'DOE, JANE' },
+        { position: 'FO', name: 'ROE, RICHARD' },
+      ],
+      is_deadhead: false,
+      block_minutes: 85,
+      ...overrides,
+    })
+
+  it('logs a night takeoff and a day landing on the same leg', () => {
+    expect(leg().performance).toEqual({ nightTakeoffs: 1, dayLandings: 1 })
+  })
+
+  it('logs a day takeoff and a night landing on the same leg', () => {
+    const entry = leg({
+      scheduled_out_local: '2026-11-03 16:45:00',
+      scheduled_in_local: '2026-11-03 18:20:00',
+      actual_out_local: '2026-11-03 16:50:00',
+      actual_off_local: '2026-11-03 17:00:00',
+      actual_on_local: '2026-11-03 18:10:00',
+      actual_in_local: '2026-11-03 18:20:00',
+    })
+    expect(entry.performance).toEqual({ dayTakeoffs: 1, nightLandings: 1 })
+  })
+
+  it('leaves takeoffs null when the departure airport is unresolved', () => {
+    const entry = leg({ dep_airport: 'ZZZQ', external_flight_id: 'FLICA_20261103_9101_ZZZQ' })
+    const perf = entry.performance as Record<string, unknown>
+    expect(perf.dayTakeoffs).toBeUndefined()
+    expect(perf.nightTakeoffs).toBeUndefined()
+  })
+
+  it('logs nothing for a deadhead', () => {
+    expect(leg({ is_deadhead: true }).performance).toEqual({})
+  })
+})
+
