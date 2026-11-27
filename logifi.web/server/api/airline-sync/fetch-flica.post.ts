@@ -28,7 +28,13 @@ import {
   FlicaClientError,
   type FlicaSession,
 } from '../../utils/flicaClient'
-import { airlineHasActiveCrewDigest, resolveFlicaPortal } from '../../utils/flicaPortal'
+import {
+  airlineHasActiveCrewDigest,
+  FlicaDisabledAirlineError,
+  FlicaUnsupportedAirlineError,
+  flicaAirlineSsoUserMessage,
+  resolveFlicaPortal,
+} from '../../utils/flicaPortal'
 import { unsealSecret, SecretBoxError } from '../../utils/secretBox'
 import type { FcvMappedEntry } from '../../utils/fcvMap'
 import { normalizeCalendarYmd } from '../../../shared/localCalendarDate'
@@ -278,6 +284,9 @@ export default defineEventHandler(async (event) => {
   try {
     portal = resolveFlicaPortal(body.airlineCode)
   } catch (e) {
+    if (e instanceof FlicaUnsupportedAirlineError || e instanceof FlicaDisabledAirlineError) {
+      throw createError({ statusCode: 409, statusMessage: e.message })
+    }
     throw createError({
       statusCode: 400,
       statusMessage: e instanceof Error ? e.message : 'Unsupported airline',
@@ -362,8 +371,15 @@ export default defineEventHandler(async (event) => {
       .eq('id', integration.id)
 
     if (e instanceof FlicaClientError) {
-      const status = e.code === 'login_failed' || e.code === 'mfa_required' ? 401 : 502
-      throw createError({ statusCode: status, statusMessage: message })
+      const status =
+        e.code === 'airline_sso'
+          ? 409
+          : e.code === 'login_failed' || e.code === 'mfa_required'
+            ? 401
+            : 502
+      const statusMessage =
+        e.code === 'airline_sso' ? flicaAirlineSsoUserMessage(portal.label) : message
+      throw createError({ statusCode: status, statusMessage })
     }
     throw createError({ statusCode: 502, statusMessage: message })
   }
@@ -404,7 +420,7 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 422,
       statusMessage:
-        "FLICA returned a schedule, but no pairing matched this airline's refrigerator layout. Nothing was imported.",
+        "FLICA returned a schedule, but no pairing matched this airline's monthly schedule layout. Nothing was imported.",
     })
   }
 

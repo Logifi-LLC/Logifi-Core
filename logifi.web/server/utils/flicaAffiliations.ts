@@ -1,3 +1,5 @@
+import { isFlicaCarrierEnabled, isFlicaCarrierSupported } from '../../shared/flicaCarriers'
+
 /** DB row shape for public FLICA affiliation fields (no secrets). */
 export interface FlicaIntegrationAffiliationRow {
   airline_code: string
@@ -14,6 +16,10 @@ export interface AirlineAffiliationDto {
   username: string
   lastOkAt: string | null
   lastError: string | null
+  /** False when the carrier now requires airline SSO (still stored until disconnect). */
+  supported: boolean
+  /** False when the carrier is not on ENABLED_FLICA_AIRLINE_CODES (still stored until disconnect). */
+  enabled: boolean
 }
 
 export function mapFlicaIntegrationsToAffiliations(
@@ -26,5 +32,7 @@ export function mapFlicaIntegrationsToAffiliations(
     username: row.username,
     lastOkAt: row.last_ok_at,
     lastError: row.last_error,
+    supported: isFlicaCarrierSupported(row.airline_code),
+    enabled: isFlicaCarrierEnabled(row.airline_code),
   }))
 }
