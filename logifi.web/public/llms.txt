@@ -1,0 +1,32 @@
+# Logifi
+
+> Logifi is a free digital pilot logbook for airline flying. Digifi scans a paper logbook, 10 pages free, then 50 cents a page. A free transfer service can move an existing digital logbook. Email info@logifi.io.
+
+Logifi is built by a Republic captain for pairings, legs, and hours that match the job. The core logbook is free: logging flights, totals, history, currency, and export. There is no subscription for the logbook itself.
+
+Digifi is the paper logbook scanner inside Logifi. Photograph a page (the left and right sides of the paper book), review every entry, then import the flights. Every account includes 10 free pages. After that, additional pages are 50 cents each. Re-scanning a page that was already charged is free. Digifi learns the pilot's logbook over the free pages. It does not replace the pilot's review.
+
+If hours already live in ForeFlight, LogTen Pro, MyFlightbook, or a spreadsheet, use the importer or ask about the free transfer service. Email info@logifi.io with the export, the app it came from, and total time as of the export.
+
+Autofi can pull FLICA pairings into the book for Republic (RJET) pilots during a public beta. It is included and free while it is in beta. Other airlines are not supported yet. Autofi is for logbook record-keeping only.
+
+The iOS app is on the App Store: https://apps.apple.com/us/app/logifi-pilot-logbook/id6786842277
+
+## Pages
+
+- [Logifi homepage](https://www.logifi.io/): Free airline pilot logbook. How Autofi, Digifi, and imports get hours into the book.
+- [Pricing](https://www.logifi.io/pricing): The logbook is free. Digifi is 10 pages free, then $0.50 per page.
+- [Digifi](https://www.logifi.io/digifi): Photograph a paper logbook, review the transcription, and import the flights.
+- [FAQ](https://www.logifi.io/faq): Is Logifi free, how Digifi credits work, imports, Autofi, export, and data questions.
+- [How to digitize a paper pilot logbook](https://www.logifi.io/how-to-digitize-a-paper-pilot-logbook): Step-by-step Digifi guide, what to photograph, and what to check before import.
+- [Import a ForeFlight or LogTen logbook](https://www.logifi.io/import-foreflight-logten-logbook): Export steps for ForeFlight, LogTen Pro, and MyFlightbook, plus the free transfer service.
+- [Airline pilot logbook app](https://www.logifi.io/airline-pilot-logbook-app): Logifi for 121 flying, and Autofi for Republic pilots in beta.
+- [Integrations](https://www.logifi.io/integrations): Autofi / FLICA and Digifi transcription.
+- [Data sources](https://www.logifi.io/data-sources): How schedule import and Digifi scanning use third-party services.
+- [App Store: Logifi Pilot Logbook](https://apps.apple.com/us/app/logifi-pilot-logbook/id6786842277): iPhone and iPad app.
+
+## Optional
+
+- [Terms of Service](https://www.logifi.io/terms)
+- [Privacy Policy](https://www.logifi.io/privacy)
+- [Logifi on GitHub](https://github.com/Logifi-LLC/Logifi-Core)

@@ -1,7 +1,11 @@
 import { getRequestHost, getRequestURL, setResponseHeader } from 'h3'
 import { robotsNoindexHeader, seoHeadTags, shouldEmbedItunesAppMeta } from '../../shared/publicSeo'
 
-import { patchMarketingBody, patchMarketingHead } from '../../shared/marketingPages'
+import {
+  patchMarketingBody,
+  patchMarketingHead,
+  patchShellMarketingHead,
+} from '../../shared/marketingPages'
 
 type HtmlContext = {
   head: string[]
@@ -28,13 +32,17 @@ export default defineNitroPlugin((nitroApp) => {
 
   nitroApp.hooks.hook('render:html', ((html: HtmlContext, { event }) => {
     const pathname = getRequestURL(event).pathname
-    const patchedHead = patchMarketingHead(html.head.join(''), pathname)
+    const headJoined = html.head.join('')
+    const marketingHead = patchMarketingHead(headJoined, pathname)
+    const patchedHead = marketingHead ?? patchShellMarketingHead(headJoined, pathname)
     if (patchedHead != null) {
       html.head = [patchedHead]
-      for (const key of ['body', 'bodyPrepend', 'bodyAppend'] as const) {
-        const chunks = html[key]
-        if (!chunks) continue
-        html[key] = chunks.map((chunk) => patchMarketingBody(chunk, pathname))
+      if (marketingHead != null) {
+        for (const key of ['body', 'bodyPrepend', 'bodyAppend'] as const) {
+          const chunks = html[key]
+          if (!chunks) continue
+          html[key] = chunks.map((chunk) => patchMarketingBody(chunk, pathname))
+        }
       }
     }
 

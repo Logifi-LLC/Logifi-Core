@@ -3,7 +3,7 @@
  * Vue renders the blocks as elements. The document hook uses the same blocks
  * for the crawlable HTML and JSON-LD in the first response.
  */
-import { CANONICAL_ORIGIN, normalizePublicPath } from './publicSeo'
+import { CANONICAL_ORIGIN, MARKETING_SHELL_SEO, normalizePublicPath } from './publicSeo'
 import { MARKETING_PAGE_SOURCES } from './marketingPagesContent'
 
 export const MARKETING_ARTICLE_DATE = '2026-11-21'
@@ -198,6 +198,21 @@ export function renderCrawlableHtml(blocks: Block[]): string {
   return `<article id="marketing-copy">${html}</article>`
 }
 
+const CRAWLABLE_GUIDE_LINKS = [
+  { href: '/faq', label: 'FAQ' },
+  { href: '/how-to-digitize-a-paper-pilot-logbook', label: 'Digitize a paper logbook' },
+  { href: '/import-foreflight-logten-logbook', label: 'Import ForeFlight or LogTen' },
+  { href: '/airline-pilot-logbook-app', label: 'Airline pilot logbook' },
+] as const
+
+/** Guides row for prerendered marketing copy pages (ssr:false shell). */
+export function renderCrawlableGuidesFooter(): string {
+  const links = CRAWLABLE_GUIDE_LINKS.map(
+    (item) => `<a href="${escapeHtml(item.href)}">${escapeHtml(item.label)}</a>`,
+  ).join(' · ')
+  return `<nav id="marketing-guides-footer" aria-label="Guides">${links}</nav>`
+}
+
 export function serializeJsonLd(data: unknown): string {
   return JSON.stringify(data).replace(/</g, '\\u003c')
 }
@@ -293,33 +308,59 @@ function replaceOrAppendMeta(
   return html + tag
 }
 
-export function patchMarketingHead(headHtml: string, pathname: string): string | null {
-  const page = getMarketingPage(pathname)
-  if (!page) return null
+function patchMarketingMetaHead(
+  headHtml: string,
+  meta: { title: string; description: string; ogType?: string; ogUrl?: string; jsonLd?: Record<string, unknown> },
+): string {
   let html = headHtml
-  const title = escapeHtml(page.title)
+  const title = escapeHtml(meta.title)
   if (/<title>[^<]*<\/title>/.test(html)) {
     html = html.replace(/<title>[^<]*<\/title>/, `<title>${title}</title>`)
   } else {
     html += `<title>${title}</title>`
   }
-  html = replaceOrAppendMeta(html, 'name', 'description', page.description)
-  html = replaceOrAppendMeta(html, 'property', 'og:title', page.title)
-  html = replaceOrAppendMeta(html, 'property', 'og:description', page.description)
-  html = replaceOrAppendMeta(html, 'property', 'og:type', page.kind === 'article' ? 'article' : 'website')
-  html = replaceOrAppendMeta(html, 'property', 'og:url', page.canonical)
-  html = replaceOrAppendMeta(html, 'name', 'twitter:title', page.title)
-  html = replaceOrAppendMeta(html, 'name', 'twitter:description', page.description)
-  if (!html.includes('id="marketing-jsonld"')) {
-    html += `<script type="application/ld+json" id="marketing-jsonld">${serializeJsonLd(page.jsonLd)}</script>`
+  html = replaceOrAppendMeta(html, 'name', 'description', meta.description)
+  html = replaceOrAppendMeta(html, 'property', 'og:title', meta.title)
+  html = replaceOrAppendMeta(html, 'property', 'og:description', meta.description)
+  if (meta.ogType) html = replaceOrAppendMeta(html, 'property', 'og:type', meta.ogType)
+  if (meta.ogUrl) html = replaceOrAppendMeta(html, 'property', 'og:url', meta.ogUrl)
+  html = replaceOrAppendMeta(html, 'name', 'twitter:title', meta.title)
+  html = replaceOrAppendMeta(html, 'name', 'twitter:description', meta.description)
+  if (meta.jsonLd && !html.includes('id="marketing-jsonld"')) {
+    html += `<script type="application/ld+json" id="marketing-jsonld">${serializeJsonLd(meta.jsonLd)}</script>`
   }
   return html
+}
+
+export function patchMarketingHead(headHtml: string, pathname: string): string | null {
+  const page = getMarketingPage(pathname)
+  if (!page) return null
+  return patchMarketingMetaHead(headHtml, {
+    title: page.title,
+    description: page.description,
+    ogType: page.kind === 'article' ? 'article' : 'website',
+    ogUrl: page.canonical,
+    jsonLd: page.jsonLd,
+  })
+}
+
+export function patchShellMarketingHead(headHtml: string, pathname: string): string | null {
+  const path = normalizePublicPath(pathname)
+  const shell = MARKETING_SHELL_SEO[path]
+  if (!shell) return null
+  const canonical = path === '/' ? `${CANONICAL_ORIGIN}/` : `${CANONICAL_ORIGIN}${path}`
+  return patchMarketingMetaHead(headHtml, {
+    title: shell.title,
+    description: shell.description,
+    ogType: 'website',
+    ogUrl: canonical,
+  })
 }
 
 export function patchMarketingBody(bodyHtml: string, pathname: string): string {
   const page = getMarketingPage(pathname)
   if (!page || bodyHtml.includes('id="marketing-copy"')) return bodyHtml
-  const crawlable = renderCrawlableHtml(page.blocks)
+  const crawlable = `${renderCrawlableHtml(page.blocks)}${renderCrawlableGuidesFooter()}`
   return bodyHtml.replace(
     /<div id="__nuxt"([^>]*)>\s*<\/div>/,
     (_match, attrs: string) => `<div id="__nuxt"${attrs}>${crawlable}</div>`,

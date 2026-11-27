@@ -11,6 +11,7 @@ import {
   parseBlocks,
   patchMarketingBody,
   patchMarketingHead,
+  patchShellMarketingHead,
   renderCrawlableHtml,
   safeLink,
   type Block,
@@ -86,6 +87,7 @@ describe('marketing copy pages', () => {
       const published = `${source.title}\n${source.description}\n${source.markdown}`
       expect(published).not.toContain('Reviewer notes')
       expect(published).not.toContain('Draft for review')
+      expect(published).not.toContain('for this draft')
       expect(published).not.toContain('Suggested title tag')
       expect(published).not.toContain('70%')
       expect(published.toLowerCase()).not.toContain('self-host')
@@ -113,7 +115,7 @@ describe('marketing copy pages', () => {
     }
     const digifi = questions.find((question) => question.name === 'What is Digifi?')
     expect(digifi?.acceptedAnswer.text).toContain('gets to know your logbook')
-    expect(digifi?.acceptedAnswer.text).toContain('10 free spreads')
+    expect(digifi?.acceptedAnswer.text).toContain('10 free pages')
     expect(digifi?.acceptedAnswer.text).not.toContain('70%')
     const help = questions.find((question) => question.name === 'How do I get help?')
     expect(help?.acceptedAnswer.text.endsWith('export.')).toBe(true)
@@ -172,9 +174,14 @@ describe('marketing copy pages', () => {
     expect(articleHead).toContain('property="og:type" content="article"')
     expect(articleHead).toContain('"datePublished":"2026-11-21"')
     expect(patchMarketingHead(SHELL_HEAD, '/pricing')).toBeNull()
+    const pricingHead = patchShellMarketingHead(SHELL_HEAD, '/pricing')
+    expect(pricingHead).toContain('<title>Pricing | Logifi</title>')
+    expect(pricingHead).toContain('10 pages free, then $0.50 per page')
 
     const body = patchMarketingBody('<div id="__nuxt"></div>', '/faq')
     expect(body).toContain('id="marketing-copy"')
+    expect(body).toContain('id="marketing-guides-footer"')
+    expect(body).toContain('href="/how-to-digitize-a-paper-pilot-logbook"')
     expect(body).toContain('Is Logifi free?')
     expect(htmlText(body)).toContain('gets to know your logbook')
     expect(patchMarketingBody(body, '/faq')).toBe(body)
