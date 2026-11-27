@@ -60,6 +60,51 @@ export const ORGANIZATION_SAME_AS = [
 export const SITEMAP_URL = `${CANONICAL_ORIGIN}/sitemap.xml`
 export const ROBOTS_NOINDEX = 'noindex'
 
+/** Article + FAQ pages shipped with release #233. */
+export const SITEMAP_MARKETING_COPY_LASTMOD = '2026-11-21'
+
+/** Older public marketing routes (pre-Nov 2026 article set). */
+export const SITEMAP_CORE_LASTMOD = '2026-09-14'
+
+const SITEMAP_LASTMOD: Record<string, string> = {
+  '/faq': SITEMAP_MARKETING_COPY_LASTMOD,
+  '/how-to-digitize-a-paper-pilot-logbook': SITEMAP_MARKETING_COPY_LASTMOD,
+  '/import-foreflight-logten-logbook': SITEMAP_MARKETING_COPY_LASTMOD,
+  '/airline-pilot-logbook-app': SITEMAP_MARKETING_COPY_LASTMOD,
+}
+
+export function lastmodForPublicPath(path: string): string {
+  const normalized = normalizePublicPath(path)
+  return SITEMAP_LASTMOD[normalized] ?? SITEMAP_CORE_LASTMOD
+}
+
+/** Per-path title and description patched into the first HTML response (ssr:false shell). */
+export const MARKETING_SHELL_SEO: Record<
+  string,
+  { title: string; description: string }
+> = {
+  '/': {
+    title: 'Logifi — Airline pilot logbook',
+    description:
+      'Free digital logbook for airline flying. Autofi schedule import, Digifi paper pages, imports, and export.',
+  },
+  '/pricing': {
+    title: 'Pricing | Logifi',
+    description:
+      'The logbook is free. Digifi is 10 pages free, then $0.50 per page. Re-scanning an already-charged page is free.',
+  },
+  '/digifi': {
+    title: 'Digifi | Logifi',
+    description:
+      'Photograph paper logbook pages and review Digifi transcription before import. Every account includes 10 free pages.',
+  },
+  '/integrations': {
+    title: 'Integrations | Logifi',
+    description:
+      'Autofi FLICA import for Republic pilots in beta and Google Gemini for Digifi paper page scanning.',
+  },
+}
+
 const PUBLIC_PATH_SET = new Set<string>(PUBLIC_MARKETING_PATHS)
 
 export function hostnameFromHostHeader(host: string | null | undefined): string {
@@ -177,6 +222,10 @@ export function seoHeadTags(input: {
 }
 
 export function renderSitemapXml(): string {
-  const urls = publicCanonicalUrls().map((loc) => `  <url><loc>${loc}</loc></url>`).join('\n')
+  const urls = PUBLIC_MARKETING_PATHS.map((path) => {
+    const loc = path === '/' ? `${CANONICAL_ORIGIN}/` : `${CANONICAL_ORIGIN}${path}`
+    const lastmod = lastmodForPublicPath(path)
+    return `  <url><loc>${loc}</loc><lastmod>${lastmod}</lastmod></url>`
+  }).join('\n')
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`
 }

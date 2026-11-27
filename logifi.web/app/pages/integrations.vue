@@ -36,6 +36,7 @@
               This is for <strong class="text-gray-100">logbook record-keeping only</strong>. Logifi does not use schedule data for flight planning, dispatch, weather or NOTAM briefing, or any operational decision-making.
             </p>
             <p class="text-lg leading-relaxed">
+              Read more in <NuxtLink to="/airline-pilot-logbook-app" class="text-blue-400 font-bold hover:text-blue-300 transition-colors">Airline pilot logbook app</NuxtLink>.
               More detail: <NuxtLink to="/data-sources?from=landing" class="text-blue-400 font-bold hover:text-blue-300 transition-colors">Data sources &amp; third-party APIs</NuxtLink>.
             </p>
           </div>
@@ -63,9 +64,11 @@
               We do not send airline portal credentials or schedule tokens to Gemini or any other AI provider.
             </p>
             <p class="text-lg leading-relaxed">
-              Digifi uses a pay-per-spread credit model. Every account includes <strong class="text-gray-100">10 free Digifi spreads</strong> to get started—see
+              Digifi uses a pay-per-page credit model. Every account includes <strong class="text-gray-100">10 free Digifi pages</strong> to get started—see
               <NuxtLink to="/pricing" class="text-blue-400 font-bold hover:text-blue-300 transition-colors">Pricing</NuxtLink>
               for additional rates.
+              Step-by-step:
+              <NuxtLink to="/how-to-digitize-a-paper-pilot-logbook" class="text-blue-400 font-bold hover:text-blue-300 transition-colors">How to digitize a paper logbook</NuxtLink>.
             </p>
             <p class="text-lg leading-relaxed">
               More detail: <NuxtLink to="/data-sources?from=landing" class="text-blue-400 font-bold hover:text-blue-300 transition-colors">Data sources &amp; third-party APIs</NuxtLink>
@@ -97,6 +100,7 @@ import MarketingFooter from '~/components/MarketingFooter.vue'
 import MarketingHeader from '~/components/MarketingHeader.vue'
 import MarketingSecondaryPageShell from '~/components/MarketingSecondaryPageShell.vue'
 import { AUTOFI_BETA_LINE } from '~/utils/autofiBeta'
+import { MARKETING_SHELL_SEO } from '../../shared/publicSeo'
 
 const { theme, isDark, applyDocumentTheme } = useTheme()
 
@@ -123,14 +127,9 @@ const handleAuthSuccess = () => {
   window.location.href = '/dashboard'
 }
 
+const integrationsSeo = MARKETING_SHELL_SEO['/integrations']
 useHead({
-  title: 'Integrations | Logifi',
-  meta: [
-    {
-      name: 'description',
-      content:
-        'Logifi integrations: Autofi FLICA import (public beta, Republic verified) and Google Gemini for Digifi paper scanning.',
-    },
-  ],
+  title: integrationsSeo.title,
+  meta: [{ name: 'description', content: integrationsSeo.description }],
 })
 </script>
