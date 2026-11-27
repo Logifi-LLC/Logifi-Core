@@ -3,7 +3,7 @@ import type { DigifiSessionPriorPage } from './digifiSessionContext'
 import type { DigifiScanRow, DigifiScanStrategy } from '../../app/utils/digifiTypes'
 import type { DigifiScanMetaInput } from './digifiSchema'
 
-export type DigifiProvider = 'gemini' | 'anthropic'
+export type DigifiProvider = 'gemini' | 'anthropic' | 'openrouter'
 
 export type DigifiExtractorErrorCode = 'CAPACITY' | 'CONFIG' | 'INVALID_RESPONSE' | 'UNKNOWN'
 

@@ -20,6 +20,18 @@ export const DEFAULT_GEMINI_DIGIFI_MODEL = 'gemini-3.8-flash'
 /** Current Anthropic Sonnet with vision — retired 3.5 snapshots map here. */
 export const DEFAULT_CLAUDE_DIGIFI_MODEL = 'claude-sonnet-4-6'
 
+/** OpenRouter model when NUXT_DIGIFI_PROVIDER=openrouter. Direct Gemini stays the default. */
+export const DEFAULT_OPENROUTER_DIGIFI_MODEL = 'google/gemini-4-hydrogen'
+
+/** Pin google/* OpenRouter models to Google AI Studio unless env overrides the list. */
+export const DEFAULT_OPENROUTER_PROVIDERS = ['google-ai-studio']
+
+export type DigifiTransport = 'gemini' | 'openrouter'
+
+export function resolveDigifiTransport(value: string): DigifiTransport {
+  return value.trim().toLowerCase() === 'openrouter' ? 'openrouter' : 'gemini'
+}
+
 const CLAUDE_MODEL_ALIASES: Record<string, string> = {
   'claude-3.5-sonnet': DEFAULT_CLAUDE_DIGIFI_MODEL,
   'claude-3-5-sonnet': DEFAULT_CLAUDE_DIGIFI_MODEL,
@@ -51,11 +63,13 @@ export function normalizeDigifiModelId(model: string): string {
 }
 
 /**
- * Gemini 3.6+ Flash deprecates temperature/topP/topK (ignored now; may 400 later).
+ * Gemini 3.6+ and Gemini 4.x deprecate temperature/topP/topK (ignored now; may 400 later).
  * @see https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
  */
 export function omitsDigifiGeminiSamplingParams(model: string): boolean {
-  return /gemini-3\.[678]/i.test(model.trim())
+  const id = model.trim()
+  if (/gemini-4/i.test(id)) return true
+  return /gemini-3\.[678]/i.test(id)
 }
 
 /** Flash-Lite is excluded from automatic fallbacks (poor logbook OCR). */
@@ -104,16 +118,24 @@ export function shouldTryNextDigifiModel(errorCode: DigifiExtractorErrorCode): b
   return errorCode === 'CAPACITY' || errorCode === 'CONFIG'
 }
 
-/** OCR: keep internal reasoning low so visible TSV fits maxOutputTokens (thinking shares the budget on 3.x). */
+/** OCR: keep internal reasoning low so visible TSV fits maxOutputTokens (thinking shares the budget). */
 export function resolveDigifiThinkingLevel(
   envLevel?: DigifiGeminiThinkingLevel,
   model?: string
 ): DigifiGeminiThinkingLevel {
   const level = envLevel ?? 'low'
-  if (level === 'high' || level === 'medium') return 'low'
+  if (level === 'medium' || level === 'high' || level === 'xhigh') return 'low'
   // Gemini 3.7 only supports low/medium/high — clamp 'minimal' to 'low'
   if (level === 'minimal' && model && /gemini-3\.7/i.test(model)) return 'low'
   return level
+}
+
+function parseOpenRouterProviders(value: string): string[] {
+  const list = value
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+  return list.length > 0 ? list : [...DEFAULT_OPENROUTER_PROVIDERS]
 }
 
 export function getDigifiEnv() {
@@ -140,6 +162,32 @@ export function getDigifiEnv() {
       process.env.ANTHROPIC_API_KEY,
       process.env.NUXT_ANTHROPIC_API_KEY,
       config.anthropicApiKey
+    ),
+    openrouterApiKey: pick(
+      process.env.OPENROUTER_API_KEY,
+      process.env.NUXT_OPENROUTER_API_KEY,
+      config.openrouterApiKey
+    ),
+    /** gemini unless NUXT_DIGIFI_PROVIDER=openrouter. Unset stays direct Gemini. */
+    transport: resolveDigifiTransport(
+      pick(
+        process.env.NUXT_DIGIFI_PROVIDER,
+        process.env.DIGIFI_PROVIDER,
+        config.digifiProvider
+      )
+    ),
+    openrouterModel:
+      pick(
+        process.env.NUXT_DIGIFI_OPENROUTER_MODEL,
+        process.env.DIGIFI_OPENROUTER_MODEL,
+        config.digifiOpenrouterModel
+      ) || DEFAULT_OPENROUTER_DIGIFI_MODEL,
+    openrouterProviders: parseOpenRouterProviders(
+      pick(
+        process.env.NUXT_DIGIFI_OPENROUTER_PROVIDERS,
+        process.env.DIGIFI_OPENROUTER_PROVIDERS,
+        config.digifiOpenrouterProviders
+      )
     ),
     model: normalizeDigifiModelId(
       pick(
@@ -202,8 +250,9 @@ export function getDigifiEnv() {
         'true'
       ).toLowerCase() === 'false',
     /**
-     * Gemini 3.x thinking_level (REST: generationConfig.thinkingConfig.thinkingLevel).
-     * Default "low" — "high" is capped to low so thinking does not exhaust output tokens.
+     * Gemini thinking_level (REST: generationConfig.thinkingConfig.thinkingLevel).
+     * Also sent as OpenRouter reasoning.effort. Accepted: minimal, low, medium, high, xhigh.
+     * medium, high, and xhigh are capped to low so thinking does not exhaust output tokens.
      */
     geminiThinkingLevel: normalizeGeminiThinkingLevel(
       pick(
@@ -275,7 +324,9 @@ export function getDigifiEnv() {
 
 export function isDigifiConfigured(env = getDigifiEnv()): boolean {
   const provider = inferDigifiProvider(env.model)
-  return provider === 'anthropic' ? !!env.anthropicApiKey : !!env.geminiApiKey
+  if (provider === 'anthropic') return !!env.anthropicApiKey
+  if (env.transport === 'openrouter') return !!env.openrouterApiKey || !!env.geminiApiKey
+  return !!env.geminiApiKey
 }
 
 /** User-facing hint when the configured model id is invalid or inaccessible. */
@@ -287,7 +338,7 @@ export function digifiModelUnavailableMessage(env = getDigifiEnv()): string {
   return `The AI scan model is not available on this API key. Restart the dev server after pulling latest config, or set NUXT_DIGIFI_MODEL=${DEFAULT_GEMINI_DIGIFI_MODEL} in .env.`
 }
 
-const GEMINI_THINKING_LEVELS = ['minimal', 'low', 'medium', 'high'] as const
+const GEMINI_THINKING_LEVELS = ['minimal', 'low', 'medium', 'high', 'xhigh'] as const
 export type DigifiGeminiThinkingLevel = (typeof GEMINI_THINKING_LEVELS)[number]
 
 function normalizeGeminiThinkingLevel(value: string): DigifiGeminiThinkingLevel {
@@ -305,7 +356,7 @@ function parseClaudeTemperature(value: string): number {
 }
 
 /**
- * Gemini 3.x (incl. 3.5 / 3.6 Flash): thinkingConfig.thinkingLevel only — never mix with thinkingBudget.
+ * Gemini 3.x and 4.x: thinkingConfig.thinkingLevel only — never mix with thinkingBudget.
  * Gemini 2.5: thinkingBudget 0 (2.5 does not use thinkingLevel).
  * @see https://ai.google.dev/gemini-api/docs/thinking
  */
@@ -313,7 +364,7 @@ export function buildDigifiThinkingConfig(
   model: string,
   thinkingLevel: DigifiGeminiThinkingLevel
 ): { thinkingLevel: DigifiGeminiThinkingLevel } | { thinkingBudget: number } {
-  if (/gemini-3/i.test(model)) {
+  if (/gemini-[34]/i.test(model)) {
     return { thinkingLevel }
   }
   return { thinkingBudget: 0 }

@@ -23,6 +23,16 @@ describe('estimateGeminiCostUsd', () => {
     const cost = estimateGeminiCostUsd('gemini-3.8-flash', 1_000_000, 500_000)
     expect(cost).toBe('0.45000000')
   })
+
+  it('prices gemini-4-hydrogen at $1.50 input and $7.50 output per 1M', () => {
+    expect(estimateGeminiCostUsd('gemini-4-hydrogen', 1_000_000, 1_000_000)).toBe('9.00000000')
+    expect(estimateGeminiCostUsd('google/gemini-4-hydrogen', 2_000_000, 0)).toBe('3.00000000')
+  })
+
+  it('keeps the existing pro rate for models without a specific price', () => {
+    expect(estimateGeminiCostUsd('gemini-2.5-pro', 1_000_000, 0)).toBe('1.25000000')
+    expect(estimateGeminiCostUsd('gemini-4-other', 1_000_000, 0)).toBe('1.25000000')
+  })
 })
 
 describe('recordDigifiGeminiCallEvent', () => {

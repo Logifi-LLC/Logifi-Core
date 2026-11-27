@@ -34,15 +34,30 @@ const FLASH_OUTPUT_USD_PER_M = 0.6
 const PRO_INPUT_USD_PER_M = 1.25
 const PRO_OUTPUT_USD_PER_M = 5
 
+/** Exact model overrides. Unlisted ids keep the flash/pro rates above. */
+const GEMINI_MODEL_RATES_USD_PER_M: Record<string, { input: number; output: number }> = {
+  'gemini-4-hydrogen': { input: 1.5, output: 7.5 },
+}
+
+function rateForGeminiModel(model: string): { input: number; output: number } {
+  const trimmed = model.trim().toLowerCase()
+  const bare = trimmed.includes('/') ? trimmed.slice(trimmed.lastIndexOf('/') + 1) : trimmed
+  const specific = GEMINI_MODEL_RATES_USD_PER_M[bare]
+  if (specific) return specific
+  const flash = /flash/i.test(model)
+  return {
+    input: flash ? FLASH_INPUT_USD_PER_M : PRO_INPUT_USD_PER_M,
+    output: flash ? FLASH_OUTPUT_USD_PER_M : PRO_OUTPUT_USD_PER_M,
+  }
+}
+
 export function estimateGeminiCostUsd(
   model: string,
   promptTokens: number,
   outputTokens: number
 ): string {
-  const flash = /flash/i.test(model)
-  const inputRate = flash ? FLASH_INPUT_USD_PER_M : PRO_INPUT_USD_PER_M
-  const outputRate = flash ? FLASH_OUTPUT_USD_PER_M : PRO_OUTPUT_USD_PER_M
-  const cost = (promptTokens * inputRate + outputTokens * outputRate) / 1_000_000
+  const rate = rateForGeminiModel(model)
+  const cost = (promptTokens * rate.input + outputTokens * rate.output) / 1_000_000
   return cost.toFixed(8)
 }
 

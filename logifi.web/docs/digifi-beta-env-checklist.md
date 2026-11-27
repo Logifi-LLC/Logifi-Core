@@ -24,7 +24,11 @@ Compare these between local `.env` and the beta host (Coolify, Vercel, etc.):
 | `DIGIFI_ENABLE_RESCUE_SCAN` | `true` | Optional second pass when primary scan leaves missing rows; set `false` to disable. |
 | `DIGIFI_GEMINI_MEDIA_RESOLUTION` | `MEDIA_RESOLUTION_HIGH` | `LOW` reduces accuracy. |
 | `DIGIFI_GEMINI_MAX_OUTPUT_TOKENS` | capped at 20000 | Truncation on dense pages causes incomplete rows. |
-| `DIGIFI_GEMINI_THINKING_LEVEL` | `low` | Higher levels share the output token budget on Gemini 3.x. |
+| `DIGIFI_GEMINI_THINKING_LEVEL` | `low` | Higher levels share the output token budget. `minimal`, `low`, `medium`, `high`, and `xhigh` are accepted; `medium`, `high`, and `xhigh` are capped to `low`. |
+| `NUXT_DIGIFI_PROVIDER` | `gemini` | Set to `openrouter` to send scans through OpenRouter. Unset stays direct Gemini. Errors and a missing OpenRouter key fall back to direct Gemini. |
+| `NUXT_OPENROUTER_API_KEY` | (empty) | Server-only. Required for the OpenRouter path. Keep `GEMINI_API_KEY` so fallback still scans. |
+| `NUXT_DIGIFI_OPENROUTER_MODEL` | `google/gemini-4-hydrogen` | OpenRouter model id. `google/*` ids pin `provider.only` to Google AI Studio. |
+| `NUXT_DIGIFI_OPENROUTER_PROVIDERS` | `google-ai-studio` | Comma-separated OpenRouter provider slugs for `google/*` models. `allow_fallbacks` stays false. |
 
 ### Claude-only (when `NUXT_DIGIFI_MODEL` starts with `claude-`)
 
