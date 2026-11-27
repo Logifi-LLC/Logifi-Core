@@ -18,32 +18,32 @@ import { GENERIC_FLICA_TRIP_ID_PATTERN } from '../../../shared/flicaTripId'
 
 const FLICA_FIXTURE = `
 August Schedule
-DEREK FARMER
-(624619)
+JANE EXAMPLE
+(900001)
 Last Updated Aug 12, 2026 09:51:14 EDT
-L7513 : 04AUG  EXCEPT SUN SAT  BSE REPT: 0520L
+Z7513 : 04AUG  EXCEPT SUN SAT  BSE REPT: 0520L
 Base/Equip: LGA/EM7 CA01FO01
 TU	04	*		5770	LGA-DCA	0605	0712	0107	0100	8823
 TU 04  5772 DCA-LGA0812 0953 0141 0029 8879
 Crew:
-CA 624619 FARMER, DEREK FO 627385 SUTTON, DREW
-L7528 : 06AUG  TUE-THU  BSE REPT: 0635L
+CA 900001 EXAMPLE, JANE FO 900003 SAMPLE, JOHN
+Z7528 : 06AUG  TUE-THU  BSE REPT: 0635L
 Base/Equip: LGA/EM7 CA01
 TH 06 * 5686 LGA-CMH 0734 0921 0147 0334 8210
 Crew:
-CA 624619 FARMER, DEREK
+CA 900001 EXAMPLE, JANE
 GDO : 01AUG
 ActivityStart DateStart TimeEnd DateEnd TimeCredit
 GDO 01AUG 02:00 03AUG 23:59 0000
 `
 
 /** Ground-truth trip from live RJET schedule (Aug 12, 2026). */
-const L7G13_FIXTURE = `
+const Z7G13_FIXTURE = `
 August Schedule
-DEREK FARMER
-(624619)
+JANE EXAMPLE
+(900001)
 Last Updated Aug 12, 2026 09:51:14 EDT
-L7G13 : 12AUG  ONLY ON WED  BSE REPT: 1019L
+Z7G13 : 12AUG  ONLY ON WED  BSE REPT: 1019L
 Operates: Aug 12 Only
 Base/Equip: LGA/EM7 CA01
 WE 12  4442 LGA-RIC 1059 1226 0127 0044 A21
@@ -51,30 +51,30 @@ WE 12  4442 RIC-LGA 1310 1426 0116 A21
 D-END: 1441L
 Total: 0243 0000 0412 0422/0407
 Crew:
-CA 624619 FARMER, DEREK
+CA 900001 EXAMPLE, JANE
 `
 
-const L7G13_HTML_FIXTURE = `
+const Z7G13_HTML_FIXTURE = `
 <html><body>
-<div>L7G13 : 12AUG ONLY ON WED BSE REPT: 1019L</div>
+<div>Z7G13 : 12AUG ONLY ON WED BSE REPT: 1019L</div>
 <div>Base/Equip: LGA/EM7 CA01</div>
 <table>
 <tr><td>WE</td><td>12</td><td></td><td></td><td>4442</td><td>LGA-RIC</td><td>1059</td><td>1226</td><td>0127</td></tr>
 <tr><td>WE</td><td>12</td><td></td><td></td><td>4442</td><td>RIC-LGA</td><td>1310</td><td>1426</td><td>0116</td></tr>
 </table>
 <br>Crew:<br>
-CA 624619 FARMER, DEREK
+CA 900001 EXAMPLE, JANE
 </body></html>
 `
 
 /** Classic FLICA CGI: ISO-8859-1, omitted </tr></td>, &nbsp; padding, FONT wrappers. */
-const L7G13_FLICA_CGI_HTML = `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+const Z7G13_FLICA_CGI_HTML = `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
 <html>
 <head><meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
 <title>Schedule Detail</title></head>
 <body>
 <table border=0 cellpadding=0 cellspacing=0>
-<tr><td colspan=12><font size=2><b>L7G13 : 12AUG&nbsp;&nbsp;ONLY ON WED&nbsp;&nbsp;BSE REPT: 1019L</b></font>
+<tr><td colspan=12><font size=2><b>Z7G13 : 12AUG&nbsp;&nbsp;ONLY ON WED&nbsp;&nbsp;BSE REPT: 1019L</b></font>
 <tr><td colspan=12><font size=2>Base/Equip: LGA/EM7 CA01</font>
 <tr>
 <td><font size=2>WE</font>
@@ -95,13 +95,13 @@ const L7G13_FLICA_CGI_HTML = `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transi
 <td><font size=2>1426</font>
 <td><font size=2>0116</font>
 <tr><td colspan=12>Crew:
-<tr><td colspan=12>CA 624619 FARMER, DEREK
+<tr><td colspan=12>CA 900001 EXAMPLE, JANE
 </table>
 </body></html>
 `
 
-const L7G13_SPLIT_ROUTE_HTML = `
-<div>L7G13 : 12AUG</div>
+const Z7G13_SPLIT_ROUTE_HTML = `
+<div>Z7G13 : 12AUG</div>
 <div>Base/Equip: LGA/EM7</div>
 <table>
 <tr><td>WE</td><td>12</td><td>&nbsp;</td><td>4442</td><td>LGA</td><td>RIC</td><td>1059</td><td>1226</td><td>0127</td></tr>
@@ -112,10 +112,10 @@ const L7G13_SPLIT_ROUTE_HTML = `
 /** Live 3-day pairing (Aug 18–20, 2026): C * is AC swap, crew once at the end. */
 const THREE_DAY_PAIRING_TSV = `
 August Schedule
-DEREK FARMER
-(624619)
+JANE EXAMPLE
+(900001)
 Last Updated Aug 18, 2026 09:00:00 EDT
-L7H18 : 18AUG  TUE-THU  BSE REPT: 0515L
+Z7H18 : 18AUG  TUE-THU  BSE REPT: 0515L
 Base/Equip: LGA/EM7 CA01FO01
 DY	DD	DH	C	FLTNO	DPS-ARS	DEPL	ARRL	BLKT	GRNT	OA	    	TBLK	TDHD	 	TCRD	TDUTY/FDP	LAYOVER
 TU	18	 	*	4393	LGA-DCA	0603	0727	 0124	0108	121
@@ -130,13 +130,13 @@ TH	20	 	 	4584	RIC-LGA	1117	1239	 0122	 	B48	 	0513	        	        	0513	0730/
  	D-END: 1254L    T.A.F.B.: 5534
  	Total: 	1408	0000	 	1434	2152/2107
 Crew:
-    	CA 	 624619	  FARMER, DEREK 	    	FO 	 626955	  JOHNS, LUKE
+    	CA 	 900001	  EXAMPLE, JANE 	    	FO 	 900002	  DOE, RICHARD
 `
 
 const THREE_DAY_SPLIT_CREW_HTML = `
 <html><body>
-<div>DEREK FARMER (624619)</div>
-<div>L7H18 : 18AUG</div>
+<div>JANE EXAMPLE (900001)</div>
+<div>Z7H18 : 18AUG</div>
 <div>Base/Equip: LGA/EM7 CA01FO01</div>
 <table>
 <tr><td>TU</td><td>18</td><td></td><td>*</td><td>4393</td><td>LGA-DCA</td><td>0603</td><td>0727</td><td>0124</td></tr>
@@ -149,8 +149,8 @@ const THREE_DAY_SPLIT_CREW_HTML = `
 <tr><td>TH</td><td>20</td><td></td><td></td><td>4584</td><td>RIC-LGA</td><td>1117</td><td>1239</td><td>0122</td></tr>
 <tr><td colspan=12>Total: 1408</td></tr>
 <tr><td colspan=12>Crew:</td></tr>
-<tr><td>CA</td><td>624619</td><td>FARMER, DEREK</td></tr>
-<tr><td>FO</td><td>626955</td><td>JOHNS, LUKE</td></tr>
+<tr><td>CA</td><td>900001</td><td>EXAMPLE, JANE</td></tr>
+<tr><td>FO</td><td>900002</td><td>DOE, RICHARD</td></tr>
 </table>
 </body></html>
 `
@@ -165,13 +165,13 @@ const THREE_DAY_IDS = [
   'FLICA_20260820_4584_RIC',
 ]
 
-function expectL7G13Turn(legs: ReturnType<typeof parseFlicaSchedule>) {
+function expectZ7G13Turn(legs: ReturnType<typeof parseFlicaSchedule>) {
   expect(legs).toHaveLength(2)
   expect(legs.map((l) => l.external_flight_id)).toEqual([
     'FLICA_20260812_4442_LGA',
     'FLICA_20260812_4442_RIC',
   ])
-  expect(legs[0].trip_number).toBe('L7G13')
+  expect(legs[0].trip_number).toBe('Z7G13')
   expect(legs[0].dep_airport).toBe('LGA')
   expect(legs[0].arr_airport).toBe('RIC')
   expect(legs[0].is_deadhead).toBe(false)
@@ -185,10 +185,10 @@ function expectThreeDayPairing(legs: ReturnType<typeof parseFlicaSchedule>) {
   expect(legs).toHaveLength(7)
   expect(legs.map((l) => l.external_flight_id)).toEqual(THREE_DAY_IDS)
   expect(legs.every((l) => l.is_deadhead === false)).toBe(true)
-  expect(legs.every((l) => l.trip_number === 'L7H18')).toBe(true)
+  expect(legs.every((l) => l.trip_number === 'Z7H18')).toBe(true)
   expect(legs.every((l) => l.role === 'PIC')).toBe(true)
-  expect(legs[0]?.crew.map((c) => c.employeeId)).toEqual(['624619', '626955'])
-  expect(legs[6]?.crew.some((c) => c.name.includes('JOHNS'))).toBe(true)
+  expect(legs[0]?.crew.map((c) => c.employeeId)).toEqual(['900001', '900002'])
+  expect(legs[6]?.crew.some((c) => c.name.includes('DOE'))).toBe(true)
   expect(legs.find((l) => l.flight_number === '4393')?.scheduled_out_local).toBe(
     '2026-08-18 06:03:00'
   )
@@ -212,7 +212,7 @@ describe('parseFlicaSchedule', () => {
     expect(deadhead?.block_minutes).toBe(67)
     expect(deadhead?.fcv_aircraft_type).toBe('EM7')
     expect(deadhead?.role).toBe('PIC')
-    expect(deadhead?.crew.some((c) => c.name.includes('SUTTON'))).toBe(true)
+    expect(deadhead?.crew.some((c) => c.name.includes('SAMPLE'))).toBe(true)
 
     const operating = legs.find((l) => l.flight_number === '5772')
     expect(operating?.is_deadhead).toBe(false)
@@ -228,30 +228,30 @@ describe('parseFlicaSchedule', () => {
   it('maps FO crew slot to SIC when the schedule belongs to the first officer', () => {
     const text = `
 August Schedule
-DREW SUTTON
-(627385)
+JOHN SAMPLE
+(900003)
 Last Updated Aug 12, 2026 09:51:14 EDT
-L7513 : 04AUG  EXCEPT SUN SAT  BSE REPT: 0520L
+Z7513 : 04AUG  EXCEPT SUN SAT  BSE REPT: 0520L
 Base/Equip: LGA/EM7 CA01FO01
 TU 04  5772 DCA-LGA0812 0953 0141 0029 8879
 Crew:
-CA 624619 FARMER, DEREK FO 627385 SUTTON, DREW
+CA 900001 EXAMPLE, JANE FO 900003 SAMPLE, JOHN
 `
     const legs = parseFlicaSchedule(text)
     expect(legs[0]?.role).toBe('SIC')
-    expect(legs[0]?.crew.some((c) => c.position === 'FO' && c.employeeId === '627385')).toBe(true)
+    expect(legs[0]?.crew.some((c) => c.position === 'FO' && c.employeeId === '900003')).toBe(true)
   })
 
   it('parses FO-first crew lines and still matches SIC', () => {
     const text = `
 August Schedule
-DREW SUTTON
-(627385)
-L7513 : 04AUG
+JOHN SAMPLE
+(900003)
+Z7513 : 04AUG
 Base/Equip: LGA/EM7
 TU 04  5772 DCA-LGA0812 0953 0141
 Crew:
-FO 627385 SUTTON, DREW CA 624619 FARMER, DEREK
+FO 900003 SAMPLE, JOHN CA 900001 EXAMPLE, JANE
 `
     const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
     expect(legs[0]?.role).toBe('SIC')
@@ -261,23 +261,23 @@ FO 627385 SUTTON, DREW CA 624619 FARMER, DEREK
   it('parses FO-only crew lines as SIC for that employee', () => {
     const text = `
 August Schedule
-DREW SUTTON
-(627385)
-L7513 : 04AUG
+JOHN SAMPLE
+(900003)
+Z7513 : 04AUG
 TU 04  5772 DCA-LGA0812 0953 0141
 Crew:
-FO 627385 SUTTON, DREW
+FO 900003 SAMPLE, JOHN
 `
     const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
     expect(legs[0]?.role).toBe('SIC')
     expect(legs[0]?.crew).toEqual([
-      { position: 'FO', name: 'SUTTON, DREW', employeeId: '627385' },
+      { position: 'FO', name: 'SAMPLE, JOHN', employeeId: '900003' },
     ])
   })
 
   it('infers PIC from CA-only Base/Equip when there is no crew line', () => {
     const text = `
-L7G13 : 12AUG
+Z7G13 : 12AUG
 Base/Equip: LGA/EM7 CA01
 WE 12  4442 LGA-RIC 1059 1226 0127
 `
@@ -288,7 +288,7 @@ WE 12  4442 LGA-RIC 1059 1226 0127
 
   it('infers SIC from FO-only Base/Equip when there is no crew line', () => {
     const text = `
-L7G13 : 12AUG
+Z7G13 : 12AUG
 Base/Equip: LGA/EM7 FO01
 WE 12  4442 LGA-RIC 1059 1226 0127
 `
@@ -299,7 +299,7 @@ WE 12  4442 LGA-RIC 1059 1226 0127
 
   it('leaves role empty when Base/Equip lists both seats and there is no crew line', () => {
     const text = `
-L7G13 : 12AUG
+Z7G13 : 12AUG
 Base/Equip: LGA/EM7 CA01FO01
 WE 12  4442 LGA-RIC 1059 1226 0127
 `
@@ -311,9 +311,9 @@ WE 12  4442 LGA-RIC 1059 1226 0127
   it('leaves role empty when the header pilot is not on the crew line', () => {
     const text = `
 August Schedule
-DEREK FARMER
-(624619)
-L7513 : 04AUG
+JANE EXAMPLE
+(900001)
+Z7513 : 04AUG
 TU 04  5772 DCA-LGA0812 0953 0141
 Crew:
 CA 111111 OTHER, PILOT FO 222222 SOMEONE, ELSE
@@ -323,27 +323,27 @@ CA 111111 OTHER, PILOT FO 222222 SOMEONE, ELSE
     expect(legs[0]?.crew).toHaveLength(2)
   })
 
-  it('parses L7G13 Aug 12 turn (4442 LGA-RIC / RIC-LGA)', () => {
-    expectL7G13Turn(parseFlicaSchedule(L7G13_FIXTURE))
+  it('parses Z7G13 Aug 12 turn (4442 LGA-RIC / RIC-LGA)', () => {
+    expectZ7G13Turn(parseFlicaSchedule(Z7G13_FIXTURE))
   })
 
-  it('parses L7G13 from table HTML with cell breaks', () => {
-    expectL7G13Turn(parseFlicaSchedule(L7G13_HTML_FIXTURE, { defaultYear: 2026 }))
+  it('parses Z7G13 from table HTML with cell breaks', () => {
+    expectZ7G13Turn(parseFlicaSchedule(Z7G13_HTML_FIXTURE, { defaultYear: 2026 }))
   })
 
-  it('parses L7G13 from classic FLICA CGI (unclosed tags + &nbsp;)', () => {
-    const text = flicaHtmlToText(L7G13_FLICA_CGI_HTML)
+  it('parses Z7G13 from classic FLICA CGI (unclosed tags + &nbsp;)', () => {
+    const text = flicaHtmlToText(Z7G13_FLICA_CGI_HTML)
     expect(text).toMatch(/WE[\s|]+12[\s|]+4442[\s|]+LGA-RIC/)
-    expectL7G13Turn(parseFlicaSchedule(L7G13_FLICA_CGI_HTML, { defaultYear: 2026 }))
+    expectZ7G13Turn(parseFlicaSchedule(Z7G13_FLICA_CGI_HTML, { defaultYear: 2026 }))
   })
 
-  it('parses L7G13 when DPS and ARS are separate table cells', () => {
-    expectL7G13Turn(parseFlicaSchedule(L7G13_SPLIT_ROUTE_HTML, { defaultYear: 2026 }))
+  it('parses Z7G13 when DPS and ARS are separate table cells', () => {
+    expectZ7G13Turn(parseFlicaSchedule(Z7G13_SPLIT_ROUTE_HTML, { defaultYear: 2026 }))
   })
 
   it('uses defaultYear when Last Updated year is missing', () => {
     const text = `
-L7G13 : 12AUG
+Z7G13 : 12AUG
 Base/Equip: LGA/EM7 CA01
 WE 12  4442 LGA-RIC 1059 1226 0127
 `
@@ -362,15 +362,15 @@ WE 12  4442 LGA-RIC 1059 1226 0127
   it('parses every trip in a month dump regardless of pairing length', () => {
     const text = `
 August Schedule
-DEREK FARMER
-(624619)
+JANE EXAMPLE
+(900001)
 Last Updated Aug 18, 2026 09:00:00 EDT
-L1A01 : 03AUG
+Z1A01 : 03AUG
 Base/Equip: LGA/EM7 CA01
 MO 03  1001 LGA-BOS 0800 0910 0110
 Crew:
-CA 624619 FARMER, DEREK
-L5B05 : 10AUG
+CA 900001 EXAMPLE, JANE
+Z5B05 : 10AUG
 Base/Equip: LGA/EM7 CA01FO01
 MO 10  2001 LGA-ORD 0700 0900 0200
 TU 11  2002 ORD-DFW 1000 1200 0200
@@ -379,8 +379,8 @@ TH 13  2004 ORD-LGA 1600 1900 0300
 FR 14  2005 LGA-DCA 2000 2100 0100
 D-END: 2115L
 Crew:
-CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
-L6C06 : 20AUG
+CA 900001 EXAMPLE, JANE FO 900002 DOE, RICHARD
+Z6C06 : 20AUG
 Base/Equip: LGA/EM7 CA01
 TH 20  3001 LGA-CLT 0600 0800 0200
 FR 21  3002 CLT-MIA 0900 1100 0200
@@ -389,18 +389,18 @@ SU 23  3004 CLT-ATL 1500 1600 0100
 MO 24  3005 ATL-CLT 1700 1800 0100
 TU 25  3006 CLT-LGA 1900 2100 0200
 Crew:
-CA 624619 FARMER, DEREK
+CA 900001 EXAMPLE, JANE
 `
     const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
     expect(legs).toHaveLength(12)
-    expect(legs.filter((l) => l.trip_number === 'L1A01')).toHaveLength(1)
-    expect(legs.filter((l) => l.trip_number === 'L5B05')).toHaveLength(5)
-    expect(legs.filter((l) => l.trip_number === 'L6C06')).toHaveLength(6)
+    expect(legs.filter((l) => l.trip_number === 'Z1A01')).toHaveLength(1)
+    expect(legs.filter((l) => l.trip_number === 'Z5B05')).toHaveLength(5)
+    expect(legs.filter((l) => l.trip_number === 'Z6C06')).toHaveLength(6)
     expect(legs.every((l) => l.role === 'PIC')).toBe(true)
-    expect(legs.find((l) => l.trip_number === 'L5B05')?.crew.some((c) => c.name.includes('JOHNS'))).toBe(
+    expect(legs.find((l) => l.trip_number === 'Z5B05')?.crew.some((c) => c.name.includes('DOE'))).toBe(
       true
     )
-    expect(legs.find((l) => l.trip_number === 'L1A01')?.crew.some((c) => c.name.includes('JOHNS'))).toBe(
+    expect(legs.find((l) => l.trip_number === 'Z1A01')?.crew.some((c) => c.name.includes('DOE'))).toBe(
       false
     )
     expect(legs.find((l) => l.flight_number === '3006')?.scheduled_out_local).toBe(
@@ -411,17 +411,17 @@ CA 624619 FARMER, DEREK
   it('rolls a pairing into the next month when IROPS / days-off add legs past month-end', () => {
     const text = `
 August Schedule
-DEREK FARMER
-(624619)
+JANE EXAMPLE
+(900001)
 Last Updated Aug 30, 2026 09:00:00 EDT
-L9Z30 : 30AUG
+Z9Z30 : 30AUG
 Base/Equip: LGA/EM7 CA01
 SU 30  4001 LGA-STL 0800 1000 0200
 MO 31  4002 STL-DEN 1100 1300 0200
 TU 01  4003 DEN-STL 0600 0900 0300
 WE 02  4004 STL-LGA 1000 1400 0400
 Crew:
-CA 624619 FARMER, DEREK
+CA 900001 EXAMPLE, JANE
 `
     const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
     expect(legs.map((l) => l.scheduled_out_local?.slice(0, 10))).toEqual([
@@ -430,23 +430,23 @@ CA 624619 FARMER, DEREK
       '2026-09-01',
       '2026-09-02',
     ])
-    expect(legs.every((l) => l.trip_number === 'L9Z30')).toBe(true)
+    expect(legs.every((l) => l.trip_number === 'Z9Z30')).toBe(true)
     expect(legs.every((l) => l.role === 'PIC')).toBe(true)
   })
 
   it('rolls a pairing into January when it crosses the year', () => {
     const text = `
 December Schedule
-DEREK FARMER
-(624619)
+JANE EXAMPLE
+(900001)
 Last Updated Dec 30, 2026 09:00:00 EDT
-L9Y31 : 30DEC
+Z9Y31 : 30DEC
 Base/Equip: LGA/EM7 CA01
 WE 30  5001 LGA-ORD 0800 1000 0200
 TH 31  5002 ORD-DEN 1100 1300 0200
 FR 01  5003 DEN-LGA 0900 1500 0600
 Crew:
-CA 624619 FARMER, DEREK
+CA 900001 EXAMPLE, JANE
 `
     const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
     expect(legs.map((l) => l.scheduled_out_local?.slice(0, 10))).toEqual([
@@ -579,16 +579,16 @@ describe('filterAirlineLegs', () => {
   it('parses updated FLICA gate times for a completed Aug 20 pairing (4809 / 4584)', () => {
     const text = `
 August Schedule
-DEREK FARMER
-(624619)
+JANE EXAMPLE
+(900001)
 Last Updated Aug 20, 2026 14:00:00 EDT
-L7H18 : 18AUG  TUE-THU  BSE REPT: 0515L
+Z7H18 : 18AUG  TUE-THU  BSE REPT: 0515L
 Base/Equip: LGA/EM7 CA01FO01
 TH	20	 	*	4809	ATL-LGA	0606	0809	 0203	0059	B48
 TH	20	 	 	4584	LGA-RIC	0908	1103	 0155	0038	C64
 TH	20	 	 	4584	RIC-LGA	1141	1256
 Crew:
-CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
+CA 900001 EXAMPLE, JANE FO 900002 DOE, RICHARD
 `
     const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
     const atlLga = legs.find((l) => l.flight_number === '4809')
@@ -615,14 +615,14 @@ CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
   it('parses updated FLICA gate times for a completed leg (4349 LGA-ATL)', () => {
     const text = `
 August Schedule
-DEREK FARMER
-(624619)
+JANE EXAMPLE
+(900001)
 Last Updated Aug 19, 2026 14:00:00 EDT
-L7H18 : 19AUG
+Z7H18 : 19AUG
 Base/Equip: LGA/EM7 CA01FO01
 WE 19   4349 LGA-ATL 1144 1352 0208
 Crew:
-CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
+CA 900001 EXAMPLE, JANE FO 900002 DOE, RICHARD
 `
     const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
     const leg = legs.find((l) => l.flight_number === '4349')
@@ -689,14 +689,14 @@ CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
   it('excludes a 15:00 Eastern leg when UTC now is 17:30 (still in the future locally)', () => {
     const text = `
 August Schedule
-DEREK FARMER
-(624619)
+JANE EXAMPLE
+(900001)
 Last Updated Aug 25, 2026 09:00:00 EDT
-L9Z25 : 25AUG
+Z9Z25 : 25AUG
 Base/Equip: LGA/EM7 CA01
 TU 25  9999 LGA-DCA 1500 1630 0130
 Crew:
-CA 624619 FARMER, DEREK
+CA 900001 EXAMPLE, JANE
 `
     const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
     const nowMs = Date.parse('2026-08-25T17:30:00.000Z')
@@ -786,24 +786,24 @@ CA 624619 FARMER, DEREK
   it('keeps legs in a range that crosses months (Aug 29–Sep 2 Autofi)', () => {
     const text = `
 August Schedule
-DEREK FARMER
-(624619)
+JANE EXAMPLE
+(900001)
 Last Updated Aug 12, 2026 09:51:14 EDT
-L7513 : 04AUG
+Z7513 : 04AUG
 Base/Equip: LGA/EM7 CA01
 TU 04  5770 LGA-DCA 0605 0712 0107
 Crew:
-CA 624619 FARMER, DEREK
+CA 900001 EXAMPLE, JANE
 September Schedule
-DEREK FARMER
-(624619)
+JANE EXAMPLE
+(900001)
 Last Updated Sep 2, 2026 09:00:00 EDT
-L8A01 : 01SEP
+Z8A01 : 01SEP
 Base/Equip: LGA/EM7 CA01
 TU 01  5001 LGA-ORD 0800 1000 0200
 WE 02  5002 ORD-LGA 1100 1400 0300
 Crew:
-CA 624619 FARMER, DEREK
+CA 900001 EXAMPLE, JANE
 `
     const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
     const stats = filterAirlineLegsWithStats(legs, {
@@ -819,14 +819,14 @@ CA 624619 FARMER, DEREK
   it('does not treat ISO datetime bounds as excluding every YYYY-MM-DD leg', () => {
     const text = `
 August Schedule
-DEREK FARMER
-(624619)
+JANE EXAMPLE
+(900001)
 Last Updated Aug 29, 2026 09:00:00 EDT
-L7Z29 : 29AUG
+Z7Z29 : 29AUG
 Base/Equip: LGA/EM7 CA01
 SA 29  4901 LGA-DCA 0600 0720 0120
 Crew:
-CA 624619 FARMER, DEREK
+CA 900001 EXAMPLE, JANE
 `
     const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
     const stats = filterAirlineLegsWithStats(legs, {
@@ -915,14 +915,14 @@ describe('parseFlicaSchedule published actuals', () => {
   it('maps dual-column 4809 bid+published times to published Out/In/block', () => {
     const text = `
 August Schedule
-DEREK FARMER
-(624619)
+JANE EXAMPLE
+(900001)
 Last Updated Aug 20, 2026 14:00:00 EDT
-L7H18 : 18AUG
+Z7H18 : 18AUG
 Base/Equip: LGA/EM7 CA01FO01
 TH	20	 	*	4809	ATL-LGA	0609	0825	0216	0047	0606	0809	0203
 Crew:
-CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
+CA 900001 EXAMPLE, JANE FO 900002 DOE, RICHARD
 `
     const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
     const atlLga = legs.find((l) => l.flight_number === '4809')
@@ -934,14 +934,14 @@ CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
   it('maps dual-column published Out/In when the actuals omit BLKT', () => {
     const text = `
 August Schedule
-DEREK FARMER
-(624619)
+JANE EXAMPLE
+(900001)
 Last Updated Aug 20, 2026 14:00:00 EDT
-L7H18 : 18AUG
+Z7H18 : 18AUG
 Base/Equip: LGA/EM7 CA01FO01
 TH	20	 	*	4809	ATL-LGA	0609	0825	0216	0047	0606	0809
 Crew:
-CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
+CA 900001 EXAMPLE, JANE FO 900002 DOE, RICHARD
 `
     const legs = parseFlicaSchedule(text, { defaultYear: 2026 })
     const atlLga = legs.find((l) => l.flight_number === '4809')
@@ -954,7 +954,7 @@ CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
     const html = `
 <html><body>
 <div>Last Updated Aug 20, 2026 16:00:00 EDT</div>
-<div>L7H18 : 18AUG</div>
+<div>Z7H18 : 18AUG</div>
 <div>Base/Equip: LGA/EM7 CA01FO01</div>
 <table>
 <tr><td>TH</td><td>20</td><td></td><td>*</td><td>4809</td><td>ATL-LGA</td><td>0609</td><td>0825</td><td>0216</td><td>0047</td><td>B48</td></tr>
@@ -963,7 +963,7 @@ CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
 <tr><td></td><td></td><td></td><td></td><td></td><td></td><td>0908</td><td>1103</td></tr>
 </table>
 <div>Crew:</div>
-<div>CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE</div>
+<div>CA 900001 EXAMPLE, JANE FO 900002 DOE, RICHARD</div>
 </body></html>
 `
     const legs = parseFlicaSchedule(html, { defaultYear: 2026 })
@@ -981,7 +981,7 @@ CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
     const html = `<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
 <html><body>
 <table border=0 cellpadding=0 cellspacing=0>
-<tr><td colspan=12><font size=2><b>L7H18 : 18AUG</b></font>
+<tr><td colspan=12><font size=2><b>Z7H18 : 18AUG</b></font>
 <tr><td colspan=12><font size=2>Base/Equip: LGA/EM7 CA01FO01</font>
 <tr>
 <td><font size=2>TH</font>
@@ -1004,7 +1004,7 @@ CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
 <td><font size=2>0809</font>
 <td><font size=2>0203</font>
 <tr><td colspan=12>Crew:
-<tr><td colspan=12>CA 624619 FARMER, DEREK FO 626955 JOHNS, LUKE
+<tr><td colspan=12>CA 900001 EXAMPLE, JANE FO 900002 DOE, RICHARD
 </table>
 </body></html>`
     const legs = parseFlicaSchedule(html, { defaultYear: 2026 })
@@ -1019,7 +1019,7 @@ describe('overlayFlicaPairingLegs', () => {
   it('replaces month-refrigerator bid times with pairing-page published actuals', () => {
     const month = parseFlicaSchedule(
       `
-L7H18 : 18AUG
+Z7H18 : 18AUG
 Base/Equip: LGA/EM7 CA01
 TH 20  4809 ATL-LGA 0609 0825 0216
 `,
@@ -1028,7 +1028,7 @@ TH 20  4809 ATL-LGA 0609 0825 0216
     const pairing = parseFlicaSchedule(
       `
 Last Updated Aug 20, 2026 16:00:00 EDT
-L7H18 : 18AUG
+Z7H18 : 18AUG
 Base/Equip: LGA/EM7 CA01
 TH 20  4809 ATL-LGA 0606 0809 0203
 `,

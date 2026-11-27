@@ -558,8 +558,8 @@ describe('FcvSync unmatched own seat', () => {
         own_role_unmatched: true,
         own_role_unmatched_reason: 'not_on_crew',
         crew_listed: [
-          { position: 'CA', name: 'FARMER, DEREK' },
-          { position: 'FO', name: 'SUTTON, DREW' },
+          { position: 'CA', name: 'EXAMPLE, JANE' },
+          { position: 'FO', name: 'SAMPLE, JOHN' },
         ],
       },
       ...overrides,
@@ -606,7 +606,7 @@ describe('FcvSync unmatched own seat', () => {
     expect(flights[0]?.role).toBe('SIC')
     expect(flights[0]?.flight_time).toMatchObject({ total: 1.6, sic: 1.6 })
     expect(flights[0]?.flight_time.pic).toBeUndefined()
-    expect(flights[0]?.training_elements).toBe('FARMER, DEREK')
+    expect(flights[0]?.training_elements).toBe('EXAMPLE, JANE')
     expect(flights[0]?.training_instructor).toBe('Captain')
     expect(flights[0]?.import_metadata.own_role_unmatched).toBeUndefined()
     const isUnmatched = setupState.isFlightOwnRoleUnmatched as (f: {
@@ -621,12 +621,12 @@ describe('FcvSync unmatched own seat', () => {
     const setupState = getSetupState(wrapper)
     setupState.previewFlights = [
       unmatchedFlight({
-        training_elements: 'FARMER, DEREK',
+        training_elements: 'EXAMPLE, JANE',
         training_instructor: 'First Officer',
         import_metadata: {
           own_role_unmatched: true,
           own_role_unmatched_reason: 'not_on_crew',
-          crew_listed: [{ position: 'CA', name: 'FARMER, DEREK', employeeId: '624619' }],
+          crew_listed: [{ position: 'CA', name: 'EXAMPLE, JANE', employeeId: '900001' }],
         },
       }),
     ]

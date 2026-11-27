@@ -8,7 +8,7 @@ describe('fcvFlightToAirlineLeg', () => {
     const flight: FcvFlight = {
       fcv_flight_id: 'fcv-99',
       flight_number: '5770',
-      trip_number: 'L7513',
+      trip_number: 'Z7513',
       role: 'CA',
       dep_airport_icao: 'KLGA',
       arr_airport_icao: 'KDCA',
@@ -46,7 +46,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260804_5770_LGA',
       import_source: 'flica_aerodatabox',
       flight_number: '5770',
-      trip_number: 'L7513',
+      trip_number: 'Z7513',
       role: 'PIC',
       dep_airport: 'LGA',
       arr_airport: 'DCA',
@@ -59,8 +59,8 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       fcv_tail_number: 'N12345',
       fcv_aircraft_type: 'E75',
       crew: [
-        { position: 'CA', name: 'FARMER, DEREK' },
-        { position: 'FO', name: 'SUTTON, DREW' },
+        { position: 'CA', name: 'EXAMPLE, JANE' },
+        { position: 'FO', name: 'SAMPLE, JOHN' },
       ],
       is_deadhead: false,
       block_minutes: 67,
@@ -72,7 +72,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
     expect(entry.destination).toBe('KDCA')
     expect(entry.registration).toBe('N12345')
     expect(entry.date).toBe('2026-08-04')
-    expect(entry.training_elements).toBe('SUTTON, DREW')
+    expect(entry.training_elements).toBe('SAMPLE, JOHN')
     expect(entry.flight_conditions).toContain('ifr')
     expect(entry.flight_conditions).toContain('crossCountry')
     expect(entry.oooi?.out).toBe('10:08')
@@ -86,7 +86,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260804_5772_DCA',
       import_source: 'flica_aerodatabox',
       flight_number: '5772',
-      trip_number: 'L7513',
+      trip_number: 'Z7513',
       role: 'SIC',
       dep_airport: 'DCA',
       arr_airport: 'LGA',
@@ -99,8 +99,8 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       fcv_tail_number: 'N12345',
       fcv_aircraft_type: 'E75',
       crew: [
-        { position: 'CA', name: 'FARMER, DEREK' },
-        { position: 'FO', name: 'SUTTON, DREW' },
+        { position: 'CA', name: 'EXAMPLE, JANE' },
+        { position: 'FO', name: 'SAMPLE, JOHN' },
       ],
       is_deadhead: false,
       block_minutes: 60,
@@ -110,7 +110,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       (entry.flight_time as Record<string, unknown>).total
     )
     expect((entry.flight_time as Record<string, unknown>).pic).toBeUndefined()
-    expect(entry.training_elements).toBe('FARMER, DEREK')
+    expect(entry.training_elements).toBe('EXAMPLE, JANE')
     expect(entry.training_instructor).toBe('Captain')
     expect(entry.import_metadata?.own_role_unmatched).toBeUndefined()
   })
@@ -120,7 +120,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260804_5772_DCA',
       import_source: 'flica_aerodatabox',
       flight_number: '5772',
-      trip_number: 'L7513',
+      trip_number: 'Z7513',
       role: 'PIC',
       dep_airport: 'DCA',
       arr_airport: 'LGA',
@@ -132,7 +132,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       actual_on_local: null,
       fcv_tail_number: '',
       fcv_aircraft_type: 'E75',
-      crew: [{ position: 'CA', name: 'FARMER, DEREK', employeeId: '624619' }],
+      crew: [{ position: 'CA', name: 'EXAMPLE, JANE', employeeId: '900001' }],
       is_deadhead: false,
       block_minutes: 60,
     })
@@ -148,7 +148,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260804_5772_DCA',
       import_source: 'flica_aerodatabox',
       flight_number: '5772',
-      trip_number: 'L7513',
+      trip_number: 'Z7513',
       role: '',
       dep_airport: 'DCA',
       arr_airport: 'LGA',
@@ -181,7 +181,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260812_4442_LGA',
       import_source: 'flica_aerodatabox',
       flight_number: '4442',
-      trip_number: 'L7G13',
+      trip_number: 'Z7G13',
       role: '',
       dep_airport: 'LGA',
       arr_airport: 'RIC',
@@ -208,7 +208,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260819_4349_LGA',
       import_source: 'flica_aerodatabox',
       flight_number: '4349',
-      trip_number: 'L7H18',
+      trip_number: 'Z7H18',
       role: 'PIC',
       dep_airport: 'LGA',
       arr_airport: 'ATL',
@@ -242,7 +242,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20261112_4506_LGA',
       import_source: 'flica_aerodatabox',
       flight_number: '4506',
-      trip_number: 'L8012',
+      trip_number: 'Z8012',
       role: 'PIC',
       dep_airport: 'LGA',
       arr_airport: 'CAE',
@@ -270,7 +270,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260804_5770_LGA',
       import_source: 'flica_aerodatabox',
       flight_number: '5770',
-      trip_number: 'L7513',
+      trip_number: 'Z7513',
       role: 'PIC',
       dep_airport: 'LGA',
       arr_airport: 'DCA',
@@ -322,7 +322,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260812_4442_RIC',
       import_source: 'flica_aerodatabox',
       flight_number: '4442',
-      trip_number: 'L7G13',
+      trip_number: 'Z7G13',
       role: 'PIC',
       dep_airport: 'RIC',
       arr_airport: 'LGA',
@@ -354,7 +354,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260820_4809_ATL',
       import_source: 'flica_aerodatabox',
       flight_number: '4809',
-      trip_number: 'L7H18',
+      trip_number: 'Z7H18',
       role: 'PIC',
       dep_airport: 'ATL',
       arr_airport: 'LGA',
@@ -367,8 +367,8 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       fcv_tail_number: 'N648RW',
       fcv_aircraft_type: 'E75',
       crew: [
-        { position: 'CA', name: 'FARMER, DEREK' },
-        { position: 'FO', name: 'JOHNS, LUKE' },
+        { position: 'CA', name: 'EXAMPLE, JANE' },
+        { position: 'FO', name: 'DOE, RICHARD' },
       ],
       is_deadhead: false,
       block_minutes: 123,
@@ -389,7 +389,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260915_5759_LGA',
       import_source: 'flica_aerodatabox',
       flight_number: '5759',
-      trip_number: 'L8X01',
+      trip_number: 'Z8X01',
       role: 'PIC',
       dep_airport: 'LGA',
       arr_airport: 'BOS',
@@ -419,7 +419,7 @@ describe('mapAirlineLegToFcvMappedEntry', () => {
       external_flight_id: 'FLICA_20260820_4584_RIC',
       import_source: 'flica_aerodatabox',
       flight_number: '4584',
-      trip_number: 'L7H18',
+      trip_number: 'Z7H18',
       role: 'PIC',
       dep_airport: 'RIC',
       arr_airport: 'LGA',

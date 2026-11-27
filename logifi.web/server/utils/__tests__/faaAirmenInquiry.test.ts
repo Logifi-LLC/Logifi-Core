@@ -11,7 +11,7 @@ const SAMPLE_DETAIL_HTML = `
 `
 
 const SAMPLE_WITH_INSTRUCTOR_HTML = `
-<span id="ctl00_content_ctl01_ctl00_lbName" class="Cert_Name"><b>FARMER, DEREK A </b></span>
+<span id="ctl00_content_ctl01_ctl00_lbName" class="Cert_Name"><b>EXAMPLE, JANE A </b></span>
 <span id="CertHeader0">COMMERCIAL PILOT</span>
 <div id="TabBody0" style="display:block"><label class="Cert_Info"><b>Certificate:</b>&nbsp;COMMERCIAL PILOT</label><br/><br/><label class="Cert_Info"><b>Ratings:</b> <br/><u>COMMERCIAL PILOT</u><br/>&nbsp;&nbsp;AIRPLANE SINGLE ENGINE LAND<br/>&nbsp;&nbsp;INSTRUMENT AIRPLANE</label></div>
 <span id="CertHeader1">FLIGHT INSTRUCTOR</span>
@@ -35,7 +35,7 @@ describe('parseAirmenDetailHtml', () => {
   it('includes flight instructor certificate and ratings from additional tabs', () => {
     const data = parseAirmenDetailHtml(SAMPLE_WITH_INSTRUCTOR_HTML)
     expect(data).not.toBeNull()
-    expect(data?.name).toBe('Derek A Farmer')
+    expect(data?.name).toBe('Jane A Example')
     expect(data?.certificateLevels).toContain('Commercial Pilot')
     expect(data?.certificateLevels).toContain('Flight Instructor')
     expect(data?.ratings).toContain('Airplane Single Engine')

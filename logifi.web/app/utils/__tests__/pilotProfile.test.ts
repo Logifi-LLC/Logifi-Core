@@ -3,7 +3,7 @@ import { getPilotInitialsFromName } from '../pilotProfile'
 
 describe('getPilotInitialsFromName', () => {
   it('uses first and last name letters', () => {
-    expect(getPilotInitialsFromName('Derek A Farmer')).toBe('DF')
+    expect(getPilotInitialsFromName('Jane A Example')).toBe('JE')
     expect(getPilotInitialsFromName('Charles Elwood Yeager')).toBe('CY')
   })
 

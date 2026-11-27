@@ -7,7 +7,7 @@ describe('mapFlicaIntegrationsToAffiliations', () => {
       {
         airline_code: 'RJET',
         portal_host: 'rpa.flica.net',
-        username: 'RPA624619',
+        username: 'TST000000',
         last_ok_at: '2026-01-15T12:00:00.000Z',
         last_error: null,
       },
@@ -17,7 +17,7 @@ describe('mapFlicaIntegrationsToAffiliations', () => {
         airlineCode: 'RJET',
         connected: true,
         portalHost: 'rpa.flica.net',
-        username: 'RPA624619',
+        username: 'TST000000',
         lastOkAt: '2026-01-15T12:00:00.000Z',
         lastError: null,
         supported: true,

@@ -8,7 +8,7 @@ import {
 
 describe('formatAirmanRegistryName', () => {
   it('converts FAA last-first comma format to title case', () => {
-    expect(formatAirmanRegistryName('FARMER, DEREK A')).toBe('Derek A Farmer')
+    expect(formatAirmanRegistryName('EXAMPLE, JANE A')).toBe('Jane A Example')
   })
 
   it('title-cases space-separated names', () => {
